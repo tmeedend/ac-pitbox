@@ -21,7 +21,8 @@
     "cars": "Voitures",
     "tracks": "Circuits",
     "railLabel": "Navigation principale",
-    "alertLabel": "éléments à vérifier"
+    "alertLabel": "éléments à vérifier",
+    "openCmShort": "Content Manager"
   },
   "titlebar": {
     "bigPicture": "Mode Big Picture (plein écran)",

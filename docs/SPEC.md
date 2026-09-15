@@ -876,9 +876,9 @@ L'application compte une douzaine de destinations. Elles se répartissent en tro
 
 | Territoire | Question | Contenu |
 | --- | --- | --- |
-| **Rail** (à gauche, `NavRail.svelte`) | *où je vais* | les destinations — des lieux qu'on parcourt |
+| **Rail** (à gauche, `NavRail.svelte`) | *où je vais* | les destinations — des lieux qu'on parcourt, plus **Ouvrir CM** en pied |
 | **Barre de titre** (en haut, `TitleBar.svelte`) | *quelle forme a la fenêtre* | réduire, agrandir, fermer, Big Picture — **et l'identité de l'app** : logo, nom, sous-titre |
-| **Colonne de session** (`AppShell.svelte`) | *ce que je lance* | type de session, voiture, livrée, pilote, performance, circuit, lancement, **Ouvrir CM** |
+| **Colonne de session** (`AppShell.svelte`) | *ce que je lance* | circuit, voiture, livrée, pilote, performance, type de session, lancement |
 
 **La marque est dans la barre de titre, pas dans la colonne.** Elle a occupé un
 bandeau en tête de la colonne de session — tuile, nom, sous-titre empilés — soit
@@ -889,7 +889,9 @@ ni le sous-titre : les trois s'y rangent sur une ligne, à coût de hauteur nul.
 Conséquence assumée : en mode Big Picture, où la barre de titre est masquée, la
 marque n'apparaît nulle part — c'est un mode immersif, il n'a pas à se nommer.
 
-Avant ce découpage, la colonne de session faisait office de navigation en plus de son travail propre, et les deux grilles de boutons `ADD-ONS` et `ATELIER` qu'elle portait en pied étaient orphelines : elles n'étaient pas mal dessinées, elles étaient mal placées. Deux conséquences qui ne se devinent pas : **« À propos » quitte la barre de titre** (c'est du contenu — version, liens, dépôt — pas un état de fenêtre) et descend au pied du rail ; **« Ouvrir CM » quitte la navigation pour la colonne de session** (ce n'est pas une destination mais un chemin de lancement alternatif, pour qui préfère démarrer depuis Content Manager — le critère de rangement est l'intention, pas le fait que la cible soit externe).
+Avant ce découpage, la colonne de session faisait office de navigation en plus de son travail propre, et les deux grilles de boutons `ADD-ONS` et `ATELIER` qu'elle portait en pied étaient orphelines : elles n'étaient pas mal dessinées, elles étaient mal placées. Deux conséquences qui ne se devinent pas : **« À propos » quitte la barre de titre** (c'est du contenu — version, liens, dépôt — pas un état de fenêtre) et descend au pied du rail ; et **« Ouvrir CM » quitte la navigation pour la colonne de session** (ce n'est pas une destination mais un chemin de lancement alternatif — le critère de rangement est l'intention, pas le fait que la cible soit externe).
+
+**Ouvrir CM est depuis revenu dans le rail**, en pied, entre Réglages et À propos — décidé avec l'utilisateur. L'argument ci-dessus reste exact et ne suffisait plus : la colonne de session n'a pas de hauteur à donner à ce qui n'est pas la session, et le pied du rail ne porte déjà plus des lieux qu'on parcourt mais **ce qu'on ouvre à part**. L'entrée n'est donc pas une destination pour autant : elle n'est jamais active, ne porte pas d'`aria-current`, et **disparaît entièrement** quand Content Manager n'est pas détecté au chemin configuré — ni entrée grisée, ni message d'erreur au clic. Son icône est la flèche qui sort du cadre, qui porte le « ouvrir » ; son libellé se réduit donc à `Content Manager`, le rail faisant 74 px et « Ouvrir Content Manager » y tenant sur trois lignes quand toutes les autres entrées en font deux.
 
 **Règle d'architecture : le rail porte les lieux, les onglets vivent à l'intérieur d'un lieu, aucun lieu n'a deux niveaux d'onglets.** C'est elle qui décide de tout le reste. Les deux inventaires restants (compléments, apps) portent déjà leurs propres facettes ou onglets : les ranger sous un onglet supplémentaire produirait deux rangées horizontales de forme identique, sans que rien n'indique laquelle commande l'autre. Ils sont donc des entrées de rail à part entière. Les quatre outils de l'Atelier, à l'inverse, n'ont **aucune** sous-rubrique — c'est la seule raison pour laquelle ce regroupement-là est légitime et l'autre non (§7.2quater).
 
@@ -903,7 +905,7 @@ complexité que l'app existe pour absorber — et leur contenu vit dans
 l'inventaire (§7bis). Apps devient une entrée : une app a un nom, une identité,
 on l'installe volontairement, elle n'est la dépendance de rien. Chaque entrée porte une **icône et un libellé** : le rail n'est pas iconographique seul, « Add-ons voiture » contre « Compléments » n'étant pas une distinction qu'une icône peut porter, et un rail muet se paie en infobulles pour un gain de largeur sans valeur ici.
 
-L'entrée active — celle dont l'écran est affiché — se marque par un **filet gauche rouge de 2 px** (`box-shadow: inset`, jamais une bordure : 2 px de bordure décaleraient le contenu d'un pixel à chaque changement d'écran), plus une icône pleine et un libellé en pleine lumière. C'est la seule apparition du rouge dans le rail (§7.2ter). **La colonne de session porte le même filet, et ce n'est pas une brèche dans la frontière** : le rail marque le *lieu* où l'on est, la colonne marque le *type de session* qu'on prépare (§9.1bis) — deux échelles, jamais deux réponses à la même question, et les deux ne peuvent pas se contredire puisqu'un type n'est surligné que tant qu'on est sur l'écran de session. Au clavier, flèches haut/bas pour circuler dans le rail (bouclé aux deux extrémités), `Entrée` pour activer, `aria-current="page"` sur l'entrée active.
+L'entrée active — celle dont l'écran est affiché — se marque par un **filet gauche rouge de 2 px** (`box-shadow: inset`, jamais une bordure : 2 px de bordure décaleraient le contenu d'un pixel à chaque changement d'écran), plus une icône pleine et un libellé en pleine lumière. C'est la seule apparition du rouge dans le rail (§7.2ter). **La colonne de session porte le même filet, et ce n'est pas une brèche dans la frontière** : le rail marque le *lieu* où l'on est, la colonne marque le *type de session* qu'on regarde (§9.1bis) — deux échelles, jamais deux réponses à la même question. Et la colonne distingue deux marques là où le rail n'en a qu'une : le libellé en pleine lumière dit *le type qui partira*, quel que soit l'écran affiché (c'est une valeur, comme la voiture et le circuit au-dessus), le filet rouge dit *on est en train de le regarder* et ne s'allume donc que sur l'écran de session. Au clavier, flèches haut/bas pour circuler dans le rail (bouclé aux deux extrémités), `Entrée` pour activer, `aria-current="page"` sur l'entrée active.
 
 **Pastille d'alerte** : un point de 6 px en haut à droite de l'icône, bordé de la couleur du rail, sur une rubrique qui contient un problème. Pas d'agrégat sur une entrée parente et **pas de compteur** — il faut voir *laquelle* aller regarder, et le nombre exact ne change pas cette décision. Une seule source aujourd'hui : les conflits de fichiers entre compléments, que `list_others` calcule déjà. Les autres inventaires n'ont pas de notion de « problème » à remonter.
 
@@ -1354,29 +1356,32 @@ Pas d'écran séparé de sélection : la voiture/le circuit sélectionnés dans 
 **La colonne répond à une seule question : *qu'est-ce que je lance ?*** Tout ce qui n'y répond pas en est sorti — les boutons de navigation dans le rail (§7.2), les trois menus de tenue dans l'écran Pilote (§9.5). Restent **le type de session, qui est la navigation** (§9.1bis), **deux blocs à l'anatomie strictement identique** — vignette, nom, source, puis les champs — et deux actions :
 
 ```
+CIRCUIT
+  [ vignette ]                     ← cliquable : ouvre la bibliothèque
+  Imola                            ← cliquable, même zone
+  Kunos
+  LAYOUT     Imola — layout unique     (statique : une seule option)
+  SKIN       Celui d'origine     ▾
+VOITURE
+  [ vignette ]
+  Porsche 718 Boxster S
+  Porsche · 2016
+  LIVRÉE        ▪ Miami Blue    ▾
+  PILOTE          Mon pilote    ›
+  PERFORMANCE     D'origine     ▾  ← repli : lest, bride, ABS, antipatinage
 SESSION
   Essais
   Hotlap
   Course                           ← sélectionné
     Adversaires  6 IA · 87 % ± 3   ← sous-entrée, indentée, filet d'attache
   Track day
-VOITURE
-  [ vignette ]                     ← cliquable : ouvre la bibliothèque
-  Porsche 718 Boxster S            ← cliquable, même zone
-  Porsche · 2016
-  LIVRÉE        ▪ Miami Blue    ▾
-  PILOTE          Mon pilote    ›
-  PERFORMANCE     D'origine     ▾  ← repli : lest, bride, ABS, antipatinage
-CIRCUIT
-  [ vignette ]
-  Imola
-  Kunos
-  LAYOUT     Imola — layout unique     (statique : une seule option)
-  SKIN       Celui d'origine     ▾
   [ ▶ DÉMARRER LA SESSION      ]
-  ─────────────────────────────
-    ↗ Ouvrir Content Manager
 ```
+
+**L'ordre suit celui de la décision** : le circuit, puis la voiture qu'on y
+emmène, puis le genre de séance qu'on y fait — et le bouton de lancement tombe
+juste sous la liste des types, qui est le dernier choix avant de partir.
+`Ouvrir Content Manager` a quitté cette colonne pour le pied du rail (§7.2).
 
 **La colonne ne doit jamais défiler**, et le cas à tenir est le plus chargé :
 Course sélectionnée, sous-entrée affichée, en 1920 × 1080. Deux dispositifs y
@@ -1399,8 +1404,14 @@ double geste qui a remplacé le bouton `PARAMÉTRAGE DE LA SESSION` et le
 segmenté `TYPE DE SESSION` de l'écran de réglages, qui disaient la même chose à
 deux endroits sans qu'aucun ne dise ce que l'app savait faire.
 
+- **Deux marques, et elles ne disent pas la même chose.** Le libellé en pleine
+  lumière = le type qui partira, visible depuis n'importe quel écran ; le filet
+  rouge d'attaque = on le regarde, donc seulement sur l'écran de session. Sans
+  la première, la sous-entrée `Adversaires` pendait sous quatre lignes
+  identiques dès qu'on quittait l'écran, sans qu'on voie à laquelle elle
+  appartenait.
 - **La sous-entrée `Adversaires`** ne paraît que sous Course et Track day, et
-  seulement quand ce type est sélectionné. En Essais et en Hotlap, la liste fait
+  seulement sous le type choisi. En Essais et en Hotlap, la liste fait
   quatre lignes.
 - **Elle porte une ligne de résumé** — `6 IA · 87 % ± 3`, le nombre d'IA puis la
   difficulté en centre ± écart. Ce n'est pas un ornement : sans elle, on ne peut
@@ -1469,7 +1480,7 @@ maquette — dans cette colonne, `›` annonce une destination (l'écran Pilote)
 - **Vide** : trame diagonale, bordure pointillée, « ＋ Choisir une voiture », ni nom ni métadonnée. **L'app ne choisit jamais une voiture à la place de l'utilisateur** au premier démarrage : « la première du catalogue » est une voiture arbitraire, et démarrer sur un bouton rouge qui lancerait une session au hasard installe le mauvais modèle mental. Tant que le duo est incomplet, « Paramétrage » et « Démarrer la session » sont **désactivés** — ce dernier gardant son fond rouge en opacité réduite : il reste la destination visible de l'écran, le griser effacerait le but à atteindre. C'est aussi ce premier démarrage qui enseigne le geste : sans autre chemin que le bloc, l'utilisateur apprend qu'il est cliquable, et le bouton permanent n'avait plus rien à enseigner ensuite.
 - **Impasse** : Assetto Corsa introuvable ou chemin mal renseigné (`validate_config`, relu en quittant les Réglages). Même trame que l'état vide, mais « Aucune voiture détectée » + « Vérifiez le chemin d'installation », et le clic ouvre **Réglages › Chemins** au lieu d'une bibliothèque nécessairement vide — le problème à résoudre n'est pas le même.
 
-**Ouvrir Content Manager** ferme la colonne, sous le bouton de lancement. **Un lien texte, jamais un troisième bouton encadré** : trois blocs de même gabarit empilés annuleraient la hiérarchie que le bordé (paramétrage) et le plein (lancement) viennent d'établir. Un filet et une respiration l'en séparent — collé sous le bouton rouge il se lirait comme la suite du bloc, l'adjacence promettant toute seule même sans le mot. Le libellé ne dit **pas** « ouvrir *dans* » : CM ne reçoit ni la voiture ni le circuit, il s'ouvre sur son propre état, et « dans » annoncerait un transfert de contexte qui n'a pas lieu. Si CM n'est pas détecté au chemin configuré (`validate_config`), **le lien ne s'affiche pas du tout** — ni bouton grisé ni message d'erreur au clic : une sortie vers un outil absent n'a pas à occuper une ligne dans une colonne dont la hauteur est comptée.
+**Ouvrir Content Manager** vit au pied du rail (§7.2), plus dans cette colonne. Le libellé ne dit **pas** « ouvrir *dans* » : CM ne reçoit ni la voiture ni le circuit, il s'ouvre sur son propre état, et « dans » annoncerait un transfert de contexte qui n'a pas lieu. Si CM n'est pas détecté au chemin configuré (`validate_config`), **l'entrée ne s'affiche pas du tout** — ni bouton grisé ni message d'erreur au clic : une sortie vers un outil absent n'a pas à occuper une ligne.
 
 **Deux chemins vers les bibliothèques, deux intentions.** L'entrée du rail dit *je vais parcourir ma collection* ; le clic sur la vignette dit *je change la voiture de cette session*. Ce n'est pas une redondance. En l'absence de décision sur un cadrage différent (positionner la liste sur la voiture courante ?), les deux chemins sont strictement identiques — défaut acceptable.
 

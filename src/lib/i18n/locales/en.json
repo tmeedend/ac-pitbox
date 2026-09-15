@@ -21,7 +21,8 @@
     "cars": "Cars",
     "tracks": "Tracks",
     "railLabel": "Main navigation",
-    "alertLabel": "items to check"
+    "alertLabel": "items to check",
+    "openCmShort": "Content Manager"
   },
   "titlebar": {
     "bigPicture": "Big Picture mode (fullscreen)",

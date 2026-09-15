@@ -13,6 +13,7 @@
   // qui n'ont aucune sous-rubrique — c'est la seule raison pour laquelle ce
   // regroupement-là est légitime.
   import { nav, requestSection } from "$lib/nav.svelte";
+  import { openContentManager } from "$lib/launch";
   import { t } from "$lib/i18n/index.svelte";
 
   type Entry = {
@@ -31,6 +32,12 @@
     group?: string;
     /** Pousse l'entrée (et ses suivantes) en pied de rail. */
     foot?: boolean;
+    /** L'entrée n'ouvre pas un écran mais **sort de l'application**. Une
+     * seule aujourd'hui : Content Manager. Elle n'est donc jamais active, ne
+     * porte pas d'`aria-current`, et disparaît entièrement quand sa cible
+     * n'est pas détectée — une sortie vers un outil absent n'a pas à occuper
+     * une ligne. */
+    exit?: boolean;
   };
 
   const ENTRIES: Entry[] = [
@@ -45,15 +52,45 @@
     { target: "rules", labelKey: "nav.atelier", sections: ["rules", "import", "profiles", "maintenance"], sep: true },
     // Troisième filet : détache le pied.
     { target: "settings", labelKey: "nav.settings", sep: true, foot: true },
+    // **Ouvrir Content Manager vit ici**, entre les deux entrées du pied. Ce
+    // n'est toujours pas une destination — CM ne reçoit ni la voiture ni le
+    // circuit, il s'ouvre sur son propre état — mais le pied du rail ne porte
+    // déjà plus des lieux qu'on parcourt : il porte ce qu'on ouvre à part, et
+    // l'autre outil de la chaîne y a sa place mieux que dans une colonne dont
+    // la hauteur est comptée. Décidé avec l'utilisateur.
+    // Libellé court : le rail fait 74 px, « Ouvrir Content Manager » y tenait
+    // sur trois lignes quand toutes les autres entrées en font deux. L'icône —
+    // la flèche qui sort du cadre — porte le « ouvrir », le nom suffit.
+    { target: "cm", labelKey: "nav.openCmShort", exit: true },
     { target: "about", labelKey: "nav.about" },
   ];
 
   /** Rubriques qui réclament l'attention, par section. Pas de compteur : le
    * nombre exact ne change pas la décision d'aller voir. */
-  let { alerts = {} }: { alerts?: Record<string, boolean> } = $props();
+  let {
+    alerts = {},
+    cmAvailable = false,
+  }: {
+    alerts?: Record<string, boolean>;
+    /** Content Manager détecté au chemin configuré (`validate_config`). Faux,
+     * l'entrée n'est pas rendue du tout — ni grisée, ni suivie d'un message
+     * d'erreur au clic. */
+    cmAvailable?: boolean;
+  } = $props();
+
+  const shown = $derived(ENTRIES.filter((e) => !e.exit || cmAvailable));
 
   function isActive(e: Entry): boolean {
+    if (e.exit) return false;
     return (e.sections ?? [e.target]).includes(nav.section);
+  }
+
+  function activate(e: Entry) {
+    if (e.exit) {
+      void openContentManager().catch((err) => console.error(err));
+      return;
+    }
+    void requestSection(e.target);
   }
   function hasAlert(e: Entry): boolean {
     return (e.sections ?? [e.target]).some((s) => alerts[s]);
@@ -78,7 +115,7 @@
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <nav class="rail" data-gp-region="rail" aria-label={t("nav.railLabel")} onkeydown={onKeydown}>
-  {#each ENTRIES as e (e.target)}
+  {#each shown as e (e.target)}
     {#if e.foot}<div class="spacer"></div>{/if}
     {#if e.sep}<div class="sep"></div>{/if}
     {#if e.group}<span class="grp">{t(e.group)}</span>{/if}
@@ -90,7 +127,7 @@
       type="button"
       aria-current={active ? "page" : undefined}
       aria-label={alert ? `${t(e.labelKey)}, ${t("nav.alertLabel")}` : undefined}
-      onclick={() => requestSection(e.target)}
+      onclick={() => activate(e)}
     >
       <span class="ic">
         <svg viewBox="0 0 20 20" aria-hidden="true">
@@ -114,6 +151,11 @@
             <path d="M10 9.7v7.2" />
           {:else if e.target === "rules"}
             <path d="M12.4 2.9a4.2 4.2 0 0 0-4 5.5l-5.1 5.1a1.6 1.6 0 0 0 2.2 2.2l5.1-5.1a4.2 4.2 0 0 0 5.5-4l-2.4 2.4-2.4-.7-.7-2.4z" />
+          {:else if e.target === "cm"}
+            <!-- La flèche qui sort du cadre : on quitte l'application. -->
+            <path d="M10.6 3.5h5.9v5.9" />
+            <path d="M16.5 3.5 9.4 10.6" />
+            <path d="M13.8 12.2v3.5a.8.8 0 0 1-.8.8H4.3a.8.8 0 0 1-.8-.8V7a.8.8 0 0 1 .8-.8h3.5" />
           {:else if e.target === "settings"}
             <circle cx="10" cy="10" r="2.6" />
             <path d="M10 1.9v2.2M10 15.9v2.2M18.1 10h-2.2M4.1 10H1.9M15.7 4.3l-1.5 1.5M5.8 14.2l-1.5 1.5M15.7 15.7l-1.5-1.5M5.8 5.8 4.3 4.3" />

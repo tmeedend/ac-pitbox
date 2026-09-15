@@ -62,7 +62,6 @@
   import { initBulkProgress } from "$lib/bulkState.svelte";
   import { initRepairProgress } from "$lib/repairState.svelte";
   import {
-    openContentManager,
     listModSkins,
     carFactoryAssists,
     type AssistLevel,
@@ -88,14 +87,6 @@
   // « Atelier » qui vivaient ici sont parties dans le rail : elles n'étaient
   // pas mal dessinées, elles étaient mal placées — la colonne de session
   // faisait office de navigation en plus de son travail propre.
-  async function openCm() {
-    try {
-      await openContentManager();
-    } catch (e) {
-      console.error(e);
-    }
-  }
-
   // Glisser-déposer disponible partout : un seul listener, monté ici à la
   // racine, plutôt que dans chaque écran susceptible de recevoir un drop.
   onMount(() => initGlobalDragDrop());
@@ -257,10 +248,21 @@
       spread: sessionNav.spread,
     }),
   );
-  /** L'entrée de navigation est surlignée par la section ET la page : sur un
-   * autre écran que les réglages, aucune des deux ne l'est — le type reste
-   * celui qui partira, mais on n'est pas dessus. */
+  /**
+   * Deux marques, deux choses différentes — et c'est ce qui permet au filet
+   * rouge de cohabiter avec celui du rail sans dire la même chose que lui.
+   *
+   * - **Choisi** (libellé en pleine lumière) : c'est le type qui partira, quel
+   *   que soit l'écran qu'on regarde. La colonne répond toujours à « qu'est-ce
+   *   que je lance ? », comme la voiture et le circuit au-dessus — et sans
+   *   cette marque, la sous-entrée « Adversaires » pendait sous quatre lignes
+   *   identiques, sans qu'on voie à laquelle elle appartenait.
+   * - **Ouvert** (filet rouge d'attaque) : on est en train de le regarder. Ça,
+   *   c'est un repère d'écran actif, et il ne s'allume que sur l'écran de
+   *   session.
+   */
   const onSessionScreen = $derived(nav.section === "race");
+  const typeChosen = (type: SessionType) => sessionNav.type === type;
   const typeSelected = (type: SessionType) =>
     onSessionScreen && sessionNav.type === type && sessionNav.page === "setup";
 
@@ -768,56 +770,75 @@
          la barre latérale d'un côté, l'écran actif de l'autre. La
          bibliothèque redécoupe sa moitié en deux (liste et fiche) — les zones
          imbriquées les plus internes gagnent, voir `regions()`. -->
-    <NavRail {alerts} />
+    <NavRail {alerts} {cmAvailable} />
     <aside class="side" data-gp-region="sidebar">
-      <!-- SESSION : le duo choisi, et rien d'autre. La colonne répond à une
-           seule question — « qu'est-ce que je lance ? » — et les deux blocs
-           ont exactement la même anatomie : vignette, nom, source, champs.
-           Plus de traitement d'exception sur le bloc voiture. -->
+      <!-- La colonne répond à une seule question — « qu'est-ce que je
+           lance ? » — et les deux blocs de mods ont exactement la même
+           anatomie : vignette, nom, source, champs. Plus de traitement
+           d'exception sur le bloc voiture.
+
+           **L'ordre suit celui de la décision** : le circuit, puis la voiture
+           qu'on y emmène, puis le genre de séance qu'on y fait — et le bouton
+           de lancement tombe juste sous la liste des types, qui est le dernier
+           choix avant de partir. -->
       <div class="session" style="--sess-lblw:{labelWidth}px">
-        <div class="nsec">{t("nav.session")}</div>
-
-        <!-- LE TYPE DE SESSION EST LA NAVIGATION (lot 5 §1). Les quatre types
-             sont toujours visibles, jamais repliés derrière un sélecteur : ils
-             annoncent ce que l'application sait faire, et c'est la seule chose
-             de cette colonne qui ne se replie pas quand la hauteur manque.
-
-             La sous-entrée « Adversaires » ne paraît que sous Course et Track
-             day, et seulement quand ce type est sélectionné — en Essais et en
-             Hotlap, la liste fait quatre lignes. -->
-        <nav class="types" aria-label={t("nav.session")}>
-          {#each SESSION_TYPES as type (type)}
-            <button
-              class="type"
-              class:on={typeSelected(type)}
-              class:parent={onSessionScreen && sessionNav.type === type && sessionNav.page === "opponents"}
-              type="button"
-              onclick={() => (sessionNav.page === "opponents" ? backToSetup(type) : void goToType(type))}
-              >{t(`launch.type.${type}`)}</button
-            >
-            {#if sessionNav.type === type && hasOpponents(type)}
-              <!-- Indentée, et ce qui la rend lisible comme une descente est le
-                   filet vertical qui la rattache à son parent : sans lui, deux
-                   entrées de même gabarit à quelques pixels d'écart se lisent
-                   comme deux destinations sœurs. -->
-              <button
-                class="type sub"
-                class:on={onSessionScreen && sessionNav.page === "opponents"}
-                type="button"
-                onclick={() => void goToOpponents()}
-              >
-                <span class="sub-n">{t("launch.opponentsLabel")}</span>
-                <!-- Le résumé passe en rouge et porte un marqueur quand la page
-                     adversaires porte une alerte (§1.3) : une alerte sur une
-                     page qu'on ne regarde pas ne vaut pas mieux que pas
-                     d'alerte. -->
-                <span class="sub-v" class:alert={sessionNav.alert}
-                  >{#if sessionNav.alert}<span aria-hidden="true">⚠ </span>{/if}{opponentsSummary}</span
-                >
-              </button>
+        <div class="nsec">{t("session.trackTag")}</div>
+        <div class="blk">
+          <button
+            class="pick"
+            type="button"
+            onclick={() => openSlot("tracks", trackSlot)}
+            ondblclick={() => openSessionDetail("tracks", nav.sessionTrack?.id)}
+            title={trackSlot === "picked" ? t("session.trackTooltip") : undefined}
+            aria-label={nav.sessionTrack ? `${nav.sessionTrack.name} — ${t("session.changeTrack")}` : undefined}
+          >
+            <div class="thumb track" class:vacant={trackSlot !== "picked"} class:photo={trackSlot === "picked" && trackPrev}>
+              {#if trackSlot === "picked"}
+                {#if trackPrev}<img src={trackPrev} alt="" />{:else}<span class="thumb-ic">🏁</span>{/if}
+                {#if trackOutline}<img class="outline" src={trackOutline} alt="" />{/if}
+                <span class="veil"><span aria-hidden="true">✎</span>{t("session.changeTrack")}</span>
+              {:else if trackSlot === "empty"}
+                <span class="invite"><span aria-hidden="true">＋</span>{t("session.chooseTrack")}</span>
+              {:else}
+                <span class="invite">
+                  {t("session.noTrackDetected")}
+                  <small>{t("session.checkPaths")}</small>
+                </span>
+              {/if}
+            </div>
+            {#if nav.sessionTrack}
+              <!-- Même composant que la voiture : les deux blocs ont la même
+                   anatomie, et un circuit n'a simplement ni marque ni année.
+                   Son auteur reste en dessous — c'est une source, pas une
+                   partie de son nom. -->
+              <ModIdentity name={nav.sessionTrack.name} year={trackDetail?.year}>
+                {#snippet after()}
+                  {#if trackInactive}<span class="warn" title={t("session.inactiveTooltip")}>⚠</span>{/if}
+                {/snippet}
+              </ModIdentity>
+              {#if nav.sessionTrack.meta}<div class="psrc">{nav.sessionTrack.meta}</div>{/if}
             {/if}
-          {/each}
-        </nav>
+          </button>
+          {#if nav.sessionTrack}
+            <ImageSelectDropdown
+              label={t("session.fieldLayout")}
+              options={trackLayoutOptions}
+              selectedId={nav.sessionTrack.layout}
+              placeholder={t("session.pickLayout")}
+              emptyText={t("session.noLayoutsAvailable")}
+              staticWhenSingle
+              singleNote={t("session.layoutSingle")}
+              onselect={pickTrackLayout}
+              fit="contain"
+            />
+            <TrackSkinChecklistDropdown
+              label={t("session.fieldTrackSkin")}
+              options={trackSkinChecklist}
+              busy={trackSkinBusy}
+              ontoggle={toggleTrackSkinFromSlot}
+            />
+          {/if}
+        </div>
 
         <div class="nsec section">{t("session.carTag")}</div>
         <div class="blk">
@@ -992,63 +1013,50 @@
           {/if}
         </div>
 
-        <div class="nsec section">{t("session.trackTag")}</div>
-        <div class="blk">
-          <button
-            class="pick"
-            type="button"
-            onclick={() => openSlot("tracks", trackSlot)}
-            ondblclick={() => openSessionDetail("tracks", nav.sessionTrack?.id)}
-            title={trackSlot === "picked" ? t("session.trackTooltip") : undefined}
-            aria-label={nav.sessionTrack ? `${nav.sessionTrack.name} — ${t("session.changeTrack")}` : undefined}
-          >
-            <div class="thumb track" class:vacant={trackSlot !== "picked"} class:photo={trackSlot === "picked" && trackPrev}>
-              {#if trackSlot === "picked"}
-                {#if trackPrev}<img src={trackPrev} alt="" />{:else}<span class="thumb-ic">🏁</span>{/if}
-                {#if trackOutline}<img class="outline" src={trackOutline} alt="" />{/if}
-                <span class="veil"><span aria-hidden="true">✎</span>{t("session.changeTrack")}</span>
-              {:else if trackSlot === "empty"}
-                <span class="invite"><span aria-hidden="true">＋</span>{t("session.chooseTrack")}</span>
-              {:else}
-                <span class="invite">
-                  {t("session.noTrackDetected")}
-                  <small>{t("session.checkPaths")}</small>
-                </span>
-              {/if}
-            </div>
-            {#if nav.sessionTrack}
-              <!-- Même composant que la voiture : les deux blocs ont la même
-                   anatomie, et un circuit n'a simplement ni marque ni année.
-                   Son auteur reste en dessous — c'est une source, pas une
-                   partie de son nom. -->
-              <ModIdentity name={nav.sessionTrack.name} year={trackDetail?.year}>
-                {#snippet after()}
-                  {#if trackInactive}<span class="warn" title={t("session.inactiveTooltip")}>⚠</span>{/if}
-                {/snippet}
-              </ModIdentity>
-              {#if nav.sessionTrack.meta}<div class="psrc">{nav.sessionTrack.meta}</div>{/if}
+        <div class="nsec section">{t("nav.session")}</div>
+
+        <!-- LE TYPE DE SESSION EST LA NAVIGATION (lot 5 §1). Les quatre types
+             sont toujours visibles, jamais repliés derrière un sélecteur : ils
+             annoncent ce que l'application sait faire, et c'est la seule chose
+             de cette colonne qui ne se replie pas quand la hauteur manque.
+
+             La sous-entrée « Adversaires » ne paraît que sous Course et Track
+             day, et seulement quand ce type est sélectionné — en Essais et en
+             Hotlap, la liste fait quatre lignes. -->
+        <nav class="types" aria-label={t("nav.session")}>
+          {#each SESSION_TYPES as type (type)}
+            <button
+              class="type"
+              class:chosen={typeChosen(type)}
+              class:on={typeSelected(type)}
+              class:parent={onSessionScreen && sessionNav.type === type && sessionNav.page === "opponents"}
+              type="button"
+              onclick={() => (sessionNav.page === "opponents" ? backToSetup(type) : void goToType(type))}
+              >{t(`launch.type.${type}`)}</button
+            >
+            {#if sessionNav.type === type && hasOpponents(type)}
+              <!-- Indentée, et ce qui la rend lisible comme une descente est le
+                   filet vertical qui la rattache à son parent : sans lui, deux
+                   entrées de même gabarit à quelques pixels d'écart se lisent
+                   comme deux destinations sœurs. -->
+              <button
+                class="type sub"
+                class:on={onSessionScreen && sessionNav.page === "opponents"}
+                type="button"
+                onclick={() => void goToOpponents()}
+              >
+                <span class="sub-n">{t("launch.opponentsLabel")}</span>
+                <!-- Le résumé passe en rouge et porte un marqueur quand la page
+                     adversaires porte une alerte (§1.3) : une alerte sur une
+                     page qu'on ne regarde pas ne vaut pas mieux que pas
+                     d'alerte. -->
+                <span class="sub-v" class:alert={sessionNav.alert}
+                  >{#if sessionNav.alert}<span aria-hidden="true">⚠ </span>{/if}{opponentsSummary}</span
+                >
+              </button>
             {/if}
-          </button>
-          {#if nav.sessionTrack}
-            <ImageSelectDropdown
-              label={t("session.fieldLayout")}
-              options={trackLayoutOptions}
-              selectedId={nav.sessionTrack.layout}
-              placeholder={t("session.pickLayout")}
-              emptyText={t("session.noLayoutsAvailable")}
-              staticWhenSingle
-              singleNote={t("session.layoutSingle")}
-              onselect={pickTrackLayout}
-              fit="contain"
-            />
-            <TrackSkinChecklistDropdown
-              label={t("session.fieldTrackSkin")}
-              options={trackSkinChecklist}
-              busy={trackSkinBusy}
-              ontoggle={toggleTrackSkinFromSlot}
-            />
-          {/if}
-        </div>
+          {/each}
+        </nav>
 
         {#if inactiveMods.length}
           <div class="warnbox guard">
@@ -1071,18 +1079,9 @@
           {...{ [LAUNCH_BUTTON_ATTR]: "" }}
           onclick={launchNow}>{t("session.start")}</button
         >
-        <!-- Sortie vers Content Manager : un lien texte, jamais un troisième
-             bouton encadré — trois blocs de même gabarit empilés annuleraient
-             la hiérarchie que le bordé et le plein viennent d'établir. Le
-             libellé ne dit pas « dans » : CM ne reçoit ni la voiture ni le
-             circuit, il s'ouvre sur son propre état, et « ouvrir dans »
-             annoncerait un transfert de contexte qui n'a pas lieu. -->
-        {#if cmAvailable}
-          <div class="cm-sep"></div>
-          <button class="cm-link" type="button" onclick={openCm}>
-            <span aria-hidden="true">↗</span>{t("nav.openCm")}
-          </button>
-        {/if}
+        <!-- La sortie vers Content Manager a rejoint le pied du rail
+             (`NavRail`), entre Réglages et À propos : cette colonne n'a plus
+             de hauteur à donner à ce qui n'est pas la session. -->
       </div>
 
       <!-- Gabarit de mesure des intitulés de champ : hors flux, invisible, et
@@ -1627,7 +1626,9 @@
     color: var(--txt2);
     background: var(--panel2);
   }
-  .type.on {
+  /* Le type qui partira : lisible en pleine lumière, sans rouge — c'est une
+     valeur, pas un écran. */
+  .type.chosen {
     color: var(--txt);
   }
   .type.on::before {
@@ -1639,8 +1640,9 @@
     width: 2px;
     background: var(--rosso);
   }
-  /* Le type qui porte la sous-entrée ouverte : il reste lisible sans être
-     l'entrée retenue — c'est lui qu'on clique pour remonter. */
+  /* Le type qui porte la sous-entrée ouverte : en retrait d'un cran par
+     rapport à celle-ci, mais toujours lisible — c'est lui qu'on clique pour
+     remonter. */
   .type.parent {
     color: var(--txt2);
   }
@@ -1745,7 +1747,10 @@
     letter-spacing: 1.5px;
     font-weight: 600;
     font-family: var(--mono);
-    margin-top: 2px;
+    /* Détaché de la liste des types : il suit désormais le dernier choix qu'on
+       fait avant de partir, et deux pixels le faisaient lire comme une
+       cinquième entrée de cette liste. */
+    margin-top: 12px;
   }
   /* L'encadré vient de `.warnbox` (global) : jaune, parce que ce n'est pas une
      erreur mais une condition réparable d'un clic, et parce que le rouge de
@@ -1783,31 +1788,6 @@
   .btn-launch:disabled {
     opacity: 0.45;
     cursor: not-allowed;
-  }
-
-  /* Un filet et une respiration séparent le lien du bloc de lancement :
-     collé sous le bouton rouge, il se lirait comme la suite du bloc —
-     l'adjacence promet toute seule, même sans le mot. */
-  .cm-sep {
-    height: 1px;
-    background: var(--line);
-    margin-top: 12px;
-  }
-  .cm-link {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    width: 100%;
-    height: 26px;
-    margin-top: 10px;
-    background: none;
-    border: none;
-    color: var(--muted);
-    font-size: 10px;
-  }
-  .cm-link:hover {
-    color: var(--txt2);
   }
 
   .main-col {
