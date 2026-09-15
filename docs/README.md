@@ -47,11 +47,15 @@ chose qui rendait jusqu'ici une renumérotation invisible au code.
 ## Import (le domaine le plus dense)
 
 - **`SPEC-import.md`** — l'arbre de décision de l'import et la table des
-  mécanismes de pose, sur une page. Ne remplace pas `SPEC.md` §4, il le **rend
-  vérifiable** : une seule question (« où va ce fichier ? »), un seul arbre, une
-  seule table de destinations. À lire **avant** de toucher à une règle d'import,
-  et à rejouer contre les cinq archives de référence qu'il liste. En cas
-  d'écart, `SPEC.md` fait foi — et l'un des deux est à corriger tout de suite.
+  mécanismes de pose, sur une page. **Il ne double pas `SPEC.md` §4, il le rend
+  vérifiable** : le §4 énonce les règles une par une avec le *pourquoi* de
+  chacune, celui-ci les montre **ensemble** — la seule façon de voir qu'une
+  règle en contredit une autre. C'est ainsi que `mods/` a pu figurer des mois
+  dans la liste des dossiers qu'AC lit : personne ne pouvait voir la liste et
+  ses conséquences en même temps. À lire **avant** de toucher à une règle
+  d'import, et à rejouer contre les cinq archives de référence qu'il liste.
+  En cas d'écart, `SPEC.md` fait foi, et la relecture se fait en même temps que
+  la modification de la règle — jamais après. Le code y renvoie par `IMPORT§`.
 
 ## Chantiers en cours
 

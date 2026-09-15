@@ -441,8 +441,10 @@ il est là pour se vider.
   pose, et les cinq archives réelles qui servent de tests. À lire **avant**
   de toucher à une règle d'import — le §4 du SPEC les décrit une par une,
   celui-ci les montre *ensemble*, ce qui est la seule façon de voir qu'une
-  règle en contredit une autre. En cas d'écart, `SPEC.md` fait foi, et l'un
-  des deux est à corriger tout de suite.
+  règle en contredit une autre. **Les deux ne se fusionnent pas** : un arbre de
+  décision et la prose dont il est tiré sont deux objets, pas deux copies. En
+  cas d'écart, `SPEC.md` fait foi, et la relecture se fait en même temps que la
+  modification de la règle — jamais après.
 - **`docs/maquettes/`** — les maquettes visuelles, **datées**, avec leur index
   (`maquettes/README.md`) : ce que chacune a servi à décider, et si elle fait
   encore autorité. Les périmées sont dans `maquettes/archive/`, gardées pour le
@@ -506,7 +508,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Enrichissement Wikipédia** | livré ; reste à régler les seuils sur les corrections manuelles de l'utilisateur | `docs/SPEC-wikipedia-fiche-detail.md` |
 | **Signature Authenticode** | le workflow est prêt, il attend un certificat | `docs/windows-code-signing.md` |
 | **Refonte navigation et fiches** | neuf lots faits ; second palier à fusionner | `docs/PLAN-refonte-navigation.md` |
-| **Passe documentation** | lots 0 à 4 faits ; restent la découpe de `SPEC.md` et deux lots de tests | `docs/CHANTIERS.md` |
+| **Passe documentation** | lots 0 à 5 faits ; restent le socle des renvois à vider et les tests ciblés | `docs/CHANTIERS.md` |
 
 ## Fin de tâche — dans cet ordre
 

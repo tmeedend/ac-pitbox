@@ -6,9 +6,22 @@ impossibles à embrasser d'un coup d'œil. C'est comme ça que `mods/` a pu figu
 pendant des mois dans la liste des dossiers qu'Assetto Corsa lit — personne ne
 pouvait voir la liste et ses conséquences en même temps.
 
-Ici : une seule question, un seul arbre, une seule table de destinations. Quand
-`SPEC.md` et ce document divergent, **`SPEC.md` fait foi** — mais alors l'un des
-deux est à corriger tout de suite.
+Ici : une seule question, un seul arbre, une seule table de destinations.
+
+**Les deux documents ne disent pas la même chose deux fois**, et il ne faut pas
+essayer de les fusionner : `SPEC.md` §4 énonce les règles une par une, avec le
+*pourquoi* de chacune ; celui-ci les montre **ensemble**, ce qui est la seule
+façon de voir qu'une règle en contredit une autre, ou qu'une liste a une
+conséquence que personne n'avait reliée à elle. Un arbre de décision et la
+prose dont il est tiré sont deux objets, pas deux copies.
+
+La contrepartie est qu'ils peuvent diverger. Quand c'est le cas, **`SPEC.md`
+fait foi** et l'un des deux est à corriger tout de suite. Ce qui est vérifiable
+mécaniquement ici l'est : les fichiers et les fonctions cités au §10 existent
+tous, et `npm run check` refuse un renvoi `IMPORT§` vers une section absente.
+Le reste — que la table des mécanismes décrive bien ce que fait `extras.rs` —
+se relit, et la relecture se fait **en même temps** que la modification de la
+règle, jamais après.
 
 ---
 
@@ -185,7 +198,7 @@ savoir.
 
 ## 6. Phase 4 — les mécanismes de pose
 
-Sept destinations dans l'install AC, et elles ne se posent pas de la même façon.
+Huit destinations dans l'install AC, et elles ne se posent pas de la même façon.
 C'est cette table qu'il faut avoir en tête pour comprendre ce que fait une
 activation.
 

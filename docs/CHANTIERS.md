@@ -664,6 +664,22 @@ de reprendre. En cas d'écart, la spec fait foi.
         veut rien dire pour qui utilise l'app, et celui-là pointait vers une
         section disparue. Nettoyées dans les six locales, et c'est devenu la
         septième règle de `check-conventions.mjs`.
+      - **Lot 5c — et l'hypothèse de départ était fausse.** Le plan voulait
+        fusionner §4 et `SPEC-import.md`, « qui décrivent la même chose avec
+        une règle de préséance ». À la lecture, non : `SPEC-import.md` est un
+        **arbre de décision**, pas un doublon. Le §4 énonce les règles une par
+        une avec le *pourquoi* de chacune ; l'autre les montre **ensemble**,
+        seule façon de voir qu'une règle en contredit une autre. Son en-tête
+        cite le bug que ça a attrapé : `mods/` a figuré des mois dans la liste
+        des dossiers qu'AC lit, parce que personne ne pouvait voir la liste et
+        ses conséquences en même temps. **Les fusionner détruirait ce qui fait
+        sa valeur.** Fait à la place : vérifier qu'ils s'accordent — les
+        13 fichiers et les 6 fonctions qu'il cite existent tous, une seule
+        erreur trouvée (« Sept destinations » pour une table qui en liste
+        huit) — et remplacer la règle de préséance, qui promettait une
+        vérification que personne ne faisait, par ce qui est vrai : deux
+        objets distincts, et une relecture **en même temps** que la
+        modification de la règle, jamais après.
       - **Lot 4 — maquettes rangées et datées.** Les onze fichiers HTML
         quittent la racine de `docs/` pour `maquettes/` et
         `maquettes/archive/`, avec leur propre index : pour chacune, la date,
@@ -692,11 +708,7 @@ de reprendre. En cas d'écart, la spec fait foi.
         commenté « **Jamais `scrollIntoView`** » dans deux fichiers — et
         appelé dans deux autres.
       **Reste, dans cet ordre :**
-      1. **Lot 5c — fusionner §4 et `SPEC-import.md`.** Les deux décrivent
-         l'import, avec une règle de préséance (« en cas d'écart, `SPEC.md`
-         fait foi ») — c'est-à-dire une désynchronisation en attente, écrite
-         noir sur blanc. Un seul doit rester normatif.
-      2. **Vider le socle des renvois.** 215 entrées restent, en familles de
+      1. **Vider le socle des renvois.** 215 entrées restent, en familles de
          cinq à onze fichiers : `§3.4`, `§2.2`, `§5.4`, `§6.5`, `§10bis`,
          `§5bis.1`/`§5bis.2`… Même méthode que pour les `§8.x` — lire les
          commentaires qui les portent, le fichier tranche, jamais le numéro.
@@ -704,7 +716,7 @@ de reprendre. En cas d'écart, la spec fait foi.
          numérotées** des pipelines d'appariement, que le doc énumère sans en
          faire des titres ; soit on leur donne des titres, soit on renvoie à
          la section mère.
-      3. **Lot 6 — tests ciblés.** Idempotence de `overlay::migrate()` sur deux
+      2. **Lot 6 — tests ciblés.** Idempotence de `overlay::migrate()` sur deux
          passages et migration depuis une base ancienne (2 tests pour
          2 379 lignes aujourd'hui) ; l'arbitrage par date de `gamebackup.rs`
          (règle d'or n°5, 3 tests).
