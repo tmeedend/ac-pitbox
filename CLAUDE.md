@@ -261,7 +261,7 @@ s'il n'appartient à **aucun** domaine (`errors`, `format`, `storage`…) ; dans
 doute, il appartient à un domaine.
 
 **Deux dossiers de `components/` ne sont pas des domaines, et pas pour la même
-raison.** `ui/` regroupe les briques partagées (§chantier composants partagés) :
+raison.** `ui/` regroupe les briques partagées (`PLAN-refonte-navigation.md` §0.b) :
 elles ne savent **rien du contenu** qu'on leur passe, et c'est vérifiable — un
 composant de `ui/` qui importe `$lib/library/…` ou `$lib/detail/…` s'est trompé
 de dossier. La seule dépendance qu'elles ont le droit d'avoir est la coquille
@@ -594,7 +594,6 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | --- | --- | --- |
 | **Texture updates** | rien d'implémenté ; la règle de détection est mesurée et nette | `docs/SPEC-texture-update.md` |
 | **Harmonisation des libellés** | fiche détail et titres d'écran faits ; filtres et grille de bibliothèque restent | `docs/CHANTIERS.md` |
-| **Composants partagés** | inventaire clos, les trois briques différées tranchées — plus aucun travail identifié | `docs/CHANTIERS.md` |
 | **Vignettes de la grille** | fusionné mais **éteint** (`FEATURE_GRID_THUMBS`) ; reste à figer les valeurs des trois presets | `docs/SPEC-grille.md` |
 | **Écran Pilote** | livré ; trois points restent, dont un casque posé de travers | `docs/SPEC-ecran-pilote.md` |
 | **Aperçu 3D natif** | lots 0 à 6 validés à l'écran ; reste le choix du LOD | `docs/SPEC-preview-3d-kn5.md` PREVIEW§13 à §15 |

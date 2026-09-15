@@ -79,10 +79,14 @@ un choix.
 
 **0.a — Mesures.** Faites, §1.
 
-**0.b — Composants partagés.** C'est le chantier « composants partagés plutôt que
-styles recopiés » de CLAUDE.md, et il passe **avant** la refonte, pas après : trois
-écrans neufs et quatre fiches vont écrire ces briques. Le CSS Svelte étant scopé, les
-recopier maintenant, c'est les faire diverger tout de suite.
+**0.b — Composants partagés.** ✅ **Terminé** ; ce bloc en est le dossier complet,
+le chantier ayant été retiré de `CHANTIERS.md` une fois clos. Il passait **avant** la
+refonte et non après : trois écrans neufs et quatre fiches allaient écrire ces briques,
+et le CSS Svelte étant scopé, les recopier à ce moment-là, c'était les faire diverger
+tout de suite. Deux enseignements valent au-delà du lot — une brique s'extrait **de**
+ses copies, jamais avant elles (c'est le compte qui dit quoi partager et quels axes lui
+donner), et le compte seul ne suffit pas : trois appelants aux contrats divergents ne
+font pas une brique, ils font trois modules.
 
 - ✅ `.errbox` globale — **21** copies locales, pas 14 : l'inventaire datait de trois
   semaines et quatre composants s'étaient ajoutés depuis. Sœur de `.warnbox`, ce qui a
@@ -114,6 +118,31 @@ recopier maintenant, c'est les faire diverger tout de suite.
   désignait aussi un en-tête de dialogue, un message sous un champ et un surtitre posé
   **au-dessus** de son titre.
 
+- ✅ Le reste du lot, livré au fil des écrans : `Tabs` (trois `.tabs` locaux —
+  fiche détail, Réglages, Règles), `Slider` (tous les curseurs de l'app),
+  `StateBadge`, `NumberStepper`, `LoadingState`, `Tooltip`, `ContextMenu`,
+  `Toast`/`ToastStack` (la pile bas-droite, §4.2bis), `InlineEdit` (§5bis.3),
+  `NoteBlock` et sa variante `bare`, `PickerBar`. Deux d'entre eux portent une
+  leçon qui ne se relit pas dans le code :
+  - **`Field`** partage moins l'apparence d'un réglage que **l'écart avec le
+    précédent**, que chaque écran posait à la main et qu'un champ ajouté après
+    coup oubliait — c'est ce qui collait « pilote au volant » à la case du dessus.
+  - **`Pencil`**, le crayon « ça se reprend à la main », partagé par le nom, la
+    description, l'auteur et la note. Le premier jet de la note en avait posé un
+    **décoratif** : il ressemblait à un bouton sans en être un.
+- ✅ **Listes nommées — instruit, puis refermé sans rien mutualiser** (`14cefab`,
+  2026-09-15). `NamedListDialog` porte le geste enregistrer/charger/supprimer et
+  sert les sessions **et** les grilles. Y raccorder `DriverOutfits` a été mesuré
+  puis écarté : les trois modules ont la même *forme* (`list`/`save`/`delete`) et
+  **trois contrats d'écrasement différents**, chacun porté par une raison écrite —
+  `savedSessions` écrase par nom *dans le type de session*, `savedGrids` suffixe au
+  lieu d'écraser *à l'import*, `driverOutfits` écrase *insensible à la casse*,
+  plafonne, et attend la lecture avant d'écrire (garde née d'un bug remonté deux
+  fois). Un module commun exposerait cinq axes pour trois appelants, quand `Seg`
+  s'est limité à trois pour sept : pas une copie de trop, mais trois contrats
+  voisins qu'on lit mieux séparés. Reste une question d'**UX** et elle seule —
+  puces toujours visibles contre modale —, à reposer le jour où le panneau
+  d'essayage se refait.
 Reformatage pur → commits isolés, jamais mélangés au fonctionnel (sinon `git blame`
 devient inexploitable).
 
