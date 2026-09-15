@@ -56,6 +56,18 @@
     perfUnreadable?: number;
     /** Ce que l'écran range dans le bloc de droite (colonnes, vue). */
     end?: Snippet;
+    /**
+     * Le décompte se lit **dans la coulée**, juste après les puces, au lieu
+     * d'être calé à droite de la barre.
+     *
+     * Le bloc de droite est fait pour cohabiter avec des contrôles de vue : à
+     * la bibliothèque, le décompte y voisine la bascule grille/tableau et se
+     * lit comme une information d'écran. La page adversaires n'en a aucun, et
+     * le décompte s'y retrouvait seul à l'autre bout de la ligne, sans rien
+     * pour dire qu'il est la **conséquence du filtre** — signalé à l'usage.
+     * Collé aux puces, il n'a plus besoin de le dire.
+     */
+    inlineCount?: boolean;
   }
   let {
     defs,
@@ -69,6 +81,7 @@
     perfRef = null,
     perfUnreadable = 0,
     end,
+    inlineCount = false,
   }: Props = $props();
 
   const defOf = (key: string) => defs.find((d) => d.key === key);
@@ -279,12 +292,17 @@
   {#if canClear}
     <button type="button" class="clear" onclick={clearAll}>{t("filters.clearAll")}</button>
   {/if}
+  {#if inlineCount}
+    <span class="count mono inline">{t(countKey, { count: resultCount })}</span>
+  {/if}
   </div>
 
-  <div class="aside">
-    <span class="count mono">{t(countKey, { count: resultCount })}</span>
-    {@render end?.()}
-  </div>
+  {#if !inlineCount || end}
+    <div class="aside">
+      {#if !inlineCount}<span class="count mono">{t(countKey, { count: resultCount })}</span>{/if}
+      {@render end?.()}
+    </div>
+  {/if}
 </div>
 
 {#if menuOpen && addEl}
@@ -424,6 +442,11 @@
     font-size: 11px;
     color: var(--faint);
     white-space: nowrap;
+  }
+  /* Dans la coulée : une respiration avant, pour qu'il se lise comme le
+     résultat de ce qui précède et non comme une puce de plus. */
+  .count.inline {
+    margin-left: 6px;
   }
 
   .chip {

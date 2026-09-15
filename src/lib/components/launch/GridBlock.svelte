@@ -30,7 +30,6 @@
   import { previewSrc, type ModCard } from "$lib/library";
   import { t } from "$lib/i18n/index.svelte";
   import AnchoredPopover from "../filters/AnchoredPopover.svelte";
-  import ColumnsMenu from "../ColumnsMenu.svelte";
 
   let {
     setup,
@@ -38,7 +37,6 @@
     skinsByCarId,
     index,
     poolCount,
-    columns = $bindable(),
     nationalityList,
     duplicateDrivers,
     onchoose,
@@ -58,8 +56,6 @@
     /** Le vivier, pour le libellé de « Choisir dans le vivier · N voitures » :
      * c'est le geste qui relie les deux blocs. */
     poolCount: number;
-    /** Colonnes optionnelles affichées (§4.2). */
-    columns: string[];
     /** Les nationalités que le jeu connaît, avec leur drapeau. */
     nationalityList: Nationality[];
     /** Deux pilotes sous la même identité (§1.9). Calculé par l'écran et non
@@ -81,36 +77,19 @@
   const RANGE_MIN = AI_LEVEL_MIN;
   const RANGE_MAX = AI_LEVEL_MAX;
 
-  // --- Columns (§4.2) ------------------------------------------------------
+  // --- Colonnes : toutes, tout le temps -------------------------------------
   //
-  // The car is fixed — it IS the row. The other six are a preference, and they
-  // go through the same menu as the library's table view: same gesture, same
-  // component (`ColumnsMenu`).
+  // Le menu de colonnes est parti, et avec lui la préférence qu'il gardait. Il
+  // existait parce que le plateau vivait dans une colonne d'écran : à 700 px,
+  // huit colonnes ne tenaient pas, et il fallait choisir. La page dédiée a
+  // supprimé la contrainte — la table a toute la largeur de l'écran —, donc
+  // aussi la question. Un menu qui cache des colonnes dont on a la place est un
+  // geste de plus pour un problème qui n'existe plus, et un réglage à retrouver
+  // quand on cherche une valeur qui « a disparu ».
   //
-  // **No "how many fit" note.** §4.3 asks the menu to say how many more columns
-  // the current width takes, which means measuring the grid in pixels — and a
-  // pixel read back into a layout is precisely what the interface zoom breaks
-  // (§13). The dedicated page made the question moot: the table has the whole
-  // width, and the widen-in-place button it used to need went with it (lot 5
-  // §5.2).
-  //
-  // **Five columns at rest, not eight** (§5.4): the thumbnail, the car, the
-  // driver's name, the strength, and the two actions. `kg/bhp`, nationality,
-  // ballast and restrictor are things one goes looking for, not things one
-  // reads every time — they live behind this menu.
-  const COLUMNS = $derived([
-    { key: "car", label: t("columns.name"), fixed: true },
-    { key: "ratio", label: t("launch.colRatio") },
-    { key: "strength", label: t("launch.colStrength") },
-    { key: "driver", label: t("launch.colDriver") },
-    { key: "nationality", label: t("launch.colNationality") },
-    { key: "ballast", label: t("launch.colBallast") },
-    { key: "restrictor", label: t("launch.colRestrictor") },
-  ]);
-  const shows = (key: string) => columns.includes(key);
-  function toggleColumn(key: string) {
-    columns = columns.includes(key) ? columns.filter((k) => k !== key) : [...columns, key];
-  }
+  // Corollaire : plus de largeur à économiser, donc plus d'abréviations. `Nat.`
+  // et `Str.` étaient les deux seules, et elles ne se lisaient que parce qu'on
+  // savait déjà ce qu'elles disaient.
 
   /** kg/bhp d'un adversaire, `—` quand sa fiche est illisible — jamais estimé.
    * Lu dans l'index du vivier, donc analysé une fois par chargement de liste et
@@ -152,12 +131,6 @@
 
   /** Lest et bride : 0 à 100, jamais d'`Auto` — « rien » s'y dit par 0. */
   const clamp100 = (v: string): number => Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
-
-  /** Les quatre colonnes optionnelles portent des valeurs qu'aucune ligne ne
-   * nomme d'elle-même : dès que l'une est là, l'en-tête devient nécessaire. */
-  const headerNeeded = $derived(
-    columns.some((k) => k === "driver" || k === "nationality" || k === "ballast" || k === "restrictor"),
-  );
 
   function opponentName(carId: string): string {
     return carPool.find((c) => c.id_interne === carId)?.display_name ?? carId;
@@ -275,7 +248,6 @@
       <!-- La position de départ a rejoint SESSION OPTIONS (§2.5) : elle dépend
            du type de session, et tout ce qui en dépend vit là-bas. -->
       <span class="oppo-sp"></span>
-      <ColumnsMenu size="header" items={COLUMNS} visible={columns} ontoggle={toggleColumn} />
       <button class="oppo-regen" type="button" disabled={!setup.opponents.length} onclick={onregenerate}
         >{t("launch.regenerateGrid")}</button
       >
@@ -285,30 +257,30 @@
          collant : une ligne d'en-tête qui sort par le haut au bout de trois
          lignes ne sert à rien. -->
     <div class="oppo-rows">
-    <!-- En-tête de colonnes seulement quand il y a plus que la voiture à
-         nommer : sur trois colonnes, la ligne se lit sans légende. -->
-    {#if headerNeeded}
+      <!-- **Une seule police pour toute la rangée d'en-tête.** Les intitulés
+           héritaient de la taille de LEUR colonne — 10,5 px pour le nom, 9 pour
+           le kg/bhp, 8 pour les autres : trois tailles sur une même ligne, ce
+           qui se voit avant même qu'on lise les mots. La taille est donc posée
+           sur la rangée, une fois, et prime sur celles des colonnes.
+           Les mots sont entiers : la page a la largeur, les abréviations
+           n'économisaient plus rien. -->
       <div class="oppo-row oppo-th">
         <span class="oppo-img th-img"></span>
         <!-- Read-only header in the dimmer grey, editable ones in the lighter:
              two greys, no third level, and the row says what can be typed into
              before one tries. -->
         <span class="oppo-n lbl-key ro">{t("columns.name")}</span>
-        {#if shows("driver")}<span class="oppo-driver lbl-key">{t("launch.colDriver")}</span>{/if}
-        {#if shows("nationality")}<span class="oppo-nat lbl-key">{t("launch.colNatShort")}</span>{/if}
-        {#if shows("ratio")}<span class="oppo-ratio lbl-key">{t("launch.colRatio")}</span>{/if}
-        {#if shows("strength")}<span class="oppo-force lbl-key">{t("launch.colStrShort")}</span>{/if}
-        {#if shows("ballast")}<span class="oppo-bal lbl-key">{t("launch.colBallast")}</span>{/if}
-        <!-- `Restrictor` en entier et non `Restr.`, seul des trois à ne pas
-             s'abréger : c'est le mot exact de la carte voiture du joueur, et
-             c'est ce qui fait voir que les deux réglages sont le même. `Nat.`
-             et `Str.` n'ont pas ce voisin et ne se confondent avec rien. -->
-        {#if shows("restrictor")}<span class="oppo-res lbl-key">{t("launch.colRestrictor")}</span>{/if}
+        <span class="oppo-driver lbl-key">{t("launch.colDriver")}</span>
+        <span class="oppo-nat lbl-key">{t("launch.colNationality")}</span>
+        <span class="oppo-ratio lbl-key ro">{t("launch.colRatio")}</span>
+        <span class="oppo-force lbl-key">{t("launch.colStrength")}</span>
+        <span class="oppo-bal lbl-key">{t("launch.colBallast")}</span>
+        <span class="oppo-res lbl-key">{t("launch.colRestrictor")}</span>
         <span class="th-act"></span>
       </div>
-    {/if}
     {#each setup.opponents as opp, i}
       {@const prev = opponentPreview(opp)}
+      {@const shownName = opp.nationality ?? skinOf(opp)?.country ?? null}
       <div
         class="oppo-row"
         role="button"
@@ -338,11 +310,10 @@
           >{opponentName(opp.car_id)}{#if opponentSkinName(opp)}<span class="oppo-skin"> · {opponentSkinName(opp)}</span
             >{/if}</span
         >
-        {#if shows("driver")}
-          <!-- Vide = `Auto` : le nom vient alors du `ui_skin.json` de la livrée,
-               ce que le jeu fait déjà. Rien à voir avec les mods de tenue de
-               pilote, qui sont une apparence 3D sur leur propre axe. -->
-          <input
+        <!-- Vide = `Auto` : le nom vient alors du `ui_skin.json` de la livrée,
+             ce que le jeu fait déjà. Rien à voir avec les mods de tenue de
+             pilote, qui sont une apparence 3D sur leur propre axe. -->
+        <input
             class="oppo-driver cell"
             class:is-auto={opp.driver_name == null}
             type="text"
@@ -350,41 +321,32 @@
             value={opp.driver_name ?? ""}
             onclick={(e) => e.stopPropagation()}
             onchange={(e) => onsetcell(i, { driver_name: orAuto(e.currentTarget.value) })}
-          />
-        {/if}
-        {#if shows("nationality")}
-          {@const shownName = opp.nationality ?? skinOf(opp)?.country ?? null}
-          <!-- **Le drapeau seul dans la ligne, le nom au survol.** Écrit en
-               toutes lettres, « Brunei Darussalam » prenait un cinquième de la
-               largeur du plateau pour ce qu'un drapeau dit d'un coup d'œil. Le
-               nom reste là où on le cherche vraiment : en infobulle, et dans le
-               menu au moment de choisir.
-
-               Le `select` est **posé transparent par-dessus la cellule** plutôt
-               qu'affiché : c'est ce qui garde le menu natif du système, son
-               clavier et sa recherche à la frappe, sous une cellule qui ne
-               montre qu'une image. -->
-          <button
-            class="oppo-nat natcell"
-            type="button"
-            title={shownName ?? t("launch.autoCell")}
-            aria-label={t("launch.colNationality")}
-            onclick={(e) => {
-              e.stopPropagation();
-              openNat(i, e.currentTarget);
-            }}
-          >
-            {#if flagOf(shownName)}
-              <img class="flag" src={flagOf(shownName)} alt="" />
-            {:else}
-              <span class="flag flag-none"></span>
-            {/if}
-          </button>
-        {/if}
-        {#if shows("ratio")}
-          <span class="oppo-ratio mono">{opponentRatio(opp.car_id)}</span>
-        {/if}
-        {#if shows("strength")}
+        />
+        <!-- **Le drapeau ET le nom.** Le drapeau seul tenait dans trente
+             pixels, à l'époque où la colonne se disputait la largeur avec sept
+             autres dans un rail d'écran ; le nom vivait en infobulle, c'est-à-
+             dire à peu près nulle part. La page dédiée a la place, et un
+             drapeau seul se reconnaît mal au-delà d'une dizaine de pays. Les
+             plus longs s'élident, le drapeau reprenant alors la
+             reconnaissance. -->
+        <button
+          class="oppo-nat natcell"
+          type="button"
+          title={shownName ?? t("launch.autoCell")}
+          aria-label={t("launch.colNationality")}
+          onclick={(e) => {
+            e.stopPropagation();
+            openNat(i, e.currentTarget);
+          }}
+        >
+          {#if flagOf(shownName)}
+            <img class="flag" src={flagOf(shownName)} alt="" />
+          {:else}
+            <span class="flag flag-none"></span>
+          {/if}
+          <span class="nat-name" class:is-auto={!shownName}>{shownName ?? t("launch.autoCell")}</span>
+        </button>
+        <span class="oppo-ratio mono">{opponentRatio(opp.car_id)}</span>
         <!-- `Auto` is not a value we draw: it is the absence of an override,
              and the game draws inside the global range. Hence a placeholder
              rather than a number — emptying the field is the gesture that puts
@@ -401,31 +363,26 @@
           onclick={(e) => e.stopPropagation()}
           onchange={(e) => onsetlevel(i, e.currentTarget.value.trim() === "" ? null : Number(e.currentTarget.value))}
         />
-        {/if}
-        {#if shows("ballast")}
-          <input
-            class="oppo-bal cell mono"
-            class:is-zero={!opp.ballast}
-            type="number"
-            min="0"
-            max="100"
-            value={opp.ballast}
-            onclick={(e) => e.stopPropagation()}
-            onchange={(e) => onsetcell(i, { ballast: clamp100(e.currentTarget.value) })}
-          />
-        {/if}
-        {#if shows("restrictor")}
-          <input
-            class="oppo-res cell mono"
-            class:is-zero={!opp.restrictor}
-            type="number"
-            min="0"
-            max="100"
-            value={opp.restrictor}
-            onclick={(e) => e.stopPropagation()}
-            onchange={(e) => onsetcell(i, { restrictor: clamp100(e.currentTarget.value) })}
-          />
-        {/if}
+        <input
+          class="oppo-bal cell mono"
+          class:is-zero={!opp.ballast}
+          type="number"
+          min="0"
+          max="100"
+          value={opp.ballast}
+          onclick={(e) => e.stopPropagation()}
+          onchange={(e) => onsetcell(i, { ballast: clamp100(e.currentTarget.value) })}
+        />
+        <input
+          class="oppo-res cell mono"
+          class:is-zero={!opp.restrictor}
+          type="number"
+          min="0"
+          max="100"
+          value={opp.restrictor}
+          onclick={(e) => e.stopPropagation()}
+          onchange={(e) => onsetcell(i, { restrictor: clamp100(e.currentTarget.value) })}
+        />
         <button
           class="oppo-dup"
           type="button"
@@ -627,10 +584,10 @@
     background: transparent;
     border: 1px solid var(--line);
     color: var(--muted);
-    font-size: 8.5px;
+    font-size: 10px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    padding: 3px 8px;
+    padding: 4px 10px;
   }
   .oppo-regen:hover:not(:disabled) {
     background: var(--panel2);
@@ -698,8 +655,12 @@
      parcourant des yeux. La place restante va au vide en fin de ligne plutôt
      qu'à une colonne arbitraire. */
   .oppo-n {
-    font-size: 10.5px;
-    flex: 0 1 440px;
+    font-size: 12.5px;
+    /* Plafonné plus haut qu'avant : la page dédiée a la largeur, et le vide de
+       fin de ligne valait une centaine de pixels. Plafonné quand même — sans
+       cap, toute la largeur gagnée va au nom et l'écart avec le nom de pilote
+       devient assez grand pour qu'on perde la ligne en la parcourant. */
+    flex: 0 1 560px;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -717,21 +678,31 @@
      quoi l'alignement d'une colonne à l'autre se perdrait d'une ligne à la
      suivante. */
   .oppo-ratio {
-    width: 52px;
+    width: 72px;
     flex: none;
-    font-size: 9px;
+    font-size: 11px;
     color: var(--muted);
     text-align: right;
   }
   .oppo-driver {
-    width: 104px;
+    width: 156px;
   }
-  /* Assez large pour le drapeau et un nom de pays lisible ; les plus longs
-     s'élident, le drapeau portant la reconnaissance. */
-  /* La largeur d'un drapeau, plus de quoi écrire « Nat. » en en-tête. Le nom
-     du pays vit en infobulle, pas dans la colonne. */
+  /* Le drapeau, l'écart, et de quoi écrire un nom de pays lisible ; les plus
+     longs s'élident, le drapeau reprenant alors la reconnaissance. */
   .oppo-nat {
-    width: 30px;
+    width: 156px;
+  }
+  .nat-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    color: var(--txt);
+  }
+  /* `Auto` n'est pas un pays : éteint, comme les cellules `Auto` voisines. */
+  .nat-name.is-auto {
+    color: var(--faint);
   }
   /* Bouton, mais rien d'un bouton au repos : c'est le drapeau qu'on voit, et le
      cadre qui apparaît au survol de la ligne suffit à dire qu'il se clique —
@@ -739,11 +710,13 @@
   .natcell {
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
+    gap: 8px;
     background: transparent;
     border: 1px solid transparent;
-    padding: 2px;
+    padding: 2px 3px;
     cursor: pointer;
+    text-align: left;
   }
   .oppo-row:hover .natcell {
     background: var(--bg);
@@ -816,12 +789,11 @@
     border-style: dashed;
   }
   .oppo-bal {
-    width: 44px;
+    width: 78px;
     text-align: right;
   }
-  /* Assez large pour « Restrictor » en toutes lettres à 8 px interlettré. */
   .oppo-res {
-    width: 60px;
+    width: 92px;
     text-align: right;
   }
   /* Les quatre champs de cellule partagent la même discrétion que la force :
@@ -831,8 +803,8 @@
     background: transparent;
     border: 1px solid transparent;
     color: var(--txt);
-    font-size: 9.5px;
-    padding: 2px 3px;
+    font-size: 12px;
+    padding: 3px 4px;
     flex: none;
     min-width: 0;
     appearance: textfield;
@@ -859,24 +831,51 @@
   .cell.is-zero {
     color: var(--faint);
   }
-  /* Rangée d'en-tête : une ligne du plateau sans ses gestes. */
+  /* Rangée d'en-tête : une ligne du plateau sans ses gestes.
+     **La taille est posée ici, sur la rangée**, et non colonne par colonne :
+     les intitulés héritaient sinon de la taille de leur colonne — 10,5 px,
+     9 px, 8 px sur une même ligne. Le sélecteur descendant prime sur les
+     règles de colonne, qui gardent la leur pour les cellules. Couleur, casse
+     et interlettrage viennent toujours de `.lbl-key` (global). */
   .oppo-th {
     cursor: default;
     background: var(--bg);
-    padding-top: 3px;
-    padding-bottom: 3px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+  }
+  /* Les cellules saisissables ont un cadre et sa marge intérieure ; les
+     intitulés, non. Sans ce rattrapage, chaque en-tête de colonne éditable est
+     décalé de cinq pixels par rapport aux valeurs qu'il nomme — visible sur les
+     colonnes alignées à droite, où les deux bords devraient coïncider. */
+  .oppo-th .oppo-driver,
+  .oppo-th .oppo-bal,
+  .oppo-th .oppo-res {
+    padding: 0 5px;
+  }
+  .oppo-th .oppo-nat {
+    padding: 0 4px;
+  }
+  .oppo-th span {
+    font-size: 10px;
+    /* La couleur aussi : `.lbl-key` est GLOBALE, donc moins spécifique que les
+       règles de colonne de ce fichier — « Force » ressortait en blanc parce
+       que sa colonne se peint en `--txt` pour ses cellules. */
+    color: var(--muted);
   }
   .oppo-th:hover {
     background: var(--bg);
   }
+  /* **La même largeur que la vignette d'une ligne**, sinon toute la rangée
+     d'en-tête est décalée de la différence — trente-deux pixels, assez pour que
+     chaque intitulé désigne la colonne d'à côté. */
   .th-img {
-    width: 48px;
+    width: 80px;
     border: 0;
     background: transparent;
     height: auto;
   }
   .th-act {
-    width: 44px;
+    width: 52px;
     flex: none;
   }
   /* Blanche, et sans cadre au repos : le vert était la seule occurrence de
@@ -884,12 +883,12 @@
      ligne un formulaire. Le cadre apparaît au survol de la ligne — c'est là
      qu'il faut savoir que la valeur s'édite, pas avant. */
   .oppo-force {
-    width: 34px;
-    height: 20px;
+    width: 74px;
+    height: 24px;
     background: transparent;
     border: 1px solid transparent;
     color: var(--txt);
-    font-size: 9px;
+    font-size: 12px;
     text-align: center;
     flex: none;
     appearance: textfield;
@@ -917,7 +916,7 @@
   .oppo-dup {
     background: transparent;
     color: var(--muted2);
-    font-size: 13px;
+    font-size: 15px;
     line-height: 1;
     padding: 2px 5px;
     flex: none;
@@ -929,8 +928,8 @@
   .oppo-x {
     background: transparent;
     color: var(--muted2);
-    font-size: 12px;
-    padding: 2px 4px;
+    font-size: 14px;
+    padding: 2px 5px;
   }
   .oppo-x:hover {
     background: transparent;
@@ -940,10 +939,10 @@
      (§7.2ter), et le rouge de cet écran doit rester au bouton de lancement. */
   .oppo-add {
     background: var(--panel2);
-    padding: 7px 10px;
+    padding: 9px 12px;
     border-top: 1px solid var(--line);
     color: var(--txt2);
-    font-size: 9.5px;
+    font-size: 11.5px;
     text-align: left;
     width: 100%;
   }

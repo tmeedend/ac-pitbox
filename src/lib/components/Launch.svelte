@@ -247,13 +247,6 @@
   // menu, et les trois puces sont ce qui la remplit en un clic.
   let gridPinned = $state<string[]>([]);
   let gridQuery = $state("");
-  /** Colonnes optionnelles du plateau (§4.2), mémorisées par type de session
-   * comme tous les autres réglages.
-   *
-   * Le nom du pilote et la force au repos, et rien d'autre (lot 5 §5.4) : huit
-   * colonnes, c'était trop, et `kg/bhp`, nationalité, lest et bride sont des
-   * choses qu'on va chercher — pas qu'on lit à chaque coup d'œil. */
-  let gridColumns = $state<string[]>(["driver", "strength"]);
   const gridIndex = $derived(buildCardIndex(carPool, gridDefs, true, hasOwnDriver, setup.car_id));
   const gridMatches = $derived(buildPredicate(gridDefs, gridFilters, gridIndex.ctx));
   const gridPool = $derived(carPool.filter((c) => gridMatches(c) && matchesQuery(c, gridQuery)));
@@ -735,7 +728,6 @@
      * et ne sont plus jamais écrits. */
     grid_filters?: string;
     grid_pinned?: string[];
-    grid_columns?: string[];
     grid_mode?: "same_car" | "same_category" | "free";
     category_selection?: string;
     year_min?: number; year_max?: number;
@@ -832,7 +824,6 @@
       aggression: setup.aggression, start_mode: setup.start_mode, ghost_advantage: setup.ghost_advantage,
       opponent_count: opponentCount,
       grid_filters: serializeFilters(gridQuery, gridFilters), grid_pinned: [...gridPinned],
-      grid_columns: [...gridColumns],
       laps: setup.laps, time_hours: setup.time_hours,
       penalties: setup.penalties, jump_start_penalty: setup.jump_start_penalty,
       track_state: setup.track_state ? { ...setup.track_state } : null, grip: setup.grip,
@@ -872,7 +863,6 @@
       // preset portant `second` ou `random` revenait sur `random` en silence.
       setup.start_mode = START_MODES.includes(p.start_mode as StartMode) ? (p.start_mode as StartMode) : "random";
       setup.ghost_advantage = Math.max(0, Math.min(5, p.ghost_advantage ?? 0));
-      gridColumns = p.grid_columns ?? ["driver", "strength"];
       opponentCount = p.opponent_count ?? 7;
       applyGridPreset(p);
       setup.laps = p.laps; setup.time_hours = p.time_hours;
@@ -969,7 +959,7 @@
 
   $effect(() => {
     void [setup.ai_level, setup.ai_spread, setup.aggression, setup.aggression_spread, setup.start_mode, setup.ghost_advantage,
-      opponentCount, gridFilters, gridQuery, gridPinned, gridColumns,
+      opponentCount, gridFilters, gridQuery, gridPinned,
       setup.laps,
       setup.time_hours, setup.penalties, setup.jump_start_penalty, setup.grip, setup.track_state,
       setup.practice_enabled, setup.practice_minutes, setup.qualify_minutes,
@@ -1420,7 +1410,6 @@
           {skinsByCarId}
           index={gridIndex}
           poolCount={gridPool.length}
-          bind:columns={gridColumns}
           {nationalityList}
           {duplicateDrivers}
           onchoose={openAddPicker}

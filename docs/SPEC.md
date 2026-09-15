@@ -1856,18 +1856,56 @@ une ligne `Auto` n'aurait rien voulu dire, puisque c'est précisément dedans qu
 le jeu tire. `AiLevel` est le **haut** de la fourchette et `AiLevelMin` le bas,
 relevé sur un preset réel.
 
-**Colonnes** : voiture + livrée (fixe, c'est la ligne elle-même), nom de pilote
-et force par défaut ; kg/bhp, nationalité, lest et bride s'ajoutent par le
-**même menu que la vue tableau de la bibliothèque**, composant compris. Huit
-colonnes au repos, c'était trop : les quatre optionnelles sont des choses qu'on
-va chercher, pas qu'on lit à chaque coup d'œil. Le lest et la bride n'ont pas
-d'`Auto` : « rien » s'y dit par 0, comme dans le preset. Les en-têtes
-distinguent les colonnes éditables des colonnes en lecture seule par les **deux
-gris** de l'app, sans en introduire un troisième.
+**Colonnes : toutes, tout le temps, et aucune abréviation.** Le menu de
+colonnes est parti, et avec lui la préférence qu'il gardait. Il existait parce
+que le plateau vivait dans une colonne d'écran : à 700 px, huit colonnes ne
+tenaient pas, et il fallait choisir. La page dédiée a supprimé la contrainte —
+la table a toute la largeur — donc aussi la question. Un menu qui cache des
+colonnes dont on a la place est un geste de plus pour un problème qui n'existe
+plus, et un réglage à retrouver quand on cherche une valeur qui « a disparu ».
+Corollaire : plus de largeur à économiser, donc `Nat.` et `Str.` s'écrivent
+`Nationalité` et `Force` — elles ne se lisaient que parce qu'on savait déjà ce
+qu'elles disaient. Même raison pour le **nom du pays affiché à côté de son
+drapeau** : il vivait en infobulle, c'est-à-dire à peu près nulle part, et un
+drapeau seul se reconnaît mal au-delà d'une dizaine de pays.
+
+Le lest et la bride n'ont pas d'`Auto` : « rien » s'y dit par 0, comme dans le
+preset. Les en-têtes distinguent les colonnes éditables des colonnes en lecture
+seule par les **deux gris** de l'app, sans en introduire un troisième.
+
+**Une seule police pour toute la rangée d'en-tête**, et elle est posée sur la
+rangée. Chaque intitulé héritait de la taille de SA colonne — 10,5 px pour le
+nom, 9 pour le kg/bhp, 8 pour les autres : trois tailles sur une même ligne, ce
+qui se voit avant même qu'on lise les mots. Deux pièges de mise en œuvre, tous
+deux constatés à l'écran : la couleur doit être reposée là aussi (`.lbl-key`
+est globale, donc moins spécifique que les règles de colonne du composant — la
+colonne « Force » ressortait en blanc), et la case vide qui tient lieu de
+vignette dans l'en-tête doit avoir **exactement** la largeur de la vignette
+d'une ligne, sans quoi toute la rangée est décalée de la différence et chaque
+intitulé désigne la colonne d'à côté.
 
 **Le vivier et le plateau ont leur page, et rien ne les sépare.** Dans l'ordre :
-filtres, contraintes, générateur, bannières d'alerte, plateau — un seul
-enchaînement, pleine largeur, sans césure de carte. Le bloc du haut configure un
+le bandeau (vivier et tirage), les bannières d'alerte, le plateau — un seul
+enchaînement, pleine largeur, sans césure de carte.
+
+**Le bandeau : deux groupes côte à côte, un filet entre eux.** Le vivier et le
+tirage occupaient trois rangées empilées — la barre de filtres, les trois
+puces, puis le générateur — sur une page qui a toute la largeur de l'écran. Ils
+tiennent côte à côte, et le filet dit ce que l'empilement disait mal : à gauche
+**à qui on a le droit de piocher**, à droite **ce qu'on en tire**. Le groupe de
+gauche est dimensionné par son contenu, pas étiré : le groupe de droite se lit
+accolé au filet et non renvoyé au bord opposé de l'écran. Chaque groupe se
+replie sur lui-même quand la largeur manque, et le filet disparaît quand les
+deux s'empilent — un trait vertical entre deux blocs superposés ne sépare plus
+rien.
+
+**Le décompte du vivier se lit dans la coulée du filtre**, juste après les
+puces, et non calé à droite de la barre. Le bloc de droite de `FilterBar` est
+fait pour cohabiter avec des contrôles de vue : à la bibliothèque, le décompte
+y voisine la bascule grille/tableau et se lit comme une information d'écran.
+Cette page n'en a aucun, et le décompte s'y retrouvait seul à l'autre bout de la
+ligne, sans rien pour dire qu'il est la **conséquence du filtre** — signalé à
+l'usage. Collé aux puces, il n'a plus besoin de le dire. Le bloc du haut configure un
 générateur, le plateau en est la **sortie** ; séparés par une gouttière, trois
 liens réels devenaient invisibles — la bannière de vivier explique le contenu du
 plateau, `Tirer au hasard` et `Régénérer` font des choses voisines, et la
