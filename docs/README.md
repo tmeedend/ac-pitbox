@@ -47,7 +47,14 @@ chose qui rendait jusqu'ici une renumérotation invisible au code.
 
 ## Chantiers en cours
 
-Chacun porte sa propre spec, et c'est elle qui dit où en est le chantier.
+- **`CHANTIERS.md`** — le journal de bord : où en est chaque chantier, ce qui
+  reste, et surtout **les pièges déjà payés une fois**. Il vivait dans
+  `CLAUDE.md`, où il pesait 55 % du fichier relu à chaque session pour un
+  contenu qui n'est pas une consigne. `CLAUDE.md` n'en garde qu'un tableau.
+  **Point d'entrée pour reprendre un chantier à froid.**
+
+Chacun porte en plus sa propre spec, et c'est elle qui décrit ce que l'app
+fait — en cas d'écart, la spec fait foi.
 
 - **`SPEC-refonte-navigation-et-fiches.md`** — rail à deux rangs, inventaire
   unique des compléments, anatomie de fiche commune. Énonce ce qui change, ce
