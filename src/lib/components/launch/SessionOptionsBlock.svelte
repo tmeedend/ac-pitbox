@@ -206,6 +206,14 @@
     flex-wrap: wrap;
     align-items: flex-end;
     gap: 14px 16px;
+    /* **La même hauteur dans les quatre types.** Le bloc en changeait à chaque
+       fois — un segmenté seul est plus court qu'un champ numérique, et la case
+       du ghost n'a pas d'intitulé au-dessus d'elle — si bien que SIMULATION,
+       juste dessous, sautait de quelques pixels d'un type à l'autre. Un
+       plancher égal à la rangée la plus haute (intitulé + champ de 32 px) le
+       fige, et `flex-end` cale les contrôles plus courts sur la même ligne de
+       base que les autres plutôt que de les laisser flotter. */
+    min-height: 47px;
   }
   .varies > div {
     display: flex;
@@ -240,10 +248,18 @@
   }
   /* One control out of a tick and a duration. The stepper keeps its own
      border, and the negative margin collapses it onto the tick's: a single
-     shared line, which is the separator. */
-  .phase {
+     shared line, which is the separator.
+
+     **`.varies > div.phase` et non `.phase`** : la règle générique ci-dessus
+     empile les réglages en colonne (intitulé puis contrôle), et elle est plus
+     spécifique qu'une classe seule — l'avance du ghost passait donc SOUS sa
+     case au lieu de se poser à côté d'elle. Le sélecteur remet la rangée à
+     l'horizontale en gagnant la même spécificité. */
+  .varies > div.phase {
     display: flex;
+    flex-direction: row;
     align-items: stretch;
+    gap: 0;
   }
   .phase .tick {
     display: flex;

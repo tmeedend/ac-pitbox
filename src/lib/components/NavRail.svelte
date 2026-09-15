@@ -41,8 +41,11 @@
   };
 
   const ENTRIES: Entry[] = [
-    { target: "cars", labelKey: "nav.cars", group: "nav.groupSession" },
-    { target: "tracks", labelKey: "nav.tracks" },
+    // **Le circuit avant la voiture**, comme dans la colonne de session : c'est
+    // l'ordre de la décision (§9.1), et deux listes qui portent les mêmes
+    // entités dans deux ordres différents se paient à chaque coup d'œil.
+    { target: "tracks", labelKey: "nav.tracks", group: "nav.groupSession" },
+    { target: "cars", labelKey: "nav.cars" },
     { target: "driver", labelKey: "nav.driver" },
     // Les deux écrans d'add-ons ont disparu : ils classaient par mécanique de
     // pose, et leur contenu est dans l'inventaire (refonte §3.1).

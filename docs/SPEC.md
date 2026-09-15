@@ -901,9 +901,12 @@ Avant ce découpage, la colonne de session faisait office de navigation en plus 
 
 **Règle d'architecture : le rail porte les lieux, les onglets vivent à l'intérieur d'un lieu, aucun lieu n'a deux niveaux d'onglets.** C'est elle qui décide de tout le reste. Les deux inventaires restants (compléments, apps) portent déjà leurs propres facettes ou onglets : les ranger sous un onglet supplémentaire produirait deux rangées horizontales de forme identique, sans que rien n'indique laquelle commande l'autre. Ils sont donc des entrées de rail à part entière. Les quatre outils de l'Atelier, à l'inverse, n'ont **aucune** sous-rubrique — c'est la seule raison pour laquelle ce regroupement-là est légitime et l'autre non (§7.2quater).
 
-**Sept entrées, deux rangs nommés** : *La session* — Voitures · Circuits ·
+**Sept entrées, deux rangs nommés** : *La session* — Circuits · Voitures ·
 Pilote — puis *Le jeu* — Apps · Compléments — puis Atelier, et en pied
-Réglages · À propos. Les rangs ne classent pas par type de contenu mais par
+Réglages · Ouvrir CM · À propos. **Le circuit avant la voiture**, comme dans la
+colonne de session : c'est l'ordre de la décision (§9.1), et deux listes qui
+portent les mêmes entités dans deux ordres différents se paient à chaque coup
+d'œil. Les rangs ne classent pas par type de contenu mais par
 **durée de validité** de ce qu'on y règle : ce qui se décide à chaque session,
 et ce qui reste vrai jusqu'à nouvel ordre. Les deux écrans d'add-ons ont
 disparu — ils classaient par mécanique d'installation, c'est-à-dire par la
@@ -1609,6 +1612,13 @@ champ est éteint tant que la qualification vaut 0 et dit pourquoi.
 **Un bloc peut prendre la largeur disponible ; ses contrôles internes gardent
 leur gabarit et restent calés à gauche.** Un curseur de 900 px pour un réglage
 qu'on pose au pourcentage près est une régression, pas un gain.
+
+**Le bloc a la même hauteur dans les quatre types.** Il en changeait à chaque
+fois — un segmenté est plus court qu'un champ numérique, et la case du ghost
+n'a pas d'intitulé au-dessus d'elle — si bien que SIMULATION, juste dessous,
+sautait de quelques pixels quand on changeait de type. Un plancher égal à la
+rangée la plus haute (intitulé + champ de 32 px) le fige, et l'alignement par le
+bas cale les contrôles plus courts sur la même ligne de base que les autres.
 
 **Un champ sans objet dans le type courant est retiré, jamais grisé.** Le grisé
 est réservé aux **dépendances internes** — une case décochée éteint sa durée, la
