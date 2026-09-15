@@ -9,7 +9,7 @@
     "prebuild": "npm run gen:licenses",
     "build": "vite build",
     "preview": "vite preview",
-    "precheck": "npm run gen:licenses && npm run check:locales && npm run check:version && npm run check:refs && npm run check:conventions",
+    "precheck": "npm run gen:licenses && npm run check:locales && npm run check:version && npm run check:refs && npm run check:conventions && npm run report:docs",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "precheck:watch": "npm run gen:licenses",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
@@ -22,7 +22,8 @@
     "verify:rust": "cd src-tauri && cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace",
     "version": "node scripts/sync-version.mjs && git add src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock",
     "check:refs": "node scripts/check-refs.mjs",
-    "check:conventions": "node scripts/check-conventions.mjs"
+    "check:conventions": "node scripts/check-conventions.mjs",
+    "report:docs": "node scripts/report-docs.mjs"
   },
   "license": "MIT",
   "dependencies": {

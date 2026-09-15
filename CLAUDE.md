@@ -447,6 +447,15 @@ Svelte. Les deux sont documentées comme écartées, en tête du script.
 `MUSIQUE§3.4`, `IMPORT§`, `REFONTE§`, `TEXTURE§`. La liste fait foi dans
 `scripts/check-refs.mjs`.
 
+**`npm run check` affiche aussi le poids de la documentation** — nombre de
+documents, de lignes, et les trois sections les plus lourdes. **C'est un
+rapport, pas une porte** : aucun seuil, aucun échec. `SPEC.md` a atteint
+2 448 lignes dont 924 pour son seul §9 sans que personne le voie venir, parce
+qu'un document grossit d'une ligne à la fois. Le nombre passe sous les yeux à
+chaque vérification, et c'est l'œil humain qui décide quand découper — une
+porte qui refuse un commit parce qu'un document a grandi de dix lignes finirait
+désactivée.
+
 `npm run check` vérifie que chaque renvoi tombe sur un titre qui existe, et
 **les 2 780 y tombent** : le socle (`scripts/refs-baseline.json`) est vide. Le
 contrôle est donc strict — le moindre renvoi sans cible fait échouer
