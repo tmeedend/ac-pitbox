@@ -47,7 +47,7 @@ pub fn search_query(cleaner: &Cleaner, subject: &CarSubject) -> String {
     format!("{brand} {name}").trim().to_string()
 }
 
-/// The score of §4.1.4, in `[0, 1]`.
+/// The score of WIKI§4.1, in `[0, 1]`.
 ///
 /// Three signals, and the third is special: **the year is a bonus when it
 /// exists and never a penalty when it does not**. Measured on the real API —
@@ -229,7 +229,7 @@ mod tests {
         }
     }
 
-    /// Rule (§4.1.1): the brand is not repeated when the name already carries
+    /// Rule (WIKI§4.1): the brand is not repeated when the name already carries
     /// it — "Toyota Toyota AE86" scores worse against every candidate.
     #[test]
     fn the_query_does_not_say_the_brand_twice() {
@@ -263,7 +263,7 @@ mod tests {
         }
     }
 
-    /// Rule (WIKI§1, §4.1.5, WIKI§11): **two plausible candidates produce nothing.**
+    /// Rule (WIKI§1, WIKI§4.1, WIKI§11): **two plausible candidates produce nothing.**
     /// Two generations of the same model, both matching the brand and the
     /// name, is the realistic ambiguity — and it must not be resolved.
     #[test]
@@ -282,7 +282,7 @@ mod tests {
         }
     }
 
-    /// Rule (§4.1.3): what is not of an accepted type is not a candidate at
+    /// Rule (WIKI§4.1): what is not of an accepted type is not a candidate at
     /// all. A video game named after a car is the case that costs the most —
     /// it matches the name perfectly.
     #[test]
@@ -306,7 +306,7 @@ mod tests {
         );
     }
 
-    /// Rule (§4.1.4, measured): a missing production period is **neutral**, not
+    /// Rule (WIKI§4.1, measured): a missing production period is **neutral**, not
     /// a zero.
     ///
     /// No car item measured carries `P571`, and only generations carry
@@ -342,7 +342,7 @@ mod tests {
         assert!(asked > contradicted, "l'absence vaut mieux qu'une période qui dément");
     }
 
-    /// Rule (§4.1.4): a period that exists and excludes the year does lower the
+    /// Rule (WIKI§4.1): a period that exists and excludes the year does lower the
     /// score — that is the whole point of reading it.
     #[test]
     fn a_period_that_excludes_the_year_lowers_the_score() {
@@ -368,7 +368,7 @@ mod tests {
         );
     }
 
-    /// Rule (§4.1.4): the brand must match in full. "Alfa Romeo" is not
+    /// Rule (WIKI§4.1): the brand must match in full. "Alfa Romeo" is not
     /// satisfied by an entity whose words only contain "Alfa".
     #[test]
     fn a_brand_matches_whole_or_not_at_all() {

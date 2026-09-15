@@ -27,7 +27,7 @@
 //! - **The radius is the API's ceiling, and it is not always enough.** Monza is
 //!   listed at Milan's coordinates, eighteen kilometres away, while
 //!   `list=geosearch` refuses anything over ten. What rescues those is the name
-//!   fallback of §4.2.4, extended here to "no candidate found by coordinates".
+//!   fallback of WIKI§4.2, extended here to "no candidate found by coordinates".
 
 use super::api::{EntityDetails, Fetched, WikiClient};
 use super::clean::Cleaner;
@@ -159,7 +159,7 @@ pub fn decide_by_distance(candidates: Vec<(EntityDetails, f64)>, thresholds: &Th
     }
 }
 
-/// The name fallback of §4.2.4, used when the track has no coordinates.
+/// The name fallback of WIKI§4.2, used when the track has no coordinates.
 ///
 /// Nothing but name similarity: a track has no brand and no production period,
 /// so the car score's other two signals have no input here. The type allowlist
@@ -191,7 +191,7 @@ pub fn match_track(
         // Nothing of the right type within ten kilometres — the API's ceiling —
         // does not mean the track has no article: Monza's coordinates are
         // Milan's, eighteen kilometres from the circuit. So the name gets its
-        // turn, which §4.2.4 already grants when there are no coordinates at
+        // turn, which WIKI§4.2 already grants when there are no coordinates at
         // all. An **ambiguity is not retried**: it is a verdict (WIKI§1), and
         // neither is an unreachable network, which taught us nothing.
         if matches!(outcome, MatchOutcome::NoCandidate) {
@@ -294,7 +294,7 @@ mod tests {
         }
     }
 
-    /// Rule (§4.2.2, measured): **the type filter carries the whole strategy.**
+    /// Rule (WIKI§4.2, measured): **the type filter carries the whole strategy.**
     ///
     /// This is the Nordschleife, as the API really answers it: nineteen Grand
     /// Prix editions at 4.9 m, the circuit further down the list. Without the
@@ -365,7 +365,7 @@ mod tests {
         }
     }
 
-    /// Rule (§4.2.3): once they are far enough apart, the nearest wins.
+    /// Rule (WIKI§4.2): once they are far enough apart, the nearest wins.
     #[test]
     fn far_enough_apart_the_nearest_wins() {
         let candidates = vec![
@@ -382,7 +382,7 @@ mod tests {
         }
     }
 
-    /// Rule (§4.2.2, calibrated): **a circuit beats a nearer street.**
+    /// Rule (WIKI§4.2, calibrated): **a circuit beats a nearer street.**
     ///
     /// Straight from the calibration run: the Nordschleife tied with
     /// `Kurt-Bosch-Straße` and was rejected, Vallelunga with two Roman streets,
@@ -431,7 +431,7 @@ mod tests {
         );
     }
 
-    /// Rule (§4.2.2): nothing of an accepted type nearby is a non-result, not
+    /// Rule (WIKI§4.2): nothing of an accepted type nearby is a non-result, not
     /// a fallback onto the village next door.
     #[test]
     fn a_neighbourhood_without_a_track_matches_nothing() {
@@ -442,7 +442,7 @@ mod tests {
         assert_eq!(decide_by_distance(candidates, &thresholds()), MatchOutcome::NoCandidate);
     }
 
-    /// Rule (§4.2.1): proximity is reported as a score so one table can hold
+    /// Rule (WIKI§4.2): proximity is reported as a score so one table can hold
     /// both strategies — nearest is 1, the edge of the radius is 0.
     #[test]
     fn proximity_spans_the_radius() {

@@ -28,7 +28,7 @@ export interface DriverChoices {
    * ou celui qu'on lui a substitué. */
   model: string;
   /** `true` quand ce corps n'est pas celui de la voiture — le mode « corps
-   * substitué », qui ne vaut que dans l'aperçu (SPEC-ecran-pilote PILOTE§10). */
+   * substitué », qui ne vaut que dans l'aperçu (PILOTE§10). */
   substituted: boolean;
   era: DriverEra | null;
   suits: WardrobeOption[];

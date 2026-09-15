@@ -136,7 +136,7 @@
     });
   });
 
-  // Garde de navigation (§10bis) : quitter Réglages avec des changements non
+  // Garde de navigation (§11) : quitter Réglages avec des changements non
   // enregistrés propose d'enregistrer ou d'annuler (et dans ce cas, revient
   // sur l'aperçu live déjà appliqué — zoom, langue).
   setSectionGuard(async () => {

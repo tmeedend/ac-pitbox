@@ -317,11 +317,11 @@ struct Engine {
     /// que les commandes `EnterBigPicture`/`ExitBigPicture`, y compris
     /// quand `enter_big_picture` reste silencieux (AC déjà lancé). Distinct
     /// de `state != Idle` : sert à `exit_session` à savoir s'il doit
-    /// vraiment reprendre une ambiance ou rester silencieux (§19).
+    /// vraiment reprendre une ambiance ou rester silencieux.
     big_picture_active: bool,
     /// Ambiance active juste avant `enter_session` (menu ou grid selon
     /// l'écran affiché au lancement) — `exit_session` y revient plutôt que
-    /// de retomber systématiquement sur MENU (MUSIQUE§4/§19).
+    /// de retomber systématiquement sur MENU (MUSIQUE§4).
     pre_session_ambience: Option<Ambience>,
 }
 
@@ -675,7 +675,7 @@ impl Engine {
         // Part du volume réellement atteint, pas de `effective_volume()` —
         // sortir de Big Picture pendant qu'un crossfade ou un fondu d'entrée
         // est encore en cours ne doit pas faire sauter le son au plein
-        // volume avant de le refaire redescendre (§18, bug réel : "ça coupe,
+        // volume avant de le refaire redescendre (bug réel : "ça coupe,
         // ça revient, puis ça repart"). `cancel_fade` stoppe aussi l'éventuel
         // slot abandonné d'un crossfade interrompu (l'autre moitié du bug :
         // sans ça, il continuait de jouer indéfiniment, plus jamais touché).
@@ -709,7 +709,7 @@ impl Engine {
             self.save_elapsed(amb);
             // Mémorisé pour `exit_session` : reprendre la même ambiance
             // qu'avant la session (menu ou grid selon l'écran affiché au
-            // lancement, MUSIQUE§4/§19) plutôt que de retomber systématiquement sur
+            // lancement, MUSIQUE§4) plutôt que de retomber systématiquement sur
             // MENU.
             self.pre_session_ambience = Some(amb);
         }
@@ -744,7 +744,7 @@ impl Engine {
             return;
         }
         // Reprend l'ambiance active avant la session — menu ou grid selon
-        // l'écran affiché au lancement (MUSIQUE§4/§19) — jamais systématiquement
+        // l'écran affiché au lancement (MUSIQUE§4) — jamais systématiquement
         // MENU. `None` seulement si la session a commencé avant que Big
         // Picture ait joué quoi que ce soit (ouvert pendant le chargement) :
         // MENU reste alors le repli le plus sensé.

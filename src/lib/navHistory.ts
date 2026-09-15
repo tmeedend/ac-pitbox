@@ -55,7 +55,7 @@ export function recordScreen(screen: Screen): void {
 }
 
 /** Puts a recorded screen back on display. Returns false when the move was
- * refused, which only the unsaved-changes guard of §10bis can do. */
+ * refused, which only the unsaved-changes guard of §11 can do. */
 async function apply(target: Screen): Promise<boolean> {
   applying = true;
   try {

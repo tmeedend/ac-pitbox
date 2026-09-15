@@ -102,7 +102,7 @@ pub async fn list_driver_choices(
 ///
 /// `Ok(None)` — jamais une erreur — quand Assetto Corsa n'est pas configuré ou
 /// que le corps n'est pas installé : le plateau retombe alors sur
-/// l'échantillon plat, et la galerie reste entièrement utilisable (§12.4).
+/// l'échantillon plat, et la galerie reste entièrement utilisable (PILOTE§12.4).
 #[tauri::command]
 pub async fn prepare_driver_preview(
     app: AppHandle,

@@ -234,7 +234,7 @@ pub fn run() {
             let music_engine = music::engine::spawn(app.handle().clone(), music_cfg);
             // Le même fil sert deux clients : la musique de Big Picture, et la
             // génération des vignettes de la grille, qui se suspend pendant une
-            // session pour rendre la machine au jeu (`SPEC-grille.md` §5.4bis).
+            // session pour rendre la machine au jeu (GRILLE§5.4).
             // Un seul sondage de process pour les deux — le redécouvrir ailleurs
             // serait la même question posée deux fois.
             let watch_handle = app.handle().clone();

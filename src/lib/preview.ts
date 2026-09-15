@@ -55,7 +55,7 @@ export type PreviewStage = "geometry" | "textures" | "writing";
 export interface DriverView {
   /** Corps substitué à celui de la voiture, `null` = le sien. Le substituer
    * fait tomber la garde-robe de la livrée avec lui, côté backend : elle est
-   * nommée d'après l'ancien corps (SPEC-ecran-pilote §10.1). */
+   * nommée d'après l'ancien corps (PILOTE§10.1). */
   model?: string | null;
   /** Tenue imposée, `null` par pièce = celle que le skin déclare. */
   suit?: string | null;
@@ -133,7 +133,7 @@ export interface DriverPreview {
  *
  * `null` quand Assetto Corsa n'est pas configuré ou que le corps n'est pas
  * installé : le plateau retombe alors sur l'échantillon plat et la galerie
- * reste utilisable (§12.4), jamais une erreur.
+ * reste utilisable (PILOTE§12.4), jamais une erreur.
  *
  * La tenue **adoptée** entre dans la clé de cache, donc l'adopter convertit
  * une fois. L'essai au survol, lui, ne repasse jamais par ici : le frontend

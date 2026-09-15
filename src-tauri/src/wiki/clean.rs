@@ -20,7 +20,7 @@ const SEED: &str = include_str!("../../rules/wiki-matching.json");
 /// File name in the config directory, once seeded.
 const FILE_NAME: &str = "wiki-matching.json";
 
-/// Weights of the car score (§4.1.4). They sum to 1 in the seed; nothing
+/// Weights of the car score (WIKI§4.1). They sum to 1 in the seed; nothing
 /// enforces it, because a user editing the file to make the brand decisive is
 /// doing something legitimate.
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]

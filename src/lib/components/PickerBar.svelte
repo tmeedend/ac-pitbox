@@ -44,7 +44,7 @@
     fit?: "cover" | "contain";
     emptyText: string;
     /** Mention accolée au compteur : « dont 1 ajouté » quand une couche apporte
-     * une partie de la liste (§7.7). Absente quand il n'y a rien à dire. */
+     * une partie de la liste (REFONTE§7.7). Absente quand il n'y a rien à dire. */
     note?: string;
   }
   let { label, items, index, onpick, expanded, ontoggle, fit = "cover", emptyText, note }: Props = $props();

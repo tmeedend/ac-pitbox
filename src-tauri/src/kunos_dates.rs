@@ -68,7 +68,7 @@ pub fn release_date(kind: ModKind, id: &str) -> Option<String> {
     }
 }
 
-/// Nom d'affichage du DLC qui a introduit ce contenu (§10bis, fiche détail —
+/// Nom d'affichage du DLC qui a introduit ce contenu (§11, fiche détail —
 /// bloc Source/Origine) — `None` pour le jeu de base (`pack == "base"`, le
 /// frontend affiche alors son propre libellé traduit) ou un contenu non
 /// référencé, jamais le nom brut de `"base"` (`"Assetto Corsa (base / 1.0)"`,
@@ -101,7 +101,7 @@ mod tests {
     use super::*;
 
     /// Règle protégée : le jeu de base ne doit jamais afficher le nom
-    /// technique brut de son pack (§10bis) — `None`, pas
+    /// technique brut de son pack (§11) — `None`, pas
     /// "Assetto Corsa (base / 1.0)".
     #[test]
     fn base_game_pack_name_is_none() {
@@ -109,7 +109,7 @@ mod tests {
     }
 
     /// Règle protégée : un DLC référencé renvoie le nom d'affichage du pack,
-    /// pas sa clé technique (§10bis).
+    /// pas sa clé technique (§11).
     #[test]
     fn dlc_pack_name_resolves_display_name() {
         assert_eq!(

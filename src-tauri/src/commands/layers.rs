@@ -53,7 +53,7 @@ pub fn list_layer_files(app: AppHandle, db: State<Db>, id: String) -> Result<Vec
 /// Ouvre le dossier d'une couche dans l'explorateur. Même rationale que
 /// `open_mod_folder` : le chemin est résolu côté Rust depuis l'overlay, jamais
 /// donné par le front, donc pas de scope ACL large à ouvrir.
-/// Tracés apportés par les couches actives d'un circuit (§7.7).
+/// Tracés apportés par les couches actives d'un circuit (REFONTE§7.7).
 #[tauri::command]
 pub fn layer_layout_origins(
     app: AppHandle,

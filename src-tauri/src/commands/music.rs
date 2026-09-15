@@ -17,7 +17,7 @@ pub fn get_music_config(app: AppHandle) -> MusicConfig {
 #[tauri::command]
 pub fn save_music_config(app: AppHandle, config: MusicConfig, engine: State<MusicEngineHandle>) -> Result<(), String> {
     music::config::save(&app, &config)?;
-    // Préchauffe le nouveau dossier avant que le moteur en ait besoin (§20) :
+    // Préchauffe le nouveau dossier avant que le moteur en ait besoin :
     // sans ça, la première navigation vers l'ambiance dont le dossier vient
     // de changer subit le scan complet en pleine transition.
     music::index::warm(&app, config.clone());

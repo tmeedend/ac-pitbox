@@ -67,7 +67,7 @@ pub fn is_track(dir: &Path) -> bool {
 }
 
 /// Mod son : présence de `*.bank` + `GUIDs.txt`. Détecté mais hors périmètre
-/// car/track de L1 (cf. §14.5) — on évite simplement d'y descendre.
+/// car/track de L1 (cf. REFONTE§14) — on évite simplement d'y descendre.
 pub fn is_car_sound(dir: &Path) -> bool {
     if !dir.is_dir() || !dir.join("GUIDs.txt").is_file() {
         return false;

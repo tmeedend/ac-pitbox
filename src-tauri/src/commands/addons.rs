@@ -177,7 +177,7 @@ pub async fn audition_engine_native(
         // the idle reveals no further sound: an engine would stall there, and
         // the bank only has its idle loop pitched down. Set at the idle, the
         // bottom of the travel becomes useful instead — it is where lifting off
-        // the throttle lands (§6quater).
+        // the throttle lands (FMOD§6quater).
         rev_floor: idle_rev.max(crate::enginesound::REV_FLOOR),
         rev_ceiling,
         rev_start: rev
@@ -212,7 +212,7 @@ pub fn set_audition_rev(engine: State<crate::fmod::engine::FmodEngineHandle>, re
 /// what a STILL slider means. Held still, button down, is an engine held ON the
 /// throttle - without it, that stillness read as "slider put down" and the sound
 /// settled back to the off-throttle layers under a motionless hand. A slider
-/// being dragged keeps saying what it always said (§6quater), the button
+/// being dragged keeps saying what it always said (FMOD§6quater), the button
 /// included: down is a lift-off, which is the deceleration.
 #[cfg(windows)]
 #[tauri::command]
@@ -241,7 +241,7 @@ pub fn set_audition_listener(
     });
 }
 
-/// Lance ou coupe les coups d'accélérateur (§6bis) : quelques secondes de
+/// Lance ou coupe les coups d'accélérateur (FMOD§6bis) : quelques secondes de
 /// ralenti, puis une rafale de brefs coups de gaz, en boucle.
 #[cfg(windows)]
 #[tauri::command]

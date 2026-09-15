@@ -730,10 +730,10 @@ de reprendre. En cas d'écart, la spec fait foi.
         appelé dans deux autres.
       **Reste, dans cet ordre :**
       1. **Vider le socle des renvois.** 215 entrées restent, en familles de
-         cinq à onze fichiers : `§3.4`, `§2.2`, `§5.4`, `§6.5`, `§10bis`,
+         cinq à onze fichiers : `§3.4`, `§2.2`, `§5.4`, `§6.5`, `§11`,
          `§5bis.1`/`§5bis.2`… Même méthode que pour les `§8.x` — lire les
          commentaires qui les portent, le fichier tranche, jamais le numéro.
-         Un cas déjà instruit : `WIKI§4.1.1` à `§4.2.4` désignent les **étapes
+         Un cas déjà instruit : `WIKI§4.1.1` à `WIKI§4.2` désignent les **étapes
          numérotées** des pipelines d'appariement, que le doc énumère sans en
          faire des titres ; soit on leur donne des titres, soit on renvoie à
          la section mère.

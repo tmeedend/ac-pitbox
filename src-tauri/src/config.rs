@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
-/// Préférences persistantes de l'app (§10bis).
+/// Préférences persistantes de l'app (§11).
 /// Présentes dès maintenant pour que le modèle de données puisse les porter ;
 /// l'UI dédiée arrivera avec les lots concernés.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,10 +81,10 @@ pub struct Prefs {
     /// Score minimal en dessous duquel le meilleur candidat n'est l'article de
     /// personne.
     pub wiki_match_min_score: f64,
-    /// Écart minimal entre le premier et le deuxième candidat (§4.1.5). En
+    /// Écart minimal entre le premier et le deuxième candidat (WIKI§4.1). En
     /// dessous, l'ambiguïté l'emporte et on n'affiche rien.
     pub wiki_match_min_margin: f64,
-    /// Rayon de la recherche géographique des circuits, en mètres (§4.2.1).
+    /// Rayon de la recherche géographique des circuits, en mètres (WIKI§4.2).
     pub wiki_track_radius_m: u32,
     /// Deux candidats circuit plus proches que ça l'un de l'autre, en mètres,
     /// sont à égalité — donc ambigus.

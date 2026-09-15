@@ -61,7 +61,7 @@ pub struct ModDetail {
     pub specs: Option<NativeSpecs>,
     /// Détail circuit (description + layouts illustrés), circuits uniquement.
     pub track: Option<uijson::TrackDetail>,
-    /// Nom du DLC Kunos d'origine (contenu de base uniquement, §10bis) —
+    /// Nom du DLC Kunos d'origine (contenu de base uniquement, §11) —
     /// `None` pour le jeu de base ou un mod importé (le bloc Source/Origine
     /// y affiche alors l'archive ou « Jeu de base »).
     pub stock_pack: Option<String>,

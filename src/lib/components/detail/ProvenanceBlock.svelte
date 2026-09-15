@@ -40,7 +40,7 @@
   } = $props();
 
   /** Archive dont provient la version **active** (§4.2) — mod importé
-   * uniquement. Pour le contenu de base Kunos (§10bis), il n'y a jamais eu
+   * uniquement. Pour le contenu de base Kunos (§11), il n'y a jamais eu
    * d'archive : jeu de base ou DLC (`detail.stock_pack`, résolu côté Rust
    * depuis `docs/kunos_content_dates.json`), jamais les deux à la fois.
    *

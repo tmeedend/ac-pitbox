@@ -35,7 +35,7 @@ fn ac_running(sys: &System) -> bool {
 /// d'autre : ce fil sait déjà quand Assetto Corsa démarre et s'arrête, et le
 /// redécouvrir ailleurs serait un second sondage pour la même information. Il
 /// sert à la génération des vignettes, qui doit rendre la machine pendant une
-/// session (`SPEC-grille.md` §5.4bis).
+/// session (GRILLE§5.4).
 ///
 /// **Une fermeture, pas un `AppHandle`.** Un module métier qui importe
 /// `tauri::Emitter` rend le binaire de test de la lib inexécutable — mesuré,

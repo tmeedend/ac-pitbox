@@ -213,7 +213,7 @@
       actionError = errorText(e);
     }
   }
-  /** Tracés apportés par une couche active (§7.7). La carte des tracés montre
+  /** Tracés apportés par une couche active (REFONTE§7.7). La carte des tracés montre
    * l'état **composé** — celui du lancement — et « 2 tracés » y est exact tout
    * en étant trompeur quand l'un des deux vient d'une extension.
    * Relu à chaque recomposition (`contentRevision`) : activer une couche change
@@ -313,7 +313,7 @@
   // Fichiers annexes du mod (§4.5.2, Bloc Ressources) — lus en direct sur disque.
 
   /** Décompte de l'onglet Médias : la **somme** des quatre blocs qu'il réunit
-   * (§7.8). `null` tant qu'aucun n'a répondu — afficher « (0) » avant de savoir
+   * (REFONTE§7.8). `null` tant qu'aucun n'a répondu — afficher « (0) » avant de savoir
    * est un mensonge qui dure une seconde ; un seul bloc connu suffit en
    * revanche à donner un chiffre, les autres s'y ajoutent en arrivant. */
   const mediaCount = $derived.by(() => {
@@ -1632,7 +1632,7 @@
                       <div class="skin-img layout-img">
                         {#if o}<img src={o} alt={l.name} loading="lazy" />{:else}<span class="skin-noimg">▦</span>{/if}
                         {#if i === previewLayout}<span class="skin-apercu mono">{t("library.sessionBadge")}</span>{/if}
-                        <!-- Marque d'origine (§7.7) : ce tracé n'est pas dans le mod,
+                        <!-- Marque d'origine (REFONTE§7.7) : ce tracé n'est pas dans le mod,
                              c'est une couche qui l'apporte. -->
                         {#if from}<span class="skin-from mono" title={t("detail.layoutFromLayerTip", { layer: from.layer_name })}>{t("detail.layoutFromLayer")}</span>{/if}
                       </div>
@@ -1664,7 +1664,7 @@
     )}
 
     {:else if activeTab === "media"}
-      <!-- Quatre blocs, deux groupes (§7.8) : ce que TU as produit (captures,
+      <!-- Quatre blocs, deux groupes (REFONTE§7.8) : ce que TU as produit (captures,
            replays), puis ce qui est LIVRÉ avec le mod (ressources, fonds).
            Aucun n'est masqué quand il est vide : ses actions « Ouvrir le
            dossier » et « Lier un fichier… » sont la seule voie pour y ajouter
@@ -1672,7 +1672,7 @@
       <div class="tab-body stack">
         <MediaScreenshots modId={id} onerror={(m) => (actionError = m)} />
         <MediaReplays modId={id} onerror={(m) => (actionError = m)} />
-        <!-- Les documents livrés AVEC ce mod mais rangés à part (§7.8) — une
+        <!-- Les documents livrés AVEC ce mod mais rangés à part (REFONTE§7.8) — une
              notice, un manuel, des notes de version — rejoignent la liste des
              ressources plutôt que d'ouvrir une carte chacun : trois cartes
              au-dessus d'une carte « Ressources » annonçant « aucun fichier

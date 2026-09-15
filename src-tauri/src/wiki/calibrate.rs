@@ -1,7 +1,7 @@
 //! Calibration run: the whole library through the matching, **persisting
 //! nothing** (WIKI§13).
 //!
-//! The thresholds of §4.1.5 and §4.2.3 cannot be chosen from a desk. The spec
+//! The thresholds of WIKI§4.1 and WIKI§4.2 cannot be chosen from a desk. The spec
 //! says as much — its numbers are "des points de départ, pas des cibles" — so
 //! this module exists to produce the evidence: every mod, the candidate that
 //! was retained, its score, and the margin over the runner-up.

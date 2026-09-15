@@ -1115,7 +1115,7 @@ SUIT=\\type1\\black_black
 
     /// Où un mannequin tient ses mains, sa tête et ses pieds dans sa **pose de
     /// repos** — celle qu'il a sans voiture autour de lui, donc celle du
-    /// plateau d'essayage (SPEC-ecran-pilote PILOTE§5.1).
+    /// plateau d'essayage (PILOTE§5.1).
     ///
     /// La question à laquelle ce test répond : peut-on poser un volant
     /// générique à un endroit fixe, ou faut-il le calculer par mannequin ?

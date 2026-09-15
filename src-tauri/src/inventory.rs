@@ -256,7 +256,7 @@ fn nature_of_sub(_kind: RowKind) -> Nature {
 /// C'est le signal n°2 du §2.1, le seul qui soit **certain** : rien n'est
 /// déduit, `parent_id` dit l'hôte. Un hôte inconnu de la bibliothèque (mod
 /// supprimé, couche en attente de son contenu) laisse la ligne rattachée « au
-/// jeu » plutôt que de la faire disparaître — §14.3 en fera un état d'attente
+/// jeu » plutôt que de la faire disparaître — REFONTE§14 en fera un état d'attente
 /// à part entière.
 fn host_attachment(index: &attach::EntityIndex, parent_id: &str, nature: Nature) -> Attachment {
     match index.lookup(parent_id) {
@@ -469,7 +469,7 @@ mod tests {
         drop(base);
     }
 
-    /// Rule (§14.3, partiel): a host the library no longer knows leaves the row
+    /// Rule (REFONTE§14, partiel): a host the library no longer knows leaves the row
     /// attached to "the game" rather than making it vanish. Nothing is ever
     /// lost from this screen — that is its whole purpose.
     #[test]

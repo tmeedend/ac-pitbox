@@ -108,7 +108,7 @@ pub struct EntityDetails {
     /// show to disambiguate by eye ("modèle d'automobile Toyota, 1983–1987").
     pub label: Option<String>,
     pub description: Option<String>,
-    /// `P31`, the type filter's input (§4.1.3, §4.2.2).
+    /// `P31`, the type filter's input (WIKI§4.1, WIKI§4.2).
     pub types: Vec<String>,
     /// `P176`, the brand half of the car score.
     pub manufacturers: Vec<String>,
@@ -122,7 +122,7 @@ pub struct EntityDetails {
 }
 
 impl EntityDetails {
-    /// Is this candidate of one of the accepted types (§4.1.3, §4.2.2)?
+    /// Is this candidate of one of the accepted types (WIKI§4.1, WIKI§4.2)?
     pub fn is_of_type(&self, allowed: &[&str]) -> bool {
         self.types.iter().any(|t| allowed.contains(&t.as_str()))
     }
@@ -378,10 +378,10 @@ impl WikiClient {
         out
     }
 
-    /// Free-text entity search (§4.1.1, and the manual correction of WIKI§7.6).
+    /// Free-text entity search (WIKI§4.1, and the manual correction of WIKI§7.6).
     ///
     /// `wbsearchentities` is the API's own name lookup: it returns ids, labels
-    /// and short descriptions, but **no types** — the filtering of §4.1.3 needs
+    /// and short descriptions, but **no types** — the filtering of WIKI§4.1 needs
     /// `details` afterwards. Two requests per name, which is the floor.
     pub fn search(&self, query: &str, lang: &str, limit: u32) -> Fetched<Vec<SearchHit>> {
         let query = query.trim();
@@ -404,7 +404,7 @@ impl WikiClient {
         }
     }
 
-    /// Candidate entities from **Wikipedia's full-text search** (§4.1.1).
+    /// Candidate entities from **Wikipedia's full-text search** (WIKI§4.1).
     ///
     /// Not `wbsearchentities`, and this is measured rather than preferred: that
     /// endpoint matches labels and aliases from the **start of the string**, so
@@ -484,7 +484,7 @@ impl WikiClient {
         }
     }
 
-    /// Entities within `radius_m` of a point, nearest first (§4.2.1).
+    /// Entities within `radius_m` of a point, nearest first (WIKI§4.2).
     ///
     /// **On Wikidata, not on a language wiki**, and that is a correction to the
     /// spec rather than a shortcut: the English article "Nürburgring" carries
@@ -1091,7 +1091,7 @@ mod tests {
         assert_eq!(parse_article(&empty, "fr"), Fetched::Absent, "nothing to display");
     }
 
-    /// Rule (§4.1.4, measured): the production period is read off `P580`/`P582`,
+    /// Rule (WIKI§4.1, measured): the production period is read off `P580`/`P582`,
     /// whose time strings carry a sign and zeroed month and day.
     #[test]
     fn a_production_period_is_read_from_its_time_strings() {
@@ -1128,7 +1128,7 @@ mod tests {
         );
     }
 
-    /// Rule (§4.1.1, measured): the candidate search is Wikipedia's full-text
+    /// Rule (WIKI§4.1, measured): the candidate search is Wikipedia's full-text
     /// one, and it answers a name carrying a generation.
     ///
     /// `wbsearchentities("BMW M3 E30")` comes back **empty** — it matches
@@ -1159,7 +1159,7 @@ mod tests {
         assert_eq!(parse_search_pages(&json!({ "batchcomplete": true })), Fetched::Absent);
     }
 
-    /// Rule (§4.2.1, measured): on Wikidata a geosearch result's `title` is the
+    /// Rule (WIKI§4.2, measured): on Wikidata a geosearch result's `title` is the
     /// Q-id itself, and `dist` is in metres, nearest first.
     #[test]
     fn a_geosearch_result_is_a_q_id_and_a_distance() {

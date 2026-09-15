@@ -922,7 +922,7 @@ L'entrée active — celle dont l'écran est affiché — se marque par un **fil
 
 Règles, Importer, Profils et Maintenance sont les quatre **onglets d'un même écran** (`Workshop.svelte`), titré `Atelier`. Chacun est un écran à une tâche sans sous-rubrique : c'est ce qui rend le regroupement possible sans créer le double niveau d'onglets que §7.2 interdit. Quatre entrées de rail économisées, et les quatre outils gagnent une maison visible au lieu d'être quatre boutons dans une grille. Chaque onglet garde son propre **sous-titre** — il décrit l'outil, là où le titre décrit le lieu.
 
-**L'onglet reste porté par `nav.section`**, pas par un état local, et c'est ce qui compte à l'usage : la douzaine d'endroits qui appellent déjà `requestSection("import")` (le glisser-déposer global, un rapport d'import, un renvoi depuis la bibliothèque) atterrissent sur le bon onglet sans rien savoir de cet écran, la garde de navigation (§10bis) et l'historique (§7.2bis) restent en place, et l'entrée du rail — qui vise `rules` — repart forcément du premier onglet. **L'onglet actif n'est pas mémorisé.**
+**L'onglet reste porté par `nav.section`**, pas par un état local, et c'est ce qui compte à l'usage : la douzaine d'endroits qui appellent déjà `requestSection("import")` (le glisser-déposer global, un rapport d'import, un renvoi depuis la bibliothèque) atterrissent sur le bon onglet sans rien savoir de cet écran, la garde de navigation (§11) et l'historique (§7.2bis) restent en place, et l'entrée du rail — qui vise `rules` — repart forcément du premier onglet. **L'onglet actif n'est pas mémorisé.**
 
 Les **préférences d'import** ont suivi l'opération : elles ont quitté les Réglages pour une **section repliable en pied de l'onglet Importer**, repliée par défaut. Deux noms quasi identiques dans deux endroits différents — l'un l'action, l'autre ses préférences — produisaient des allers-retours. Une section et non un onglet : cet écran est déjà un onglet de l'Atelier. Écriture immédiate, sans bouton Enregistrer (deux réglages, aucun aperçu live à valider ou annuler), un échec s'affichant plutôt que de se perdre.
 
@@ -965,7 +965,7 @@ l'observateur voit passer la liste d'arrivée comme un écran à part entière :
 
 Trois points de comportement :
 - **Naviguer après un retour efface l'avance**, comme dans un navigateur.
-- **La garde de §10bis s'applique** : reculer depuis les Réglages avec des changements non enregistrés propose de les enregistrer, exactement comme un clic dans la barre latérale. Un refus laisse l'historique où il était.
+- **La garde de §11 s'applique** : reculer depuis les Réglages avec des changements non enregistrés propose de les enregistrer, exactement comme un clic dans la barre latérale. Un refus laisse l'historique où il était.
 - **Rien n'est persisté** : une app rouverte le lendemain n'a pas d'écran précédent, pas plus qu'un onglet neuf n'a de bouton retour actif.
 
 WebView2 mappe ces deux boutons sur **son** historique de navigation ; l'app à route unique (SPA `adapter-static`) n'a rien où reculer, et la webview quitterait la page pour une fenêtre blanche. Ils sont donc interceptés (`preventDefault` sur `mousedown` et sur `auxclick`) avant d'être traduits en navigation Pit Box.
@@ -1429,7 +1429,7 @@ Ce n'est un déchet que si le parent ne revient jamais. Ils sont donc **listés 
 **enrichissement Wikipédia** (`wiki_online`, défaut activé — §6.3) et sa **langue de
 lecture** (automatique par défaut : la langue de l'app, puis la chaîne de repli).
 
-**Écran Réglages en onglets** (Général / Chemins / Aperçu 3D / Vignettes / Musique / Wikipédia) depuis le mode Big Picture (§16) — Général et Chemins partagent `AppConfig` et sa garde de navigation (§10bis) ; Aperçu 3D et Musique ont chacun leur propre stockage et **s'appliquent sans bouton Enregistrer** (`ui_prefs.json` pour l'un, `music.json` pour l'autre). L'onglet **Import** n'est plus ici : ses deux préférences vivent au pied de l'écran `Atelier › Importer` (§7.2quater).
+**Écran Réglages en onglets** (Général / Chemins / Aperçu 3D / Vignettes / Musique / Wikipédia) depuis le mode Big Picture (§16) — Général et Chemins partagent `AppConfig` et sa garde de navigation (§11) ; Aperçu 3D et Musique ont chacun leur propre stockage et **s'appliquent sans bouton Enregistrer** (`ui_prefs.json` pour l'un, `music.json` pour l'autre). L'onglet **Import** n'est plus ici : ses deux préférences vivent au pied de l'écran `Atelier › Importer` (§7.2quater).
 
 **Onglet Wikipédia** (`components/settings/WikiTab.svelte`) : l'interrupteur de
 l'enrichissement et son motif (§6.3), la langue de lecture, la **purge du cache**

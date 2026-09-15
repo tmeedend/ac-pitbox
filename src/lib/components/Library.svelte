@@ -328,7 +328,7 @@
   // normalise pendant qu'on l'utilise. Un seul observateur pour toute la
   // grille : un par carte coûterait trois cents abonnements pour la même
   // information.
-  // **Le preset suit la densité de la grille** (SPEC-grille §6bis). La densité
+  // **Le preset suit la densité de la grille** (SPEC-grille FMOD§6bis). La densité
   // est déjà une déclaration d'intention : passer en dense, c'est dire « je
   // cherche » ; passer en confortable, c'est dire « je regarde ». Y accrocher le
   // style n'ajoute donc pas un réglage, ça donne un second sens à un contrôle

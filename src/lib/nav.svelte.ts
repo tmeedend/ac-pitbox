@@ -173,7 +173,7 @@ export function queueOpponentsAction(mode: "set" | "add", carIds: string[]): voi
   nav.opponentsAction = { mode, carIds };
 }
 
-// --- Garde de navigation (§10bis) ---
+// --- Garde de navigation (§11) ---
 // Un écran avec des modifications non enregistrées (ex. Réglages, zoom/langue
 // appliqués en aperçu live avant la sauvegarde) peut poser une garde : avant
 // tout changement de section, on lui laisse la main pour proposer

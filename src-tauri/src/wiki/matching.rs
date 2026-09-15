@@ -12,7 +12,7 @@ use serde::Serialize;
 /// One candidate, with whatever score its strategy gave it.
 ///
 /// The score is in `[0, 1]` in both strategies, but it does not mean the same
-/// thing: for a car it is the weighted name/brand/year score of §4.1.4, for a
+/// thing: for a car it is the weighted name/brand/year score of WIKI§4.1, for a
 /// track it is proximity. Comparable within a strategy, never across.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -70,9 +70,9 @@ pub struct Thresholds {
     /// Below this, the best candidate is not good enough to be anybody's
     /// article.
     pub min_score: f64,
-    /// Gap the best must have over the second (§4.1.5).
+    /// Gap the best must have over the second (WIKI§4.1).
     pub min_margin: f64,
-    /// Radius of the geographic search, metres (§4.2.1).
+    /// Radius of the geographic search, metres (WIKI§4.2).
     pub track_radius_m: u32,
     /// Two accepted track candidates closer together than this are a tie, and
     /// a tie is an ambiguity.
@@ -130,7 +130,7 @@ pub fn name_similarity(a: &str, b: &str) -> f64 {
     0.5 * jaccard + 0.5 * containment
 }
 
-/// The verdict of §4.1.5, applied to candidates **already sorted** best first.
+/// The verdict of WIKI§4.1, applied to candidates **already sorted** best first.
 ///
 /// Two ways to end with nothing, and they are not the same: too weak (nobody
 /// is plausible) and too close (several are). The second is the one the spec
@@ -225,7 +225,7 @@ mod tests {
         assert_eq!(name_similarity("Toyota AE86", "toyota ae-86"), 1.0);
     }
 
-    /// Rule (WIKI§1, §4.1.5): **two close candidates produce nothing.** This is the
+    /// Rule (WIKI§1, WIKI§4.1): **two close candidates produce nothing.** This is the
     /// test the whole feature turns on — a wrong article costs far more than a
     /// missing one, so a near-tie is never resolved by picking the first.
     #[test]
@@ -248,7 +248,7 @@ mod tests {
         }
     }
 
-    /// Rule (§4.1.5): the same pair, once the best is clear enough, is a match
+    /// Rule (WIKI§4.1): the same pair, once the best is clear enough, is a match
     /// — and it carries its margin so the calibration report can show it.
     #[test]
     fn a_clear_winner_is_matched_with_its_margin() {

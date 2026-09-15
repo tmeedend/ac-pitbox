@@ -13,8 +13,8 @@
 
 // --- Properties -------------------------------------------------------------
 
-/// `instance of` / « nature de l'élément ». The type filter of §4.1.2 and
-/// §4.2.2 reads this and nothing else.
+/// `instance of` / « nature de l'élément ». The type filter of WIKI§4.1 and
+/// WIKI§4.2 reads this and nothing else.
 pub const INSTANCE_OF: &str = "P31";
 
 /// `subclass of` / « sous-classe de ».
@@ -38,14 +38,14 @@ pub const PART_OF: &str = "P361";
 /// (Nürburgring): 50.3355555, 6.9475.
 pub const COORDINATE_LOCATION: &str = "P625";
 
-/// `manufacturer` / « fabricant ». The brand half of the car score (§4.1.4).
+/// `manufacturer` / « fabricant ». The brand half of the car score (WIKI§4.1).
 /// Seen on all four cars measured: MX-5 → Q35996, Supra and AE86 → Q53268,
 /// M3 → Q26678.
 pub const MANUFACTURER: &str = "P176";
 
 /// `start time` / « date de début » and `end time` / « date de fin ».
 ///
-/// The production period of §4.1.4, and the **only** source for it that exists
+/// The production period of WIKI§4.1, and the **only** source for it that exists
 /// in practice. `P571` ("inception") was the obvious candidate and is absent
 /// from every car item measured — MX-5, Supra, M3 and the Sprinter Trueno all
 /// lack it. Only the *generation* item carries a period: Q1377219 has
@@ -77,7 +77,7 @@ pub const CAR_MODEL_SERIES: &str = "Q59773381";
 /// Found because a calibration report claimed the SF15-T had no article.
 pub const RACING_CAR_MODEL: &str = "Q90834785";
 
-/// What §4.1.3 accepts for a car. Every entry added here is a new way to match
+/// What WIKI§4.1 accepts for a car. Every entry added here is a new way to match
 /// the wrong thing, so each one is measured on a real item rather than
 /// imagined.
 pub const CAR_TYPES: [&str; 3] = [CAR_MODEL, CAR_MODEL_SERIES, RACING_CAR_MODEL];
@@ -129,7 +129,7 @@ pub const ROUTE_TYPES: [&str; 6] = [
     MOUNTAIN_PASS,
 ];
 
-/// The allowlist of §4.2.2, wider than the cars' on purpose.
+/// The allowlist of WIKI§4.2, wider than the cars' on purpose.
 ///
 /// **This list carries the whole track strategy.** Measured five metres from
 /// the Nordschleife's coordinates: the twenty nearest items are nineteen Grand
@@ -137,7 +137,7 @@ pub const ROUTE_TYPES: [&str; 6] = [
 /// castle, a stream and a closed amusement park — and the Nürburgring itself
 /// is not among them, because some twenty items share the exact same
 /// coordinate and the order between equals is arbitrary. Without the filter,
-/// "the nearest one" (§4.2.3) matches the Nordschleife to the 1997 Luxembourg
+/// "the nearest one" (WIKI§4.2) matches the Nordschleife to the 1997 Luxembourg
 /// Grand Prix.
 ///
 /// Mountains are **not** in the list. The Initial D passes are the tempting

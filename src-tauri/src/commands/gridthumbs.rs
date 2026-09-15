@@ -1,4 +1,4 @@
-//! Regenerated thumbnails for the library grid (`docs/SPEC-grille.md` GRILLE§5).
+//! Regenerated thumbnails for the library grid (GRILLE§5).
 //!
 //! Rendering happens in the frontend — that is where three.js lives — so the
 //! round trip is: ask what this car needs (`grid_thumbnail`), convert it out of

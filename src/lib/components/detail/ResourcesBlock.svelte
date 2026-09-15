@@ -61,7 +61,7 @@
     /** Intitulé du bandeau. Par défaut « Ressources ». */
     title?: string;
     /** Livraisons **rattachées** dont les documents rejoignent cette liste
-     * (§7.8) : les notices d'un pack, stockées comme des mods à eux parce
+     * (REFONTE§7.8) : les notices d'un pack, stockées comme des mods à eux parce
      * qu'elles arrivaient hors du dossier du mod.
      *
      * Dans la même liste, et non dans une carte chacune : trois cartes pour

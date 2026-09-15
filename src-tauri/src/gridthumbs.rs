@@ -1,4 +1,4 @@
-//! Regenerated thumbnails for the library grid (`docs/SPEC-grille.md` GRILLE§5).
+//! Regenerated thumbnails for the library grid (GRILLE§5).
 //!
 //! The grid shows whatever the mod author shipped as `preview.png`: renders on
 //! black, renders on white, in-game captures, photographs. The eye re-adapts to
