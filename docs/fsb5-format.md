@@ -15,7 +15,7 @@ demandait jusqu'ici de démarrer une session.
 
 Les fichiers lus sont ceux de l'installation locale de l'utilisateur. Rien n'est
 redistribué, et aucune bibliothèque FMOD n'est embarquée : le lecteur est écrit
-à partir de la description du format, ce que le §2 du `SPEC-preview-3d-kn5.md`
+à partir de la description du format, ce que le PREVIEW§2
 tranche déjà pour le KN5 — les offsets et constantes d'un format sont des faits
 techniques, c'est le *code* d'un tiers qui est sous licence.
 

@@ -166,6 +166,15 @@ console.log(`[refs] ${total} renvois §X, ${broken.length} sans cible (${baselin
 // tous. L'ordre est donc : le document, puis l'étiquette si elle est là, et
 // c'est seulement quand ni l'un ni l'autre ne répond qu'il y a un défaut.
 //
+// **Ce que le second compteur vaut, et ce qu'il ne vaut pas.** Les 137 `§` nus
+// qui sortaient de leur document ont été relus un par un (2026-09-16) : 75
+// visaient une autre spec et portent désormais leur étiquette, les autres
+// visaient bien `SPEC.md` et sont donc **corrects** — un `§` nu vaut `SPEC.md`,
+// c'est la convention. Le compteur n'a donc pas vocation à tomber à zéro ; il
+// sert de **fil-piège** : s'il bondit, quelqu'un a écrit des renvois sans se
+// demander vers quel document ils pointaient. Aucune règle mécanique ne
+// distingue les deux cas — il faut lire la phrase qui porte le renvoi.
+//
 // **Pourquoi un rapport et pas une porte.** 213 défauts préexistants ne
 // passent pas en une fois, et les geler dans le socle serait précisément ce
 // que `CLAUDE.md` refuse — « on ne grossit pas le socle pour faire taire une
@@ -179,7 +188,7 @@ const docsNoTarget = [];
   let docTotal = 0;
   let selfRefs = 0;
   const noTarget = docsNoTarget;
-  const unlabelled = [];
+  const toSpec = [];
   for (const f of mdFiles) {
     for (const m of readFileSync("docs/" + f, "utf8").matchAll(REF)) {
       docTotal++;
@@ -198,7 +207,7 @@ const docsNoTarget = [];
       // Il sort du document. S'il tombe dans SPEC.md c'est peut-être voulu,
       // mais rien ne le dit — et c'est exactement par là que les cinq renvois
       // mal dirigés sont passés. L'étiquette lève l'ambiguïté ; elle manque.
-      if (sections[""].has(ref)) unlabelled.push(`${f} : §${ref}`);
+      if (sections[""].has(ref)) toSpec.push(`${f} : §${ref}`);
       else noTarget.push(`${f} : §${ref} — ni ce document ni SPEC.md ne le définit`);
     }
   }
@@ -209,9 +218,9 @@ const docsNoTarget = [];
   };
   console.log(
     `[refs] docs/ : ${docTotal} renvois — ${selfRefs} auto-renvois, ` +
-      `${noTarget.length} sans cible, ${unlabelled.length} à étiqueter (rapport, pas une porte)`,
+      `${noTarget.length} sans cible, ${toSpec.length} nus vers SPEC.md (convention)`,
   );
-  const worst = [...byFile(noTarget), ...byFile(unlabelled)].reduce((acc, [f, n]) => {
+  const worst = [...byFile(noTarget), ...byFile(toSpec)].reduce((acc, [f, n]) => {
     acc[f] = (acc[f] ?? 0) + n;
     return acc;
   }, {});
@@ -219,7 +228,7 @@ const docsNoTarget = [];
   if (top.length) console.log(`[refs] docs/ les plus touchés : ${top.map(([f, n]) => `${f} (${n})`).join(" · ")}`);
   if (process.argv.includes("--docs")) {
     for (const e of noTarget) console.log(`  sans cible   ${e}`);
-    for (const e of unlabelled) console.log(`  à étiqueter  ${e}`);
+    for (const e of toSpec) console.log(`  vers SPEC   ${e}`);
   }
 }
 

@@ -35,7 +35,7 @@ de reprendre. En cas d'écart, la spec fait foi.
       possible et **nette** (100 % des fichiers du mod sont des textures de son
       `.kn5`, contre 58 % au maximum pour 75 livrées réelles ; 0 livrée sur
       3585 dépourvue des quatre marqueurs de livrée). Restent deux décisions de
-      conception, §5 et §6 de la spec. Ne pas commencer sans les avoir lues.
+      conception, TEXTURE§5 et TEXTURE§6 de la spec. Ne pas commencer sans les avoir lues.
 - [ ] **Harmonisation des libellés**. 68 règles de libellé
       produisent 53 signatures visuelles distinctes : 15 tailles de police,
       7 interlettrages, 9 couleurs. La même fonction visuelle change donc
@@ -68,9 +68,9 @@ de reprendre. En cas d'écart, la spec fait foi.
       éteint** : `FEATURE_GRID_THUMBS` est à `false` dans `src/lib/features.ts`,
       qui porte le mode d'emploi de l'interrupteur. Il ne reste qu'un réglage,
       long et fastidieux, et trois presets livrés avec des valeurs provisoires
-      seraient jugés sur elles. Spec dans `docs/SPEC-grille.md`, dont le §11 dit ce
-      que l'implémentation a changé et pourquoi. La partie A (§2 à §4) était
-      déjà livrée ; la **partie B** (§5 à §8) l'est — pipeline, tâche de fond,
+      seraient jugés sur elles. Spec dans `docs/SPEC-grille.md`, dont le GRILLE§11 dit ce
+      que l'implémentation a changé et pourquoi. La partie A (GRILLE§2 à GRILLE§4) était
+      déjà livrée ; la **partie B** (GRILLE§5 à GRILLE§8) l'est — pipeline, tâche de fond,
       écran de réglage, profils à l'installation — et le modèle de **presets**
       est venu après, d'une remarque de l'utilisateur : la preview d'origine
       d'Assetto Corsa est plus *jolie* que notre rendu, le nôtre plus
@@ -234,7 +234,7 @@ de reprendre. En cas d'écart, la spec fait foi.
       « Pilote choisi » de la bibliothèque lit ce drapeau par carte**, donc de
       façon synchrone (`peekUiPref`).
       **Reste, dans cet ordre :**
-      1. **Écart spec/réalité à trancher avec l'utilisateur** : le §6.3 range
+      1. **Écart spec/réalité à trancher avec l'utilisateur** : le PILOTE§6.3 range
          les époques par ce que désigne la *famille*, mais mesuré sur
          l'installation, c'est la *variante* qui porte le sens en 1969
          (amon, clark…) et en 1985 (les couleurs). D'où le repli implémenté :
@@ -266,17 +266,17 @@ de reprendre. En cas d'écart, la spec fait foi.
          `seating_offset` a mesuré comme inapplicable.
       **Écarts assumés vis-à-vis de la spec, décidés avec l'utilisateur** :
       le favori se pose sur le cœur de la bibliothèque (`♥`/`♡`) placé sous
-      l'image et non sur elle — on garde l'argument du §7.3 (l'échantillon est
+      l'image et non sur elle — on garde l'argument du PILOTE§7.3 (l'échantillon est
       montré entier, un bouton posé dessus en cache un morceau) en prenant le
       glyphe du reste de l'app ; les **tenues enregistrées**
-      (`driverOutfits.svelte.ts`, §13 complété) reposent les quatre pièces
+      (`driverOutfits.svelte.ts`, PILOTE§13 complété) reposent les quatre pièces
       d'un clic — le corps d'abord, sinon `setDriverBody` efface les trois
       autres juste après les avoir posées ; le badge `MODIFIÉ` du PILOTE§3.2 est
       retiré, la ligne de session disant désormais elle-même « Tenue
       d'origine », le nom de la tenue enregistrée, ou « Tenue personnalisée » ;
       et une pièce gardée qui ne s'applique pas au corps courant est **barrée**
       dans sa piste au lieu d'être affichée comme active — elle est conservée
-      (§13) mais ne change rien, ce que rien ne disait.
+      (PILOTE§13) mais ne change rien, ce que rien ne disait.
       Le **verrou « voiture de course »** du PILOTE§11.2 est retiré (décidé avec
       l'utilisateur) : son texte était devenu faux, le corps se pose là comme
       ailleurs, et un écran intermédiaire qu'un clic franchit ne protège rien.
@@ -289,7 +289,7 @@ de reprendre. En cas d'écart, la spec fait foi.
 - [ ] **Aperçu 3D natif des voitures** (fusionné dans `main` ; la branche
       d'origine `feature/3dpreview` ne subsiste que sur `origin`).
       **L'avancement détaillé, les écarts assumés vis-à-vis de la spec et le
-      reste à faire sont dans `docs/SPEC-preview-3d-kn5.md` §13 à §15** — c'est
+      reste à faire sont dans `docs/SPEC-preview-3d-kn5.md` PREVIEW§13 à PREVIEW§15** — c'est
       là qu'il faut lire en reprenant, pas ici.
       En bref : **lots 0 à 6 faits et validés à l'écran** — la voiture
       s'affiche dans la fiche, tourne sur son socle, se manipule à la souris,
@@ -308,12 +308,12 @@ de reprendre. En cas d'écart, la spec fait foi.
       fois de suite (texture, opacité, exposant spéculaire). Donc : devant un
       défaut visuel, **ne pas s'arrêter au premier champ coupable**, et
       regarder aussi ce qui est dessiné par-dessus.
-      Reste surtout le choix du LOD — §15.
+      Reste surtout le choix du LOD — PREVIEW§15.
       Le réglage de qualité se réduit au suréchantillonnage : une passe SMAA
       a été essayée, déplacée, puis retirée faute de gain visible pour un
       gigaoctet de mémoire. Il subsiste du crénelage sur les lignes claires
       quasi horizontales ; le prochain essai est **en amont** (normales,
-      rugosité), pas un filtre de plus. §15 point 8.
+      rugosité), pas un filtre de plus. PREVIEW§15 point 8.
       (R et B de `txMaps` : question close, par la négative ; la métallicité
       vient de `fresnelC` — écarts n°7 et n°10 de `kn5-format.md`.)
       Trois règles à ne pas perdre de vue :
@@ -328,16 +328,16 @@ de reprendre. En cas d'écart, la spec fait foi.
 - [ ] **Enrichissement Wikipédia de la fiche** (fusionné dans
       `main`). Un extrait de l'article du véhicule ou
       du circuit **réel**, dans un onglet à côté de la description de l'auteur.
-      Spec : `docs/SPEC-wikipedia-fiche-detail.md`, et son §1 commande tout —
+      Spec : `docs/SPEC-wikipedia-fiche-detail.md`, et son WIKI§1 commande tout —
       la fonctionnalité est **décorative**, donc l'ambiguïté n'affiche rien et
-      l'absence n'est jamais une erreur. Son §2 est juridique et non
+      l'absence n'est jamais une erreur. Son WIKI§2 est juridique et non
       négociable : le texte reste une **collection** (jamais fusionné à la
       description, jamais reformulé, résumé ni traduit — surtout pas par un
       modèle de langage), sinon le ShareAlike de CC BY-SA remonte sur l'app.
       **Fait : les lots 1 à 3, sans interface** — `src-tauri/src/wiki/` : les
-      trois tables dans l'overlay (§3), la chaîne de repli et la remontée d'un
-      cran (§5), le client Action API (§6), et l'appariement automatique des
-      voitures et des circuits (§4) avec sa commande de calibration.
+      trois tables dans l'overlay (WIKI§3), la chaîne de repli et la remontée d'un
+      cran (WIKI§5), le client Action API (WIKI§6), et l'appariement automatique des
+      voitures et des circuits (WIKI§4) avec sa commande de calibration.
       Le module porte encore un `allow(dead_code)`, mais **plus pour la raison
       qui l'a fait poser** : il datait du temps où rien n'appelait le module.
       Mesuré en le retirant, il masque aujourd'hui **13 warnings de deux
@@ -350,12 +350,12 @@ de reprendre. En cas d'écart, la spec fait foi.
       et au moins un (`ROUTE_TYPES`) **porte une décision** — les routes ne
       s'apparient pas automatiquement — qu'une suppression effacerait.
       **Les identifiants Wikidata sont dans `wiki/ids.rs`**, un par un relevés
-      sur l'API vivante (§4.4 l'exige) — le libellé en commentaire est celui
+      sur l'API vivante (WIKI§4.4 l'exige) — le libellé en commentaire est celui
       que l'API a rendu, et chaque entrée dit sur quel item réel elle a été
       confirmée. Ne pas en ajouter de mémoire.
       **Les seuils sont dans `Prefs`** (`wiki_match_*`, `wiki_track_*`) et la
       liste de nettoyage des noms dans `rules/wiki-matching.json`, semée dans
-      le dossier de config et éditable — §4.3 l'exige, et c'est ce qui permet
+      le dossier de config et éditable — WIKI§4.3 l'exige, et c'est ce qui permet
       de régler la reconnaissance sans release.
       **Pour calibrer** (rien n'est persisté, le rapport sort en Markdown) :
       ```
@@ -365,7 +365,7 @@ de reprendre. En cas d'écart, la spec fait foi.
       fois :
       - **La recherche géographique des circuits tourne sur Wikidata, pas sur
         Wikipédia.** L'article anglais « Nürburgring » n'a *aucune* coordonnée
-        GeoData (Suzuka non plus) : le `list=geosearch` de la §4.2 ne peut
+        GeoData (Suzuka non plus) : le `list=geosearch` de la WIKI§4.2 ne peut
         structurellement pas rendre le circuit qui lui sert d'exemple. L'item
         Wikidata porte bien P625, et y chercher rend des Q-ids directement.
       - **Le filtre de type porte toute la stratégie circuit.** À 5 m du
@@ -395,25 +395,25 @@ de reprendre. En cas d'écart, la spec fait foi.
         sitelinks mélangent `commonswiki` aux langues. Un test ignoré
         (`talks_to_wikipedia_for_real`) rejoue le tout contre le vrai service —
         c'est la seule preuve que le FFI WinHTTP fonctionne, la CI ne
-        l'exécutant pas (§11 : aucun test ne dépend de Wikipédia).
+        l'exécutant pas (WIKI§11 : aucun test ne dépend de Wikipédia).
       - **Un 404 et un réseau coupé ne sont pas le même non-résultat**
         (`api::Fetched`). Les confondre écrirait « pas d'article » dans le
         cache négatif pour 90 jours à cause d'un tunnel.
       **La calibration a tourné** (335 mods) et les seuils livrés sont les
-      siens, plus ceux du §13. Elle a corrigé quatre choses que le raisonnement
+      siens, plus ceux du WIKI§13. Elle a corrigé quatre choses que le raisonnement
       n'aurait pas trouvées, toutes consignées dans le code :
       - `wbsearchentities` **cherche par préfixe de libellé** : « BMW M3 E30 »
         n'y rend *rien*, aucun item ne s'appelant ainsi. C'était la cause
         dominante des 264 échecs du premier passage. La recherche passe
         désormais par le moteur plein texte de Wikipédia, qui rend « BMW M3 »
         en tête — et « Abarth 500 » pour une variante sans article à elle, ce
-        que la §4.1 veut explicitement.
+        que la WIKI§4.1 veut explicitement.
       - **`gsradius` est plafonné à 10 km par l'API**, qui refuse la requête
         entière au-delà. Un rayon de 25 km a transformé *les 24 circuits* en
         « réseau indisponible » d'un coup — c'est à ça que ressemble une panne
         systématique à côté d'une vraie coupure.
       - **Les routes ne s'apparient plus automatiquement** (écart assumé avec
-        la §4.2) : une rue est à portée de n'importe quelle coordonnée, et le
+        la WIKI§4.2) : une rue est à portée de n'importe quelle coordonnée, et le
         nom ne peut pas arbitrer puisque la spec a choisi les coordonnées
         *parce que* « Shutoko » ne ressemble pas à « Metropolitan Expressway ».
         Quatre articles faux pour une poignée de justes. Shutoko et les touge
@@ -423,31 +423,31 @@ de reprendre. En cas d'écart, la spec fait foi.
         recherche.
       Résultat : 15 circuits retenus, tous justes (Monza retrouvé par le repli
       sur le nom, ses coordonnées CSP étant celles de Milan), contre 0 avant.
-      **Les six lots du §12 sont faits.** L'onglet vit dans la fiche
+      **Les six lots du WIKI§12 sont faits.** L'onglet vit dans la fiche
       (voitures et circuits), la correction manuelle y est, et
       `Réglages › Wikipédia` porte l'interrupteur, la langue, la purge du cache
       et l'export des corrections.
       **Quatre écarts assumés avec la spec, tous décidés avec l'utilisateur
       après l'avoir vu à l'écran** — ils sont écrits dans le SPEC de la
       fonctionnalité, pas seulement ici :
-      - **L'onglet est permanent** (contre la §7.1). Un onglet absent ne se
+      - **L'onglet est permanent** (contre la WIKI§7.1). Un onglet absent ne se
         distingue ni d'une recherche en cours, ni d'une fonctionnalité qui
         n'existe pas — constaté en vrai, sur un circuit qui s'appariait
         pendant qu'on regardait la fiche. Il porte donc six états, dont aucun
         n'est une erreur, et la correction manuelle avec eux : la WIKI§7.6
         l'accrochait à un onglet qui n'existait pas dans le seul cas où elle
         sert.
-      - **L'article entier et rendu** (contre la §7.3, qui n'en voulait que
+      - **L'article entier et rendu** (contre la WIKI§7.3, qui n'en voulait que
         l'introduction en texte brut) : sections, sommaire, tableaux, infobox.
         Le HTML n'est jamais injecté tel quel — `wikiHtml.ts` **reconstruit**
         un arbre depuis une liste blanche, la webview ayant accès à `invoke`.
         Aucune dépendance ajoutée pour ça.
-      - **Les images sont affichées** (contre la §9). Ses trois objections
+      - **Les images sont affichées** (contre la WIKI§9). Ses trois objections
         étaient exactes et sont traitées, pas contournées : **Commons
         uniquement** (`imagerepository == "shared"`), ce qui écarte
         structurellement l'usage loyal puisque Commons n'accepte que du libre ;
         auteur et licence sous chaque image, non masquables.
-      - **Le mot « extrait » quitte l'attribution** (§7.4) : il était exigé
+      - **Le mot « extrait » quitte l'attribution** (WIKI§7.4) : il était exigé
         parce que ne montrer qu'un fragment est une modification. Montrer le
         texte entier est le régime **plus simple**, pas plus risqué.
       **Reste deux choses** : le ménage du `allow(dead_code)` ci-dessus, et
@@ -480,7 +480,7 @@ de reprendre. En cas d'écart, la spec fait foi.
          **absent**. C'est ce qui transforme le rapport d'un décompte en mesure.
       4. Balayer les couples (`wiki_match_min_score`, `wiki_match_min_margin`)
          sur ces étiquettes et retenir celui qui maximise les justes sans
-         laisser passer de faux — la §1 échange volontiers du rappel contre de
+         laisser passer de faux — la WIKI§1 échange volontiers du rappel contre de
          la précision.
       **Deux pièges à ne pas réintroduire :**
       - **La calibration doit comparer le verdict brut du moteur aux
@@ -500,7 +500,7 @@ de reprendre. En cas d'écart, la spec fait foi.
       causes que rien ne distingue à l'écran.
       **Les images s'ouvrent en grand**, et c'est `Lightbox` qui le fait —
       la visionneuse partagée des captures et des backgrounds, à qui on a
-      ajouté deux choses : le **crédit avec son lien Commons** (§9 : sans lui
+      ajouté deux choses : le **crédit avec son lien Commons** (WIKI§9 : sans lui
       l'image ne peut pas être affichée du tout) et une **source de repli**,
       parce que MediaWiki refuse d'agrandir au-delà de l'original et que rien
       dans l'URL ne dit où il est — on demande 1600 px, on retombe sur la
@@ -552,7 +552,7 @@ de reprendre. En cas d'écart, la spec fait foi.
       l'export des notes n'a nulle part où aller (il n'existe aucun export des
       métadonnées de l'overlay), la valeur d'origine des unités est déjà la
       seule affichée (rien n'est converti), et le retrait des mannequins de
-      l'inventaire — pourtant demandé par le §5 — s'est révélé **nuisible** :
+      l'inventaire — pourtant demandé par le REFONTE§5 — s'est révélé **nuisible** :
       la galerie de l'écran Pilote est un sélecteur, elle ne gère rien, et les
       en retirer supprimait le seul endroit d'où on pouvait les désactiver ou
       les supprimer. Les livrées tranchent par l'exemple : **choisir et gérer

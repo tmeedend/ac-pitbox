@@ -533,13 +533,23 @@ renuméroté, d'où onze renvois morts dans le seul `LOT1`), des renvois vers un
 autre spec écrits sans étiquette, et sept sous-sections de `REFONTE§14` écrites
 **en gras au lieu de titres** — elles existaient, aucun outil ne les voyait.
 
-**Restent 137 `§` nus qui sortent de leur document**, et eux restent un
-**rapport** : ils tombent sur une vraie section de `SPEC.md`, donc rien ne les
-distingue d'un renvoi correct sans lire la phrase qui les porte. C'est par là
-que cinq renvois mal dirigés sont passés en deux jours. Même patron que
-`report-docs.mjs` : le nombre passe sous les yeux à chaque vérification, on le
-draine par lots, et le jour où il atteint zéro cette moitié devient une porte à
-son tour. `node scripts/check-refs.mjs --docs` liste le détail.
+**Les 137 `§` nus qui sortaient de leur document ont été relus un par un**
+(2026-09-16) : **75 visaient une autre spec** et portent désormais leur
+étiquette — un document compagnon (`kn5-format.md`, le plan de refonte) renvoie
+à la spec qu'il accompagne, et une entrée de `CHANTIERS.md` renvoie à la spec de
+son chantier. Les **62 restants sont corrects** : un `§` nu vaut `SPEC.md`,
+c'est la convention.
+
+Ce second compteur **n'a donc pas vocation à tomber à zéro** — il est un
+**fil-piège** : s'il bondit, quelqu'un a écrit des renvois sans se demander vers
+quel document ils pointaient. Aucune règle mécanique ne sépare les deux cas, il
+faut lire la phrase. `node scripts/check-refs.mjs --docs` liste le détail.
+
+**Deux angles morts découverts en le vidant.** Une section peut exister sans
+qu'aucun outil la voie : `REFONTE§14.1` à `14.7` étaient en **gras**, pas en
+titres. Et un `§` nu peut être **avalé comme auto-renvoi** — le `§4` du plan de
+refonte se résolvait sur son propre « 4. Les lots » alors qu'il visait
+`REFONTE§4`, donc il paraissait juste tout en étant faux.
 
 Le mécanisme du socle reste, pour le jour où une refonte en casse trente d'un
 coup : `node scripts/check-refs.mjs --update` les gèle et on les reprend par

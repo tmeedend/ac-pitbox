@@ -47,7 +47,7 @@ de nature.
 **③ Les quatre signaux du REFONTE§2.1 sont tous présents dans les données réelles**, y compris
 les deux exemples que la spec cite de mémoire : `policeman__ext_config.ini` (signal 3,
 config CSP nommée d'après une entité) et les polices RSS arrivées dans l'archive de la
-voiture (signal 4, conjecture). `DORIKIN_DRIVER_MOD` — le cas du §4.5, listé deux fois
+voiture (signal 4, conjecture). `DORIKIN_DRIVER_MOD` — le cas du REFONTE§4.5, listé deux fois
 aujourd'hui — existe bien lui aussi. Le calcul du REFONTE§2.1 est donc éprouvable sur cette
 bibliothèque dès le lot 6, sans corpus fabriqué.
 
@@ -63,15 +63,15 @@ un choix.
 1. **Runner de tests front : Vitest, logique pure uniquement.** `src/lib/*.ts`, aucun
    test de composant, pas de jsdom. Ajouté à `npm run verify`. La refonte produit
    enfin la matière qui manquait : conversion d'unités (REFONTE§7.6), nom de couche dérivé
-   (§8.3), règles de facettes et de rattachement — en plus de `displayName.ts` qui
+   (REFONTE§8.3), règles de facettes et de rattachement — en plus de `displayName.ts` qui
    attendait déjà.
 2. **Ordre : les fiches d'abord, deux paliers.** L1→L5, fusion dans `main`, puis
-   L6→L9. La spec le permet (§15 : « les lots 1 à 4 peuvent être livrés seuls ») et
+   L6→L9. La spec le permet (REFONTE§15 : « les lots 1 à 4 peuvent être livrés seuls ») et
    ça évite une branche qui diverge pendant des mois.
 3. **L'écran transversal est absorbé, mais le groupement par hôte survit.**
    L'inventaire gagne « Grouper par : archive · hôte · aucun ». Le geste « voir tous
    les skins de cette voiture » ne se perd pas, et c'est le même mécanisme que le
-   groupement par archive du §4.4.
+   groupement par archive du REFONTE§4.4.
 
 ---
 
@@ -140,9 +140,13 @@ font pas une brique, ils font trois modules.
   plafonne, et attend la lecture avant d'écrire (garde née d'un bug remonté deux
   fois). Un module commun exposerait cinq axes pour trois appelants, quand `Seg`
   s'est limité à trois pour sept : pas une copie de trop, mais trois contrats
-  voisins qu'on lit mieux séparés. Reste une question d'**UX** et elle seule —
-  puces toujours visibles contre modale —, à reposer le jour où le panneau
-  d'essayage se refait.
+  voisins qu'on lit mieux séparés. **La question d'UX qui restait est tranchée**
+  (2026-09-16, décidé avec l'utilisateur) : les tenues **gardent leurs puces**.
+  Les brancher sur `NamedListDialog` échangerait un geste immédiat contre une
+  fenêtre, sur le seul écran où l'enchaînement rapide est le sujet — et pour
+  supprimer une duplication qui n'en est pas une. Le seul écart réel entre les
+  trois listes était l'absence de confirmation d'écrasement côté tenues ; il est
+  corrigé (`18457d9`), sans toucher au geste. **Rien ne reste ouvert ici.**
 Reformatage pur → commits isolés, jamais mélangés au fonctionnel (sinon `git blame`
 devient inexploitable).
 
@@ -161,17 +165,17 @@ paraît juste.
 | Lot | Contenu | Dépend de |
 |---|---|---|
 | **L1** | ✅ **Socle overlay** : `notes_user` et `display_name_user` sur les cinq tables d'entités, module `usermeta.rs`, un couple de commandes pour tous les types, binding typé. ALTER idempotents. Backend seul, aucun écran touché. `attachment_user` est **reporté en L6**, avec le code qui le calcule : une colonne que rien n'écrit ni ne lit pourrit. | — |
-| **L2** | ✅ **Coquille de fiche** (§6, §12) : `FicheHeader` sur les cinq fiches, tuile réelle ou pictogramme de type (jamais deux lettres du nom), nom repris à la main partout — les DTO d'app, de son et de mod « autre » portent enfin `display_name_user` jusqu'à l'écran —, auteur au sous-titre, et « en attente » ajouté à `StateBadge`. Les rangées de boutons des quatre fiches passent dans le ⋮, comme la fiche voiture l'avait fait avant elles. | L1, 0.b |
-| **L3** | ✅ **Notes** (§9) : `NoteBlock` sur les quatre fiches d'entité, recherche plein texte, filtre « Note contient… » **et** filtre booléen « A une note », colonne Note, marqueur ✎ sur la carte et sur la ligne. **L'export du REFONTE§9.6 est sans objet** : il n'existe aujourd'hui aucun export/import des métadonnées de l'overlay — seulement l'export d'un mod en archive autonome, qui ne transporte pas la base. À rouvrir le jour où cet export existera. | L1, L2 |
+| **L2** | ✅ **Coquille de fiche** (REFONTE§6, REFONTE§12) : `FicheHeader` sur les cinq fiches, tuile réelle ou pictogramme de type (jamais deux lettres du nom), nom repris à la main partout — les DTO d'app, de son et de mod « autre » portent enfin `display_name_user` jusqu'à l'écran —, auteur au sous-titre, et « en attente » ajouté à `StateBadge`. Les rangées de boutons des quatre fiches passent dans le ⋮, comme la fiche voiture l'avait fait avant elles. | L1, 0.b |
+| **L3** | ✅ **Notes** (REFONTE§9) : `NoteBlock` sur les quatre fiches d'entité, recherche plein texte, filtre « Note contient… » **et** filtre booléen « A une note », colonne Note, marqueur ✎ sur la carte et sur la ligne. **L'export du REFONTE§9.6 est sans objet** : il n'existe aujourd'hui aucun export/import des métadonnées de l'overlay — seulement l'export d'un mod en archive autonome, qui ne transporte pas la base. À rouvrir le jour où cet export existera. | L1, L2 |
 | **L4** | ✅ **Fiche voiture / circuit** (REFONTE§7 + REFONTE§7.8) — le gros morceau, sur `DetailPage.svelte` (2 159 lignes). ① découpage en blocs, commit de déplacement pur ② les trois onglets, blocs déplacés **sans être modifiés** (REFONTE§17) ③ sélecteur compact partagé livrée/tracé ④ bloc textuel à sous-onglets, catégorie près du titre, CSP démotées. L'état composé des tracés (REFONTE§7.7) est fait : un tracé qu'une couche **active** apporte porte sa marque, et le compteur dit « dont 1 ajouté » — seulement quand la base ne connaît pas déjà ce tracé, sans quoi on étiquetterait comme add-on le contenu propre du circuit. **Le REFONTE§7.6 est sans objet** : il protège la valeur déclarée par le mod « quand elle est convertie » — or rien n'est converti. `TechSheet` affiche les chaînes brutes du `ui_car.json` (`"345bhp"`, `"1176kg"`), donc la valeur d'origine est déjà la seule affichée. Le REFONTE§7.6 ne redeviendra vrai que si une normalisation d'unités est ajoutée un jour. | L2, L3 |
-| **L5** | ✅ **Fiche de couche** (§8) : `LayerDetail`, ouverte par-dessus la fiche de l'hôte. Ce qui écrase la base en premier et en clair, ce qui s'ajoute replié par dossier, carte Ordre à partir de deux couches, nom dérivé corrigeable (`layerName.ts`, 7 tests). Le déversement de fichiers disparaît de `LayersBlock`. Celui de `LayersSection` (écran transversal Add-ons) est parti avec le composant, resté orphelin jusqu'au ménage qui a suivi L9. | L2 |
+| **L5** | ✅ **Fiche de couche** (REFONTE§8) : `LayerDetail`, ouverte par-dessus la fiche de l'hôte. Ce qui écrase la base en premier et en clair, ce qui s'ajoute replié par dossier, carte Ordre à partir de deux couches, nom dérivé corrigeable (`layerName.ts`, 7 tests). Le déversement de fichiers disparaît de `LayersBlock`. Celui de `LayersSection` (écran transversal Add-ons) est parti avec le composant, resté orphelin jusqu'au ménage qui a suivi L9. | L2 |
 | — | **Palier : fusion dans `main`.** | |
 | **L6** | ✅ **Rattachement et nature** (§2) : `attach.rs`, déduction par ordre de force **avec le signal attaché à la réponse**, correction utilisateur (`attachment_user`), nature déduite des zones touchées. Six tests, un par signal. **Écart assumé** : rien n'est *stocké* sauf la correction — la déduction se recalcule à chaque listage, ce qui est gratuit (`list_others` parcourt déjà les fichiers) et ne peut pas être périmé. Le signal « couche » du REFONTE§2.1 n'a pas de variante tant que l'inventaire ne liste pas les couches (L7) : une variante que rien ne construit est du code mort. | L1 |
-| **L7** | ✅ **Écran Compléments** (§4) : `inventory.rs` réunit cinq sources en une ligne par chose, `Inventory.svelte` porte les facettes tri-état, le groupement par archive et par hôte, et le ⋮. `Transversal.svelte` supprimé, les apps prennent leur entrée de rail, le rail passe à deux rangs. **Écarts** : les facettes sont locales à l'écran plutôt que branchées sur `filters.ts`, typé sur `ModCard` — le généraliser pour un autre type de ligne était un refactor à part ; « aussi dans … » (§4.5) reste à faire ; la remontée sur la fiche de l'hôte (§4.3) est venue avec L9 ; les modèles de pilote restent listés tant que l'écran Pilote n'a pas son inventaire (L8). | L6, 0.b |
+| **L7** | ✅ **Écran Compléments** (REFONTE§4) : `inventory.rs` réunit cinq sources en une ligne par chose, `Inventory.svelte` porte les facettes tri-état, le groupement par archive et par hôte, et le ⋮. `Transversal.svelte` supprimé, les apps prennent leur entrée de rail, le rail passe à deux rangs. **Écarts** : les facettes sont locales à l'écran plutôt que branchées sur `filters.ts`, typé sur `ModCard` — le généraliser pour un autre type de ligne était un refactor à part ; « aussi dans … » (REFONTE§4.5) reste à faire ; la remontée sur la fiche de l'hôte (REFONTE§4.3) est venue avec L9 ; les modèles de pilote restent listés tant que l'écran Pilote n'a pas son inventaire (L8). | L6, 0.b |
 | **L8** | ✅ **Rail à deux rangs, Apps en écran, Pilote fusionné** (§3, §5). Le rail et l'écran Apps sont venus avec L7, faute de quoi les apps devenaient injoignables entre les deux lots. Reste fait ici : l'écran Pilote dit désormais combien de `.kn5` il a écartés (illisibles, sans squelette) — ils n'apparaissaient nulle part et rien ne l'expliquait. **Le retrait des mannequins de l'inventaire, prévu par le §5, a été essayé puis annulé** (décidé avec l'utilisateur) : la galerie de l'écran Pilote est un *sélecteur*, elle ne gère rien, et les retirer de l'inventaire supprimait le seul endroit d'où on pouvait les désactiver ou les supprimer. Les livrées tranchent par l'exemple — elles vivent dans le sélecteur de la fiche voiture **et** dans l'inventaire, et ça ne gêne personne : choisir et gérer sont deux gestes. | L7 |
-| **L9** | ✅ **Fiches de mods greffés simples** (§11) : blocs **Où il atterrit** (chemins posés, groupés par dossier de destination, relatifs à la racine d'AC) et **Conflits** (qui vise les mêmes fichiers et qui gagne). Notes et origine y étaient déjà. **Le panneau latéral du §6.2 est écarté** : il avait été retiré du projet pour cause de redondance, et la fiche posée par-dessus la liste — dont le retour ramène à la liste — rend déjà le service qu'il visait, sans réintroduire un second contenant à maintenir. | L6 |
+| **L9** | ✅ **Fiches de mods greffés simples** (REFONTE§11) : blocs **Où il atterrit** (chemins posés, groupés par dossier de destination, relatifs à la racine d'AC) et **Conflits** (qui vise les mêmes fichiers et qui gagne). Notes et origine y étaient déjà. **Le panneau latéral du REFONTE§6.2 est écarté** : il avait été retiré du projet pour cause de redondance, et la fiche posée par-dessus la liste — dont le retour ramène à la liste — rend déjà le service qu'il visait, sans réintroduire un second contenant à maintenir. | L6 |
 
-L'onglet « Le modèle réel » du bloc textuel (§7.4) reçoit sa place dès **L4**, vide,
+L'onglet « Le modèle réel » du bloc textuel (REFONTE§7.4) reçoit sa place dès **L4**, vide,
 pour que le chantier Wikipédia n'ait pas à rouvrir la mise en page.
 
 ---
@@ -193,7 +197,7 @@ pour que le chantier Wikipédia n'ait pas à rouvrir la mise en page.
 
 ## 5. Ce qui reste à trancher
 
-- **Le retour du panneau latéral** (§6.2). Il a été retiré du projet parce qu'il
+- **Le retour du panneau latéral** (REFONTE§6.2). Il a été retiré du projet parce qu'il
   doublait la page pleine ; la spec le réintroduit pour des fiches qui n'ont **pas**
   de page pleine. À confirmer au moment de L9.
 - **Le nom « Compléments »**, que la spec met elle-même « à confirmer » (§4).

@@ -1,4 +1,4 @@
-# L4 — Pilotage de Content Manager : résolution du point ouvert §8.3
+# L4 — Pilotage de Content Manager : résolution du point ouvert sur le pilotage de CM
 
 > Recherche menée sur la source primaire AcTools (`gro-ove/actools`, branche master).
 > Fichiers clés : `AcManager/Tools/ArgumentsHandler.cs`, `ArgumentsHandler.Commands.cs`,

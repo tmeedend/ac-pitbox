@@ -1,7 +1,7 @@
 # KN5 — ce que le format fait vraiment
 
 Journal des points de format **vérifiés sur des fichiers réels**, en complément
-de `SPEC-preview-3d-kn5.md` §3 (qui décrit le layout attendu) et §12 (qui liste
+de `SPEC-preview-3d-kn5.md` PREVIEW§3 (qui décrit le layout attendu) et PREVIEW§12 (qui liste
 les questions laissées ouvertes). Chaque entrée dit **comment** la réponse a été
 obtenue : une affirmation sans méthode n'a pas sa place ici.
 
@@ -50,7 +50,7 @@ référence. Rare, mais un seul cas suffisait à rendre une voiture illisible.
 
 ---
 
-## §12 q2 — le `blend_mode` des matériaux : deux octets, pas un `i16`
+## PREVIEW§12 q2 — le `blend_mode` des matériaux : deux octets, pas un `i16`
 
 **Spec PREVIEW§3.3** : `blend_mode : i16 // 0=opaque, 1=alpha blend, 2=alpha to
 coverage (à confirmer)`.
@@ -73,12 +73,12 @@ octet haut à 1. Croisement avec le nom du shader (`kn5-tool inspect
 les deux sens, et la combinaison `257` (blend **et** test) n'apparaît jamais —
 ce qui est cohérent, les deux techniques s'excluant.
 
-**Conséquence pour §6.1** : `alpha_tested` est le signal fiable pour
+**Conséquence pour PREVIEW§6.1** : `alpha_tested` est le signal fiable pour
 `alphaMode: "MASK"`, plus fiable que « `ksAlphaRef` > 0 ».
 
 ---
 
-## §12 q1 — ordre des trois octets de flags d'un nœud mesh
+## PREVIEW§12 q1 — ordre des trois octets de flags d'un nœud mesh
 
 **Spec PREVIEW§3.4** : `cast_shadows`, `is_visible`, `is_transparent`, « ordre à
 confirmer empiriquement ».
@@ -103,7 +103,7 @@ comportement par défaut attendu.
 
 ---
 
-## §12 q5 — les 36 octets après chaque propriété de matériau
+## PREVIEW§12 q5 — les 36 octets après chaque propriété de matériau
 
 **Statut : sans intérêt pratique, question close.**
 
@@ -151,10 +151,10 @@ X1R5G5B5, précédemment en échec) ressort en normal map bleu-violet canonique 
 
 ---
 
-## §12 q4 — aucune conversion de repère, et aucune inversion de V
+## PREVIEW§12 q4 — aucune conversion de repère, et aucune inversion de V
 
 **Réponse : l'identité.** Ni négation d'axe, ni inversion de la coordonnée V,
-contrairement à ce que demande le §4.4. Il a fallu **deux erreurs successives**
+contrairement à ce que demande le PREVIEW§4.4. Il a fallu **deux erreurs successives**
 pour l'établir, et c'est cette histoire qui vaut d'être consignée.
 
 ### Ce que disaient les mesures numériques
@@ -201,7 +201,7 @@ Diagnostic par élimination, chaque étape écartant une hypothèse :
 
 DirectX **et** glTF placent tous deux l'origine des textures **en haut à
 gauche**. L'inversion de V est nécessaire pour aller vers OpenGL, pas vers
-glTF. Le §4.4 confond les deux conventions.
+glTF. Le PREVIEW§4.4 confond les deux conventions.
 
 ⚠️ **Leçon de méthode** : valider une conversion sur une voiture dont l'atlas
 est symétrique ne prouve rien. Le test doit porter sur **du texte** *et* sur une
@@ -364,7 +364,7 @@ l'environnement réfléchi. Opacité fixée à 0,1, verrouillée par
 **Et son `ksSpecularEXP` n'est pas un exposant utilisable non plus.** Une fois
 le voile blanc retiré, la vitre restait « sale » : `ksWindscreen` annonce
 `ksSpecular = 0` et `ksSpecularEXP = 10`, dont la formule générale de rugosité
-(§6.1) tire **0,8** — du verre dépoli. Comparaison qui tranche, sur la même
+(PREVIEW§6.1) tire **0,8** — du verre dépoli. Comparaison qui tranche, sur la même
 voiture : la vitre extérieure (`ksPerPixelReflection`) annonce, elle,
 `ksSpecularEXP = 500`, soit une surface lisse. Une vitre est lisse quoi
 qu'annonce son matériau ; rugosité plafonnée à 0,08 sur toute la famille
@@ -448,7 +448,7 @@ trop ou pas assez marqué).
 
 ## Écart n°7 — dans `txMaps`, seul le vert porte un sens (et c'est la brillance)
 
-**Question ouverte depuis le début du chantier** (SPEC-preview-3d §6.2, §12 q3),
+**Question ouverte depuis le début du chantier** (SPEC-preview-3d PREVIEW§6.2, PREVIEW§12 q3),
 laissée de côté parce que « une spécularité fausse est pire qu'une surface
 seulement diffuse ». Mesurée, elle l'est maintenant à moitié.
 
@@ -500,7 +500,7 @@ Ce que ça dit, dans l'ordre :
    davantage.
 
 Conclusion : R et B restent inutilisés, et ce n'est plus une prudence en
-attendant mieux — c'est une réponse. La question §12 q3 de la spec est
+attendant mieux — c'est une réponse. La question PREVIEW§12 q3 de la spec est
 tranchée, par la négative.
 
 **La métallicité qu'on en attendait vient d'ailleurs** : `fresnelC`, voir
@@ -529,7 +529,7 @@ Deux garde-fous, tous deux nés d'un cas réel :
 ## Écart n°10 — la métallicité n'est pas dans une texture, elle est dans `fresnelC`
 
 **Le problème qu'il fallait résoudre** : `metallicFactor` était tenu à zéro
-depuis le début du chantier (§6.2), donc **aucun matériau n'était métallique** —
+depuis le début du chantier (PREVIEW§6.2), donc **aucun matériau n'était métallique** —
 le chrome, les jantes, le métal nu et les optiques rendaient comme de la
 peinture brillante. On l'attendait de `txMaps`, qui ne le donne pas (écart n°7).
 
@@ -614,12 +614,12 @@ ver.towhook_bar.i   16 octets
 
 16 octets = IV, 4 octets = identifiant/clé, blob = charge utile : la signature
 d'un chiffrement par bloc. C'est très probablement la protection CSP des mods
-payants (§4.5).
+payants (PREVIEW§4.5).
 
 **Ce qu'on en fait : rien.** La partie KN5 en clair se lit normalement et
 produit un modèle complet et cohérent (273 234 triangles, 72 textures,
 identifiants de matériaux tous valides). La remorque est ignorée, conformément
-à §4.5 — on ne déchiffre pas. L'avertissement du parser est conservé : il reste
+à PREVIEW§4.5 — on ne déchiffre pas. L'avertissement du parser est conservé : il reste
 le bon signal si un vrai décalage de section apparaissait un jour.
 
 ⚠️ **Levé, négativement** : voir « Découverte — un magic KN5 valide n'est pas une
@@ -639,7 +639,7 @@ l'utilisateur.
 Deux mods signalés par un utilisateur comme cassés dans l'aperçu 3D :
 `ms_citroen_berlingo_2003_vts` (« un gros carré bleu qui clignote ») et
 `gmp_w204_c63_c13` (« plein de petits polygones bleus »). L'hypothèse de
-départ — un magic `sc6969` altéré par la protection CSP (§4.5) — ne tient pas :
+départ — un magic `sc6969` altéré par la protection CSP (PREVIEW§4.5) — ne tient pas :
 les deux fichiers parsent **sans la moindre erreur**, `kn5::Kn5Error::NotAKn5File`
 ne se déclenche jamais. La détection existante (comparaison du magic) est donc
 aveugle à cette famille de mods cassés.
@@ -683,7 +683,7 @@ tentative de rendu sur une géométrie qui ne veut rien dire. `kn5-tool
 convert`, lui, continue de convertir et de simplement avertir — c'est un outil
 de diagnostic, pas le chemin utilisateur.
 
-On ne sait toujours pas s'il s'agit de la protection CSP (§4.5) ou d'une autre
+On ne sait toujours pas s'il s'agit de la protection CSP (PREVIEW§4.5) ou d'une autre
 forme de corruption qui laisse le magic intact : les deux produisent le même
 symptôme côté utilisateur, donc le même traitement. Le libellé affiché reste
 générique (« modèle protégé ») plutôt que de nommer une cause qu'on ne peut
@@ -1136,7 +1136,7 @@ d'enroulement) et qu'il faut regarder une roue de près pour attraper.
   de skins mal rangés, aucun `.kn5`), et `some1_acura_nsx_zanardi_1999` qui
   n'a qu'un `collider.kn5` — mod incomplet.
 - **0 échec de parsing.**
-- Résolution du modèle : 197 par heuristique (§4.2 étape 2), 1 par
+- Résolution du modèle : 197 par heuristique (PREVIEW§4.2 étape 2), 1 par
   `data/lods.ini`. L'heuristique porte donc la quasi-totalité du travail —
   `lods.ini` est presque toujours enfermé dans `data.acd`.
 - Conteneurs de texture : 13 682 DDS, 614 PNG, **aucun JPEG**. Le sniff de
@@ -1194,7 +1194,7 @@ lire vaut moins que pas de carte du tout.
 **Symptôme.** Aperçu 3D remonté par l'utilisateur : la tête d'un mannequin
 (`senna.kn5`, mod de pilote tiers) rendue quasi transparente.
 
-**Attendu (§12 q2)** : `blend_mode = 1` marque un matériau en fondu, et sur le
+**Attendu (PREVIEW§12 q2)** : `blend_mode = 1` marque un matériau en fondu, et sur le
 corpus voiture ça ne s'est vu que sur du verre et des décalcomanies —
 d'où l'approximation de vitre (`glass_opacity`, dérivée de `ksDiffuse`) posée
 sur tout matériau en fondu dont la texture ne porte pas d'alpha exploitable
@@ -1347,7 +1347,7 @@ que la plaque blanche autour de lui et les logos qui l'encadrent restent.
 
 **Attendu (écart n°15 et suivants)** : `blend_mode = 1` marque un matériau en
 fondu, qu'on rend dans la passe transparente sans écriture de profondeur — la
-règle qui garde l'habitacle visible derrière le pare-brise (SPEC §8.2).
+règle qui garde l'habitacle visible derrière le pare-brise (SPEC PREVIEW§8.2).
 
 **Réel** : le numéro est un maillage à part (`CM_1_*_DOOR`, les plaques que
 Content Manager pose), posé **2,3 mm devant** sa plaque, et sa plaque appartient
@@ -1682,7 +1682,7 @@ donc calculé avant la branche du verre. Effet mesuré sur le même corpus :
 
 ### Ce qui a été mesuré puis écarté : le drapeau de transparence du maillage
 
-Le troisième octet du bloc de flags d'un maillage (§12 q1) dit que l'auteur l'a
+Le troisième octet du bloc de flags d'un maillage (PREVIEW§12 q1) dit que l'auteur l'a
 coché « transparent », et la conversion ne s'en sert que pour éviter de fusionner
 un maillage transparent avec un opaque. Il **sépare pourtant exactement** les
 deux cas de l'écart n°15 : la vitre de la Supra est cochée, le `senna_head` de
