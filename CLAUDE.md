@@ -525,13 +525,21 @@ le plus courant de loin (401 des 679). Appliquer la règle du code les
 condamnerait tous. L'ordre est : le document, puis l'étiquette, et un défaut
 seulement quand ni l'un ni l'autre ne répond.
 
-Restent **76 renvois sans cible et 137 `§` nus qui sortent de leur document**,
-résolus par chance aujourd'hui — c'est par là que cinq renvois mal dirigés sont
-passés en deux jours. Les geler dans le socle serait exactement ce que la
-section suivante refuse, donc c'est un **rapport**, au patron de
+**Les 76 renvois sans cible ont été repris, et cette moitié est donc devenue une
+porte** — un renvoi mort dans `docs/` fait désormais échouer `npm run check`, au
+même titre qu'un renvoi mort dans le code. Trois familles y étaient : des
+sections déplacées (le §9 de `SPEC.md` est parti dans `SPEC-session.md` et a été
+renuméroté, d'où onze renvois morts dans le seul `LOT1`), des renvois vers une
+autre spec écrits sans étiquette, et sept sous-sections de `REFONTE§14` écrites
+**en gras au lieu de titres** — elles existaient, aucun outil ne les voyait.
+
+**Restent 137 `§` nus qui sortent de leur document**, et eux restent un
+**rapport** : ils tombent sur une vraie section de `SPEC.md`, donc rien ne les
+distingue d'un renvoi correct sans lire la phrase qui les porte. C'est par là
+que cinq renvois mal dirigés sont passés en deux jours. Même patron que
 `report-docs.mjs` : le nombre passe sous les yeux à chaque vérification, on le
-draine par lots, et le jour où il atteint zéro cette moitié devient une porte
-comme l'autre. `node scripts/check-refs.mjs --docs` liste le détail.
+draine par lots, et le jour où il atteint zéro cette moitié devient une porte à
+son tour. `node scripts/check-refs.mjs --docs` liste le détail.
 
 Le mécanisme du socle reste, pour le jour où une refonte en casse trente d'un
 coup : `node scripts/check-refs.mjs --update` les gèle et on les reprend par

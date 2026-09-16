@@ -18,7 +18,7 @@ pas redessinées, la modale les consomme tels quels. Seul ce qui est dessiné en
 Les proportions et couleurs restent celles du thème ; la maquette porte l'intention, pas le
 gabarit.
 
-Spec concernée : SPEC.md §9.1 (bibliothèque comme sélecteur), §9.3 (écran de réglages),
+Spec concernée : SESSION§1 (bibliothèque comme sélecteur), SESSION§3 (écran de réglages),
 §7.2ter (barème rouge), §7.4 (multi-sélection en bibliothèque).
 
 ---

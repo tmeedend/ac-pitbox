@@ -13,8 +13,8 @@ Maquette de référence : `pitbox-session-l1.html` (ouvrir dans un navigateur, l
 sont cliquables — c'est le moyen le plus rapide de vérifier qu'aucun contrôle ne se déplace
 d'un type de session à l'autre).
 
-Spec concernée : SPEC.md §9.3 (écran de réglages), §7.2ter (barème de l'accent rouge),
-§9.2ter (couplage qualification / essais libres), §9.2quater (Track day).
+Spec concernée : SESSION§3 (écran de réglages), §7.2ter (barème de l'accent rouge),
+SESSION§2.1 (couplage qualification / essais libres), SESSION§2.2 (Track day).
 
 ---
 
@@ -26,7 +26,7 @@ de l'écran de réglages de session.
 **Hors du lot, à ne pas toucher :**
 - la colonne météo (icônes, température/vent/heure, bande jour/nuit, saisons) ;
 - la carte `Saved sessions` ;
-- la colonne de session de la barre latérale (§9.1), y compris `ImageSelectDropdown.svelte` ;
+- la colonne de session de la barre latérale (SESSION§1), y compris `ImageSelectDropdown.svelte` ;
 - le fond photo de l'écran (§6.2) ;
 - la modale de sélection d'adversaire — elle est refaite en L2, elle reste telle quelle ici ;
 - toute la couche backend Rust, sauf le point 4.1 ci-dessous.
@@ -36,7 +36,7 @@ de l'écran de réglages de session.
 changent de place, de forme et d'habillage, rien d'autre.
 
 **Point de vigilance séparé (hors L1) :** l'évolution du grip est peut-être non transmise au
-preset Quick Drive (SPEC §9.2 la dit non mappée, §9.2ter suggère l'inverse). Ce lot ne touche
+preset Quick Drive (SESSION§2 la dit non mappée, SESSION§2.1 suggère l'inverse). Ce lot ne touche
 pas à sa transmission. Ne pas « corriger » le câblage au passage : si le comportement est
 constaté anormal pendant le travail, le signaler sans le modifier.
 
@@ -44,7 +44,7 @@ constaté anormal pendant le travail, le signaler sans le modifier.
 
 ## 2. Fichiers
 
-Le composant du bloc adversaires est `OpponentsBlock.svelte` (nommé en SPEC §9.3).
+Le composant du bloc adversaires est `OpponentsBlock.svelte` (nommé en SESSION§3).
 Le composant qui porte `Session type` / `Session options` n'est pas nommé dans la spec :
 **l'identifier et le nommer dans le compte rendu final**, ne pas en créer un nouveau.
 
@@ -121,7 +121,7 @@ la zone gauche. La zone gauche peut donc paraître dégarnie en Practice et Hotl
 voulu**, la stabilité de la zone droite est le service rendu.
 
 Track day n'a pas de champ `Race length` : la valeur part bien dans le `ModeData` côté CM
-mais n'a aucun effet en jeu (SPEC §9.2quater). Ne pas l'afficher.
+mais n'a aucun effet en jeu (SESSION§2.2). Ne pas l'afficher.
 
 ### 3.3 Segmentés horizontaux
 
@@ -141,7 +141,7 @@ hauteur 40 px.
 Décoché → le cadre entier passe à `opacity:.55` et le champ de durée à
 `color: var(--text-disabled)`. Le champ reste lisible, il n'est pas masqué.
 
-**Décocher `Qualifying` décoche `Free practice`** (SPEC §9.2ter : sans qualification le preset
+**Décocher `Qualifying` décoche `Free practice`** (SESSION§2.1 : sans qualification le preset
 bascule sur le mode course sèche de CM, où aucune phase préparatoire n'existe). L'inverse
 n'est pas vrai : décocher les essais libres ne touche pas la qualification. Le bornage
 existant (qualification ≥ 5 min, `PracticeLength: 0` et jamais `null`) est inchangé.
@@ -334,7 +334,7 @@ Si et seulement si le point 3.10 aboutit, l'unité (`laps` | `minutes`) est un n
 - persisté dans les sessions enregistrées (`src-tauri/src/saved_sessions.rs`) ;
 - **absent d'une sauvegarde antérieure** (`undefined`, distinct de `0`) → repli sur `laps`,
   le comportement implicite d'avant ce champ. Même schéma de migration silencieuse que le
-  champ `Category` et que `trackSkins` (SPEC §9.3).
+  champ `Category` et que `trackSkins` (SESSION§3).
 
 **ABS et antipatinage changent de type** : booléen → énumération `off | factory | on`. À
 persister dans `launch_state.json` et dans les sessions enregistrées.
@@ -367,7 +367,7 @@ Aucun autre champ de persistance n'est touché par ce lot.
 - **Mesures en pixels réinjectées dans un style** : diviser par `zoomFactor()` avant écriture
   (SPEC §13). Concerne le positionnement des libellés de difficulté et celui de la bulle.
 - **Largeur des libellés mono** : ils sont au-dessus des groupes, pas en colonne — la règle
-  de largeur partagée `--sess-lblw` de §9.1 ne s'applique pas ici, ne pas l'y importer.
+  de largeur partagée `--sess-lblw` de SESSION§1 ne s'applique pas ici, ne pas l'y importer.
 - **`prefers-reduced-motion: reduce`** : toutes les transitions de ce lot sont désactivées.
 - **Focus visible** sur chaque contrôle interactif, jaune, non négociable.
 - **Responsive** : sous 1000 px de large, la grille à deux zones passe en une colonne et la

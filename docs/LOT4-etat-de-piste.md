@@ -9,7 +9,7 @@
 > En cas d'écart, `SPEC-session.md` fait foi.
 
 
-**Prérequis** : §2.2 livré (bloc `TRACK CONDITION` dans le rail droit, select des sept entrées natives, ligne de lecture des quatre valeurs, modèle « objet nommé porteur de quatre valeurs »).
+**Prérequis** : SETUP§2.2 livré (bloc `TRACK CONDITION` dans le rail droit, select des sept entrées natives, ligne de lecture des quatre valeurs, modèle « objet nommé porteur de quatre valeurs »).
 
 **Objet du lot** : lire les presets d'état de piste créés par l'utilisateur dans Content Manager et les proposer à côté des sept entrées natives. En lecture seule.
 
@@ -87,7 +87,7 @@ Ce dernier point est le seul arbitrage réellement ouvert de ce lot. L'autre bra
 
 ## 4.8 Aucune édition dans cet écran
 
-Le bloc `TRACK CONDITION` reste tel que livré en §2.2 : un select, une ligne de lecture, rien d'éditable. Pas de curseurs, pas de bouton d'enregistrement, pas de champ de description modifiable.
+Le bloc `TRACK CONDITION` reste tel que livré en SETUP§2.2 : un select, une ligne de lecture, rien d'éditable. Pas de curseurs, pas de bouton d'enregistrement, pas de champ de description modifiable.
 
 Qui veut composer un état le fait dans CM et le retrouve ici — ce que ce lot rend précisément possible.
 

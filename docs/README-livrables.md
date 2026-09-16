@@ -16,7 +16,7 @@ et l'ordre dans lequel s'en servir.
 
 - **archives.py** — code Python de référence pour la logique d'import/détection (isCar, isTrack,
   isCarSound, descente récursive). À PORTER, pas à exécuter. ⚠️ contrairement à ce code,
-  l'app ne réécrit JAMAIS le ui_*.json du mod (modèle overlay non destructif, §3.0).
+  l'app ne réécrit JAMAIS le ui_*.json du mod (modèle overlay non destructif, §3).
 
 ## Maquettes visuelles (le À QUOI ÇA RESSEMBLE) — Claude Code peut les ouvrir
 

@@ -172,12 +172,13 @@ console.log(`[refs] ${total} renvois §X, ${broken.length} sans cible (${baselin
 // erreur, il est là pour se vider ». Même patron que `report-docs.mjs` : le
 // nombre passe sous les yeux à chaque vérification, on le draine par lots, et
 // le jour où il atteint zéro cette section devient une porte comme l'autre.
+const docsNoTarget = [];
 {
   const mdFiles = readdirSync("docs").filter((f) => f.endsWith(".md"));
   const own = Object.fromEntries(mdFiles.map((f) => [f, sectionsOf(f)]));
   let docTotal = 0;
   let selfRefs = 0;
-  const noTarget = [];
+  const noTarget = docsNoTarget;
   const unlabelled = [];
   for (const f of mdFiles) {
     for (const m of readFileSync("docs/" + f, "utf8").matchAll(REF)) {
@@ -231,6 +232,20 @@ if (fresh.length) {
   for (const b of fresh) console.error(`  ${b.file} : ${b.ref} — ${b.why}`);
   console.error(
     `\nUn renvoi désigne son document : « §4.5 » = SPEC.md, sinon une étiquette (${Object.keys(DOCS).filter(Boolean).join(", ")}).`,
+  );
+  process.exit(1);
+}
+
+// Les 76 renvois sans cible de `docs/` ont été repris, donc cette moitié
+// devient une porte — comme annoncé quand elle n'était qu'un rapport. L'autre
+// moitié reste un rapport : un `§` nu qui sort de son document tombe sur une
+// vraie section de `SPEC.md`, donc rien ne le distingue d'un renvoi correct
+// sans lire la phrase qui le porte.
+if (docsNoTarget.length) {
+  console.error(`\n[refs] ${docsNoTarget.length} renvoi(s) de docs/ sans cible :`);
+  for (const e of docsNoTarget) console.error(`  ${e}`);
+  console.error(
+    `\nDans un document, un « § » nu vaut d'abord CE document ; sinon il lui faut une étiquette.`,
   );
   process.exit(1);
 }

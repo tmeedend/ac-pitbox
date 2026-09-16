@@ -14,7 +14,7 @@
 > empêche désormais.
 >
 > Il cite deux documents frères, **lot 1** (« la règle 1.2 du lot 1 ») et
-> **lot 2** (« §2.6 du lot 2 »), plus un **lot 4** hors périmètre. Ceux-là
+> **lot 2** (SETUP§2.6), plus un **lot 4** hors périmètre. Ceux-là
 > manquent encore, et une quarantaine de renvois du code les désignent.
 
 **Nature du lot** : réorganisation structurelle. Peu de nouveaux réglages, beaucoup de déplacements. Aucun réglage existant ne disparaît, aucune valeur envoyée au jeu ne change.
@@ -129,7 +129,7 @@ LAPS  [  5 ]      QUALIFYING  [ 10 ] min      FREE PRACTICE  [ 20 ] min
 
 - Valeur `0` affichée en `--text-disabled` ; valeur non nulle en blanc.
 - La règle 1.2 du lot 1 (griser le champ, conserver la valeur au décochage) devient caduque : il n'y a plus rien à griser.
-- La dépendance `Qualifying → Starting position` (§2.6 du lot 2) devient : `Qualifying > 0` neutralise `Start`.
+- La dépendance `Qualifying → Starting position` (SETUP§2.6) devient : `Qualifying > 0` neutralise `Start`.
 
 ### 3.2 Bloc SIMULATION
 

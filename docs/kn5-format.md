@@ -14,7 +14,7 @@ document).
 
 ## Écart n°1 — une entrée de texture de type 0 ne contient rien du tout
 
-**Spec §3.2** décrit chaque entrée de la section Textures comme
+**Spec PREVIEW§3.2** décrit chaque entrée de la section Textures comme
 `type / name / size / data`, avec le commentaire « 1 = actif/embarqué ;
 0 rencontré = pas de données ». Lu ainsi — un nom et une taille présents, un
 blob vide — la section se désynchronise.
@@ -52,7 +52,7 @@ référence. Rare, mais un seul cas suffisait à rendre une voiture illisible.
 
 ## §12 q2 — le `blend_mode` des matériaux : deux octets, pas un `i16`
 
-**Spec §3.3** : `blend_mode : i16 // 0=opaque, 1=alpha blend, 2=alpha to
+**Spec PREVIEW§3.3** : `blend_mode : i16 // 0=opaque, 1=alpha blend, 2=alpha to
 coverage (à confirmer)`.
 
 **Réel** : ce sont **deux `u8` indépendants** — un mode de fusion (`0` opaque,
@@ -80,7 +80,7 @@ ce qui est cohérent, les deux techniques s'excluant.
 
 ## §12 q1 — ordre des trois octets de flags d'un nœud mesh
 
-**Spec §3.4** : `cast_shadows`, `is_visible`, `is_transparent`, « ordre à
+**Spec PREVIEW§3.4** : `cast_shadows`, `is_visible`, `is_transparent`, « ordre à
 confirmer empiriquement ».
 
 **Réel** : l'ordre annoncé est le bon. Confirmé, pas seulement plausible.
@@ -120,7 +120,7 @@ rendu.
 
 ## Écart n°2 — une texture sur huit est un DDS non compressé
 
-**Spec §5.4** prévoit `image_dds` pour décoder « BC1–BC7 ». C'est nécessaire mais
+**Spec PREVIEW§5.4** prévoit `image_dds` pour décoder « BC1–BC7 ». C'est nécessaire mais
 **pas suffisant**.
 
 **Réel** : une part importante des textures AC ne sont pas compressées par blocs
@@ -792,7 +792,7 @@ habitacle.
 
 ## Découverte — ce que « géométrie inexploitable » recouvre vraiment
 
-Le §4.5bis du SPEC refusait l'aperçu au-dessous de 90 % de cohérence
+Le PREVIEW§4.5bis refusait l'aperçu au-dessous de 90 % de cohérence
 d'enroulement, sans savoir ce qui se passait — « protection CSP ou corruption,
 on ne sait pas ». Voici la mesure, qui tranche.
 
@@ -1032,7 +1032,7 @@ fois via `[ReplaceRims]`.
 **Ce qu'il faut en retenir** : devant une pièce manquante sur un mod de
 préparation, vérifier d'abord si elle existe dans le KN5 avant de soupçonner
 la conversion. `extension/*.kn5` et `skins/*/*.kn5` sont les deux endroits où
-regarder. La règle de traitement est au §4.5ter de `SPEC-preview-3d-kn5.md`.
+regarder. La règle de traitement est au PREVIEW§4.5ter.
 
 ## Découverte — le pilote est assis par `driver_base_pos.knh`, pas par l'animation
 
@@ -1140,7 +1140,7 @@ d'enroulement) et qu'il faut regarder une roue de près pour attraper.
   `data/lods.ini`. L'heuristique porte donc la quasi-totalité du travail —
   `lods.ini` est presque toujours enfermé dans `data.acd`.
 - Conteneurs de texture : 13 682 DDS, 614 PNG, **aucun JPEG**. Le sniff de
-  magie (§3.2) n'est pas une précaution théorique : **134 textures sur 14 296**
+  magie (PREVIEW§3.2) n'est pas une précaution théorique : **134 textures sur 14 296**
   (≈ 1 %) ont un conteneur réel qui contredit leur extension — un `.dds` qui
   est un PNG, ou l'inverse. Une sur cent, c'est assez pour qu'au moins une
   voiture de n'importe quelle bibliothèque soit concernée.

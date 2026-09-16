@@ -80,7 +80,7 @@ de reprendre. En cas d'écart, la spec fait foi.
       grille**.
       **Les pièges à ne pas réintroduire**, tous mesurés ou vécus :
       1. **Ne jamais faire passer la génération par `prepare_car_preview`.**
-         C'est le §5.3, et il a une raison chiffrée : 312 conversions dans un
+         C'est le GRILLE§5.3, et il a une raison chiffrée : 312 conversions dans un
          cache déjà à son plafond évincent une entrée vivante chacune, donc les
          aperçus que l'utilisateur consulte vraiment. La voie parallèle est
          `preview::prepare_scratch` → brouillon vidé avant chaque conversion,
@@ -141,12 +141,12 @@ de reprendre. En cas d'écart, la spec fait foi.
          luminance — un fond seul est un dégradé très doux, une voiture y ajoute
          forcément des clairs et des sombres.
       **Écarts assumés vis-à-vis de la spec** : l'ombre de contact est une vraie
-      ombre projetée et non l'ellipse peinte du §5.6 ; l'azimut n'a pas été
+      ombre projetée et non l'ellipse peinte du GRILLE§5.6 ; l'azimut n'a pas été
       « relevé sur les previews Kunos » puisque c'est déjà fait (318°, l'aperçu
       3D) ; la tâche de fond réduite est une barre et non une pastille à anneau
       (la pile bas-droite n'a qu'une forme) ; les six voitures de l'atelier sont
       prises par **catégorie** (plus la voiture de session en tête) et non par
-      silhouette, que rien dans les données ne dit ; et le §5.7 (versionnage du
+      silhouette, que rien dans les données ne dit ; et le GRILLE§5.7 (versionnage du
       gabarit d'origine) est **supprimé**, rendu inutile par les presets
       embarqués.
       **Trois embarqués**, et ils ne poursuivent pas le même but : *Catalogue*
@@ -175,7 +175,7 @@ de reprendre. En cas d'écart, la spec fait foi.
         et contre-jour s'expriment en pourcentage d'elle, donc la descendre
         éteint tout l'éclairage direct et laisse le showroom seul. La remonter
         remonte aussi les deux autres ;
-      - le cadrage d'Officiel a une **mesure** derrière lui (§11.4 de la spec) ;
+      - le cadrage d'Officiel a une **mesure** derrière lui (GRILLE§11.4) ;
         s'en écarter est permis, l'ignorer serait dommage.
 - [ ] **Écran Pilote** (fusionné dans `main`). Spec et maquette dans
       `docs/SPEC-ecran-pilote.md` + `maquettes/pitbox-ecran-pilote.html`, résumé au
@@ -271,13 +271,13 @@ de reprendre. En cas d'écart, la spec fait foi.
       glyphe du reste de l'app ; les **tenues enregistrées**
       (`driverOutfits.svelte.ts`, §13 complété) reposent les quatre pièces
       d'un clic — le corps d'abord, sinon `setDriverBody` efface les trois
-      autres juste après les avoir posées ; le badge `MODIFIÉ` du §3.2 est
+      autres juste après les avoir posées ; le badge `MODIFIÉ` du PILOTE§3.2 est
       retiré, la ligne de session disant désormais elle-même « Tenue
       d'origine », le nom de la tenue enregistrée, ou « Tenue personnalisée » ;
       et une pièce gardée qui ne s'applique pas au corps courant est **barrée**
       dans sa piste au lieu d'être affichée comme active — elle est conservée
       (§13) mais ne change rien, ce que rien ne disait.
-      Le **verrou « voiture de course »** du §11.2 est retiré (décidé avec
+      Le **verrou « voiture de course »** du PILOTE§11.2 est retiré (décidé avec
       l'utilisateur) : son texte était devenu faux, le corps se pose là comme
       ailleurs, et un écran intermédiaire qu'un clic franchit ne protège rien.
       **Ce qui n'est pas tranché** : ce qu'AC met dans son checksum en ligne.
@@ -417,7 +417,7 @@ de reprendre. En cas d'écart, la spec fait foi.
         nom ne peut pas arbitrer puisque la spec a choisi les coordonnées
         *parce que* « Shutoko » ne ressemble pas à « Metropolitan Expressway ».
         Quatre articles faux pour une poignée de justes. Shutoko et les touge
-        relèvent désormais de la correction manuelle (§7.6).
+        relèvent désormais de la correction manuelle (WIKI§7.6).
       - **Un item sans libellé anglais revenait sans nom** et marquait 0 contre
         tout — d'où `borrow_labels`, qui reprend le titre trouvé par la
         recherche.
@@ -434,7 +434,7 @@ de reprendre. En cas d'écart, la spec fait foi.
         distingue ni d'une recherche en cours, ni d'une fonctionnalité qui
         n'existe pas — constaté en vrai, sur un circuit qui s'appariait
         pendant qu'on regardait la fiche. Il porte donc six états, dont aucun
-        n'est une erreur, et la correction manuelle avec eux : la §7.6
+        n'est une erreur, et la correction manuelle avec eux : la WIKI§7.6
         l'accrochait à un onglet qui n'existait pas dans le seul cas où elle
         sert.
       - **L'article entier et rendu** (contre la §7.3, qui n'en voulait que
@@ -560,7 +560,7 @@ de reprendre. En cas d'écart, la spec fait foi.
       **Reste trois questions, aucune ligne de code en attente** : « aussi
       dans … » (REFONTE§4.5, un mod rattaché à plusieurs entités), les points
       ouverts de REFONTE§14 à reposer avec l'inventaire réel sous les yeux, et le
-      markdown dans les notes (demandé à l'usage le 2026-09-11, voir le §4bis du
+      markdown dans les notes (demandé à l'usage le 2026-09-11, voir le 4bis du
       plan).
 - [ ] **Deux jeux de règles de tags ont divergé — à trancher.**
       `docs/default-tag-rules-enriched.json` **n'est pas ce que l'app charge** :

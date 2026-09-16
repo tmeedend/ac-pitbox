@@ -83,7 +83,7 @@ Le nom de la section **est celui du mannequin**. Donc remplacer le corps par
 inopérante : il faut écrire la tenue sous `[driver_501]`.
 
 C'est exactement la règle que l'écran Pilote applique déjà côté aperçu
-(substituer le corps fait tomber la garde-robe de la livrée, §10.1) — elle
+(substituer le corps fait tomber la garde-robe de la livrée, PILOTE§10.1) — elle
 n'était pas une commodité d'interface, c'est le comportement du jeu.
 
 ## 4. Pistes explorées et écartées

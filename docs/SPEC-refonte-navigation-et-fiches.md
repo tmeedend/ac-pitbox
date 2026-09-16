@@ -523,28 +523,42 @@ réservée.
 
 ## 14. Points ouverts — ne pas implémenter par défaut
 
-**14.1 Filtres PP, showrooms, météo, interface.** Rangés dans l'inventaire avec un
+### 14.1 Filtres PP, showrooms, météo, interface
+
+Rangés dans l'inventaire avec un
 rattachement `le jeu`. À réexaminer une fois l'inventaire réel sous les yeux : un filtre PP
 se *choisit* plus qu'il ne s'installe.
 
-**14.2 Rattachement massif.** Un pack de configs visant trente circuits doit s'afficher
+### 14.2 Rattachement massif
+
+Un pack de configs visant trente circuits doit s'afficher
 « 30 circuits » sans les énumérer. Reste à décider ce qu'ouvre ce lien.
 
-**14.3 Mod greffé sur un contenu absent.** Le skin d'une voiture non installée doit avoir un
+### 14.3 Mod greffé sur un contenu absent
+
+Le skin d'une voiture non installée doit avoir un
 état d'attente. Sans cela il tombe dans `le jeu` et devient indéchiffrable.
 
-**14.4 Volume de `le jeu`.** Sur une bibliothèque réelle, mesurer la part de l'inventaire
+### 14.4 Volume de `le jeu`
+
+Sur une bibliothèque réelle, mesurer la part de l'inventaire
 qui n'a aucun rattachement. Si elle domine, une troisième facette sera nécessaire,
 probablement le dossier AC touché.
 
-**14.5 Gestes du sélecteur compact.** Les flèches sont supposées être le geste le plus
+### 14.5 Gestes du sélecteur compact
+
+Les flèches sont supposées être le geste le plus
 fréquent. Si l'usage montre qu'on ne fait que déplier la grille, elles sont du bruit.
 
-**14.6 Déséquilibre inverse des colonnes.** Sur un mod sans description ni article
+### 14.6 Déséquilibre inverse des colonnes
+
+Sur un mod sans description ni article
 Wikipédia, la colonne gauche se réduit à l'aperçu et au sélecteur. À vérifier sur un mod
 pauvre avant de figer.
 
-**14.7 Lien « 1 en attente ».** L'état ambre des ajouts au jeu indique qu'un emplacement est
+### 14.7 Lien « 1 en attente »
+
+L'état ambre des ajouts au jeu indique qu'un emplacement est
 disputé, mais pas par qui. Reste à décider si le nom du mod qui gagne l'arbitrage s'affiche,
 et s'il est cliquable.
 

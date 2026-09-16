@@ -8,7 +8,7 @@ personne ne retrouvera.
 ## Comment le code renvoie ici
 
 Le code porte près de 2 800 renvois `§` vers ces documents. Un numéro seul ne
-dit pas lequel — `§5.3` existe dans quatre specs à la fois — donc **un `§` nu
+dit pas lequel — le numéro `5.3` existe dans quatre specs à la fois — donc **un `§` nu
 désigne `SPEC.md`** et les autres documents portent une étiquette :
 
 | Étiquette | Document |
@@ -77,8 +77,8 @@ d'écart, `SPEC-session.md` fait foi.
   enregistrées, l'import Content Manager. C'est lui qui porte « le filtre
   définit le vivier, jamais le plateau ».
 - **`LOT-session-setup.md`** (`SETUP§`) — corrections et réorganisation de
-  départ, §1.1 à §1.9 puis §2.1 à §2.11. C'est à ces deux moitiés que le lot 5
-  renvoie quand il écrit « la règle 1.2 du lot 1 » et « §2.6 du lot 2 ».
+  départ, SETUP§1.1 à SETUP§1.9 puis SETUP§2.1 à SETUP§2.11. C'est à ces deux moitiés que le lot 5
+  renvoie quand il écrit « la règle 1.2 du lot 1 » et « le 2.6 du lot 2 ».
 - **`LOT1-forme-ecran-session.md`** (`L1§`) — la forme de l'écran de réglages.
 - **`LOT2-selection-adversaires.md`** (`L2§`) — la sélection d'adversaires.
 - **`LOT4-etat-de-piste.md`** (`L4§`) — les presets d'état de piste de Content
@@ -105,7 +105,7 @@ fait — en cas d'écart, la spec fait foi.
 - **`PLAN-refonte-navigation.md`** — le plan de livraison en lots, et surtout
   les **mesures faites sur la bibliothèque réelle avant de commencer** : elles
   ont supprimé un lot entier (la détection CSP des voitures existait déjà) et
-  démenti le fourre-tout redouté au §14.4.
+  démenti le fourre-tout redouté au REFONTE§14.4.
 - **`SPEC-grille.md`** — lisibilité des cartes, affichage du nom, et
   **régénération des vignettes**. Porte la distinction qui structure le reste :
   « les voitures sombres sont indiscernables » recouvre deux problèmes — la
@@ -126,7 +126,7 @@ fait — en cas d'écart, la spec fait foi.
 - **`SPEC-engine-sound-fmod.md`** — écouter le vrai moteur d'une voiture en
   passant par les DLL FMOD livrées avec Assetto Corsa, au lieu de deviner le
   ralenti par analyse du signal. Contient la position prise sur la licence
-  FMOD, et les **écarts d'ABI mesurés** au §2bis — dont une structure dont la
+  FMOD, et les **écarts d'ABI mesurés** au FMOD§2bis — dont une structure dont la
   disposition documentée est fausse d'une manière qui ressemble à un succès.
 
 ## Pistes instruites, pas encore ouvertes
