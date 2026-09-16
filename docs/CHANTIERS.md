@@ -59,9 +59,24 @@ de reprendre. En cas d'écart, la spec fait foi.
       quatre niveaux). **Couleurs sémantiques** : le **rouge** a désormais son
       barème, écrit au §7.2ter du SPEC — quatre niveaux, un quota par niveau,
       et la règle « le survol n'introduit jamais de rouge sur un élément qui
-      n'y a pas droit au repos ». Appliqué au rail de navigation et à la
-      colonne de session ; **les filtres et la grille de bibliothèque restent
-      à faire** (specs séparées). Le reste n'est pas attaqué — le `--orange`
+      n'y a pas droit au repos ». Appliqué au rail de navigation, à la colonne
+      de session, et **aux filtres et à la grille de bibliothèque**
+      (2026-09-16). Les neuf emplois hors barème qu'ils portaient se rangeaient
+      en trois familles : un **survol qui rougissait un contrôle neutre**
+      (bouton « effacer », cœur de favori vide, poignée de largeur de colonne),
+      un **focus en rouge** là où il est jaune partout ailleurs — les deux
+      champs de recherche des filtres tuaient même l'anneau jaune global par un
+      `outline: 0` pour le remplacer par un filet rouge —, et du **rouge sur de
+      la structure** (flèche de tri, repère de dépôt d'une colonne). Plus un
+      survol de puce qui passait du niveau 3 au niveau 2. Le test de conformité
+      du §7.2ter passe maintenant sur les deux zones.
+      **Quatre emplois restent à trancher**, parce qu'ils demandent un avis et
+      non une lecture du barème : `.card.sel` porte le rouge plein quand
+      `tbody tr.sel` porte le rouge éteint — **le même état à deux niveaux**,
+      et le barème dit que « où je suis » est jaune, pas rouge ; le cœur de
+      favori et l'épingle d'un filtre sont rouges sans relever de la session ;
+      et « + Filtre » ouvert prend un filet éteint alors que le barème le cite
+      comme contrôle neutre. Le reste n'est pas attaqué — le `--orange`
       ajouté pour « mod inactif » (`StateBadge`) est le premier pas dans cette
       direction (ni le jaune d'alerte, ni le rouge destructif).
 - [ ] **Vignettes régénérées de la grille** — **fusionné dans `main`, mais

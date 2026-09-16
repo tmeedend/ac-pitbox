@@ -457,8 +457,13 @@
     background: var(--panel2);
     max-width: 100%;
   }
+  /* Le survol reste au niveau 3 : la puce porte déjà un filet éteint au
+     repos, donc passer au rouge plein lui donnerait le niveau 2 — réservé à
+     ce qui est retenu pour la session (§7.2ter). Le fond éteint suffit à
+     dire « sous le curseur », et laisse `.chip.open` seule à porter le
+     filet plein. */
   .chip:hover {
-    border-color: var(--rosso);
+    background: var(--rosso-dim);
   }
   .chip.open {
     border-color: var(--rosso);
@@ -550,7 +555,9 @@
     font-size: 11.5px;
     cursor: pointer;
   }
+  /* Bouton secondaire : il éclaircit son gris, il ne prend pas de rouge
+     (§7.2ter — le survol n'en introduit jamais sur un contrôle neutre). */
   .clear:hover {
-    color: var(--rosso-bright);
+    color: var(--txt);
   }
 </style>

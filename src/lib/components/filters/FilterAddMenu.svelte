@@ -101,13 +101,15 @@
     border: 1px solid var(--line);
     color: var(--txt);
     padding: 0 9px;
-    outline: 0;
+    /* Pas d'`outline: 0` : l'anneau jaune de `global.css` est le repère de
+       focus de toute l'app, et le masquer ici obligeait à le remplacer par
+       un filet rouge — que le barème §7.2ter n'autorise pas sur un champ. */
     font: inherit;
     font-size: 12.5px;
     margin-bottom: 6px;
   }
   .find:focus {
-    border-color: var(--rosso-border);
+    border-color: var(--faint);
   }
   .list {
     max-height: 300px;

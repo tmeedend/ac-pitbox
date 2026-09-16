@@ -1418,8 +1418,11 @@
   .card-fav.on {
     color: var(--rosso-bright);
   }
+  /* Un cœur vide est gris : le survol l'éclaircit sans le rougir, sinon le
+     rouge dirait « sous le curseur » autant que « favori » (§7.2ter). Seul
+     `.card-fav.on` — l'état, pas le survol — porte la couleur. */
   .card-fav:hover {
-    color: var(--rosso-bright);
+    color: var(--muted);
   }
   /* `.brand-badge` reste ici pour la colonne « Marque » du TABLEAU seule — la
      grille, elle, passe par `ModIdentity`, qui porte le sien. */
@@ -1489,7 +1492,8 @@
   }
   th .arrow {
     margin-left: 4px;
-    color: var(--rosso-bright);
+    /* Le tri relève de la structure du tableau : pas de rouge (§7.2ter). */
+    color: var(--txt2);
   }
   .th-label {
     padding-right: 8px;
@@ -1521,9 +1525,11 @@
     line-height: 1;
     cursor: help;
   }
-  .th-info:hover,
-  .th-info:focus-visible {
-    color: var(--rosso-bright);
+  /* Le focus reste jaune, comme partout (`:focus-visible` de `global.css`) :
+     l'entrée en rouge le dédoublait d'un second signal, et le barème réserve
+     le rouge à la session (§7.2ter). */
+  .th-info:hover {
+    color: var(--muted);
   }
   /* Réordonnement au glissé souris, pas le drag HTML5 natif (§6.2, abandonné
      après deux tentatives infructueuses sous WebView2 — voir `startHeaderDrag`).
@@ -1538,6 +1544,8 @@
   }
   /* Repère de dépôt : ligne verticale du côté où la colonne glissée
      s'insérerait si on relâchait maintenant. */
+  /* Repère neutre : déplacer une colonne ne concerne ni la session ni ce
+     qu'elle retient — le rouge est réservé à ça (§7.2ter). */
   th.drop-before::before,
   th.drop-after::after {
     content: "";
@@ -1545,7 +1553,7 @@
     top: 0;
     bottom: 0;
     width: 2px;
-    background: var(--rosso-bright);
+    background: var(--txt2);
     z-index: 3;
   }
   th.drop-before::before {
@@ -1575,10 +1583,12 @@
     width: 2px;
     background: var(--line);
   }
+  /* Au repos la poignée est un filet `--line` : le survol l'éclaircit, il ne
+     la rougit pas (§7.2ter, le survol n'introduit jamais de rouge). */
   .col-resize:hover::after,
   .col-resize:focus-visible::after,
   th.resizing .col-resize::after {
-    background: var(--rosso-border);
+    background: var(--faint);
   }
   .col-resize:focus-visible {
     outline: none;
