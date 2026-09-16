@@ -533,18 +533,19 @@ de reprendre. En cas d'écart, la spec fait foi.
       source), réponse attendue par email. Si refus ou trop long, plan B
       documenté : Certum Open Source Code Signing (~49€/an, cloud SimplySign,
       pas de jeton USB).
-- [ ] **Refonte de la navigation et des fiches** (premier palier fusionné dans
-      `main`). Rail à deux rangs, inventaire unique des
+- [ ] **Refonte de la navigation et des fiches** — **livrée et entièrement dans
+      `main`**. Rail à deux rangs, inventaire unique des
       compléments, une seule anatomie de fiche, notes sur toutes les entités.
       **Spec, maquette et plan de livraison dans `docs/`** —
       `PLAN-refonte-navigation.md` porte l'ordre des lots et, surtout, les
       **mesures faites sur la bibliothèque réelle avant de commencer** : elles
       ont supprimé un lot entier (la détection CSP des voitures existe déjà,
       167 sur 311) et démenti le fourre-tout redouté (19 des 28 mods « autres »
-      sont des mannequins). **Les neuf lots sont faits** (L1 à L9), le premier
-      palier est fusionné dans `main`, le second reste à fusionner. Le détail
-      lot par lot, avec ses écarts assumés, est dans le plan — ne pas le
-      recopier ici.
+      sont des mannequins). **Les neuf lots sont faits** (L1 à L9) **et
+      fusionnés** : il ne reste aucune branche et le palier du plan est passé.
+      Ce qui suit n'est donc plus du code à livrer, mais des questions ouvertes.
+      Le détail lot par lot, avec ses écarts assumés, est dans le plan — ne pas
+      le recopier ici.
       **Quatre points de la spec sont tombés à la mesure** plutôt qu'en
       implémentation, et c'est le genre d'information qu'on ne retrouve pas
       deux fois : la détection CSP des voitures existait déjà (167 sur 311),
@@ -556,9 +557,11 @@ de reprendre. En cas d'écart, la spec fait foi.
       en retirer supprimait le seul endroit d'où on pouvait les désactiver ou
       les supprimer. Les livrées tranchent par l'exemple : **choisir et gérer
       sont deux gestes, ils peuvent avoir deux écrans.**
-      **Reste** : « aussi dans … » (§4.5, un mod rattaché à plusieurs entités),
-      les points ouverts §14 à reposer avec l'inventaire réel sous les yeux, et
-      le markdown dans les notes (demandé à l'usage, voir le §4bis du plan).
+      **Reste trois questions, aucune ligne de code en attente** : « aussi
+      dans … » (REFONTE§4.5, un mod rattaché à plusieurs entités), les points
+      ouverts de REFONTE§14 à reposer avec l'inventaire réel sous les yeux, et le
+      markdown dans les notes (demandé à l'usage le 2026-09-11, voir le §4bis du
+      plan).
 - [ ] **Deux jeux de règles de tags ont divergé — à trancher.**
       `docs/default-tag-rules-enriched.json` **n'est pas ce que l'app charge** :
       elle sème `src-tauri/rules/default-tag-rules.json` dans le dossier de
