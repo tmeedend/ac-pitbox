@@ -54,7 +54,7 @@ de reprendre. En cas d'écart, la spec fait foi.
       l'utilisateur, à traiter séparément si besoin) : les libellés de champ
       de formulaire (Réglages, Chemins, filtres bibliothèque — rôle différent
       d'une clé de fiche technique en lecture seule, même si visuellement
-      proche) et les titres de popup (`OpponentPicker`/`SavedSessionsDialog`,
+      proche) et les titres de popup (`OpponentPicker`/`NamedListDialog`,
       13px/majuscules, identiques entre eux mais ne correspondant à aucun des
       quatre niveaux). **Couleurs sémantiques** : le **rouge** a désormais son
       barème, écrit au §7.2ter du SPEC — quatre niveaux, un quota par niveau,
@@ -70,13 +70,19 @@ de reprendre. En cas d'écart, la spec fait foi.
       la structure** (flèche de tri, repère de dépôt d'une colonne). Plus un
       survol de puce qui passait du niveau 3 au niveau 2. Le test de conformité
       du §7.2ter passe maintenant sur les deux zones.
-      **Quatre emplois restent à trancher**, parce qu'ils demandent un avis et
-      non une lecture du barème : `.card.sel` porte le rouge plein quand
-      `tbody tr.sel` porte le rouge éteint — **le même état à deux niveaux**,
-      et le barème dit que « où je suis » est jaune, pas rouge ; le cœur de
-      favori et l'épingle d'un filtre sont rouges sans relever de la session ;
-      et « + Filtre » ouvert prend un filet éteint alors que le barème le cite
-      comme contrôle neutre. Le reste n'est pas attaqué — le `--orange`
+      **Quatre emplois sont des écarts assumés** (2026-09-16, décidés avec
+      l'utilisateur après lecture à l'écran) : `.card.sel` en rouge plein quand
+      `tbody tr.sel` est en rouge éteint, le cœur de favori, l'épingle d'un
+      filtre, et « + Filtre » ouvert. **La réserve du barème ne mord pas ici** :
+      il veut que « où je suis » soit jaune, et il l'est — c'est l'anneau de
+      `:focus-visible`/`.gp-focus`, qui se distingue nettement du rouge à
+      l'usage. Le rouge de `.card.sel` est un second repère, plus grossier, de
+      la carte courante ; la carte en session s'en sépare par son filet doublé.
+      Le cœur et l'épingle relèvent de l'iconographie (un cœur est rouge) plus
+      que du barème. Rien à changer.
+      **Reste, et c'est tout ce qui reste : les trois autres couleurs.** Le
+      rouge a son barème et il est appliqué partout ; le bleu (info et fichier
+      mod), le vert (règle) et le jaune (alerte) n'ont pas le leur — le `--orange`
       ajouté pour « mod inactif » (`StateBadge`) est le premier pas dans cette
       direction (ni le jaune d'alerte, ni le rouge destructif).
 - [ ] **Vignettes régénérées de la grille** — **fusionné dans `main`, mais
