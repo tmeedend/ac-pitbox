@@ -233,13 +233,18 @@ de reprendre. En cas d'écart, la spec fait foi.
       `ui_prefs.json` sur le patron de `preferred.ts`, **parce que le filtre
       « Pilote choisi » de la bibliothèque lit ce drapeau par carte**, donc de
       façon synchrone (`peekUiPref`).
-      **Reste, dans cet ordre :**
-      1. **Écart spec/réalité à trancher avec l'utilisateur** : le PILOTE§6.3 range
-         les époques par ce que désigne la *famille*, mais mesuré sur
-         l'installation, c'est la *variante* qui porte le sens en 1969
-         (amon, clark…) et en 1985 (les couleurs). D'où le repli implémenté :
-         un regroupement qui ne produirait qu'un groupe passe en grille plate.
-      2. **Casque posé de travers sur un mannequin à pièces statiques.**
+      **Le regroupement est tranché** (2026-09-16, décidé avec l'utilisateur) :
+      ce qui est livré convient, et `PILOTE§6.3` a été réécrit dessus — il
+      décrivait encore une bascule `Grouper par couleur / motif / pilote` qui
+      n'existe plus. Les époques ne suffisent pas, **le pack prend donc la
+      main** : les corps se rangent par ce que leur nom porte avant le premier
+      `_` (`rss_`, `rh_`, `gt-m_`, `mp-h_`), les préfixes génériques
+      (`driver`, `drivers`, `pilote`) retombent sur l'époque, un pack sous
+      trois cases rend la main à l'époque, un groupe trop petit va dans
+      « Autres », et un groupe unique repasse en grille plate. Les tenues
+      gardent leur premier niveau de dossier. Aucune bascule nulle part.
+      **Reste un seul point :**
+      1. **Casque posé de travers sur un mannequin à pièces statiques.**
          `rh_schuberth_helmet_driver_19` traverse sa propre figure. Il est le
          cas que rien d'autre ne représente : cinq maillages **statiques**
          (casque, visière, HANS, prise d'air, visage) accrochés au nœud
@@ -247,23 +252,23 @@ de reprendre. En cas d'écart, la spec fait foi.
          skinnés. Or `pose::apply_locals` ne remplace la transformation **que
          des nœuds `Dummy`** — un maillage nommé par la hiérarchie est ignoré.
          À vérifier avant de corriger : c'est le casque qui bouge, ou la tête ?
-      3. **Poser le pilote en jeu — fait.** Le **corps** passe par une section
-         `[DRIVER3D_MODEL] NAME=…` dans `<voiture>/extension/ext_config.ini`
-         (CSP surcharge une section de `data.acd` en préfixant le nom du
-         fichier ; `data.acd` n'est pas touché, donc le checksum tient), la
-         **tenue** par le `skin.ini` de la livrée, sous le nom du mannequin —
-         il n'existe aucune route CSP pour celle-là, cherchée et non trouvée.
-         Tout est dans `docs/csp-driver-research.md`, et le code dans
-         `driverapply.rs`, appelé par `launch()` : une seule entrée `sync()`
-         qui pose quand la voiture a un choix et **retire** quand elle n'en a
-         plus. Conséquence à ne pas rater : remplacer le corps rend la section
-         de la livrée inopérante, la tenue doit être réécrite sous le
-         **nouveau** nom de mannequin. Le déploiement étant en hardlink,
-         l'écriture efface le fichier avant de le réécrire — sinon c'est la
-         copie de bibliothèque qu'on modifie. **Ne pas écrire `POSITION`**
-         dans `[DRIVER3D_MODEL]`, contrairement à ce que suggèrent les réponses
-         trouvées en ligne : c'est le même `[MODEL] POSITION` que
-         `seating_offset` a mesuré comme inapplicable.
+      **Poser le pilote en jeu — fait.** Le **corps** passe par une section
+      `[DRIVER3D_MODEL] NAME=…` dans `<voiture>/extension/ext_config.ini`
+      (CSP surcharge une section de `data.acd` en préfixant le nom du
+      fichier ; `data.acd` n'est pas touché, donc le checksum tient), la
+      **tenue** par le `skin.ini` de la livrée, sous le nom du mannequin —
+      il n'existe aucune route CSP pour celle-là, cherchée et non trouvée.
+      Tout est dans `docs/csp-driver-research.md`, et le code dans
+      `driverapply.rs`, appelé par `launch()` : une seule entrée `sync()`
+      qui pose quand la voiture a un choix et **retire** quand elle n'en a
+      plus. Conséquence à ne pas rater : remplacer le corps rend la section
+      de la livrée inopérante, la tenue doit être réécrite sous le
+      **nouveau** nom de mannequin. Le déploiement étant en hardlink,
+      l'écriture efface le fichier avant de le réécrire — sinon c'est la
+      copie de bibliothèque qu'on modifie. **Ne pas écrire `POSITION`**
+      dans `[DRIVER3D_MODEL]`, contrairement à ce que suggèrent les réponses
+      trouvées en ligne : c'est le même `[MODEL] POSITION` que
+      `seating_offset` a mesuré comme inapplicable.
       **Écarts assumés vis-à-vis de la spec, décidés avec l'utilisateur** :
       le favori se pose sur le cœur de la bibliothèque (`♥`/`♡`) placé sous
       l'image et non sur elle — on garde l'argument du PILOTE§7.3 (l'échantillon est

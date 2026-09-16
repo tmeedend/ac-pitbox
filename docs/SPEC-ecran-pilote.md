@@ -212,21 +212,40 @@ Le filtre est **automatique et non désactivable** — un casque hors époque ne
 
 Le compteur de la barre d'outils énonce la cause du filtrage, jamais le filtre seul (§8.3).
 
-## 6.3 Regroupement typé
+## 6.3 Regroupement
 
-Les identifiants ont la forme `driver_helmet/<FAMILLE>/<variante>` sur deux niveaux. Le premier niveau est déjà signifiant — mais **il ne signifie pas la même chose selon l'époque**.
+**Deux règles, selon la piste, et aucune commande pour en changer.**
 
-| Époque | Ce que la famille désigne | Intitulé de la bascule | Exemple |
-|---|---|---|---|
-| Moderne | une couleur | `Grouper par couleur` | `HELMET_BASE_Red` → 1…7 |
-| Années 80 | une couleur | `Grouper par couleur` | `HELMET_1985_Blue` |
-| Années 70 | un motif | `Grouper par motif` | `HELMET_1975_Blue` → plain, checkered, stripe1 |
-| Années 60 | **un pilote** | `Grouper par pilote` | `HELMET_1969` → amon, bandini, clark, hill, ickx |
-| Mod | un pack | `Grouper par pack` | `ddm` → c-one, shinichi_yamaji, trd |
+**Les tenues** (casque, combinaison, gants) se rangent par **premier niveau de
+dossier** : les identifiants ont la forme `driver_helmet/<FAMILLE>/<variante>`,
+et ce premier niveau porte déjà le sens — une couleur (`HELMET_BASE_Red`), un
+motif (`HELMET_1975_Blue` → plain, checkered, stripe1), un pilote
+(`HELMET_1969` → amon, bandini, clark…), un pack de mod.
 
-**Table de correspondance maintenue en code**, indexée sur le préfixe d'époque. Préfixe inconnu → repli sur `Grouper par famille`, sans erreur ni message.
+**Les corps** se rangent par **pack** : ce que le nom de fichier porte avant le
+premier `_`. C'est le seul regroupement que les données portent réellement — un
+mannequin n'a ni `ui_*.json`, ni marque, ni catégorie, son nom de fichier est
+toute son identité, et les packs s'y annoncent : `rss_` (13 corps sur
+l'installation de référence), `rh_` (5), `gt-m_` (5), `mp-h_` (3).
+**`driver`, `drivers` et `pilote` sont écartés** parce qu'ils ne disent rien —
+tous les mannequins sont des pilotes, et les quinze fichiers ainsi nommés sont
+la famille livrée avec le jeu. Ceux-là retombent sur leur **époque** (§6.2), qui
+les sépare utilement là où « driver » les entasserait sous une étiquette vide.
 
-**Bascule.** `Grouper par <axe>` / `Tout`. Le second mode donne une grille plate, tri alphabétique. État mémorisé entre sessions.
+**Trois replis, dans cet ordre.** Un pack sous le seuil de trois cases rend la
+main à l'époque ; un groupe qui reste sous ce seuil rejoint **Autres**, lequel
+n'apparaît que s'il contient quelque chose ; et **un groupe unique repasse en
+grille plate**, parce qu'une bannière qui coiffe tout ne sépare rien. Mesuré sur
+l'installation de référence : `HELMET_1969` porte ses vingt et un casques à lui
+seul, 1985 aussi ; 1975 et les modernes non.
+
+**Il n'y a pas de bascule**, et c'est un abandon assumé. Une commande
+`Grouper par <axe>` / `Tout` — avec un intitulé qui changeait selon l'époque,
+« par couleur », « par motif », « par pilote » — a été essayée puis retirée,
+décidé avec l'utilisateur : la grille plate n'est pas praticable passé quelques
+dizaines de cases, donc le second cran ne servait jamais, et une bascule qu'on
+ne rouvre pas prend la place de la recherche et des filtres dans une barre déjà
+dense.
 
 ## 6.4 En-tête de groupe
 
