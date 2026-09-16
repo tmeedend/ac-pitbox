@@ -440,6 +440,23 @@ Message d'une ligne sous la barre d'outils, avec le terme cherché et un lien d'
 
 ---
 
+## 11.4 Mannequin à pièces statiques
+
+**Un seul mannequin de l'installation de référence est dans ce cas**, et son
+casque se pose de travers : `rh_schuberth_helmet_driver_19` porte cinq maillages
+**statiques** — casque, visière, HANS, prise d'air, visage — accrochés au nœud
+`DRIVER:RIG_Head`, là où tous les autres sont entièrement skinnés. Or la pose
+appliquée au mannequin ne remplace la transformation **que des nœuds `Dummy`** :
+un maillage nommé par la hiérarchie n'est pas déplacé, et la tête part sans son
+casque.
+
+**Accepté tel quel** (2026-09-16, décidé avec l'utilisateur) : un mannequin sur
+quarante-cinq, dans un panneau d'essayage qui sert à choisir une tenue et non à
+juger un modèle. Le corriger demanderait d'étendre l'application de pose aux
+maillages nommés, sur la foi d'un seul cas — et il faudrait d'abord établir
+lequel des deux bouge, le casque ou la tête.
+
+---
 # 12. Interaction et accessibilité
 
 ## 12.1 Souris
@@ -531,7 +548,7 @@ Le langage existant s'applique sans exception : fond quasi noir, panneaux gris t
 
 # 16. Ce qui reste ouvert
 
-**L'application en course.** Aujourd'hui le choix ne vaut que dans l'aperçu. S'il devient effectif en jeu pour la tenue, le bandeau « corps substitué · aperçu seulement » devient la seule chose qui distingue les deux moitiés de l'écran — et il devra probablement être plus qu'une étiquette d'angle. La spec fonctionne dans les deux cas ; seule la place de ce bandeau est à revoir le jour où la décision tombe.
+**L'application en course — livrée.** Le choix ne valait que dans l'aperçu quand cette spec a été écrite ; il est désormais posé en jeu au lancement et retiré dès qu'on ne le choisit plus (`driverapply.rs`, appelé par `launch()`), corps par `[DRIVER3D_MODEL]` dans l'`ext_config.ini` de la voiture et tenue par le `skin.ini` de la livrée — voir SESSION§5 et `csp-driver-research.md`. **Ce qui reste ouvert** est ce que la question traînait avec elle : un corps substitué ne suivra jamais en course, par nature, donc le bandeau « corps substitué » distingue bien les deux moitiés de l'écran et sa place est à revoir.
 
 **Le nom lisible des familles modernes.** « Red » → « Rouge » suppose une table de correspondance couleur. Faisable pour les douze familles `HELMET_BASE`, à confirmer pour les packs de mods, où le premier niveau n'est pas toujours un mot traduisible.
 
