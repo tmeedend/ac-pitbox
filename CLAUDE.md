@@ -510,11 +510,28 @@ chaque vérification, et c'est l'œil humain qui décide quand découper — une
 porte qui refuse un commit parce qu'un document a grandi de dix lignes finirait
 désactivée.
 
-`npm run check` vérifie que chaque renvoi tombe sur un titre qui existe, et
-**les 2 780 y tombent** : le socle (`scripts/refs-baseline.json`) est vide. Le
-contrôle est donc strict — le moindre renvoi sans cible fait échouer
+`npm run check` vérifie que chaque renvoi **du code** tombe sur un titre qui
+existe, et **les 2 785 y tombent** : le socle (`scripts/refs-baseline.json`) est
+vide. Le contrôle est donc strict — le moindre renvoi sans cible fait échouer
 `npm run check`. Il a démarré avec 348 renvois cassés hérités de
 renumérotations successives ; ils ont tous été repris.
+
+**Les renvois de `docs/` sont un rapport, pas une porte — et leur règle n'est pas
+celle du code.** Le contrôle n'a longtemps regardé que `src/` et `src-tauri/` :
+les documents qui *définissent* les sections n'avaient jamais eu leurs propres
+renvois vérifiés. Dans un document, **un `§` nu vaut d'abord le document
+lui-même** — une spec qui écrit « voir §7.2 » parle de son §7.2, et c'est le cas
+le plus courant de loin (401 des 679). Appliquer la règle du code les
+condamnerait tous. L'ordre est : le document, puis l'étiquette, et un défaut
+seulement quand ni l'un ni l'autre ne répond.
+
+Restent **76 renvois sans cible et 137 `§` nus qui sortent de leur document**,
+résolus par chance aujourd'hui — c'est par là que cinq renvois mal dirigés sont
+passés en deux jours. Les geler dans le socle serait exactement ce que la
+section suivante refuse, donc c'est un **rapport**, au patron de
+`report-docs.mjs` : le nombre passe sous les yeux à chaque vérification, on le
+draine par lots, et le jour où il atteint zéro cette moitié devient une porte
+comme l'autre. `node scripts/check-refs.mjs --docs` liste le détail.
 
 Le mécanisme du socle reste, pour le jour où une refonte en casse trente d'un
 coup : `node scripts/check-refs.mjs --update` les gèle et on les reprend par

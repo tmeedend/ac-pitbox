@@ -150,6 +150,78 @@ const fixed = [...known].filter((k) => !broken.some((b) => key(b) === k));
 
 console.log(`[refs] ${total} renvois §X, ${broken.length} sans cible (${baseline.length} hérités)`);
 
+// --- Les renvois de `docs/` : un rapport, pas une porte ---------------------
+//
+// **Le contrôle ci-dessus ne regarde que le code.** `git ls-files src
+// src-tauri/…` n'a jamais inclus `docs/`, si bien que les documents qui
+// *définissent* les sections n'ont jamais eu leurs propres renvois vérifiés.
+// Cinq renvois mal dirigés y ont été trouvés à la main en deux jours, et la
+// mesure qui a suivi en donne 213 — dont 15 dans `SPEC.md`, la source de
+// vérité, et 8 dans `README.md`, le point d'entrée.
+//
+// **La règle n'est pas celle du code.** Dans un document, un `§` nu vaut
+// **d'abord le document lui-même** : une spec qui écrit « voir §7.2 » parle de
+// son §7.2, et c'est le cas le plus courant de loin — 401 des 679 renvois de
+// `docs/`. Appliquer la règle du code (« § nu = SPEC.md ») les condamnerait
+// tous. L'ordre est donc : le document, puis l'étiquette si elle est là, et
+// c'est seulement quand ni l'un ni l'autre ne répond qu'il y a un défaut.
+//
+// **Pourquoi un rapport et pas une porte.** 213 défauts préexistants ne
+// passent pas en une fois, et les geler dans le socle serait précisément ce
+// que `CLAUDE.md` refuse — « on ne grossit pas le socle pour faire taire une
+// erreur, il est là pour se vider ». Même patron que `report-docs.mjs` : le
+// nombre passe sous les yeux à chaque vérification, on le draine par lots, et
+// le jour où il atteint zéro cette section devient une porte comme l'autre.
+{
+  const mdFiles = readdirSync("docs").filter((f) => f.endsWith(".md"));
+  const own = Object.fromEntries(mdFiles.map((f) => [f, sectionsOf(f)]));
+  let docTotal = 0;
+  let selfRefs = 0;
+  const noTarget = [];
+  const unlabelled = [];
+  for (const f of mdFiles) {
+    for (const m of readFileSync("docs/" + f, "utf8").matchAll(REF)) {
+      docTotal++;
+      const tag = m[1] ?? "";
+      const ref = m[2];
+      if (m[1]) {
+        if (!(m[1] in DOCS)) noTarget.push(`${f} : ${m[0]} — étiquette inconnue`);
+        else if (!sections[tag].has(ref)) noTarget.push(`${f} : ${m[0]} — ${DOCS[tag]} ne définit pas §${ref}`);
+        continue;
+      }
+      // Auto-renvoi : le document définit lui-même ce numéro. Rien à signaler.
+      if (own[f].has(ref)) {
+        selfRefs++;
+        continue;
+      }
+      // Il sort du document. S'il tombe dans SPEC.md c'est peut-être voulu,
+      // mais rien ne le dit — et c'est exactement par là que les cinq renvois
+      // mal dirigés sont passés. L'étiquette lève l'ambiguïté ; elle manque.
+      if (sections[""].has(ref)) unlabelled.push(`${f} : §${ref}`);
+      else noTarget.push(`${f} : §${ref} — ni ce document ni SPEC.md ne le définit`);
+    }
+  }
+  const byFile = (list) => {
+    const n = {};
+    for (const e of list) n[e.split(" : ")[0]] = (n[e.split(" : ")[0]] ?? 0) + 1;
+    return Object.entries(n).sort((a, b) => b[1] - a[1]);
+  };
+  console.log(
+    `[refs] docs/ : ${docTotal} renvois — ${selfRefs} auto-renvois, ` +
+      `${noTarget.length} sans cible, ${unlabelled.length} à étiqueter (rapport, pas une porte)`,
+  );
+  const worst = [...byFile(noTarget), ...byFile(unlabelled)].reduce((acc, [f, n]) => {
+    acc[f] = (acc[f] ?? 0) + n;
+    return acc;
+  }, {});
+  const top = Object.entries(worst).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  if (top.length) console.log(`[refs] docs/ les plus touchés : ${top.map(([f, n]) => `${f} (${n})`).join(" · ")}`);
+  if (process.argv.includes("--docs")) {
+    for (const e of noTarget) console.log(`  sans cible   ${e}`);
+    for (const e of unlabelled) console.log(`  à étiqueter  ${e}`);
+  }
+}
+
 if (fixed.length) {
   console.log(`[refs] ${fixed.length} renvoi(s) du socle sont réparés — « node scripts/check-refs.mjs --update » les retire.`);
 }
