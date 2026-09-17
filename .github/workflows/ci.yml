@@ -103,7 +103,13 @@ jobs:
       - name: Build installateur (non signé)
         run: npm run tauri build
 
-      - uses: actions/upload-artifact@v4
+      # v7 : la v4 ciblait Node 20, que les runners forcent désormais sur
+      # Node 24 avec un avertissement de dépréciation. La v5 ne suffisait pas —
+      # elle ne fait que *supporter* Node 24, elle tourne encore sur Node 20 par
+      # défaut ; c'est la v6 qui bascule, et la v7 y ajoute l'ESM. Les quatre
+      # entrées ci-dessous n'ont pas changé de sens depuis la v4. La borne de
+      # version de runner qu'exige la v7 ne concerne que l'auto-hébergé.
+      - uses: actions/upload-artifact@v7
         with:
           name: pitbox-installers-unsigned
           path: src-tauri/target/release/bundle/nsis/*.exe
