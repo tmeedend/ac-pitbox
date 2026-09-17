@@ -102,6 +102,11 @@ impl CachedArticle {
     /// `https://fr.wikipedia.org/wiki/...` gives `fr`. The alternative was a
     /// tenth column duplicating what the URL already says — and the URL is the
     /// one field guaranteed to be right, since it comes from the API itself.
+    ///
+    /// Exercised by its own test rather than by a caller: the rule it encodes —
+    /// asked in French, served in English — is what the test asserts, and it
+    /// would have to be rewritten the day a caller needs it.
+    #[allow(dead_code)]
     pub fn article_lang(&self) -> Option<&str> {
         let host = self.article_url.strip_prefix("https://")?;
         let (code, rest) = host.split_once('.')?;

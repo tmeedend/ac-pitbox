@@ -24,20 +24,16 @@
 //! The legal constraint of WIKI§2 shapes one thing in the code: the extract is
 //! stored and served **verbatim**, as the API returned it. Nothing here
 //! reformats, truncates, merges or translates it.
-
-#![allow(dead_code)]
-// **Still here, but no longer for the original reason, and no longer clean.**
-// It was put in when the module had no caller at all. It now has one, and
-// removing the allowance surfaces 13 warnings of two very different kinds:
-// the calibration harness (`calibrate`), which is reachable only from
-// `#[ignore]` tests and is therefore dead in a lib build — legitimately
-// covered — and about seven genuinely unused items (`ids::ROUTE_TYPES`,
-// `ids::COORDINATE_LOCATION`, `api::parse_search`, `WikiClient::search`,
-// `CachedArticle::langs`…), which this blanket allowance is hiding rather
-// than justifying. Narrowing it to `calibrate` and settling each of those
-// seven, one by one, is its own change: some are leftovers, and at least one
-// (`ROUTE_TYPES`) documents a decision — roads are not matched automatically
-// — that a deletion would erase.
+//!
+//! **No blanket `dead_code` allowance here.** It carried one while the module
+//! had no caller at all; once it had one, the allowance hid seven genuinely
+//! unused items rather than justifying them. Each was settled on its own
+//! (2026-09-17): the `wbsearchentities` search pair was superseded by
+//! `search_pages` and deleted, `COORDINATE_LOCATION` and `EntityTitles::langs`
+//! likewise, and the three that survive say why on the spot — `ROUTE_TYPES`
+//! carries a decision, `Candidate::name` serves the harness, `article_lang`
+//! serves its own test. The harness keeps a scoped allowance in
+//! `calibrate.rs`.
 
 pub mod api;
 pub mod calibrate;

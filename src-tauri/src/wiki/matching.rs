@@ -28,6 +28,10 @@ pub struct Candidate {
 
 impl Candidate {
     /// Label if there is one, id otherwise — for reports and logs.
+    ///
+    /// Only the calibration report calls it, and that report is reachable only
+    /// from `#[ignore]` tests: dead in a lib build, alive where it matters.
+    #[allow(dead_code)]
     pub fn name(&self) -> &str {
         self.label.as_deref().unwrap_or(&self.entity_id)
     }

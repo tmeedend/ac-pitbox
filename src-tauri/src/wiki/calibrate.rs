@@ -1,6 +1,13 @@
 //! Calibration run: the whole library through the matching, **persisting
 //! nothing** (WIKI§13).
 //!
+//! **Dead in a lib build, and that is the design.** Everything here is reached
+//! only from `#[ignore]` tests, run by hand with a real network — see the
+//! commands in `docs/CHANTIERS.md`. The allowance below is therefore scoped to
+//! this module: it covers a harness that is deliberately unreachable, not an
+//! oversight elsewhere.
+#![allow(dead_code)]
+//!
 //! The thresholds of WIKI§4.1 and WIKI§4.2 cannot be chosen from a desk. The spec
 //! says as much — its numbers are "des points de départ, pas des cibles" — so
 //! this module exists to produce the evidence: every mod, the candidate that

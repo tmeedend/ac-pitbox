@@ -250,17 +250,24 @@ de reprendre. En cas d'écart, la spec fait foi.
       trois tables dans l'overlay (WIKI§3), la chaîne de repli et la remontée d'un
       cran (WIKI§5), le client Action API (WIKI§6), et l'appariement automatique des
       voitures et des circuits (WIKI§4) avec sa commande de calibration.
-      Le module porte encore un `allow(dead_code)`, mais **plus pour la raison
-      qui l'a fait poser** : il datait du temps où rien n'appelait le module.
-      Mesuré en le retirant, il masque aujourd'hui **13 warnings de deux
-      natures** — le banc de calibration, mort dans une compilation de lib
-      puisque seuls des tests `#[ignore]` l'atteignent (couverture légitime),
-      et **sept éléments réellement inutilisés** (`ids::ROUTE_TYPES`,
-      `ids::COORDINATE_LOCATION`, `api::parse_search`, `WikiClient::search`,
-      `CachedArticle::langs`…). Le restreindre à `calibrate` et trancher ces
-      sept-là un par un est un chantier à part : certains sont des restes,
-      et au moins un (`ROUTE_TYPES`) **porte une décision** — les routes ne
-      s'apparient pas automatiquement — qu'une suppression effacerait.
+      **Le `allow(dead_code)` du module est retiré** (2026-09-17). Il datait du
+      temps où rien n'appelait le module ; une fois un appelant venu, il
+      masquait 13 warnings au lieu de les justifier. Les sept qui n'étaient pas
+      le banc de calibration ont été tranchés un par un, et **trois étaient des
+      implémentations supplantées** que le code documentait déjà ailleurs :
+      `WikiClient::search` et `parse_search` interrogeaient
+      `wbsearchentities`, abandonné après mesure — « BMW M3 E30 » n'y rend
+      *rien*, l'item s'appelant `BMW M3` — au profit de `search_pages`, dont le
+      doc-comment porte la démonstration ; `COORDINATE_LOCATION` nommait une
+      propriété que `list=geosearch` résout côté serveur et que la requête
+      n'envoie jamais ; `EntityTitles::langs` était doublé par
+      `available_langs`, construit dans `api.rs` et seul à alimenter le
+      sélecteur. Supprimés. Les trois survivants disent leur raison sur place :
+      `ROUTE_TYPES` **porte une décision** — les routes ne s'apparient pas
+      automatiquement, et `matchtrack` dit les y laisser pour la correction
+      manuelle —, `Candidate::name` sert le banc, `article_lang` sert son
+      propre test. Le banc garde une allowance **à son échelle**, dans
+      `calibrate.rs`, avec la raison : il est injoignable par conception.
       **Les identifiants Wikidata sont dans `wiki/ids.rs`**, un par un relevés
       sur l'API vivante (WIKI§4.4 l'exige) — le libellé en commentaire est celui
       que l'API a rendu, et chaque entrée dit sur quel item réel elle a été
@@ -362,8 +369,8 @@ de reprendre. En cas d'écart, la spec fait foi.
       - **Le mot « extrait » quitte l'attribution** (WIKI§7.4) : il était exigé
         parce que ne montrer qu'un fragment est une modification. Montrer le
         texte entier est le régime **plus simple**, pas plus risqué.
-      **Reste deux choses** : le ménage du `allow(dead_code)` ci-dessus, et
-      surtout — **régler les seuils sur les corrections manuelles.** Tout le code est livré ; ce qui manque est une **mesure**,
+      **Reste une seule chose : régler les seuils sur les corrections
+      manuelles.** Tout le code est livré ; ce qui manque est une **mesure**,
       et elle demande que l'utilisateur ait corrigé un paquet d'articles.
       **Pourquoi ça attend, et pourquoi ça vaut le coup d'attendre.** Le
       rapport de calibration dit aujourd'hui « score 0,689, marge 0,122 », il

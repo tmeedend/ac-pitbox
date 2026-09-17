@@ -378,32 +378,6 @@ impl WikiClient {
         out
     }
 
-    /// Free-text entity search (WIKI§4.1, and the manual correction of WIKI§7.6).
-    ///
-    /// `wbsearchentities` is the API's own name lookup: it returns ids, labels
-    /// and short descriptions, but **no types** — the filtering of WIKI§4.1 needs
-    /// `details` afterwards. Two requests per name, which is the floor.
-    pub fn search(&self, query: &str, lang: &str, limit: u32) -> Fetched<Vec<SearchHit>> {
-        let query = query.trim();
-        if query.is_empty() {
-            // Searching for nothing is not a network question (WIKI§4.3: a name
-            // made only of noise cleans down to empty).
-            return Fetched::Absent;
-        }
-        let path = format!(
-            "/w/api.php?action=wbsearchentities&search={}&language={}&uselang={}&type=item&limit={limit}\
-             &format=json&formatversion=2",
-            http::encode_query_value(query),
-            http::encode_query_value(lang),
-            http::encode_query_value(lang),
-        );
-        match self.get_json(WIKIDATA_HOST, &path) {
-            Fetched::Found(root) => parse_search(&root),
-            Fetched::Absent => Fetched::Absent,
-            Fetched::Unavailable => Fetched::Unavailable,
-        }
-    }
-
     /// Candidate entities from **Wikipedia's full-text search** (WIKI§4.1).
     ///
     /// Not `wbsearchentities`, and this is measured rather than preferred: that
@@ -714,32 +688,6 @@ fn parse_details(root: &Value) -> Fetched<Vec<EntityDetails>> {
         .iter()
         .filter(|(_, entity)| entity.get("missing").is_none())
         .map(|(id, entity)| details_of(entity, id))
-        .collect();
-    if found.is_empty() {
-        Fetched::Absent
-    } else {
-        Fetched::Found(found)
-    }
-}
-
-/// Reads a `wbsearchentities` answer.
-fn parse_search(root: &Value) -> Fetched<Vec<SearchHit>> {
-    let Some(hits) = root["search"].as_array() else {
-        log::warn!("wiki/api: a search answer without a search array");
-        return Fetched::Unavailable;
-    };
-    let found: Vec<SearchHit> = hits
-        .iter()
-        .filter_map(|hit| {
-            let id = hit["id"].as_str()?;
-            // Properties and lexemes can surface on a search; only items can
-            // be an appariement.
-            is_entity_id(id).then(|| SearchHit {
-                entity_id: id.to_string(),
-                label: hit["label"].as_str().map(str::to_string),
-                description: hit["description"].as_str().map(str::to_string),
-            })
-        })
         .collect();
     if found.is_empty() {
         Fetched::Absent

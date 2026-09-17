@@ -33,11 +33,6 @@ pub const SUBCLASS_OF: &str = "P279";
 /// Seen on Q1377219 → Q2626308.
 pub const PART_OF: &str = "P361";
 
-/// `coordinate location` / « coordonnées géographiques » (globe-coordinate).
-/// What the geographic search of WIKI§4.2 matches on. Seen on Q152207
-/// (Nürburgring): 50.3355555, 6.9475.
-pub const COORDINATE_LOCATION: &str = "P625";
-
 /// `manufacturer` / « fabricant ». The brand half of the car score (WIKI§4.1).
 /// Seen on all four cars measured: MX-5 → Q35996, Supra and AE86 → Q53268,
 /// M3 → Q26678.
@@ -120,6 +115,10 @@ pub const CIRCUIT_TYPES: [&str; 2] = [MOTORSPORT_RACING_TRACK, RACE_TRACK];
 /// coordinates. The run matched the Nordschleife against `Kurt-Bosch-Straße`
 /// (7 mm of score apart), Vallelunga against two Roman streets and Zandvoort
 /// against `Duinweg` — four of the fourteen ambiguities, all of them this.
+/// Not read by the matcher — `matchtrack` deliberately leaves roads
+/// unmatched — but kept for the manual correction, which is where a road can
+/// legitimately be chosen by hand.
+#[allow(dead_code)]
 pub const ROUTE_TYPES: [&str; 6] = [
     ROAD,
     STREET,

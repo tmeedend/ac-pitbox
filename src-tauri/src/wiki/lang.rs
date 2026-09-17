@@ -65,11 +65,6 @@ impl EntityArticles {
             titles,
         }
     }
-
-    /// The languages this entity has an article in, for the selector (WIKI§5.4).
-    pub fn langs(&self) -> Vec<String> {
-        self.titles.keys().cloned().collect()
-    }
 }
 
 /// One link of the fallback chain (WIKI§5.2): an article that is known to exist.
