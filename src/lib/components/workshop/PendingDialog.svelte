@@ -26,6 +26,19 @@
   let error = $state<string | null>(null);
   /** Notice dépliée, par dossier. Absent = repliée. */
   let notices = $state<Record<string, string>>({});
+  /**
+   * Answer given to a folder during THIS opening of the dialog.
+   *
+   * The card stays in place once answered, showing what was chosen, instead of
+   * leaving the list. Reloading the list on each answer made every card below
+   * jump up under the pointer - reported, and it is what made a run of ten
+   * folders unpleasant. The answer is already written on disk: this map only
+   * decides what the card shows.
+   */
+  let settled = $state<Record<string, PendingAction>>({});
+  /** Ce qui attend encore une réponse : le décompte de l'en-tête, et ce que dit
+   * le bouton de fermeture. */
+  const waiting = $derived(folders.filter((f) => !settled[f.id]));
 
   // Rechargée à chaque ouverture : un lot a pu en ajouter, et un autre écran a
   // pu en trancher entre-temps.
@@ -37,6 +50,9 @@
   async function refresh(): Promise<void> {
     try {
       folders = await listPendingFolders();
+      // A fresh opening lists only what is still pending, so no answer from a
+      // previous opening has a card to sit on any more.
+      settled = {};
     } catch (e) {
       error = errorText(e);
       folders = [];
@@ -70,7 +86,17 @@
     error = null;
     try {
       await resolvePendingFolder(f.id, action);
-      await refresh();
+      settled = { ...settled, [f.id]: action };
+      // The list is NOT reloaded: the card keeps its place. Only the count the
+      // import report reads has to follow.
+      //
+      // And NOTHING scrolls. Bringing the next question up was tried and taken
+      // back out: the list holds still under the answer, so a view that moves
+      // by itself right after a click reads as a consequence of that click,
+      // and whoever wanted to re-read what they just answered has to find it
+      // again. The card that keeps its size is the whole point - moving the
+      // viewport instead gives back the disorientation it removed.
+      await refreshPendingCount();
     } catch (e) {
       error = errorText(e);
     } finally {
@@ -106,13 +132,22 @@
     <div class="dlg">
       <header class="dlg-h">
         <h3>{t("importOverlay.pendingTitle")}</h3>
-        <span class="dlg-n">{t("importOverlay.pendingRemaining", { count: folders.length })}</span>
+        {#if waiting.length}
+          <span class="dlg-n">{t("importOverlay.pendingRemaining", { count: waiting.length })}</span>
+        {/if}
       </header>
       <p class="dlg-note">{t("importOverlay.pendingNote")}</p>
 
       <div class="dlg-body">
         {#each folders as f (f.id)}
-          <article class="card">
+          {@const done = settled[f.id]}
+          <!-- Répondue, la carte ne change **pas de hauteur** : c'est la
+               réponse choisie qui s'allume et les autres qui s'éteignent. La
+               rétracter en une ligne faisait remonter tout ce qui suit, soit
+               exactement le saut qu'on cherchait à supprimer — et la question
+               qu'on vient de trancher reste lisible, ce qui est la seule façon
+               de vérifier qu'on a répondu ce qu'on croit. -->
+          <article class="card" class:done>
             <!-- Le titre de l'auteur passe devant le chemin d'archive : c'est
                  la seule ligne écrite pour être lue par un humain. -->
             <div class="c-head">
@@ -171,14 +206,16 @@
               {#each f.actions as a}
                 <button
                   class="c-act"
-                  class:suggested={a === f.suggestion}
+                  class:suggested={a === f.suggestion && !done}
+                  class:chosen={done === a}
                   type="button"
-                  disabled={busy === f.id}
+                  aria-pressed={done ? done === a : undefined}
+                  disabled={busy === f.id || !!done}
                   onclick={() => settle(f, a)}
                 >
                   <span class="c-act-l">
                     {t(ACTION_LABEL[a])}
-                    {#if a === f.suggestion}<em class="c-act-s">{t("importOverlay.pendingSuggested")}</em>{/if}
+                    {#if a === f.suggestion && !done}<em class="c-act-s">{t("importOverlay.pendingSuggested")}</em>{/if}
                   </span>
                   <span class="c-act-h">{t(ACTION_HINT[a])}</span>
                 </button>
@@ -190,7 +227,12 @@
 
       {#if error}<p class="dlg-err">{error}</p>{/if}
       <footer class="dlg-f">
-        <button class="btn" type="button" onclick={closePendingDialog}>{t("importOverlay.pendingClose")}</button>
+        <!-- « Plus tard » tant qu'il reste une question : fermer n'est alors pas
+             une fin, c'est un report (§4.6bis). Quand tout est tranché, le même
+             bouton ne reporte plus rien. -->
+        <button class="btn" type="button" onclick={closePendingDialog}>
+          {waiting.length ? t("importOverlay.pendingClose") : t("importOverlay.pendingDone")}
+        </button>
       </footer>
     </div>
   </div>
@@ -253,6 +295,16 @@
   .card:first-child {
     border-top: none;
     padding-top: 0;
+  }
+  /* Une carte répondue s'éteint sans rien perdre de sa taille : même texte,
+     mêmes réponses, mêmes pixels — seul le contraste tombe, pour qu'elle ne se
+     dispute plus l'œil avec la question suivante. */
+  .card.done .c-title,
+  .card.done .c-desc,
+  .card.done .c-facts,
+  .card.done .c-warn,
+  .card.done .c-neutral {
+    opacity: 0.55;
   }
   .c-head {
     display: flex;
@@ -394,6 +446,17 @@
   }
   .c-act.suggested {
     border-color: var(--blue-border);
+  }
+  /* La réponse donnée : vert, comme le « installé » du rapport d'import —
+     c'est un fait acquis, pas une proposition. Les autres retombent au gris
+     des boutons désactivés, si bien qu'une carte répondue se lit d'un coup
+     d'œil sans qu'une seule ligne ait bougé. */
+  .c-act.chosen:disabled {
+    opacity: 1;
+    border-color: var(--green-border);
+  }
+  .c-act.chosen .c-act-l {
+    color: var(--green);
   }
   .c-act-l {
     display: block;

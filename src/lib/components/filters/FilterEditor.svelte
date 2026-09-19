@@ -56,9 +56,15 @@
   const needle = $derived(text.trim().replace(/^[-+]/, "").trim().toLowerCase());
 
   const posed = $derived(st.type === "val" ? st.values : []);
-  const shown = $derived(
-    options.filter((o) => !posed.some((v) => v.value === o.value) && o.label.toLowerCase().includes(needle)),
-  );
+  /** Sign posed on each value, absent when the value is not in the filter.
+   * A map rather than a scan: every suggestion row reads it. */
+  const posedSign = $derived(new Map(posed.map((v) => [v.value, v.sign])));
+  // The list keeps EVERY value matching the search, posed ones included.
+  // Dropping a row the moment it was clicked pulled the next one up under the
+  // cursor and lost the place being read - reported, and worse still on a long
+  // scrolled list. A posed row shows its sign instead, and clicking the same
+  // sign again takes it back.
+  const shown = $derived(options.filter((o) => o.label.toLowerCase().includes(needle)));
   // L'index actif ne doit jamais dépasser une liste qui vient de rétrécir sous
   // la frappe : sans ça, Entrée valide `undefined` et ne fait rien.
   const cursor = $derived(Math.min(activeIndex, Math.max(shown.length - 1, 0)));
@@ -82,11 +88,15 @@
     onupdate({ type: "val", values, op: st.op });
   }
 
-  function add(value: string, sign: Sign) {
+  /** Poses `value` with the given sign, flips it when it was posed the other
+   * way, takes it back when the same sign is asked again. One path for the
+   * three gestures: the row never moves, only its state changes. */
+  function setSign(value: string, sign: Sign) {
     if (st.type !== "val") return;
-    setValues([...st.values, { value, sign }]);
-    text = "";
-    activeIndex = 0;
+    const at = st.values.findIndex((v) => v.value === value);
+    if (at < 0) setValues([...st.values, { value, sign }]);
+    else if (st.values[at].sign === sign) setValues(st.values.filter((_, i) => i !== at));
+    else setValues(st.values.map((v, i) => (i === at ? { ...v, sign } : v)));
     inputEl?.focus();
   }
 
@@ -112,7 +122,12 @@
       const pick = shown[cursor];
       if (!pick) return;
       e.preventDefault();
-      add(pick.value, e.altKey || excMode ? -1 : defaultSign);
+      setSign(pick.value, e.altKey || excMode ? -1 : defaultSign);
+      // Cleared HERE only: typing was the way this value was named, and the
+      // next one gets typed too. A click is the opposite - the search text is
+      // what the list is being read through, so nothing may touch it.
+      text = "";
+      activeIndex = 0;
     } else if (e.key === "Backspace" && text === "" && posed.length) {
       // Retirer le dernier jeton à la touche retour, comme un champ de
       // destinataires d'e-mail : le geste est acquis, il n'a pas à s'expliquer.
@@ -143,20 +158,6 @@
   <div class="head">{t(def.labelKey)}</div>
 
   {#if st.type === "val"}
-    {#if ordered.length}
-      <div class="toks">
-        {#each ordered as tk (tk.value)}
-          <span class="tok" class:neg={tk.sign < 0}>
-            <button type="button" class="body" title={t("filters.tokenToggle")} onclick={() => flipAt(tk.i)}>
-              <span class="sign" aria-hidden="true">{tk.sign < 0 ? "−" : "+"}</span>
-              <span class="label">{valueLabel(def, tk.value)}</span>
-            </button>
-            <button type="button" class="rm" title={t("filters.tokenRemove")} onclick={() => removeAt(tk.i)}>×</button>
-          </span>
-        {/each}
-      </div>
-    {/if}
-
     <!-- Le champ ne pose pas de valeur libre : les valeurs proposées sont
          **dérivées de la bibliothèque** (marques, auteurs, tags…), donc une
          valeur inventée ne remonterait aucun mod par construction. Il ne sert
@@ -176,7 +177,8 @@
 
     <div class="sugg">
       {#each shown as opt, i (opt.value)}
-        <div class="opt" class:on={i === cursor}>
+        {@const held = posedSign.get(opt.value)}
+        <div class="opt" class:on={i === cursor} class:posed={held !== undefined} class:neg={held !== undefined && held < 0}>
           <span class="oname" title={opt.label}>{opt.label}</span>
           <span class="ocount mono">{opt.count}</span>
           <span class="acts">
@@ -185,8 +187,13 @@
                 type="button"
                 class="a"
                 class:minus={sign < 0}
-                title={sign < 0 ? t("filters.tokenExclude") : t("filters.tokenInclude")}
-                onclick={() => add(opt.value, sign)}>{sign < 0 ? "−" : "+"}</button
+                class:held={held === sign}
+                title={held === sign
+                  ? t("filters.tokenRemove")
+                  : sign < 0
+                    ? t("filters.tokenExclude")
+                    : t("filters.tokenInclude")}
+                onclick={() => setSign(opt.value, sign)}>{sign < 0 ? "−" : "+"}</button
               >
             {/each}
           </span>
@@ -195,6 +202,24 @@
         <div class="none">{t("filters.tokenNoMatch")}</div>
       {/each}
     </div>
+
+    <!-- Récapitulatif SOUS la liste, et c'est tout l'intérêt : au-dessus, il
+         poussait le champ et les suggestions d'une rangée entière au premier
+         jeton posé. Il porte ce que la liste ne montre pas — une valeur posée
+         puis masquée par la recherche en cours reste lisible et reprenable ici. -->
+    {#if ordered.length}
+      <div class="toks">
+        {#each ordered as tk (tk.value)}
+          <span class="tok" class:neg={tk.sign < 0}>
+            <button type="button" class="body" title={t("filters.tokenToggle")} onclick={() => flipAt(tk.i)}>
+              <span class="sign" aria-hidden="true">{tk.sign < 0 ? "−" : "+"}</span>
+              <span class="label">{valueLabel(def, tk.value)}</span>
+            </button>
+            <button type="button" class="rm" title={t("filters.tokenRemove")} onclick={() => removeAt(tk.i)}>×</button>
+          </span>
+        {/each}
+      </div>
+    {/if}
 
     {#if def.operator}
       <!-- Le libellé n'est pas décoratif : sans lui, on croit que l'opérateur
@@ -334,7 +359,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 5px;
-    margin-bottom: 8px;
+    margin-top: 9px;
   }
   .tok {
     display: inline-flex;
@@ -453,6 +478,12 @@
   .opt:hover .acts {
     display: flex;
   }
+  /* Une valeur déjà posée garde ses deux boutons visibles en permanence : ils
+     ne sont plus une action offerte au survol mais l'état de la ligne, et un
+     état ne se lit pas seulement sous le curseur. */
+  .opt.posed .acts {
+    display: flex;
+  }
   .a {
     width: 20px;
     height: 20px;
@@ -475,6 +506,26 @@
     border-color: var(--faint2);
     background: var(--raised);
     color: var(--txt);
+  }
+  /* Le bouton du signe en cours est allé chercher l'apparence de son propre
+     survol : c'est le même rouge éteint que la puce retenue, et il dit « c'est
+     celui-là » sans introduire une troisième couleur. */
+  .a.held {
+    border-color: var(--rosso-border);
+    background: var(--rosso-dim);
+    color: var(--rosso-bright);
+  }
+  .a.minus.held {
+    border-color: var(--faint2);
+    background: var(--raised);
+    color: var(--txt);
+  }
+  /* Même langage que le jeton du récapitulatif : une exclusion se dit par la
+     rature et par le mot, jamais par une couleur à elle. */
+  .opt.neg .oname {
+    color: var(--muted);
+    text-decoration: line-through;
+    text-decoration-color: var(--faint2);
   }
   .none {
     font-size: 11.5px;
