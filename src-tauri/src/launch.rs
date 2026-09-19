@@ -502,4 +502,118 @@ pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(
     let _ = crate::overlay::mark_launched(conn, &setup.track_id, &now);
     Ok(())
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
 
+    /// A saved session exactly as version 0.6.0 wrote it into
+    /// `saved_sessions.json`, trimmed to its `setup` object. Verbatim: the six
+    /// fields that have since disappeared are still here (`ai_level_min`,
+    /// `ai_level_max`, `year_min`, `year_max`, `abs_auto`,
+    /// `traction_control_auto`), and the eleven that arrived after it are
+    /// absent.
+    const SETUP_0_6_0: &str = r#"{
+        "car_id": "ks_praga_r1",
+        "car_skin": "red",
+        "driver": null,
+        "track_id": "spa",
+        "track_layout": "layout_gp",
+        "session_type": "race",
+        "opponents": [
+            { "car_id": "ks_lotus_25", "ai_level": 92, "car_skin": "green" },
+            { "car_id": "ks_praga_r1", "ai_level": 88, "car_skin": null }
+        ],
+        "ai_level_min": 85,
+        "ai_level_max": 95,
+        "laps": 7,
+        "weather": "3_clear",
+        "time_hours": 14.5,
+        "ambient_c": 26,
+        "road_c": 31,
+        "wind_speed_kmh": 12,
+        "wind_direction_deg": 225,
+        "year_min": 1990,
+        "year_max": 2020,
+        "season": "summer",
+        "season_date": "2026-02-19T00:00:00",
+        "penalties": true,
+        "jump_start_penalty": 1,
+        "grip": 96,
+        "practice_enabled": true,
+        "practice_minutes": 15,
+        "qualify_enabled": true,
+        "qualify_minutes": 10,
+        "ghost_car": false,
+        "practice_start": "track",
+        "damage": 50,
+        "fuel_rate": 100,
+        "tyre_wear": 150,
+        "tyre_blankets": true,
+        "abs_auto": true,
+        "traction_control_auto": false,
+        "ideal_line": false
+    }"#;
+
+    /// **The upgrade path, which no amount of use in development exercises.**
+    ///
+    /// `RaceSetup` lost six fields and gained eleven since 0.6.0, and every
+    /// session a user saved back then is read through this very struct on first
+    /// launch of the new version (`sessionpreset::migrate_legacy_file`, which
+    /// converts them into Content Manager presets). A field arriving without
+    /// `#[serde(default)]` would make every one of those sessions unreadable —
+    /// the migration logs and skips what it cannot parse, so the user would
+    /// simply find their list empty, with nothing on screen to explain it.
+    ///
+    /// What the assertions protect: the five fields that have no default and
+    /// must therefore keep their exact names, the opponents (whose `ai_level`
+    /// went from a plain number to `Option<u32>`), and the fact that a removed
+    /// field is ignored rather than refused.
+    #[test]
+    fn a_session_saved_by_the_previous_version_still_reads_back() {
+        let setup: RaceSetup = serde_json::from_str(SETUP_0_6_0).expect("a 0.6.0 setup still deserialises");
+
+        assert_eq!(setup.car_id, "ks_praga_r1", "the car is what will be driven");
+        assert_eq!(setup.car_skin.as_deref(), Some("red"), "the player skin survives");
+        assert_eq!(setup.track_id, "spa");
+        assert_eq!(setup.track_layout.as_deref(), Some("layout_gp"), "the layout survives");
+        assert_eq!(setup.session_type, SessionType::Race, "the session type survives");
+        assert_eq!(setup.laps, 7, "the race length survives");
+        assert_eq!(setup.weather, "3_clear");
+        assert_eq!(setup.time_hours, 14.5);
+        assert_eq!(setup.grip, 96, "the grip survives");
+        assert!(setup.penalties, "the flags survive");
+
+        assert_eq!(setup.opponents.len(), 2, "the grid is the reason one saves a session");
+        assert_eq!(
+            setup.opponents[0].ai_level,
+            Some(92),
+            "a level posed by hand stays an explicit value, it is not taken for Auto"
+        );
+        assert_eq!(setup.opponents[0].car_skin.as_deref(), Some("green"));
+        assert_eq!(setup.opponents[1].car_skin, None);
+    }
+
+    /// The other half of the same rule: what 0.6.0 could not know takes its
+    /// default rather than blocking the read, and the two assists it wrote as
+    /// booleans land on `Factory` — which is what `abs_auto: true` meant.
+    #[test]
+    fn what_the_previous_version_never_wrote_takes_its_default() {
+        let setup: RaceSetup = serde_json::from_str(SETUP_0_6_0).expect("a 0.6.0 setup still deserialises");
+
+        assert_eq!(
+            setup.abs,
+            AssistLevel::Factory,
+            "an assist with no value left is factory"
+        );
+        assert_eq!(setup.traction_control, AssistLevel::Factory);
+        assert_eq!(setup.start_mode, StartMode::Random, "no starting position was saved");
+        assert_eq!(
+            setup.ai_level,
+            default_ai_level(),
+            "the single level replaces the old range"
+        );
+        assert_eq!(setup.player_ballast, 0, "no handicap was saved");
+        assert_eq!(setup.player_restrictor, 0);
+        assert!(setup.track_state.is_none(), "track states did not exist yet");
+    }
+}
