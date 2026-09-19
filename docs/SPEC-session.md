@@ -871,13 +871,14 @@ en tête, rien de caché. Le type devient une propriété affichée, à côté d
 circuit et de la date. Si un filtre explicite devenait nécessaire, il prendrait
 la forme d'une puce visible et effaçable — jamais d'un masquage silencieux.
 
-Clé par `<type>::<nom>` : deux types peuvent avoir une sauvegarde du même nom
-sans collision, et la suppression lit le type de **l'entrée**, pas celui de
-l'écran, puisque la liste n'est plus filtrée. **Persistance**
-(`src-tauri/src/saved_sessions.rs`, `app_config_dir/saved_sessions.json`) : même
-mécanisme et même raison que le duo de session et les presets ci-dessus —
-fichier dédié écrit côté Rust, migration silencieuse depuis `localStorage` au
-premier démarrage après la mise à jour.
+**Un nom, un fichier** : une sauvegarde est un `.cmpreset` (SESSION§3.6), donc
+la clé `<type>::<nom>` d'avant a disparu avec le fichier unique qui la portait.
+Deux types ne peuvent plus avoir une sauvegarde du même nom — enregistrer
+« Test » en Practice remplace le « Test » de Course, après la confirmation
+d'écrasement que la modale demande déjà. C'est le prix du format, et il est
+assumé : un fichier que Content Manager affiche doit porter le nom qui a été
+tapé, pas `race::Test`. La suppression, elle, lit toujours l'entrée et jamais
+l'écran, puisque la liste n'est pas filtrée.
 
 **Contenu d'une session enregistrée** : les réglages (météo, adversaires, options) **et le duo de session** — voiture pilotée avec son skin, circuit avec son tracé et ses **skins de circuit actifs** (§8, seul élément hors `setup` : c'est un état de déploiement, d'où un champ `trackSkins` à part). Le chargement rétablit le tout en passant par le duo de session (SESSION§1), qui reste la source de vérité : voiture et circuit sont reposés via `pickSession`, pas écrits directement dans le setup. Les skins de circuit sont remis **à l'identique** — ceux qui manquent sont activés, ceux en trop désactivés, sinon un skin resté actif d'une session précédente changerait l'apparence du circuit sans que rien ne le signale. Une sauvegarde antérieure au champ `trackSkins` (`undefined`, distinct d'une liste vide) n'y touche pas du tout.
 
@@ -886,6 +887,58 @@ premier démarrage après la mise à jour.
 **Écran non prêt** : le corps de l'écran (colonnes de réglages) reste masqué derrière `LoadingState` (même indicateur que les listes de mods) tant que le chargement initial n'est pas terminé (bibliothèque, presets/sélection persistés, duo de session, météo par défaut) — évite que l'utilisateur voie les champs se réajuster au fur et à mesure que les valeurs mémorisées arrivent.
 
 **Choix layout/skin de circuit** : sur la fiche/bibliothèque circuit, image d'aperçu (`preview.png`) avec le tracé du layout (`outline.png`/`map.png`) par-dessus, infos (longueur, virages, CSP).
+
+### 3.6 Une session enregistrée est un preset Content Manager
+
+**Le format de sauvegarde est celui de CM**, `.cmpreset`, écrit dans son propre
+dossier : `%LocalAppData%\AcTools Content Manager\Presets\Quick Drive\Pit Box\`.
+Une session réglée dans Pit Box se lance donc aussi depuis Content Manager,
+sans export ni conversion — et les presets que l'utilisateur a composés dans CM
+apparaissent dans la liste de Pit Box. Les deux applications cessent d'être deux
+mondes.
+
+Le fichier est produit par **le constructeur du lancement lui-même**
+(`quickdrive::preset_value`, SESSION§2) : ce qui est enregistré et ce qui est
+lancé ne peuvent pas diverger, parce qu'il n'y a qu'un producteur.
+
+**Le bloc `PitBox`, et pourquoi un aller-retour ne suffit pas.** Le schéma Quick
+Drive ne porte pas tout : **le skin du joueur n'y a aucun champ** (mesuré, pas
+supposé — SESSION§2), ni l'intention météo, ni les skins de circuit actifs, ni
+les jetons du vivier, ni la tenue du pilote. Relire un preset perdrait donc
+exactement ce sur quoi on a passé du temps. Nos fichiers portent en plus une
+clé de premier niveau `PitBox` contenant l'instantané complet, et c'est **elle
+seule** qui est relue : aucun aller-retour dégradant. Content Manager ignore les
+clés qu'il ne connaît pas, le fichier reste un preset parfaitement ordinaire
+pour lui. S'il réécrivait un de nos fichiers et emportait le bloc, rien ne
+casse : le fichier se relit alors comme n'importe quel preset de CM.
+
+**Les presets de Content Manager sont listés, avec un badge.** Ils se chargent
+au mieux de ce que le format porte. Ce qu'il ne porte pas est **dit** dans le
+bandeau jaune du chargement partiel, jamais deviné : le skin du joueur d'abord
+(la session garde celui en place, exactement ce que fait CM), et le plateau
+quand le preset **tire** ses adversaires au lieu de les énumérer — seul
+`ModeId: "manual"` est un plateau, même règle qu'à l'import des grilles
+(SESSION§3.5). La température de piste ne revient pas non plus : `crt` dit
+qu'une valeur a été posée, jamais laquelle.
+
+**Les trois modes sans équivalent** — Drag, Drift, Time attack — sont **nommés**
+dans la liste, en ligne grisée avec leur raison, pas masqués : qui a dix presets
+et en voit huit se demande lesquels ont disparu. Ils ne comptent pas dans le
+décompte du bouton, qui ne promet que ce qui se charge.
+
+**Un preset qu'on n'a pas écrit ne se supprime pas** — la croix ne s'affiche que
+sur les nôtres, et le backend refuse de toute façon un fichier sans bloc
+`PitBox`. C'est le corollaire de la règle sur les fichiers du jeu, appliqué au
+dossier de CM.
+
+**Sans Content Manager**, le dossier n'existe pas : les presets vont alors dans
+`app_config_dir/Quick Drive/Pit Box/`, même format, même code. Enregistrer une
+session ne dépend pas de CM, seul le partage avec lui en dépend.
+
+**Migration** : `saved_sessions.json` est relu une fois, chaque entrée réécrite
+en preset, puis le fichier renommé — une session supprimée depuis ne ressuscite
+pas au démarrage suivant. Une entrée dont le `setup` ne se relit plus est
+journalisée et sautée, jamais bloquante.
 
 ## 4. Aperçu 3D des voitures
 

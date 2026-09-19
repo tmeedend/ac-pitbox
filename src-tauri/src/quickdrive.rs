@@ -519,6 +519,15 @@ fn mode_data_trackday(s: &RaceSetup) -> String {
 /// n'a pas d'état « pas de qualif » — sa durée est bornée à `[5, 90]` et son
 /// `Save()` n'écrit jamais de durée nulle.
 pub fn build_preset(s: &RaceSetup) -> Result<String, String> {
+    serde_json::to_string(&preset_value(s)).map_err(|e| format!("sérialisation du preset Quick Drive : {e}"))
+}
+
+/// Le preset avant sérialisation — `build_preset` n'en est que la mise en
+/// chaîne. Séparé parce que les sessions enregistrées (SESSION§3.6) y
+/// ajoutent leur bloc `PitBox` avant d'écrire : re-parser une chaîne qu'on
+/// vient de produire pour y insérer une clé serait un aller-retour inutile,
+/// et surtout une occasion de diverger si le format changeait d'un côté.
+pub fn preset_value(s: &RaceSetup) -> Value {
     let (mode_path, mode_data) = match s.session_type {
         SessionType::Practice => ("/Pages/Drive/QuickDrive_Practice.xaml", mode_data_practice(s)),
         SessionType::Hotlap => ("/Pages/Drive/QuickDrive_Hotlap.xaml", mode_data_hotlap(s)),
@@ -568,7 +577,7 @@ pub fn build_preset(s: &RaceSetup) -> Result<String, String> {
         "crt": s.road_c.is_some(),
     });
 
-    serde_json::to_string(&preset).map_err(|e| format!("sérialisation du preset Quick Drive : {e}"))
+    preset
 }
 
 #[cfg(test)]

@@ -1,11 +1,14 @@
-//! Persistance des sessions de lancement sauvegardées par l'utilisateur
-//! (SESSION§3.5) — fichier dédié (`saved_sessions.json`), écriture synchrone.
-//! Même bug que le duo de session et les presets (SESSION§3, voir
-//! `session_state.rs`) : `localStorage` n'est pas garanti synchrone sur
-//! disque côté WebView2, ce qui perdait une sauvegarde nommée à la fermeture
-//! de l'app plutôt qu'au clic sur Sauvegarder/Retirer. Structure opaque côté
-//! Rust : le schéma (`SavedSession`, clé `<type>::<nom>`) appartient au
-//! frontend (`savedSessions.ts`).
+//! `saved_sessions.json` — the file saved sessions used to live in, kept for
+//! one thing only: migrating what it still holds (SESSION§3.6).
+//!
+//! A saved session is now a Content Manager preset (`sessionpreset.rs`), which
+//! is why nothing writes here any more. The file is read once, converted, then
+//! renamed — see `sessionpreset::migrate_legacy_file`.
+//!
+//! The history is worth keeping in one line, because it is the reason the
+//! preset writer is synchronous too: before this file there was
+//! `localStorage`, which is not guaranteed to reach the disk on WebView2, and
+//! a session saved just before closing the app could simply never exist.
 
 use std::path::PathBuf;
 
@@ -15,8 +18,8 @@ fn file(app: &AppHandle) -> Option<PathBuf> {
     app.path().app_config_dir().ok().map(|d| d.join("saved_sessions.json"))
 }
 
-/// Objet vide si le fichier n'existe pas encore ou est illisible — premier
-/// démarrage, ou fichier corrompu : jamais bloquant.
+/// Empty object when the file is absent or unreadable — a fresh install, or a
+/// corrupt file: never blocking.
 pub fn load(app: &AppHandle) -> serde_json::Value {
     let Some(path) = file(app) else {
         return serde_json::json!({});
@@ -25,15 +28,6 @@ pub fn load(app: &AppHandle) -> serde_json::Value {
         Ok(s) => serde_json::from_str(&s).unwrap_or_else(|_| serde_json::json!({})),
         Err(_) => serde_json::json!({}),
     }
-}
-
-pub fn save(app: &AppHandle, all: &serde_json::Value) -> Result<(), String> {
-    let path = file(app).ok_or("dossier de config indisponible")?;
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    let json = serde_json::to_string_pretty(all).map_err(|e| e.to_string())?;
-    std::fs::write(&path, json).map_err(|e| format!("écriture saved_sessions.json échouée : {e}"))
 }
 
 #[cfg(test)]
@@ -53,8 +47,8 @@ mod tests {
 
     #[test]
     fn malformed_json_falls_back_to_empty_object() {
-        // Même repli que `load()` (fichier corrompu, ou d'un futur format
-        // incompatible) : jamais bloquant, jamais de panique.
+        // Same fallback as `load()` (corrupt file, or one from a future
+        // incompatible format): never blocking, never a panic.
         let value: serde_json::Value = serde_json::from_str("{not json").unwrap_or_else(|_| serde_json::json!({}));
         assert!(value.as_object().unwrap().is_empty());
     }

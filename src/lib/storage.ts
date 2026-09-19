@@ -32,6 +32,10 @@ export const StorageKey = {
   sessionTrack: `${PREFIX}.session.track`,
   launchSelection: `${PREFIX}.launchSel`,
   launchPresets: `${PREFIX}.launchPresets`,
+  /** Historique : sessions enregistrées, passées par `localStorage` puis par
+   * `saved_sessions.json`, et désormais des presets `.cmpreset` (SESSION§3.6).
+   * Plus aucune lecture ici — la clé reste pour que l'exclusion de la
+   * migration en bloc (`uiPrefs.svelte.ts`) ait un nom quelque part. */
   savedSessions: `${PREFIX}.savedSessions`,
   /** Visibilité seule (jamais l'ordre ni la largeur, fonctionnalités
    * postérieures à cette clé) — le reste repart des défauts à la migration. */

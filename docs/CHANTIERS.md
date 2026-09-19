@@ -25,6 +25,30 @@ de reprendre. En cas d'écart, la spec fait foi.
 
 ---
 
+- [ ] **Sessions au format `.cmpreset` — une seule vérification reste.**
+      Livré (SESSION§3.6) : une session enregistrée est un preset Quick Drive
+      écrit chez Content Manager, portant en plus une clé `PitBox` avec
+      l'instantané complet — le skin du joueur, l'intention météo, les skins de
+      circuit et les jetons du vivier, dont **aucun n'a de champ dans le schéma
+      de CM**. Les presets de CM sont listés avec un badge, convertis au mieux,
+      et jamais supprimés depuis Pit Box.
+
+      **Ce qui reste, et c'est mesurable en une minute** : CM ignore-t-il
+      vraiment notre clé ? C'est la valeur par défaut de Newtonsoft (membres
+      inconnus ignorés), donc c'est attendu — mais ce n'est pas mesuré, et la
+      règle de ce projet est de ne pas déduire un format qu'on peut observer.
+      Ouvrir Quick Drive dans CM, charger un preset du dossier `Pit Box`,
+      vérifier qu'il se charge et se lance. S'il refusait, le repli est écrit
+      d'avance : le bloc part dans un fichier jumeau `<nom>.pitbox.json` à côté
+      du preset, et rien d'autre ne bouge.
+
+      **Ce qui ne revient pas d'un preset de CM**, et c'est le format qui le
+      dit, pas un manque de travail : le skin du joueur (aucun champ — mesuré,
+      deux presets sauvegardés avec deux skins différents sont identiques
+      octet pour octet) et la température de piste (`crt` dit qu'une valeur a
+      été posée, jamais laquelle). Les deux sont annoncés dans le bandeau
+      jaune plutôt que devinés.
+
 - [ ] **Texture updates — la couche développée sur toutes les livrées.**
       Recherche faite, **rien d'implémenté** : tout est dans
       `docs/SPEC-texture-update.md`, y compris les mesures, qui sont la partie

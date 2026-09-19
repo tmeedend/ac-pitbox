@@ -6,6 +6,16 @@
     name: string;
     meta?: string;
     badge?: string;
+    /** What the callbacks give back, when the name is not the identity. A
+     * session is a file now (SESSION§3.6), and two of Content Manager's
+     * folders may hold the same name; everything else keeps naming by name. */
+    id?: string;
+    /** `false` hides the delete cross — an entry Pit Box did not write is
+     * listed, never removed from here. Default `true`. */
+    deletable?: boolean;
+    /** An entry that is shown but cannot be picked: a preset whose mode has no
+     * Pit Box equivalent is named rather than hidden, and `meta` says why. */
+    disabled?: boolean;
   }
 </script>
 
@@ -38,9 +48,10 @@
     searchable?: boolean;
     /** `save`: the name typed or picked, overwrite already confirmed. */
     onsave?: (name: string) => void;
-    /** `load`: the entry chosen. */
-    onpick?: (name: string) => void;
-    ondelete: (name: string) => void;
+    /** `load`: the entry chosen, by `id` when it has one. */
+    onpick?: (key: string) => void;
+    /** The entry to remove, by `id` when it has one. */
+    ondelete: (key: string) => void;
     onclose: () => void;
   }
   let { title, entries, mode, placeholder = "", emptyText, searchable = false, onsave, onpick, ondelete, onclose }: Props =
@@ -54,9 +65,15 @@
     query.trim() ? entries.filter((e) => e.name.toLowerCase().includes(query.trim().toLowerCase())) : entries,
   );
 
+  /** The identity of an entry: its `id` when it has one, its name otherwise. */
+  function keyOf(entry: NamedEntry): string {
+    return entry.id ?? entry.name;
+  }
+
   function activate(entry: NamedEntry) {
+    if (entry.disabled) return;
     if (mode === "load") {
-      onpick?.(entry.name);
+      onpick?.(keyOf(entry));
       return;
     }
     // Picking an existing name to overwrite it is faster than retyping it.
@@ -78,7 +95,7 @@
 
   function remove(entry: NamedEntry, e: Event) {
     e.stopPropagation();
-    ondelete(entry.name);
+    ondelete(keyOf(entry));
     if (confirmName === entry.name) confirmName = null;
   }
 </script>
@@ -126,21 +143,23 @@
       {#if !shown.length}
         <div class="empty">{query.trim() ? t("common.noResults") : emptyText}</div>
       {:else}
-        {#each shown as e (e.name)}
-          <button class="item" type="button" onclick={() => activate(e)}>
+        {#each shown as e (e.id ?? e.name)}
+          <button class="item" class:off={e.disabled} type="button" disabled={e.disabled} onclick={() => activate(e)}>
             <div class="item-b">
               <div class="item-name">{e.name}</div>
               {#if e.meta}<div class="item-meta mono">{e.meta}</div>{/if}
             </div>
             {#if e.badge}<span class="badge">{e.badge}</span>{/if}
-            <span
-              class="item-x"
-              role="button"
-              tabindex="-1"
-              title={t("common.remove")}
-              onclick={(ev) => remove(e, ev)}
-              onkeydown={(ev) => ev.key === "Enter" && remove(e, ev)}>✕</span
-            >
+            {#if e.deletable !== false}
+              <span
+                class="item-x"
+                role="button"
+                tabindex="-1"
+                title={t("common.remove")}
+                onclick={(ev) => remove(e, ev)}
+                onkeydown={(ev) => ev.key === "Enter" && remove(e, ev)}>✕</span
+              >
+            {/if}
           </button>
         {/each}
       {/if}
@@ -230,6 +249,14 @@
   }
   .item:hover {
     background: var(--raised);
+  }
+  /* Named, not hidden: the line stays readable, and `meta` carries the
+     reason — an entry that disappears leaves the user counting. */
+  .item.off {
+    opacity: 0.55;
+  }
+  .item.off:hover {
+    background: var(--panel2);
   }
   .item-b {
     flex: 1;

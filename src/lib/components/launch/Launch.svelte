@@ -62,6 +62,7 @@
     deleteSavedSession,
     formatSavedAt,
     type SavedSession,
+    type SessionPreset,
   } from "$lib/launch/savedSessions";
   import { deleteSavedGrid, listSavedGrids, saveGrid, type SavedGrid } from "$lib/launch/savedGrids";
 
@@ -1182,9 +1183,14 @@
   // qu'elle enregistre — d'où `Save grid…` en bas de la grille et celle-ci en
   // en-tête d'écran.
   let sessionDialog = $state<"save" | "load" | null>(null);
-  let savedList = $state<SavedSession[]>([]);
+  let savedList = $state<SessionPreset[]>([]);
   $effect(() => {
     const type = setup.session_type;
+    // Ouvrir la modale relit le dossier de presets : le scénario réel est
+    // d'aller composer un preset dans Content Manager puis de revenir, et il
+    // doit apparaître sans redémarrer l'app. Lu en tête, avant toute sortie —
+    // une dépendance lue plus bas ne serait jamais enregistrée.
+    void sessionDialog;
     // Le type ne filtre plus, il TRIE (SETUP§2.11) : la liste les porte toutes, et
     // celles du type courant viennent en tête. Le type peut changer avant que
     // la réponse (invoke Rust) n'arrive — n'applique le résultat que s'il
@@ -1194,19 +1200,31 @@
     });
   });
 
-  /** Ce qui distingue deux sauvegardes d'un coup d'œil : son type — devenu une
-   * propriété affichée depuis qu'il ne filtre plus —, son circuit, sa date. */
-  function savedMeta(s: SavedSession): string {
+  /** Le décompte du bouton ne compte que ce qui se charge : un preset dont le
+   * mode n'a pas d'équivalent Pit Box est listé pour qu'on sache qu'il existe,
+   * mais l'annoncer dans « Charger (12) » promettrait douze sessions. */
+  const loadableCount = $derived(savedList.filter((e) => e.session).length);
+
+  /** Ce qui distingue deux entrées d'un coup d'œil : son type — devenu une
+   * propriété affichée depuis qu'il ne filtre plus —, son circuit, sa date.
+   * Un preset qu'on n'a pas su convertir affiche sa raison à la place : la
+   * ligne reste, et elle dit pourquoi elle ne se charge pas (SESSION§3.6). */
+  function savedMeta(e: SessionPreset): string {
+    if (!e.session) return errorText(e.reason ?? "");
+    const s = e.session;
     const track = libCards.find((c) => c.id_interne === s.setup.track_id)?.display_name ?? s.setup.track_id;
     return [t(`launch.type.${s.setup.session_type}`), track, formatSavedAt(s.savedAt)].filter(Boolean).join(" · ");
   }
 
-  async function removeSavedSession(name: string) {
-    // Le type vient de l'entrée elle-même, pas de l'écran : la liste n'est plus
-    // filtrée, donc on peut très bien supprimer une session d'un autre type que
-    // celui qu'on est en train de régler.
-    const entry = savedList.find((s) => s.name === name);
-    if (entry) await deleteSavedSession(entry.setup.session_type, name);
+  async function removeSavedSession(path: string) {
+    // Par chemin, et seulement pour les nôtres : un preset composé dans
+    // Content Manager est listé ici, jamais supprimé d'ici (SESSION§3.6). Le
+    // backend refuse de toute façon, la croix ne s'affiche simplement pas.
+    try {
+      await deleteSavedSession(path);
+    } catch (e) {
+      error = errorText(e);
+    }
     savedList = await listSavedSessions(setup.session_type);
   }
 
@@ -1216,19 +1234,28 @@
     // avait quand la session a été enregistrée. Un échec de lecture ne doit
     // pas empêcher la sauvegarde du reste : liste vide plutôt que rien.
     const trackSkins = setup.track_id ? await listActiveTrackSkins(setup.track_id).catch(() => []) : [];
-    await saveSession({
-      name,
-      savedAt: new Date().toISOString(),
-      setup: $state.snapshot(setup),
-      opponentCount,
-      gridFilters: serializeFilters(gridQuery, gridFilters),
-      gridPinned: [...gridPinned],
-      season,
-      intent: selectedIntent,
-      trackSkins,
-    });
+    // L'échec d'une **écriture** ne s'avale pas (règle d'or n°6) : un dossier
+    // de presets en lecture seule doit se voir, pas laisser croire que la
+    // session est enregistrée. La modale reste ouverte pour qu'on puisse
+    // réessayer sous un autre nom.
+    error = "";
+    try {
+      await saveSession({
+        name,
+        savedAt: new Date().toISOString(),
+        setup: $state.snapshot(setup),
+        opponentCount,
+        gridFilters: serializeFilters(gridQuery, gridFilters),
+        gridPinned: [...gridPinned],
+        season,
+        intent: selectedIntent,
+        trackSkins,
+      });
+      sessionDialog = null;
+    } catch (e) {
+      error = errorText(e);
+    }
     savedList = await listSavedSessions(setup.session_type);
-    sessionDialog = null;
   }
 
   /** Charge une session enregistrée (SESSION§3.5) : réglages **et** duo de session
@@ -1239,9 +1266,12 @@
    * plutôt que d'interrompre le chargement du reste. Une session enregistrée
    * survit à des années de bibliothèque remaniée — l'échec partiel est le cas
    * normal, pas l'exception. */
-  async function doLoadSession(s: SavedSession) {
+  async function doLoadSession(s: SavedSession, notes: string[] = []) {
     error = ""; info = ""; warning = "";
-    const warnings: string[] = [];
+    // Ce qu'un preset Content Manager n'a pas pu porter (le skin du joueur
+    // avant tout) arrive avec l'entrée et rejoint le bandeau : même endroit
+    // que les mods disparus, pour la même raison — il n'y a rien à décider.
+    const warnings: string[] = notes.map((k) => errorText(k));
 
     setup = { ...setup, ...s.setup, opponents: (s.setup.opponents ?? []).map(restoreOpponent) };
     // Par le store, qui est la valeur vivante : l'écrire dans `setup` seul
@@ -1285,9 +1315,14 @@
       return;
     }
     const skins = await ensureSkins(carId);
-    const skin = skinId ? skins.find((sk) => sk.id === skinId) ?? null : null;
+    // Sans skin enregistré — le cas de tout preset Content Manager, dont le
+    // format n'a pas de champ pour lui (SESSION§3.6) —, c'est la mémoire par
+    // voiture qui décide, comme partout ailleurs dans l'app. Prendre `null`
+    // pour « aucun skin » déshabillerait la voiture au chargement.
+    const wanted = skinId ?? getPreferredSkin(carId)?.id ?? null;
+    const skin = wanted ? skins.find((sk) => sk.id === wanted) ?? null : null;
     if (skinId && !skin) warnings.push(t("launch.loadWarnCarSkinMissing", { id: skinId }));
-    if (skin) setPreferredSkin(carId, skin);
+    if (skinId && skin) setPreferredSkin(carId, skin);
     const meta = [card.brand, card.year].filter(Boolean).join(" · ");
     pickSession("Car", {
       id: carId,
@@ -1370,7 +1405,7 @@
     <div class="hbtns">
       <button class="btn" type="button" onclick={() => (sessionDialog = "save")}>{t("launch.saveSession")}</button>
       <button class="btn" type="button" onclick={() => (sessionDialog = "load")}
-        >{t("launch.loadSession")}{#if savedList.length}&nbsp;({savedList.length}){/if}</button
+        >{t("launch.loadSession")}{#if loadableCount}&nbsp;({loadableCount}){/if}</button
       >
     </div>
   </header>
@@ -1488,14 +1523,21 @@
     title={t(sessionDialog === "save" ? "launch.saveSessionTitle" : "launch.loadSessionTitle")}
     placeholder={t(sessionDialog === "save" ? "launch.sessionNamePlaceholder" : "launch.sessionSearchPlaceholder")}
     emptyText={t("launch.noSavedSessions")}
-    entries={savedList.map((s) => ({ name: s.name, meta: savedMeta(s) }))}
+    entries={savedList.map((e) => ({
+      id: e.path,
+      name: e.name,
+      meta: savedMeta(e),
+      badge: e.origin === "cm" ? t("launch.fromCm") : undefined,
+      deletable: e.origin === "pitbox",
+      disabled: !e.session,
+    }))}
     onsave={(name) => void doSaveSession(name)}
-    onpick={(name) => {
-      const s = savedList.find((x) => x.name === name);
+    onpick={(path) => {
+      const e = savedList.find((x) => x.path === path);
       sessionDialog = null;
-      if (s) void doLoadSession(s);
+      if (e?.session) void doLoadSession(e.session, e.notes);
     }}
-    ondelete={(name) => void removeSavedSession(name)}
+    ondelete={(path) => void removeSavedSession(path)}
     onclose={() => (sessionDialog = null)}
   />
 {/if}

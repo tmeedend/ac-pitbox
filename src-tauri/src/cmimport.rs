@@ -108,7 +108,7 @@ fn cmpresets(root: &Path) -> Vec<PathBuf> {
 /// `as_i64()` seul laisse passer en silence : il rend `None` sur `95.0`, donc
 /// la fourchette de difficulté d'un preset importé retombait sur le défaut au
 /// lieu d'être lue. Trouvé par le test sur le preset de référence.
-fn cell_number(v: Option<&Value>) -> Option<i64> {
+pub(crate) fn cell_number(v: Option<&Value>) -> Option<i64> {
     match v? {
         Value::String(s) => s.trim().parse::<f64>().ok().map(|f| f.round() as i64),
         Value::Number(n) => n.as_i64().or_else(|| n.as_f64().map(|f| f.round() as i64)),
@@ -118,14 +118,14 @@ fn cell_number(v: Option<&Value>) -> Option<i64> {
 
 /// `-1` est le `Auto` de CM, et il ne se confond pas avec `0` : le preset de
 /// référence montre les deux côte à côte dans `AiAggressions`.
-fn optional_level(v: Option<&Value>) -> Option<u32> {
+pub(crate) fn optional_level(v: Option<&Value>) -> Option<u32> {
     match cell_number(v)? {
         n if n < 0 => None,
         n => Some(n.clamp(0, 100) as u32),
     }
 }
 
-fn cell_text(v: Option<&Value>) -> Option<String> {
+pub(crate) fn cell_text(v: Option<&Value>) -> Option<String> {
     match v? {
         Value::String(s) if !s.trim().is_empty() => Some(s.trim().to_string()),
         _ => None,
@@ -138,7 +138,7 @@ fn at<'a>(grid: &'a Value, key: &str, i: usize) -> Option<&'a Value> {
 
 /// Convertit un objet `RaceGrid` en grille Pit Box. `None` quand ce n'est pas
 /// un plateau explicite (voir l'en-tête du module).
-fn convert(grid: &Value, name: &str, source: &str) -> Option<CmGrid> {
+pub(crate) fn convert(grid: &Value, name: &str, source: &str) -> Option<CmGrid> {
     if grid.get("ModeId").and_then(Value::as_str) != Some("manual") {
         return None;
     }
@@ -183,7 +183,7 @@ fn convert(grid: &Value, name: &str, source: &str) -> Option<CmGrid> {
 /// Un preset de `Race Grids\` **est** cet objet ; un preset de `Quick Drive\`
 /// l'enfouit sous deux couches de JSON-dans-une-chaîne. On tente donc le
 /// déballage d'abord, et on retombe sur le fichier lui-même.
-fn race_grid_of(root: &Value) -> Option<Value> {
+pub(crate) fn race_grid_of(root: &Value) -> Option<Value> {
     if let Some(mode_data) = root.get("ModeData").and_then(Value::as_str) {
         let mode: Value = serde_json::from_str(mode_data).ok()?;
         let serialized = mode.get("RaceGridSerialized")?.as_str()?;
@@ -219,7 +219,7 @@ pub fn scan() -> CmScan {
                 out.skipped.push(CmSkipped {
                     name,
                     source,
-                    reason: "errors.cmUnreadable".into(),
+                    reason: crate::errors::CM_UNREADABLE.into(),
                 });
                 continue;
             };
@@ -228,7 +228,7 @@ pub fn scan() -> CmScan {
                 None => out.skipped.push(CmSkipped {
                     name,
                     source,
-                    reason: "errors.cmNotAGrid".into(),
+                    reason: crate::errors::CM_NOT_A_GRID.into(),
                 }),
             }
         }

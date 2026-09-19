@@ -16,6 +16,18 @@ pub const PACK_NOT_FOUND: &str = "errors.packNotFound";
 pub const AC_NOT_CONFIGURED: &str = "errors.acNotConfigured";
 pub const LIBRARY_NOT_CONFIGURED: &str = "errors.libraryNotConfigured";
 pub const CM_NOT_CONFIGURED: &str = "errors.cmNotConfigured";
+// Presets Content Manager lus comme sessions enregistrées (SESSION§3.6). Un
+// preset illisible ou d'un mode sans équivalent Pit Box est **nommé** dans la
+// liste avec sa raison, jamais masqué : qui a dix presets et en voit huit se
+// demande lesquels ont disparu.
+pub const CM_UNREADABLE: &str = "errors.cmUnreadable";
+pub const CM_NOT_A_GRID: &str = "errors.cmNotAGrid";
+pub const CM_UNSUPPORTED_MODE: &str = "errors.cmUnsupportedMode";
+pub const PRESET_NOT_OURS: &str = "errors.presetNotOurs";
+// Ce qu'une conversion depuis un preset CM n'a pas pu porter — affiché dans le
+// bandeau jaune après chargement, jamais tu.
+pub const CM_NOTE_NO_PLAYER_SKIN: &str = "errors.cmNoteNoPlayerSkin";
+pub const CM_NOTE_DRAWN_GRID: &str = "errors.cmNoteDrawnGrid";
 pub const SEVENZIP_NOT_CONFIGURED: &str = "errors.sevenzipNotConfigured";
 pub const VERSION_NOT_FOUND: &str = "errors.versionNotFound";
 pub const ACTIVE_VERSION_NOT_FOUND: &str = "errors.activeVersionNotFound";

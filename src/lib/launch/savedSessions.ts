@@ -1,11 +1,18 @@
-// Sessions sauvegardées nommées (SESSION§3.5) : distinctes des presets par type
-// (« dernier réglage utilisé pour ce type ») — une sauvegarde nommée capture
-// un instantané complet et rappelable à la demande (surtout utile pour ne pas
-// reperdre un plateau d'adversaires soigneusement ajusté).
+// Saved sessions, stored as Content Manager presets (SESSION§3.6).
+//
+// A named save is a full, recallable snapshot of the screen — distinct from
+// the per-type presets ("the last settings used for this kind of session"),
+// and mostly there so a carefully tuned grid is never lost. Since it became a
+// `.cmpreset`, it is also a session Content Manager can start on its own, and
+// the presets CM's user composed himself show up in the same list.
+//
+// Two things the screen must not have to know: where the file sits, and
+// whether the entry came from us or from CM. Both live in `sessionpreset.rs`;
+// here the entries all look alike, with an `origin` for the badge and a
+// `notes` list for what a conversion could not carry.
 import { invoke } from "@tauri-apps/api/core";
 import { centerSpreadOf } from "./aiBand";
 import { assistLevelFrom, type RaceSetup, type SessionType } from "./launch";
-import { StorageKey } from "$lib/storage";
 
 export type Season = "" | "spring" | "summer" | "autumn" | "winter";
 
@@ -14,145 +21,147 @@ export interface SavedSession {
   savedAt: string;
   setup: RaceSetup;
   opponentCount: number;
-  /** Vivier d'adversaires (CIBLE§3.3), sérialisé comme les filtres de bibliothèque.
-   * `undefined` sur une sauvegarde antérieure aux jetons : le chargement
-   * reconstruit alors le vivier depuis `gridMode`/`categorySelection`, gardés
-   * pour cette seule relecture et jamais réécrits. */
+  /** Opponent pool (CIBLE§3.3), serialised like the library filters.
+   * `undefined` on a save predating the tokens: loading then rebuilds the pool
+   * from `gridMode`/`categorySelection`, kept for that one re-read and never
+   * written back. */
   gridFilters?: string;
   gridPinned?: string[];
   gridMode?: "same_car" | "same_category" | "free";
   categorySelection?: string;
   season: Season;
-  /** Intention météo sélectionnée (pour resurligner la bonne carte à la relecture). */
+  /** Weather intent chosen (so the right card lights up again on re-read). */
   intent: string;
-  /** Skins de circuit actifs au moment de la sauvegarde (§8, plusieurs
-   * possibles). Voiture, skin piloté, circuit et tracé sont déjà dans `setup` ;
-   * les skins de circuit, eux, ne sont pas un réglage de session mais un état
-   * de déploiement — d'où ce champ séparé. `undefined` sur une sauvegarde
-   * antérieure à ce champ : le chargement n'y touche alors pas du tout, plutôt
-   * que de prendre une liste vide pour « aucun skin actif » et de désactiver
-   * ce que l'utilisateur avait mis en place. */
+  /** Track skins active when the session was saved (§8, several possible).
+   * Car, driven skin, track and layout are already in `setup`; track skins are
+   * not a session setting but a deployment state, hence this separate field.
+   * `undefined` on a save predating the field: loading then leaves them alone
+   * rather than taking an empty list for "no skin active" and undoing what the
+   * user had set up. */
   trackSkins?: string[];
 }
 
-/** Clé de stockage préfixée par type (SESSION§3.5, carte « Sessions enregistrées » :
- * une liste par type de session) — sans ça, une sauvegarde « Test » en Course
- * écraserait une sauvegarde « Test » en Practice, deux choses sans rapport
- * pour l'utilisateur. */
-function keyFor(sessionType: SessionType, name: string): string {
-  return `${sessionType}::${name}`;
+/** Where an entry comes from. `cm` is read-only: Pit Box lists a preset
+ * Content Manager wrote, it never deletes or overwrites it. */
+export type PresetOrigin = "pitbox" | "cm";
+
+/** One entry of the list, as the backend hands it over. */
+export interface SessionPreset {
+  /** Absolute path — the identity of the entry. Two presets can share a name
+   * in two of CM's subfolders, so the name is not a key. */
+  path: string;
+  name: string;
+  origin: PresetOrigin;
+  /** Path relative to `Quick Drive\`, to tell two same-named presets apart. */
+  source: string;
+  /** `null` when the file could not be converted — `reason` then says why. */
+  session: SavedSession | null;
+  /** i18n key for an entry that cannot be loaded. */
+  reason: string | null;
+  /** i18n keys for what a CM preset could not carry (the player's skin above
+   * all). Shown in the yellow banner after loading. */
+  notes: string[];
 }
 
-/** Ancien mécanisme (avant fix) : lu une seule fois pour migrer les
- * sauvegardes déjà faites, jamais réécrit. `localStorage` n'est pas garanti
- * synchrone sur disque côté WebView2 — une sauvegarde nommée juste avant de
- * fermer l'app pouvait ne jamais atteindre le disque (même bug réel que le
- * duo de session/les presets, voir `nav.svelte.ts`/`session_state.rs`). */
-function loadLegacyAll(): Record<string, SavedSession> {
-  try {
-    return JSON.parse(localStorage.getItem(StorageKey.savedSessions) ?? "{}");
-  } catch {
-    return {};
-  }
+/** Every preset, ours and CM's. Never throws: a missing Content Manager or an
+ * unreadable file is a non-result, not a failure. */
+async function loadAll(): Promise<SessionPreset[]> {
+  const list = await invoke<SessionPreset[]>("list_session_presets").catch((e) => {
+    console.error("list_session_presets", e);
+    return [] as SessionPreset[];
+  });
+  for (const entry of list) if (entry.session) migrate(entry.session);
+  return list;
 }
 
-/** Persistance durable (SESSION§3.5) : fichier écrit côté Rust
- * (`saved_sessions.json`, `std::fs::write` synchrone), pas `localStorage` —
- * voir `loadLegacyAll` pour le pourquoi du changement. */
-async function loadAll(): Promise<Record<string, SavedSession>> {
-  const fromRust = await invoke<Record<string, SavedSession>>("get_saved_sessions").catch(() => ({}));
-  if (Object.keys(fromRust).length > 0) return migrate(fromRust);
-  // Repli sur l'ancien `localStorage` seulement si le nouveau fichier n'a
-  // rien (première ouverture après la mise à jour) — et dans ce cas,
-  // persiste tout de suite au nouvel endroit pour ne plus jamais redépendre
-  // de `localStorage`.
-  const legacy = loadLegacyAll();
-  if (Object.keys(legacy).length > 0) await persist(migrate(legacy));
-  return migrate(legacy);
-}
-
-/** Champs d'un instantané qui ont changé de forme depuis qu'il a été écrit.
+/** Fields of a snapshot whose shape changed since it was written.
  *
- * Passe sur **toutes** les entrées, pas sur celles du type courant : chaque
- * sauvegarde porte son propre `setup`, et n'en convertir qu'une partie
- * laisserait des booléens orphelins qui retomberaient en silence sur le défaut
- * au prochain chargement. Ici plutôt qu'au chargement d'une session : c'est le
- * seul passage obligé des trois opérations (lister, enregistrer, supprimer),
- * et `saveSession` réécrit le tout, ce qui rend la conversion durable sans
- * écriture dédiée. Idempotent — une entrée déjà convertie porte son niveau et
- * l'ancien booléen n'est plus regardé. */
-function migrate(all: Record<string, SavedSession>): Record<string, SavedSession> {
-  for (const s of Object.values(all)) {
-    const old = s.setup as Partial<{
-      abs_auto: boolean;
-      traction_control_auto: boolean;
-      ai_level_min: number;
-      ai_level_max: number;
-    }>;
-    s.setup.abs = assistLevelFrom(s.setup.abs, old.abs_auto);
-    s.setup.traction_control = assistLevelFrom(s.setup.traction_control, old.traction_control_auto);
-    // Difficulté : deux bornes avant le modèle centre ± écart (SETUP§2.9). Converti
-    // plutôt que repli sur le défaut — une session enregistrée porte souvent un
-    // réglage ajusté longuement, et le voir se réinitialiser en la rechargeant
-    // est pire que tout. Idempotent : une entrée déjà convertie porte son
-    // centre, et les anciennes bornes ne sont plus regardées.
-    if (s.setup.ai_level == null && old.ai_level_min != null && old.ai_level_max != null) {
-      const band = centerSpreadOf(old.ai_level_min, old.ai_level_max);
-      s.setup.ai_level = band.center;
-      s.setup.ai_spread = band.spread;
-    }
-    s.setup.aggression_spread ??= 0;
+ * Runs on every entry rather than on the current type's: each save carries its
+ * own `setup`, and converting only some would leave orphan booleans quietly
+ * falling back to defaults on the next load. Idempotent — an entry already
+ * converted carries its level, and the old boolean is no longer read.
+ *
+ * In place, on the way out of the backend: since a session is now a file of
+ * its own, there is no "rewrite everything" pass left to make the conversion
+ * durable. It is redone on each read, which costs nothing and never lies. */
+function migrate(s: SavedSession): SavedSession {
+  const old = s.setup as Partial<{
+    abs_auto: boolean;
+    traction_control_auto: boolean;
+    ai_level_min: number;
+    ai_level_max: number;
+  }>;
+  s.setup.abs = assistLevelFrom(s.setup.abs, old.abs_auto);
+  s.setup.traction_control = assistLevelFrom(s.setup.traction_control, old.traction_control_auto);
+  // Difficulty: two bounds before the centre ± spread model (SETUP§2.9).
+  // Converted rather than reset to the default — a saved session often carries
+  // a long-tuned setting, and watching it reset on reload is the worst of all.
+  if (s.setup.ai_level == null && old.ai_level_min != null && old.ai_level_max != null) {
+    const band = centerSpreadOf(old.ai_level_min, old.ai_level_max);
+    s.setup.ai_level = band.center;
+    s.setup.ai_spread = band.spread;
   }
-  return all;
-}
-
-function persist(all: Record<string, SavedSession>): Promise<void> {
-  return invoke<void>("save_saved_sessions", { all }).catch((e) => console.error("save_saved_sessions", e));
+  s.setup.aggression_spread ??= 0;
+  return s;
 }
 
 /**
- * **Toutes** les sauvegardes, celles du type courant en tête (SETUP§2.11).
+ * **Every** preset, the current type's first (SETUP§2.11).
  *
- * Le filtre par type a été retiré parce qu'il était **invisible**. Quelqu'un
- * qui avait enregistré une session en Course et la cherchait depuis Practice ne
- * voyait pas une liste filtrée : il voyait une liste vide, et en concluait que
- * sa sauvegarde avait échoué. Charger une session bascule le type — il fait
- * partie de ce qui est enregistré —, donc la charger depuis un autre type est
- * une opération parfaitement valide qu'il n'y avait aucune raison de masquer.
+ * The type filter was dropped because it was **invisible**. Someone who had
+ * saved a session in Race and looked for it from Practice did not see a
+ * filtered list: they saw an empty one, and concluded the save had failed.
+ * Loading a session switches the type — it is part of what is saved — so
+ * loading one from another type is perfectly valid and there was nothing to
+ * hide. The practical benefit of the filter survives as **sorting**.
  *
- * Le bénéfice pratique du filtre est conservé par le **tri** : ce qu'on cherche
- * le plus souvent est en tête, et rien n'est caché.
+ * Entries that cannot be converted come last: they are named, as the grid
+ * import names what it skipped, but they are not what the user came for.
  */
-export async function listSavedSessions(sessionType: SessionType): Promise<SavedSession[]> {
+export async function listSavedSessions(sessionType: SessionType): Promise<SessionPreset[]> {
   const all = await loadAll();
-  return Object.values(all).sort((a, b) => {
-    const am = a.setup.session_type === sessionType ? 0 : 1;
-    const bm = b.setup.session_type === sessionType ? 0 : 1;
-    return am !== bm ? am - bm : b.savedAt.localeCompare(a.savedAt);
+  return all.sort((a, b) => {
+    const rank = (e: SessionPreset) => (!e.session ? 2 : e.session.setup.session_type === sessionType ? 0 : 1);
+    const ra = rank(a);
+    const rb = rank(b);
+    if (ra !== rb) return ra - rb;
+    return (b.session?.savedAt ?? "").localeCompare(a.session?.savedAt ?? "");
   });
 }
 
-/** Enregistre (ou écrase si le nom existe déjà pour ce type) une session. */
-export async function saveSession(session: SavedSession): Promise<void> {
-  const all = await loadAll();
-  all[keyFor(session.setup.session_type, session.name)] = session;
-  await persist(all);
-}
-
-export async function deleteSavedSession(sessionType: SessionType, name: string): Promise<void> {
-  const all = await loadAll();
-  delete all[keyFor(sessionType, name)];
-  await persist(all);
-}
-
-/** Date de sauvegarde, dans le fuseau de l'utilisateur.
+/** Saves (or overwrites, if the name is already taken) one session.
  *
- * `savedAt` est un ISO **UTC** (`new Date().toISOString()`), et le tronquer à
- * la main (`iso.slice(0, 16)`) affichait donc l'heure UTC : une sauvegarde
- * faite à 14 h en France s'affichait « 12:00 ». Le stockage reste en UTC —
- * c'est ce qui rend le tri par `localeCompare` correct — seul l'affichage
- * repasse en heure locale. Format volontairement fixe (ISO court) plutôt que
- * `toLocaleString` : la même colonne monospace pour les six locales. */
+ * No `invokeSafe` here: this is a **write**, and a mute fallback would make
+ * "saved" out of a command that wrote nothing (golden rule 6). A failure is
+ * logged and rethrown, never swallowed. */
+export async function saveSession(session: SavedSession): Promise<string> {
+  return invoke<string>("save_session_preset", {
+    name: session.name,
+    setup: session.setup,
+    snapshot: session,
+  }).catch((e) => {
+    console.error("save_session_preset", e);
+    throw e;
+  });
+}
+
+/** Deletes one of our presets, by path. A preset Content Manager wrote is
+ * refused by the backend — listed here, never removed from here. */
+export async function deleteSavedSession(path: string): Promise<void> {
+  return invoke<void>("delete_session_preset", { path }).catch((e) => {
+    console.error("delete_session_preset", e);
+    throw e;
+  });
+}
+
+/** Save date, in the user's time zone.
+ *
+ * `savedAt` is a UTC ISO string (`new Date().toISOString()`), so slicing it by
+ * hand (`iso.slice(0, 16)`) used to display UTC: a save made at 2 pm in France
+ * showed "12:00". Storage stays UTC — that is what makes `localeCompare`
+ * sorting correct — only the display goes back to local time. Format
+ * deliberately fixed (short ISO) rather than `toLocaleString`: the same
+ * monospace column for all six locales. */
 export function formatSavedAt(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso.slice(0, 16).replace("T", " ");

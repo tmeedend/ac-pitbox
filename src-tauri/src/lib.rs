@@ -58,6 +58,7 @@ mod rules;
 mod saved_grids;
 mod saved_sessions;
 mod session_state;
+mod sessionpreset;
 mod showroom;
 mod steering;
 mod stock;
@@ -348,8 +349,9 @@ pub fn run() {
             commands::nationalities::nationalities,
             commands::saved_grids::get_saved_grids,
             commands::saved_grids::save_saved_grids,
-            commands::saved_sessions::get_saved_sessions,
-            commands::saved_sessions::save_saved_sessions,
+            commands::sessionpreset::list_session_presets,
+            commands::sessionpreset::save_session_preset,
+            commands::sessionpreset::delete_session_preset,
             commands::library_columns::get_library_columns,
             commands::library_columns::save_library_columns,
             commands::ui_prefs::get_ui_prefs,

@@ -16,6 +16,13 @@ const BACKUP_KEEP: usize = 7;
 /// Tout ce qui vit directement dans `app_config_dir` et n'est pas
 /// régénérable automatiquement (le cache de miniatures ou les logs, par
 /// exemple, ne le sont pas ici : ils se reconstruisent tout seuls).
+/// Où les sessions enregistrées atterrissent dans la sauvegarde. Un
+/// sous-dossier parce qu'elles ne vivent plus dans `app_config_dir` mais chez
+/// Content Manager (SESSION§3.6) : le filet doit les suivre là-bas, sinon la
+/// seule chose que l'utilisateur ait composée à la main serait la seule qui ne
+/// soit pas sauvegardée.
+const SESSIONS_SUBDIR: &str = "saved-sessions";
+
 const BACKED_UP_FILES: &[&str] = &[
     "overlay.sqlite",
     "config.json",
@@ -23,6 +30,10 @@ const BACKED_UP_FILES: &[&str] = &[
     "library_columns.json",
     "session.json",
     "launch_state.json",
+    // Migré en presets `.cmpreset` (SESSION§3.6) : gardé dans la liste tant
+    // qu'il peut exister chez quelqu'un qui n'a pas encore redémarré après la
+    // mise à jour — c'est justement le fichier qu'on n'aimerait pas perdre
+    // juste avant sa migration.
     "saved_sessions.json",
     "music.json",
     "tag-rules.json",
@@ -43,12 +54,13 @@ pub fn run_startup_backup(app: &AppHandle) {
         log::warn!("backup: app_config_dir indisponible, sauvegarde de démarrage ignorée");
         return;
     };
-    if let Err(e) = backup_now(&base) {
+    let presets = crate::sessionpreset::own_dir(app);
+    if let Err(e) = backup_now(&base, presets.as_deref()) {
         log::warn!("backup: sauvegarde de démarrage échouée : {e}");
     }
 }
 
-fn backup_now(base: &Path) -> Result<(), String> {
+fn backup_now(base: &Path, presets: Option<&Path>) -> Result<(), String> {
     let root = backups_root(base);
     let stamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
     let dest = root.join(&stamp);
@@ -63,6 +75,7 @@ fn backup_now(base: &Path) -> Result<(), String> {
         std::fs::copy(&src, dest.join(name)).map_err(|e| format!("{name}: {e}"))?;
         copied += 1;
     }
+    copied += copy_presets(presets, &dest)?;
     // Premier lancement (rien à sauvegarder encore) : pas la peine de garder
     // un dossier horodaté vide.
     if copied == 0 {
@@ -71,6 +84,37 @@ fn backup_now(base: &Path) -> Result<(), String> {
     }
 
     prune(&root)
+}
+
+/// Copie les presets de session dans le sous-dossier dédié, et rend leur
+/// nombre. Un dossier absent (Content Manager jamais lancé, aucune session
+/// enregistrée) rend zéro : c'est un non-résultat, pas une panne. Les
+/// sous-dossiers ne sont pas parcourus — on ne sauvegarde que ce qu'on écrit,
+/// et on écrit à plat.
+fn copy_presets(presets: Option<&Path>, dest: &Path) -> Result<usize, String> {
+    let Some(src) = presets.filter(|p| p.is_dir()) else {
+        return Ok(0);
+    };
+    let mut copied = 0;
+    let mut target_made = false;
+    for entry in std::fs::read_dir(src)
+        .map_err(|e| e.to_string())?
+        .filter_map(|e| e.ok())
+    {
+        let path = entry.path();
+        if !path.is_file() || !path.extension().is_some_and(|x| x.eq_ignore_ascii_case("cmpreset")) {
+            continue;
+        }
+        let target = dest.join(SESSIONS_SUBDIR);
+        if !target_made {
+            std::fs::create_dir_all(&target).map_err(|e| e.to_string())?;
+            target_made = true;
+        }
+        let Some(name) = path.file_name() else { continue };
+        std::fs::copy(&path, target.join(name)).map_err(|e| format!("{}: {e}", name.to_string_lossy()))?;
+        copied += 1;
+    }
+    Ok(copied)
 }
 
 /// Garde les `BACKUP_KEEP` sauvegardes les plus récentes — le format
@@ -96,6 +140,46 @@ fn prune(root: &Path) -> Result<(), String> {
 mod tests {
     use super::*;
 
+    /// Règle protégée : les sessions enregistrées sont sauvegardées elles
+    /// aussi, alors qu'elles ne vivent plus dans `app_config_dir` mais chez
+    /// Content Manager (SESSION§3.6). Sans ça, la seule chose que
+    /// l'utilisateur ait composée à la main serait la seule hors du filet.
+    #[test]
+    fn saved_sessions_follow_the_backup_out_of_the_config_folder() {
+        let dir = crate::testutil::temp_dir("backup-presets");
+        let presets = dir.join("Quick Drive").join("Pit Box");
+        std::fs::create_dir_all(&presets).unwrap();
+        std::fs::write(presets.join("Spa dusk.cmpreset"), b"{}").unwrap();
+        // Un fichier qui n'est pas un preset ne part pas : on ne sauvegarde
+        // que ce qu'on écrit.
+        std::fs::write(presets.join("notes.txt"), b"x").unwrap();
+        backup_now(&dir, Some(&presets)).unwrap();
+
+        let root = backups_root(&dir);
+        let stamp = std::fs::read_dir(&root).unwrap().next().unwrap().unwrap().path();
+        let copied = stamp.join(SESSIONS_SUBDIR);
+        assert!(
+            copied.join("Spa dusk.cmpreset").is_file(),
+            "le preset est dans la sauvegarde"
+        );
+        assert!(!copied.join("notes.txt").exists(), "seuls les presets partent");
+    }
+
+    /// Règle protégée : un dossier de presets absent (Content Manager jamais
+    /// lancé, aucune session enregistrée) est un non-résultat — le reste de la
+    /// sauvegarde se fait quand même.
+    #[test]
+    fn a_missing_preset_folder_does_not_stop_the_rest() {
+        let dir = crate::testutil::temp_dir("backup-no-presets");
+        std::fs::write(dir.join("config.json"), b"{}").unwrap();
+        backup_now(&dir, Some(&dir.join("nowhere"))).unwrap();
+
+        let root = backups_root(&dir);
+        let stamp = std::fs::read_dir(&root).unwrap().next().unwrap().unwrap().path();
+        assert!(stamp.join("config.json").is_file(), "le reste est bien sauvegardé");
+        assert!(!stamp.join(SESSIONS_SUBDIR).exists(), "pas de sous-dossier vide");
+    }
+
     /// Règle protégée : les fichiers présents sont copiés, les absents
     /// n'empêchent pas la sauvegarde de réussir (mod pas encore utilisé —
     /// `music.json` par ex. — ne doit jamais faire échouer le reste).
@@ -104,7 +188,7 @@ mod tests {
         let dir = crate::testutil::temp_dir("backup-basic");
         std::fs::write(dir.join("overlay.sqlite"), b"fake db").unwrap();
         std::fs::write(dir.join("config.json"), b"{}").unwrap();
-        backup_now(&dir).unwrap();
+        backup_now(&dir, None).unwrap();
 
         let root = backups_root(&dir);
         let stamps: Vec<_> = std::fs::read_dir(&root).unwrap().filter_map(|e| e.ok()).collect();
@@ -138,7 +222,7 @@ mod tests {
     #[test]
     fn skips_creating_empty_backup_when_nothing_to_copy() {
         let dir = crate::testutil::temp_dir("backup-empty");
-        backup_now(&dir).unwrap();
+        backup_now(&dir, None).unwrap();
         let root = backups_root(&dir);
         assert!(
             !root.exists() || std::fs::read_dir(&root).unwrap().next().is_none(),
