@@ -10,11 +10,13 @@
     linkMediaManually,
     openMediaFolder,
     trashMediaFile,
+    onSessionEnd,
     type ScreenshotFile,
   } from "$lib/detail/media";
   import { previewSrc } from "$lib/library/library";
   import { loadThumbnails } from "$lib/detail/thumbnails";
   import { open } from "@tauri-apps/plugin-dialog";
+  import { onMount } from "svelte";
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
   import Lightbox, { type LightboxItem } from "$lib/components/ui/Lightbox.svelte";
@@ -22,9 +24,14 @@
   let {
     modId,
     onerror,
+    oncount,
   }: {
     modId: string;
     onerror: (message: string) => void;
+    /** Remonte le décompte au bandeau de l'onglet, chargé de son côté à
+     * l'ouverture de la fiche : sans ça il resterait sur l'ancien chiffre
+     * après une session. */
+    oncount?: (n: number) => void;
   } = $props();
 
   let files = $state<ScreenshotFile[]>([]);
@@ -44,8 +51,27 @@
     thumbs = {};
     lightboxIndex = null;
     listMediaScreenshots(current).then((f) => {
-      if (current === modId) files = f;
+      if (current !== modId) return;
+      files = f;
+      oncount?.(f.length);
     });
+  });
+
+  // Une capture prise en course n'apparaissait qu'à la réouverture de la
+  // fiche : même signal que les replays, même raison (§6.1).
+  onMount(() => {
+    let stop: (() => void) | null = null;
+    void onSessionEnd(() => {
+      const current = modId;
+      listMediaScreenshots(current)
+        .then((f) => {
+          if (current !== modId) return;
+          files = f;
+          oncount?.(f.length);
+        })
+        .catch(() => {});
+    }).then((off) => (stop = off));
+    return () => stop?.();
   });
 
   $effect(() => {

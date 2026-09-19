@@ -1670,8 +1670,8 @@
            dossier » et « Lier un fichier… » sont la seule voie pour y ajouter
            quelque chose. -->
       <div class="tab-body stack">
-        <MediaScreenshots modId={id} onerror={(m) => (actionError = m)} />
-        <MediaReplays modId={id} onerror={(m) => (actionError = m)} />
+        <MediaScreenshots modId={id} onerror={(m) => (actionError = m)} oncount={(n) => (screenshotsCount = n)} />
+        <MediaReplays modId={id} onerror={(m) => (actionError = m)} oncount={(n) => (replaysCount = n)} />
         <!-- Les documents livrés AVEC ce mod mais rangés à part (REFONTE§7.8) — une
              notice, un manuel, des notes de version — rejoignent la liste des
              ressources plutôt que d'ouvrir une carte chacun : trois cartes

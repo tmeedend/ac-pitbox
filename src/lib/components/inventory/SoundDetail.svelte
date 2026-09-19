@@ -10,7 +10,7 @@
   // et la clé de contact sont les composants de la fiche voiture.
   import { onMount } from "svelte";
   import { soundDetail, setSoundAuthor, type SoundDetail } from "$lib/detail/enginesound";
-  import { fmtSize } from "$lib/format";
+  import { fmtDuration, fmtSize } from "$lib/format";
   import { errorText } from "$lib/errors";
   import { setEntityDisplayName, setEntityNote } from "$lib/detail/userMeta";
   import { t } from "$lib/i18n/index.svelte";
@@ -111,14 +111,6 @@
     return c && c.revParam ? c : null;
   });
 
-  /** Durée totale du bank, en minutes et secondes — des heures de son en
-   * secondes ne se lisent pas. */
-  function fmtDuration(seconds: number): string {
-    const total = Math.round(seconds);
-    const m = Math.floor(total / 60);
-    const s = total % 60;
-    return m > 0 ? `${m} min ${String(s).padStart(2, "0")} s` : `${s} s`;
-  }
 </script>
 
 <div class="page">

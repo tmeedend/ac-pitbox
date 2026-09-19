@@ -2,6 +2,7 @@
 // replays personnels rattachés par nom de fichier, backgrounds officiels CSP,
 // et fond photo de l'écran de réglages (§6.2/SESSION§3).
 import { invoke } from "@tauri-apps/api/core";
+import { onAcRunning } from "$lib/launch/launch";
 
 export interface ScreenshotFile {
   path: string;
@@ -15,9 +16,25 @@ export interface ScreenshotFile {
 export interface ReplayFile {
   path: string;
   file_name: string;
+  /** Lettre écrite par AC dans le nom d'un autosave : `R` course, `Q` qualif,
+   * `O` le reste. `null` dès que le fichier a été renommé. */
   session_type: string | null;
   recorded_at: string | null;
   matched_counterpart: string | null;
+  size_bytes: number;
+  /** Le fichier porte encore le nom donné par le jeu, donc il est dans la
+   * rotation d'autosave d'AC ; le renommer est précisément ce qui le garde. */
+  autosave: boolean;
+  /** Rang parmi les autosaves du même type, le plus récent en 1. */
+  autosave_rank: number | null;
+  /** Combien AC en garde pour ce type de session (`cfg/replay.ini`). */
+  autosave_limit: number | null;
+  car_id: string | null;
+  driver_name: string | null;
+  track_id: string | null;
+  track_layout: string | null;
+  cars_number: number | null;
+  duration_s: number | null;
 }
 
 export interface BackgroundFile {
@@ -76,4 +93,38 @@ export function getSessionBackground(
   layoutId: string | null,
 ): Promise<string | null> {
   return invoke<string | null>("get_session_background", { carId, trackId, layoutId });
+}
+
+/** Content Manager écrit sa copie du replay une poignée de secondes après la
+ * fermeture du jeu, pas pendant. Un seul rechargement à la fermeture arrive
+ * donc parfois trop tôt. */
+const CM_SETTLE_MS = 6000;
+
+/**
+ * Rappelle `handler` quand une session vient de se terminer (§6.1) — c'est à
+ * ce moment-là, et à ce moment-là seulement, que de nouveaux screenshots et
+ * replays apparaissent sur le disque.
+ *
+ * **Le signal existait déjà** : `ac://running`, le sondage du process du jeu
+ * qui coupe la musique de Big Picture et suspend les vignettes de la grille.
+ * On écoute sa retombée, et non le statut « en piste » (`is_live`), qui
+ * redescend à chaque retour aux stands : c'est la fermeture du jeu qui écrit
+ * les fichiers.
+ *
+ * Deux passages, parce qu'il y a deux écrivains : Assetto Corsa pose son
+ * autosave avant de rendre la main, mais Content Manager renomme ou recopie
+ * le fichier ensuite, une fois le jeu parti. Sans le second passage, un replay
+ * conservé par CM n'apparaissait qu'à la prochaine ouverture de la fiche.
+ */
+export function onSessionEnd(handler: () => void): Promise<() => void> {
+  let settle: ReturnType<typeof setTimeout> | null = null;
+  return onAcRunning((running) => {
+    if (running) return;
+    handler();
+    if (settle) clearTimeout(settle);
+    settle = setTimeout(handler, CM_SETTLE_MS);
+  }).then((stop) => () => {
+    if (settle) clearTimeout(settle);
+    stop();
+  });
 }

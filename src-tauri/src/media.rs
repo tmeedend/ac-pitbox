@@ -18,15 +18,20 @@
 //!   n'est pas uniforme (bug `tm_year` en session) : jamais parsé, on ne lit
 //!   que le mtime du fichier.
 //! - `replay/AC_<ddmmyy>-<hhmmss>_<type>_<car_id>_<track_id[_layout]>_<suffixe?>.acreplay`,
-//!   suffixe final de longueur variable ou absent. `replay/temp/` est ignoré
-//!   (fichiers de travail, jamais des replays terminés).
+//!   suffixe final de longueur variable ou absent — c'est le nom que le jeu
+//!   donne à un autosave. Content Manager, lui, **renomme** un replay qu'on
+//!   conserve (motif par défaut `<car>_<track>_<ddmmyy>-<hhmmss>`), ce qui le
+//!   sort de la rotation d'AC. `replay/temp/` est ignoré (fichiers de travail,
+//!   jamais des replays terminés).
+//!   Le reste — pilote, durée, nombre de voitures — se lit dans l'en-tête du
+//!   fichier lui-même (`acreplay.rs`), pas dans son nom.
 //! - `<ac_install>/extension/backgrounds/<track_id>[__<layout_id>]_<variant>.jpg` —
 //!   convention CSP propre, match par préfixe.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Local, TimeZone};
 use serde::Serialize;
 use walkdir::WalkDir;
 
@@ -50,6 +55,10 @@ pub struct ScreenshotFile {
     pub matched_counterpart: Option<String>,
 }
 
+/// A replay of the Documents folder, described from three sources that each
+/// know something the others do not: the file name (session type, whether AC
+/// wrote it), the filesystem (size, and a recording date when the name has
+/// none), and the header itself (driver, duration, cars on track — §6.1).
 #[derive(Debug, Clone, Serialize)]
 pub struct ReplayFile {
     pub path: String,
@@ -57,6 +66,25 @@ pub struct ReplayFile {
     pub session_type: Option<String>,
     pub recorded_at: Option<String>,
     pub matched_counterpart: Option<String>,
+    pub size_bytes: u64,
+    /// True while the file still carries the `AC_<date>_<type>_…` name the
+    /// game gives it: that is what puts it in the autosave rotation, and
+    /// renaming it is exactly how one is kept (§6.1).
+    pub autosave: bool,
+    /// Position among the autosaves of the same session type, most recent
+    /// first (1-based). `None` for a kept replay, which is in no rotation.
+    pub autosave_rank: Option<i32>,
+    /// How many autosaves of that session type the game keeps
+    /// (`cfg/replay.ini`, §6.1). With `autosave_rank`, this is the whole
+    /// answer to "is this one about to disappear?" — a rank above the limit
+    /// means the next session of the same type pushes it out.
+    pub autosave_limit: Option<i32>,
+    pub car_id: Option<String>,
+    pub driver_name: Option<String>,
+    pub track_id: Option<String>,
+    pub track_layout: Option<String>,
+    pub cars_number: Option<i32>,
+    pub duration_s: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -127,17 +155,45 @@ pub fn list_screenshots(entity_id: &str, counterpart_ids: &HashSet<String>) -> V
     list_screenshots_in(&dir.join("screens"), entity_id, counterpart_ids)
 }
 
-/// Parse le préfixe fixe `AC_<ddmmyy>-<hhmmss>_<type>_…` d'un replay — la
-/// seule partie du nom dont le format est garanti (le reste, voiture/circuit,
-/// est géré par simple `contains`, voir en-tête de module).
-fn parse_replay_stem(stem: &str) -> (Option<String>, Option<String>) {
-    let Some(rest) = stem.strip_prefix("AC_") else {
-        return (None, None);
-    };
-    let mut parts = rest.splitn(3, '_');
-    let recorded_at = parts.next().and_then(parse_ddmmyy_hhmmss);
-    let session_type = parts.next().map(str::to_string);
-    (session_type, recorded_at)
+/// Ce qu'un nom de replay dit, et qui dépend de qui l'a écrit :
+/// - **Assetto Corsa** : `AC_<ddmmyy>-<hhmmss>_<type>_<car>_<track…>` — c'est
+///   un autosave, donc soumis à la rotation de `cfg/replay.ini` (§6.1).
+/// - **Content Manager conservant un replay** : il le renomme, motif par
+///   défaut `<car>_<track>_<ddmmyy>-<hhmmss>`. Le motif est configurable côté
+///   CM, mais la date en fin de nom est ce qu'on sait lire — et sortir du
+///   motif `AC_` suffit à dire l'essentiel : le fichier n'est plus dans la
+///   rotation.
+///
+/// Un replay renommé à la main ne dit plus rien : ni type ni date. Le mtime
+/// prend alors le relais côté `describe_replay`, sans quoi il tombait en fin
+/// de liste sans horodatage — c'est-à-dire exactement là où on ne regarde pas
+/// le replay qu'on vient d'enregistrer.
+struct ReplayNaming {
+    session_type: Option<String>,
+    recorded_at: Option<String>,
+    autosave: bool,
+}
+
+fn parse_replay_name(stem: &str) -> ReplayNaming {
+    if let Some(rest) = stem.strip_prefix("AC_") {
+        let mut parts = rest.splitn(3, '_');
+        let recorded_at = parts.next().and_then(parse_ddmmyy_hhmmss);
+        let session_type = parts.next().map(str::to_string);
+        // La date doit avoir été lue : `AC_something_else` n'est pas un
+        // autosave du jeu, c'est un nom qui commence par les mêmes lettres.
+        if recorded_at.is_some() {
+            return ReplayNaming {
+                session_type,
+                recorded_at,
+                autosave: true,
+            };
+        }
+    }
+    ReplayNaming {
+        session_type: None,
+        recorded_at: stem.rsplit_once('_').and_then(|(_, tail)| parse_ddmmyy_hhmmss(tail)),
+        autosave: false,
+    }
 }
 
 fn parse_ddmmyy_hhmmss(s: &str) -> Option<String> {
@@ -154,17 +210,119 @@ fn parse_ddmmyy_hhmmss(s: &str) -> Option<String> {
     let sec: u32 = t[4..6].parse().ok()?;
     let date = chrono::NaiveDate::from_ymd_opt(year, month, day)?;
     let time = chrono::NaiveTime::from_hms_opt(hour, min, sec)?;
-    Some(
-        chrono::NaiveDateTime::new(date, time)
-            .format("%Y-%m-%dT%H:%M:%S")
-            .to_string(),
-    )
+    // Même forme que le mtime (RFC 3339 avec décalage local) : les deux
+    // sources se retrouvent dans le même champ et doivent se trier ensemble.
+    // Le jeu écrit une heure locale ; une heure ambiguë (passage à l'heure
+    // d'hiver) prend la première des deux, à une heure près une fois par an.
+    Local
+        .from_local_datetime(&chrono::NaiveDateTime::new(date, time))
+        .earliest()
+        .map(|dt| dt.to_rfc3339())
 }
 
-fn list_replays_in(dir: &Path, entity_id: &str, counterpart_ids: &HashSet<String>) -> Vec<ReplayFile> {
+/// Rang de chaque autosave parmi ceux de son type, le plus récent en 1 —
+/// c'est-à-dire sa place dans la rotation d'AC (§6.1). Indexé par nom de
+/// fichier.
+///
+/// Compté sur **tout** le dossier et pas sur les seuls replays de la fiche
+/// affichée : la rotation ignore de quelle voiture il s'agit, elle ne compte
+/// que le type de session.
+fn autosave_ranks(dir: &Path) -> HashMap<String, i32> {
+    let mut by_type: HashMap<String, Vec<(String, String)>> = HashMap::new();
+    for entry in WalkDir::new(dir).max_depth(1).into_iter().flatten() {
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let path = entry.path();
+        if !is_replay_path(path) {
+            continue;
+        }
+        let (Some(stem), Some(name)) = (
+            path.file_stem().and_then(|s| s.to_str()),
+            path.file_name().and_then(|s| s.to_str()),
+        ) else {
+            continue;
+        };
+        let naming = parse_replay_name(stem);
+        if !naming.autosave {
+            continue;
+        }
+        let key = naming.session_type.unwrap_or_default();
+        let at = naming.recorded_at.unwrap_or_default();
+        by_type.entry(key).or_default().push((at, name.to_string()));
+    }
+    let mut ranks = HashMap::new();
+    for (_, mut files) in by_type {
+        files.sort_by(|a, b| b.0.cmp(&a.0));
+        for (i, (_, name)) in files.into_iter().enumerate() {
+            ranks.insert(name, i as i32 + 1);
+        }
+    }
+    ranks
+}
+
+fn is_replay_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|x| x.to_str())
+        .is_some_and(|x| x.eq_ignore_ascii_case("acreplay"))
+}
+
+/// Tout ce qu'on sait dire d'un fichier de replay : son nom, son en-tête
+/// (§6.1, `acreplay.rs`) et ce que le disque en dit. Un en-tête illisible
+/// n'écarte jamais le fichier — la ligne s'affiche avec ce qui reste.
+fn describe_replay(
+    path: &Path,
+    counterpart_ids: &HashSet<String>,
+    ranks: &HashMap<String, i32>,
+    policy: &crate::acreplay::AutosavePolicy,
+) -> Option<ReplayFile> {
+    let stem = path.file_stem()?.to_str()?;
+    let file_name = path.file_name()?.to_string_lossy().into_owned();
+    let naming = parse_replay_name(stem);
+    let meta = std::fs::metadata(path).ok();
+    let recorded_at = naming.recorded_at.or_else(|| {
+        meta.as_ref()
+            .and_then(|m| m.modified().ok())
+            .map(|t| DateTime::<Local>::from(t).to_rfc3339())
+    });
+    let header = crate::acreplay::read_header(path);
+    Some(ReplayFile {
+        path: path.to_string_lossy().into_owned(),
+        session_type: naming.session_type.clone(),
+        recorded_at,
+        matched_counterpart: best_counterpart(stem, counterpart_ids),
+        size_bytes: meta.as_ref().map(|m| m.len()).unwrap_or(0),
+        autosave: naming.autosave,
+        autosave_rank: if naming.autosave {
+            ranks.get(&file_name).copied()
+        } else {
+            None
+        },
+        autosave_limit: if naming.autosave && policy.enabled {
+            Some(policy.limit_for(naming.session_type.as_deref().unwrap_or_default()))
+        } else {
+            None
+        },
+        car_id: header.as_ref().map(|h| h.car_id.clone()),
+        driver_name: header.as_ref().map(|h| h.driver_name.clone()),
+        track_id: header.as_ref().map(|h| h.track_id.clone()),
+        track_layout: header.as_ref().map(|h| h.track_layout.clone()),
+        cars_number: header.as_ref().map(|h| h.cars_number),
+        duration_s: header.as_ref().map(|h| h.duration_s),
+        file_name,
+    })
+}
+
+fn list_replays_in(
+    dir: &Path,
+    entity_id: &str,
+    counterpart_ids: &HashSet<String>,
+    policy: &crate::acreplay::AutosavePolicy,
+) -> Vec<ReplayFile> {
     if !dir.is_dir() {
         return Vec::new();
     }
+    let ranks = autosave_ranks(dir);
     // `max_depth(1)` : ne descend pas dans `replay/temp/` (fichiers de travail,
     // jamais des replays terminés).
     let mut out: Vec<ReplayFile> = WalkDir::new(dir)
@@ -174,29 +332,24 @@ fn list_replays_in(dir: &Path, entity_id: &str, counterpart_ids: &HashSet<String
         .filter(|e| e.file_type().is_file())
         .filter_map(|e| {
             let path = e.path();
-            let is_replay = path
-                .extension()
-                .and_then(|x| x.to_str())
-                .is_some_and(|x| x.eq_ignore_ascii_case("acreplay"));
-            if !is_replay {
+            if !is_replay_path(path) {
                 return None;
             }
-            let stem = path.file_stem()?.to_str()?;
-            if !stem.contains(entity_id) {
+            if !path.file_stem()?.to_str()?.contains(entity_id) {
                 return None;
             }
-            let (session_type, recorded_at) = parse_replay_stem(stem);
-            Some(ReplayFile {
-                path: path.to_string_lossy().into_owned(),
-                file_name: path.file_name()?.to_string_lossy().into_owned(),
-                session_type,
-                recorded_at,
-                matched_counterpart: best_counterpart(stem, counterpart_ids),
-            })
+            describe_replay(path, counterpart_ids, &ranks, policy)
         })
         .collect();
-    out.sort_by(|a, b| b.recorded_at.cmp(&a.recorded_at));
+    sort_replays(&mut out);
     out
+}
+
+/// Le plus récent en tête. `recorded_at` est désormais toujours renseigné
+/// (nom, sinon mtime), donc le tri ne rejette plus en fin de liste le replay
+/// qu'on vient d'enregistrer parce que son nom ne commençait pas par `AC_`.
+fn sort_replays(files: &mut [ReplayFile]) {
+    files.sort_by(|a, b| b.recorded_at.cmp(&a.recorded_at));
 }
 
 /// Replays impliquant `entity_id` (§6.1) — mêmes conventions que
@@ -205,7 +358,12 @@ pub fn list_replays(entity_id: &str, counterpart_ids: &HashSet<String>) -> Vec<R
     let Some(dir) = documents_ac_dir() else {
         return Vec::new();
     };
-    list_replays_in(&dir.join("replay"), entity_id, counterpart_ids)
+    list_replays_in(
+        &dir.join("replay"),
+        entity_id,
+        counterpart_ids,
+        &crate::acreplay::autosave_policy(),
+    )
 }
 
 /// Fusionne les captures détectées automatiquement avec les rattachements
@@ -239,25 +397,26 @@ pub fn merge_screenshot_links(mut auto: Vec<ScreenshotFile>, manual_paths: &[Str
 /// Même principe que `merge_screenshot_links`, pour les replays.
 pub fn merge_replay_links(mut auto: Vec<ReplayFile>, manual_paths: &[String]) -> Vec<ReplayFile> {
     let known: HashSet<String> = auto.iter().map(|s| s.path.clone()).collect();
+    // Les rangs se calculent sur le dossier du replay rattaché, pas sur celui
+    // de la fiche : un lien manuel peut pointer ailleurs.
+    let mut ranks_by_dir: HashMap<PathBuf, HashMap<String, i32>> = HashMap::new();
+    let policy = crate::acreplay::autosave_policy();
     for p in manual_paths {
         if known.contains(p) {
             continue;
         }
         let path = Path::new(p);
-        let Some(file_name) = path.file_name().and_then(|n| n.to_str()) else {
+        let Some(parent) = path.parent() else {
             continue;
         };
-        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-        let (session_type, recorded_at) = parse_replay_stem(stem);
-        auto.push(ReplayFile {
-            path: p.clone(),
-            file_name: file_name.to_string(),
-            session_type,
-            recorded_at,
-            matched_counterpart: None,
-        });
+        let ranks = ranks_by_dir
+            .entry(parent.to_path_buf())
+            .or_insert_with(|| autosave_ranks(parent));
+        if let Some(f) = describe_replay(path, &HashSet::new(), ranks, &policy) {
+            auto.push(f);
+        }
     }
-    auto.sort_by(|a, b| b.recorded_at.cmp(&a.recorded_at));
+    sort_replays(&mut auto);
     auto
 }
 
@@ -363,6 +522,17 @@ mod tests {
         std::fs::write(path, b"x").unwrap();
     }
 
+    /// `list_replays_in` avec la politique d'autosave par défaut d'AC (2 R,
+    /// 1 Q, 1 O) : les tests ne lisent pas le `replay.ini` du poste.
+    fn list_replays_in_t(dir: &Path, entity_id: &str, counterparts: &HashSet<String>) -> Vec<ReplayFile> {
+        list_replays_in(
+            dir,
+            entity_id,
+            counterparts,
+            &crate::acreplay::AutosavePolicy::default(),
+        )
+    }
+
     fn ids(values: &[&str]) -> HashSet<String> {
         values.iter().map(|s| s.to_string()).collect()
     }
@@ -422,16 +592,116 @@ mod tests {
                 .join("AC_010101-000000_R_vrc_erc_1998_pageau_shannonville_long.acreplay"),
         );
 
-        let found = list_replays_in(&dir, "vrc_erc_1998_pageau", &HashSet::new());
+        let found = list_replays_in_t(&dir, "vrc_erc_1998_pageau", &HashSet::new());
         assert_eq!(found.len(), 1, "temp/ ne doit jamais être scanné");
         assert_eq!(found[0].session_type.as_deref(), Some("R"));
-        assert_eq!(found[0].recorded_at.as_deref(), Some("2024-01-30T23:18:24"));
+        assert!(
+            found[0]
+                .recorded_at
+                .as_deref()
+                .unwrap()
+                .starts_with("2024-01-30T23:18:24"),
+            "la date du nom est reprise telle quelle, en heure locale"
+        );
+        assert!(found[0].autosave, "un nom AC_ est un autosave du jeu");
 
-        let barcelona = list_replays_in(&dir, "ks_barcelona_layout_gp", &HashSet::new());
+        let barcelona = list_replays_in_t(&dir, "ks_barcelona_layout_gp", &HashSet::new());
         assert_eq!(
             barcelona.len(),
             1,
             "suffixe de longueur variable (osrw62) sans incidence sur le match"
+        );
+    }
+
+    // Bug réel : le replay qu'on vient d'enregistrer n'était « pas identifié »
+    // après une course. Il l'était — mais Content Manager l'ayant renommé, le
+    // nom ne commençait plus par `AC_`, donc ni date ni type, et le tri par
+    // date le renvoyait en fin de liste, sans horodatage. Un replay a toujours
+    // une date, et le plus récent est toujours en tête.
+    #[test]
+    fn a_replay_renamed_by_content_manager_keeps_its_date_and_sorts_first() {
+        let base = crate::testutil::temp_dir("media-cm-rename");
+        let dir = base.join("replay");
+        write(&dir.join("AC_170926-083257_O_rss_formula_2013_ks_silverstone_gp.acreplay"));
+        // Motif de renommage par défaut de CM : la date passe en fin de nom.
+        write(&dir.join("rss_formula_2013_ks_silverstone_gp_190926-130225.acreplay"));
+        // Renommé à la main : plus aucune date dans le nom, le mtime prend le
+        // relais.
+        write(&dir.join("mon super tour.acreplay"));
+
+        let found = list_replays_in_t(&dir, "rss_formula_2013", &HashSet::new());
+        assert_eq!(found.len(), 2, "le fichier renommé à la main ne contient pas l'id");
+        assert!(
+            found[0]
+                .recorded_at
+                .as_deref()
+                .unwrap()
+                .starts_with("2026-09-19T13:02:25"),
+            "le plus récent en tête, date lue en fin de nom"
+        );
+        assert!(!found[0].autosave, "un replay renommé est sorti de la rotation d'AC");
+        assert!(found[1].autosave);
+
+        let manual = list_replays_in_t(&dir, "mon super tour", &HashSet::new());
+        assert_eq!(manual.len(), 1);
+        assert!(
+            manual[0].recorded_at.is_some(),
+            "sans date dans le nom, le mtime évite la ligne sans horodatage reléguée en fin de liste"
+        );
+    }
+
+    // Ce qui répond à « quand celui-ci sera-t-il supprimé ? » : la rotation
+    // d'AC compte par type de session, toutes voitures confondues.
+    #[test]
+    fn autosave_rank_counts_per_session_type_across_the_whole_folder() {
+        let base = crate::testutil::temp_dir("media-ranks");
+        let dir = base.join("replay");
+        write(&dir.join("AC_010926-100000_R_car_a_imola.acreplay"));
+        write(&dir.join("AC_020926-100000_R_car_b_spa.acreplay"));
+        write(&dir.join("AC_030926-100000_R_car_a_imola.acreplay"));
+        write(&dir.join("AC_040926-100000_O_car_a_imola.acreplay"));
+        write(&dir.join("car_a_imola_050926-100000.acreplay"));
+
+        let found = list_replays_in_t(&dir, "car_a", &HashSet::new());
+        let rank = |name: &str| {
+            found
+                .iter()
+                .find(|f| f.file_name == name)
+                .unwrap_or_else(|| panic!("{name} attendu dans la liste"))
+                .autosave_rank
+        };
+        assert_eq!(
+            rank("AC_030926-100000_R_car_a_imola.acreplay"),
+            Some(1),
+            "le plus récent des R"
+        );
+        assert_eq!(
+            rank("AC_010926-100000_R_car_a_imola.acreplay"),
+            Some(3),
+            "la course d'une autre voiture compte aussi : la rotation ignore la voiture"
+        );
+        assert_eq!(
+            rank("AC_040926-100000_O_car_a_imola.acreplay"),
+            Some(1),
+            "chaque type de session a sa propre rotation"
+        );
+        assert_eq!(
+            rank("car_a_imola_050926-100000.acreplay"),
+            None,
+            "un replay conservé n'est dans aucune rotation"
+        );
+
+        let limit = |name: &str| found.iter().find(|f| f.file_name == name).unwrap().autosave_limit;
+        assert_eq!(
+            limit("AC_030926-100000_R_car_a_imola.acreplay"),
+            Some(2),
+            "la limite d'une course vient de [AUTOSAVE] RACE"
+        );
+        assert_eq!(limit("AC_040926-100000_O_car_a_imola.acreplay"), Some(1));
+        assert_eq!(
+            limit("car_a_imola_050926-100000.acreplay"),
+            None,
+            "aucune limite ne s'applique à un replay conservé"
         );
     }
 

@@ -564,11 +564,50 @@ convention supposée) :
   format de l'année dans le nom n'est pas uniforme selon le mode de capture
   (bug `tm_year` en session) : jamais parsé, seul le mtime du fichier est lu.
 - `Documents\Assetto Corsa\replay\AC_<ddmmyy>-<hhmmss>_<type>_<car_id>_<track_id[_layout]>_<suffixe?>.acreplay`,
-  `<type>` une lettre de session, suffixe final de longueur variable ou absent.
-  `replay\temp\` (fichiers de travail) n'est jamais scanné.
+  `<type>` une lettre de session (`R` course, `Q` qualification, le reste
+  « autre »), suffixe final de longueur variable ou absent.
+  `replay\temp\` (fichiers de travail) n'est jamais scanné. **Ce nom-là est
+  celui d'un autosave du jeu** ; Content Manager renomme ceux qu'on conserve,
+  motif par défaut `<car_id>_<track_id>_<ddmmyy>-<hhmmss>`. La date se lit donc
+  en tête ou en fin de nom selon l'écrivain, et à défaut dans le mtime : un
+  replay a **toujours** un horodatage, sans quoi le tri par date renvoyait en
+  fin de liste, sans date affichée, le replay qu'on venait d'enregistrer.
 - `<ac_install>\extension\backgrounds\<track_id>[__<layout_id>]_<variant>.jpg`
   (CSP) — convention propre, match par préfixe (double underscore avant le
   layout).
+**Ce qu'une ligne de replay affiche** : le combo réellement piloté (voiture,
+circuit et layout), l'horodatage, la durée, le nombre de voitures en piste, le
+nom du pilote, la taille du fichier, et le nom du fichier lui-même en dessous.
+Les cinq premières viennent de l'**en-tête du `.acreplay`** (`acreplay.rs`),
+pas du nom : le nom ne distingue pas deux courses du même combo, et il ne dit
+rien du pilote ni de la durée. Le bloc de frames ayant un pas fixe
+(`frames × (4 + objets_de_piste × 12)` octets), les champs qui suivent sont
+atteints par un seek — lire l'en-tête d'un replay de 635 Mo coûte le même temps
+que celui d'un replay de 867 Ko, ce qui rend l'opération tenable pour chaque
+ligne de la liste. En-tête illisible (replay d'une version antérieure, fichier
+tronqué, replay en cours d'écriture) : la ligne s'affiche avec ce que le nom et
+le disque donnent, jamais d'erreur.
+
+**Autosave ou gardé** (badge sur chaque ligne). Il n'existe **aucun nettoyage
+par ancienneté** : ni Pit Box ni Content Manager ne suppriment un replay au bout
+de X jours. C'est Assetto Corsa qui fait tourner ses autosaves, et il les
+**compte** — `cfg/replay.ini`, section `[AUTOSAVE]`, `RACE`/`QUALIFY`/`OTHERS`
+(les réglages « Replays autosave » de CM écrivent ce fichier, ils n'ajoutent
+rien de leur côté). Une ligne porte donc soit **« Autosave rang/limite »** — son
+rang parmi les autosaves du même type de session, toutes voitures confondues, le
+plus récent en 1 —, soit **« Gardé »** quand le fichier a été renommé, ce qui le
+sort de la rotation. Le détail (quel type, combien AC en garde) est dans
+l'infobulle du badge, jamais en libellé.
+
+**La liste se recharge à la fin d'une session**, sans qu'on ait à rouvrir la
+fiche : `onSessionEnd` (`detail/media.ts`) écoute la retombée de `ac://running`,
+le sondage du process du jeu qui sert déjà à couper la musique de Big Picture et
+à suspendre les vignettes de la grille (GRILLE§5.4) — pas un second sondage.
+Deux passages, à la fermeture puis six secondes après, parce qu'il y a deux
+écrivains : AC pose son autosave avant de rendre la main, Content Manager
+renomme ou recopie le fichier une fois le jeu parti. Le même signal rafraîchit
+les Screenshots et les décomptes des onglets.
+
 - **Replays — bouton « Lire dans CM »** (`launch.rs::launch_replay`) : passe le
   chemin du `.acreplay` en argument à l'exécutable Content Manager — même
   mécanisme que l'association de fichier Windows au double-clic, et cohérent

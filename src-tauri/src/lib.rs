@@ -1,5 +1,6 @@
 mod acd;
 mod acpath;
+mod acreplay;
 mod activation;
 mod apps;
 mod archive;
