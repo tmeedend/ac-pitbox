@@ -16,6 +16,13 @@ pub const PACK_NOT_FOUND: &str = "errors.packNotFound";
 pub const AC_NOT_CONFIGURED: &str = "errors.acNotConfigured";
 pub const LIBRARY_NOT_CONFIGURED: &str = "errors.libraryNotConfigured";
 pub const CM_NOT_CONFIGURED: &str = "errors.cmNotConfigured";
+// Launching a session onto content the game does not have (SESSION§2). Two
+// keys rather than one interpolated with the id: `errorText` resolves a bare
+// key, no error here carries a parameter, and knowing WHICH of the two is
+// missing is what tells the user where to go - the id itself would say nothing
+// they did not just pick on screen.
+pub const CAR_NOT_INSTALLED: &str = "errors.carNotInstalled";
+pub const TRACK_NOT_INSTALLED: &str = "errors.trackNotInstalled";
 // Presets Content Manager lus comme sessions enregistrées (SESSION§3.6). Un
 // preset illisible ou d'un mode sans équivalent Pit Box est **nommé** dans la
 // liste avec sa raison, jamais masqué : qui a dix presets et en voit huit se

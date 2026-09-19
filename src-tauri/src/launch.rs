@@ -365,7 +365,11 @@ fn ensure_available(conn: &Connection, cfg: &AppConfig, kind: ModKind, id: &str)
     if overlay::mod_exists(conn, id).map_err(|e| e.to_string())? {
         return activation::activate(conn, cfg, id, None);
     }
-    Err(format!("« {id} » n'est pas installé dans Assetto Corsa."))
+    Err(match kind {
+        ModKind::Car => crate::errors::CAR_NOT_INSTALLED,
+        ModKind::Track => crate::errors::TRACK_NOT_INSTALLED,
+    }
+    .to_string())
 }
 
 /// Steam tourne-t-il ? (SESSION§2.3)
@@ -498,3 +502,4 @@ pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(
     let _ = crate::overlay::mark_launched(conn, &setup.track_id, &now);
     Ok(())
 }
+

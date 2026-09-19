@@ -1410,6 +1410,8 @@
     "appNotFound": "App not found.",
     "bundledNotRemovable": "Bundled with the mod: cannot be removed on its own.",
     "cmNotConfigured": "Content Manager is not configured.",
+    "carNotInstalled": "The chosen car is not installed in Assetto Corsa.",
+    "trackNotInstalled": "The chosen track is not installed in Assetto Corsa.",
     "cmUnreadable": "This Content Manager preset could not be read.",
     "cmNotAGrid": "This preset draws its opponents instead of listing them.",
     "cmUnsupportedMode": "Pit Box has no equivalent for this Content Manager mode.",
