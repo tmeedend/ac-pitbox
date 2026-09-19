@@ -1505,9 +1505,10 @@
   .field {
     display: flex;
     align-items: center;
-    /* 8 px et non 9 : la même gouttière que `.isd-trigger` juste au-dessus.
+    /* 8 px, comme `.isd-trigger.labelled` juste au-dessus — qui était resté à
+       9 malgré ce commentaire, d'où 2 px d'écart sur le début de la valeur.
        Les deux lignes partagent la colonne d'intitulé et portent chacune une
-       vignette de 13 px — un pixel d'écart ici décale la valeur de l'une par
+       vignette de 28 px — un pixel d'écart ici décale la valeur de l'une par
        rapport à l'autre, ce qui se voit d'autant mieux qu'elles sont
        voisines. */
     gap: 8px;
@@ -1535,31 +1536,36 @@
     text-transform: uppercase;
     color: var(--muted);
   }
-  /* Même case que `.isd-thumb.labelled` du sélecteur de livrée, aux mêmes
-     dimensions : c'est leur alignement vertical qui fait tout l'intérêt. Elle
-     est posée même vide — un cadre qui apparaît et disparaît décalerait le
-     nom du pilote d'une voiture à l'autre. */
+  /* Même case que `.isd-thumb` du sélecteur de livrée, aux mêmes dimensions :
+     c'est leur alignement vertical qui fait tout l'intérêt. Elle est posée
+     même vide — un cadre qui apparaît et disparaît décalerait le nom du
+     pilote d'une voiture à l'autre. Pleine hauteur de ligne depuis qu'à 13 px
+     on ne reconnaissait rien de ce qu'elle montre, et donc sans cadre à elle :
+     le raisonnement complet est dans `ImageSelectDropdown`. */
   .dthumb {
     flex: none;
-    width: 13px;
-    height: 13px;
+    width: 28px;
+    height: 28px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: var(--raised);
-    border: 1px solid var(--line);
     overflow: hidden;
   }
   .dthumb img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    /* **Recadrage sur la tête, en CSS et pas au rendu.** La vignette est un
-       buste (du haut du casque à la poitrine) : à 13 px, le casque n'en fait
-       plus que trois et on ne distingue rien. Mesuré sur les 85 vignettes du
-       cache : la tête va du bord haut (médiane 4 %, au pire 16 %) à 39 % de la
-       hauteur (p90 47 %). Ce couple montre donc la tranche 0-52 % de l'image
-       source, soit la tête entière et un doigt d'épaules.
+    /* **Recadrage sur la tête, en CSS et pas au rendu.** La vignette source est
+       un buste (du haut du casque à la poitrine). Mesuré sur les 85 vignettes
+       du cache : la tête va du bord haut (médiane 4 %, au pire 16 %) à 39 % de
+       la hauteur (p90 47 %). Ce couple montre donc la tranche 0-52 % de
+       l'image source, soit la tête entière et un doigt d'épaules.
+       **Il tient même à 28 px**, et l'essai inverse a été fait : ouvert au
+       haut du buste, la ligne montrait le torse et les jambes, qui ne
+       distinguent aucun mannequin d'un autre. Ce qu'on reconnaît d'un pilote
+       est la forme de son casque — sur une ligne d'une seule hauteur de
+       texte, le reste n'est que du remplissage.
        En CSS et non dans `driverThumbs` parce que le même PNG sert la galerie
        de l'écran Pilote, où il est affiché à 104 px et où le buste est le bon
        cadrage — et parce que le recalculer invaliderait les 85 vignettes déjà

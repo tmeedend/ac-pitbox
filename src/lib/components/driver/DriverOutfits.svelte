@@ -8,8 +8,12 @@
   // Reposer une tenue complète, c'est **quatre choix d'un coup**, écrits en une
   // fois : poser le corps puis les pièces les effacerait, `setDriverBody`
   // remettant les trois autres au défaut (§D6).
+  import { untrack } from "svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { deleteOutfit, saveOutfit, savedOutfits, wornOutfit, type SavedOutfit } from "$lib/driver/driverOutfits.svelte";
+  import type { DriverChoices, WardrobeOption } from "$lib/driver/driver";
+  import { bodyThumb, requestBodyThumb } from "$lib/driver/driverThumbs.svelte";
+  import { previewSrc } from "$lib/library/library";
   import {
     driverFor,
     fallbackName,
@@ -20,7 +24,21 @@
   } from "$lib/driver/driverOverride.svelte";
   import ImageSelectDropdown from "$lib/components/ui/ImageSelectDropdown.svelte";
 
-  let { carId, kind }: { carId: string; kind: CarClass } = $props();
+  let {
+    carId,
+    kind,
+    skinId = null,
+    choices = null,
+  }: {
+    carId: string;
+    kind: CarClass;
+    /** Livrée en place : elle habille le mannequin du rendu de vignette, donc
+     * deux livrées ne donnent pas la même image du même corps. */
+    skinId?: string | null;
+    /** Les garde-robes de cette voiture — c'est là que vivent les vignettes
+     * qu'Assetto Corsa range à côté de ses `.dds`. */
+    choices?: DriverChoices | null;
+  } = $props();
 
   const prefs = $derived(driverFor(carId || null, kind));
   const outfits = $derived(savedOutfits());
@@ -108,14 +126,73 @@
     return currentlyWorn?.name === outfit.name;
   }
 
-  /** Les entrées du sélecteur : « Aucune » d'abord, puis les tenues. Sans
-   * image — ce sont des noms, pas des livrées — mais avec le même composant
-   * que le sélecteur de livrée de la colonne de session : sa liste s'ouvre en
-   * `position: fixed` et prend la largeur de son plus long libellé, là où un
-   * `<select>` contraint à 170 px dans ce panneau coupait les noms. */
+  /** La vignette d'une pièce de garde-robe, si cette voiture la propose. */
+  function pieceThumb(list: WardrobeOption[] | undefined, id: string | null): string | null {
+    if (!id || !list) return null;
+    return previewSrc(list.find((w) => w.id === id)?.thumbnail ?? null);
+  }
+
+  /**
+   * L'image d'une tenue enregistrée.
+   *
+   * **Le casque d'abord** : c'est la pièce qui distingue deux tenues au premier
+   * regard, et sa vignette est un fichier qu'AC range déjà à côté de ses
+   * textures. La combinaison puis les gants ensuite, même raisonnement.
+   *
+   * **Le corps en dernier**, et seulement faute de mieux : son image est un
+   * rendu 3D du mannequin habillé par la LIVRÉE, pas par la tenue enregistrée
+   * — deux tenues qui ne diffèrent que par le casque y seraient identiques.
+   * Elle ne dit donc juste que pour une tenue qui n'est qu'une substitution de
+   * mannequin, ce qui est exactement le cas où les trois autres manquent.
+   *
+   * `null` reste normal : une tenue dont les pièces viennent d'une autre
+   * voiture n'a rien à montrer ici, et la case vide du sélecteur suffit.
+   */
+  function outfitThumb(o: SavedOutfit): string | null {
+    return (
+      pieceThumb(choices?.helmets, o.helmet) ??
+      pieceThumb(choices?.suits, o.suit) ??
+      pieceThumb(choices?.gloves, o.gloves) ??
+      (o.body ? bodyThumb(carId + "|" + o.body) : null)
+    );
+  }
+
+  // Le rendu d'un corps coûte une conversion la première fois, d'où la
+  // discipline de `driverThumbs` : on ne demande que ce qui va s'afficher.
+  // Ici, seulement les tenues dont aucune pièce n'a d'image — une poignée au
+  // plus, là où demander les douze coûterait douze conversions pour rien.
+  // Toutes les dépendances se lisent avant la première sortie : une garde en
+  // tête tronquerait la liste des abonnements dès le montage.
+  $effect(() => {
+    const car = carId;
+    const skin = skinId;
+    const list = outfits;
+    const wardrobe = choices;
+    if (!car) return;
+    // `untrack` : `requestBodyThumb` LIT le cache des vignettes pour savoir si
+    // la demande est déjà faite. Sans lui, cet effet s'abonnerait à ce cache
+    // et se redéclencherait à chaque vignette qui tombe, y compris celles des
+    // autres écrans. Demander n'est pas une dépendance.
+    untrack(() => {
+      for (const o of list) {
+        if (!o.body) continue;
+        const dressed =
+          pieceThumb(wardrobe?.helmets, o.helmet) ??
+          pieceThumb(wardrobe?.suits, o.suit) ??
+          pieceThumb(wardrobe?.gloves, o.gloves);
+        if (!dressed) requestBodyThumb(car, skin, o.body);
+      }
+    });
+  });
+
+  /** Les entrées du sélecteur : « Aucune » d'abord, puis les tenues, chacune
+   * avec sa vignette — même composant que le sélecteur de livrée de la
+   * colonne de session : sa liste s'ouvre en `position: fixed` et prend la
+   * largeur de son plus long libellé, là où un `<select>` contraint à 170 px
+   * dans ce panneau coupait les noms. */
   const fallbackOptions = $derived([
     { id: "", name: t("driver.fallback.none"), image: null },
-    ...outfits.map((o) => ({ id: o.name, name: o.name, image: null })),
+    ...outfits.map((o) => ({ id: o.name, name: o.name, image: outfitThumb(o) })),
   ]);
 
   function remove(name: string) {
@@ -169,8 +246,16 @@
   {#if outfits.length}
     <div class="chips">
       {#each outfits as outfit (outfit.name)}
+        {@const thumb = outfitThumb(outfit)}
         <span class="chip" class:on={worn(outfit)}>
-          <button class="chip-name" type="button" onclick={() => apply(outfit)}>{outfit.name}</button>
+          <!-- La même image que dans le sélecteur juste en dessous : ce sont
+               les mêmes tenues, elles doivent se reconnaître d'une liste à
+               l'autre. La case est posée même vide, sans quoi les pastilles
+               n'auraient pas toutes la même hauteur. -->
+          <button class="chip-name" type="button" onclick={() => apply(outfit)}>
+            <span class="chip-thumb">{#if thumb}<img src={thumb} alt="" />{/if}</span>
+            {outfit.name}
+          </button>
           <button class="chip-x" type="button" title={t("driver.outfits.delete")} onclick={() => remove(outfit.name)}
             >×</button
           >
@@ -278,6 +363,33 @@
     color: var(--muted);
     font-size: 11px;
     padding: 4px 8px;
+  }
+  .chip-name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-left: 5px;
+  }
+  /* 18 px : la pastille fait 24 px de haut, l'image en prend ce qu'elle peut
+     sans la faire grandir — une rangée de pastilles plus hautes coûterait de
+     la hauteur à un panneau qui n'en a pas de reste. */
+  .chip-thumb {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    background: var(--raised);
+    overflow: hidden;
+  }
+  .chip-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  /* Sur la pastille en place, le fond rouge remplace le gris de la case vide :
+     un carré gris s'y lirait comme une image qui n'a pas chargé. */
+  .chip.on .chip-thumb {
+    background: rgba(255, 255, 255, 0.18);
   }
   .chip.on .chip-name,
   .chip.on .chip-x {

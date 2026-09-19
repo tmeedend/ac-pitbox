@@ -126,7 +126,9 @@
   .isd-trigger.labelled {
     height: 30px;
     padding: 0 9px;
-    gap: 9px;
+    /* 8 px comme `ImageSelectDropdown` et `.field` : les trois posent des
+       lignes de la même colonne, leurs valeurs commencent au même pixel. */
+    gap: 8px;
   }
   /* Mêmes valeurs que `ImageSelectDropdown` : les deux composants posent des
      lignes de la même colonne, elles doivent s'aligner au pixel. */

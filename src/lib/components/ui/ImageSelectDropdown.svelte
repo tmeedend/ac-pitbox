@@ -248,16 +248,35 @@
     text-align: left;
   }
   /* Version « champ nommé » de la colonne de session : hauteur fixe pour que
-     les lignes s'alignent, et une vignette réduite au rôle de pastille de
-     couleur — à 13 px, ce qu'on lit d'un skin c'est sa teinte, pas son motif. */
+     les lignes s'alignent, et une vignette qui prend **toute la hauteur de la
+     ligne**.
+     Elle a longtemps été réduite au rôle de pastille de couleur (13 px, « ce
+     qu'on lit d'un skin c'est sa teinte, pas son motif ») — sauf qu'une
+     livrée, un tracé et un pilote sont justement ce qu'on cherche à
+     reconnaître d'un coup d'œil, et à 13 px aucun des trois ne se
+     reconnaissait : signalé à l'usage. 28 px = les 30 px de la ligne moins ses
+     deux filets, donc le maximum à hauteur de ligne inchangée — c'est
+     l'alignement des valeurs qui coûterait cher, pas les pixels d'image.
+     Pas de cadre à elle : à pleine hauteur, il doublerait celui de la ligne à
+     un pixel de distance.
+     `gap: 8px` et non 9 : même gouttière que `.field` d'`AppShell`, dont les
+     lignes voisinent les nôtres dans la même colonne. L'écart valait 2 px sur
+     le début de la valeur, et il se voit d'autant mieux que les vignettes sont
+     maintenant larges. */
   .isd-trigger.labelled {
     height: 30px;
     padding: 0 9px;
-    gap: 9px;
+    gap: 8px;
   }
   .isd-trigger.labelled .isd-thumb {
-    width: 13px;
-    height: 13px;
+    width: 28px;
+    height: 28px;
+    border: 0;
+  }
+  /* La gouttière de 2 px protégeait le tracé d'un cadre qui n'existe plus
+     ici : elle lui coûterait un septième de sa hauteur pour rien. */
+  .isd-trigger.labelled .isd-thumb.contain img {
+    padding: 0;
   }
   /* Le libellé ne bouge jamais, la valeur change : c'est toute la règle. Un
      intitulé qui se nomme lui-même (« Aucun skin de circuit ») disparaît dès

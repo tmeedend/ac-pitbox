@@ -602,7 +602,7 @@
             {substituted ? t("driver.reset.body") : t("driver.reset.livery")}
           </button>
 
-          <DriverOutfits {carId} kind={carKind} />
+          <DriverOutfits {carId} kind={carKind} skinId={nav.sessionCar?.skin ?? null} {choices} />
         </div>
       </section>
 
