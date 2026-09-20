@@ -480,7 +480,9 @@ Les caractéristiques mécaniques ne sont **pas** des tags (un tag filtre/groupe
 
 **Une valeur cassée se lit, elle ne se répare pas.** Le `ui_track.json` de `le_lancone` porte `"country": "France\", \"Corsica"` — son auteur a voulu écrire deux entrées et en a produit une seule, guillemets compris. Le nom retenu est ce qui précède le premier guillemet, qu'un nom de pays ne contient jamais. **Jamais à la virgule**, qui paraîtrait faire la même chose : la table du jeu en contient (`Tanzania, {United Republic of}`), et les couper les rendrait introuvables.
 
-L'arrivée des alias fait passer le moteur en **version 3** : une bibliothèque indexée avant eux se réharmonise **toute seule au démarrage suivant**, sans rien demander — c'est le même rattrapage que la fermeture du vocabulaire en version 2.
+**Un circuit déclare son pays comme une voiture, et le garde comme elle.** Ce n'était pas le cas : la réharmonisation relisait le pays natif par le lecteur de `ui_car.json` **quel que soit le type**. Un circuit n'en a pas, son pays revenait donc vide — et comme rien n'extrait de pays d'un tag de circuit, la valeur posée à l'import était **effacée**, sans un mot, dès qu'on touchait aux règles. Le défaut était dans la duplication : deux lecteurs, dont un seul branchait sur le type. Il n'y en a plus qu'un, qui rend le pays natif en même temps que l'harmonisation — ils viennent du même fichier.
+
+L'arrivée des alias fait passer le moteur en **version 3**, et cette correction en **version 4** : une bibliothèque indexée avant eux se réharmonise **toute seule au démarrage suivant**, sans rien demander — c'est le même rattrapage que la fermeture du vocabulaire en version 2, et c'est lui qui rend leur pays aux circuits qui l'avaient perdu.
 
 **Favori** : état personnel (cœur), ni tag ni caractéristique.
 

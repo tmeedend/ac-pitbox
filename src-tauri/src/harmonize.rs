@@ -86,15 +86,28 @@ pub fn harmonize_all(conn: &Connection, cfg: &AppConfig, rules: &Rules) -> rusql
 }
 
 fn reharmonize_one(conn: &Connection, cfg: &AppConfig, rules: &Rules, m: &ModRow) -> rusqlite::Result<()> {
-    let Some(h) = recompute_for(conn, cfg, rules, m) else {
+    let Some((h, native_country)) = recompute_for(conn, cfg, rules, m) else {
         return Ok(());
     };
-    let native_country = native_country(conn, cfg, m);
     store(conn, &m.id_interne, &h, native_country.as_deref(), rules)
 }
 
-/// Recalcule l'harmonisation d'un mod en relisant sa version active (lecture seule).
-fn recompute_for(conn: &Connection, cfg: &AppConfig, rules: &Rules, m: &ModRow) -> Option<Harmonized> {
+/// Recalcule l'harmonisation d'un mod en relisant sa version active (lecture
+/// seule), **et rend le pays natif qu'il vient d'y lire**.
+///
+/// Les deux repartent ensemble parce qu'ils viennent du même fichier, et c'est
+/// une correction : un second lecteur, à côté, appelait `read_car` quel que
+/// soit le type. Un circuit n'ayant pas d'`ui_car.json`, son pays revenait
+/// vide à chaque réharmonisation — et comme `apply_track` n'extrait aucun pays
+/// d'un tag, la valeur posée à l'import était **effacée**, en silence, dès
+/// qu'on touchait aux règles. Le bug était dans la duplication, pas dans le
+/// `read_car` : un seul lecteur ne peut pas se tromper de type.
+fn recompute_for(
+    conn: &Connection,
+    cfg: &AppConfig,
+    rules: &Rules,
+    m: &ModRow,
+) -> Option<(Harmonized, Option<String>)> {
     let kind = if m.kind == "Track" {
         ModKind::Track
     } else {
@@ -110,14 +123,8 @@ fn recompute_for(conn: &Connection, cfg: &AppConfig, rules: &Rules, m: &ModRow) 
     .unwrap_or_default();
     let class = ui.class.clone().unwrap_or_default();
     let name = ui.name.clone().unwrap_or_else(|| m.id_interne.clone());
-    Some(compute(rules, kind, &ui.tags, &name, &class, ui.country.as_deref()))
-}
-
-fn native_country(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<String> {
-    let vid = m.active_version_id.as_ref()?;
-    let stored = overlay::get_version_path(conn, vid).ok().flatten()?;
-    let lib = crate::libpath::resolve(cfg.library_path.as_deref(), &stored)?;
-    uijson::read_car(&lib).and_then(|ui| ui.country)
+    let h = compute(rules, kind, &ui.tags, &name, &class, ui.country.as_deref());
+    Some((h, ui.country))
 }
 
 /// Aperçu d'impact (§5) : nombre de mods dont l'harmonisation changerait
@@ -128,7 +135,7 @@ pub fn count_affected(conn: &Connection, cfg: &AppConfig, rules: &Rules) -> rusq
     let mods = overlay::list_mods(conn)?;
     let mut n = 0;
     for m in &mods {
-        let Some(h) = recompute_for(conn, cfg, rules, m) else {
+        let Some((h, _native)) = recompute_for(conn, cfg, rules, m) else {
             continue;
         };
         let cand: BTreeSet<&String> = h.tags_from_rule.iter().collect();
@@ -185,6 +192,72 @@ mod tests {
             super::final_country(&rules, &h, Some("U.S.A.")).as_deref(),
             Some("United States"),
             "the file said the United States, the tag does not get to say Germany"
+        );
+    }
+
+    /// **A track keeps its country when the rules are re-applied.**
+    ///
+    /// Real bug, and a silent one: re-harmonising read the native country
+    /// through `read_car` whatever the kind. A track has no `ui_car.json`, so
+    /// its country came back empty — and `apply_track` extracts none from a
+    /// tag — which blanked in the overlay what the import had read correctly.
+    /// Nothing said so: the country simply left the sheet and the filter, the
+    /// next time the rules were touched.
+    ///
+    /// The test goes through the whole path (library on disk, overlay, active
+    /// version) because that is where the bug was: the two readers were each
+    /// right on their own, and only disagreed once assembled.
+    #[test]
+    fn re_applying_the_rules_leaves_a_track_its_country() {
+        let base = crate::testutil::temp_dir("harmo-track-country");
+        let lib = base.join("lib");
+        let dir = lib.join("tracks").join("le_lancone").join("v");
+        std::fs::create_dir_all(dir.join("ui")).unwrap();
+        // Verbatim du mod réel : l'auteur a voulu écrire deux entrées.
+        std::fs::write(
+            dir.join("ui").join("ui_track.json"),
+            r#"{"name":"Le Lancone","country":"France\", \"Corsica","tags":["rally"]}"#,
+        )
+        .unwrap();
+
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        overlay::upsert_mod(&conn, "le_lancone", "Track", None, Some("Le Lancone"), "h", None, &now).unwrap();
+        overlay::insert_version(
+            &conn,
+            "le_lancone_v",
+            "le_lancone",
+            Some("1.0"),
+            None,
+            &now,
+            &dir.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
+        )
+        .unwrap();
+        overlay::set_active_version(&conn, "le_lancone", "le_lancone_v").unwrap();
+
+        let cfg = AppConfig {
+            library_path: Some(lib.clone()),
+            ..Default::default()
+        };
+        let rules = rules::default_rules();
+        harmonize_all(&conn, &cfg, &rules).unwrap();
+
+        let row = overlay::list_mods(&conn)
+            .unwrap()
+            .into_iter()
+            .find(|m| m.id_interne == "le_lancone")
+            .expect("the track is listed");
+        assert_eq!(
+            row.country.as_deref(),
+            Some("France"),
+            "a track keeps the country of its own ui_track.json, read up to the quote"
         );
     }
 

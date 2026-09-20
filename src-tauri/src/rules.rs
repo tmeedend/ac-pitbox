@@ -30,7 +30,11 @@ const DEFAULT_RULES: &str = include_str!("../rules/default-tag-rules.json");
 ///
 /// 2 — closed vocabulary: unknown tags are no longer promoted (§5).
 /// 3 — country aliases: a declared country is normalised on the way in (§5).
-pub const ENGINE_VERSION: u32 = 3;
+/// 4 — a track keeps its country when the rules are re-applied: the second
+///     reader used `read_car` whatever the kind, so every re-harmonisation
+///     silently blanked it. The bump is what gives those tracks their country
+///     back, from their own `ui_track.json`.
+pub const ENGINE_VERSION: u32 = 4;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Rules {
