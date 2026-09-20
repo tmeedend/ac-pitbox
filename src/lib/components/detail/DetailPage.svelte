@@ -74,6 +74,7 @@
   import { libraryVersion } from "$lib/library/libraryVersion.svelte";
   import { getPreferredSkin, setPreferredSkin, getPreferredLayout, setPreferredLayout } from "$lib/preferred";
   import { getConfig } from "$lib/config";
+  import { flagFor, loadFlags } from "$lib/flags.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { odometerText } from "$lib/detail/odometer";
   import { trackLength } from "$lib/detail/trackLength";
@@ -141,6 +142,13 @@
    * (§4.5.2). Ils ont leur place dans l'onglet Médias **et** dans le bloc
    * « Posé sur ce mod » — l'un pour les lire, l'autre pour les gérer. */
   const attachedDocs = $derived(attached.filter((a) => a.kind === "DOCUMENT"));
+
+  // Table des drapeaux : la fiche d'un circuit montre son pays sans passer par
+  // `TechSheet`, qui la charge de son côté. Idempotent, donc chaque composant
+  // qui montre un drapeau la demande plutôt que de compter sur un voisin.
+  $effect(() => {
+    void loadFlags();
+  });
 
   /** Fiche d'un mod greffé, ouverte par-dessus celle de l'hôte — comme celle
    * d'une couche, et pour la même raison : on y est arrivé DEPUIS ce mod. */
@@ -1557,7 +1565,16 @@
                     >{/if}
                 </div>
               </div>
-              <div><div class="k lbl-key">{t("columns.country")}</div><div class="v">{d.country ?? "—"}</div></div>
+              <!-- Même pastille que la fiche technique d'une voiture : un circuit
+                   déclare son pays comme elle, et se reconnaît de même. -->
+              <div>
+                <div class="k lbl-key">{t("columns.country")}</div>
+                <div class="v">
+                  {#if d.country}{@const flag = flagFor(d.country)}
+                    {#if flag}<img class="flag" src={flag} alt="" />{/if}{d.country}
+                  {:else}—{/if}
+                </div>
+              </div>
               <div><div class="k lbl-key">{t("detail.odometer")}</div><div class="v">{odometerText(d)}</div></div>
             </div>
           </section>
@@ -2262,6 +2279,18 @@
     color: var(--txt2);
     font-size: 11px;
     font-family: var(--mono);
+  }
+  /* Mêmes valeurs que la fiche technique, les filtres et le plateau : une
+     seule taille de drapeau dans l'app, et un filet parce que beaucoup ont du
+     blanc sur un bord. Le CSS des composants étant scopé, la ressemblance se
+     réécrit, elle ne s'hérite pas. */
+  .specgrid .flag {
+    width: 16px;
+    height: 12px;
+    object-fit: cover;
+    border: 1px solid var(--line);
+    vertical-align: -1px;
+    margin-right: 5px;
   }
   .lg-pow {
     color: var(--rosso-bright);

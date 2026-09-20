@@ -14,6 +14,7 @@
   //
   // The frame stays the host's business: what is shared is the content and the
   // row itself.
+  import { flagFor, loadFlags } from "$lib/flags.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import type { ModDetail } from "$lib/library/library";
   import { odometerText } from "$lib/detail/odometer";
@@ -38,6 +39,9 @@
     /** Deduced by the rule engine (§6) rather than read in the mod's own
      * file — shown in the rule colour, with the tooltip that says so. */
     derived?: boolean;
+    /** Drapeau du pays, quand la rangée en est un. Les autres n'en ont pas :
+     * c'est une propriété de la valeur, pas de la fiche. */
+    flag?: string | null;
   }
 
   /** Engine position, abbreviated: the sheet is a grid of narrow cells, and
@@ -49,11 +53,18 @@
     return pos;
   }
 
+  // Idempotent : la barre de filtres a déjà pu la charger, et deux appels ne
+  // coûtent qu'un test. `loadFlags` écrit le cache sans le lire, donc cet effet
+  // ne s'y abonne pas.
+  $effect(() => {
+    void loadFlags();
+  });
+
   const rows = $derived.by(() => {
     const d = detail;
     const out: Row[] = [];
-    const add = (label: string, value: string | null | undefined, derived = false) => {
-      if (value) out.push({ label, value, derived });
+    const add = (label: string, value: string | null | undefined, derived = false, flag: string | null = null) => {
+      if (value) out.push({ label, value, derived, flag });
     };
     const s = d.specs;
     // Read as-is in the mod's `ui_car.json`, empty rows skipped: a sheet of
@@ -65,7 +76,16 @@
     add(t("modpanel.specAccel"), s?.acceleration);
     add(t("modpanel.specPwRatio"), s?.pwratio);
     add(t("modpanel.specRange"), s?.range);
-    add(t("columns.country"), s?.country ?? d.country);
+    {
+      // **Le pays rangé passe devant celui du fichier**, contrairement à toutes
+      // les lignes au-dessus. C'est le seul champ de cette fiche que l'app
+      // normalise (§5, alias de pays), et montrer ici « U.S.A. » quand le filtre,
+      // la colonne et le drapeau disent « United States » ferait douter qu'il
+      // s'agisse du même pays. Le fichier du mod n'est pas trahi pour autant :
+      // il n'est jamais réécrit, c'est l'overlay qui porte la valeur.
+      const country = d.country ?? s?.country;
+      add(t("columns.country"), country, false, flagFor(country));
+    }
     // Deduced by the rules, hence the separate look.
     add(t("columns.drivetrain"), d.drivetrain, true);
     add(t("columns.aspiration"), d.aspiration, true);
@@ -117,7 +137,7 @@
   {#each rows as r (r.label)}
     <div class="cell" class:derived={r.derived} title={r.derived ? t("modpanel.derivedTooltip") : undefined}>
       <div class="lbl-key k">{r.label}</div>
-      <div class="v">{r.value}</div>
+      <div class="v">{#if r.flag}<img class="flag" src={r.flag} alt="" />{/if}{r.value}</div>
     </div>
   {/each}
 </div>
@@ -143,6 +163,17 @@
   /* Le trait extérieur, quand l'hôte n'encadre pas déjà la fiche lui-même. */
   .ts.framed {
     padding: 1px;
+  }
+  /* Mêmes valeurs que la colonne Nationalité du plateau et que les filtres :
+     une seule taille de drapeau dans l'app. Aligné sur la ligne de base du
+     texte plutôt que sur sa boîte, sans quoi il pend sous les lettres. */
+  .flag {
+    width: 16px;
+    height: 12px;
+    object-fit: cover;
+    border: 1px solid var(--line);
+    vertical-align: -1px;
+    margin-right: 5px;
   }
   .cell {
     background: var(--panel);
