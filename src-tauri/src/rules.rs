@@ -29,7 +29,8 @@ const DEFAULT_RULES: &str = include_str!("../rules/default-tag-rules.json");
 /// code that produced it has moved on.
 ///
 /// 2 — closed vocabulary: unknown tags are no longer promoted (§5).
-pub const ENGINE_VERSION: u32 = 2;
+/// 3 — country aliases: a declared country is normalised on the way in (§5).
+pub const ENGINE_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Rules {
@@ -37,6 +38,62 @@ pub struct Rules {
     pub car: CarRules,
     #[serde(default)]
     pub track: TrackRules,
+    /// Hors des deux familles, et à dessein : un circuit déclare un pays comme
+    /// une voiture, et il l'écrit tout aussi librement.
+    #[serde(default)]
+    pub country_aliases: CountryAliases,
+}
+
+/// Comment un pays s'écrit, et le nom sous lequel on le range.
+///
+/// **À ne pas confondre avec `extraction_country`**, qui lui ressemble et ne
+/// répond pas à la même question. L'extraction DEVINE un pays absent à partir
+/// d'un tag (« cette voiture porte le tag `germany`, donc elle est allemande »)
+/// et ne s'applique que si le champ natif est vide. Les alias, eux,
+/// NORMALISENT un pays déjà déclaré (« ce mod dit `U.S.A.`, c'est-à-dire
+/// United States ») et s'appliquent toujours. Les fusionner laisserait un tag
+/// réécrire un pays que l'auteur a pris la peine de déclarer.
+///
+/// Clés en minuscules, valeurs telles qu'on veut les lire à l'écran. Le jeu de
+/// départ est **mesuré** — voir `rules/default-tag-rules.json`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CountryAliases {
+    #[serde(default)]
+    pub map: BTreeMap<String, String>,
+}
+
+/// Le pays tel qu'on le range, à partir de ce que le mod a écrit.
+///
+/// Deux passes, et une seule table — celle des règles, donc éditable :
+///
+///  1. **la valeur cassée se coupe au premier guillemet.** Relevé sur
+///     `le_lancone`, dont le `ui_track.json` porte
+///     `"country": "France\", \"Corsica"` : l'auteur a voulu écrire deux
+///     entrées et en a produit une seule, guillemets compris. Un nom de pays
+///     n'en contient jamais, donc ce qui précède le premier est le nom.
+///     **Jamais à la virgule**, qui paraîtrait faire pareil : la table du jeu
+///     en contient (`Tanzania, {United Republic of}`) et les couper les
+///     rendrait introuvables ;
+///  2. **l'alias**, s'il y en a un pour cette orthographe.
+///
+/// Sans alias, la valeur ressort telle que l'auteur l'a écrite, aux espaces de
+/// bord près : on ne corrige que ce qu'on sait corriger.
+pub fn canonical_country(raw: &str, aliases: &CountryAliases) -> Option<String> {
+    let quote = raw.find('"');
+    let cleaned = match quote {
+        // `> 0` : un nom qui COMMENCE par un guillemet ne laisse rien à lire.
+        Some(i) if i > 0 => &raw[..i],
+        Some(_) => "",
+        None => raw,
+    }
+    .trim();
+    if cleaned.is_empty() {
+        return None;
+    }
+    Some(match aliases.map.get(&cleaned.to_lowercase()) {
+        Some(canonical) => canonical.clone(),
+        None => cleaned.to_string(),
+    })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -152,6 +209,12 @@ pub fn load(app: &AppHandle) -> Rules {
     // sans réécrire le fichier (l'utilisateur peut ensuite l'éditer et sauver).
     if rules.track.category_allowlist.is_empty() {
         rules.track.category_allowlist = default_rules().track.category_allowlist;
+    }
+    // Même backfill pour les alias de pays, arrivés après : un fichier de
+    // règles écrit avant eux n'a pas la clé, et repartirait sans aucun alias —
+    // c'est-à-dire en perdant la correction sur les 80 mods qu'elle vise.
+    if rules.country_aliases.map.is_empty() {
+        rules.country_aliases = default_rules().country_aliases;
     }
     rules
 }
@@ -536,5 +599,73 @@ mod tests {
         let r = default_rules();
         assert!(r.track.category_allowlist.contains(&"#rally".to_string()));
         assert!(r.track.category_allowlist.contains(&"#circuit".to_string()));
+    }
+
+    /// The seeded aliases are the ones the survey found, and they are what
+    /// makes 80 of 395 mods land on a flag instead of none.
+    #[test]
+    fn the_seeded_country_aliases_cover_what_the_survey_found() {
+        let a = default_rules().country_aliases;
+        for written in ["U.S.A.", "USA", "United States of America"] {
+            assert_eq!(
+                canonical_country(written, &a).as_deref(),
+                Some("United States"),
+                "{written} is how mods spell the United States"
+            );
+        }
+        assert_eq!(
+            canonical_country("Great Britain", &a).as_deref(),
+            Some("United Kingdom")
+        );
+    }
+
+    /// Assetto Corsa gives Scotland, England, Wales and Northern Ireland a flag
+    /// of their own: folding them into the United Kingdom would replace one
+    /// correct flag with another, and lose what the mod's author wrote.
+    #[test]
+    fn the_british_nations_keep_their_own_name() {
+        let a = default_rules().country_aliases;
+        for kept in ["Scotland", "England", "Wales", "Northern Ireland"] {
+            assert_eq!(
+                canonical_country(kept, &a).as_deref(),
+                Some(kept),
+                "{kept} is a country here"
+            );
+        }
+    }
+
+    /// Real file, `le_lancone`: its `ui_track.json` carries
+    /// `"country": "France\", \"Corsica"` - the author meant two entries and
+    /// wrote one, quotes included.
+    #[test]
+    fn a_country_broken_by_its_author_is_read_up_to_the_quote() {
+        let a = default_rules().country_aliases;
+        assert_eq!(canonical_country("France\", \"Corsica", &a).as_deref(), Some("France"));
+        assert_eq!(canonical_country("\"", &a), None, "nothing to read before the quote");
+    }
+
+    /// **The rule is the quote, never the comma** - and this is the whole point
+    /// of the test. Cutting at the comma would look like it does the same job,
+    /// and would make unreachable the two names the game's own table spells
+    /// that way.
+    #[test]
+    fn a_country_is_never_cut_at_a_comma() {
+        let a = default_rules().country_aliases;
+        for kept in ["Tanzania, {United Republic of}", "Micronesia, {Federated States of}"] {
+            assert_eq!(
+                canonical_country(kept, &a).as_deref(),
+                Some(kept),
+                "the game writes it so"
+            );
+        }
+    }
+
+    /// An unknown spelling comes back as the author wrote it: we correct what we
+    /// know how to correct, and invent nothing.
+    #[test]
+    fn an_unknown_country_keeps_the_spelling_of_its_author() {
+        let a = default_rules().country_aliases;
+        assert_eq!(canonical_country("  Freedonia ", &a).as_deref(), Some("Freedonia"));
+        assert_eq!(canonical_country("   ", &a), None);
     }
 }

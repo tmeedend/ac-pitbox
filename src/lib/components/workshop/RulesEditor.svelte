@@ -10,17 +10,24 @@
   let saving = $state(false);
   let savedMsg = $state("");
 
-  // Le map pays s'édite via une liste de paires synchronisée vers l'objet.
+  // Les deux maps de pays s'éditent via des listes de paires synchronisées vers
+  // l'objet. Deux listes et non une : elles ne répondent pas à la même question
+  // (deviner un pays absent à partir d'un tag / normaliser un pays déclaré), et
+  // les fusionner laisserait un tag réécrire ce que l'auteur a déclaré.
   let countryPairs = $state<{ tag: string; country: string }[]>([]);
+  let aliasPairs = $state<{ written: string; country: string }[]>([]);
 
   onMount(async () => {
     rules = await getRules();
     countryPairs = Object.entries(rules.car.extraction_country.map).map(
       ([tag, country]) => ({ tag, country }),
     );
+    aliasPairs = Object.entries(rules.country_aliases.map).map(
+      ([written, country]) => ({ written, country }),
+    );
   });
 
-  // Reconstruit le map pays depuis les paires éditées.
+  // Reconstruit les deux maps depuis les paires éditées.
   $effect(() => {
     if (!rules) return;
     const map: Record<string, string> = {};
@@ -29,6 +36,17 @@
       if (k) map[k] = p.country.trim();
     }
     rules.car.extraction_country.map = map;
+  });
+
+  $effect(() => {
+    if (!rules) return;
+    const map: Record<string, string> = {};
+    for (const p of aliasPairs) {
+      // Clé en minuscules : c'est ainsi que le moteur cherche (`canonical_country`).
+      const k = p.written.trim().toLowerCase();
+      if (k) map[k] = p.country.trim();
+    }
+    rules.country_aliases.map = map;
   });
 
   // Aperçu d'impact à la volée (anti-rebond) — « N mods affectés » (§5).
@@ -262,6 +280,28 @@
             </div>
           </section>
         {/if}
+
+        <!-- ALIAS DE PAYS — hors des onglets : un circuit déclare un pays comme
+             une voiture, et l'écrit tout aussi librement. -->
+        <section>
+          <div class="s-head">
+            <h3>{t("rules.countryAliasTitle")} <span class="cnt">{aliasPairs.length}</span></h3>
+            <button class="btn" type="button" onclick={() => push(aliasPairs, { written: "", country: "" })}
+              >+ {t("columns.country")}</button
+            >
+          </div>
+          <p class="hint">{t("rules.countryAliasHint")}</p>
+          <div class="rows">
+            {#each aliasPairs as pair, i}
+              <div class="row">
+                <input class="input mono" bind:value={pair.written} placeholder="u.s.a." />
+                <span class="arrow">→</span>
+                <input class="input" bind:value={pair.country} placeholder="United States" />
+                <button class="btn-ghost del" type="button" onclick={() => removeAt(aliasPairs, i)} title={t("common.delete")}>✕</button>
+              </div>
+            {/each}
+          </div>
+        </section>
       {/if}
     </div>
   </div>

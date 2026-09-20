@@ -1124,6 +1124,8 @@
     "fieldGearbox": "Boîte",
     "countryExtractionTitle": "Extraction pays",
     "countryExtractionHint": "Tag pays → champ « country » (si vide). Le tag est retiré du vocabulaire.",
+    "countryAliasTitle": "Alias de pays",
+    "countryAliasHint": "Comment un mod écrit un pays → le nom sous lequel Pit Box le range. « U.S.A. », « USA » et « United States of America » désignent le même pays et doivent se retrouver au même endroit. S'applique aux voitures comme aux circuits, et au pays déclaré comme à celui déduit d'un tag.",
     "impactText": "mod(s) seraient affecté(s) par ces règles",
     "calculatingImpact": "calcul de l'impact…",
     "applying": "Application…",

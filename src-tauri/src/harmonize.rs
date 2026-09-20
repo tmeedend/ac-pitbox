@@ -29,12 +29,21 @@ pub fn compute(
     }
 }
 
-/// Persiste l'harmonisation. Le pays final = natif s'il existe, sinon extrait.
-pub fn store(conn: &Connection, id: &str, h: &Harmonized, native_country: Option<&str>) -> rusqlite::Result<()> {
-    let country = native_country
-        .filter(|c| !c.trim().is_empty())
-        .map(|s| s.to_string())
-        .or_else(|| h.country.clone());
+/// Persiste l'harmonisation.
+///
+/// **Le seul endroit où le pays final est décidé**, et c'est ce qui rend la
+/// normalisation fiable : les deux sources se rejoignent ici — le champ natif
+/// du `ui_*.json` s'il est renseigné, sinon celui qu'une règle a déduit d'un
+/// tag (`extraction_country`). Normaliser plus haut, à la lecture du `ui_json`,
+/// aurait laissé passer le second sans y toucher.
+pub fn store(
+    conn: &Connection,
+    id: &str,
+    h: &Harmonized,
+    native_country: Option<&str>,
+    rules: &Rules,
+) -> rusqlite::Result<()> {
+    let country = final_country(rules, h, native_country);
     overlay::update_harmonization(
         conn,
         id,
@@ -50,6 +59,17 @@ pub fn store(conn: &Connection, id: &str, h: &Harmonized, native_country: Option
         h.engine_config.as_deref(),
         h.gearbox.as_deref(),
     )
+}
+
+/// Le pays retenu : le natif s'il est renseigné, sinon celui qu'un tag a donné,
+/// puis **normalisé dans les deux cas** (`rules::canonical_country`). Extrait de
+/// `store` pour être testable sans base.
+fn final_country(rules: &Rules, h: &Harmonized, native_country: Option<&str>) -> Option<String> {
+    native_country
+        .filter(|c| !c.trim().is_empty())
+        .map(|s| s.to_string())
+        .or_else(|| h.country.clone())
+        .and_then(|c| rules::canonical_country(&c, &rules.country_aliases))
 }
 
 /// Réapplique l'ontologie à tous les mods (après édition des règles).
@@ -70,7 +90,7 @@ fn reharmonize_one(conn: &Connection, cfg: &AppConfig, rules: &Rules, m: &ModRow
         return Ok(());
     };
     let native_country = native_country(conn, cfg, m);
-    store(conn, &m.id_interne, &h, native_country.as_deref())
+    store(conn, &m.id_interne, &h, native_country.as_deref(), rules)
 }
 
 /// Recalcule l'harmonisation d'un mod en relisant sa version active (lecture seule).
@@ -118,4 +138,66 @@ pub fn count_affected(conn: &Connection, cfg: &AppConfig, rules: &Rules) -> rusq
         }
     }
     Ok(n)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A country reaches the overlay by one of TWO paths, and they must not
+    /// disagree: the `country` field of the mod's `ui_*.json`, or, when that
+    /// field is empty, a tag the rules recognise (`extraction_country`). This
+    /// is why the normalisation lives in `store` and nowhere else — done at
+    /// `ui_json` read time, it would have left the second path untouched, and
+    /// a car tagged `usa` would have been filed apart from a car declaring
+    /// `U.S.A.` while both mean the same country.
+    #[test]
+    fn both_paths_to_a_country_land_on_the_same_spelling() {
+        let rules = rules::default_rules();
+
+        // 1. Déclaré dans le fichier, orthographe non canonique.
+        let declared = compute(&rules, ModKind::Car, &[], "Any Car", "street", Some("U.S.A."));
+        let from_file = super::final_country(&rules, &declared, Some("U.S.A."));
+
+        // 2. Champ natif vide : c'est le tag qui parle.
+        let tagged = compute(&rules, ModKind::Car, &["usa".into()], "Any Car", "street", None);
+        let from_tag = super::final_country(&rules, &tagged, None);
+
+        assert_eq!(from_file.as_deref(), Some("United States"), "declared in the file");
+        assert_eq!(from_tag.as_deref(), Some("United States"), "deduced from a tag");
+        assert_eq!(from_file, from_tag, "the two paths file the car under one country");
+    }
+
+    /// A declared country always wins over a tag: the author took the trouble
+    /// to write it. The alias table normalises it, it never overrides it.
+    #[test]
+    fn a_declared_country_is_normalised_not_replaced_by_a_tag() {
+        let rules = rules::default_rules();
+        let h = compute(
+            &rules,
+            ModKind::Car,
+            &["germany".into()],
+            "Any Car",
+            "street",
+            Some("U.S.A."),
+        );
+        assert_eq!(
+            super::final_country(&rules, &h, Some("U.S.A.")).as_deref(),
+            Some("United States"),
+            "the file said the United States, the tag does not get to say Germany"
+        );
+    }
+
+    /// A track declares a country like a car does, and writes it just as
+    /// freely — hence a table shared by both families rather than one filed
+    /// under `car`.
+    #[test]
+    fn a_track_country_goes_through_the_same_table() {
+        let rules = rules::default_rules();
+        let h = compute(&rules, ModKind::Track, &[], "Any Track", "", Some("Great Britain"));
+        assert_eq!(
+            super::final_country(&rules, &h, Some("Great Britain")).as_deref(),
+            Some("United Kingdom")
+        );
+    }
 }

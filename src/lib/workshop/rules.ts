@@ -32,6 +32,15 @@ export interface ExtractionSpecs {
 export interface ExtractionCountry {
   map: Record<string, string>;
 }
+/** Comment un pays s'écrit → le nom sous lequel on le range.
+ *
+ * À ne pas confondre avec `ExtractionCountry`, qui lui ressemble : celle-là
+ * DEVINE un pays absent à partir d'un tag, celle-ci NORMALISE un pays déjà
+ * déclaré. D'où sa place hors des deux familles — un circuit déclare un pays
+ * comme une voiture. */
+export interface CountryAliases {
+  map: Record<string, string>;
+}
 export interface CarRules {
   brand_fix: BrandFix[];
   name_to_tag: NameToTag[];
@@ -48,6 +57,7 @@ export interface TrackRules {
 export interface Rules {
   car: CarRules;
   track: TrackRules;
+  country_aliases: CountryAliases;
 }
 
 export function getRules(): Promise<Rules> {

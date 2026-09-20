@@ -1164,5 +1164,17 @@
       "#test",
       "#circuit"
     ]
+  },
+  "country_aliases": {
+    "map": {
+      "usa": "United States",
+      "u.s.a.": "United States",
+      "united states of america": "United States",
+      "great britain": "United Kingdom",
+      "uk": "United Kingdom",
+      "u.k.": "United Kingdom",
+      "holland": "Netherlands",
+      "deutschland": "Germany"
+    }
   }
 }
