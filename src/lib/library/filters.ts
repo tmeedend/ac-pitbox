@@ -69,6 +69,15 @@ export interface FilterDef {
   negLabelKey?: string;
   /** Polarity taken when the filter (or one of its values) is first posed. */
   defaultSign?: Sign;
+  /**
+   * `val` read off the library: each value is a country name, so it is shown
+   * with the game's own flag (`$lib/flags`).
+   *
+   * Implies NO `choices`: the flag is looked up by the label on screen, which
+   * is the stored value itself only as long as the vocabulary is open. A fixed
+   * vocabulary would translate its labels, and the lookup would miss.
+   */
+  flags?: boolean;
 }
 
 /** The four exclusive states of a mod, plus `broken` which cuts across them.
@@ -109,7 +118,7 @@ export function filterDefs(kind: ModKind): FilterDef[] {
   defs.push(
     { key: "tag", labelKey: "library.filterTag", type: "val", operator: true },
     { key: "author", labelKey: "library.filterAuthor", type: "val" },
-    { key: "country", labelKey: "library.filterCountry", type: "val" },
+    { key: "country", labelKey: "library.filterCountry", type: "val", flags: true },
   );
   if (isCar) {
     defs.push(

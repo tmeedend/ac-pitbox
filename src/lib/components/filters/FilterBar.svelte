@@ -21,6 +21,7 @@
   import AnchoredPopover from "./AnchoredPopover.svelte";
   import FilterAddMenu from "./FilterAddMenu.svelte";
   import FilterEditor from "./FilterEditor.svelte";
+  import { flagFor, loadFlags } from "$lib/flags.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import {
     blankState,
@@ -85,6 +86,14 @@
   }: Props = $props();
 
   const defOf = (key: string) => defs.find((d) => d.key === key);
+
+  // La table des drapeaux se charge ici plutôt qu'au démarrage : c'est la
+  // barre qui sait si un filtre en montre. `loadFlags` ne lit pas le cache, il
+  // l'écrit — cet effet ne s'y abonne donc pas et ne se redéclenche pas à
+  // chaque drapeau rendu.
+  $effect(() => {
+    if (defs.some((d) => d.flags)) void loadFlags();
+  });
 
   /** Épinglés d'abord, dans leur ordre, puis les filtres posés à la volée dans
    * l'ordre du catalogue — pas dans celui où ils ont été ajoutés, qui ferait
@@ -205,6 +214,19 @@
   }
 </script>
 
+<!-- Les valeurs d'une puce, drapeau compris quand le filtre en porte. Un
+     `join(", ")` ne peut pas intercaler d'image, d'où ce fragment : la
+     virgule est écrite ici, entre les valeurs et jamais après la dernière. -->
+{#snippet listed(def: FilterDef, values: string[])}
+  {#each values as value, i (value)}
+    {#if i}<span class="sep">, </span>{/if}
+    {#if def.flags}
+      {@const flag = flagFor(value)}
+      {#if flag}<img class="flag" src={flag} alt="" />{/if}
+    {/if}{value}
+  {/each}
+{/snippet}
+
 <!-- UNE seule coulée : recherche, bouton, puces et « Tout effacer » passent à
      la ligne ensemble. Le décompte et la bascule de vue sont dans un bloc à
      part, calé en haut à droite — c'est ce qui les empêche de descendre avec
@@ -265,12 +287,12 @@
               {#if sum.plain !== undefined}
                 {sum.plain}
               {:else}
-                {#if sum.inc.length}<span>{sum.inc.join(", ")}{#if sum.incMore}&nbsp;+{sum.incMore}{/if}</span>{/if}
+                {#if sum.inc.length}<span>{@render listed(def, sum.inc)}{#if sum.incMore}&nbsp;+{sum.incMore}{/if}</span>{/if}
                 {#if sum.exc.length}
                   {#if sum.inc.length}<span class="sep"> · </span>{/if}
                   <span class="neg"
                     >{t("filters.except")}
-                    {sum.exc.join(", ")}{#if sum.excMore}&nbsp;+{sum.excMore}{/if}</span
+                    {@render listed(def, sum.exc)}{#if sum.excMore}&nbsp;+{sum.excMore}{/if}</span
                   >
                 {/if}
               {/if}
@@ -527,6 +549,17 @@
   }
   .chip .sep {
     color: var(--faint2);
+  }
+  /* Mêmes valeurs que la colonne Nationalité du plateau et que l'éditeur : une
+     seule taille de drapeau dans l'app. Aligné sur la ligne de base du texte
+     plutôt que sur sa boîte, sans quoi il pend sous les lettres. */
+  .chip .flag {
+    width: 16px;
+    height: 12px;
+    object-fit: cover;
+    border: 1px solid var(--line);
+    vertical-align: -1px;
+    margin-right: 4px;
   }
   .chip .x {
     width: 18px;

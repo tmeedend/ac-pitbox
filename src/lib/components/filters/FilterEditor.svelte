@@ -13,6 +13,7 @@
   import { untrack } from "svelte";
   import NumberStepper from "$lib/components/ui/NumberStepper.svelte";
   import Slider from "$lib/components/ui/Slider.svelte";
+  import { flagFor } from "$lib/flags.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { clampPerfPct, formatRatio, perfBand, PERF_MAX_PCT, PERF_MIN_PCT, PERF_STEP } from "$lib/detail/carSpecs";
   import { valueLabel, type FilterDef, type FilterOption, type FilterState, type PerfRef, type Sign } from "$lib/library/filters";
@@ -179,6 +180,14 @@
       {#each shown as opt, i (opt.value)}
         {@const held = posedSign.get(opt.value)}
         <div class="opt" class:on={i === cursor} class:posed={held !== undefined} class:neg={held !== undefined && held < 0}>
+          <!-- Le drapeau est un repère, pas une information : le nom reste à
+               côté, et une case vide tient la place quand Assetto Corsa ne
+               connaît pas ce pays — sans elle, les noms ne s'aligneraient plus
+               d'une ligne à l'autre. -->
+          {#if def.flags}
+            {@const flag = flagFor(opt.value)}
+            {#if flag}<img class="flag" src={flag} alt="" />{:else}<span class="flag flag-none"></span>{/if}
+          {/if}
           <span class="oname" title={opt.label}>{opt.label}</span>
           <span class="ocount mono">{opt.count}</span>
           <span class="acts">
@@ -213,6 +222,10 @@
           <span class="tok" class:neg={tk.sign < 0}>
             <button type="button" class="body" title={t("filters.tokenToggle")} onclick={() => flipAt(tk.i)}>
               <span class="sign" aria-hidden="true">{tk.sign < 0 ? "−" : "+"}</span>
+              {#if def.flags}
+                {@const flag = flagFor(tk.value)}
+                {#if flag}<img class="flag" src={flag} alt="" />{/if}
+              {/if}
               <span class="label">{valueLabel(def, tk.value)}</span>
             </button>
             <button type="button" class="rm" title={t("filters.tokenRemove")} onclick={() => removeAt(tk.i)}>×</button>
@@ -531,6 +544,21 @@
     font-size: 11.5px;
     color: var(--faint);
     padding: 6px 8px;
+  }
+  /* 4:3 comme les PNG du jeu, et un filet : beaucoup de drapeaux ont du blanc
+     sur un bord, qui se fondrait dans la ligne. Mêmes valeurs que la colonne
+     Nationalité du plateau — c'est la même table, à la même taille. */
+  .flag {
+    flex: none;
+    width: 16px;
+    height: 12px;
+    object-fit: cover;
+    border: 1px solid var(--line);
+  }
+  /* Place tenue quand le pays n'est pas dans la table du jeu : sans elle, les
+     noms cesseraient de s'aligner d'une ligne à l'autre. */
+  .flag-none {
+    border-style: dashed;
   }
 
   .grouplbl {
