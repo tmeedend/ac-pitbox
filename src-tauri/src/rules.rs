@@ -34,7 +34,9 @@ const DEFAULT_RULES: &str = include_str!("../rules/default-tag-rules.json");
 ///     reader used `read_car` whatever the kind, so every re-harmonisation
 ///     silently blanked it. The bump is what gives those tracks their country
 ///     back, from their own `ui_track.json`.
-pub const ENGINE_VERSION: u32 = 4;
+/// 5 — countries fold case, accents and ISO codes onto the game's spelling
+///     (TAXO§7.1).
+pub const ENGINE_VERSION: u32 = 5;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Rules {
@@ -64,6 +66,11 @@ pub struct Rules {
 pub struct CountryAliases {
     #[serde(default)]
     pub map: BTreeMap<String, String>,
+    /// Values unknown to the game that the user chose to leave as they are
+    /// (TAXO§7.2, "Ignore"): the Countries tab stops offering to attach them.
+    /// Remembered, and reversible from the tab.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ignored: Vec<String>,
 }
 
 /// Le pays tel qu'on le range, à partir de ce que le mod a écrit.
@@ -83,6 +90,62 @@ pub struct CountryAliases {
 /// Sans alias, la valeur ressort telle que l'auteur l'a écrite, aux espaces de
 /// bord près : on ne corrige que ce qu'on sait corriger.
 pub fn canonical_country(raw: &str, aliases: &CountryAliases) -> Option<String> {
+    crate::nationalities::with_known(|known| canonical_country_in(raw, aliases, known))
+}
+
+/// Case, spaces and accents folded away: `JAPAN`, ` japan ` and `Japán` are
+/// the same string, and merging them is not a decision (TAXO§7.1).
+fn fold(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.to_lowercase().chars() {
+        let base = match c {
+            'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' | 'ā' => 'a',
+            'ç' | 'ć' | 'č' => 'c',
+            'è' | 'é' | 'ê' | 'ë' | 'ē' | 'ě' => 'e',
+            'ì' | 'í' | 'î' | 'ï' | 'ī' => 'i',
+            'ñ' | 'ń' | 'ň' => 'n',
+            'ò' | 'ó' | 'ô' | 'õ' | 'ö' | 'ø' | 'ō' => 'o',
+            'ù' | 'ú' | 'û' | 'ü' | 'ū' | 'ů' => 'u',
+            'ý' | 'ÿ' => 'y',
+            'š' | 'ś' => 's',
+            'ž' | 'ź' | 'ż' => 'z',
+            'ř' => 'r',
+            other => other,
+        };
+        out.push(base);
+    }
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// `canonical_country` against an explicit game table — the testable half.
+///
+/// After the aliases (a decision the user can see and edit), two merges that
+/// are NOT decisions (TAXO§7.1): a name equal to one of the game's once case,
+/// spaces and accents are folded takes the game's spelling, and a valid ISO
+/// code (`JP`, `JPN`) takes the country's name — a normalised table, not a
+/// judgement. Anything else is kept as written: guessing a closer country is
+/// what the Countries tab proposes, never what the harmonisation decides.
+pub fn canonical_country_in(
+    raw: &str,
+    aliases: &CountryAliases,
+    known: &[crate::nationalities::Nationality],
+) -> Option<String> {
+    let cleaned = cleaned_country(raw)?;
+    if let Some(canonical) = aliases.map.get(&cleaned.to_lowercase()) {
+        return Some(canonical.clone());
+    }
+    let folded = fold(&cleaned);
+    let upper = cleaned.to_uppercase();
+    let hit = known.iter().find(|n| {
+        fold(&n.name) == folded
+            || (upper.len() == 3 && n.code == upper)
+            || (upper.len() == 2 && n.iso2.as_deref() == Some(upper.as_str()))
+    });
+    Some(hit.map(|n| n.name.clone()).unwrap_or(cleaned))
+}
+
+/// The value cut at its first quote and trimmed, `None` when nothing is left.
+fn cleaned_country(raw: &str) -> Option<String> {
     let quote = raw.find('"');
     let cleaned = match quote {
         // `> 0` : un nom qui COMMENCE par un guillemet ne laisse rien à lire.
@@ -91,13 +154,23 @@ pub fn canonical_country(raw: &str, aliases: &CountryAliases) -> Option<String> 
         None => raw,
     }
     .trim();
-    if cleaned.is_empty() {
-        return None;
-    }
-    Some(match aliases.map.get(&cleaned.to_lowercase()) {
-        Some(canonical) => canonical.clone(),
-        None => cleaned.to_string(),
-    })
+    (!cleaned.is_empty()).then(|| cleaned.to_string())
+}
+
+/// Cleans the alias table before it is written (Countries tab): keys in their
+/// compared form (lowercased, trimmed), no alias pointing at itself — an entry
+/// `japan → Japan` would be dead weight that looks like a decision.
+pub fn normalize_country_aliases(mut a: CountryAliases) -> CountryAliases {
+    a.map = a
+        .map
+        .into_iter()
+        .map(|(k, v)| (k.trim().to_lowercase(), v.trim().to_string()))
+        .filter(|(k, v)| !k.is_empty() && !v.is_empty() && *k != v.to_lowercase())
+        .collect();
+    a.ignored.retain(|v| !v.trim().is_empty());
+    a.ignored.sort();
+    a.ignored.dedup();
+    a
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -697,6 +770,59 @@ mod tests {
         let fams = default_rules().car.category_families;
         assert!(fams.iter().any(|f| f.id == "race"), "shipped families present");
         assert!(fams.iter().all(|f| !f.tags.is_empty()), "no family without a tag");
+    }
+
+    fn nat(code: &str, iso2: Option<&str>, name: &str) -> crate::nationalities::Nationality {
+        crate::nationalities::Nationality {
+            code: code.into(),
+            name: name.into(),
+            flag: None,
+            iso2: iso2.map(str::to_string),
+        }
+    }
+
+    /// TAXO§7.1: case, spaces, accents and a valid ISO code merge on their own;
+    /// nothing else does.
+    #[test]
+    fn a_country_folds_onto_the_game_spelling_and_nothing_further() {
+        let known = [
+            nat("JPN", Some("JP"), "Japan"),
+            nat("CIV", Some("CI"), "Côte d'Ivoire"),
+            nat("SCT", None, "Scotland"),
+        ];
+        let a = CountryAliases::default();
+        for written in ["JAPAN", "  japan ", "JP", "jpn"] {
+            assert_eq!(
+                canonical_country_in(written, &a, &known).as_deref(),
+                Some("Japan"),
+                "{written}"
+            );
+        }
+        assert_eq!(
+            canonical_country_in("cote d'ivoire", &a, &known).as_deref(),
+            Some("Côte d'Ivoire")
+        );
+        assert_eq!(
+            canonical_country_in("Nippon", &a, &known).as_deref(),
+            Some("Nippon"),
+            "a closer country is proposed by the tab, never decided here"
+        );
+        assert_eq!(
+            canonical_country_in("SC", &a, &known).as_deref(),
+            Some("SC"),
+            "no ISO code, no code merge"
+        );
+    }
+
+    #[test]
+    fn a_self_alias_is_not_written() {
+        let mut a = CountryAliases::default();
+        a.map.insert(" Japan ".into(), "Japan".into());
+        a.map.insert("Nippon".into(), "Japan".into());
+        assert_eq!(
+            normalize_country_aliases(a).map.into_iter().collect::<Vec<_>>(),
+            vec![("nippon".into(), "Japan".into())]
+        );
     }
 
     /// TAXO§7.3: one tag, one family. The Categories tab moves a tag rather

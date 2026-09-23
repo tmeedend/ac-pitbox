@@ -202,6 +202,13 @@ pub fn run() {
             // sinon un disque externe non monté ferait passer un balayage à
             // vide pour un rattrapage fait, et la base resterait périmée pour
             // toujours.
+            // The game's nationality table, for the country normalisation
+            // (TAXO§7.1) run by every harmonisation below and after. Before the
+            // catch-up, which would otherwise run without it.
+            if let Some(root) = cfg.ac_install_path.as_deref() {
+                nationalities::set_known(nationalities::nationalities(std::path::Path::new(root)));
+            }
+
             let lib_ready = cfg.library_path.as_deref().is_some_and(|p| p.is_dir());
             let engine = rules::ENGINE_VERSION.to_string();
             let stamped = overlay::get_meta(&conn, overlay::META_ENGINE_VERSION).unwrap_or(None);
@@ -448,6 +455,8 @@ pub fn run() {
             commands::rules::save_rules,
             commands::rules::save_category_families,
             commands::rules::default_category_families,
+            commands::rules::save_country_aliases,
+            commands::rules::default_country_aliases,
             commands::rules::rules_impact,
             commands::rules::reapply_rules,
             commands::library::set_favorite,

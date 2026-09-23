@@ -14,7 +14,7 @@
   //
   // The frame stays the host's business: what is shared is the content and the
   // row itself.
-  import { flagFor, loadFlags } from "$lib/flags.svelte";
+  import { countryLabel, flagFor, loadFlags } from "$lib/flags.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import type { ModDetail } from "$lib/library/library";
   import { odometerText } from "$lib/detail/odometer";
@@ -84,7 +84,7 @@
       // s'agisse du même pays. Le fichier du mod n'est pas trahi pour autant :
       // il n'est jamais réécrit, c'est l'overlay qui porte la valeur.
       const country = d.country ?? s?.country;
-      add(t("columns.country"), country, false, flagFor(country));
+      add(t("columns.country"), country ? countryLabel(country) : country, false, flagFor(country));
     }
     // Deduced by the rules, hence the separate look.
     add(t("columns.drivetrain"), d.drivetrain, true);

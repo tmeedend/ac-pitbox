@@ -10,6 +10,7 @@
   import BrowseIndex from "./BrowseIndex.svelte";
   import { brandBadges } from "$lib/library/browseIndex";
   import { categoryFamilies, loadFamilies } from "$lib/library/familyTable.svelte";
+  import { countryLabel, flagFor, withCountryLabels } from "$lib/flags.svelte";
   import ContextMenu from "$lib/components/ui/ContextMenu.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import StateBadge from "$lib/components/ui/StateBadge.svelte";
@@ -81,7 +82,7 @@
   /** Catalogue des filtres de CE type (§6.3) : marque, année, classe et
    * pilote n'existent que côté voitures. Dérivé et non figé : le filtre
    * Famille n'existe qu'une fois la table des familles lue (`familyTable`). */
-  const defs = $derived(filterDefs(kind, isCar ? categoryFamilies() : []));
+  const defs = $derived(withCountryLabels(filterDefs(kind, isCar ? categoryFamilies() : [])));
 
   let cards = $state<ModCard[]>([]);
   // Distinct de « bibliothèque vide » : sans lui, la liste encore vide au
@@ -1167,6 +1168,11 @@
                     {:else if col.key === "brand"}
                       {#if c.badge}<img class="brand-badge" src={previewSrc(c.badge)} alt="" loading="lazy" />{/if}
                       {col.value(c)}
+                    {:else if col.key === "country" && c.country}
+                      <!-- Translated like the chip and the index (TAXO§12); the
+                           sort stays on the stored English name. -->
+                      {@const flag = flagFor(c.country)}
+                      {#if flag}<img class="country-flag" src={flag} alt="" />{/if}{countryLabel(c.country)}
                     {:else if col.key === "name"}
                       {#if c.broken}<span class="broken-flag" title={t("library.brokenTooltip")}>⚠</span>{/if}
                       {col.value(c)}
@@ -1204,6 +1210,15 @@
 </div>
 
 <style>
+  /* Same size as the flag of a chip: one flag size in the app. */
+  .country-flag {
+    width: 16px;
+    height: 12px;
+    object-fit: cover;
+    border: 1px solid var(--line);
+    vertical-align: -1px;
+    margin-right: 6px;
+  }
   .library {
     display: flex;
     height: 100%;

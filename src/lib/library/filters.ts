@@ -98,6 +98,14 @@ export interface FilterDef {
    * hole in the data one may want to fill, and the index shows it as a tile.
    */
   unsetLabelKey?: string;
+  /**
+   * Label of a value read off the library, when it is not the value itself -
+   * a country, stored under the game's English name and read in the user's
+   * language (TAXO§12). Set by the screen (`withCountryLabels`), not here:
+   * the translation needs the game table, a cache this module stays free of.
+   * The value remains what is stored, matched and persisted.
+   */
+  labelOf?: (value: string) => string;
 }
 
 /** The four exclusive states of a mod, plus `broken` which cuts across them.
@@ -339,7 +347,7 @@ export function optionsOf(def: FilterDef, cards: ModCard[], ctx: FilterContext):
   }
   return [
     ...[...counts.entries()]
-      .map(([value, count]) => ({ value, label: value, count }))
+      .map(([value, count]) => ({ value, label: valueLabel(def, value), count }))
       .sort((a, b) => a.label.toLowerCase().localeCompare(b.label.toLowerCase())),
     ...unset,
   ];
@@ -468,6 +476,7 @@ export function blankState(def: FilterDef): FilterState {
  * fixed vocabulary is translated - a brand, a tag or an author never is. */
 export function valueLabel(def: FilterDef, value: string): string {
   if (value === UNSET_VALUE && def.unsetLabelKey) return t(def.unsetLabelKey);
+  if (def.labelOf) return def.labelOf(value);
   const choice = def.choices?.find((c) => c.value === value);
   if (choice?.label) return choice.label;
   return choice?.labelKey ? t(choice.labelKey) : value;
@@ -508,11 +517,18 @@ export function poseValue(defs: FilterDef[], filters: FilterMap, key: string, va
  * single string because inclusions and exclusions are not styled the same,
  * and because the `+N` overflow must still be readable in full by a screen
  * reader (`ariaSummary` below). */
+/** One value of a chip: what is shown, and what it is - the flag of a country
+ * is looked up by the value, the label being translated. */
+export interface ChipValue {
+  value: string;
+  label: string;
+}
+
 export interface ChipSummary {
   /** `val` only. */
-  inc: string[];
+  inc: ChipValue[];
   incMore: number;
-  exc: string[];
+  exc: ChipValue[];
   excMore: number;
   /** Operator pill - set only when it would actually change the result, that
    * is with at least two inclusions. With one value AND and OR agree and the
@@ -531,7 +547,8 @@ const CAP = 2;
 export function chipSummary(def: FilterDef, st: FilterState): ChipSummary {
   const empty: ChipSummary = { inc: [], incMore: 0, exc: [], excMore: 0 };
   if (st.type === "val") {
-    const labels = (sign: Sign) => st.values.filter((v) => v.sign === sign).map((v) => valueLabel(def, v.value));
+    const labels = (sign: Sign) =>
+      st.values.filter((v) => v.sign === sign).map((v) => ({ value: v.value, label: valueLabel(def, v.value) }));
     const inc = labels(1);
     const exc = labels(-1);
     return {

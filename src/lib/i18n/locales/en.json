@@ -8,6 +8,7 @@
     "apps": "Apps",
     "rules": "Rules",
     "categories": "Categories",
+    "countries": "Countries",
     "import": "Import",
     "profiles": "Profiles",
     "maintenance": "Maintenance",
@@ -1126,8 +1127,6 @@
     "fieldGearbox": "Gearbox",
     "countryExtractionTitle": "Country extraction",
     "countryExtractionHint": "Country tag → \"country\" field (if empty). The tag is removed from the vocabulary.",
-    "countryAliasTitle": "Country aliases",
-    "countryAliasHint": "How a mod spells a country → the name Pit Box files it under. “U.S.A.”, “USA” and “United States of America” mean one country and belong in one place. Applies to cars and tracks alike, and to a declared country as much as to one deduced from a tag.",
     "impactText": "mod(s) would be affected by these rules",
     "calculatingImpact": "calculating impact…",
     "applying": "Applying…",
@@ -1755,5 +1754,32 @@
     "create": "Create",
     "resetAll": "Restore all",
     "confirmResetAll": "Confirm: restore all"
+  },
+  "countryNames": {
+    "ENG": "England",
+    "SCT": "Scotland",
+    "WLS": "Wales",
+    "NIR": "Northern Ireland"
+  },
+  "countriesTab": {
+    "subtitle": "Countries of cars and tracks: the name each is stored under, and the spellings that lead to it.",
+    "unset": "{count} mods without a country",
+    "applying": "applying to the library…",
+    "proposals": "{count} countries unknown to the game",
+    "attachTo": "Attach to…",
+    "attach": "Attach",
+    "ignore": "Ignore",
+    "noMod": "no mod",
+    "aliasCount": "{count} aliases",
+    "code": "ISO code",
+    "unknown": "unknown to the game",
+    "aliases": "Attached spellings",
+    "noAlias": "None",
+    "addAlias": "Add a spelling…",
+    "removeAlias": "Remove this spelling",
+    "restore": "Restore the shipped spellings",
+    "showEmpty": "Show countries without a mod ({count})",
+    "ignored": "Ignored",
+    "unignore": "Stop ignoring"
   }
 }

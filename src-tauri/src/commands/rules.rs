@@ -31,6 +31,27 @@ pub fn default_category_families() -> Vec<CategoryFamily> {
     crate::rules::default_rules().car.category_families
 }
 
+/// Writes the country aliases (Countries tab, TAXO§6) and re-applies them.
+///
+/// Unlike the families, this one DOES re-harmonise: the country is decided at
+/// write time (`harmonize::store`), so an alias changes the value stored for
+/// every mod that spells it. Returns the number of mods processed.
+#[tauri::command]
+pub fn save_country_aliases(app: AppHandle, db: State<Db>, aliases: CountryAliases) -> Result<usize, String> {
+    let mut rules = crate::rules::load(&app);
+    rules.country_aliases = crate::rules::normalize_country_aliases(aliases);
+    crate::rules::save(&app, &rules)?;
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::harmonize::harmonize_all(&conn, &cfg, &rules).map_err(|e| e.to_string())
+}
+
+/// The shipped aliases, for "Restore".
+#[tauri::command]
+pub fn default_country_aliases() -> CountryAliases {
+    crate::rules::default_rules().country_aliases
+}
+
 /// Aperçu d'impact : nombre de mods affectés par un jeu de règles candidat,
 /// sans rien enregistrer (§5).
 #[tauri::command]

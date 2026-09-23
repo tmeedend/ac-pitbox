@@ -35,6 +35,7 @@
   import { carClassOf, driverFor, isEmpty } from "$lib/driver/driverOverride.svelte";
   import { centerSpreadOf } from "$lib/launch/aiBand";
   import { buildCardIndex, buildPredicate, filterDefs, parseFilters, serializeFilters, type FilterMap } from "$lib/library/filters";
+  import { withCountryLabels } from "$lib/flags.svelte";
   import { matchesQuery } from "$lib/library/cardSearch";
   import { hasOwnDriver } from "$lib/driver/driverOverride.svelte";
   import { defaultGridFilters } from "$lib/launch/opponentPool";
@@ -242,7 +243,7 @@
   // "except mine" rule: a rule the chips do not show is exactly the kind of
   // reconciliation this refactor exists to delete, and the `Same car` chip
   // needs the car to be in there anyway.
-  const gridDefs = filterDefs("Car");
+  const gridDefs = withCountryLabels(filterDefs("Car"));
   let gridFilters = $state<FilterMap>(defaultGridFilters());
   // Aucun filtre épinglé : la barre s'ouvre sur son champ de recherche et son
   // menu, et les trois puces sont ce qui la remplit en un clic.

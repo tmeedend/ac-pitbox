@@ -510,8 +510,8 @@ de reprendre. En cas d'écart, la spec fait foi.
       fait : `car.category_families` dans les règles, huit familles livrées,
       un filtre `Famille`, et l'onglet Catégories de l'Atelier qui les édite.
       Découpage convenu avec l'utilisateur, un lot à la fois avec une pause
-      pour regarder : **Catégories (fait)**, puis Pays, puis Marques (fusions),
-      puis Marques (logos). **Reste** : les onglets Marques et Pays, l'élection du logo canonique (TAXO§4 — fond transparent,
+      pour regarder : **Catégories (fait)**, **Pays (fait)**, puis Marques
+      (fusions), puis Marques (logos). **Reste** : l'onglet Marques, l'élection du logo canonique (TAXO§4 — fond transparent,
       résolution, vote majoritaire), la détection du fond cuit et la pastille
       claire (TAXO§5), les propositions de fusion avec `Ignorer` mémorisé
       (TAXO§7), la migration des corrections de marque hors de Règles (TAXO§8),
@@ -544,11 +544,25 @@ de reprendre. En cas d'écart, la spec fait foi.
       `gt3` n'était plus dans aucune famille : Course perdait ses GT3 sans
       qu'on y ait touché. Ils retournent désormais dans la famille qui les
       livre (`restoreFamily`, testé).
-      **Piège pour les pays** : les tuiles traduisent le nom (depuis le code
-      ISO, `localizedCountry`), mais la puce et l'éditeur montrent encore le
-      nom anglais rangé — leurs drapeaux se cherchent **par le libellé** dans
-      `FilterBar`, donc traduire `valueLabel` les éteindrait. À reprendre avec
-      l'onglet Pays, qui stockera le code.
+      **Pièges payés sur les pays.** (1) La première traduction retrouvait
+      le code ISO par le **nom anglais** dans la table de régions du moteur :
+      33 des 221 noms du jeu n'y ont pas de correspondance exacte (Tchéquie,
+      Russie, Turquie, Hong Kong…), et la correspondance par nom rendait en
+      silence des **codes retirés** qui portent encore le même nom — `UK` au
+      lieu de `GB`, `FX` (France métropolitaine) au lieu de `FR`, `YU`, `DY`,
+      `HV`, `TP`. D'où la table alpha-3 → alpha-2 de `nationalities.rs`, les
+      codes retirés exclus et un test qui les nomme. (2) Le drapeau de la puce
+      se cherchait **par le libellé** : traduire le libellé l'éteignait. Il se
+      cherche désormais par la valeur (`ChipValue`).
+      **Écart assumé** : la spec voulait un jeu de drapeaux SVG embarqué
+      (TAXO§3.1) ; l'app garde ceux du jeu (`content/gui/NationFlags/`), déjà
+      présents, qui couvrent les 221 pays et les quatre nations britanniques
+      que l'ISO ne connaît pas. Et le nom rangé reste le nom anglais du jeu, pas
+      le code : c'est la clé du drapeau et de la table de CM ; le code n'est
+      que dérivé, pour traduire.
+      **À surveiller** : chaque modification de l'onglet réharmonise toute la
+      bibliothèque (le pays est décidé à l'écriture). Non mesuré sur la
+      bibliothèque réelle — si c'est lent, regrouper les écritures.
 
 - [ ] **Deux jeux de règles de tags ont divergé — à trancher.**
       `docs/default-tag-rules-enriched.json` **n'est pas ce que l'app charge** :

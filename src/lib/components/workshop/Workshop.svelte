@@ -17,13 +17,14 @@
   import Tabs from "$lib/components/ui/Tabs.svelte";
   import RulesEditor from "./RulesEditor.svelte";
   import Categories from "./Categories.svelte";
+  import Countries from "./Countries.svelte";
   import Import from "./Import.svelte";
   import Profiles from "./Profiles.svelte";
   import Maintenance from "./Maintenance.svelte";
   import { nav, requestSection } from "$lib/shell/nav.svelte";
   import { t } from "$lib/i18n/index.svelte";
 
-  const TAB_IDS = ["rules", "categories", "import", "profiles", "maintenance"] as const;
+  const TAB_IDS = ["rules", "categories", "countries", "import", "profiles", "maintenance"] as const;
   // Recalculés à chaque changement de langue (`t` est réactif) : un tableau
   // `const` de libellés figés resterait dans l'ancienne langue.
   const tabs = $derived(TAB_IDS.map((id) => ({ id, label: t(`nav.${id}`) })));
@@ -45,6 +46,8 @@
       <RulesEditor />
     {:else if nav.section === "categories"}
       <Categories />
+    {:else if nav.section === "countries"}
+      <Countries />
     {:else if nav.section === "import"}
       <Import />
     {:else if nav.section === "profiles"}

@@ -24,47 +24,44 @@ export function countryKey(name: string, isKnown: (key: string) => boolean): str
   return isKnown(key) ? key : null;
 }
 
-/** English region name → ISO 3166-1 alpha-2 code, built once from the
- * runtime's own table rather than shipped: 676 two-letter probes, of which the
- * ~250 real regions answer. */
-let byEnglishName: Map<string, string> | null = null;
+/** Regions whose long name carries an administrative status nobody says out
+ * loud: "R.A.S. chinoise de Hong Kong" on a tile of 124 px. Their short form
+ * is the plain name - and only theirs: the short form of the others
+ * abbreviates ("R.-U.", "É.-U."). */
+const SHORT_FORM = new Set(["HK", "MO"]);
 
-function regionCodes(): Map<string, string> {
-  if (byEnglishName) return byEnglishName;
-  byEnglishName = new Map();
-  const en = new Intl.DisplayNames(["en"], { type: "region", fallback: "none" });
-  const A = "A".charCodeAt(0);
-  for (let i = 0; i < 26; i++) {
-    for (let j = 0; j < 26; j++) {
-      const code = String.fromCharCode(A + i, A + j);
-      let name: string | undefined;
-      try {
-        name = en.of(code);
-      } catch {
-        name = undefined;
-      }
-      if (name) byEnglishName.set(name.toLowerCase(), code);
-    }
-  }
-  return byEnglishName;
+/** What the game table says about a country, as far as naming goes. */
+export interface CountryEntry {
+  /** ISO 3166-1 alpha-3, the game's own code. */
+  code: string;
+  /** ISO 3166-1 alpha-2, `null` for the British nations. */
+  iso2: string | null;
 }
 
 /**
- * A country name as the user reads it in `locale` (INDEX§11) —
+ * A country name as the user reads it in `locale` (INDEX§11, TAXO§12) —
  * `Japan` becomes `Japon`.
  *
- * Translated **from the code, never from the mod's string** (TAXO§12):
- * the stored value is the game's English name, already normalised, and the
- * runtime knows every region by its code. A name it cannot match exactly
- * (Scotland, which AC flags on its own, or a spelling the runtime does not
- * share) keeps its English form — an approximate match would put a wrong name
- * on a tile, which is worse than an untranslated one.
+ * **Translated from the code, never from the string.** The code comes from the
+ * game table (`nationalities.rs`, alpha-3 → alpha-2). An earlier version
+ * matched the English name against the runtime's region names instead: 33 of
+ * the 221 names of the game did not match (`Czech Republic`, `Russian
+ * Federation`, `Turkey`…), and the reverse lookup handed out retired codes for
+ * others. The four British nations have no ISO code and are translated by
+ * key (`byKey`); a value unknown to the game keeps its own spelling — a
+ * guessed translation would be a wrong one.
  */
-export function localizedCountry(name: string, locale: string): string {
-  const code = regionCodes().get(name.trim().toLowerCase());
-  if (!code) return name;
+export function countryDisplayName(
+  name: string,
+  entry: CountryEntry | undefined,
+  locale: string,
+  byKey: (code3: string) => string | null,
+): string {
+  if (!entry) return name;
+  if (!entry.iso2) return byKey(entry.code) ?? name;
   try {
-    return new Intl.DisplayNames([locale], { type: "region" }).of(code) ?? name;
+    const style = SHORT_FORM.has(entry.iso2) ? "short" : "long";
+    return new Intl.DisplayNames([locale], { type: "region", style }).of(entry.iso2) ?? name;
   } catch {
     return name;
   }

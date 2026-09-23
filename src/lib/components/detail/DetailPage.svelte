@@ -74,7 +74,7 @@
   import { libraryVersion } from "$lib/library/libraryVersion.svelte";
   import { getPreferredSkin, setPreferredSkin, getPreferredLayout, setPreferredLayout } from "$lib/preferred";
   import { getConfig } from "$lib/config";
-  import { flagFor, loadFlags } from "$lib/flags.svelte";
+  import { countryLabel, flagFor, loadFlags } from "$lib/flags.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { odometerText } from "$lib/detail/odometer";
   import { trackLength } from "$lib/detail/trackLength";
@@ -1571,7 +1571,7 @@
                 <div class="k lbl-key">{t("columns.country")}</div>
                 <div class="v">
                   {#if d.country}{@const flag = flagFor(d.country)}
-                    {#if flag}<img class="flag" src={flag} alt="" />{/if}{d.country}
+                    {#if flag}<img class="flag" src={flag} alt="" />{/if}{countryLabel(d.country)}
                   {:else}—{/if}
                 </div>
               </div>

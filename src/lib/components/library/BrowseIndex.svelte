@@ -15,8 +15,7 @@
   // stacked grids are the wall again, and "Japan" on a car only says less well
   // what `#jdm` says.
   import { flagFor, loadFlags } from "$lib/flags.svelte";
-  import { localizedCountry } from "$lib/flags";
-  import { i18n, t } from "$lib/i18n/index.svelte";
+  import { t } from "$lib/i18n/index.svelte";
   import { brandTiles, indexTiles, initials, type IndexTile } from "$lib/library/browseIndex";
   import type { CategoryFamily } from "$lib/library/families";
   import { familyIcon, NEUTRAL_ICON } from "$lib/library/familyIcons";
@@ -61,13 +60,6 @@
     return t(unit, { count: n });
   }
 
-  /** The name ON the tile. A country is translated from its code
-   * (INDEX§11); a brand never is, and a family or "Not set" already comes
-   * translated from the filter's own vocabulary. */
-  function tileName(key: string, tile: IndexTile): string {
-    return key === "country" && !tile.unset ? localizedCountry(tile.label, i18n.locale) : tile.label;
-  }
-
   /**
    * Arrows move between tiles like in a grid of cards (INDEX§9). The
    * column count is read off the grid as laid out — `auto-fill` decides it,
@@ -93,7 +85,10 @@
      the flag itself, and the tile took its 44×29 box and `overflow: hidden` -
      a squashed tile showing only its count. -->
 {#snippet tile(key: string, tl: IndexTile, emblem: "flag" | "family" | "brand")}
-  {@const name = tileName(key, tl)}
+  <!-- The label comes translated from the filter itself (a country through
+       `withCountryLabels`, INDEX§11), so the tile and its chip say the same
+       name. -->
+  {@const name = tl.label}
   <button
     type="button"
     class="tile"
@@ -104,7 +99,7 @@
     onkeydown={onTileKey}
   >
     {#if emblem === "flag"}
-      {@const flag = tl.unset ? null : flagFor(tl.label)}
+      {@const flag = tl.unset ? null : flagFor(tl.value)}
       <span class="flag">
         {#if flag}<img src={flag} alt="" />{:else}<span class="none" aria-hidden="true">?</span>{/if}
       </span>

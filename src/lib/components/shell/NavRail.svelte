@@ -52,7 +52,7 @@
     { target: "apps", labelKey: "nav.apps", sep: true, group: "nav.groupGame" },
     { target: "others", labelKey: "nav.others" },
     // Deuxième filet : isole les outils.
-    { target: "rules", labelKey: "nav.atelier", sections: ["rules", "categories", "import", "profiles", "maintenance"], sep: true },
+    { target: "rules", labelKey: "nav.atelier", sections: ["rules", "categories", "countries", "import", "profiles", "maintenance"], sep: true },
     // Troisième filet : détache le pied.
     { target: "settings", labelKey: "nav.settings", sep: true, foot: true },
     // **Ouvrir Content Manager vit ici**, entre les deux entrées du pied. Ce

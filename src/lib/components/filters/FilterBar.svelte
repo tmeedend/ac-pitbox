@@ -28,6 +28,7 @@
     chipSummary,
     ariaSummary,
     isBlank,
+    type ChipValue,
     type FilterDef,
     type FilterMap,
     type FilterOption,
@@ -214,16 +215,18 @@
   }
 </script>
 
-<!-- Les valeurs d'une puce, drapeau compris quand le filtre en porte. Un
-     `join(", ")` ne peut pas intercaler d'image, d'où ce fragment : la
-     virgule est écrite ici, entre les valeurs et jamais après la dernière. -->
-{#snippet listed(def: FilterDef, values: string[])}
-  {#each values as value, i (value)}
+<!-- The values of a chip, flag included when the filter carries one. A
+     `join(", ")` cannot interleave images, hence this fragment: the comma is
+     written here, between values and never after the last. The flag is
+     looked up by the VALUE: the label is translated (TAXO§12), and a
+     translated name is not a key of the game table. -->
+{#snippet listed(def: FilterDef, values: ChipValue[])}
+  {#each values as v, i (v.value)}
     {#if i}<span class="sep">, </span>{/if}
     {#if def.flags}
-      {@const flag = flagFor(value)}
+      {@const flag = flagFor(v.value)}
       {#if flag}<img class="flag" src={flag} alt="" />{/if}
-    {/if}{value}
+    {/if}{v.label}
   {/each}
 {/snippet}
 

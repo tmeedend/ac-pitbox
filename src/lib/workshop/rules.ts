@@ -40,6 +40,9 @@ export interface ExtractionCountry {
  * comme une voiture. */
 export interface CountryAliases {
   map: Record<string, string>;
+  /** Values unknown to the game the user chose to leave as they are
+   * (TAXO§7.2). */
+  ignored?: string[];
 }
 /** A family of car categories (INDEX§6.1) — see `$lib/library/families`. */
 export interface CategoryFamily {
@@ -93,4 +96,16 @@ export function saveCategoryFamilies(families: CategoryFamily[]): Promise<Catego
 /** The family table as the app ships it, for "Restore". */
 export function defaultCategoryFamilies(): Promise<CategoryFamily[]> {
   return invoke<CategoryFamily[]>("default_category_families");
+}
+
+/** Writes the country aliases and re-applies them to the library - the
+ * country is decided at write time, so an alias changes stored values. A WRITE:
+ * `invoke`, never `invokeSafe`. Returns the number of mods processed. */
+export function saveCountryAliases(aliases: CountryAliases): Promise<number> {
+  return invoke<number>("save_country_aliases", { aliases });
+}
+
+/** The aliases as the app ships them, for "Restore". */
+export function defaultCountryAliases(): Promise<CountryAliases> {
+  return invoke<CountryAliases>("default_country_aliases");
 }

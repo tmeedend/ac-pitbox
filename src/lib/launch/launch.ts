@@ -157,6 +157,9 @@ export interface Nationality {
   name: string;
   /** Chemin du PNG, à passer à `previewSrc`. `null` si le fichier manque. */
   flag: string | null;
+  /** ISO 3166-1 alpha-2, what the name is translated from; `null` for the
+   * British nations (`nationalities.rs`). */
+  iso2: string | null;
 }
 
 /** Liste vide quand l'installation du jeu n'est pas lisible : la cellule

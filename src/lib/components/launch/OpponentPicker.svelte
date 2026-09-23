@@ -21,6 +21,7 @@
   import { scrollIntoContainer } from "$lib/shell/shellScroll";
   import { hasOwnDriver } from "$lib/driver/driverOverride.svelte";
   import { buildCardIndex, buildPredicate, filterDefs, type FilterMap } from "$lib/library/filters";
+  import { withCountryLabels } from "$lib/flags.svelte";
   import type { ModCard } from "$lib/library/library";
   import { t } from "$lib/i18n/index.svelte";
   import FilterBar from "$lib/components/filters/FilterBar.svelte";
@@ -65,7 +66,7 @@
     onclose,
   }: Props = $props();
 
-  const defs = untrack(() => filterDefs("Car"));
+  const defs = untrack(() => withCountryLabels(filterDefs("Car")));
 
   const index = $derived(buildCardIndex(pool, defs, true, hasOwnDriver, perfRefId));
   const matchesFilters = $derived(buildPredicate(defs, filters, index.ctx));

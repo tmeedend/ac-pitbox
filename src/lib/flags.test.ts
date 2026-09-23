@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countryKey, localizedCountry } from "./flags";
+import { countryDisplayName, countryKey } from "./flags";
 
 /** Un extrait fidèle de la table du jeu : les noms utiles aux cas ci-dessous,
  * dont les deux qui portent une virgule. */
@@ -37,18 +37,26 @@ describe("countryKey", () => {
   });
 });
 
-describe("localizedCountry", () => {
-  // Index spec §11: a country is translated from its code, never from the
-  // mod's string.
-  it("translates the game's English name through its code", () => {
-    expect(localizedCountry("Japan", "fr")).toBe("Japon");
-    expect(localizedCountry("United Kingdom", "de")).toBe("Vereinigtes Königreich");
-    expect(localizedCountry("united states", "fr")).toBe("États-Unis");
+describe("countryDisplayName", () => {
+  const byKey = (code: string) => (code === "SCT" ? "Écosse" : null);
+
+  // INDEX§11: translated from the code, never from the mod's string.
+  it("translates through the game's code", () => {
+    expect(countryDisplayName("Japan", { code: "JPN", iso2: "JP" }, "fr", byKey)).toBe("Japon");
+    expect(countryDisplayName("United Kingdom", { code: "GBR", iso2: "GB" }, "de", byKey)).toBe("Vereinigtes Königreich");
+    // The names the runtime spells differently are exactly why the code is used.
+    expect(countryDisplayName("Czech Republic", { code: "CZE", iso2: "CZ" }, "fr", byKey)).toBe("Tchéquie");
+    expect(countryDisplayName("Russian Federation", { code: "RUS", iso2: "RU" }, "fr", byKey)).toBe("Russie");
   });
 
-  // A wrong name on a tile is worse than an untranslated one.
-  it("keeps the name as is when no code matches it exactly", () => {
-    expect(localizedCountry("Scotland", "fr")).toBe("Scotland");
-    expect(localizedCountry("Nürburgring Land", "fr")).toBe("Nürburgring Land");
+  it("drops the administrative status of Hong Kong, and abbreviates nothing else", () => {
+    expect(countryDisplayName("Hong Kong", { code: "HKG", iso2: "HK" }, "fr", byKey)).toBe("Hong Kong");
+    expect(countryDisplayName("United States", { code: "USA", iso2: "US" }, "fr", byKey)).toBe("États-Unis");
+  });
+
+  it("translates the British nations by key, and keeps an unknown value as written", () => {
+    expect(countryDisplayName("Scotland", { code: "SCT", iso2: null }, "fr", byKey)).toBe("Écosse");
+    expect(countryDisplayName("Wales", { code: "WLS", iso2: null }, "fr", byKey)).toBe("Wales");
+    expect(countryDisplayName("Freedonia", undefined, "fr", byKey)).toBe("Freedonia");
   });
 });

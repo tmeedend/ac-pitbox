@@ -8,6 +8,7 @@
     "apps": "Apps",
     "rules": "Règles",
     "categories": "Catégories",
+    "countries": "Pays",
     "import": "Importer",
     "profiles": "Profils",
     "maintenance": "Maintenance",
@@ -1126,8 +1127,6 @@
     "fieldGearbox": "Boîte",
     "countryExtractionTitle": "Extraction pays",
     "countryExtractionHint": "Tag pays → champ « country » (si vide). Le tag est retiré du vocabulaire.",
-    "countryAliasTitle": "Alias de pays",
-    "countryAliasHint": "Comment un mod écrit un pays → le nom sous lequel Pit Box le range. « U.S.A. », « USA » et « United States of America » désignent le même pays et doivent se retrouver au même endroit. S'applique aux voitures comme aux circuits, et au pays déclaré comme à celui déduit d'un tag.",
     "impactText": "mod(s) seraient affecté(s) par ces règles",
     "calculatingImpact": "calcul de l'impact…",
     "applying": "Application…",
@@ -1755,5 +1754,32 @@
     "create": "Créer",
     "resetAll": "Tout rétablir",
     "confirmResetAll": "Confirmer : tout rétablir"
+  },
+  "countryNames": {
+    "ENG": "Angleterre",
+    "SCT": "Écosse",
+    "WLS": "Pays de Galles",
+    "NIR": "Irlande du Nord"
+  },
+  "countriesTab": {
+    "subtitle": "Les pays des voitures et des circuits : le nom sous lequel chacun est rangé, et les orthographes qui y mènent.",
+    "unset": "{count} mods sans pays",
+    "applying": "application à la bibliothèque…",
+    "proposals": "{count} pays inconnus du jeu",
+    "attachTo": "Rattacher à…",
+    "attach": "Rattacher",
+    "ignore": "Ignorer",
+    "noMod": "aucun mod",
+    "aliasCount": "{count} alias",
+    "code": "Code ISO",
+    "unknown": "inconnu du jeu",
+    "aliases": "Orthographes rattachées",
+    "noAlias": "Aucune",
+    "addAlias": "Ajouter une orthographe…",
+    "removeAlias": "Retirer cette orthographe",
+    "restore": "Rétablir les orthographes d'origine",
+    "showEmpty": "Afficher les pays sans mod ({count})",
+    "ignored": "Ignorés",
+    "unignore": "Ne plus ignorer"
   }
 }
