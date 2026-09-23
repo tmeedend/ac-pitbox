@@ -306,23 +306,44 @@ pub fn load(app: &AppHandle) -> Rules {
 /// failed to write runs again at the next load, from the same file.
 pub fn load_from_dir(dir: &std::path::Path) -> Rules {
     let legacy = read_legacy(dir);
+    let tax_path = dir.join("taxonomy.json");
+    let lists_path = dir.join("rules-overlay.json");
+    if legacy.is_some() && tax_path.is_file() && lists_path.is_file() {
+        // Both overlays exist: this file is not read, it came back AFTER the
+        // migration. Seen on the dev machine (2026-09-23): an older copy of
+        // `tag-rules.json` reappeared twice, from nothing this application
+        // writes. Said in the log so the next occurrence can be dated.
+        log::warn!("{LEGACY_FILE} reappeared after migration; set aside, not read");
+    }
     let catalog = default_rules();
     let mut rules = catalog.clone();
 
-    let tax_path = dir.join("taxonomy.json");
     let tax = crate::taxonomy::load_or_migrate(&tax_path, legacy.as_ref().unwrap_or(&Rules::default()));
     crate::taxonomy::apply(&mut rules, &crate::taxonomy::catalog(), &tax);
 
-    let lists_path = dir.join("rules-overlay.json");
     let lists = crate::rule_overlay::load_or_migrate(&lists_path, legacy.as_ref());
     crate::rule_overlay::apply(&mut rules, &catalog, &lists);
 
     if legacy.is_some() && tax_path.is_file() && lists_path.is_file() {
-        if let Err(e) = std::fs::rename(dir.join(LEGACY_FILE), dir.join(RETIRED_FILE)) {
+        if let Err(e) = std::fs::rename(dir.join(LEGACY_FILE), retired_path(dir)) {
             log::warn!("{LEGACY_FILE} migrated but not set aside, it will be read again: {e}");
         }
     }
     rules
+}
+
+/// Where to set the legacy file aside. Never onto an earlier one: on Windows a
+/// rename replaces its target, and "kept, never deleted" would quietly become
+/// "the last one kept".
+fn retired_path(dir: &std::path::Path) -> PathBuf {
+    let first = dir.join(RETIRED_FILE);
+    if !first.exists() {
+        return first;
+    }
+    (2..)
+        .map(|n| dir.join(format!("tag-rules.pre-overlay-{n}.json")))
+        .find(|p| !p.exists())
+        .expect("an unused name")
 }
 
 /// Saves what the Rules screen edited: as DECISIONS on the catalogue

@@ -600,6 +600,15 @@ de reprendre. En cas d'écart, la spec fait foi.
       `tag-rules.json` migré puis mis de côté en `tag-rules.pre-overlay.json`.
       La crate `pitbox-taxonomy` est devenue `pitbox-catalog` (modules
       `taxonomy` et `rules`). Banc réel : aucune décision, 350 mods, 0 écart.
+      **Mystère non résolu, à surveiller** : sur la machine de dev
+      (2026-09-23), un `tag-rules.json` plus ancien est **réapparu deux fois**
+      dans le dossier de config, dates d'origine conservées (donc recopié, pas
+      réécrit), alors qu'aucun processus de Pit Box ni aucune commande de la
+      session ne l'écrivait — une autre session active ou un outil externe
+      restent les seules pistes. La mise de côté ne peut plus écraser une copie
+      précédente (`tag-rules.pre-overlay-2.json`…), et une réapparition après
+      migration laisse désormais un `log::warn!` daté : c'est lui qu'il faudra
+      lire à la prochaine occurrence.
       **Piège évité de justesse** : la sauvegarde de démarrage (`backup.rs`)
       copiait `tag-rules.json` mais ignorait les fichiers de décisions — tout
       ce que l'utilisateur fait dans les règles aurait été hors du filet.

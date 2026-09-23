@@ -264,6 +264,32 @@ mod tests {
         assert_eq!(lists(&rebuilt), lists(&edited));
     }
 
+    /// The legacy file is set aside once both overlays are written - and a copy
+    /// that reappears later is set aside again, next to the first, never over
+    /// it (seen on the dev machine, from an unknown writer).
+    #[test]
+    fn the_legacy_file_is_set_aside_and_never_over_an_earlier_one() {
+        let dir = crate::testutil::temp_dir("legacy-retire");
+        let text = serde_json::to_string(&as_copied(pre_layer_rules())).unwrap();
+        std::fs::write(dir.join("tag-rules.json"), &text).unwrap();
+        crate::rules::load_from_dir(&dir);
+        assert!(dir.join("rules-overlay.json").is_file() && dir.join("taxonomy.json").is_file());
+        assert!(!dir.join("tag-rules.json").exists(), "set aside");
+        assert!(dir.join("tag-rules.pre-overlay.json").is_file());
+
+        std::fs::write(dir.join("tag-rules.json"), "{\"car\":{}}").unwrap();
+        crate::rules::load_from_dir(&dir);
+        assert_eq!(
+            std::fs::read_to_string(dir.join("tag-rules.pre-overlay.json")).unwrap(),
+            text,
+            "the first copy is untouched"
+        );
+        assert!(
+            dir.join("tag-rules.pre-overlay-2.json").is_file(),
+            "the second goes next to it"
+        );
+    }
+
     /// A corrupt overlay is never overwritten by a migration.
     #[test]
     fn an_unreadable_overlay_is_left_alone() {
