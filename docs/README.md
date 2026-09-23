@@ -200,6 +200,12 @@ dans un commentaire de code.
   `year` (année du modèle) et `release` (date de sortie dans AC via son pack).
   Section `packs` = dates des DLC. **Le seul fichier de `docs/` que l'app lit
   vraiment** : `kunos_dates.rs` l'embarque par `include_str!`.
+- **`src-tauri/rules/taxonomy-catalog.json`** (hors `docs/`, cité ici parce
+  qu'on le cherche) — le catalogue des familles, alias et tags de pays, livré
+  à tous les utilisateurs. **Ne s'édite pas à la main** : on cure dans l'app,
+  puis `npm run rules:promote` (REGLES§2, `SPEC.md` §5). À côté,
+  `rules/manifests/pre-layer-tables.json` est une photo **figée** qui ne sert
+  qu'à la migration : ne jamais la mettre à jour.
 - **`default-tag-rules-enriched.json`** — ontologie de tags (vocabulaire fermé
   + règles fusion/suppression/déduction/extraction/brand_fix). ⚠️ **Ce n'est
   pas le fichier que l'app charge** : elle sème

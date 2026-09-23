@@ -1,0 +1,15 @@
+[package]
+name = "rules-tool"
+version = "0.1.0"
+edition = "2021"
+description = "Developer CLI for the rules catalogue shipped with Pit Box — not shipped to users"
+license = "MIT"
+publish = false
+
+[dependencies]
+pitbox-taxonomy = { path = "../taxonomy" }
+serde = "1"
+serde_json = "1"
+
+# Aucune autre dépendance : deux sous-commandes et trois options tiennent en
+# quelques lignes, comme pour `kn5-tool`.

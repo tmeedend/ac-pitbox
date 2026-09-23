@@ -110,6 +110,20 @@ export function touches(o: MapOverlay, catalog: Table, name: string): boolean {
   );
 }
 
+/**
+ * The keys leading to `name`, told apart by origin (REGLES§8.1): shipped or
+ * added by the user, plus the shipped ones it no longer has - removed, or
+ * attached elsewhere - shown struck through, one click from coming back.
+ */
+export function keyOrigins(effective: Table, catalog: Table, name: string): { keys: { key: string; mine: boolean }[]; gone: string[] } {
+  const shipped = keysTo(catalog, name);
+  const now = keysTo(effective, name);
+  return {
+    keys: now.map((k) => ({ key: k, mine: !shipped.includes(k) })),
+    gone: shipped.filter((k) => !now.includes(k)),
+  };
+}
+
 /** "Ignore" on a proposal (TAXO§7.2): remembered, reversible. */
 export function ignoreCountry(ignored: string[], value: string): string[] {
   return [...new Set([...ignored, value])].sort();

@@ -181,29 +181,9 @@ pub struct CarRules {
     pub category_families: Vec<CategoryFamily>,
 }
 
-/// One family of car categories.
-///
-/// A tag belongs to **one** family at most: attached elsewhere it moves,
-/// otherwise the index counters stop meaning anything (TAXO§7.3). A car,
-/// on the other hand, belongs to as many families as its tags reach — a 250
-/// GTO is Classic, Sportscars *and* Race.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct CategoryFamily {
-    /// Stable slug. The shipped families are translated from it; it is also
-    /// the value a filter chip stores, so it must never be renamed.
-    pub id: String,
-    /// Displayed name of a family the user made up. Absent on the shipped ones,
-    /// which are translated instead (TAXO§12).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    /// Silhouette picked from the embedded set; the neutral glyph otherwise.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub icon: Option<String>,
-    /// Tags compared lowercased and without their leading `#`: the same tag
-    /// reaches a car as `#rally` through a rule and as `rally` from its file.
-    #[serde(default)]
-    pub tags: Vec<String>,
-}
+/// One family of car categories — defined with the merge of the layers in
+/// the `pitbox-taxonomy` crate, shared with `rules-tool`.
+pub use pitbox_taxonomy::CategoryFamily;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TrackRules {
@@ -305,13 +285,20 @@ pub fn save_taxonomy(
     app: &AppHandle,
     overlay: crate::taxonomy::TaxonomyOverlay,
 ) -> Result<(Rules, crate::taxonomy::TaxonomyOverlay), String> {
-    let overlay = overlay.normalized(&default_rules());
+    let overlay = overlay.normalized(&crate::taxonomy::catalog());
     crate::taxonomy::save(&taxonomy_file(app)?, &overlay)?;
     Ok((load(app), overlay))
 }
 
+/// The shipped rules: `default-tag-rules.json`, plus the taxonomy catalogue
+/// that lives in its own file (`taxonomy.rs` says why).
 pub fn default_rules() -> Rules {
-    serde_json::from_str(DEFAULT_RULES).expect("le jeu de règles embarqué doit être valide")
+    let mut r: Rules = serde_json::from_str(DEFAULT_RULES).expect("le jeu de règles embarqué doit être valide");
+    let t = crate::taxonomy::catalog();
+    r.car.category_families = t.families;
+    r.country_aliases.map = t.country_aliases;
+    r.car.extraction_country.map = t.country_tags;
+    r
 }
 
 /// Charge les règles depuis le fichier éditable ; au premier accès, sème le
@@ -343,7 +330,7 @@ pub fn load(app: &AppHandle) -> Rules {
         .unwrap_or_else(default_rules);
     // The taxonomy tables come from the catalogue + the user's overlay, never
     // from this file (`taxonomy.rs`) - migrated out of it the first time.
-    let catalog = default_rules();
+    let catalog = crate::taxonomy::catalog();
     let overlay = match taxonomy_file(app) {
         Ok(p) => crate::taxonomy::load_or_migrate(&p, &rules),
         Err(e) => {

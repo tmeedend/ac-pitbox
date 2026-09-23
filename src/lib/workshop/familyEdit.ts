@@ -131,6 +131,28 @@ export function isCurated(o: FamilyOverlay, catalog: CategoryFamily[], id: strin
   return Object.entries(o.tags ?? {}).some(([k, v]) => v === id || shipped.get(k) === id);
 }
 
+/** One entry of a family or a country as the tab shows it: whether the
+ * catalogue ships it or the user added it. */
+export interface Origin {
+  key: string;
+  mine: boolean;
+}
+
+/**
+ * What a family is made of, told apart by origin (REGLES§8.1): its tags, each
+ * marked shipped or added by the user, and the shipped tags it no longer has -
+ * removed, or moved elsewhere - which the tab shows struck through, one click
+ * from coming back. Without them a removal left no trace at all.
+ */
+export function tagOrigins(effective: CategoryFamily, catalog: CategoryFamily[]): { tags: Origin[]; gone: string[] } {
+  const shipped = (catalog.find((f) => f.id === effective.id)?.tags ?? []).map(familyTag);
+  const has = new Set(effective.tags.map(familyTag));
+  return {
+    tags: effective.tags.map((t) => ({ key: t, mine: !shipped.includes(familyTag(t)) })),
+    gone: shipped.filter((t) => !has.has(t)),
+  };
+}
+
 /**
  * How many cars carry each tag, in its compared form. A car counts once per
  * tag, however many origins bring it (file, rule, manual) - which is what the

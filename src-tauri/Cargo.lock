@@ -3048,6 +3048,7 @@ dependencies = [
  "kn5",
  "kn5-gltf",
  "log",
+ "pitbox-taxonomy",
  "regex",
  "rodio",
  "rusqlite",
@@ -3066,6 +3067,13 @@ dependencies = [
  "walkdir",
  "windows 0.61.3",
  "winreg",
+]
+
+[[package]]
+name = "pitbox-taxonomy"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -3422,6 +3430,15 @@ dependencies = [
  "lewton",
  "symphonia",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "rules-tool"
+version = "0.1.0"
+dependencies = [
+ "pitbox-taxonomy",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -48,8 +48,8 @@ mod prelude {
     pub(crate) use crate::importer::ArchiveResult;
     pub(crate) use crate::library::{ModCard, ModDetail};
     pub(crate) use crate::overlay::Db;
-    pub(crate) use crate::rules::{CategoryFamily, Rules};
-    pub(crate) use crate::taxonomy::{FamilyOverlay, MapOverlay, TaxonomyOverlay};
+    pub(crate) use crate::rules::Rules;
+    pub(crate) use crate::taxonomy::{FamilyOverlay, MapOverlay, TaxonomyOverlay, TaxonomyTables};
     pub(crate) use tauri_plugin_opener::OpenerExt;
 
     pub(crate) use super::mod_kind;

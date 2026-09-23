@@ -1782,5 +1782,11 @@
     "tags": "Tags that name it",
     "addTag": "Add a tag…",
     "removeTag": "Remove this tag"
+  },
+  "taxonomyOrigin": {
+    "shippedTitle": "Shipped with Pit Box: updates keep improving it",
+    "added": "Added by you",
+    "removed": "Shipped with Pit Box, removed by you",
+    "putBack": "Put back"
   }
 }

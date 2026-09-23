@@ -97,6 +97,9 @@ trash = "5"
 # format KN5 et conversion en glTF, tous deux dans `crates/`.
 kn5 = { path = "crates/kn5" }
 kn5-gltf = { path = "crates/kn5-gltf" }
+# Tables de taxonomie en deux couches (REGLES§2) : types et fusion, partagés
+# avec `rules-tool` pour qu'il n'existe qu'une implémentation de la fusion.
+pitbox-taxonomy = { path = "crates/taxonomy" }
 
 # Lecture registre Windows uniquement (détection du Mode développeur, §12) —
 # déjà présent transitivement via tauri, pas une dépendance de plus en pratique.

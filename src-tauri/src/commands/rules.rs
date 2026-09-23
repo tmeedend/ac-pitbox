@@ -29,13 +29,6 @@ pub struct TaxonomyView {
     effective: TaxonomyTables,
 }
 
-#[derive(serde::Serialize)]
-pub struct TaxonomyTables {
-    families: Vec<CategoryFamily>,
-    country_aliases: std::collections::BTreeMap<String, String>,
-    country_tags: std::collections::BTreeMap<String, String>,
-}
-
 fn tables(r: &Rules) -> TaxonomyTables {
     TaxonomyTables {
         families: r.car.category_families.clone(),
@@ -46,7 +39,7 @@ fn tables(r: &Rules) -> TaxonomyTables {
 
 fn view(rules: &Rules, overlay: TaxonomyOverlay) -> TaxonomyView {
     TaxonomyView {
-        catalog: tables(&crate::rules::default_rules()),
+        catalog: crate::taxonomy::catalog(),
         overlay,
         effective: tables(rules),
     }

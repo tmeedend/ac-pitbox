@@ -1782,5 +1782,11 @@
     "tags": "Tags qui le désignent",
     "addTag": "Ajouter un tag…",
     "removeTag": "Retirer ce tag"
+  },
+  "taxonomyOrigin": {
+    "shippedTitle": "Livrée avec Pit Box : les mises à jour la font évoluer",
+    "added": "Ajouté par vous",
+    "removed": "Livré avec Pit Box, retiré par vous",
+    "putBack": "Remettre"
   }
 }

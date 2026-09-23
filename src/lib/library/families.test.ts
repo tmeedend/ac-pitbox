@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import seed from "../../../src-tauri/rules/default-tag-rules.json";
+import catalog from "../../../src-tauri/rules/taxonomy-catalog.json";
 import { familiesOfTags, familyLookup, familyTag } from "./families";
 import { FAMILY_ICONS } from "./familyIcons";
 
@@ -34,7 +34,7 @@ describe("families", () => {
 });
 
 describe("the shipped family table", () => {
-  const shipped = seed.car.category_families;
+  const shipped = catalog.families;
 
   // Otherwise the counters of the index stop meaning anything: a tag counted
   // in two families would be read as two different cars' worth of overlap.

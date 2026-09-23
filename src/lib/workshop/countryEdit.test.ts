@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attachCountry, closestCountry, keysTo, removeEntry, restoreEntries, setEntry, touches } from "./countryEdit";
+import { attachCountry, closestCountry, keyOrigins, keysTo, removeEntry, restoreEntries, setEntry, touches } from "./countryEdit";
 
 const ALIASES = { usa: "United States", "u.s.a.": "United States", holland: "Netherlands" };
 const TAGS = { germany: "Germany", usa: "United States" };
@@ -43,6 +43,17 @@ describe("country decisions on top of the catalogue", () => {
     const back = restoreEntries(o, ALIASES, "United States");
     expect(touches(back, ALIASES, "United States")).toBe(false);
     expect(back.set, "other countries untouched").toEqual({ nippon: "Japan" });
+  });
+
+  it("tells shipped spellings from added ones, and keeps the removed ones in view", () => {
+    const eff = { "u.s.a.": "United States", america: "United States", holland: "Netherlands" };
+    expect(keyOrigins(eff, ALIASES, "United States")).toEqual({
+      keys: [
+        { key: "america", mine: true },
+        { key: "u.s.a.", mine: false },
+      ],
+      gone: ["usa"],
+    });
   });
 
   it("lists the keys leading to a name", () => {

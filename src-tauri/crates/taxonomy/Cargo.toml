@@ -1,0 +1,12 @@
+[package]
+name = "pitbox-taxonomy"
+version = "0.1.0"
+edition = "2021"
+description = "Taxonomy tables of Pit Box in two layers - shipped catalogue and user overlay"
+license = "MIT"
+
+# Pure data and merge logic, shared by the application and by `rules-tool`:
+# ONE implementation of the merge, so what the tool promotes into the
+# catalogue is exactly what the application applied.
+[dependencies]
+serde = { version = "1", features = ["derive"] }

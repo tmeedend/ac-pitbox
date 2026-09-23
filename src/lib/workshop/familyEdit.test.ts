@@ -8,6 +8,7 @@ import {
   restoreFamily,
   setFamilyLook,
   tagCounts,
+  tagOrigins,
 } from "./familyEdit";
 
 const CATALOG = [
@@ -65,6 +66,16 @@ describe("family decisions on top of the catalogue", () => {
     const back = restoreFamily(o, CATALOG, "prototype");
     expect(back).toMatchObject({ meta: {}, tags: {}, removed: [] });
     expect(isCurated(back, CATALOG, "race")).toBe(false);
+  });
+
+  // REGLES§8.1: what is shipped and what is the user's must be readable.
+  it("tells shipped tags from added ones, and keeps the removed ones in view", () => {
+    const o = tagOrigins({ id: "race", tags: ["race", "wec"] }, CATALOG);
+    expect(o.tags).toEqual([
+      { key: "race", mine: false },
+      { key: "wec", mine: true },
+    ]);
+    expect(o.gone, "gt3 was shipped in Race and is no longer there").toEqual(["gt3"]);
   });
 
   it("counts a car once per tag, whatever the spelling it carries it under", () => {

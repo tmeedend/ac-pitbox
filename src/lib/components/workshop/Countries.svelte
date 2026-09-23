@@ -28,6 +28,7 @@
     attachCountry,
     closestCountry,
     ignoreCountry,
+    keyOrigins,
     keysTo,
     removeEntry,
     restoreEntries,
@@ -242,7 +243,8 @@
         {@const label = countryLabel(r.name)}
         {@const entry = gameCountry(r.name)}
         {@const spelled = keysTo(effAliases, r.name)}
-        {@const byTag = keysTo(effTags, r.name)}
+        {@const aliasOrigin = keyOrigins(effAliases, catAliases, r.name)}
+        {@const tagOrigin = keyOrigins(effTags, catTags, r.name)}
         {@const curated = touches(aliases, catAliases, r.name) || touches(tags, catTags, r.name)}
         <li>
           <button type="button" class="row" aria-expanded={open === r.name} onclick={() => toggle(r.name)}>
@@ -268,9 +270,9 @@
               <div class="field">
                 <span class="lbl-key">{t("countriesTab.aliases")}</span>
                 <div class="tags">
-                  {#each spelled as alias (alias)}
-                    <span class="tok"
-                      >{alias}<button
+                  {#each aliasOrigin.keys as { key: alias, mine } (alias)}
+                    <span class="tok" class:mine title={mine ? t("taxonomyOrigin.added") : undefined}
+                      >{#if mine}<span class="mark" aria-hidden="true">✎</span>{/if}{alias}<button
                         type="button"
                         class="x"
                         title={t("countriesTab.removeAlias")}
@@ -280,6 +282,17 @@
                     >
                   {:else}
                     <span class="empty">{t("countriesTab.noAlias")}</span>
+                  {/each}
+                  {#each aliasOrigin.gone as alias (alias)}
+                    <span class="tok gone" title={t("taxonomyOrigin.removed")}
+                      ><s>{alias}</s><button
+                        type="button"
+                        class="x"
+                        title={t("taxonomyOrigin.putBack")}
+                        disabled={busy}
+                        onclick={() => commit({ aliases: setEntry(aliases, catAliases, alias, r.name, true) })}>↺</button
+                      ></span
+                    >
                   {/each}
                 </div>
                 <input
@@ -300,9 +313,9 @@
               <div class="field">
                 <span class="lbl-key">{t("countriesTab.tags")}</span>
                 <div class="tags">
-                  {#each byTag as tag (tag)}
-                    <span class="tok"
-                      >{tag}<button
+                  {#each tagOrigin.keys as { key: tag, mine } (tag)}
+                    <span class="tok" class:mine title={mine ? t("taxonomyOrigin.added") : undefined}
+                      >{#if mine}<span class="mark" aria-hidden="true">✎</span>{/if}{tag}<button
                         type="button"
                         class="x"
                         title={t("countriesTab.removeTag")}
@@ -312,6 +325,17 @@
                     >
                   {:else}
                     <span class="empty">{t("countriesTab.noAlias")}</span>
+                  {/each}
+                  {#each tagOrigin.gone as tag (tag)}
+                    <span class="tok gone" title={t("taxonomyOrigin.removed")}
+                      ><s>{tag}</s><button
+                        type="button"
+                        class="x"
+                        title={t("taxonomyOrigin.putBack")}
+                        disabled={busy}
+                        onclick={() => commit({ tags: setEntry(tags, catTags, tag, r.name) })}>↺</button
+                      ></span
+                    >
                   {/each}
                 </div>
                 <input
@@ -522,6 +546,23 @@
   .x:hover {
     color: var(--txt);
     background: var(--raised);
+  }
+  /* Origin of an entry (REGLES§8.1). The shipped ones are the plain case; the
+     mark goes on what the USER did - fewer marks, and they point at what an
+     update will not touch. */
+  .tok.mine {
+    border-style: dashed;
+    border-color: var(--faint2);
+  }
+  .tok .mark {
+    color: var(--txt2);
+  }
+  .tok.gone {
+    color: var(--muted2);
+    background: none;
+  }
+  .tok.gone s {
+    text-decoration-color: var(--muted2);
   }
   .empty {
     color: var(--muted2);

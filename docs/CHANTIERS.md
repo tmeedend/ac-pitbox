@@ -566,7 +566,9 @@ de reprendre. En cas d'écart, la spec fait foi.
 
 - [ ] **Catalogue de règles et surcouche (`SPEC-regles.md`) — lot 1 fait.**
       Ordre convenu avec l'utilisateur : (1) deux couches pour les tables de
-      taxonomie **— fait** ; (2) manifeste des catalogues passés + test « diff
+      taxonomie **— fait**, avec les marques livré / ajouté / retiré dans les
+      onglets et `rules-tool` (`diff`, `promote`) pour promouvoir une
+      curation faite dans l'app vers le catalogue ; (2) manifeste des catalogues passés + test « diff
       nul » pour les règles en liste ; (3) identifiants stables et surcouche
       pour les règles en liste (marque, classe, fusion de tags, specs) ; (4)
       rapport de mise à jour et « Revenir à vN » ; (5) écran Règles refait
@@ -586,8 +588,9 @@ de reprendre. En cas d'écart, la spec fait foi.
       marque, le pays ou la classe d'un mod précis. (c) La liste blanche des
       catégories de circuit est encore une table recopiée : elle rejoint la
       surcouche avec les règles en liste.
-      **Outil de relevé — reporté, pas abandonné.** Un binaire du workspace,
-      jamais livré (comme `kn5-tool`), qui fait tourner **le vrai moteur** sur
+      **Outil de relevé — reporté, pas abandonné, et il a désormais sa
+      maison** : une sous-commande `survey` de `rules-tool`. Un binaire du
+      workspace, jamais livré (comme `kn5-tool`), qui fait tourner **le vrai moteur** sur
       une install et une bibliothèque, en lecture seule, et sort les voitures
       non classées, les tags hors vocabulaire, les pays sans drapeau, les
       variantes de marque, et la classification complète. Rejoué avant/après

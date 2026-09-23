@@ -33,6 +33,7 @@
     restoreFamily,
     setFamilyLook,
     tagCounts,
+    tagOrigins,
   } from "$lib/workshop/familyEdit";
   import { getTaxonomy, saveFamilyOverlay, type FamilyOverlay } from "$lib/workshop/rules";
 
@@ -175,7 +176,9 @@
         <li class:open={open === f.id}>
           <button type="button" class="row" aria-expanded={open === f.id} onclick={() => toggle(f.id)}>
             <svg class="ico" viewBox="0 0 120 52" aria-hidden="true">{@html familyIcon(f.icon)}</svg>
-            <span class="nm">{nameOf(f)}</span>
+            <span class="nm"
+              >{nameOf(f)}{#if base}<span class="badge" title={t("taxonomyOrigin.shippedTitle")}>PIT BOX</span>{/if}</span
+            >
             <span class="num">{t("index.cars", { count: n })}</span>
             <span class="num">{t("categories.tagCount", { count: f.tags.length })}</span>
             <span class="flag" class:on={curated} title={curated ? t("categories.curated") : undefined} aria-hidden={!curated}
@@ -185,6 +188,7 @@
           </button>
 
           {#if open === f.id}
+            {@const origin = tagOrigins(f, shipped)}
             <div class="detail">
               <label class="field">
                 <span class="lbl-key">{t("categories.name")}</span>
@@ -217,9 +221,11 @@
               <div class="field">
                 <span class="lbl-key">{t("categories.tags")}</span>
                 <div class="tags">
-                  {#each f.tags as tag (tag)}
-                    <span class="tok">
-                      {tag}<span class="c">{perTag.get(familyTag(tag)) ?? 0}</span>
+                  {#each origin.tags as { key: tag, mine } (tag)}
+                    <span class="tok" class:mine title={mine ? t("taxonomyOrigin.added") : undefined}>
+                      {#if mine}<span class="mark" aria-hidden="true">✎</span>{/if}{tag}<span class="c"
+                        >{perTag.get(familyTag(tag)) ?? 0}</span
+                      >
                       <button
                         type="button"
                         class="x"
@@ -229,6 +235,20 @@
                     </span>
                   {:else}
                     <span class="empty">{t("categories.noTag")}</span>
+                  {/each}
+                  <!-- Shipped tags this family no longer has - removed, or moved
+                       to another family. Kept in view, one click from coming
+                       back: a removal used to leave no trace at all. -->
+                  {#each origin.gone as tag (tag)}
+                    <span class="tok gone" title={t("taxonomyOrigin.removed")}>
+                      <s>{tag}</s>
+                      <button
+                        type="button"
+                        class="x"
+                        title={t("taxonomyOrigin.putBack")}
+                        onclick={() => commit(attachTag(overlay, shipped, tag, f.id))}>↺</button
+                      >
+                    </span>
                   {/each}
                 </div>
                 <input
@@ -457,6 +477,34 @@
   .x:hover {
     color: var(--txt);
     background: var(--raised);
+  }
+  /* Origin of an entry (REGLES§8.1). The shipped ones are the plain case; the
+     mark goes on what the USER did - fewer marks, and they point at what an
+     update will not touch. The badge follows REGLES§12: 9 px, a neutral grey,
+     a hairline, no red (nothing here belongs to the session). */
+  .badge {
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    color: var(--muted2);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 0 4px;
+    margin-left: 8px;
+    vertical-align: 1px;
+  }
+  .tok.mine {
+    border-style: dashed;
+    border-color: var(--faint2);
+  }
+  .tok .mark {
+    color: var(--txt2);
+  }
+  .tok.gone {
+    color: var(--muted2);
+    background: none;
+  }
+  .tok.gone s {
+    text-decoration-color: var(--muted2);
   }
   .empty {
     color: var(--muted2);

@@ -1,0 +1,188 @@
+{
+  "families": [
+    {
+      "id": "street",
+      "icon": "street",
+      "tags": [
+        "street",
+        "stock",
+        "super street",
+        "trackday",
+        "tuned",
+        "hot hatchback",
+        "touge",
+        "wangan",
+        "shutoko",
+        "suv",
+        "van"
+      ]
+    },
+    {
+      "id": "sportscars",
+      "icon": "sports",
+      "tags": [
+        "sportscars",
+        "sportscar",
+        "small sports",
+        "supercars",
+        "supercar",
+        "hypercars",
+        "hypercar",
+        "hypercars r",
+        "muscle",
+        "bigblock"
+      ]
+    },
+    {
+      "id": "race",
+      "icon": "race",
+      "tags": [
+        "race",
+        "racing",
+        "gt",
+        "gt1",
+        "gt2",
+        "gt3",
+        "gt4",
+        "gte-gt3",
+        "lm-gte",
+        "lmgt",
+        "gt500",
+        "n-gt",
+        "touring",
+        "90s touring",
+        "dtm",
+        "btcc",
+        "tcr",
+        "drm",
+        "cup",
+        "tt cup",
+        "porsche cup",
+        "global cup",
+        "458challenge",
+        "trans am",
+        "nascar",
+        "group 3",
+        "group 4",
+        "group 5"
+      ]
+    },
+    {
+      "id": "classic",
+      "icon": "classic",
+      "tags": [
+        "vintage",
+        "classic",
+        "historic",
+        "vintage gt",
+        "vintage supercars",
+        "vintage touring",
+        "vintage racecar",
+        "vintage can am"
+      ]
+    },
+    {
+      "id": "openwheel",
+      "icon": "openwheel",
+      "tags": [
+        "singleseater",
+        "open wheeler",
+        "open-wheel",
+        "formula",
+        "formula 1",
+        "formula 2",
+        "formula 3",
+        "formula ford",
+        "f2000",
+        "gp",
+        "skipbarber",
+        "indycar"
+      ]
+    },
+    {
+      "id": "prototype",
+      "icon": "proto",
+      "tags": [
+        "prototype",
+        "prototypes",
+        "proto c",
+        "prototype c",
+        "prototypes group c",
+        "group c",
+        "lmp1",
+        "lmp2",
+        "lmp3",
+        "lmp900",
+        "lmh",
+        "lmdh",
+        "lmgtp",
+        "gtp",
+        "dpi",
+        "can-am",
+        "lemans"
+      ]
+    },
+    {
+      "id": "drift",
+      "icon": "drift",
+      "tags": [
+        "drift",
+        "street drift"
+      ]
+    },
+    {
+      "id": "rally",
+      "icon": "rally",
+      "tags": [
+        "rally",
+        "rallycross",
+        "hillclimb",
+        "kitcar",
+        "kit-car",
+        "gra",
+        "r5",
+        "group b",
+        "wrc"
+      ]
+    }
+  ],
+  "country_aliases": {
+    "deutschland": "Germany",
+    "great britain": "United Kingdom",
+    "holland": "Netherlands",
+    "u.k.": "United Kingdom",
+    "u.s.a.": "United States",
+    "uk": "United Kingdom",
+    "united states of america": "United States",
+    "usa": "United States"
+  },
+  "country_tags": {
+    "america": "United States",
+    "australia": "Australia",
+    "austria": "Austria",
+    "belgium": "Belgium",
+    "brazil": "Brazil",
+    "bulgaria": "Bulgaria",
+    "canada": "Canada",
+    "china": "China",
+    "czech republic": "Czech Republic",
+    "england": "United Kingdom",
+    "france": "France",
+    "german": "Germany",
+    "germany": "Germany",
+    "great britain": "United Kingdom",
+    "ireland": "Ireland",
+    "italy": "Italy",
+    "japan": "Japan",
+    "jordan": "Jordan",
+    "netherlands": "Netherlands",
+    "new zealand": "New Zealand",
+    "south korea": "South Korea",
+    "spain": "Spain",
+    "sweden": "Sweden",
+    "uk": "United Kingdom",
+    "united kingdom": "United Kingdom",
+    "united states": "United States",
+    "usa": "United States"
+  }
+}

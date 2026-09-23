@@ -213,6 +213,9 @@ src-tauri/crates/       Crates du workspace (aperçu 3D, docs/SPEC-preview-3d-kn
   kn5/                  Parsing du format KN5 — pur, sans I/O ni Tauri
   kn5-gltf/             Textures et export glTF (touche au disque : skins)
   kn5-tool/             CLI de validation, jamais livrée à l'utilisateur
+  taxonomy/             Tables de taxonomie en deux couches (REGLES§2) :
+                        types et fusion, partagés par l'app et rules-tool
+  rules-tool/           CLI développeur du catalogue de règles, jamais livrée
 src/lib/                Modules : un dossier par domaine, comme le backend
   shell/                La coquille : navigation, historique, zoom, défilement,
                         manette, Big Picture
@@ -476,7 +479,9 @@ Svelte. Les deux sont documentées comme écartées, en tête du script.
   chargement, et à côté, dans un fichier à part, les seules **décisions** de
   l'utilisateur, indexées par la clé naturelle de l'entrée, une suppression
   étant une pierre tombale. La fusion des deux ne se calcule qu'à un endroit,
-  côté Rust.
+  la crate `pitbox-taxonomy`. **Pour faire évoluer ce catalogue, on ne
+  l'édite pas à la main** : on cure dans l'app (Atelier › Catégories, Pays),
+  puis `npm run rules:diff` / `npm run rules:promote`.
 - **`Prefs` (`config.rs`) est en `#[serde(default)]`** : un champ retiré est
   simplement ignoré dans les `config.json` existants, pas de migration à
   écrire. Un champ ajouté prend sa valeur par défaut chez les utilisateurs
