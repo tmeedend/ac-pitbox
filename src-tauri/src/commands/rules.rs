@@ -13,6 +13,10 @@ pub fn get_rules(app: AppHandle) -> Rules {
 #[tauri::command]
 pub fn save_rules(app: AppHandle, db: State<Db>, rules: Rules) -> Result<usize, String> {
     crate::rules::save(&app, &rules)?;
+    // Harmonise with the rules as they now APPLY, reloaded - not with what the
+    // screen sent: the overlay puts the user's rules first, and that order is
+    // the one the next start will use.
+    let rules = crate::rules::load(&app);
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::harmonize::harmonize_all(&conn, &cfg, &rules).map_err(|e| e.to_string())

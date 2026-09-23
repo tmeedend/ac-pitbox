@@ -14,14 +14,14 @@
 //! of this repository), `--overlay <file>` (default: the application's
 //! `%APPDATA%\com.pitbox.app\taxonomy.json`).
 //!
-//! The merge is the application's own (`pitbox-taxonomy`): what `promote`
+//! The merge is the application's own (`pitbox-catalog`): what `promote`
 //! writes is exactly what the application was showing.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use pitbox_taxonomy::{TaxonomyOverlay, TaxonomyTables, FORMAT};
+use pitbox_catalog::taxonomy::{TaxonomyOverlay, TaxonomyTables, FORMAT};
 use serde::de::DeserializeOwned;
 
 const USAGE: &str = "usage: rules-tool <diff|promote> [--catalog <file>] [--overlay <file>]";

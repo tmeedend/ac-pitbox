@@ -1,6 +1,6 @@
 //! The taxonomy tables of the application: catalogue + overlay (REGLES§2).
 //!
-//! The types and the merge live in the `pitbox-taxonomy` crate, shared with
+//! The types and the merge live in the `pitbox-catalog` crate, shared with
 //! `rules-tool` (the developer's tool that promotes decisions into the
 //! catalogue). What stays here is what only the application does: the
 //! embedded catalogue, the files of the user, and the one-time migration out of
@@ -13,7 +13,7 @@
 
 use std::path::Path;
 
-pub use pitbox_taxonomy::{FamilyOverlay, MapOverlay, TaxonomyOverlay, TaxonomyTables, FORMAT};
+pub use pitbox_catalog::taxonomy::{FamilyOverlay, MapOverlay, TaxonomyOverlay, TaxonomyTables, FORMAT};
 
 use crate::rules::Rules;
 
@@ -76,16 +76,6 @@ pub fn apply(rules: &mut Rules, catalog: &TaxonomyTables, o: &TaxonomyOverlay) {
     rules.car.extraction_country.map = t.country_tags;
 }
 
-/// Empties the three tables before `tag-rules.json` is written: they belong to
-/// the catalogue and to `taxonomy.json` now, and a copy left in the rules file
-/// is how the catalogue got frozen in the first place.
-pub fn strip(rules: &mut Rules) {
-    rules.car.category_families.clear();
-    rules.country_aliases.map.clear();
-    rules.country_aliases.ignored.clear();
-    rules.car.extraction_country.map.clear();
-}
-
 /// Reads `taxonomy.json`, or builds it from the tables of the rules file the
 /// first time (then writes it, so the migration happens once).
 ///
@@ -126,7 +116,7 @@ pub fn save(path: &Path, o: &TaxonomyOverlay) -> Result<(), String> {
 mod tests {
     use super::*;
     use crate::rules::default_rules;
-    use pitbox_taxonomy::CategoryFamily;
+    use pitbox_catalog::taxonomy::CategoryFamily;
 
     fn tables_of(r: &Rules) -> TaxonomyTables {
         TaxonomyTables {
@@ -187,7 +177,9 @@ mod tests {
     fn a_missing_section_migrates_to_no_overlay() {
         let baseline = pre_layer();
         let mut file = baseline.clone();
-        strip(&mut file);
+        file.car.category_families.clear();
+        file.country_aliases.map.clear();
+        file.car.extraction_country.map.clear();
         assert!(!migrate(&file, &baseline).has_decisions());
     }
 

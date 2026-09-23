@@ -213,7 +213,7 @@ src-tauri/crates/       Crates du workspace (aperçu 3D, docs/SPEC-preview-3d-kn
   kn5/                  Parsing du format KN5 — pur, sans I/O ni Tauri
   kn5-gltf/             Textures et export glTF (touche au disque : skins)
   kn5-tool/             CLI de validation, jamais livrée à l'utilisateur
-  taxonomy/             Tables de taxonomie en deux couches (REGLES§2) :
+  catalog/              Catalogue de règles en deux couches (REGLES§2) :
                         types et fusion, partagés par l'app et rules-tool
   rules-tool/           CLI développeur du catalogue de règles, jamais livrée
 src/lib/                Modules : un dossier par domaine, comme le backend
@@ -474,12 +474,13 @@ Svelte. Les deux sont documentées comme écartées, en tête du script.
   de la souris — c'est le même geste, il ne peut pas avoir deux comportements.
 - **Une table livrée ne se recopie jamais chez l'utilisateur.** Recopiée,
   elle devient sa vérité et plus aucune mise à jour ne l'atteint — c'est
-  arrivé à tout `tag-rules.json`, semé une fois puis figé. Le modèle est
-  `taxonomy.rs` (REGLES§2) : le catalogue relu depuis l'embarqué à chaque
+  arrivé à tout `tag-rules.json`, semé une fois puis figé (il est désormais
+  migré et mis de côté). Le modèle est `taxonomy.rs` et `rule_overlay.rs`
+  (REGLES§2) : le catalogue relu depuis l'embarqué à chaque
   chargement, et à côté, dans un fichier à part, les seules **décisions** de
   l'utilisateur, indexées par la clé naturelle de l'entrée, une suppression
   étant une pierre tombale. La fusion des deux ne se calcule qu'à un endroit,
-  la crate `pitbox-taxonomy`. **Pour faire évoluer ce catalogue, on ne
+  la crate `pitbox-catalog`. **Pour faire évoluer ce catalogue, on ne
   l'édite pas à la main** : on cure dans l'app (Atelier › Catégories, Pays),
   puis `npm run rules:diff` / `npm run rules:promote`.
 - **`Prefs` (`config.rs`) est en `#[serde(default)]`** : un champ retiré est
@@ -649,7 +650,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Signature Authenticode** | le workflow est prêt, il attend un certificat | `docs/windows-code-signing.md` |
 | **Refonte navigation et fiches** | livrée et fusionnée ; restent trois questions ouvertes, dont le markdown dans les notes | `docs/PLAN-refonte-navigation.md` |
 | **Taxonomies** | familles, onglets Catégories et Pays livrés ; reste l'onglet Marques (fusions, logos canoniques) | `docs/SPEC-taxonomies.md`, `docs/CHANTIERS.md` |
-| **Catalogue de règles** | tables de taxonomie en deux couches ; manifeste figé et banc « diff nul » des règles en liste faits ; restent leur surcouche, le rapport de mise à jour, l'écran Règles | `docs/SPEC-regles.md`, `docs/CHANTIERS.md` |
+| **Catalogue de règles** | tout en deux couches (catalogue + décisions), `tag-rules.json` retiré ; restent le rapport de mise à jour et l'écran Règles refait |  `docs/SPEC-regles.md`, `docs/CHANTIERS.md` |
 | **Règles de tags divergentes** | deux fichiers décrivent la même ontologie, un seul est chargé | `docs/CHANTIERS.md` |
 
 ## Fin de tâche — dans cet ordre

@@ -182,8 +182,8 @@ pub struct CarRules {
 }
 
 /// One family of car categories — defined with the merge of the layers in
-/// the `pitbox-taxonomy` crate, shared with `rules-tool`.
-pub use pitbox_taxonomy::CategoryFamily;
+/// the `pitbox-catalog` crate, shared with `rules-tool`.
+pub use pitbox_catalog::taxonomy::CategoryFamily;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TrackRules {
@@ -198,31 +198,9 @@ pub struct TrackRules {
     pub category_allowlist: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BrandFix {
-    pub name_contains: String,
-    pub set_brand: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NameToTag {
-    pub name_contains: String,
-    pub add: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ClassFix {
-    pub from: Vec<String>,
-    pub set_class: Option<String>,
-    #[serde(default)]
-    pub add: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TagMerge {
-    pub from: Vec<String>,
-    pub to: Vec<String>,
-}
+/// The list-rule types, with their stable id (REGLES§4) — defined in the
+/// `pitbox-catalog` crate, shared with `rules-tool`.
+pub use pitbox_catalog::rules::{BrandFix, ClassFix, NameToTag, SetRule, TagMerge};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ExtractionSpecs {
@@ -238,12 +216,6 @@ pub struct ExtractionSpecs {
     pub gearbox: Vec<SetRule>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SetRule {
-    pub from: Vec<String>,
-    pub set: String,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ExtractionCountry {
     #[serde(default)]
@@ -252,26 +224,34 @@ pub struct ExtractionCountry {
 
 // --- Chargement / sauvegarde (fichier éditable, §12) ------------------------
 
-fn rules_file(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    Ok(dir.join("tag-rules.json"))
+/// The file pre-layer versions copied every rule into. Read once, to migrate
+/// the user's decisions out of it, then set aside (`load_from_dir`).
+const LEGACY_FILE: &str = "tag-rules.json";
+/// Where the legacy file goes once migrated - kept, never deleted.
+const RETIRED_FILE: &str = "tag-rules.pre-overlay.json";
+
+fn config_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path().app_config_dir().map_err(|e| e.to_string())
 }
 
-/// The user's overlay on the taxonomy tables (`taxonomy.rs`).
-fn taxonomy_file(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    Ok(dir.join("taxonomy.json"))
+/// The legacy rules file, when there is one and it reads. One that exists but
+/// does not parse is logged and left where it is: it is not migrated, so it
+/// must not be retired either.
+fn read_legacy(dir: &std::path::Path) -> Option<Rules> {
+    let text = std::fs::read_to_string(dir.join(LEGACY_FILE)).ok()?;
+    match serde_json::from_str(&text) {
+        Ok(r) => Some(r),
+        Err(e) => {
+            log::warn!("{LEGACY_FILE} unreadable, not migrated: {e}");
+            None
+        }
+    }
 }
 
-/// The overlay as stored — migrated from the rules file the first time.
+/// The overlay on the taxonomy tables as stored — migrated the first time.
 pub fn load_taxonomy(app: &AppHandle) -> crate::taxonomy::TaxonomyOverlay {
-    let file: Rules = rules_file(app)
-        .ok()
-        .and_then(|p| std::fs::read_to_string(p).ok())
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default();
-    match taxonomy_file(app) {
-        Ok(path) => crate::taxonomy::load_or_migrate(&path, &file),
+    match config_dir(app) {
+        Ok(dir) => crate::taxonomy::load_or_migrate(&dir.join("taxonomy.json"), &read_legacy(&dir).unwrap_or_default()),
         Err(e) => {
             log::warn!("taxonomy overlay path: {e}");
             crate::taxonomy::TaxonomyOverlay::default()
@@ -279,21 +259,22 @@ pub fn load_taxonomy(app: &AppHandle) -> crate::taxonomy::TaxonomyOverlay {
     }
 }
 
-/// Writes the overlay (normalised against the catalogue) and returns the rules
-/// as they now apply.
+/// Writes the taxonomy overlay (normalised against the catalogue) and returns
+/// the rules as they now apply.
 pub fn save_taxonomy(
     app: &AppHandle,
     overlay: crate::taxonomy::TaxonomyOverlay,
 ) -> Result<(Rules, crate::taxonomy::TaxonomyOverlay), String> {
     let overlay = overlay.normalized(&crate::taxonomy::catalog());
-    crate::taxonomy::save(&taxonomy_file(app)?, &overlay)?;
+    crate::taxonomy::save(&config_dir(app)?.join("taxonomy.json"), &overlay)?;
     Ok((load(app), overlay))
 }
 
-/// The shipped rules: `default-tag-rules.json`, plus the taxonomy catalogue
-/// that lives in its own file (`taxonomy.rs` says why).
+/// The shipped rules — the catalogue: `default-tag-rules.json` for the list
+/// rules, plus the taxonomy catalogue that lives in its own file (`taxonomy.rs`
+/// says why).
 pub fn default_rules() -> Rules {
-    let mut r: Rules = serde_json::from_str(DEFAULT_RULES).expect("le jeu de règles embarqué doit être valide");
+    let mut r: Rules = serde_json::from_str(DEFAULT_RULES).expect("the embedded rules must be valid");
     let t = crate::taxonomy::catalog();
     r.car.category_families = t.families;
     r.country_aliases.map = t.country_aliases;
@@ -301,10 +282,9 @@ pub fn default_rules() -> Rules {
     r
 }
 
-/// Charge les règles depuis le fichier éditable ; au premier accès, sème le
-/// fichier avec le jeu par défaut embarqué.
+/// The rules as they apply: the catalogue, with the user's decisions on top.
 pub fn load(app: &AppHandle) -> Rules {
-    match app.path().app_config_dir() {
+    match config_dir(app) {
         Ok(dir) => load_from_dir(&dir),
         Err(e) => {
             log::warn!("config dir unavailable, embedded rules used: {e}");
@@ -316,54 +296,41 @@ pub fn load(app: &AppHandle) -> Rules {
 /// `load`, from an explicit configuration directory - what the tests and the
 /// diff-nul bench (`harmonize::snapshot`) use to load a real user's rules
 /// without a running application.
+///
+/// **Nothing of the catalogue is copied to the user any more** (REGLES§2): the
+/// rules start from the embedded catalogue and receive two overlays, the
+/// taxonomy tables' (`taxonomy.json`) and the list rules' (`rules-overlay.json`).
+/// Both are migrated once from the legacy `tag-rules.json`, which is then set
+/// aside as `tag-rules.pre-overlay.json` - kept, never deleted, and no longer
+/// read. It is retired only once BOTH overlays are on disk: a migration that
+/// failed to write runs again at the next load, from the same file.
 pub fn load_from_dir(dir: &std::path::Path) -> Rules {
-    let path = dir.join("tag-rules.json");
-    if !path.exists() {
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
+    let legacy = read_legacy(dir);
+    let catalog = default_rules();
+    let mut rules = catalog.clone();
+
+    let tax_path = dir.join("taxonomy.json");
+    let tax = crate::taxonomy::load_or_migrate(&tax_path, legacy.as_ref().unwrap_or(&Rules::default()));
+    crate::taxonomy::apply(&mut rules, &crate::taxonomy::catalog(), &tax);
+
+    let lists_path = dir.join("rules-overlay.json");
+    let lists = crate::rule_overlay::load_or_migrate(&lists_path, legacy.as_ref());
+    crate::rule_overlay::apply(&mut rules, &catalog, &lists);
+
+    if legacy.is_some() && tax_path.is_file() && lists_path.is_file() {
+        if let Err(e) = std::fs::rename(dir.join(LEGACY_FILE), dir.join(RETIRED_FILE)) {
+            log::warn!("{LEGACY_FILE} migrated but not set aside, it will be read again: {e}");
         }
-        // Written WITHOUT the taxonomy tables: a copy of them here is what
-        // froze the catalogue (`taxonomy.rs`).
-        let mut seed = default_rules();
-        crate::taxonomy::strip(&mut seed);
-        match serde_json::to_string_pretty(&seed) {
-            Ok(json) => {
-                if let Err(e) = std::fs::write(&path, json) {
-                    log::warn!("seeding tag-rules.json failed: {e}");
-                }
-            }
-            Err(e) => log::warn!("seeding tag-rules.json failed: {e}"),
-        }
-    }
-    let mut rules: Rules = std::fs::read_to_string(&path)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_else(default_rules);
-    // The taxonomy tables come from the catalogue + the user's overlay, never
-    // from this file (`taxonomy.rs`) - migrated out of it the first time.
-    let catalog = crate::taxonomy::catalog();
-    let overlay = crate::taxonomy::load_or_migrate(&dir.join("taxonomy.json"), &rules);
-    crate::taxonomy::apply(&mut rules, &catalog, &overlay);
-    // Backfill : une config antérieure à la liste blanche des catégories de
-    // circuit (§5) n'a pas la clé → on la remplit depuis le seed embarqué,
-    // sans réécrire le fichier (l'utilisateur peut ensuite l'éditer et sauver).
-    if rules.track.category_allowlist.is_empty() {
-        rules.track.category_allowlist = default_rules().track.category_allowlist;
     }
     rules
 }
 
+/// Saves what the Rules screen edited: as DECISIONS on the catalogue
+/// (`rule_overlay::diff`), never as a copy of it. The taxonomy tables it also
+/// carries are not the screen's to change - they have their own tabs.
 pub fn save(app: &AppHandle, rules: &Rules) -> Result<(), String> {
-    let path = rules_file(app)?;
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    // The taxonomy tables are not written here: they belong to the catalogue
-    // and to `taxonomy.json`, and a copy in this file is how they froze.
-    let mut rules = rules.clone();
-    crate::taxonomy::strip(&mut rules);
-    let json = serde_json::to_string_pretty(&rules).map_err(|e| e.to_string())?;
-    std::fs::write(&path, json).map_err(|e| e.to_string())
+    let o = crate::rule_overlay::diff(rules, &default_rules());
+    crate::rule_overlay::save(&config_dir(app)?.join("rules-overlay.json"), &o)
 }
 
 // --- Application (moteur) ---------------------------------------------------
@@ -612,6 +579,7 @@ mod tests {
 
     fn merge(from: &[&str], to: &[&str]) -> TagMerge {
         TagMerge {
+            id: None,
             from: from.iter().map(|s| s.to_string()).collect(),
             to: to.iter().map(|s| s.to_string()).collect(),
         }

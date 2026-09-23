@@ -7,7 +7,7 @@ license = "MIT"
 publish = false
 
 [dependencies]
-pitbox-taxonomy = { path = "../taxonomy" }
+pitbox-catalog = { path = "../catalog" }
 serde = "1"
 serde_json = "1"
 

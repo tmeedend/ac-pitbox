@@ -36,6 +36,13 @@ const BACKED_UP_FILES: &[&str] = &[
     // juste avant sa migration.
     "saved_sessions.json",
     "music.json",
+    // The user's decisions on the rules catalogue (REGLES§2): since the
+    // catalogue is no longer copied, these two files ARE everything he did in
+    // the Rules, Categories and Countries screens - out of the backup, a bad
+    // write would lose it with nothing to fall back on.
+    "taxonomy.json",
+    "rules-overlay.json",
+    // The pre-overlay rules file, while it exists (not yet migrated).
     "tag-rules.json",
 ];
 

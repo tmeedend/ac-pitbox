@@ -2,22 +2,30 @@
 import { invoke } from "@tauri-apps/api/core";
 
 export interface SetRule {
+  /** Stable id of a shipped rule (REGLES§4); absent on the user's own. It
+   * rides along when the Rules screen edits the rule, and is what tells a
+   * disabled or modified shipped rule from a new one when saving. */
+  id?: string;
   from: string[];
   set: string;
 }
 export interface TagMerge {
+  id?: string;
   from: string[];
   to: string[];
 }
 export interface BrandFix {
+  id?: string;
   name_contains: string;
   set_brand: string;
 }
 export interface NameToTag {
+  id?: string;
   name_contains: string;
   add: string[];
 }
 export interface ClassFix {
+  id?: string;
   from: string[];
   set_class: string | null;
   add: string[];

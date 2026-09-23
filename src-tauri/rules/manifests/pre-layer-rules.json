@@ -1,50 +1,59 @@
 {
   "_meta": {
-    "note": "Règles en liste telles que TOUTES les versions d'avant la surcouche les recopiaient dans tag-rules.json — mesuré identiques du premier commit (63e44ba) à v0.7.0 ; seule category_allowlist est absente avant v0.1.0. Figé : référence de la migration (rule_manifest.rs, REGLES§13.1). Ne jamais le mettre à jour avec le catalogue."
+    "note": "Règles en liste telles que TOUTES les versions d'avant la surcouche les recopiaient dans tag-rules.json — mesuré identiques du premier commit (63e44ba) à v0.7.0 ; seule category_allowlist est absente avant v0.1.0. Figé : référence de la migration (rule_manifest.rs, REGLES§13.1). Ne jamais le mettre à jour avec le catalogue. Les identifiants (champ id) sont ceux du catalogue au moment où ils ont été écrits : c'est par eux que la migration relie une règle recopiée à la règle livrée qu'elle était."
   },
   "car": {
     "brand_fix": [
       {
+        "id": "pitbox.brand.bayro",
         "name_contains": "bayro",
         "set_brand": "BMW"
       },
       {
+        "id": "pitbox.brand.auriel",
         "name_contains": "auriel",
         "set_brand": "Audi"
       },
       {
+        "id": "pitbox.brand.darche",
         "name_contains": "darche",
         "set_brand": "Porsche"
       },
       {
+        "id": "pitbox.brand.minardi",
         "name_contains": "minardi",
         "set_brand": "Minardi"
       },
       {
+        "id": "pitbox.brand.bar",
         "name_contains": "bar ",
         "set_brand": "Bar"
       }
     ],
     "name_to_tag": [
       {
+        "id": "pitbox.name.police",
         "name_contains": "police",
         "add": [
           "police"
         ]
       },
       {
+        "id": "pitbox.name.taxi",
         "name_contains": "taxi",
         "add": [
           "taxi"
         ]
       },
       {
+        "id": "pitbox.name.traffic",
         "name_contains": "traffic",
         "add": [
           "#traffic"
         ]
       },
       {
+        "id": "pitbox.name.truck",
         "name_contains": "truck",
         "add": [
           "#truck"
@@ -53,6 +62,7 @@
     ],
     "class_fix": [
       {
+        "id": "pitbox.class.racing",
         "from": [
           "racing",
           "grand prix",
@@ -67,6 +77,7 @@
         "add": []
       },
       {
+        "id": "pitbox.class.drift",
         "from": [
           "drift",
           "street drift"
@@ -77,6 +88,7 @@
         ]
       },
       {
+        "id": "pitbox.class.rally",
         "from": [
           "rally",
           "hillclimb",
@@ -88,6 +100,7 @@
         ]
       },
       {
+        "id": "pitbox.class.stock",
         "from": [
           "stock",
           "tuning",
@@ -102,6 +115,7 @@
         "add": []
       },
       {
+        "id": "pitbox.class.rally-gr4",
         "from": [
           "rally gr4"
         ],
@@ -112,6 +126,7 @@
         ]
       },
       {
+        "id": "pitbox.class.kitcar",
         "from": [
           "kitcar",
           "kit-car"
@@ -123,6 +138,7 @@
         ]
       },
       {
+        "id": "pitbox.class.gra",
         "from": [
           "gra"
         ],
@@ -133,6 +149,7 @@
         ]
       },
       {
+        "id": "pitbox.class.r5",
         "from": [
           "r5"
         ],
@@ -143,6 +160,7 @@
         ]
       },
       {
+        "id": "pitbox.class.tcr",
         "from": [
           "tcr"
         ],
@@ -152,6 +170,7 @@
         ]
       },
       {
+        "id": "pitbox.class.wtcr",
         "from": [
           "wtcr"
         ],
@@ -161,6 +180,7 @@
         ]
       },
       {
+        "id": "pitbox.class.gt500",
         "from": [
           "gt500",
           "gt2"
@@ -171,6 +191,7 @@
         ]
       },
       {
+        "id": "pitbox.class.gt2",
         "from": [
           "#gt2"
         ],
@@ -181,6 +202,7 @@
         ]
       },
       {
+        "id": "pitbox.class.group-5",
         "from": [
           "group 5"
         ],
@@ -190,6 +212,7 @@
         ]
       },
       {
+        "id": "pitbox.class.f2",
         "from": [
           "f2"
         ],
@@ -201,6 +224,7 @@
         ]
       },
       {
+        "id": "pitbox.class.f1",
         "from": [
           "f1"
         ],
@@ -212,6 +236,7 @@
         ]
       },
       {
+        "id": "pitbox.class.formula-3",
         "from": [
           "formula 3"
         ],
@@ -221,6 +246,7 @@
         ]
       },
       {
+        "id": "pitbox.class.prototype",
         "from": [
           "prototype",
           "group c"
@@ -231,6 +257,7 @@
         ]
       },
       {
+        "id": "pitbox.class.lmp3",
         "from": [
           "lmp3"
         ],
@@ -241,6 +268,7 @@
         ]
       },
       {
+        "id": "pitbox.class.traffic",
         "from": [
           "traffic"
         ],
@@ -250,6 +278,7 @@
         ]
       },
       {
+        "id": "pitbox.class.historic",
         "from": [
           "historic",
           "vintage"
@@ -260,6 +289,7 @@
         ]
       },
       {
+        "id": "pitbox.class.utility",
         "from": [
           "utility"
         ],
@@ -271,6 +301,7 @@
     ],
     "tag_merge": [
       {
+        "id": "pitbox.car-merge.group-5",
         "from": [
           "group 5",
           "group5"
@@ -280,6 +311,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.group-3",
         "from": [
           "group 3",
           "group3"
@@ -289,6 +321,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.group-4",
         "from": [
           "group 4",
           "group4"
@@ -298,6 +331,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.gt1",
         "from": [
           "gt1"
         ],
@@ -306,6 +340,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.cup",
         "from": [
           "cup"
         ],
@@ -314,6 +349,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.dpi",
         "from": [
           "dpi"
         ],
@@ -322,6 +358,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.lmh",
         "from": [
           "lmh"
         ],
@@ -330,6 +367,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.touring",
         "from": [
           "touring"
         ],
@@ -338,6 +376,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.muscle",
         "from": [
           "muscle"
         ],
@@ -346,6 +385,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.trans-am",
         "from": [
           "trans am",
           "trans-am",
@@ -356,6 +396,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.vintage",
         "from": [
           "#vintage"
         ],
@@ -364,6 +405,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.prototype",
         "from": [
           "#prototype"
         ],
@@ -372,6 +414,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.gt",
         "from": [
           "#gt"
         ],
@@ -380,6 +423,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.hypercar",
         "from": [
           "hypercar"
         ],
@@ -388,6 +432,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.vintage-gt",
         "from": [
           "vintage gt"
         ],
@@ -396,6 +441,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.vintage-racecar",
         "from": [
           "vintage racecar",
           "#vintage racecar"
@@ -405,6 +451,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.gte-gt3",
         "from": [
           "gte-gt3",
           "#gte-gt3"
@@ -414,6 +461,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.lmp3",
         "from": [
           "lmp3"
         ],
@@ -422,6 +470,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.small-sports",
         "from": [
           "##small sports"
         ],
@@ -430,6 +479,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.sportscars",
         "from": [
           "##sportscars"
         ],
@@ -438,6 +488,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.rally",
         "from": [
           "rally",
           "rallye",
@@ -451,6 +502,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.lmp1",
         "from": [
           "lmp1"
         ],
@@ -461,6 +513,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.lmp2",
         "from": [
           "lmp2"
         ],
@@ -471,6 +524,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.lmp900",
         "from": [
           "lmp900"
         ],
@@ -481,6 +535,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.lmgt",
         "from": [
           "lmgt"
         ],
@@ -493,6 +548,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.lmgtp",
         "from": [
           "lmgtp"
         ],
@@ -503,6 +559,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.f1",
         "from": [
           "f1",
           "formula 1",
@@ -515,6 +572,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.f2",
         "from": [
           "f2",
           "formula 2",
@@ -527,6 +585,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.f3",
         "from": [
           "f3",
           "formula 3",
@@ -539,6 +598,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.formula-ford",
         "from": [
           "formula ford"
         ],
@@ -547,6 +607,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.btcc",
         "from": [
           "btcc"
         ],
@@ -555,6 +616,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.dpi-2",
         "from": [
           "dpi",
           "#dpi"
@@ -564,6 +626,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.drm",
         "from": [
           "drm"
         ],
@@ -572,6 +635,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.grand-prix",
         "from": [
           "grand prix"
         ],
@@ -580,6 +644,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.lemans",
         "from": [
           "lemans",
           "le mans"
@@ -589,6 +654,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.gra",
         "from": [
           "gra"
         ],
@@ -598,6 +664,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.dtm",
         "from": [
           "dtm"
         ],
@@ -606,6 +673,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.gte",
         "from": [
           "#gte",
           "gte"
@@ -616,6 +684,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.gt2",
         "from": [
           "gt2",
           "#gt2"
@@ -626,6 +695,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.gt4",
         "from": [
           "gt4"
         ],
@@ -634,6 +704,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.gt3",
         "from": [
           "gt3"
         ],
@@ -642,6 +713,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.n-gt",
         "from": [
           "n-gt"
         ],
@@ -650,6 +722,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.tcr",
         "from": [
           "tcr"
         ],
@@ -658,6 +731,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.sgt500",
         "from": [
           "#sgt500",
           "jgtc",
@@ -668,6 +742,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.can-am",
         "from": [
           "can-am",
           "can am",
@@ -679,6 +754,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.traffic",
         "from": [
           "traffic"
         ],
@@ -687,6 +763,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.sport",
         "from": [
           "sport",
           "roadsport",
@@ -698,6 +775,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.open-wheeler",
         "from": [
           "open wheeler"
         ],
@@ -706,6 +784,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.single-seater",
         "from": [
           "single seater"
         ],
@@ -714,6 +793,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.historic",
         "from": [
           "historic"
         ],
@@ -722,6 +802,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.hothatch",
         "from": [
           "hothatch",
           "hot hatchback"
@@ -731,6 +812,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.supercar",
         "from": [
           "supercar",
           "#supercar"
@@ -740,6 +822,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.proto-c",
         "from": [
           "proto c",
           "#proto c",
@@ -756,6 +839,7 @@
         ]
       },
       {
+        "id": "pitbox.car-merge.wangan",
         "from": [
           "wangan",
           "jdm"
@@ -769,6 +853,7 @@
       "_note": "Remplit les champs techniques non présents dans l'objet specs natif (bhp/torque/weight y sont déjà). Retire ensuite ces tags du vocabulaire.",
       "drivetrain": [
         {
+          "id": "pitbox.spec-drivetrain.rwd",
           "from": [
             "rwd",
             "propulsion",
@@ -777,6 +862,7 @@
           "set": "RWD"
         },
         {
+          "id": "pitbox.spec-drivetrain.fwd",
           "from": [
             "fwd",
             "traction",
@@ -785,6 +871,7 @@
           "set": "FWD"
         },
         {
+          "id": "pitbox.spec-drivetrain.awd",
           "from": [
             "awd",
             "4wd",
@@ -797,6 +884,7 @@
       ],
       "aspiration": [
         {
+          "id": "pitbox.spec-aspiration.turbo",
           "from": [
             "turbo",
             "twin-turbo",
@@ -807,6 +895,7 @@
           "set": "TURBO"
         },
         {
+          "id": "pitbox.spec-aspiration.supercharged",
           "from": [
             "compressor",
             "supercharger",
@@ -816,6 +905,7 @@
           "set": "SUPERCHARGED"
         },
         {
+          "id": "pitbox.spec-aspiration.na",
           "from": [
             "na",
             "aspirated",
@@ -827,30 +917,35 @@
       ],
       "engine_config": [
         {
+          "id": "pitbox.spec-engine-config.v6",
           "from": [
             "v6"
           ],
           "set": "V6"
         },
         {
+          "id": "pitbox.spec-engine-config.v8",
           "from": [
             "v8"
           ],
           "set": "V8"
         },
         {
+          "id": "pitbox.spec-engine-config.v10",
           "from": [
             "v10"
           ],
           "set": "V10"
         },
         {
+          "id": "pitbox.spec-engine-config.v12",
           "from": [
             "v12"
           ],
           "set": "V12"
         },
         {
+          "id": "pitbox.spec-engine-config.i4",
           "from": [
             "i4",
             "l4",
@@ -861,6 +956,7 @@
           "set": "I4"
         },
         {
+          "id": "pitbox.spec-engine-config.i6",
           "from": [
             "i6",
             "l6",
@@ -871,6 +967,7 @@
           "set": "I6"
         },
         {
+          "id": "pitbox.spec-engine-config.flat",
           "from": [
             "flat-6",
             "flat6",
@@ -881,6 +978,7 @@
           "set": "FLAT"
         },
         {
+          "id": "pitbox.spec-engine-config.rotary",
           "from": [
             "rotary",
             "wankel",
@@ -889,6 +987,7 @@
           "set": "ROTARY"
         },
         {
+          "id": "pitbox.spec-engine-config.electric",
           "from": [
             "electric",
             "ev",
@@ -897,6 +996,7 @@
           "set": "ELECTRIC"
         },
         {
+          "id": "pitbox.spec-engine-config.hybrid",
           "from": [
             "hybrid",
             "hev"
@@ -904,6 +1004,7 @@
           "set": "HYBRID"
         },
         {
+          "id": "pitbox.spec-engine-config.diesel",
           "from": [
             "diesel"
           ],
@@ -912,6 +1013,7 @@
       ],
       "engine_pos": [
         {
+          "id": "pitbox.spec-engine-pos.mid",
           "from": [
             "mid engine",
             "mid-engine",
@@ -920,6 +1022,7 @@
           "set": "MID"
         },
         {
+          "id": "pitbox.spec-engine-pos.front",
           "from": [
             "front engine",
             "front-engine"
@@ -927,6 +1030,7 @@
           "set": "FRONT"
         },
         {
+          "id": "pitbox.spec-engine-pos.rear",
           "from": [
             "rear engine",
             "rear-engine"
@@ -936,6 +1040,7 @@
       ],
       "gearbox": [
         {
+          "id": "pitbox.spec-gearbox.manual",
           "from": [
             "manual",
             "h-shifter",
@@ -945,6 +1050,7 @@
           "set": "MANUAL"
         },
         {
+          "id": "pitbox.spec-gearbox.sequential",
           "from": [
             "sequential",
             "seq"
@@ -952,6 +1058,7 @@
           "set": "SEQUENTIAL"
         },
         {
+          "id": "pitbox.spec-gearbox.semiauto",
           "from": [
             "semiautomatic",
             "manu/sequential",
@@ -961,12 +1068,14 @@
           "set": "SEMIAUTO"
         },
         {
+          "id": "pitbox.spec-gearbox.auto",
           "from": [
             "automatic"
           ],
           "set": "AUTO"
         },
         {
+          "id": "pitbox.spec-gearbox.dct",
           "from": [
             "dct",
             "dsg",
@@ -981,6 +1090,7 @@
   "track": {
     "tag_merge": [
       {
+        "id": "pitbox.track-merge.freeroam",
         "from": [
           "freeroam"
         ],
@@ -989,6 +1099,7 @@
         ]
       },
       {
+        "id": "pitbox.track-merge.circuit",
         "from": [
           "#circuit"
         ],
@@ -997,6 +1108,7 @@
         ]
       },
       {
+        "id": "pitbox.track-merge.country",
         "from": [
           "country"
         ],
@@ -1005,6 +1117,7 @@
         ]
       },
       {
+        "id": "pitbox.track-merge.24h",
         "from": [
           "24h",
           "sebring"
@@ -1014,6 +1127,7 @@
         ]
       },
       {
+        "id": "pitbox.track-merge.grand-prix",
         "from": [
           "grand prix"
         ],
@@ -1022,6 +1136,7 @@
         ]
       },
       {
+        "id": "pitbox.track-merge.city",
         "from": [
           "city"
         ],
@@ -1030,6 +1145,7 @@
         ]
       },
       {
+        "id": "pitbox.track-merge.dockland",
         "from": [
           "dockland"
         ],
@@ -1038,6 +1154,7 @@
         ]
       },
       {
+        "id": "pitbox.track-merge.formula-1",
         "from": [
           "formula 1"
         ],
@@ -1046,6 +1163,7 @@
         ]
       },
       {
+        "id": "pitbox.track-merge.historic-gp",
         "from": [
           "historic gp"
         ],
@@ -1055,6 +1173,7 @@
         ]
       },
       {
+        "id": "pitbox.track-merge.p2p",
         "from": [
           "p2p"
         ],
@@ -1063,6 +1182,7 @@
         ]
       },
       {
+        "id": "pitbox.track-merge.drift",
         "from": [
           "drift"
         ],
@@ -1071,6 +1191,7 @@
         ]
       },
       {
+        "id": "pitbox.track-merge.hillclimb",
         "from": [
           "hillclimb",
           "hill climb"
@@ -1082,6 +1203,7 @@
         ]
       },
       {
+        "id": "pitbox.track-merge.rally",
         "from": [
           "rally",
           "rallye",
@@ -1094,6 +1216,7 @@
         ]
       },
       {
+        "id": "pitbox.track-merge.dirt3",
         "from": [
           "dirt3",
           "fm7",

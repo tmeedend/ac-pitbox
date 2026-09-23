@@ -54,7 +54,7 @@ mod profiles;
 mod quickdrive;
 mod raceini;
 mod resources;
-mod rule_manifest;
+mod rule_overlay;
 mod rules;
 mod saved_grids;
 mod saved_sessions;

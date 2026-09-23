@@ -303,15 +303,16 @@ mod tests {
         );
     }
 
-    /// REGLES§13.5 on a REAL install, before any migration of the list rules:
-    /// how the user's own rules file compares to the frozen manifest, and
-    /// whether it classifies his library exactly like the embedded rules. Works
-    /// on COPIES of the config files; the install itself is only read.
+    /// REGLES§13.5 on a REAL install: the rules as the legacy `tag-rules.json`
+    /// held them, against the rules after the migration to catalogue +
+    /// overlays - the library must be classified exactly the same. Works on
+    /// COPIES of the config files; the install itself is only read.
     ///
     /// ```text
     /// cargo test --lib harmonize::tests::real_install_diff_nul -- --ignored --nocapture
     /// ```
-    /// `PITBOX_CONFIG_DIR` overrides `%APPDATA%\com.pitbox.app`.
+    /// `PITBOX_CONFIG_DIR` overrides `%APPDATA%\com.pitbox.app`. Without a
+    /// legacy file there (already migrated), the retired copy is used.
     #[test]
     #[ignore = "reads the Pit Box configuration and library of this machine"]
     fn real_install_diff_nul() {
@@ -320,41 +321,49 @@ mod tests {
             .or_else(|| std::env::var_os("APPDATA").map(|d| std::path::Path::new(&d).join("com.pitbox.app")))
             .expect("PITBOX_CONFIG_DIR or APPDATA");
         let work = crate::testutil::temp_dir("real-diff-nul");
-        for f in ["config.json", "overlay.sqlite", "tag-rules.json", "taxonomy.json"] {
+        for f in ["config.json", "overlay.sqlite", "taxonomy.json"] {
             if src.join(f).is_file() {
                 std::fs::copy(src.join(f), work.join(f)).unwrap();
             }
         }
+        let legacy = ["tag-rules.json", "tag-rules.pre-overlay.json"]
+            .iter()
+            .map(|f| src.join(f))
+            .find(|p| p.is_file())
+            .expect("a legacy rules file to compare against");
+        std::fs::copy(&legacy, work.join("tag-rules.json")).unwrap();
+
         let cfg: AppConfig = serde_json::from_str(&std::fs::read_to_string(work.join("config.json")).unwrap()).unwrap();
         let conn = overlay::open(&work.join("overlay.sqlite")).unwrap();
-        let file: Rules = std::fs::read_to_string(work.join("tag-rules.json"))
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default();
 
-        let classes = crate::rule_manifest::classify(&file, &crate::rule_manifest::pre_layer_rules());
-        for (sec, c) in &classes {
-            println!(
-                "{sec:36} intact {:3}  removed {:2}  own {:2}{}",
-                c.intact.len(),
-                c.removed.len(),
-                c.user.len(),
-                if c.reordered { "  REORDERED" } else { "" }
-            );
+        // Before: the legacy file as the pre-layer load used it - its lists
+        // as written, the allowlist refilled when missing, the taxonomy
+        // tables from the (already migrated) taxonomy overlay.
+        let mut before: Rules =
+            serde_json::from_str(&std::fs::read_to_string(work.join("tag-rules.json")).unwrap()).unwrap();
+        let tax = crate::taxonomy::load_or_migrate(&work.join("taxonomy.json"), &before.clone());
+        crate::taxonomy::apply(&mut before, &crate::taxonomy::catalog(), &tax);
+        if before.track.category_allowlist.is_empty() {
+            before.track.category_allowlist = rules::default_rules().track.category_allowlist;
         }
-        let mine = snapshot(&conn, &cfg, &rules::load_from_dir(&work)).unwrap();
-        let shipped = snapshot(&conn, &cfg, &rules::default_rules()).unwrap();
-        let diff = snapshot_diff(&mine, &shipped);
-        println!("{} mods classified, {} classified differently", mine.len(), diff.len());
+
+        let after = rules::load_from_dir(&work);
+        let migrated: pitbox_catalog::rules::RulesOverlay =
+            serde_json::from_str(&std::fs::read_to_string(work.join("rules-overlay.json")).unwrap()).unwrap();
+        println!("migrated overlay: {}", serde_json::to_string(&migrated).unwrap());
+        assert!(
+            work.join("tag-rules.pre-overlay.json").is_file(),
+            "legacy file set aside"
+        );
+
+        let a = snapshot(&conn, &cfg, &before).unwrap();
+        let b = snapshot(&conn, &cfg, &after).unwrap();
+        let diff = snapshot_diff(&a, &b);
+        println!("{} mods classified, {} classified differently", a.len(), diff.len());
         for id in diff.iter().take(20) {
             println!("  {id}");
         }
-        if !crate::rule_manifest::has_decisions(&classes) {
-            assert!(
-                diff.is_empty(),
-                "a file holding no decision must classify like the catalogue"
-            );
-        }
+        assert!(diff.is_empty(), "diff nul: the migration must not reclassify anything");
     }
 
     #[test]

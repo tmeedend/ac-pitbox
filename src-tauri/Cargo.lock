@@ -3048,7 +3048,7 @@ dependencies = [
  "kn5",
  "kn5-gltf",
  "log",
- "pitbox-taxonomy",
+ "pitbox-catalog",
  "regex",
  "rodio",
  "rusqlite",
@@ -3070,10 +3070,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "pitbox-taxonomy"
+name = "pitbox-catalog"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -3436,7 +3437,7 @@ dependencies = [
 name = "rules-tool"
 version = "0.1.0"
 dependencies = [
- "pitbox-taxonomy",
+ "pitbox-catalog",
  "serde",
  "serde_json",
 ]

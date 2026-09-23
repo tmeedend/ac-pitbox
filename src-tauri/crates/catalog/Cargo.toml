@@ -1,8 +1,8 @@
 [package]
-name = "pitbox-taxonomy"
+name = "pitbox-catalog"
 version = "0.1.0"
 edition = "2021"
-description = "Taxonomy tables of Pit Box in two layers - shipped catalogue and user overlay"
+description = "Pit Box rules catalogue in two layers - what the application ships, and the user's decisions on top"
 license = "MIT"
 
 # Pure data and merge logic, shared by the application and by `rules-tool`:
@@ -10,3 +10,4 @@ license = "MIT"
 # catalogue is exactly what the application applied.
 [dependencies]
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"

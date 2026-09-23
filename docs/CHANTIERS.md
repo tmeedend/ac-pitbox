@@ -570,7 +570,7 @@ de reprendre. En cas d'écart, la spec fait foi.
       onglets et `rules-tool` (`diff`, `promote`) pour promouvoir une
       curation faite dans l'app vers le catalogue ; (2) manifeste des catalogues passés + test « diff
       nul » pour les règles en liste **— fait** ; (3) identifiants stables et surcouche
-      pour les règles en liste (marque, classe, fusion de tags, specs) ; (4)
+      pour les règles en liste (marque, classe, fusion de tags, specs) **— fait** ; (4)
       rapport de mise à jour et « Revenir à vN » ; (5) écran Règles refait
       (liste unique, bascules, badges, compteurs d'effet). Le lot Marques des
       taxonomies vient **après** le lot 1, pour naître dans le bon format.
@@ -593,6 +593,22 @@ de reprendre. En cas d'écart, la spec fait foi.
       (`cargo test --lib harmonize::tests::real_install_diff_nul -- --ignored
       --nocapture`, sur des copies) : 11 sections intactes, **350 mods, 0
       classé différemment**. C'est lui qui prouvera le lot 3.
+      **Lot 3.** 123 identifiants écrits une fois dans le catalogue et dans le
+      manifeste (jamais recalculés) ; surcouche par section dans
+      `rules-overlay.json` (désactivée / dérivée avec empreinte FNV-1a — pas
+      `DefaultHasher`, instable d'une version de Rust à l'autre — / à lui) ;
+      `tag-rules.json` migré puis mis de côté en `tag-rules.pre-overlay.json`.
+      La crate `pitbox-taxonomy` est devenue `pitbox-catalog` (modules
+      `taxonomy` et `rules`). Banc réel : aucune décision, 350 mods, 0 écart.
+      **Piège évité de justesse** : la sauvegarde de démarrage (`backup.rs`)
+      copiait `tag-rules.json` mais ignorait les fichiers de décisions — tout
+      ce que l'utilisateur fait dans les règles aurait été hors du filet.
+      **Reste pour `rules-tool`** : `promote` ne sait promouvoir que les tables
+      de taxonomie ; les règles en liste demanderont un conteneur des sections
+      dans la crate (aujourd'hui dans `rules.rs`). Et une règle **retirée** du
+      catalogue n'a pas encore de marque `retired` (REGLES§4) : la supprimer
+      simplement laisse ses décisions orphelines, sans effet — acceptable, mais
+      le rapport du lot 4 devra le dire.
       **Pièges pour la suite.** (a) « La règle utilisateur gagne » (REGLES§3)
       n'a pas le même sens selon le type, **et c'est tranché** : `brand_fix`,
       `class_fix`, `tag_merge` et l'extraction des specs s'arrêtent à la
