@@ -89,11 +89,15 @@
   }
 </script>
 
+<!-- The emblem kind is NOT a class of the tile: `flag` is also the class of
+     the flag itself, and the tile took its 44×29 box and `overflow: hidden` -
+     a squashed tile showing only its count. -->
 {#snippet tile(key: string, tl: IndexTile, emblem: "flag" | "family" | "brand")}
   {@const name = tileName(key, tl)}
   <button
     type="button"
-    class="tile {emblem}"
+    class="tile"
+    class:brand={emblem === "brand"}
     class:unset={tl.unset}
     aria-label="{name}, {countText(tl.count)}"
     onclick={() => onpose(key, tl.value)}
