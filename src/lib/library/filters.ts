@@ -19,6 +19,7 @@
 // (cars and tracks) share them and they stay readable on their own.
 import { carPerf, clampPerfPct, perfBand, PERF_DEFAULT_PCT } from "$lib/detail/carSpecs";
 import { modTags } from "./cardSearch";
+import { familiesOfTags, familyLookup, type CategoryFamily } from "./families";
 import type { ModCard, ModKind } from "./library";
 import { t } from "$lib/i18n/index.svelte";
 
@@ -47,11 +48,24 @@ export type FilterState =
 
 export type FilterMap = Record<string, FilterState>;
 
+/**
+ * The value that stands for "this mod carries none" (INDEX§4.3).
+ *
+ * A real value and not a separate flag, so that the "Not set" tile of the index
+ * poses an ordinary token, which the chip then shows, excludes, clears and
+ * persists like any other - one filter state, not two (INDEX§2). It can
+ * never collide with a value read off a mod: no author writes this.
+ */
+export const UNSET_VALUE = "__unset__";
+
 export interface FilterChoice {
   value: string;
   /** Translated label. Absent for values that come from the library itself
    * (a brand, an author, a tag - they are never translated). */
   labelKey?: string;
+  /** Label as is, for a value of a fixed vocabulary the user named himself (a
+   * category family he created keeps its name in every language). */
+  label?: string;
 }
 
 export interface FilterDef {
@@ -78,6 +92,12 @@ export interface FilterDef {
    * vocabulary would translate its labels, and the lookup would miss.
    */
   flags?: boolean;
+  /**
+   * The filter offers the "carries none" value (`UNSET_VALUE`), under this
+   * label. Only where the gap is worth seeing: a track without a country is a
+   * hole in the data one may want to fill, and the index shows it as a tile.
+   */
+  unsetLabelKey?: string;
 }
 
 /** The four exclusive states of a mod, plus `broken` which cuts across them.
@@ -99,13 +119,33 @@ const STATE_CHOICES: FilterChoice[] = [
  * year, class and driver outfit only exist for cars, which is why the pinned
  * set is stored per kind. Order here is the order of the add menu and of the
  * ghost chips. */
-export function filterDefs(kind: ModKind): FilterDef[] {
+export function filterDefs(kind: ModKind, families: CategoryFamily[] = []): FilterDef[] {
   const isCar = kind === "Car";
   const defs: FilterDef[] = [
     // A track carries SEVERAL categories, a car exactly one: the operator is
     // only offered where an AND can ever match.
     { key: "category", labelKey: "library.filterCategory", type: "val", operator: !isCar },
   ];
+  // Families (INDEX§6.1) are a filter of their OWN, next to `category`
+  // and not in its place. `category` is the car's first `#` tag - Content
+  // Manager's convention - and the Opponents block poses it for "same category
+  // as mine": turned into families, that chip would widen a GT3 grid to every
+  // race car. Absent when there is no table: a filter offering nothing but
+  // "Unclassified" would be noise (INDEX§8).
+  if (isCar && families.length) {
+    defs.push({
+      key: "family",
+      labelKey: "library.filterFamily",
+      type: "val",
+      // A car carries SEVERAL families: the operator is what lets a second
+      // tile cross with the first instead of replacing it (INDEX§7).
+      operator: true,
+      choices: families.map((f) =>
+        f.name ? { value: f.id, label: f.name } : { value: f.id, labelKey: `families.${f.id}` },
+      ),
+      unsetLabelKey: "index.unclassified",
+    });
+  }
   if (isCar) {
     defs.push({ key: "brand", labelKey: "library.filterBrand", type: "val" });
     // The one honest token for "the same car as mine" (WIKI§3.2). Matched on the
@@ -118,7 +158,7 @@ export function filterDefs(kind: ModKind): FilterDef[] {
   defs.push(
     { key: "tag", labelKey: "library.filterTag", type: "val", operator: true },
     { key: "author", labelKey: "library.filterAuthor", type: "val" },
-    { key: "country", labelKey: "library.filterCountry", type: "val", flags: true },
+    { key: "country", labelKey: "library.filterCountry", type: "val", flags: true, unsetLabelKey: "index.unset" },
   );
   if (isCar) {
     defs.push(
@@ -166,6 +206,9 @@ export interface FilterContext {
   isCar: boolean;
   /** All three tag origins merged - they are equivalent for filtering. */
   tagsOf: (c: ModCard) => string[];
+  /** Category families of a card (`families.ts`), read off an index built once
+   * per list load. */
+  familiesOf: (c: ModCard) => string[];
   /** Effective description, markup stripped and lowercased; `undefined` when
    * the mod has none, which can then never match. */
   descOf: (c: ModCard) => string | undefined;
@@ -202,13 +245,28 @@ function stateValues(c: ModCard): string[] {
 
 /** Values a card carries for a `val` filter. Returns a closure so the switch
  * is resolved ONCE per filter, not once per card: the predicate below runs
- * over the whole library on every keystroke of the search field. */
-function valuesOf(key: string, ctx: FilterContext): (c: ModCard) => string[] {
+ * over the whole library on every keystroke of the search field.
+ *
+ * A filter that offers `UNSET_VALUE` gets it for a card carrying nothing, so
+ * "Not set" is matched, counted and excluded by the very same code as a real
+ * value. */
+function valuesOf(def: FilterDef, ctx: FilterContext): (c: ModCard) => string[] {
+  const get = rawValuesOf(def.key, ctx);
+  if (!def.unsetLabelKey) return get;
+  return (c) => {
+    const v = get(c);
+    return v.length ? v : [UNSET_VALUE];
+  };
+}
+
+function rawValuesOf(key: string, ctx: FilterContext): (c: ModCard) => string[] {
   switch (key) {
     case "category":
       return ctx.isCar ? (c) => one(c.category) : (c) => c.categories;
     case "brand":
       return (c) => one(c.brand);
+    case "family":
+      return ctx.familiesOf;
     case "model":
       return (c) => one(c.display_name ?? c.id_interne);
     case "author":
@@ -250,8 +308,8 @@ function boolOf(key: string, ctx: FilterContext): (c: ModCard) => boolean {
  *
  * Counted on the current kind, never on the filtered results: a number that
  * moves with each token dropped is useless for deciding on the next one. */
-export function countValues(key: string, cards: ModCard[], ctx: FilterContext): Map<string, number> {
-  const get = valuesOf(key, ctx);
+export function countValues(def: FilterDef, cards: ModCard[], ctx: FilterContext): Map<string, number> {
+  const get = valuesOf(def, ctx);
   const m = new Map<string, number>();
   for (const c of cards) for (const v of get(c)) m.set(v, (m.get(v) ?? 0) + 1);
   return m;
@@ -265,17 +323,26 @@ export interface FilterOption {
 }
 
 export function optionsOf(def: FilterDef, cards: ModCard[], ctx: FilterContext): FilterOption[] {
-  const counts = countValues(def.key, cards, ctx);
+  const counts = countValues(def, cards, ctx);
+  // "Not set" goes LAST, and only when some mod is in that case: it is the gap
+  // in the data, not a value among the others (INDEX§4.3).
+  const unsetCount = counts.get(UNSET_VALUE) ?? 0;
+  counts.delete(UNSET_VALUE);
+  const unset: FilterOption[] = unsetCount
+    ? [{ value: UNSET_VALUE, label: valueLabel(def, UNSET_VALUE), count: unsetCount }]
+    : [];
   if (def.choices) {
-    return def.choices.map((ch) => ({
-      value: ch.value,
-      label: ch.labelKey ? t(ch.labelKey) : ch.value,
-      count: counts.get(ch.value) ?? 0,
-    }));
+    return [
+      ...def.choices.map((ch) => ({ value: ch.value, label: valueLabel(def, ch.value), count: counts.get(ch.value) ?? 0 })),
+      ...unset,
+    ];
   }
-  return [...counts.entries()]
-    .map(([value, count]) => ({ value, label: value, count }))
-    .sort((a, b) => a.label.toLowerCase().localeCompare(b.label.toLowerCase()));
+  return [
+    ...[...counts.entries()]
+      .map(([value, count]) => ({ value, label: value, count }))
+      .sort((a, b) => a.label.toLowerCase().localeCompare(b.label.toLowerCase())),
+    ...unset,
+  ];
 }
 
 /** Free-text terms: one per word, AND between them, each a plain "contains".
@@ -308,7 +375,7 @@ export function buildPredicate(
       const inc = st.values.filter((v) => v.sign > 0).map((v) => lc(v.value));
       const exc = st.values.filter((v) => v.sign < 0).map((v) => lc(v.value));
       if (!inc.length && !exc.length) continue;
-      const get = valuesOf(def.key, ctx);
+      const get = valuesOf(def, ctx);
       // The operator governs the INCLUSIONS only. Exclusions are always
       // conjunctive - "except A or except B" means nothing, one wants both
       // gone - and excluding always wins over including, which is what a
@@ -400,8 +467,41 @@ export function blankState(def: FilterDef): FilterState {
 /** Label of one value, for the chip summary and the posed tokens. Only a
  * fixed vocabulary is translated - a brand, a tag or an author never is. */
 export function valueLabel(def: FilterDef, value: string): string {
+  if (value === UNSET_VALUE && def.unsetLabelKey) return t(def.unsetLabelKey);
   const choice = def.choices?.find((c) => c.value === value);
+  if (choice?.label) return choice.label;
   return choice?.labelKey ? t(choice.labelKey) : value;
+}
+
+/** Whether any filter says something, or the search box does. What the index
+ * of the library waits for to give way to the list (INDEX§3): a pinned
+ * chip left blank is a ghost, and filters nothing. */
+export function hasActiveFilter(filters: FilterMap, query: string): boolean {
+  return query.trim() !== "" || Object.values(filters).some((st) => !isBlank(st));
+}
+
+/**
+ * Poses one value from outside the chip editor - a tile of the index (INDEX§2,
+ * R2). Returns a NEW map, for the same reason as `toggleChip`: the caller
+ * assigns it, and a `$state` proxy sees one write.
+ *
+ * **Crossing or replacing is deduced from the filter, never decided per
+ * taxonomy** (INDEX§7). A filter with an operator is one a mod carries
+ * several values of: a second value is ADDED, and a freshly posed chip starts
+ * on AND - "Prototype" then "Race" means racing prototypes. A single-valued
+ * filter is REPLACED: "Japan" then "Italy" would match nothing. An operator
+ * the user already set to OR in the editor is left alone.
+ */
+export function poseValue(defs: FilterDef[], filters: FilterMap, key: string, value: string): FilterMap {
+  const def = defs.find((d) => d.key === key);
+  if (!def || def.type !== "val") return filters;
+  const st = filters[key];
+  const current = st?.type === "val" ? st : null;
+  if (!def.operator || !current) {
+    return { ...filters, [key]: { type: "val", values: [{ value, sign: 1 }], op: "and" } };
+  }
+  const values = current.values.filter((v) => v.value !== value);
+  return { ...filters, [key]: { type: "val", values: [...values, { value, sign: 1 }], op: current.op } };
 }
 
 /** What a chip shows to the right of its label. Structured rather than a
@@ -700,6 +800,8 @@ export function buildCardIndex(
   /** Id of the car the performance band is measured against - the session car.
    * `null` on the track library, and on a first run with no session car yet. */
   perfRefId: string | null = null,
+  /** Category families (`families.ts`); empty where the screen offers none. */
+  families: CategoryFamily[] = [],
 ): CardIndex {
   const descIndex = new Map<string, string>();
   const noteIndex = new Map<string, string>();
@@ -709,7 +811,12 @@ export function buildCardIndex(
   const ratioIndex = new Map<string, number>();
   let perfUnreadable = 0;
   let perfRef: PerfRef | null = null;
+  // Once per list load too: a card's families are a lookup over all of its
+  // tags, and the index counts them for every tile.
+  const familyIndex = new Map<string, string[]>();
+  const lookup = familyLookup(families);
   for (const c of cards) {
+    if (families.length) familyIndex.set(c.id_interne, familiesOfTags(modTags(c), lookup, families));
     if (c.description) descIndex.set(c.id_interne, c.description.replace(/<[^>]*>/g, " ").toLowerCase());
     if (c.notes_user) noteIndex.set(c.id_interne, c.notes_user.toLowerCase());
     if (!isCar) continue;
@@ -723,6 +830,7 @@ export function buildCardIndex(
   const ctx: FilterContext = {
     isCar,
     tagsOf: modTags,
+    familiesOf: (c) => familyIndex.get(c.id_interne) ?? [],
     descOf: (c) => descIndex.get(c.id_interne),
     noteOf: (c) => noteIndex.get(c.id_interne),
     hasDriver,

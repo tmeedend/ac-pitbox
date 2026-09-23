@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countryKey } from "./flags";
+import { countryKey, localizedCountry } from "./flags";
 
 /** Un extrait fidèle de la table du jeu : les noms utiles aux cas ci-dessous,
  * dont les deux qui portent une virgule. */
@@ -34,5 +34,21 @@ describe("countryKey", () => {
     expect(countryKey("U.S.A.", known)).toBeNull();
     expect(countryKey("Freedonia", known)).toBeNull();
     expect(countryKey("", known)).toBeNull();
+  });
+});
+
+describe("localizedCountry", () => {
+  // Index spec §11: a country is translated from its code, never from the
+  // mod's string.
+  it("translates the game's English name through its code", () => {
+    expect(localizedCountry("Japan", "fr")).toBe("Japon");
+    expect(localizedCountry("United Kingdom", "de")).toBe("Vereinigtes Königreich");
+    expect(localizedCountry("united states", "fr")).toBe("États-Unis");
+  });
+
+  // A wrong name on a tile is worse than an untranslated one.
+  it("keeps the name as is when no code matches it exactly", () => {
+    expect(localizedCountry("Scotland", "fr")).toBe("Scotland");
+    expect(localizedCountry("Nürburgring Land", "fr")).toBe("Nürburgring Land");
   });
 });

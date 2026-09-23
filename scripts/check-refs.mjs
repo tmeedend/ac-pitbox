@@ -46,6 +46,10 @@ const DOCS = {
   IMPORT: "SPEC-import.md",
   REFONTE: "SPEC-refonte-navigation-et-fiches.md",
   TEXTURE: "SPEC-texture-update.md",
+  // L'index de bibliothèque et les taxonomies (marques, pays, familles) dont
+  // il dépend : deux specs livrées ensemble, lues ensemble.
+  INDEX: "SPEC-index-bibliotheque.md",
+  TAXO: "SPEC-taxonomies.md",
   // Les instructions par lot de la refonte de l'écran de session. Livrées,
   // gardées pour leurs arguments — et parce que le code y renvoie.
   L5: "LOT5-refonte-ecran-session.md",

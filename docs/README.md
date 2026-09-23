@@ -24,6 +24,8 @@ désigne `SPEC.md`** et les autres documents portent une étiquette :
 | `IMPORT§` | `SPEC-import.md` |
 | `REFONTE§` | `SPEC-refonte-navigation-et-fiches.md` |
 | `TEXTURE§` | `SPEC-texture-update.md` |
+| `INDEX§` | `SPEC-index-bibliotheque.md` |
+| `TAXO§` | `SPEC-taxonomies.md` |
 | `SETUP§` | `LOT-session-setup.md` |
 | `CIBLE§` | `CIBLE-reglages-session.md` |
 | `L1§` | `LOT1-forme-ecran-session.md` |
@@ -106,6 +108,14 @@ fait — en cas d'écart, la spec fait foi.
   les **mesures faites sur la bibliothèque réelle avant de commencer** : elles
   ont supprimé un lot entier (la détection CSP des voitures existait déjà) et
   démenti le fourre-tout redouté au REFONTE§14.4.
+- **`SPEC-index-bibliotheque.md`** (`INDEX§`) — l'état par défaut des écrans
+  Circuits et Voitures devient un **index** de tuiles (pays ; familles puis
+  marques). Porte la règle qui tient tout le reste : la tuile **pose une
+  puce**, elle n'ouvre pas un second mécanisme. Livrée.
+- **`SPEC-taxonomies.md`** (`TAXO§`) — marques, pays et familles de catégorie
+  deviennent des **termes** (nom canonique, alias, emblème), curés dans trois
+  onglets de l'Atelier. **Seule la table des familles est livrée** (pour
+  l'index) ; le reste est un chantier ouvert (`CHANTIERS.md`).
 - **`SPEC-grille.md`** — lisibilité des cartes, affichage du nom, et
   **régénération des vignettes**. Porte la distinction qui structure le reste :
   « les voitures sombres sont indiscernables » recouvre deux problèmes — la

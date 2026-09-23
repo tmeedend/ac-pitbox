@@ -114,6 +114,38 @@ pub struct CarRules {
     pub extraction_specs: ExtractionSpecs,
     #[serde(default)]
     pub extraction_country: ExtractionCountry,
+    /// Category families (INDEX§6.1, TAXO§7.3): which tags make a
+    /// car a "Race" or a "Classic". **Read by the library, never by this
+    /// engine** — a family is an index over tags, not a rule, so it has no
+    /// output to write into the overlay and no reason to bump `ENGINE_VERSION`.
+    /// It lives here because this is the one table the user can already edit,
+    /// and the one the Categories tab will edit.
+    #[serde(default)]
+    pub category_families: Vec<CategoryFamily>,
+}
+
+/// One family of car categories.
+///
+/// A tag belongs to **one** family at most: attached elsewhere it moves,
+/// otherwise the index counters stop meaning anything (TAXO§7.3). A car,
+/// on the other hand, belongs to as many families as its tags reach — a 250
+/// GTO is Classic, Sportscars *and* Race.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CategoryFamily {
+    /// Stable slug. The shipped families are translated from it; it is also
+    /// the value a filter chip stores, so it must never be renamed.
+    pub id: String,
+    /// Displayed name of a family the user made up. Absent on the shipped ones,
+    /// which are translated instead (TAXO§12).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Silhouette picked from the embedded set; the neutral glyph otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    /// Tags compared lowercased and without their leading `#`: the same tag
+    /// reaches a car as `#rally` through a rule and as `rally` from its file.
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -219,6 +251,11 @@ pub fn load(app: &AppHandle) -> Rules {
     // c'est-à-dire en perdant la correction sur les 80 mods qu'elle vise.
     if rules.country_aliases.map.is_empty() {
         rules.country_aliases = default_rules().country_aliases;
+    }
+    // And for the category families: without them the library index has no
+    // category section at all (INDEX§8).
+    if rules.car.category_families.is_empty() {
+        rules.car.category_families = default_rules().car.category_families;
     }
     rules
 }
@@ -595,6 +632,16 @@ mod tests {
         let h = apply_track(&rules, &["gt".into(), "fun".into()]);
         assert!(h.categories.is_empty());
         assert_eq!(h.category, None);
+    }
+
+    /// INDEX§8: without a family table there is no category index. The
+    /// backfill in `load` copies it from here, so an empty seed would leave
+    /// every existing install without one.
+    #[test]
+    fn embedded_seed_has_category_families() {
+        let fams = default_rules().car.category_families;
+        assert!(fams.iter().any(|f| f.id == "race"), "shipped families present");
+        assert!(fams.iter().all(|f| !f.tags.is_empty()), "no family without a tag");
     }
 
     #[test]

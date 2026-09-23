@@ -505,6 +505,44 @@ de reprendre. En cas d'écart, la spec fait foi.
       ouverts de REFONTE§14 à reposer avec l'inventaire réel sous les yeux, et le
       markdown dans les notes (demandé à l'usage le 2026-09-11, voir le 4bis du
       plan).
+- [ ] **Taxonomies (`SPEC-taxonomies.md`) — seule la table des familles est
+      livrée.** L'index de bibliothèque (`SPEC-index-bibliotheque.md`) est
+      fait, et il n'avait besoin que d'elle : `car.category_families` dans les
+      règles, huit familles livrées, un filtre `Famille`. **Reste tout le
+      reste de la spec** : les trois onglets Marques / Pays / Catégories de
+      l'Atelier, l'élection du logo canonique (TAXO§4 — fond transparent,
+      résolution, vote majoritaire), la détection du fond cuit et la pastille
+      claire (TAXO§5), les propositions de fusion avec `Ignorer` mémorisé
+      (TAXO§7), la migration des corrections de marque hors de Règles (TAXO§8),
+      les logos personnels (TAXO§9), les emblèmes dans les puces (TAXO§10).
+      **Ce que l'index fait en attendant, et qu'il faudra remplacer** : la
+      tuile de marque montre le badge de la voiture au plus petit id (le seul
+      critère d'élection sans analyse d'image), et les tuiles montrent les
+      valeurs brutes — `Alfa` et `Alfa Romeo` côte à côte tant qu'aucune fusion
+      n'existe (INDEX§8 l'accepte).
+      **Deux écarts assumés avec les specs, à ne pas « corriger » sans les
+      relire.** (1) Les familles sont un filtre **à part** (`family`), pas le
+      filtre `category` réinterprété : la puce « même catégorie que ma
+      voiture » du bloc Adversaires pose `category` = premier tag `#`, et une
+      famille aurait élargi une grille GT3 à toutes les voitures de course.
+      La colonne Catégorie du tableau montre donc toujours le premier tag `#`.
+      (2) La table des familles n'est **pas** une copie TypeScript : elle vit
+      dans les règles Rust, là où l'onglet Catégories l'éditera — la table
+      d'alias de pays a eu un doublon TS, et c'est le doublon invisible qui
+      gagnait.
+      **Mesure qui a fixé le seed** : sur les 359 voitures du corpus (tags des
+      `ui_car.json`), seuls 238 portent un tag `#` — des familles construites
+      sur les seuls `#` auraient laissé un tiers de la bibliothèque « Non
+      classé ». Le seed compare donc tous les tags (sans `#` de tête) : 601
+      appartenances, 34 non classées, presque toutes du trafic. `sport` (12
+      voitures, surtout DDM) et `jdm` restent hors familles : ambigus, et la
+      spec veut que `#jdm` reste un genre.
+      **Piège pour les pays** : les tuiles traduisent le nom (depuis le code
+      ISO, `localizedCountry`), mais la puce et l'éditeur montrent encore le
+      nom anglais rangé — leurs drapeaux se cherchent **par le libellé** dans
+      `FilterBar`, donc traduire `valueLabel` les éteindrait. À reprendre avec
+      l'onglet Pays, qui stockera le code.
+
 - [ ] **Deux jeux de règles de tags ont divergé — à trancher.**
       `docs/default-tag-rules-enriched.json` **n'est pas ce que l'app charge** :
       elle sème `src-tauri/rules/default-tag-rules.json` dans le dossier de

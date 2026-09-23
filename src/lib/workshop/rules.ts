@@ -41,6 +41,14 @@ export interface ExtractionCountry {
 export interface CountryAliases {
   map: Record<string, string>;
 }
+/** A family of car categories (INDEX§6.1) — see `$lib/library/families`. */
+export interface CategoryFamily {
+  id: string;
+  /** Only on a family the user made up; the shipped ones are translated. */
+  name?: string;
+  icon?: string;
+  tags: string[];
+}
 export interface CarRules {
   brand_fix: BrandFix[];
   name_to_tag: NameToTag[];
@@ -48,6 +56,7 @@ export interface CarRules {
   tag_merge: TagMerge[];
   extraction_specs: ExtractionSpecs;
   extraction_country: ExtractionCountry;
+  category_families: CategoryFamily[];
 }
 export interface TrackRules {
   tag_merge: TagMerge[];

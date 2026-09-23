@@ -404,6 +404,7 @@
     "filterAuthor": "Author",
     "filterCountry": "Country",
     "filterCategory": "Category",
+    "filterFamily": "Family",
     "filterTag": "Tag",
     "filterClass": "Class",
     "favorites": "Favorites",
@@ -1704,5 +1705,34 @@
   "prefs": {
     "writeFailedTitle": "Your settings are not being saved",
     "writeFailedBody": "Pit Box cannot write its preferences to disk. What you set stays active until you close the app, then it is lost — favourites, driver outfits, filters and views included."
+  },
+  "families": {
+    "street": "Street",
+    "sportscars": "Sportscar",
+    "race": "Race",
+    "classic": "Classic",
+    "openwheel": "Open-wheel",
+    "prototype": "Prototype",
+    "drift": "Drift",
+    "rally": "Rally"
+  },
+  "index": {
+    "byCountry": "Browse by country",
+    "byFamily": "Browse by family",
+    "byBrand": "Browse by brand",
+    "countries": "{count} countries",
+    "brands": "{count} brands",
+    "familiesOverlap": "A car can belong to several families",
+    "allTracks": "See all tracks",
+    "allBrands": "All brands ({count})",
+    "fewerBrands": "Show fewer",
+    "unset": "Not set",
+    "unclassified": "Unclassified",
+    "tracks": "{count} tracks",
+    "trackOne": "{count} track",
+    "cars": "{count} cars",
+    "carOne": "{count} car",
+    "viewIndex": "Index",
+    "viewList": "Full list"
   }
 }

@@ -498,7 +498,7 @@ Svelte. Les deux sont documentées comme écartées, en tête du script.
 `gridthumbs.rs` et `SPEC.md` dans `importer.rs`. Donc : **`§4.5` nu = `SPEC.md`**
 (le défaut, inchangé), et une **étiquette** pour les autres — `SESSION§3.2`,
 `GRILLE§5.3`, `WIKI§4.2`, `PILOTE§6.3`, `PREVIEW§8.1`, `FMOD§2bis`,
-`MUSIQUE§3.4`, `IMPORT§`, `REFONTE§`, `TEXTURE§`. La liste fait foi dans
+`MUSIQUE§3.4`, `IMPORT§`, `REFONTE§`, `TEXTURE§`, `INDEX§`, `TAXO§`. La liste fait foi dans
 `scripts/check-refs.mjs`.
 
 **`npm run check` affiche aussi le poids de la documentation** — nombre de
@@ -635,6 +635,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Enrichissement Wikipédia** | livré et nettoyé ; reste la seule mesure des seuils, sur tes corrections manuelles | `docs/SPEC-wikipedia-fiche-detail.md` |
 | **Signature Authenticode** | le workflow est prêt, il attend un certificat | `docs/windows-code-signing.md` |
 | **Refonte navigation et fiches** | livrée et fusionnée ; restent trois questions ouvertes, dont le markdown dans les notes | `docs/PLAN-refonte-navigation.md` |
+| **Taxonomies** | seule la table des familles est livrée (pour l'index) ; onglets de l'Atelier, logos canoniques et fusions restent | `docs/SPEC-taxonomies.md`, `docs/CHANTIERS.md` |
 | **Règles de tags divergentes** | deux fichiers décrivent la même ontologie, un seul est chargé | `docs/CHANTIERS.md` |
 
 ## Fin de tâche — dans cet ordre

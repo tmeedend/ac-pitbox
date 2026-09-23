@@ -404,6 +404,7 @@
     "filterAuthor": "Auteur",
     "filterCountry": "Pays",
     "filterCategory": "Catégorie",
+    "filterFamily": "Famille",
     "filterTag": "Tag",
     "filterClass": "Classe",
     "favorites": "Favoris",
@@ -1704,5 +1705,34 @@
   "prefs": {
     "writeFailedTitle": "Vos réglages ne sont pas enregistrés",
     "writeFailedBody": "Pit Box n'arrive pas à écrire ses préférences sur le disque. Ce que vous réglez reste actif jusqu'à la fermeture, puis sera perdu — favoris, tenues de pilote, filtres et vues comprises."
+  },
+  "families": {
+    "street": "Route",
+    "sportscars": "Sportive",
+    "race": "Course",
+    "classic": "Classique",
+    "openwheel": "Monoplace",
+    "prototype": "Prototype",
+    "drift": "Drift",
+    "rally": "Rallye"
+  },
+  "index": {
+    "byCountry": "Parcourir par pays",
+    "byFamily": "Parcourir par famille",
+    "byBrand": "Parcourir par marque",
+    "countries": "{count} pays représentés",
+    "brands": "{count} marques",
+    "familiesOverlap": "Une voiture peut appartenir à plusieurs familles",
+    "allTracks": "Voir tous les circuits",
+    "allBrands": "Toutes les marques ({count})",
+    "fewerBrands": "Réduire",
+    "unset": "Non renseigné",
+    "unclassified": "Non classé",
+    "tracks": "{count} circuits",
+    "trackOne": "{count} circuit",
+    "cars": "{count} voitures",
+    "carOne": "{count} voiture",
+    "viewIndex": "Index",
+    "viewList": "Liste complète"
   }
 }

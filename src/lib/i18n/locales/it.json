@@ -285,6 +285,7 @@
     "filterAuthor": "Autore",
     "filterCountry": "Paese",
     "filterCategory": "Categoria",
+    "filterFamily": "Famiglia",
     "filterTag": "Tag",
     "filterClass": "Classe",
     "favorites": "Preferiti",
@@ -1054,5 +1055,34 @@
     "tokenExclude": "Escludi",
     "tokenInputHint": "Digita per cercare. Un « - » davanti alla parola la esclude invece di includerla.",
     "tokenNoMatch": "Nessuna corrispondenza."
+  },
+  "families": {
+    "street": "Stradale",
+    "sportscars": "Sportiva",
+    "race": "Corsa",
+    "classic": "Classica",
+    "openwheel": "Monoposto",
+    "prototype": "Prototipo",
+    "drift": "Drift",
+    "rally": "Rally"
+  },
+  "index": {
+    "byCountry": "Sfoglia per paese",
+    "byFamily": "Sfoglia per famiglia",
+    "byBrand": "Sfoglia per marca",
+    "countries": "{count} paesi",
+    "brands": "{count} marche",
+    "familiesOverlap": "Un'auto può appartenere a più famiglie",
+    "allTracks": "Vedi tutti i circuiti",
+    "allBrands": "Tutte le marche ({count})",
+    "fewerBrands": "Riduci",
+    "unset": "Non indicato",
+    "unclassified": "Non classificata",
+    "tracks": "{count} circuiti",
+    "trackOne": "{count} circuito",
+    "cars": "{count} auto",
+    "carOne": "{count} auto",
+    "viewIndex": "Indice",
+    "viewList": "Elenco completo"
   }
 }

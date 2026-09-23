@@ -285,6 +285,7 @@
     "filterAuthor": "Autor",
     "filterCountry": "Land",
     "filterCategory": "Kategorie",
+    "filterFamily": "Familie",
     "filterTag": "Tag",
     "filterClass": "Klasse",
     "favorites": "Favoriten",
@@ -1054,5 +1055,34 @@
     "tokenExclude": "Ausschließen",
     "tokenInputHint": "Zum Suchen tippen. Ein vorangestelltes „-“ schließt das Wort aus, statt es einzuschließen.",
     "tokenNoMatch": "Keine Treffer."
+  },
+  "families": {
+    "street": "Straße",
+    "sportscars": "Sportwagen",
+    "race": "Rennwagen",
+    "classic": "Klassiker",
+    "openwheel": "Formelwagen",
+    "prototype": "Prototyp",
+    "drift": "Drift",
+    "rally": "Rallye"
+  },
+  "index": {
+    "byCountry": "Nach Land durchsuchen",
+    "byFamily": "Nach Familie durchsuchen",
+    "byBrand": "Nach Marke durchsuchen",
+    "countries": "{count} Länder",
+    "brands": "{count} Marken",
+    "familiesOverlap": "Ein Auto kann mehreren Familien angehören",
+    "allTracks": "Alle Strecken anzeigen",
+    "allBrands": "Alle Marken ({count})",
+    "fewerBrands": "Weniger anzeigen",
+    "unset": "Nicht angegeben",
+    "unclassified": "Nicht eingeordnet",
+    "tracks": "{count} Strecken",
+    "trackOne": "{count} Strecke",
+    "cars": "{count} Autos",
+    "carOne": "{count} Auto",
+    "viewIndex": "Index",
+    "viewList": "Vollständige Liste"
   }
 }

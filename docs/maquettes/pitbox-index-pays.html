@@ -1,0 +1,366 @@
+<meta charset="utf-8">
+<title>Pit Box — index par pays &amp; regroupement</title>
+<style>
+  :root{
+    --bg:#0b0b0d;--panel:#141416;--panel-2:#191a1d;--cell:#1a1b1e;
+    --line:#26272b;--line-soft:#1f2023;
+    --txt:#dcdcdd;--txt-2:#8d8e92;--txt-3:#5c5d62;--txt-4:#43444a;
+    --accent:#c9331f;--accent-dim:#7e2415;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#08080a;color:var(--txt);
+    font:13px/1.45 "Inter","Segoe UI",Roboto,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  .page{padding:20px 24px 44px;max-width:1420px;margin:0 auto}
+  h1{font-size:12px;letter-spacing:.24em;color:#8d8e92;font-weight:500;margin:0 0 4px}
+  .sub{font-size:12px;color:#5c5d62;margin:0 0 16px}
+  .switch{display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+  .tb{font-size:11.5px;border:1px solid #2a2b30;border-radius:2px;padding:7px 13px;
+    color:#8d8e92;background:none;cursor:pointer;font-family:inherit;letter-spacing:.06em}
+  .tb:hover{color:#dcdcdd;border-color:#3a3b40}
+  .tb.on{background:#231a18;border-color:#c9331f;color:#e3a99c}
+  .hint{font-size:11.5px;color:#5c5d62}
+
+  .app{border:1px solid #1c1d20;border-radius:2px;overflow:hidden;background:var(--bg)}
+  .brandline{height:2px;background:var(--accent)}
+  .wrap{padding:0 20px 26px}
+
+  /* ---------- barre de filtres ---------- */
+  .bar{display:flex;align-items:flex-start;gap:14px;padding:14px 0 12px}
+  .flow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;flex:1;min-width:0}
+  .search{height:32px;width:270px;display:flex;align-items:center;gap:9px;padding:0 11px;
+    background:var(--panel-2);border:1px solid var(--line);border-radius:2px;color:var(--txt-3);font-size:12.5px}
+  .add{height:32px;display:flex;align-items:center;gap:7px;padding:0 12px;background:none;font-family:inherit;
+    border:1px dashed #3a3b40;border-radius:2px;color:var(--txt-2);font-size:12px;cursor:pointer;flex:0 0 auto}
+  .add:hover{border-color:#4a4b52;color:var(--txt)}
+  .add b{color:var(--txt-3);font-weight:400;font-size:14px;line-height:1}
+  .rule{width:1px;align-self:stretch;background:var(--line);margin:3px 4px}
+  .rule.hidden{display:none}
+  .chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 3px 0 8px;
+    border:1px solid var(--accent-dim);border-radius:2px;background:var(--panel-2);
+    font-size:12px;color:var(--txt);cursor:pointer;white-space:nowrap;flex:0 0 auto}
+  .chip .k{color:var(--txt-3)}
+  .chip .x{width:17px;height:17px;display:flex;align-items:center;justify-content:center;
+    color:var(--txt-3);font-size:13px;border-radius:2px}
+  .chip .x:hover{background:#2b2c31;color:var(--txt)}
+  .chip .fl{width:16px;height:11px;border-radius:1px;overflow:hidden;flex:0 0 16px;display:block}
+  .clear{font-size:11.5px;color:var(--txt-3);border:0;background:none;cursor:pointer;
+    padding:0 6px;height:26px;font-family:inherit;flex:0 0 auto}
+  .clear:hover{color:var(--accent)}
+  .aside{display:flex;align-items:center;gap:10px;flex:0 0 auto;height:32px}
+  .count{font-size:12px;color:var(--txt-2);white-space:nowrap}
+  .count b{color:var(--txt);font-weight:500}
+  .seg{display:flex;border:1px solid var(--line);border-radius:2px;overflow:hidden;height:32px}
+  .seg button{background:var(--panel-2);border:0;border-right:1px solid var(--line);color:var(--txt-3);
+    padding:0 10px;cursor:pointer;font-size:12px;font-family:inherit}
+  .seg button:last-child{border-right:0}
+  .seg button.on{background:#232428;color:var(--txt)}
+
+  /* ---------- index pays ---------- */
+  .idxhead{display:flex;align-items:baseline;gap:12px;margin:2px 0 13px;
+    padding-top:12px;border-top:1px solid var(--line-soft)}
+  .idxhead h4{margin:0;font-size:13px;color:var(--txt);font-weight:500}
+  .idxhead span.s{font-size:11.5px;color:var(--txt-3)}
+  .idxhead .all{margin-left:auto;font-size:11.5px;color:var(--txt-2);
+    border:1px solid var(--line);border-radius:2px;padding:6px 11px;cursor:pointer}
+  .idxhead .all:hover{border-color:#3a3b40;color:var(--txt)}
+
+  .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:9px}
+  .tile{background:var(--cell);border:1px solid var(--line-soft);border-radius:2px;
+    padding:13px 10px 11px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:9px;
+    transition:border-color .12s,background .12s}
+  .tile:hover{border-color:var(--accent-dim);background:#212227}
+  .tile .fl{width:46px;height:31px;border-radius:2px;overflow:hidden;
+    box-shadow:0 1px 5px rgba(0,0,0,.55);display:block}
+  .tile .nm{font-size:12px;color:var(--txt);text-align:center;line-height:1.25}
+  .tile .ct{font-size:10.5px;color:var(--txt-3)}
+  .tile.none{border-style:dashed}
+  .tile.none .fl{background:repeating-linear-gradient(135deg,#1b1c20,#1b1c20 5px,#212228 5px,#212228 10px);
+    display:flex;align-items:center;justify-content:center;color:var(--txt-4);font-size:14px}
+
+  /* ---------- cartes ---------- */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(184px,1fr));gap:10px}
+  .card{background:var(--cell);border:1px solid #2e2f34;border-radius:2px;padding:8px;
+    box-shadow:0 1px 0 rgba(255,255,255,.025) inset,0 4px 14px rgba(0,0,0,.35)}
+  .card .art{aspect-ratio:16/9;border-radius:2px;border:1px solid #2b2c31;overflow:hidden;
+    background:radial-gradient(66% 76% at 50% 52%,#2b2d33 0%,#17181c 78%);
+    display:flex;align-items:center;justify-content:center}
+  .card .k{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:10px;
+    letter-spacing:.1em;color:var(--txt-3)}
+  .card .k b{color:var(--txt-2);font-weight:400}
+  .card .k .fl{width:14px;height:10px;border-radius:1px;overflow:hidden;flex:0 0 14px;display:block}
+  .card .k .lg{width:13px;height:13px;border-radius:50%;background:#2f3037;flex:0 0 13px;
+    display:flex;align-items:center;justify-content:center;font-size:7px;color:#8d8e92}
+  .card .t{margin-top:3px;font-size:12.5px;font-weight:500;color:#ececed;line-height:1.3;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+  /* ---------- en-têtes de groupe ---------- */
+  .grp{display:flex;align-items:center;gap:10px;margin:22px 0 10px}
+  .grp.first{margin-top:6px}
+  .grp .lg{width:22px;height:22px;border-radius:50%;background:#2f3037;flex:0 0 22px;
+    display:flex;align-items:center;justify-content:center;font-size:9px;color:#8d8e92}
+  .grp .fl{width:24px;height:16px;border-radius:2px;overflow:hidden;flex:0 0 24px;display:block}
+  .grp .nm{font-size:12.5px;color:var(--txt)}
+  .grp .ct{font-size:10.5px;color:var(--txt-3)}
+  .grp::after{content:"";flex:1;height:1px;background:var(--line-soft);margin-left:4px}
+
+  .notes{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-top:26px}
+  .nb{border:1px solid #1c1d20;border-radius:2px;background:#131315;padding:15px 17px}
+  .nb h4{margin:0 0 9px;font-size:10px;letter-spacing:.2em;color:#5c5d62;font-weight:500}
+  .nb p{margin:0 0 11px;font-size:12px;color:#8d8e92;line-height:1.7}
+  .nb p:last-child{margin:0}
+  .nb b{color:#dcdcdd;font-weight:500}
+  .nb code{background:#1a1b1e;padding:1px 5px;border-radius:2px;font-size:11px;color:#dcdcdd}
+</style>
+
+<div class="page">
+  <h1>INDEX PAR PAYS &amp; REGROUPEMENT</h1>
+  <p class="sub">Clique un pays : il pose une puce et la liste apparaît. La croix de la puce ramène à l'index.</p>
+
+  <div class="switch">
+    <button class="tb on" id="tv">Circuits — index par pays</button>
+    <span class="hint">bascule vers la bibliothèque de voitures groupée par marque</span>
+  </div>
+
+  <div class="app">
+    <div class="brandline"></div>
+    <div class="wrap">
+      <div class="bar">
+        <div class="flow" id="flow">
+          <div class="search"><span>⌕</span> Nom, id, pack, tag…</div>
+          <button class="add"><b>+</b> Filtre</button>
+          <div class="rule hidden" id="rule"></div>
+        </div>
+        <div class="aside">
+          <span class="count" id="count"></span>
+          <div class="seg" id="seg"></div>
+        </div>
+      </div>
+      <div id="body"></div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="nb">
+      <h4>UNE PORTE, PAS UN SYSTÈME</h4>
+      <p>La tuile <b>pose une puce</b> — elle n'ouvre pas un mode parallèle. Tout continue de marcher ensuite : croiser avec une année, exclure un tag, « Tout effacer ».</p>
+      <p>Un seul état de filtre, un seul modèle mental. L'index est une façon d'entrer un filtre, pas un second mécanisme à maintenir.</p>
+    </div>
+    <div class="nb">
+      <h4>L'ÉTAT PAR DÉFAUT DEVIENT UTILE</h4>
+      <p>Sans filtre ni recherche, l'écran Circuits montrait un mur de trois cents vignettes. Il montre maintenant un index.</p>
+      <p><b>Zéro contrôle ajouté</b> : c'est l'état vide qui change, pas la barre. Et <b>« Voir tous les circuits »</b> reste là — personne n'est obligé de passer par un pays pour chercher Spa.</p>
+    </div>
+    <div class="nb">
+      <h4>LES VOITURES, PAS PAREIL</h4>
+      <p>Soixante-dix marques pour 287 voitures, très déséquilibrées : une grille de logos dont la moitié mène à une seule voiture fait beaucoup de clics pour rien.</p>
+      <p>Mais le <b>regroupement avec en-têtes</b> coûte zéro clic et réutilise la bascule « Grouper par » conçue pour la galerie de casques. Bascule en haut pour comparer.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= drapeaux (SVG inline, libres de droits) ================= */
+const vb = c => `<svg viewBox="0 0 30 20" preserveAspectRatio="none" style="width:100%;height:100%;display:block">${c}</svg>`;
+const vert  = (a,b,c) => vb(`<rect width="10" height="20" fill="${a}"/><rect x="10" width="10" height="20" fill="${b}"/><rect x="20" width="10" height="20" fill="${c}"/>`);
+const horiz = (a,b,c) => vb(`<rect width="30" height="6.67" fill="${a}"/><rect y="6.67" width="30" height="6.66" fill="${b}"/><rect y="13.33" width="30" height="6.67" fill="${c}"/>`);
+const cross = (bg,cr) => vb(`<rect width="30" height="20" fill="${bg}"/><rect x="9" width="4" height="20" fill="${cr}"/><rect y="8" width="30" height="4" fill="${cr}"/>`);
+
+const FLAG = {
+  'Italie'  : vert('#008C45','#F4F5F0','#CD212A'),
+  'France'  : vert('#002395','#FFFFFF','#ED2939'),
+  'Belgique': vert('#1B1B1B','#FAE042','#ED2939'),
+  'Irlande' : vert('#169B62','#FFFFFF','#FF883E'),
+  'Allemagne': horiz('#111111','#DD0000','#FFCE00'),
+  'Pays-Bas' : horiz('#AE1C28','#FFFFFF','#21468B'),
+  'Autriche' : horiz('#ED2939','#FFFFFF','#ED2939'),
+  'Hongrie'  : horiz('#CD2A3E','#FFFFFF','#436F4D'),
+  'Espagne'  : vb(`<rect width="30" height="20" fill="#AA151B"/><rect y="5" width="30" height="10" fill="#F1BF00"/>`),
+  'Japon'    : vb(`<rect width="30" height="20" fill="#fff"/><circle cx="15" cy="10" r="6" fill="#BC002D"/>`),
+  'Royaume-Uni': vb(`<rect width="30" height="20" fill="#012169"/>
+      <path d="M0 0L30 20M30 0L0 20" stroke="#fff" stroke-width="4"/>
+      <path d="M0 0L30 20M30 0L0 20" stroke="#C8102E" stroke-width="2"/>
+      <path d="M15 0V20M0 10H30" stroke="#fff" stroke-width="6"/>
+      <path d="M15 0V20M0 10H30" stroke="#C8102E" stroke-width="3.5"/>`),
+  'États-Unis': vb(`<rect width="30" height="20" fill="#fff"/>
+      ${[0,1,2,3,4,5,6].map(i=>`<rect y="${i*2.857}" width="30" height="1.43" fill="#B22234"/>`).join('')}
+      <rect width="13" height="10" fill="#3C3B6E"/>
+      ${[0,1,2].map(r=>[0,1,2,3].map(c=>`<circle cx="${2+c*3}" cy="${2+r*3}" r=".65" fill="#fff"/>`).join('')).join('')}`),
+  'Australie': vb(`<rect width="30" height="20" fill="#012169"/>
+      <path d="M0 0L13 10M13 0L0 10" stroke="#fff" stroke-width="2"/>
+      <path d="M6.5 0V10M0 5H13" stroke="#fff" stroke-width="2.8"/>
+      <path d="M6.5 0V10M0 5H13" stroke="#C8102E" stroke-width="1.5"/>
+      <circle cx="21" cy="6" r="1.3" fill="#fff"/><circle cx="25" cy="11" r="1" fill="#fff"/><circle cx="19" cy="14" r="1" fill="#fff"/>`),
+  'Brésil'   : vb(`<rect width="30" height="20" fill="#009739"/><path d="M15 2.5L28 10L15 17.5L2 10Z" fill="#FEDD00"/><circle cx="15" cy="10" r="4" fill="#012169"/>`),
+  'Portugal' : vb(`<rect width="30" height="20" fill="#FF0000"/><rect width="12" height="20" fill="#046A38"/><circle cx="12" cy="10" r="3.6" fill="#FFE900" stroke="#fff" stroke-width=".6"/>`),
+  'Finlande' : cross('#fff','#003580'),
+  'Suède'    : cross('#006AA7','#FECC00'),
+  'Suisse'   : vb(`<rect width="30" height="20" fill="#D52B1E"/><rect x="13" y="4" width="4" height="12" fill="#fff"/><rect x="9" y="8" width="12" height="4" fill="#fff"/>`),
+  'Canada'   : vb(`<rect width="30" height="20" fill="#fff"/><rect width="7.5" height="20" fill="#D80621"/><rect x="22.5" width="7.5" height="20" fill="#D80621"/>
+      <path d="M15 5l1.4 3.2 2.6-1-1 2.8 2 1.3-2.4.7.3 2.6-2.9-1.6-2.9 1.6.3-2.6-2.4-.7 2-1.3-1-2.8 2.6 1z" fill="#D80621"/>`),
+  'Monaco'   : vb(`<rect width="30" height="10" fill="#CE1126"/><rect y="10" width="30" height="10" fill="#fff"/>`),
+  'Tchéquie' : vb(`<rect width="30" height="10" fill="#fff"/><rect y="10" width="30" height="10" fill="#D7141A"/><path d="M0 0L14 10L0 20Z" fill="#11457E"/>`)
+};
+
+const COUNTRIES = [
+  ['Italie',38],['Japon',34],['Allemagne',29],['Royaume-Uni',27],['États-Unis',21],
+  ['France',16],['Belgique',9],['Espagne',8],['Autriche',6],['Pays-Bas',6],
+  ['Australie',5],['Brésil',4],['Portugal',4],['Finlande',3],['Suède',3],
+  ['Suisse',3],['Canada',2],['Hongrie',2],['Tchéquie',2],['Irlande',1],['Monaco',1]
+];
+const UNSET = 14;
+const TOTAL = COUNTRIES.reduce((a,b)=>a+b[1],0) + UNSET;
+
+const TRACKS = {
+ 'Japon':[['Suzuka Circuit','Kunos'],['Fuji Speedway','VRC'],['Tsukuba Circuit','Kunos'],
+          ['Ebisu Minami','Nori'],['Akina Downhill','initial-d'],['Hakone Turnpike','Kaido'],
+          ['Sportsland SUGO','ACU'],['Autopolis','Pixsim']],
+ 'Italie':[['Imola','Kunos'],['Monza','Kunos'],['Mugello','Kunos'],['Vallelunga','Kunos'],
+           ['Misano','RTB'],['Varano','LiquidSky'],['Franciacorta','ACU'],['Monza 1966','Sim Traxx']],
+ 'Royaume-Uni':[['Silverstone','Kunos'],['Brands Hatch','Kunos'],['Donington Park','Sim Traxx'],
+                ['Oulton Park','RTB'],['Cadwell Park','ACU'],['Snetterton','Pixsim']],
+ 'Allemagne':[['Nürburgring GP','Kunos'],['Nordschleife','Kunos'],['Hockenheimring','RTB'],
+              ['Sachsenring','ACU'],['Lausitzring','Sim Traxx'],['Norisring','Pixsim']],
+ 'France':[['Circuit de Spa… non','x'],['Magny-Cours','RTB'],['Paul Ricard','Kunos'],
+           ['Le Mans','VRC'],['Pau-Ville','ACU'],['Charade','Sim Traxx']],
+ 'Belgique':[['Spa-Francorchamps','Kunos'],['Zolder','RTB'],['Chimay','ACU'],['Mettet','Pixsim']],
+ '__all__':[['Imola','Kunos'],['Suzuka Circuit','Kunos'],['Spa-Francorchamps','Kunos'],
+            ['Nordschleife','Kunos'],['Silverstone','Kunos'],['Laguna Seca','Kunos'],
+            ['Tsukuba Circuit','Kunos'],['Monza','Kunos']]
+};
+const TRACK_COUNTRY = {
+  'Imola':'Italie','Monza':'Italie','Suzuka Circuit':'Japon','Spa-Francorchamps':'Belgique',
+  'Nordschleife':'Allemagne','Silverstone':'Royaume-Uni','Laguna Seca':'États-Unis','Tsukuba Circuit':'Japon'
+};
+
+const CARS = [
+ ['Porsche', 61, ['911 GT3 RS','718 Cayman S','911 (993) Carrera','918 Spyder','924 Carrera Turbo','Cayman GT4']],
+ ['Nissan',  47, ['Skyline GT-R R34 V-Spec','Silvia S15','370z Nismo','GT-R NISMO','Fairlady Z S30','180SX Type-X']],
+ ['Mitsubishi', 9, ['Lancer Evolution VIII MR','GTO Twin Turbo','Lancer Evolution V Kai']]
+];
+const YEARS  = [2015,2016,1995,2013,1979,2016];
+const COLORS = ['#c9331f','#e2e2e4','#1c3f8a','#d8b12b','#2f9c5c','#3f9bd6'];
+
+function carSVG(c){
+  return `<svg width="82%" viewBox="0 0 150 60">
+    <ellipse cx="75" cy="52" rx="54" ry="4" fill="#000" opacity=".45"/>
+    <path d="M12 44c2-9 10-13 20-15 8-8 20-12 34-12s24 5 31 13c11 2 20 6 22 14 1 5-2 8-7 8H18c-5 0-7-3-6-8z" fill="${c}"/>
+    <path d="M42 30c6-6 14-9 24-9s18 3 24 9z" fill="#0b0b0d" opacity=".62"/>
+    <path d="M14 40c5-7 13-10 23-12 8-7 18-10 30-10" fill="none" stroke="#fff" stroke-opacity=".2" stroke-width="2"/>
+    <circle cx="38" cy="46" r="9" fill="#08080a"/><circle cx="38" cy="46" r="4" fill="#4a4c53"/>
+    <circle cx="112" cy="46" r="9" fill="#08080a"/><circle cx="112" cy="46" r="4" fill="#4a4c53"/></svg>`;
+}
+function trackSVG(seed){
+  const P=[ "M14 38c-8-6-6-18 4-21 12-4 18 6 30 4 10-2 12-12 24-13 12-1 22 6 26 15 4 9-2 17-12 18-16 2-24-6-38-3-12 3-24 6-34 0z",
+            "M18 14c14-6 30-2 40 6 8 7 12 18 4 23-10 6-22-2-34 0-10 2-18 8-24 2-7-7-1-18 6-23 3-3 5-6 8-8z",
+            "M12 26c6-12 22-18 36-14 12 3 16 14 28 16 8 1 12 8 8 14-5 7-16 4-26 2-14-3-24 4-36 0-8-3-13-11-10-18z" ];
+  return `<svg width="72%" viewBox="0 0 120 52">
+    <path d="${P[seed%3]}" fill="none" stroke="#c9c9cb" stroke-width="2.4" stroke-linejoin="round"/></svg>`;
+}
+
+/* ================= état ================= */
+let mode = 'tracks';     // 'tracks' | 'cars'
+let country = null;      // null = index ; '__all__' = tout
+const $ = id => document.getElementById(id);
+
+function chipEl(name){
+  const c = document.createElement('div'); c.className = 'chip';
+  c.innerHTML = `<span class="k">Pays :</span><span class="fl">${FLAG[name]||''}</span>${name}<span class="x">×</span>`;
+  c.querySelector('.x').onclick = () => { country = null; paint(); };
+  return c;
+}
+
+function paint(){
+  /* barre */
+  document.querySelectorAll('#flow .chip, #flow .clear').forEach(e => e.remove());
+  const flow = $('flow');
+  const hasChip = mode === 'tracks' && country && country !== '__all__';
+  if (hasChip){
+    flow.appendChild(chipEl(country));
+    const b = document.createElement('button');
+    b.className = 'clear'; b.textContent = 'Tout effacer';
+    b.onclick = () => { country = null; paint(); };
+    flow.appendChild(b);
+  }
+  $('rule').classList.toggle('hidden', !hasChip);
+
+  const idx = mode === 'tracks' && !country;
+  $('seg').innerHTML = idx
+    ? `<button class="on" title="Index">▦</button><button title="Liste">☰</button>`
+    : `<button class="on">▦</button><button>▤</button><button>☰</button>`;
+
+  const body = $('body'); body.innerHTML = '';
+
+  /* --- index par pays --- */
+  if (idx){
+    $('count').innerHTML = `<b>${TOTAL}</b> circuits`;
+    const h = document.createElement('div'); h.className = 'idxhead';
+    h.innerHTML = `<h4>Parcourir par pays</h4>
+                   <span class="s">${COUNTRIES.length} pays représentés</span>
+                   <span class="all" id="all">Voir tous les circuits</span>`;
+    body.appendChild(h);
+
+    const t = document.createElement('div'); t.className = 'tiles';
+    COUNTRIES.forEach(([n,c]) => {
+      const d = document.createElement('div'); d.className = 'tile';
+      d.innerHTML = `<span class="fl">${FLAG[n]||''}</span><span class="nm">${n}</span><span class="ct">${c} circuits</span>`;
+      d.onclick = () => { country = n; paint(); };
+      t.appendChild(d);
+    });
+    const none = document.createElement('div'); none.className = 'tile none';
+    none.innerHTML = `<span class="fl">?</span><span class="nm">Non renseigné</span><span class="ct">${UNSET} circuits</span>`;
+    none.onclick = () => { country = 'Non renseigné'; paint(); };
+    t.appendChild(none);
+    body.appendChild(t);
+
+    $('all').onclick = () => { country = '__all__'; paint(); };
+    return;
+  }
+
+  /* --- liste de circuits --- */
+  if (mode === 'tracks'){
+    const list = TRACKS[country] || [['Circuit A','Auteur'],['Circuit B','Auteur'],['Circuit C','Auteur'],['Circuit D','Auteur']];
+    const n = country === '__all__' ? TOTAL
+            : country === 'Non renseigné' ? UNSET
+            : (COUNTRIES.find(c => c[0] === country) || [,list.length])[1];
+    $('count').innerHTML = `<b>${n}</b> circuits`;
+
+    const g = document.createElement('div'); g.className = 'grid'; g.style.marginTop = '6px';
+    list.forEach(([nm,au],i) => {
+      const cc = country === '__all__' ? (TRACK_COUNTRY[nm] || '') : country;
+      const flag = FLAG[cc] ? `<span class="fl">${FLAG[cc]}</span>` : '';
+      const d = document.createElement('div'); d.className = 'card';
+      d.innerHTML = `<div class="art">${trackSVG(i)}</div>
+        <div class="k">${flag}<b>${(cc||'—').toUpperCase()}</b> · ${au}</div>
+        <div class="t">${nm}</div>`;
+      g.appendChild(d);
+    });
+    body.appendChild(g);
+    return;
+  }
+
+  /* --- voitures groupées par marque --- */
+  $('count').innerHTML = `<b>287</b> voitures`;
+  CARS.forEach(([brand,total,models], gi) => {
+    const h = document.createElement('div'); h.className = 'grp' + (gi === 0 ? ' first' : '');
+    h.innerHTML = `<span class="lg">◈</span><span class="nm">${brand}</span><span class="ct">${total} voitures</span>`;
+    body.appendChild(h);
+    const g = document.createElement('div'); g.className = 'grid';
+    models.forEach((m,i) => {
+      const d = document.createElement('div'); d.className = 'card';
+      d.innerHTML = `<div class="art">${carSVG(COLORS[i % COLORS.length])}</div>
+        <div class="k"><span class="lg">◈</span><b>${brand.toUpperCase()}</b> · ${YEARS[i % YEARS.length]}</div>
+        <div class="t">${m}</div>`;
+      g.appendChild(d);
+    });
+    body.appendChild(g);
+  });
+}
+
+$('tv').onclick = () => {
+  mode = mode === 'tracks' ? 'cars' : 'tracks';
+  country = null;
+  $('tv').textContent = mode === 'tracks' ? 'Circuits — index par pays' : 'Voitures — groupées par marque';
+  paint();
+};
+paint();
+</script>

@@ -19,6 +19,8 @@ En cas d'écart entre une maquette et sa spec, **la spec fait foi**.
 
 | Maquette | Date | Ce qu'elle a servi à décider |
 | --- | --- | --- |
+| `pitbox-index-pays.html` | 2026-09-23 | L'index par pays de l'écran Circuits : la tuile pose une puce, la croix ramène à l'index. Sa bascule vers des voitures « groupées par marque » est une piste **non retenue** — c'est un index de marques qui a été construit. Spec : `SPEC-index-bibliotheque.md`. |
+| `pitbox-index-voitures.html` | 2026-09-23 | L'index des voitures, familles puis marques, et le croisement ET d'une seconde famille. **Sa section « Parcourir par pays » est à ne pas construire** (INDEX§6.3) : elle n'existe que pour juger de l'effet de mur. Spec : `SPEC-index-bibliotheque.md`. |
 | `pitbox-maquettes.html` | 2026-09-11 | Les dix écrans de la refonte de navigation : rail à deux rangs, inventaire unique des compléments, anatomie de fiche commune. Sélecteurs de livrée et de tracé interactifs. Spec : `SPEC-refonte-navigation-et-fiches.md`. |
 | `pitbox-ecran-pilote.html` | 2026-09-01 | L'écran Pilote et son geste central : survol = essai, clic = adoption. Montre les trois modes (corps d'origine, corps substitué, corps sans casque applicable). Spec : `SPEC-ecran-pilote.md`. |
 | `pitbox-onglet-medias_1.html` | 2026-08-09 | L'onglet Médias d'une fiche voiture — captures, replays, backgrounds. |

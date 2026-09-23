@@ -285,6 +285,7 @@
     "filterAuthor": "Autor",
     "filterCountry": "País",
     "filterCategory": "Categoría",
+    "filterFamily": "Familia",
     "filterTag": "Tag",
     "filterClass": "Clase",
     "favorites": "Favoritos",
@@ -1054,5 +1055,34 @@
     "tokenExclude": "Excluir",
     "tokenInputHint": "Escribe para buscar. Un « - » delante de la palabra la excluye en lugar de incluirla.",
     "tokenNoMatch": "Sin coincidencias."
+  },
+  "families": {
+    "street": "Calle",
+    "sportscars": "Deportivo",
+    "race": "Carreras",
+    "classic": "Clásico",
+    "openwheel": "Monoplaza",
+    "prototype": "Prototipo",
+    "drift": "Drift",
+    "rally": "Rally"
+  },
+  "index": {
+    "byCountry": "Explorar por país",
+    "byFamily": "Explorar por familia",
+    "byBrand": "Explorar por marca",
+    "countries": "{count} países",
+    "brands": "{count} marcas",
+    "familiesOverlap": "Un coche puede pertenecer a varias familias",
+    "allTracks": "Ver todos los circuitos",
+    "allBrands": "Todas las marcas ({count})",
+    "fewerBrands": "Mostrar menos",
+    "unset": "Sin indicar",
+    "unclassified": "Sin clasificar",
+    "tracks": "{count} circuitos",
+    "trackOne": "{count} circuito",
+    "cars": "{count} coches",
+    "carOne": "{count} coche",
+    "viewIndex": "Índice",
+    "viewList": "Lista completa"
   }
 }

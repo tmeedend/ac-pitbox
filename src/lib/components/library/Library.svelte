@@ -7,6 +7,9 @@
   import { matchesQuery } from "$lib/library/cardSearch";
   import { hasOwnDriver } from "$lib/driver/driverOverride.svelte";
   import BulkEditPanel from "./BulkEditPanel.svelte";
+  import BrowseIndex from "./BrowseIndex.svelte";
+  import { brandBadges } from "$lib/library/browseIndex";
+  import { categoryFamilies, loadFamilies } from "$lib/library/familyTable.svelte";
   import ContextMenu from "$lib/components/ui/ContextMenu.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import StateBadge from "$lib/components/ui/StateBadge.svelte";
@@ -45,8 +48,10 @@
     buildCardIndex,
     buildPredicate,
     filterDefs,
+    hasActiveFilter,
     parseFilters,
     parsePinned,
+    poseValue,
     serializeFilters,
     type FilterMap,
   } from "$lib/library/filters";
@@ -74,8 +79,9 @@
     sortDir: StorageKey.librarySortDir(kind),
   }));
   /** Catalogue des filtres de CE type (§6.3) : marque, année, classe et
-   * pilote n'existent que côté voitures. */
-  const defs = untrack(() => filterDefs(kind));
+   * pilote n'existent que côté voitures. Dérivé et non figé : le filtre
+   * Famille n'existe qu'une fois la table des familles lue (`familyTable`). */
+  const defs = $derived(filterDefs(kind, isCar ? categoryFamilies() : []));
 
   let cards = $state<ModCard[]>([]);
   // Distinct de « bibliothèque vide » : sans lui, la liste encore vide au
@@ -114,6 +120,11 @@
    * la règle de tout le reste de cet écran. */
   /** La vue que l'utilisateur a choisie, et que `ui_prefs.json` garde. */
   let view = $state<GridView>("dense");
+  /** "See all": the unfiltered LIST, reached without posing a chip
+   * (INDEX§5.1) - a state of its own, distinct from the index and from a
+   * filtered list. Never remembered: the index is a state, not a preference
+   * (INDEX§3). */
+  let browseAll = $state(false);
   /** Celle qu'on AFFICHE : le Big Picture peut en imposer une autre le temps
    * qu'il dure, sans toucher au réglage (voir `bigPictureView`). */
   const shown = $derived(bigPictureView.forced ?? view);
@@ -419,9 +430,14 @@
   // fois tout appliqué, pour que l'effet de persistance des filtres plus haut
   // ne réécrive rien avant d'avoir vu les vraies valeurs sauvegardées.
   onMount(async () => {
+    // The family table BEFORE the saved filters are parsed: `parseFilters`
+    // drops every key the catalogue does not know, and without the table the
+    // catalogue has no Family filter - a family chip left posed would vanish
+    // at each restart.
     const [colPrefs, saved] = await Promise.all([
       loadColumnsPrefs(kind),
       getUiPrefs([FKEY, KEYS.pinned, KEYS.view, KEYS.sortKey, KEYS.sortDir, KEYS.hideBrand, StorageKey.tableHideBrand]),
+      isCar ? loadFamilies() : Promise.resolve(),
     ]);
     visibleKeys = colPrefs.visible;
     columnOrder = colPrefs.order;
@@ -459,6 +475,18 @@
       setUiPref(KEYS.sortKey, sortKey);
       setUiPref(KEYS.sortDir, String(sortDir));
     }
+  }
+
+  /** A tile of the index poses its chip (INDEX§2) - through the same
+   * filter state as the chip editor, so everything after it works unchanged. */
+  function poseFromIndex(key: string, value: string) {
+    filters = poseValue(defs, filters, key, value);
+    if (mainEl) mainEl.scrollTop = 0;
+  }
+
+  function showAll() {
+    browseAll = true;
+    if (mainEl) mainEl.scrollTop = 0;
   }
 
   function setView(v: GridView) {
@@ -712,11 +740,28 @@
   // cet écran comme dans le bloc Adversaires : « montre-moi tout ce qui roule
   // au niveau de ma 488 » se pose aussi hors session, et la 488 en question
   // est toujours celle que la colonne de droite affiche (CIBLE§3.4).
-  const index = $derived(buildCardIndex(typed, defs, isCar, hasOwnDriver, isCar ? nav.sessionCar?.id ?? null : null));
+  const index = $derived(
+    buildCardIndex(typed, defs, isCar, hasOwnDriver, isCar ? nav.sessionCar?.id ?? null : null, isCar ? categoryFamilies() : []),
+  );
 
   const matchesFilters = $derived(buildPredicate(defs, filters, index.ctx));
 
   const filtered = $derived(typed.filter((c) => matchesFilters(c) && matchesQuery(c, query)));
+
+  // --- The index (INDEX§3) ---------------------------------------------
+  //
+  // No chip and an empty search box: the index. At least one of either: the
+  // list. Removing the last chip, or "Clear all", brings the index back - the
+  // way out is the same as for any filter.
+  const filtering = $derived(hasActiveFilter(filters, query));
+  const indexShown = $derived(!loading && typed.length > 0 && !filtering && !browseAll && !bigPictureView.forced);
+  // "See all" lasts until a filter is posed: afterwards, removing it must lead
+  // back to the index like everywhere else, not to the unfiltered list.
+  $effect(() => {
+    if (filtering) untrack(() => (browseAll = false));
+  });
+  /** The logo of a brand tile (see `brandBadges`), computed once per load. */
+  const badges = $derived(isCar ? brandBadges(typed) : new Map<string, string>());
 
   const sorted = $derived.by(() => {
     const col = columns.find((c) => c.key === sortKey);
@@ -892,18 +937,37 @@
              partagent, sinon le menu se lit comme un contrôle de plus au lieu
              du complément de celui-ci. -->
         <div class="view-wrap">
-          <Seg
-            size="toolbar"
-            tone="neutral"
-            icon
-            value={shown}
-            onselect={(v) => setView(v as GridView)}
-            items={[
-              { value: "dense", label: "▦", title: t("library.viewDense") },
-              { value: "comfortable", label: "▤", title: t("library.viewComfortable") },
-              { value: "table", label: "☰", title: t("library.viewList") },
-            ]}
-          />
+          <!-- Two positions while nothing is filtered, index / list
+               (INDEX§3): an index has no density to set. The list position
+               is "see all", in the density the user last chose - which the
+               menu next to it still changes. Three positions again as soon
+               as a filter makes it a list. -->
+          {#if !filtering && !bigPictureView.forced}
+            <Seg
+              size="toolbar"
+              tone="neutral"
+              icon
+              value={indexShown ? "index" : "list"}
+              onselect={(v) => (v === "index" ? (browseAll = false) : showAll())}
+              items={[
+                { value: "index", label: "▦", title: t("index.viewIndex") },
+                { value: "list", label: "☰", title: t("index.viewList") },
+              ]}
+            />
+          {:else}
+            <Seg
+              size="toolbar"
+              tone="neutral"
+              icon
+              value={shown}
+              onselect={(v) => setView(v as GridView)}
+              items={[
+                { value: "dense", label: "▦", title: t("library.viewDense") },
+                { value: "comfortable", label: "▤", title: t("library.viewComfortable") },
+                { value: "table", label: "☰", title: t("library.viewList") },
+              ]}
+            />
+          {/if}
         <!-- Les préférences de présentation vivent **ici** et non dans les
              réglages globaux : il faut en voir l'effet pour les juger, et un
              écran de réglages les rend invisibles. -->
@@ -939,6 +1003,16 @@
     <div class="scroll" bind:this={mainEl}>
     {#if loading}
       <LoadingState />
+    {:else if indexShown}
+      <BrowseIndex
+        {kind}
+        optionsFor={index.optionsFor}
+        total={typed.length}
+        families={isCar ? categoryFamilies() : []}
+        badgeOf={(brand) => previewSrc(badges.get(brand) ?? null)}
+        onpose={poseFromIndex}
+        onshowall={showAll}
+      />
     {:else if filtered.length === 0}
       <div class="empty">
         {#if typed.length === 0}
