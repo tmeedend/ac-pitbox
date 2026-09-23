@@ -157,22 +157,6 @@ fn cleaned_country(raw: &str) -> Option<String> {
     (!cleaned.is_empty()).then(|| cleaned.to_string())
 }
 
-/// Cleans the alias table before it is written (Countries tab): keys in their
-/// compared form (lowercased, trimmed), no alias pointing at itself — an entry
-/// `japan → Japan` would be dead weight that looks like a decision.
-pub fn normalize_country_aliases(mut a: CountryAliases) -> CountryAliases {
-    a.map = a
-        .map
-        .into_iter()
-        .map(|(k, v)| (k.trim().to_lowercase(), v.trim().to_string()))
-        .filter(|(k, v)| !k.is_empty() && !v.is_empty() && *k != v.to_lowercase())
-        .collect();
-    a.ignored.retain(|v| !v.trim().is_empty());
-    a.ignored.sort();
-    a.ignored.dedup();
-    a
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CarRules {
     #[serde(default)]
@@ -203,7 +187,7 @@ pub struct CarRules {
 /// otherwise the index counters stop meaning anything (TAXO§7.3). A car,
 /// on the other hand, belongs to as many families as its tags reach — a 250
 /// GTO is Classic, Sportscars *and* Race.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CategoryFamily {
     /// Stable slug. The shipped families are translated from it; it is also
     /// the value a filter chip stores, so it must never be renamed.
@@ -293,6 +277,39 @@ fn rules_file(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir.join("tag-rules.json"))
 }
 
+/// The user's overlay on the taxonomy tables (`taxonomy.rs`).
+fn taxonomy_file(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    Ok(dir.join("taxonomy.json"))
+}
+
+/// The overlay as stored — migrated from the rules file the first time.
+pub fn load_taxonomy(app: &AppHandle) -> crate::taxonomy::TaxonomyOverlay {
+    let file: Rules = rules_file(app)
+        .ok()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
+    match taxonomy_file(app) {
+        Ok(path) => crate::taxonomy::load_or_migrate(&path, &file),
+        Err(e) => {
+            log::warn!("taxonomy overlay path: {e}");
+            crate::taxonomy::TaxonomyOverlay::default()
+        }
+    }
+}
+
+/// Writes the overlay (normalised against the catalogue) and returns the rules
+/// as they now apply.
+pub fn save_taxonomy(
+    app: &AppHandle,
+    overlay: crate::taxonomy::TaxonomyOverlay,
+) -> Result<(Rules, crate::taxonomy::TaxonomyOverlay), String> {
+    let overlay = overlay.normalized(&default_rules());
+    crate::taxonomy::save(&taxonomy_file(app)?, &overlay)?;
+    Ok((load(app), overlay))
+}
+
 pub fn default_rules() -> Rules {
     serde_json::from_str(DEFAULT_RULES).expect("le jeu de règles embarqué doit être valide")
 }
@@ -307,28 +324,39 @@ pub fn load(app: &AppHandle) -> Rules {
         if let Some(parent) = path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
-        let _ = std::fs::write(&path, DEFAULT_RULES);
+        // Written WITHOUT the taxonomy tables: a copy of them here is what
+        // froze the catalogue (`taxonomy.rs`).
+        let mut seed = default_rules();
+        crate::taxonomy::strip(&mut seed);
+        match serde_json::to_string_pretty(&seed) {
+            Ok(json) => {
+                if let Err(e) = std::fs::write(&path, json) {
+                    log::warn!("seeding tag-rules.json failed: {e}");
+                }
+            }
+            Err(e) => log::warn!("seeding tag-rules.json failed: {e}"),
+        }
     }
     let mut rules: Rules = std::fs::read_to_string(&path)
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_else(default_rules);
+    // The taxonomy tables come from the catalogue + the user's overlay, never
+    // from this file (`taxonomy.rs`) - migrated out of it the first time.
+    let catalog = default_rules();
+    let overlay = match taxonomy_file(app) {
+        Ok(p) => crate::taxonomy::load_or_migrate(&p, &rules),
+        Err(e) => {
+            log::warn!("taxonomy overlay path: {e}");
+            crate::taxonomy::TaxonomyOverlay::default()
+        }
+    };
+    crate::taxonomy::apply(&mut rules, &catalog, &overlay);
     // Backfill : une config antérieure à la liste blanche des catégories de
     // circuit (§5) n'a pas la clé → on la remplit depuis le seed embarqué,
     // sans réécrire le fichier (l'utilisateur peut ensuite l'éditer et sauver).
     if rules.track.category_allowlist.is_empty() {
         rules.track.category_allowlist = default_rules().track.category_allowlist;
-    }
-    // Même backfill pour les alias de pays, arrivés après : un fichier de
-    // règles écrit avant eux n'a pas la clé, et repartirait sans aucun alias —
-    // c'est-à-dire en perdant la correction sur les 80 mods qu'elle vise.
-    if rules.country_aliases.map.is_empty() {
-        rules.country_aliases = default_rules().country_aliases;
-    }
-    // And for the category families: without them the library index has no
-    // category section at all (INDEX§8).
-    if rules.car.category_families.is_empty() {
-        rules.car.category_families = default_rules().car.category_families;
     }
     rules
 }
@@ -338,63 +366,12 @@ pub fn save(app: &AppHandle, rules: &Rules) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let json = serde_json::to_string_pretty(rules).map_err(|e| e.to_string())?;
+    // The taxonomy tables are not written here: they belong to the catalogue
+    // and to `taxonomy.json`, and a copy in this file is how they froze.
+    let mut rules = rules.clone();
+    crate::taxonomy::strip(&mut rules);
+    let json = serde_json::to_string_pretty(&rules).map_err(|e| e.to_string())?;
     std::fs::write(&path, json).map_err(|e| e.to_string())
-}
-
-// --- Category families (Categories tab, TAXO§6) ---------------------------
-
-/// A tag as families compare it: lowercased, trimmed, without its leading `#`.
-/// Same rule as `familyTag` on the front end, which reads the table.
-fn family_tag(tag: &str) -> String {
-    tag.trim().to_lowercase().trim_start_matches('#').trim().to_string()
-}
-
-/// Cleans a family table before it is written.
-///
-/// The front end already keeps it tidy, but the file is also edited by hand,
-/// and this is the last place that sees every family at once:
-/// - an id is kept once (the first wins) and never empty — it is the value a
-///   filter chip stores;
-/// - a tag is stored in its compared form and kept in **one** family, the
-///   first that lists it (TAXO§7.3): counted twice, it would make the index
-///   counters meaningless;
-/// - an empty name is no name, so a shipped family falls back on its
-///   translation.
-pub fn normalize_families(families: Vec<CategoryFamily>) -> Vec<CategoryFamily> {
-    let mut ids = BTreeSet::new();
-    let mut tags = BTreeSet::new();
-    families
-        .into_iter()
-        .filter_map(|mut f| {
-            f.id = f.id.trim().to_string();
-            if f.id.is_empty() || !ids.insert(f.id.clone()) {
-                return None;
-            }
-            f.name = f.name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty());
-            f.icon = f.icon.filter(|i| !i.trim().is_empty());
-            f.tags = f
-                .tags
-                .iter()
-                .map(|t| family_tag(t))
-                .filter(|t| !t.is_empty() && tags.insert(t.clone()))
-                .collect();
-            Some(f)
-        })
-        .collect()
-}
-
-/// Writes the family table, and only it.
-///
-/// **Not through `save_rules`**, which re-harmonises the whole library: a
-/// family is an index over tags, not a rule (TAXO§2), so editing one changes no
-/// computed value in the overlay and has no business rewriting 600 rows.
-/// Returns the table as stored, so the screen shows what the file now says.
-pub fn save_category_families(app: &AppHandle, families: Vec<CategoryFamily>) -> Result<Vec<CategoryFamily>, String> {
-    let mut rules = load(app);
-    rules.car.category_families = normalize_families(families);
-    save(app, &rules)?;
-    Ok(rules.car.category_families)
 }
 
 // --- Application (moteur) ---------------------------------------------------
@@ -812,38 +789,6 @@ mod tests {
             Some("SC"),
             "no ISO code, no code merge"
         );
-    }
-
-    #[test]
-    fn a_self_alias_is_not_written() {
-        let mut a = CountryAliases::default();
-        a.map.insert(" Japan ".into(), "Japan".into());
-        a.map.insert("Nippon".into(), "Japan".into());
-        assert_eq!(
-            normalize_country_aliases(a).map.into_iter().collect::<Vec<_>>(),
-            vec![("nippon".into(), "Japan".into())]
-        );
-    }
-
-    /// TAXO§7.3: one tag, one family. The Categories tab moves a tag rather
-    /// than copying it, but the file is also edited by hand.
-    #[test]
-    fn a_tag_written_in_two_families_stays_in_the_first() {
-        let fam = |id: &str, tags: &[&str]| CategoryFamily {
-            id: id.to_string(),
-            name: None,
-            icon: None,
-            tags: tags.iter().map(|t| t.to_string()).collect(),
-        };
-        let out = normalize_families(vec![
-            fam("prototype", &["#LMP1", " group c "]),
-            fam("race", &["lmp1", "GT3"]),
-            fam("prototype", &["dtm"]),
-            fam("  ", &["rally"]),
-        ]);
-        assert_eq!(out.len(), 2, "duplicate and empty ids dropped");
-        assert_eq!(out[0].tags, vec!["lmp1", "group c"], "stored in compared form");
-        assert_eq!(out[1].tags, vec!["gt3"], "lmp1 kept by the first family only");
     }
 
     #[test]

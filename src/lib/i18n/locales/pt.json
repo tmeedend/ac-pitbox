@@ -761,8 +761,6 @@
     "fieldEngineConfig": "Motor",
     "fieldEnginePos": "Posição",
     "fieldGearbox": "Câmbio",
-    "countryExtractionTitle": "Extração do país",
-    "countryExtractionHint": "Tag de país → campo « país » (se estiver vazio). O tag sai do vocabulário.",
     "impactText": "mod(s) seriam afetados por estas regras",
     "calculatingImpact": "calculando o impacto…",
     "applying": "Aplicando…",

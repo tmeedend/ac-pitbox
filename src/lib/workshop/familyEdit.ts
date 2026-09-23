@@ -1,56 +1,84 @@
-// Editing the category family table (Categories tab, TAXO§6).
+// Editing the category families (Categories tab, TAXO§6) - as DECISIONS on top
+// of the catalogue, never as a rewritten table (REGLES§2).
 //
-// Every function returns a NEW table: the screen assigns it, saves it whole
-// (`saveCategoryFamilies`), and a `$state` proxy sees one write. Nothing here
-// touches the disk or the screen - it is the part of the tab whose edge cases
-// only show when run, hence its own tests.
+// Every function takes the user's overlay and the shipped catalogue, and
+// returns a new overlay. **The effective table is never computed here**: that
+// is `taxonomy.rs`, the one place the engine reads, and the tab displays what
+// it sends back after each save. Two implementations of the merge would end up
+// disagreeing - the country aliases once had a TypeScript copy, and it is the
+// copy nobody saw that won.
+//
+// The overlay is keyed by TAG, not by family: forking a whole family to move
+// one tag would freeze it, and the next catalogue could no longer add to it.
 import { familyLookup, familyTag, type CategoryFamily } from "$lib/library/families";
+import type { FamilyOverlay } from "$lib/workshop/rules";
+
+function copy(o: FamilyOverlay): Required<FamilyOverlay> {
+  return {
+    meta: { ...(o.meta ?? {}) },
+    created: [...(o.created ?? [])],
+    removed: [...(o.removed ?? [])],
+    tags: { ...(o.tags ?? {}) },
+  };
+}
 
 /**
- * Attaches a tag to a family - and detaches it from whichever family held it.
- *
- * **A tag belongs to one family** (TAXO§7.3): attached elsewhere, it MOVES.
- * Copied, it would count a car twice in the index and the counters would stop
- * meaning anything.
+ * Attaches a tag to a family - which detaches it from whichever family held it,
+ * since the overlay says where each tag goes (TAXO§7.3: one tag, one family).
+ * Sending a tag back where the catalogue puts it removes the decision rather
+ * than restating it: the tag is back on the catalogue, and follows it.
  */
-export function moveTag(families: CategoryFamily[], tag: string, toId: string): CategoryFamily[] {
+export function attachTag(o: FamilyOverlay, catalog: CategoryFamily[], tag: string, toId: string): FamilyOverlay {
   const key = familyTag(tag);
-  if (!key) return families;
-  return families.map((f) => {
-    const kept = f.tags.filter((t) => familyTag(t) !== key);
-    return f.id === toId ? { ...f, tags: [...kept, key] } : kept.length === f.tags.length ? f : { ...f, tags: kept };
-  });
+  if (!key) return o;
+  const next = copy(o);
+  if (familyLookup(catalog).get(key) === toId) delete next.tags[key];
+  else next.tags[key] = toId;
+  return next;
 }
 
-export function removeTag(families: CategoryFamily[], id: string, tag: string): CategoryFamily[] {
+/** Detaches a tag from every family. `""` is a decision only when the
+ * catalogue gives the tag a family; otherwise there is nothing to override. */
+export function detachTag(o: FamilyOverlay, catalog: CategoryFamily[], tag: string): FamilyOverlay {
   const key = familyTag(tag);
-  return families.map((f) => (f.id === id ? { ...f, tags: f.tags.filter((t) => familyTag(t) !== key) } : f));
+  const next = copy(o);
+  if (familyLookup(catalog).has(key)) next.tags[key] = "";
+  else delete next.tags[key];
+  return next;
 }
 
-export function patchFamily(
-  families: CategoryFamily[],
+/** Renames a family or changes its icon. On a shipped family only what
+ * differs from the catalogue is kept; an emptied name falls back on the
+ * translation. */
+export function setFamilyLook(
+  o: FamilyOverlay,
+  catalog: CategoryFamily[],
   id: string,
-  patch: Partial<Pick<CategoryFamily, "name" | "icon">>,
-): CategoryFamily[] {
-  return families.map((f) => {
-    if (f.id !== id) return f;
-    const next = { ...f, ...patch };
-    // An empty name is no name: a shipped family falls back on its
-    // translation instead of showing a blank line.
-    if (!next.name?.trim()) delete next.name;
-    if (!next.icon) delete next.icon;
+  patch: { name?: string; icon?: string },
+): FamilyOverlay {
+  const next = copy(o);
+  const mine = next.created.findIndex((c) => c.id === id);
+  if (mine >= 0) {
+    const c = { ...next.created[mine], ...patch };
+    if (!c.icon) delete c.icon;
+    next.created[mine] = c;
     return next;
-  });
+  }
+  const shipped = catalog.find((f) => f.id === id);
+  const meta = { ...(next.meta[id] ?? {}), ...patch };
+  if (!meta.name?.trim() || meta.name === shipped?.name) delete meta.name;
+  if (!meta.icon || meta.icon === shipped?.icon) delete meta.icon;
+  if (Object.keys(meta).length) next.meta[id] = meta;
+  else delete next.meta[id];
+  return next;
 }
 
 /**
- * A new family, named by the user.
- *
- * Its id is a slug of the name, made unique. **The id is what a filter chip
- * stores**, so it is fixed at creation and never follows a later rename: a
- * chip posed on "Endurance" must keep working once it is renamed "Le Mans".
+ * A new family, named by the user. Its id is a slug of the name, made unique,
+ * and **fixed at creation**: it is what a filter chip stores, so a chip posed on
+ * "Endurance" must keep working once the family is renamed "Le Mans".
  */
-export function addFamily(families: CategoryFamily[], name: string): { families: CategoryFamily[]; id: string } {
+export function createFamily(o: FamilyOverlay, taken: string[], name: string): { overlay: FamilyOverlay; id: string } {
   const base =
     name
       .normalize("NFD")
@@ -58,57 +86,49 @@ export function addFamily(families: CategoryFamily[], name: string): { families:
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "") || "family";
-  const taken = new Set(families.map((f) => f.id));
+  const used = new Set([...taken, ...(o.created ?? []).map((c) => c.id)]);
   let id = base;
-  for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
-  return { families: [...families, { id, name: name.trim(), tags: [] }], id };
+  for (let n = 2; used.has(id); n++) id = `${base}-${n}`;
+  const next = copy(o);
+  next.created.push({ id, name: name.trim(), tags: [] });
+  return { overlay: next, id };
 }
 
-export function deleteFamily(families: CategoryFamily[], id: string): CategoryFamily[] {
-  return families.filter((f) => f.id !== id);
-}
-
-/**
- * Whether a family differs from what the app shipped - the flag of the list
- * (TAXO§6.1), and what "Restore" undoes. A family the user created has no
- * shipped version: it is curated by definition.
- *
- * Tags compare as a SET: order carries nothing, and a family whose tags were
- * removed then put back is not "modified".
- */
-export function isCurated(f: CategoryFamily, shipped: CategoryFamily | undefined): boolean {
-  if (!shipped) return true;
-  if ((f.name ?? "") !== (shipped.name ?? "") || (f.icon ?? "") !== (shipped.icon ?? "")) return true;
-  const a = new Set(f.tags.map(familyTag));
-  const b = new Set(shipped.tags.map(familyTag));
-  return a.size !== b.size || [...a].some((t) => !b.has(t));
+/** Deletes a family. A shipped one gets a tombstone - an absence would let the
+ * next catalogue bring it back. Either way the tags sent to it go nowhere. */
+export function deleteFamily(o: FamilyOverlay, catalog: CategoryFamily[], id: string): FamilyOverlay {
+  const next = copy(o);
+  for (const [k, v] of Object.entries(next.tags)) if (v === id) delete next.tags[k];
+  delete next.meta[id];
+  const mine = next.created.some((c) => c.id === id);
+  next.created = next.created.filter((c) => c.id !== id);
+  if (!mine && catalog.some((f) => f.id === id) && !next.removed.includes(id)) next.removed.push(id);
+  return next;
 }
 
 /**
- * Puts one family back as shipped: its tags are taken back from whichever
- * family they had been moved to, and the tags it had gained go home.
- *
- * **Home, not nowhere.** A tag moved in from another family returns to the
- * family that ships it, when that family still exists; only a tag no shipped
- * family lists is dropped. Restoring Classic after moving `gt3` into it must
- * not leave `gt3` in no family at all - Race would lose its GT3 cars without
- * anyone having touched Race.
+ * Puts a shipped family back as the catalogue has it: its look, its existence,
+ * and every tag decision touching it - the tags it gained go back to the family
+ * the catalogue gives them, the ones it lost come home. Nothing is computed:
+ * removing the decisions IS restoring, which is why a gained tag can no longer
+ * vanish from every family as it did when the tab rewrote whole tables.
  */
-export function restoreFamily(families: CategoryFamily[], shippedTable: CategoryFamily[], id: string): CategoryFamily[] {
-  const shipped = shippedTable.find((f) => f.id === id);
-  if (!shipped) return families;
-  const gained = (families.find((f) => f.id === id)?.tags ?? []).filter(
-    (t) => !shipped.tags.some((s) => familyTag(s) === familyTag(t)),
-  );
-  let out = families.map((f) => (f.id === id ? { ...shipped, tags: [] } : f));
-  if (!out.some((f) => f.id === id)) out = [...out, { ...shipped, tags: [] }];
-  for (const tag of shipped.tags) out = moveTag(out, tag, id);
-  const home = familyLookup(shippedTable);
-  for (const tag of gained) {
-    const owner = home.get(familyTag(tag));
-    if (owner && owner !== id && out.some((f) => f.id === owner)) out = moveTag(out, tag, owner);
-  }
-  return out;
+export function restoreFamily(o: FamilyOverlay, catalog: CategoryFamily[], id: string): FamilyOverlay {
+  const next = copy(o);
+  const shipped = familyLookup(catalog);
+  delete next.meta[id];
+  next.removed = next.removed.filter((r) => r !== id);
+  for (const [k, v] of Object.entries(next.tags)) if (v === id || shipped.get(k) === id) delete next.tags[k];
+  return next;
+}
+
+/** Whether the user decided anything about this family - the flag of the list
+ * (TAXO§6.1). A family he made is his by definition. */
+export function isCurated(o: FamilyOverlay, catalog: CategoryFamily[], id: string): boolean {
+  if ((o.created ?? []).some((c) => c.id === id)) return true;
+  if (o.meta?.[id] || (o.removed ?? []).includes(id)) return true;
+  const shipped = familyLookup(catalog);
+  return Object.entries(o.tags ?? {}).some(([k, v]) => v === id || shipped.get(k) === id);
 }
 
 /**

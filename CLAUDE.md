@@ -469,6 +469,14 @@ Svelte. Les deux sont documentées comme écartées, en tête du script.
   sèche : l'historique d'abord, la fermeture en repli quand il n'y a rien
   derrière. Même règle pour le bouton B de la manette et les boutons latéraux
   de la souris — c'est le même geste, il ne peut pas avoir deux comportements.
+- **Une table livrée ne se recopie jamais chez l'utilisateur.** Recopiée,
+  elle devient sa vérité et plus aucune mise à jour ne l'atteint — c'est
+  arrivé à tout `tag-rules.json`, semé une fois puis figé. Le modèle est
+  `taxonomy.rs` (REGLES§2) : le catalogue relu depuis l'embarqué à chaque
+  chargement, et à côté, dans un fichier à part, les seules **décisions** de
+  l'utilisateur, indexées par la clé naturelle de l'entrée, une suppression
+  étant une pierre tombale. La fusion des deux ne se calcule qu'à un endroit,
+  côté Rust.
 - **`Prefs` (`config.rs`) est en `#[serde(default)]`** : un champ retiré est
   simplement ignoré dans les `config.json` existants, pas de migration à
   écrire. Un champ ajouté prend sa valeur par défaut chez les utilisateurs
@@ -498,7 +506,7 @@ Svelte. Les deux sont documentées comme écartées, en tête du script.
 `gridthumbs.rs` et `SPEC.md` dans `importer.rs`. Donc : **`§4.5` nu = `SPEC.md`**
 (le défaut, inchangé), et une **étiquette** pour les autres — `SESSION§3.2`,
 `GRILLE§5.3`, `WIKI§4.2`, `PILOTE§6.3`, `PREVIEW§8.1`, `FMOD§2bis`,
-`MUSIQUE§3.4`, `IMPORT§`, `REFONTE§`, `TEXTURE§`, `INDEX§`, `TAXO§`. La liste fait foi dans
+`MUSIQUE§3.4`, `IMPORT§`, `REFONTE§`, `TEXTURE§`, `INDEX§`, `TAXO§`, `REGLES§`. La liste fait foi dans
 `scripts/check-refs.mjs`.
 
 **`npm run check` affiche aussi le poids de la documentation** — nombre de
@@ -636,6 +644,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Signature Authenticode** | le workflow est prêt, il attend un certificat | `docs/windows-code-signing.md` |
 | **Refonte navigation et fiches** | livrée et fusionnée ; restent trois questions ouvertes, dont le markdown dans les notes | `docs/PLAN-refonte-navigation.md` |
 | **Taxonomies** | familles, onglets Catégories et Pays livrés ; reste l'onglet Marques (fusions, logos canoniques) | `docs/SPEC-taxonomies.md`, `docs/CHANTIERS.md` |
+| **Catalogue de règles** | tables de taxonomie en deux couches (catalogue + surcouche) ; restent les règles en liste, le rapport de mise à jour, l'écran Règles | `docs/SPEC-regles.md`, `docs/CHANTIERS.md` |
 | **Règles de tags divergentes** | deux fichiers décrivent la même ontologie, un seul est chargé | `docs/CHANTIERS.md` |
 
 ## Fin de tâche — dans cet ordre

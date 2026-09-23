@@ -1,88 +1,129 @@
-// Editing the country aliases (Countries tab, TAXO§6).
-//
-// A country is a TERM: the name it is stored under (the game's English name,
-// which is what carries a flag) and the spellings that lead to it. The table
-// is `alias → name`, keys in their compared form (lowercased, trimmed) - the
-// same shape `rules::canonical_country` reads, so what this module writes is
-// exactly what the harmonisation applies.
-//
-// Every function returns a NEW table, for the same reason as `familyEdit.ts`.
-import type { CountryAliases } from "$lib/workshop/rules";
+// Editing the countries (Countries tab, TAXO§6) - as DECISIONS on top of the
+// catalogue (REGLES§2), for two tables keyed the same way:
+//   - the ALIASES normalise a country a mod declares (`u.s.a.` → United
+//     States), always;
+//   - the TAGS give a country to a mod declaring none (`germany` → Germany),
+//     only then. Two tables because a tag must never rewrite what the author
+//     declared.
+// Both are `key → country name`, keys in their compared form (lowercased,
+// trimmed). Every function returns a new overlay; the effective tables come
+// back from `taxonomy.rs` after each save and are never merged here (see
+// `familyEdit.ts` for why).
+import type { MapOverlay } from "$lib/workshop/rules";
+
+type Table = Record<string, string>;
 
 const key = (s: string) => s.trim().toLowerCase();
 
-/** The spellings that lead to `name`, sorted - what the detail of a country
- * lists. */
-export function aliasesOf(a: CountryAliases, name: string): string[] {
-  return Object.entries(a.map)
+function copy(o: MapOverlay): { set: Table; removed: string[] } {
+  return { set: { ...(o.set ?? {}) }, removed: [...(o.removed ?? [])] };
+}
+
+/** The keys leading to `name` in an effective table, sorted. */
+export function keysTo(effective: Table, name: string): string[] {
+  return Object.entries(effective)
     .filter(([, to]) => to === name)
-    .map(([from]) => from)
+    .map(([k]) => k)
     .sort();
 }
 
-/** One more spelling for `name`. An alias equal to the name itself is dead
- * weight that looks like a decision, and is not written. */
-export function addAlias(a: CountryAliases, alias: string, name: string): CountryAliases {
-  const k = key(alias);
-  if (!k || k === key(name)) return a;
-  return { ...a, map: { ...a.map, [k]: name } };
+/**
+ * `k → name`. Restating what the catalogue says removes the decision instead:
+ * the entry is back on the catalogue and follows it.
+ *
+ * `spelling`: the table is the aliases, where a key equal to the name itself
+ * (`japan → Japan`) is dead weight that looks like a decision, and is not
+ * written. NOT for the tags: `usa → USA` says a tag gives a country, which is
+ * exactly what that table is for - caught by the merge test.
+ */
+export function setEntry(o: MapOverlay, catalog: Table, k: string, name: string, spelling = false): MapOverlay {
+  const kk = key(k);
+  if (!kk || (spelling && kk === key(name))) return o;
+  const next = copy(o);
+  next.removed = next.removed.filter((r) => r !== kk);
+  if (catalog[kk] === name) delete next.set[kk];
+  else next.set[kk] = name;
+  return next;
 }
 
-export function removeAlias(a: CountryAliases, alias: string): CountryAliases {
-  const map = { ...a.map };
-  delete map[key(alias)];
-  return { ...a, map };
+/** Removes an entry. A shipped one gets a tombstone - an absence would let the
+ * next catalogue bring it back. */
+export function removeEntry(o: MapOverlay, catalog: Table, k: string): MapOverlay {
+  const kk = key(k);
+  const next = copy(o);
+  delete next.set[kk];
+  if (kk in catalog && !next.removed.includes(kk)) next.removed.push(kk);
+  return next;
 }
 
 /**
- * Merges the country stored as `from` into `to` (TAXO§7): `from` becomes a
- * spelling of `to`, and so does every spelling that led to `from` - otherwise
- * a mod written `Holland` would keep landing on the old name while one written
- * `Netherlands ` moved. Also how a country is RENAMED: attaching it to another
- * name is the same operation.
+ * Retargets every entry leading to `from` onto `to` - the half of a merge that
+ * carries the spellings along (TAXO§7). Otherwise a mod written `Holland` would
+ * keep landing on the old name while one written `Netherlands` moved.
  */
-export function attachCountry(a: CountryAliases, from: string, to: string): CountryAliases {
-  if (from === to) return a;
-  const map: Record<string, string> = {};
-  for (const [k, v] of Object.entries(a.map)) map[k] = v === from ? to : v;
-  if (key(from) !== key(to)) map[key(from)] = to;
-  // The target may have been an alias of something else: it is a name now.
-  delete map[key(to)];
-  return { ...a, map, ignored: (a.ignored ?? []).filter((v) => v !== from) };
+export function retarget(
+  o: MapOverlay,
+  catalog: Table,
+  effective: Table,
+  from: string,
+  to: string,
+  spelling = false,
+): MapOverlay {
+  let next = o;
+  for (const k of keysTo(effective, from)) next = setEntry(next, catalog, k, to, spelling);
+  return next;
+}
+
+/**
+ * Merges the country stored as `from` into `to`: its spellings and its tags
+ * follow, and `from` itself becomes a spelling of `to`. Also how a country is
+ * RENAMED - attaching it to another name is the same operation. The target
+ * may have been a spelling of something else: it is a name now.
+ */
+export function attachCountry(
+  aliases: { overlay: MapOverlay; catalog: Table; effective: Table },
+  tags: { overlay: MapOverlay; catalog: Table; effective: Table },
+  from: string,
+  to: string,
+): { aliases: MapOverlay; tags: MapOverlay } {
+  if (from === to) return { aliases: aliases.overlay, tags: tags.overlay };
+  let a = retarget(aliases.overlay, aliases.catalog, aliases.effective, from, to, true);
+  a = setEntry(a, aliases.catalog, from, to, true);
+  if (key(to) in aliases.effective) a = removeEntry(a, aliases.catalog, to);
+  return { aliases: a, tags: retarget(tags.overlay, tags.catalog, tags.effective, from, to) };
+}
+
+/** Removes every decision touching `name`: its entries are back as shipped. */
+export function restoreEntries(o: MapOverlay, catalog: Table, name: string): MapOverlay {
+  const next = copy(o);
+  for (const [k, v] of Object.entries(next.set)) if (v === name || catalog[k] === name) delete next.set[k];
+  next.removed = next.removed.filter((k) => catalog[k] !== name);
+  return next;
+}
+
+/** Whether the user decided anything about `name` in this table - the flag of
+ * the list (TAXO§6.1). */
+export function touches(o: MapOverlay, catalog: Table, name: string): boolean {
+  return (
+    Object.entries(o.set ?? {}).some(([k, v]) => v === name || catalog[k] === name) ||
+    (o.removed ?? []).some((k) => catalog[k] === name)
+  );
 }
 
 /** "Ignore" on a proposal (TAXO§7.2): remembered, reversible. */
-export function ignoreCountry(a: CountryAliases, value: string): CountryAliases {
-  const ignored = [...new Set([...(a.ignored ?? []), value])].sort();
-  return { ...a, ignored };
+export function ignoreCountry(ignored: string[], value: string): string[] {
+  return [...new Set([...ignored, value])].sort();
 }
 
-export function unignoreCountry(a: CountryAliases, value: string): CountryAliases {
-  return { ...a, ignored: (a.ignored ?? []).filter((v) => v !== value) };
-}
-
-/** Whether the spellings of `name` differ from those the app shipped - the
- * flag of the list (TAXO§6.1). */
-export function isCountryCurated(a: CountryAliases, shipped: CountryAliases, name: string): boolean {
-  const mine = aliasesOf(a, name);
-  const theirs = aliasesOf(shipped, name);
-  return mine.length !== theirs.length || mine.some((m, i) => m !== theirs[i]);
-}
-
-/** Puts the spellings of `name` back as shipped: the ones added are removed,
- * the shipped ones restored - even if they had been attached elsewhere. */
-export function restoreCountry(a: CountryAliases, shipped: CountryAliases, name: string): CountryAliases {
-  const map: Record<string, string> = {};
-  for (const [k, v] of Object.entries(a.map)) if (v !== name) map[k] = v;
-  for (const [k, v] of Object.entries(shipped.map)) if (v === name) map[k] = v;
-  return { ...a, map };
+export function unignoreCountry(ignored: string[], value: string): string[] {
+  return ignored.filter((v) => v !== value);
 }
 
 /** Case, accents and anything but letters folded away, for comparing. */
 function fold(s: string): string {
   return s
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z]/g, "");
 }

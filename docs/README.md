@@ -26,6 +26,7 @@ désigne `SPEC.md`** et les autres documents portent une étiquette :
 | `TEXTURE§` | `SPEC-texture-update.md` |
 | `INDEX§` | `SPEC-index-bibliotheque.md` |
 | `TAXO§` | `SPEC-taxonomies.md` |
+| `REGLES§` | `SPEC-regles.md` |
 | `SETUP§` | `LOT-session-setup.md` |
 | `CIBLE§` | `CIBLE-reglages-session.md` |
 | `L1§` | `LOT1-forme-ecran-session.md` |
@@ -116,6 +117,13 @@ fait — en cas d'écart, la spec fait foi.
   deviennent des **termes** (nom canonique, alias, emblème), curés dans trois
   onglets de l'Atelier. **Seule la table des familles est livrée** (pour
   l'index) ; le reste est un chantier ouvert (`CHANTIERS.md`).
+- **`SPEC-regles.md`** (`REGLES§`) — livrer des règles par défaut et les faire
+  évoluer sans jamais écraser le travail de l'utilisateur : un **catalogue**
+  en lecture seule, remplacé à chaque mise à jour, et une **surcouche** des
+  décisions de l'utilisateur. **Livré pour les trois tables de taxonomie**
+  (familles, alias et tags de pays, `taxonomy.rs`) ; le reste — identifiants
+  des règles, rapport de mise à jour, écran Règles refait — est un chantier
+  ouvert (`CHANTIERS.md`).
 - **`SPEC-grille.md`** — lisibilité des cartes, affichage du nom, et
   **régénération des vignettes**. Porte la distinction qui structure le reste :
   « les voitures sombres sont indiscernables » recouvre deux problèmes — la

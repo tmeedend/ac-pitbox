@@ -6,11 +6,16 @@
   // of TAGS — a relation of parenthood, not of identity (TAXO§7.3): attaching
   // `lmp1` to Prototype does not hide the tag, it stays filterable on its own.
   //
-  // **Every change is written at once**, through `saveCategoryFamilies`, which
-  // stores the table and nothing else: no re-harmonisation of the library, a
-  // family being an index over tags and not a rule. Writes go through a queue
-  // whose failures are shown and logged — a write that fails in silence is the
-  // bug rule 6 of CLAUDE.md was written for.
+  // **What is edited is the user's overlay, never the table** (REGLES§2): the
+  // catalogue ships the families, the user's decisions sit on top, and an
+  // update of Pit Box reaches an edited table because nothing of the
+  // catalogue was copied. The effective table is merged in Rust
+  // (`taxonomy.rs`) and comes back after each save.
+  //
+  // **Every change is written at once**, through `saveFamilyOverlay`: no
+  // re-harmonisation, a family being an index over tags and not a rule.
+  // Writes go through a queue whose failures are shown and logged — a write
+  // that fails in silence is the bug rule 6 of CLAUDE.md was written for.
   import { onMount } from "svelte";
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
@@ -20,19 +25,23 @@
   import { listLibrary } from "$lib/library/library";
   import { modTags } from "$lib/library/cardSearch";
   import {
-    addFamily,
+    attachTag,
+    createFamily,
     deleteFamily,
+    detachTag,
     isCurated,
-    moveTag,
-    patchFamily,
-    removeTag,
     restoreFamily,
+    setFamilyLook,
     tagCounts,
   } from "$lib/workshop/familyEdit";
-  import { defaultCategoryFamilies, getRules, saveCategoryFamilies } from "$lib/workshop/rules";
+  import { getTaxonomy, saveFamilyOverlay, type FamilyOverlay } from "$lib/workshop/rules";
 
+  /** The effective table, as `taxonomy.rs` merged it. */
   let families = $state<CategoryFamily[]>([]);
+  /** What Pit Box ships - to say "modified" and to restore. */
   let shipped = $state<CategoryFamily[]>([]);
+  /** The user's decisions: what every gesture edits. */
+  let overlay = $state<FamilyOverlay>({});
   /** Tags of every car, all origins merged — what the index reads. */
   let cars = $state<string[][]>([]);
   let loading = $state(true);
@@ -45,9 +54,10 @@
 
   onMount(async () => {
     try {
-      const [rules, defaults, cards] = await Promise.all([getRules(), defaultCategoryFamilies(), listLibrary()]);
-      families = rules.car.category_families ?? [];
-      shipped = defaults;
+      const [view, cards] = await Promise.all([getTaxonomy(), listLibrary()]);
+      families = view.effective.families;
+      shipped = view.catalog.families;
+      overlay = view.overlay.families;
       cars = cards.filter((c) => c.kind === "Car").map(modTags);
     } catch (e) {
       error = errorText(e);
@@ -57,18 +67,19 @@
   });
 
   let queue: Promise<void> = Promise.resolve();
-  /** Shows the new table at once, then writes it. The stored table comes back
-   * normalised and replaces the local one, so the screen says what the file
-   * says. The `catch` is not optional: a rejected promise in the chain would
-   * freeze every later write until the next start. */
-  function commit(next: CategoryFamily[]) {
-    families = next;
+  /** Takes the new decisions at once (the next gesture builds on them), writes
+   * them, and shows the table Rust merged from them. The `catch` is not
+   * optional: a rejected promise in the chain would freeze every later write
+   * until the next start. */
+  function commit(next: FamilyOverlay) {
+    overlay = next;
     armed = null;
     queue = queue
       .then(async () => {
-        const stored = await saveCategoryFamilies(next);
-        families = stored;
-        setFamilies(stored);
+        const view = await saveFamilyOverlay(next);
+        overlay = view.overlay.families;
+        families = view.effective.families;
+        setFamilies(view.effective.families);
         error = "";
       })
       .catch((e) => {
@@ -119,7 +130,7 @@
 
   function attach(f: CategoryFamily, tag: string) {
     if (!familyTag(tag)) return;
-    commit(moveTag(families, tag, f.id));
+    commit(attachTag(overlay, shipped, tag, f.id));
     tagQuery = "";
   }
 
@@ -132,7 +143,7 @@
   function create() {
     const name = newName.trim();
     if (!name) return;
-    const { families: next, id } = addFamily(families, name);
+    const { overlay: next, id } = createFamily(overlay, [...families, ...shipped].map((x) => x.id), name);
     commit(next);
     newName = "";
     open = id;
@@ -160,7 +171,7 @@
       {#each rows as f (f.id)}
         {@const n = counts.byFamily.get(f.id) ?? 0}
         {@const base = shippedOf(f.id)}
-        {@const curated = isCurated(f, base)}
+        {@const curated = isCurated(overlay, shipped, f.id)}
         <li class:open={open === f.id}>
           <button type="button" class="row" aria-expanded={open === f.id} onclick={() => toggle(f.id)}>
             <svg class="ico" viewBox="0 0 120 52" aria-hidden="true">{@html familyIcon(f.icon)}</svg>
@@ -181,7 +192,7 @@
                   class="input"
                   value={f.name ?? ""}
                   placeholder={base ? t(`families.${f.id}`) : ""}
-                  onchange={(e) => commit(patchFamily(families, f.id, { name: e.currentTarget.value }))}
+                  onchange={(e) => commit(setFamilyLook(overlay, shipped, f.id, { name: e.currentTarget.value }))}
                 />
               </label>
 
@@ -195,7 +206,7 @@
                       role="radio"
                       aria-checked={(f.icon ?? "") === icon}
                       aria-label={icon || t("categories.neutralIcon")}
-                      onclick={() => commit(patchFamily(families, f.id, { icon: icon || undefined }))}
+                      onclick={() => commit(setFamilyLook(overlay, shipped, f.id, { icon: icon || undefined }))}
                     >
                       <svg viewBox="0 0 120 52" aria-hidden="true">{@html icon ? FAMILY_ICONS[icon] : NEUTRAL_ICON}</svg>
                     </button>
@@ -213,7 +224,7 @@
                         type="button"
                         class="x"
                         title={t("categories.removeTag")}
-                        onclick={() => commit(removeTag(families, f.id, tag))}>×</button
+                        onclick={() => commit(detachTag(overlay, shipped, tag))}>×</button
                       >
                     </span>
                   {:else}
@@ -245,7 +256,7 @@
 
               <div class="actions">
                 {#if base && curated}
-                  <button type="button" class="btn" onclick={() => commit(restoreFamily(families, shipped, f.id))}>
+                  <button type="button" class="btn" onclick={() => commit(restoreFamily(overlay, shipped, f.id))}>
                     {t("categories.restore")}
                   </button>
                 {/if}
@@ -254,7 +265,7 @@
                   class="btn"
                   onclick={() =>
                     arm(`del:${f.id}`, () => {
-                      commit(deleteFamily(families, f.id));
+                      commit(deleteFamily(overlay, shipped, f.id));
                       open = null;
                     })}
                 >
@@ -282,7 +293,7 @@
         class="btn reset"
         onclick={() =>
           arm("reset", () => {
-            commit(shipped.map((f) => ({ ...f, tags: [...f.tags] })));
+            commit({});
             open = null;
           })}
       >

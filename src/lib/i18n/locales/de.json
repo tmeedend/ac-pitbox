@@ -761,8 +761,6 @@
     "fieldEngineConfig": "Motor",
     "fieldEnginePos": "Lage",
     "fieldGearbox": "Getriebe",
-    "countryExtractionTitle": "Auslesen des Landes",
-    "countryExtractionHint": "Länder-Tag → Feld „Land“ (wenn leer). Der Tag verschwindet aus dem Vokabular.",
     "impactText": "Mod(s) wären von diesen Regeln betroffen",
     "calculatingImpact": "Auswirkung wird berechnet…",
     "applying": "Wird angewendet…",

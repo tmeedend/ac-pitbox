@@ -7,7 +7,13 @@
   // code (TAXO§12). Curating a country is therefore about its SPELLINGS, never
   // its image: the flag follows from the name (TAXO§3.1).
   //
-  // **Saving re-applies the aliases to the whole library**, unlike the
+  // Two tables per country, edited as the user's overlay on the catalogue
+  // (REGLES§2) and merged in Rust: its SPELLINGS, which normalise a country a
+  // mod declares, and its TAGS, which give it to a mod declaring none. The
+  // tags lived in the Rules screen; they are an exact table too, not a
+  // heuristic (REGLES§11), and one looks for them where the country is.
+  //
+  // **Saving re-applies them to the whole library**, unlike the
   // Categories tab: the country is decided at write time
   // (`harmonize::store`), so a new spelling changes what is stored for every
   // mod that writes it. Same write queue as Categories, failures shown and
@@ -19,20 +25,28 @@
   import { listLibrary } from "$lib/library/library";
   import { bumpLibraryVersion } from "$lib/library/libraryVersion.svelte";
   import {
-    addAlias,
-    aliasesOf,
     attachCountry,
     closestCountry,
     ignoreCountry,
-    isCountryCurated,
-    removeAlias,
-    restoreCountry,
+    keysTo,
+    removeEntry,
+    restoreEntries,
+    setEntry,
+    touches,
     unignoreCountry,
   } from "$lib/workshop/countryEdit";
-  import { defaultCountryAliases, getRules, saveCountryAliases, type CountryAliases } from "$lib/workshop/rules";
+  import { getTaxonomy, saveCountryOverlay, type MapOverlay, type TaxonomyView } from "$lib/workshop/rules";
 
-  let aliases = $state<CountryAliases>({ map: {} });
-  let shipped = $state<CountryAliases>({ map: {} });
+  /** Catalogue, overlay and effective tables, as Rust last sent them. */
+  let view = $state<TaxonomyView | null>(null);
+  /** The user's decisions: what every gesture edits, ahead of the save. */
+  let aliases = $state<MapOverlay>({});
+  let tags = $state<MapOverlay>({});
+  let ignored = $state<string[]>([]);
+  const effAliases = $derived(view?.effective.country_aliases ?? {});
+  const effTags = $derived(view?.effective.country_tags ?? {});
+  const catAliases = $derived(view?.catalog.country_aliases ?? {});
+  const catTags = $derived(view?.catalog.country_tags ?? {});
   /** Stored country of every mod, cars and tracks: one table for both
    * libraries (TAXO§2.2). */
   let mods = $state<{ kind: string; country: string | null }[]>([]);
@@ -41,6 +55,7 @@
   let error = $state("");
   let open = $state<string | null>(null);
   let newAlias = $state("");
+  let newTag = $state("");
   let showEmpty = $state(false);
   /** Chosen target of each "attach to" picker, keyed by the value it moves. */
   let targets = $state<Record<string, string>>({});
@@ -52,9 +67,8 @@
 
   onMount(async () => {
     try {
-      const [rules, defaults] = await Promise.all([getRules(), defaultCountryAliases(), reloadMods(), loadFlags()]);
-      aliases = { map: rules.country_aliases?.map ?? {}, ignored: rules.country_aliases?.ignored ?? [] };
-      shipped = defaults;
+      const [v] = await Promise.all([getTaxonomy(), reloadMods(), loadFlags()]);
+      take(v);
     } catch (e) {
       error = errorText(e);
     } finally {
@@ -62,16 +76,26 @@
     }
   });
 
+  function take(v: TaxonomyView) {
+    view = v;
+    aliases = v.overlay.country_aliases;
+    tags = v.overlay.country_tags;
+    ignored = v.overlay.ignored_countries ?? [];
+  }
+
   let queue: Promise<void> = Promise.resolve();
-  /** Shows the new table at once, writes it, re-applies it, then reads the
-   * library back: the counts only mean something once the stored values
+  /** Takes the new decisions at once, writes and re-applies them, then reads
+   * the library back: the counts only mean something once the stored values
    * moved. The `catch` keeps one failure from freezing every later write. */
-  function commit(next: CountryAliases) {
-    aliases = next;
+  function commit(next: { aliases?: MapOverlay; tags?: MapOverlay; ignored?: string[] }) {
+    aliases = next.aliases ?? aliases;
+    tags = next.tags ?? tags;
+    ignored = next.ignored ?? ignored;
+    const [a, tg, ig] = [aliases, tags, ignored];
     queue = queue
       .then(async () => {
         busy = true;
-        await saveCountryAliases(next);
+        take(await saveCountryOverlay(a, tg, ig));
         await reloadMods();
         bumpLibraryVersion();
         error = "";
@@ -100,7 +124,8 @@
     }
     // A country only aliases lead to - its mods gone - stays in base, hidden
     // unless asked for (TAXO§9): the spellings curated for it are kept.
-    for (const to of Object.values(aliases.map)) row(to);
+    for (const to of Object.values(effAliases)) row(to);
+    for (const to of Object.values(effTags)) row(to);
     return [...m.values()].sort((a, b) => b.cars + b.tracks - (a.cars + a.tracks) || a.name.localeCompare(b.name));
   });
   const shownRows = $derived(rows.filter((r) => showEmpty || r.cars + r.tracks > 0));
@@ -119,7 +144,7 @@
    * pre-selected when there is a close one (TAXO§7.2). */
   const proposals = $derived(
     rows
-      .filter((r) => r.cars + r.tracks > 0 && !gameCountry(r.name) && !(aliases.ignored ?? []).includes(r.name))
+      .filter((r) => r.cars + r.tracks > 0 && !gameCountry(r.name) && !ignored.includes(r.name))
       .map((r) => ({ ...r, closest: closestCountry(r.name, choices.map((c) => c.name)) })),
   );
 
@@ -130,6 +155,17 @@
   function toggle(name: string) {
     open = open === name ? null : name;
     newAlias = "";
+    newTag = "";
+  }
+
+  function attach(from: string, to: string) {
+    const out = attachCountry(
+      { overlay: aliases, catalog: catAliases, effective: effAliases },
+      { overlay: tags, catalog: catTags, effective: effTags },
+      from,
+      to,
+    );
+    commit({ ...out, ignored: unignoreCountry(ignored, from) });
   }
 
   function countText(r: Row): string {
@@ -162,7 +198,7 @@
     class="btn"
     disabled={busy || !targetOf(value, fallback)}
     onclick={() => {
-      commit(attachCountry(aliases, value, targetOf(value, fallback)));
+      attach(value, targetOf(value, fallback));
       if (open === value) open = targetOf(value, fallback);
     }}>{t("countriesTab.attach")}</button
   >
@@ -192,7 +228,7 @@
           <span class="pname">{p.name}</span>
           <span class="pcount">{countText(p)}</span>
           {@render picker(p.name, p.closest)}
-          <button type="button" class="btn" disabled={busy} onclick={() => commit(ignoreCountry(aliases, p.name))}
+          <button type="button" class="btn" disabled={busy} onclick={() => commit({ ignored: ignoreCountry(ignored, p.name) })}
             >{t("countriesTab.ignore")}</button
           >
         </div>
@@ -205,8 +241,9 @@
       {#each shownRows as r (r.name)}
         {@const label = countryLabel(r.name)}
         {@const entry = gameCountry(r.name)}
-        {@const spelled = aliasesOf(aliases, r.name)}
-        {@const curated = isCountryCurated(aliases, shipped, r.name)}
+        {@const spelled = keysTo(effAliases, r.name)}
+        {@const byTag = keysTo(effTags, r.name)}
+        {@const curated = touches(aliases, catAliases, r.name) || touches(tags, catTags, r.name)}
         <li>
           <button type="button" class="row" aria-expanded={open === r.name} onclick={() => toggle(r.name)}>
             {@render flagOf(r.name)}
@@ -238,7 +275,7 @@
                         class="x"
                         title={t("countriesTab.removeAlias")}
                         disabled={busy}
-                        onclick={() => commit(removeAlias(aliases, alias))}>×</button
+                        onclick={() => commit({ aliases: removeEntry(aliases, catAliases, alias) })}>×</button
                       ></span
                     >
                   {:else}
@@ -252,8 +289,40 @@
                   disabled={busy}
                   onkeydown={(e) => {
                     if (e.key !== "Enter" || !newAlias.trim()) return;
-                    commit(addAlias(aliases, newAlias, r.name));
+                    commit({ aliases: setEntry(aliases, catAliases, newAlias, r.name, true) });
                     newAlias = "";
+                  }}
+                />
+              </div>
+
+              <!-- Only used when the mod declares no country: a tag never
+                   rewrites what the author declared (§5). -->
+              <div class="field">
+                <span class="lbl-key">{t("countriesTab.tags")}</span>
+                <div class="tags">
+                  {#each byTag as tag (tag)}
+                    <span class="tok"
+                      >{tag}<button
+                        type="button"
+                        class="x"
+                        title={t("countriesTab.removeTag")}
+                        disabled={busy}
+                        onclick={() => commit({ tags: removeEntry(tags, catTags, tag) })}>×</button
+                      ></span
+                    >
+                  {:else}
+                    <span class="empty">{t("countriesTab.noAlias")}</span>
+                  {/each}
+                </div>
+                <input
+                  class="input add"
+                  placeholder={t("countriesTab.addTag")}
+                  bind:value={newTag}
+                  disabled={busy}
+                  onkeydown={(e) => {
+                    if (e.key !== "Enter" || !newTag.trim()) return;
+                    commit({ tags: setEntry(tags, catTags, newTag, r.name) });
+                    newTag = "";
                   }}
                 />
               </div>
@@ -265,7 +334,11 @@
 
               {#if curated}
                 <div>
-                  <button type="button" class="btn" disabled={busy} onclick={() => commit(restoreCountry(aliases, shipped, r.name))}>
+                  <button type="button" class="btn" disabled={busy} onclick={() =>
+                      commit({
+                        aliases: restoreEntries(aliases, catAliases, r.name),
+                        tags: restoreEntries(tags, catTags, r.name),
+                      })}>
                     {t("countriesTab.restore")}
                   </button>
                 </div>
@@ -283,17 +356,17 @@
           <span>{t("countriesTab.showEmpty", { count: emptyCount })}</span>
         </label>
       {/if}
-      {#if aliases.ignored?.length}
+      {#if ignored.length}
         <div class="ignored">
           <span class="lbl-key">{t("countriesTab.ignored")}</span>
-          {#each aliases.ignored as v (v)}
+          {#each ignored as v (v)}
             <span class="tok"
               >{v}<button
                 type="button"
                 class="x"
                 title={t("countriesTab.unignore")}
                 disabled={busy}
-                onclick={() => commit(unignoreCountry(aliases, v))}>×</button
+                onclick={() => commit({ ignored: unignoreCountry(ignored, v) })}>×</button
               ></span
             >
           {/each}

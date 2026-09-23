@@ -564,6 +564,41 @@ de reprendre. En cas d'écart, la spec fait foi.
       bibliothèque (le pays est décidé à l'écriture). Non mesuré sur la
       bibliothèque réelle — si c'est lent, regrouper les écritures.
 
+- [ ] **Catalogue de règles et surcouche (`SPEC-regles.md`) — lot 1 fait.**
+      Ordre convenu avec l'utilisateur : (1) deux couches pour les tables de
+      taxonomie **— fait** ; (2) manifeste des catalogues passés + test « diff
+      nul » pour les règles en liste ; (3) identifiants stables et surcouche
+      pour les règles en liste (marque, classe, fusion de tags, specs) ; (4)
+      rapport de mise à jour et « Revenir à vN » ; (5) écran Règles refait
+      (liste unique, bascules, badges, compteurs d'effet). Le lot Marques des
+      taxonomies vient **après** le lot 1, pour naître dans le bon format.
+      **Mesuré avant de coder**, et ça a décidé de la migration : sur les 9
+      versions publiées, les règles embarquées n'ont connu que **2** états
+      (v0.1.0→v0.3.1, v0.4.0→v0.7.0) ; les tags de pays sont identiques
+      partout ; alias et familles n'ont jamais été publiés. Le `tag-rules.json`
+      de la machine de dev, semé le 27 juin, portait encore la liste noire
+      `remove` retirée en v0.4 — la preuve que rien ne l'avait jamais atteint.
+      **Pièges pour la suite.** (a) « La règle utilisateur gagne » (REGLES§3)
+      n'a pas le même sens selon le type : `brand_fix` s'arrête à la première
+      qui correspond, `tag_merge` **additionne** — à définir type par type au
+      lot 3. (b) La couche 4 (corrections manuelles, REGLES§14) existe à
+      moitié : tags manuels, nom et description repris, mais rien pour la
+      marque, le pays ou la classe d'un mod précis. (c) La liste blanche des
+      catégories de circuit est encore une table recopiée : elle rejoint la
+      surcouche avec les règles en liste.
+      **Outil de relevé — reporté, pas abandonné.** Un binaire du workspace,
+      jamais livré (comme `kn5-tool`), qui fait tourner **le vrai moteur** sur
+      une install et une bibliothèque, en lecture seule, et sort les voitures
+      non classées, les tags hors vocabulaire, les pays sans drapeau, les
+      variantes de marque, et la classification complète. Rejoué avant/après
+      une modification du catalogue, il donne l'écart mesuré — le même contenu
+      que le rapport de mise à jour du lot 4, donc le même code. L'utilisateur
+      l'imagine aussi **distribué à des contributeurs** qui enverraient leurs
+      résultats : il faudra alors un rapport anonymisé par construction (ids de
+      mods et métadonnées, jamais un chemin), montré à la personne avant
+      envoi, et un rapport brut qui ne se versionne jamais — le dépôt est
+      public.
+
 - [ ] **Deux jeux de règles de tags ont divergé — à trancher.**
       `docs/default-tag-rules-enriched.json` **n'est pas ce que l'app charge** :
       elle sème `src-tauri/rules/default-tag-rules.json` dans le dossier de

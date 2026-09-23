@@ -1,48 +1,52 @@
 import { describe, expect, it } from "vitest";
-import {
-  addAlias,
-  aliasesOf,
-  attachCountry,
-  closestCountry,
-  ignoreCountry,
-  isCountryCurated,
-  restoreCountry,
-} from "./countryEdit";
+import { attachCountry, closestCountry, keysTo, removeEntry, restoreEntries, setEntry, touches } from "./countryEdit";
 
-const SHIPPED = { map: { usa: "United States", "u.s.a.": "United States", holland: "Netherlands" } };
+const ALIASES = { usa: "United States", "u.s.a.": "United States", holland: "Netherlands" };
+const TAGS = { germany: "Germany", usa: "United States" };
 
-describe("country alias editing", () => {
-  it("stores a spelling in its compared form, and never one equal to the name", () => {
-    const a = addAlias(SHIPPED, "  Nippon ", "Japan");
-    expect(a.map.nippon).toBe("Japan");
-    expect(addAlias(SHIPPED, "JAPAN", "Japan"), "dead weight, not written").toBe(SHIPPED);
+describe("country decisions on top of the catalogue", () => {
+  it("stores a spelling in its compared form, never one equal to the name, never one the catalogue says", () => {
+    expect(setEntry({}, ALIASES, "  Nippon ", "Japan", true).set).toEqual({ nippon: "Japan" });
+    expect(setEntry({}, ALIASES, "JAPAN", "Japan", true), "dead weight, not written").toEqual({});
+    expect(setEntry({}, TAGS, "japan", "Japan").set, "a tag named like its country is meaningful").toEqual({ japan: "Japan" });
+    expect(setEntry({ removed: ["usa"] }, ALIASES, "USA", "United States"), "back on the catalogue").toEqual({
+      set: {},
+      removed: [],
+    });
   });
 
-  // Merging must carry the spellings along, or a mod written `Holland` keeps
-  // landing on the old name while the others moved.
-  it("attaches a country with every spelling that led to it", () => {
-    const a = attachCountry(SHIPPED, "Netherlands", "Pays-Bas");
-    expect(aliasesOf(a, "Pays-Bas")).toEqual(["holland", "netherlands"]);
-    expect(aliasesOf(a, "Netherlands")).toEqual([]);
+  // An absence would let the next catalogue bring the entry back.
+  it("removes a shipped spelling with a tombstone", () => {
+    expect(removeEntry({}, ALIASES, "U.S.A.").removed).toEqual(["u.s.a."]);
+    expect(removeEntry({ set: { nippon: "Japan" } }, ALIASES, "nippon")).toEqual({ set: {}, removed: [] });
   });
 
-  it("frees the target when it was itself a spelling of something else", () => {
-    const a = attachCountry({ map: { usa: "United States" } }, "United States", "USA");
-    expect(a.map).toEqual({ "united states": "USA" });
+  // Merging carries the spellings AND the tags along, or a mod written
+  // `Holland` keeps landing on the old name while the others moved.
+  it("attaches a country with every spelling and tag leading to it", () => {
+    const out = attachCountry(
+      { overlay: {}, catalog: ALIASES, effective: ALIASES },
+      { overlay: {}, catalog: TAGS, effective: TAGS },
+      "United States",
+      "USA",
+    );
+    expect(out.aliases.set).toEqual({ "u.s.a.": "USA", "united states": "USA" });
+    expect(out.aliases.removed, "the target was a spelling: it is a name now").toEqual(["usa"]);
+    expect(out.tags.set).toEqual({ usa: "USA" });
   });
 
-  it("forgets an ignored value once it is attached", () => {
-    const a = attachCountry(ignoreCountry(SHIPPED, "Freedonia"), "Freedonia", "France");
-    expect(a.ignored).toEqual([]);
+  it("restores a country by removing every decision touching it", () => {
+    let o = setEntry({}, ALIASES, "america", "United States");
+    o = removeEntry(o, ALIASES, "usa");
+    o = setEntry(o, ALIASES, "nippon", "Japan");
+    expect(touches(o, ALIASES, "United States")).toBe(true);
+    const back = restoreEntries(o, ALIASES, "United States");
+    expect(touches(back, ALIASES, "United States")).toBe(false);
+    expect(back.set, "other countries untouched").toEqual({ nippon: "Japan" });
   });
 
-  it("flags a country whose spellings differ from the shipped ones, and restores them", () => {
-    const a = addAlias(SHIPPED, "america", "United States");
-    expect(isCountryCurated(a, SHIPPED, "United States")).toBe(true);
-    expect(isCountryCurated(a, SHIPPED, "Netherlands")).toBe(false);
-    const back = restoreCountry(a, SHIPPED, "United States");
-    expect(isCountryCurated(back, SHIPPED, "United States")).toBe(false);
-    expect(back.map.holland, "other countries untouched").toBe("Netherlands");
+  it("lists the keys leading to a name", () => {
+    expect(keysTo(ALIASES, "United States")).toEqual(["u.s.a.", "usa"]);
   });
 });
 

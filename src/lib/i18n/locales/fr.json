@@ -1125,8 +1125,6 @@
     "fieldEngineConfig": "Moteur",
     "fieldEnginePos": "Position",
     "fieldGearbox": "Boîte",
-    "countryExtractionTitle": "Extraction pays",
-    "countryExtractionHint": "Tag pays → champ « country » (si vide). Le tag est retiré du vocabulaire.",
     "impactText": "mod(s) seraient affecté(s) par ces règles",
     "calculatingImpact": "calcul de l'impact…",
     "applying": "Application…",
@@ -1780,6 +1778,9 @@
     "restore": "Rétablir les orthographes d'origine",
     "showEmpty": "Afficher les pays sans mod ({count})",
     "ignored": "Ignorés",
-    "unignore": "Ne plus ignorer"
+    "unignore": "Ne plus ignorer",
+    "tags": "Tags qui le désignent",
+    "addTag": "Ajouter un tag…",
+    "removeTag": "Retirer ce tag"
   }
 }

@@ -64,6 +64,7 @@ mod steering;
 mod stock;
 mod submods;
 mod sun;
+mod taxonomy;
 #[cfg(test)]
 mod testutil;
 mod thumbnails;
@@ -453,10 +454,9 @@ pub fn run() {
             commands::usermeta::set_entity_display_name,
             commands::rules::get_rules,
             commands::rules::save_rules,
-            commands::rules::save_category_families,
-            commands::rules::default_category_families,
-            commands::rules::save_country_aliases,
-            commands::rules::default_country_aliases,
+            commands::rules::get_taxonomy,
+            commands::rules::save_family_overlay,
+            commands::rules::save_country_overlay,
             commands::rules::rules_impact,
             commands::rules::reapply_rules,
             commands::library::set_favorite,

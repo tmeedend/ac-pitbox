@@ -1,62 +1,70 @@
 import { describe, expect, it } from "vitest";
-import { addFamily, isCurated, moveTag, patchFamily, restoreFamily, tagCounts } from "./familyEdit";
+import {
+  attachTag,
+  createFamily,
+  deleteFamily,
+  detachTag,
+  isCurated,
+  restoreFamily,
+  setFamilyLook,
+  tagCounts,
+} from "./familyEdit";
 
-const TABLE = [
+const CATALOG = [
   { id: "prototype", icon: "proto", tags: ["lmp1", "group c"] },
   { id: "race", icon: "race", tags: ["race", "gt3"] },
 ];
 
-describe("family table editing", () => {
-  // TAXO§7.3: a tag belongs to one family - attached elsewhere, it moves.
-  it("moves a tag instead of copying it", () => {
-    const out = moveTag(TABLE, "#LMP1", "race");
-    expect(out[0].tags).toEqual(["group c"]);
-    expect(out[1].tags).toEqual(["race", "gt3", "lmp1"]);
+describe("family decisions on top of the catalogue", () => {
+  // REGLES§2: the overlay holds decisions, keyed by tag.
+  it("records a moved tag as one decision, and drops it once sent back home", () => {
+    const moved = attachTag({}, CATALOG, "#GT3", "prototype");
+    expect(moved.tags).toEqual({ gt3: "prototype" });
+    expect(attachTag(moved, CATALOG, "gt3", "race").tags, "back on the catalogue").toEqual({});
   });
 
-  it("does not duplicate a tag moved into the family that holds it", () => {
-    expect(moveTag(TABLE, "GT3", "race")[1].tags).toEqual(["race", "gt3"]);
+  it("detaches a shipped tag with a tombstone, and an unknown one with nothing", () => {
+    expect(detachTag({}, CATALOG, "gt3").tags).toEqual({ gt3: "" });
+    expect(detachTag({ tags: { wec: "race" } }, CATALOG, "wec").tags).toEqual({});
+  });
+
+  it("keeps only the look that differs from the catalogue", () => {
+    expect(setFamilyLook({}, CATALOG, "race", { icon: "race" }).meta).toEqual({});
+    expect(setFamilyLook({}, CATALOG, "race", { name: "Course", icon: "rally" }).meta).toEqual({
+      race: { name: "Course", icon: "rally" },
+    });
+    const renamed = setFamilyLook({ meta: { race: { name: "Course" } } }, CATALOG, "race", { name: " " });
+    expect(renamed.meta, "an emptied name falls back on the translation").toEqual({});
   });
 
   // The id is what a posed chip stores: a rename must not break it.
   it("gives a new family a unique id taken from its name, fixed from then on", () => {
-    const { families, id } = addFamily(TABLE, "Course");
-    expect(id).toBe("course");
-    expect(addFamily(families, "Course").id).toBe("course-2");
-    expect(addFamily(TABLE, "Épreuve d'endurance").id).toBe("epreuve-d-endurance");
-    const renamed = patchFamily(families, "course", { name: "Le Mans" });
-    expect(renamed.at(-1)).toMatchObject({ id: "course", name: "Le Mans" });
+    const { overlay, id } = createFamily({}, ["race"], "Épreuve d'endurance");
+    expect(id).toBe("epreuve-d-endurance");
+    expect(createFamily(overlay, [], "Épreuve d'endurance").id).toBe("epreuve-d-endurance-2");
+    expect(createFamily({}, ["race"], "Race").id).toBe("race-2");
+    const renamed = setFamilyLook(overlay, CATALOG, id, { name: "Le Mans" });
+    expect(renamed.created).toEqual([{ id, name: "Le Mans", tags: [] }]);
   });
 
-  it("falls back on the translation when the name is emptied", () => {
-    expect(patchFamily(TABLE, "race", { name: "  " })[1]).not.toHaveProperty("name");
+  it("deletes a shipped family with a tombstone, a created one without trace", () => {
+    const o = attachTag(createFamily({}, [], "Mine").overlay, CATALOG, "wec", "mine");
+    expect(deleteFamily(o, CATALOG, "mine")).toMatchObject({ created: [], tags: {}, removed: [] });
+    expect(deleteFamily({}, CATALOG, "race").removed).toEqual(["race"]);
   });
 
-  // TAXO§6.1: the flag of the list says "you changed this".
-  it("flags a family whose tags differ from the shipped ones, not one merely reordered", () => {
-    const shipped = TABLE[1];
-    expect(isCurated({ ...shipped, tags: ["gt3", "#Race"] }, shipped)).toBe(false);
-    expect(isCurated({ ...shipped, tags: ["gt3"] }, shipped)).toBe(true);
-    expect(isCurated({ ...shipped, icon: "rally" }, shipped)).toBe(true);
-    expect(isCurated({ id: "mine", tags: [] }, undefined), "a family the user made").toBe(true);
-  });
-
-  it("restores a family by taking its tags back from where they were moved", () => {
-    const moved = moveTag(patchFamily(TABLE, "prototype", { icon: "rally" }), "lmp1", "race");
-    const back = restoreFamily(moved, TABLE, "prototype");
-    expect(back[0]).toEqual({ id: "prototype", icon: "proto", tags: ["lmp1", "group c"] });
-    expect(back[1].tags, "no longer in the family it was moved to").toEqual(["race", "gt3"]);
-  });
-
-  // Found while testing the tab: restoring the family a tag had been moved
-  // INTO used to drop that tag from every family.
-  it("sends a tag the family had gained back to the family that ships it", () => {
-    const moved = moveTag(TABLE, "gt3", "prototype");
-    const back = restoreFamily(moved, TABLE, "prototype");
-    expect(back[0].tags).toEqual(["lmp1", "group c"]);
-    expect(back[1].tags, "gt3 is home in Race again").toContain("gt3");
-    const invented = moveTag(TABLE, "wip", "prototype");
-    expect(restoreFamily(invented, TABLE, "prototype").flatMap((f) => f.tags), "a tag nobody ships is dropped").not.toContain("wip");
+  // The bug of the whole-table version: restoring the family a tag had been
+  // moved INTO dropped that tag from every family. Removing the decisions
+  // cannot do that.
+  it("restores a family by removing every decision touching it", () => {
+    let o = attachTag({}, CATALOG, "gt3", "prototype");
+    o = detachTag(o, CATALOG, "lmp1");
+    o = setFamilyLook(o, CATALOG, "prototype", { icon: "rally" });
+    expect(isCurated(o, CATALOG, "prototype")).toBe(true);
+    expect(isCurated(o, CATALOG, "race"), "race lost gt3: it is touched too").toBe(true);
+    const back = restoreFamily(o, CATALOG, "prototype");
+    expect(back).toMatchObject({ meta: {}, tags: {}, removed: [] });
+    expect(isCurated(back, CATALOG, "race")).toBe(false);
   });
 
   it("counts a car once per tag, whatever the spelling it carries it under", () => {

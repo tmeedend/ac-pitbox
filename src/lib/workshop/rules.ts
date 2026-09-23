@@ -41,7 +41,7 @@ export interface ExtractionCountry {
 export interface CountryAliases {
   map: Record<string, string>;
   /** Values unknown to the game the user chose to leave as they are
-   * (TAXO§7.2). */
+   * (TAXO§7.2) - from the overlay (`TaxonomyOverlay.ignored_countries`). */
   ignored?: string[];
 }
 /** A family of car categories (INDEX§6.1) — see `$lib/library/families`. */
@@ -86,26 +86,58 @@ export function rulesImpact(rules: Rules): Promise<number> {
   return invoke<number>("rules_impact", { rules });
 }
 
-/** Writes the family table only - no re-harmonisation (TAXO§6). A WRITE, hence
- * `invoke` and not `invokeSafe`: a fallback would report as saved a table that
- * never reached the disk. Returns the table as stored. */
-export function saveCategoryFamilies(families: CategoryFamily[]): Promise<CategoryFamily[]> {
-  return invoke<CategoryFamily[]>("save_category_families", { families });
+// --- Taxonomy tables in two layers (REGLES§2) --------------------------------
+
+/** Overlay of a `key → value` table: entries set, catalogue entries removed. */
+export interface MapOverlay {
+  set?: Record<string, string>;
+  removed?: string[];
 }
 
-/** The family table as the app ships it, for "Restore". */
-export function defaultCategoryFamilies(): Promise<CategoryFamily[]> {
-  return invoke<CategoryFamily[]>("default_category_families");
+export interface FamilyOverlay {
+  /** Name or icon given to a SHIPPED family. */
+  meta?: Record<string, { name?: string; icon?: string }>;
+  /** Families the user made (their tags live in `tags`). */
+  created?: CategoryFamily[];
+  /** Shipped families the user deleted. */
+  removed?: string[];
+  /** `tag → family id` over the catalogue; `""` detaches the tag. */
+  tags?: Record<string, string>;
 }
 
-/** Writes the country aliases and re-applies them to the library - the
- * country is decided at write time, so an alias changes stored values. A WRITE:
- * `invoke`, never `invokeSafe`. Returns the number of mods processed. */
-export function saveCountryAliases(aliases: CountryAliases): Promise<number> {
-  return invoke<number>("save_country_aliases", { aliases });
+export interface TaxonomyOverlay {
+  families: FamilyOverlay;
+  country_aliases: MapOverlay;
+  country_tags: MapOverlay;
+  ignored_countries?: string[];
 }
 
-/** The aliases as the app ships them, for "Restore". */
-export function defaultCountryAliases(): Promise<CountryAliases> {
-  return invoke<CountryAliases>("default_country_aliases");
+export interface TaxonomyTables {
+  families: CategoryFamily[];
+  country_aliases: Record<string, string>;
+  country_tags: Record<string, string>;
+}
+
+/** What the catalogue ships, what the user decided, what applies. */
+export interface TaxonomyView {
+  catalog: TaxonomyTables;
+  overlay: TaxonomyOverlay;
+  effective: TaxonomyTables;
+}
+
+export function getTaxonomy(): Promise<TaxonomyView> {
+  return invoke<TaxonomyView>("get_taxonomy");
+}
+
+/** Writes the family decisions - no re-harmonisation. A WRITE: `invoke`, never
+ * `invokeSafe`, whose fallback would report as saved what never reached the
+ * disk. */
+export function saveFamilyOverlay(families: FamilyOverlay): Promise<TaxonomyView> {
+  return invoke<TaxonomyView>("save_family_overlay", { families });
+}
+
+/** Writes the country decisions and re-applies them to the library: the
+ * country is decided at write time. */
+export function saveCountryOverlay(aliases: MapOverlay, tags: MapOverlay, ignored: string[]): Promise<TaxonomyView> {
+  return invoke<TaxonomyView>("save_country_overlay", { aliases, tags, ignored });
 }

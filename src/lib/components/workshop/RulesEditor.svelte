@@ -10,29 +10,8 @@
   let saving = $state(false);
   let savedMsg = $state("");
 
-  // Country extraction is edited as pairs synced into the object. Only this
-  // one lives here: it GUESSES a missing country from a tag, a rule. The
-  // aliases that NORMALISE a declared country are an index, edited in the
-  // Countries tab (TAXO§8) - merging the two would let a tag rewrite what the
-  // author declared.
-  let countryPairs = $state<{ tag: string; country: string }[]>([]);
-
   onMount(async () => {
     rules = await getRules();
-    countryPairs = Object.entries(rules.car.extraction_country.map).map(
-      ([tag, country]) => ({ tag, country }),
-    );
-  });
-
-  // Reconstruit les deux maps depuis les paires éditées.
-  $effect(() => {
-    if (!rules) return;
-    const map: Record<string, string> = {};
-    for (const p of countryPairs) {
-      const k = p.tag.trim().toLowerCase();
-      if (k) map[k] = p.country.trim();
-    }
-    rules.car.extraction_country.map = map;
   });
 
   // Aperçu d'impact à la volée (anti-rebond) — « N mods affectés » (§5).
@@ -247,30 +226,13 @@
             {/each}
           </section>
 
-          <!-- EXTRACTION PAYS -->
-          <section>
-            <div class="s-head">
-              <h3>{t("rules.countryExtractionTitle")} <span class="cnt">{countryPairs.length}</span></h3>
-              <button class="btn" type="button" onclick={() => push(countryPairs, { tag: "", country: "" })}>+ {t("columns.country")}</button>
-            </div>
-            <p class="hint">{t("rules.countryExtractionHint")}</p>
-            <div class="rows">
-              {#each countryPairs as pair, i}
-                <div class="row">
-                  <input class="input mono" bind:value={pair.tag} placeholder="germany" />
-                  <span class="arrow">→</span>
-                  <input class="input" bind:value={pair.country} placeholder="Germany" />
-                  <button class="btn-ghost del" type="button" onclick={() => removeAt(countryPairs, i)} title={t("common.delete")}>✕</button>
-                </div>
-              {/each}
-            </div>
-          </section>
         {/if}
 
-        <!-- Country aliases left this screen for the Countries tab (TAXO§8):
-             a spelling → name table is an index, not a condition → action
-             rule. Same table in the same file, so nothing was converted; the
-             rules saved from here carry it back untouched. -->
+        <!-- The country tables left this screen for the Countries tab
+             (TAXO§8, REGLES§11): the aliases, then the tags that give a
+             country - both exact tables, not heuristics. They are the
+             catalogue + the user's overlay now (`taxonomy.rs`), and what this
+             screen saves never writes them. -->
       {/if}
     </div>
   </div>
