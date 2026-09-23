@@ -7,6 +7,7 @@
     "groupGame": "Le jeu",
     "apps": "Apps",
     "rules": "Règles",
+    "categories": "Catégories",
     "import": "Importer",
     "profiles": "Profils",
     "maintenance": "Maintenance",
@@ -1734,5 +1735,25 @@
     "carOne": "{count} voiture",
     "viewIndex": "Index",
     "viewList": "Liste complète"
+  },
+  "categories": {
+    "subtitle": "Les familles de voitures : ce qui range une voiture dans l'index et dans le filtre Famille.",
+    "unclassified": "{count} voitures sans famille",
+    "tagCount": "{count} tags",
+    "curated": "Modifiée",
+    "name": "Nom",
+    "icon": "Icône",
+    "neutralIcon": "Neutre",
+    "tags": "Tags",
+    "noTag": "Aucun tag",
+    "addTag": "Ajouter un tag…",
+    "removeTag": "Retirer ce tag",
+    "inFamily": "dans {name}",
+    "restore": "Rétablir la famille d'origine",
+    "confirmDelete": "Confirmer la suppression",
+    "newPlaceholder": "Nouvelle famille",
+    "create": "Créer",
+    "resetAll": "Tout rétablir",
+    "confirmResetAll": "Confirmer : tout rétablir"
   }
 }

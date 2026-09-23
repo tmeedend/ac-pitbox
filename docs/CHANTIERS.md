@@ -505,12 +505,13 @@ de reprendre. En cas d'écart, la spec fait foi.
       ouverts de REFONTE§14 à reposer avec l'inventaire réel sous les yeux, et le
       markdown dans les notes (demandé à l'usage le 2026-09-11, voir le 4bis du
       plan).
-- [ ] **Taxonomies (`SPEC-taxonomies.md`) — seule la table des familles est
-      livrée.** L'index de bibliothèque (`SPEC-index-bibliotheque.md`) est
-      fait, et il n'avait besoin que d'elle : `car.category_families` dans les
-      règles, huit familles livrées, un filtre `Famille`. **Reste tout le
-      reste de la spec** : les trois onglets Marques / Pays / Catégories de
-      l'Atelier, l'élection du logo canonique (TAXO§4 — fond transparent,
+- [ ] **Taxonomies (`SPEC-taxonomies.md`) — familles et onglet Catégories
+      livrés.** L'index de bibliothèque (`SPEC-index-bibliotheque.md`) est
+      fait : `car.category_families` dans les règles, huit familles livrées,
+      un filtre `Famille`, et l'onglet Catégories de l'Atelier qui les édite.
+      Découpage convenu avec l'utilisateur, un lot à la fois avec une pause
+      pour regarder : **Catégories (fait)**, puis Pays, puis Marques (fusions),
+      puis Marques (logos). **Reste** : les onglets Marques et Pays, l'élection du logo canonique (TAXO§4 — fond transparent,
       résolution, vote majoritaire), la détection du fond cuit et la pastille
       claire (TAXO§5), les propositions de fusion avec `Ignorer` mémorisé
       (TAXO§7), la migration des corrections de marque hors de Règles (TAXO§8),
@@ -537,6 +538,12 @@ de reprendre. En cas d'écart, la spec fait foi.
       appartenances, 34 non classées, presque toutes du trafic. `sport` (12
       voitures, surtout DDM) et `jdm` restent hors familles : ambigus, et la
       spec veut que `#jdm` reste un genre.
+      **Piège payé sur l'onglet Catégories** : « Rétablir » une famille
+      reprenait ses tags d'origine mais laissait tomber ceux qu'elle avait
+      gagnés — un `gt3` déplacé dans Classique puis Classique rétablie, et
+      `gt3` n'était plus dans aucune famille : Course perdait ses GT3 sans
+      qu'on y ait touché. Ils retournent désormais dans la famille qui les
+      livre (`restoreFamily`, testé).
       **Piège pour les pays** : les tuiles traduisent le nom (depuis le code
       ISO, `localizedCountry`), mais la puce et l'éditeur montrent encore le
       nom anglais rangé — leurs drapeaux se cherchent **par le libellé** dans

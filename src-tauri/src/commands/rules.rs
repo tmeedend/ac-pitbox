@@ -18,6 +18,19 @@ pub fn save_rules(app: AppHandle, db: State<Db>, rules: Rules) -> Result<usize, 
     crate::harmonize::harmonize_all(&conn, &cfg, &rules).map_err(|e| e.to_string())
 }
 
+/// Writes the category family table (Categories tab, TAXO§6) without
+/// re-harmonising anything — see `rules::save_category_families`.
+#[tauri::command]
+pub fn save_category_families(app: AppHandle, families: Vec<CategoryFamily>) -> Result<Vec<CategoryFamily>, String> {
+    crate::rules::save_category_families(&app, families)
+}
+
+/// The shipped family table, for "restore" (TAXO§6.2).
+#[tauri::command]
+pub fn default_category_families() -> Vec<CategoryFamily> {
+    crate::rules::default_rules().car.category_families
+}
+
 /// Aperçu d'impact : nombre de mods affectés par un jeu de règles candidat,
 /// sans rien enregistrer (§5).
 #[tauri::command]

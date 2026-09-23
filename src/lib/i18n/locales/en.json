@@ -7,6 +7,7 @@
     "groupGame": "The game",
     "apps": "Apps",
     "rules": "Rules",
+    "categories": "Categories",
     "import": "Import",
     "profiles": "Profiles",
     "maintenance": "Maintenance",
@@ -1734,5 +1735,25 @@
     "carOne": "{count} car",
     "viewIndex": "Index",
     "viewList": "Full list"
+  },
+  "categories": {
+    "subtitle": "Car families: what places a car in the index and in the Family filter.",
+    "unclassified": "{count} cars without a family",
+    "tagCount": "{count} tags",
+    "curated": "Modified",
+    "name": "Name",
+    "icon": "Icon",
+    "neutralIcon": "Neutral",
+    "tags": "Tags",
+    "noTag": "No tag",
+    "addTag": "Add a tag…",
+    "removeTag": "Remove this tag",
+    "inFamily": "in {name}",
+    "restore": "Restore the shipped family",
+    "confirmDelete": "Confirm deletion",
+    "newPlaceholder": "New family",
+    "create": "Create",
+    "resetAll": "Restore all",
+    "confirmResetAll": "Confirm: restore all"
   }
 }

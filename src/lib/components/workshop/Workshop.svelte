@@ -16,13 +16,14 @@
   // l'entrée du rail — qui vise `rules` — repart forcément du premier onglet.
   import Tabs from "$lib/components/ui/Tabs.svelte";
   import RulesEditor from "./RulesEditor.svelte";
+  import Categories from "./Categories.svelte";
   import Import from "./Import.svelte";
   import Profiles from "./Profiles.svelte";
   import Maintenance from "./Maintenance.svelte";
   import { nav, requestSection } from "$lib/shell/nav.svelte";
   import { t } from "$lib/i18n/index.svelte";
 
-  const TAB_IDS = ["rules", "import", "profiles", "maintenance"] as const;
+  const TAB_IDS = ["rules", "categories", "import", "profiles", "maintenance"] as const;
   // Recalculés à chaque changement de langue (`t` est réactif) : un tableau
   // `const` de libellés figés resterait dans l'ancienne langue.
   const tabs = $derived(TAB_IDS.map((id) => ({ id, label: t(`nav.${id}`) })));
@@ -42,6 +43,8 @@
   <div class="body">
     {#if nav.section === "rules"}
       <RulesEditor />
+    {:else if nav.section === "categories"}
+      <Categories />
     {:else if nav.section === "import"}
       <Import />
     {:else if nav.section === "profiles"}

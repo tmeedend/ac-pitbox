@@ -446,6 +446,8 @@ pub fn run() {
             commands::usermeta::set_entity_display_name,
             commands::rules::get_rules,
             commands::rules::save_rules,
+            commands::rules::save_category_families,
+            commands::rules::default_category_families,
             commands::rules::rules_impact,
             commands::rules::reapply_rules,
             commands::library::set_favorite,

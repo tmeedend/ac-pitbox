@@ -269,6 +269,61 @@ pub fn save(app: &AppHandle, rules: &Rules) -> Result<(), String> {
     std::fs::write(&path, json).map_err(|e| e.to_string())
 }
 
+// --- Category families (Categories tab, TAXO§6) ---------------------------
+
+/// A tag as families compare it: lowercased, trimmed, without its leading `#`.
+/// Same rule as `familyTag` on the front end, which reads the table.
+fn family_tag(tag: &str) -> String {
+    tag.trim().to_lowercase().trim_start_matches('#').trim().to_string()
+}
+
+/// Cleans a family table before it is written.
+///
+/// The front end already keeps it tidy, but the file is also edited by hand,
+/// and this is the last place that sees every family at once:
+/// - an id is kept once (the first wins) and never empty — it is the value a
+///   filter chip stores;
+/// - a tag is stored in its compared form and kept in **one** family, the
+///   first that lists it (TAXO§7.3): counted twice, it would make the index
+///   counters meaningless;
+/// - an empty name is no name, so a shipped family falls back on its
+///   translation.
+pub fn normalize_families(families: Vec<CategoryFamily>) -> Vec<CategoryFamily> {
+    let mut ids = BTreeSet::new();
+    let mut tags = BTreeSet::new();
+    families
+        .into_iter()
+        .filter_map(|mut f| {
+            f.id = f.id.trim().to_string();
+            if f.id.is_empty() || !ids.insert(f.id.clone()) {
+                return None;
+            }
+            f.name = f.name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty());
+            f.icon = f.icon.filter(|i| !i.trim().is_empty());
+            f.tags = f
+                .tags
+                .iter()
+                .map(|t| family_tag(t))
+                .filter(|t| !t.is_empty() && tags.insert(t.clone()))
+                .collect();
+            Some(f)
+        })
+        .collect()
+}
+
+/// Writes the family table, and only it.
+///
+/// **Not through `save_rules`**, which re-harmonises the whole library: a
+/// family is an index over tags, not a rule (TAXO§2), so editing one changes no
+/// computed value in the overlay and has no business rewriting 600 rows.
+/// Returns the table as stored, so the screen shows what the file now says.
+pub fn save_category_families(app: &AppHandle, families: Vec<CategoryFamily>) -> Result<Vec<CategoryFamily>, String> {
+    let mut rules = load(app);
+    rules.car.category_families = normalize_families(families);
+    save(app, &rules)?;
+    Ok(rules.car.category_families)
+}
+
 // --- Application (moteur) ---------------------------------------------------
 
 /// Résultat de l'harmonisation d'un mod (overlay, non destructif).
@@ -642,6 +697,27 @@ mod tests {
         let fams = default_rules().car.category_families;
         assert!(fams.iter().any(|f| f.id == "race"), "shipped families present");
         assert!(fams.iter().all(|f| !f.tags.is_empty()), "no family without a tag");
+    }
+
+    /// TAXO§7.3: one tag, one family. The Categories tab moves a tag rather
+    /// than copying it, but the file is also edited by hand.
+    #[test]
+    fn a_tag_written_in_two_families_stays_in_the_first() {
+        let fam = |id: &str, tags: &[&str]| CategoryFamily {
+            id: id.to_string(),
+            name: None,
+            icon: None,
+            tags: tags.iter().map(|t| t.to_string()).collect(),
+        };
+        let out = normalize_families(vec![
+            fam("prototype", &["#LMP1", " group c "]),
+            fam("race", &["lmp1", "GT3"]),
+            fam("prototype", &["dtm"]),
+            fam("  ", &["rally"]),
+        ]);
+        assert_eq!(out.len(), 2, "duplicate and empty ids dropped");
+        assert_eq!(out[0].tags, vec!["lmp1", "group c"], "stored in compared form");
+        assert_eq!(out[1].tags, vec!["gt3"], "lmp1 kept by the first family only");
     }
 
     #[test]

@@ -82,3 +82,15 @@ export function saveRules(rules: Rules): Promise<number> {
 export function rulesImpact(rules: Rules): Promise<number> {
   return invoke<number>("rules_impact", { rules });
 }
+
+/** Writes the family table only - no re-harmonisation (TAXO§6). A WRITE, hence
+ * `invoke` and not `invokeSafe`: a fallback would report as saved a table that
+ * never reached the disk. Returns the table as stored. */
+export function saveCategoryFamilies(families: CategoryFamily[]): Promise<CategoryFamily[]> {
+  return invoke<CategoryFamily[]>("save_category_families", { families });
+}
+
+/** The family table as the app ships it, for "Restore". */
+export function defaultCategoryFamilies(): Promise<CategoryFamily[]> {
+  return invoke<CategoryFamily[]>("default_category_families");
+}

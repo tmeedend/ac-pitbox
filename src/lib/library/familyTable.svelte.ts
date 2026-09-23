@@ -29,3 +29,10 @@ export function loadFamilies(): Promise<void> {
 export function categoryFamilies(): CategoryFamily[] {
   return table.list;
 }
+
+/** Replaces the cached table after the Categories tab saved it, so the index
+ * and the Family filter follow without a restart. */
+export function setFamilies(list: CategoryFamily[]): void {
+  table.list = list;
+  loading ??= Promise.resolve();
+}
