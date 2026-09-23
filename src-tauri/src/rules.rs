@@ -304,9 +304,20 @@ pub fn default_rules() -> Rules {
 /// Charge les règles depuis le fichier éditable ; au premier accès, sème le
 /// fichier avec le jeu par défaut embarqué.
 pub fn load(app: &AppHandle) -> Rules {
-    let Ok(path) = rules_file(app) else {
-        return default_rules();
-    };
+    match app.path().app_config_dir() {
+        Ok(dir) => load_from_dir(&dir),
+        Err(e) => {
+            log::warn!("config dir unavailable, embedded rules used: {e}");
+            default_rules()
+        }
+    }
+}
+
+/// `load`, from an explicit configuration directory - what the tests and the
+/// diff-nul bench (`harmonize::snapshot`) use to load a real user's rules
+/// without a running application.
+pub fn load_from_dir(dir: &std::path::Path) -> Rules {
+    let path = dir.join("tag-rules.json");
     if !path.exists() {
         if let Some(parent) = path.parent() {
             let _ = std::fs::create_dir_all(parent);
@@ -331,13 +342,7 @@ pub fn load(app: &AppHandle) -> Rules {
     // The taxonomy tables come from the catalogue + the user's overlay, never
     // from this file (`taxonomy.rs`) - migrated out of it the first time.
     let catalog = crate::taxonomy::catalog();
-    let overlay = match taxonomy_file(app) {
-        Ok(p) => crate::taxonomy::load_or_migrate(&p, &rules),
-        Err(e) => {
-            log::warn!("taxonomy overlay path: {e}");
-            crate::taxonomy::TaxonomyOverlay::default()
-        }
-    };
+    let overlay = crate::taxonomy::load_or_migrate(&dir.join("taxonomy.json"), &rules);
     crate::taxonomy::apply(&mut rules, &catalog, &overlay);
     // Backfill : une config antérieure à la liste blanche des catégories de
     // circuit (§5) n'a pas la clé → on la remplit depuis le seed embarqué,

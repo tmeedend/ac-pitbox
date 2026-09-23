@@ -569,7 +569,7 @@ de reprendre. En cas d'écart, la spec fait foi.
       taxonomie **— fait**, avec les marques livré / ajouté / retiré dans les
       onglets et `rules-tool` (`diff`, `promote`) pour promouvoir une
       curation faite dans l'app vers le catalogue ; (2) manifeste des catalogues passés + test « diff
-      nul » pour les règles en liste ; (3) identifiants stables et surcouche
+      nul » pour les règles en liste **— fait** ; (3) identifiants stables et surcouche
       pour les règles en liste (marque, classe, fusion de tags, specs) ; (4)
       rapport de mise à jour et « Revenir à vN » ; (5) écran Règles refait
       (liste unique, bascules, badges, compteurs d'effet). Le lot Marques des
@@ -580,10 +580,25 @@ de reprendre. En cas d'écart, la spec fait foi.
       partout ; alias et familles n'ont jamais été publiés. Le `tag-rules.json`
       de la machine de dev, semé le 27 juin, portait encore la liste noire
       `remove` retirée en v0.4 — la preuve que rien ne l'avait jamais atteint.
+      **Lot 2, mesuré.** Les règles en liste n'ont **jamais changé** du premier
+      commit (63e44ba) à v0.7.0 : seule la liste noire `remove` a disparu (v0.4,
+      le moteur ne la lisait plus) et `category_allowlist` est apparue (v0.1).
+      Un seul manifeste figé les représente donc toutes
+      (`rules/manifests/pre-layer-rules.json`, `rule_manifest.rs`), avec le
+      classement de REGLES§13.2 (intacte / supprimée / à l'utilisateur /
+      réordonnée), par contenu faute d'identifiants (REGLES§13.3 : une règle
+      modifiée se lit comme une suppression plus une règle à lui). Le banc
+      « diff nul » (`harmonize::snapshot`) recalcule la classification de toute
+      la bibliothèque sans rien écrire ; rejoué sur l'install de dev
+      (`cargo test --lib harmonize::tests::real_install_diff_nul -- --ignored
+      --nocapture`, sur des copies) : 11 sections intactes, **350 mods, 0
+      classé différemment**. C'est lui qui prouvera le lot 3.
       **Pièges pour la suite.** (a) « La règle utilisateur gagne » (REGLES§3)
-      n'a pas le même sens selon le type : `brand_fix` s'arrête à la première
-      qui correspond, `tag_merge` **additionne** — à définir type par type au
-      lot 3. (b) La couche 4 (corrections manuelles, REGLES§14) existe à
+      n'a pas le même sens selon le type, **et c'est tranché** : `brand_fix`,
+      `class_fix`, `tag_merge` et l'extraction des specs s'arrêtent à la
+      première règle qui correspond, `name_to_tag` additionne. Pour les
+      premières, la règle de l'utilisateur passe **devant** celles du
+      catalogue — c'est déjà là que l'écran Règles l'insère (`unshift`). (b) La couche 4 (corrections manuelles, REGLES§14) existe à
       moitié : tags manuels, nom et description repris, mais rien pour la
       marque, le pays ou la classe d'un mod précis. (c) La liste blanche des
       catégories de circuit est encore une table recopiée : elle rejoint la

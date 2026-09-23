@@ -147,6 +147,48 @@ pub fn count_affected(conn: &Connection, cfg: &AppConfig, rules: &Rules) -> rusq
     Ok(n)
 }
 
+/// What the harmonisation would store for every mod under `rules`, computed
+/// and NEVER stored: `mod id → classification` (rule tags, category, class,
+/// final country, spec fields), serialised so two runs compare as strings.
+///
+/// The "diff nul" bench of REGLES§13.5: restructuring how rules are stored
+/// must classify the library exactly as before, and the only proof is to
+/// classify it twice and compare. A mod whose files cannot be read is left
+/// out on both sides.
+// Called by the diff-nul bench today, by the lot 3 migration next.
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn snapshot(
+    conn: &Connection,
+    cfg: &AppConfig,
+    rules: &Rules,
+) -> rusqlite::Result<std::collections::BTreeMap<String, String>> {
+    let mut out = std::collections::BTreeMap::new();
+    for m in overlay::list_mods(conn)? {
+        let Some((mut h, native)) = recompute_for(conn, cfg, rules, &m) else {
+            continue;
+        };
+        let country = final_country(rules, &h, native.as_deref());
+        h.tags_from_rule.sort();
+        let line = serde_json::to_string(&(&h, country)).unwrap_or_default();
+        out.insert(m.id_interne, line);
+    }
+    Ok(out)
+}
+
+/// The mods two snapshots classify differently.
+// Called by the diff-nul bench today, by the lot 3 migration next.
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn snapshot_diff(
+    a: &std::collections::BTreeMap<String, String>,
+    b: &std::collections::BTreeMap<String, String>,
+) -> Vec<String> {
+    a.keys()
+        .chain(b.keys().filter(|k| !a.contains_key(*k)))
+        .filter(|k| a.get(*k) != b.get(*k))
+        .cloned()
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -207,6 +249,114 @@ mod tests {
     /// The test goes through the whole path (library on disk, overlay, active
     /// version) because that is where the bug was: the two readers were each
     /// right on their own, and only disagreed once assembled.
+    /// The bench itself: a change of rules that reclassifies a mod is seen,
+    /// one that changes nothing is not.
+    #[test]
+    fn a_snapshot_sees_a_reclassification_and_nothing_else() {
+        let base = crate::testutil::temp_dir("harmo-snapshot");
+        let lib = base.join("lib");
+        let dir = lib.join("cars").join("rss_car").join("v");
+        std::fs::create_dir_all(dir.join("ui")).unwrap();
+        std::fs::write(
+            dir.join("ui").join("ui_car.json"),
+            r#"{"name":"RSS Formula","class":"race","tags":["singleseater","rwd"]}"#,
+        )
+        .unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        overlay::upsert_mod(&conn, "rss_car", "Car", None, Some("RSS Formula"), "h", None, &now).unwrap();
+        overlay::insert_version(
+            &conn,
+            "rss_car_v",
+            "rss_car",
+            Some("1.0"),
+            None,
+            &now,
+            &dir.to_string_lossy(),
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
+        )
+        .unwrap();
+        overlay::set_active_version(&conn, "rss_car", "rss_car_v").unwrap();
+        let cfg = AppConfig {
+            library_path: Some(lib.clone()),
+            ..Default::default()
+        };
+        let rules = rules::default_rules();
+        let before = snapshot(&conn, &cfg, &rules).unwrap();
+        assert_eq!(before.len(), 1, "the mod is classified");
+        assert!(
+            snapshot_diff(&before, &snapshot(&conn, &cfg, &rules.clone()).unwrap()).is_empty(),
+            "same rules, same classification"
+        );
+        let mut changed = rules.clone();
+        changed.car.extraction_specs.drivetrain.clear();
+        assert_eq!(
+            snapshot_diff(&before, &snapshot(&conn, &cfg, &changed).unwrap()),
+            vec!["rss_car".to_string()],
+            "losing the drivetrain extraction reclassifies the car"
+        );
+    }
+
+    /// REGLES§13.5 on a REAL install, before any migration of the list rules:
+    /// how the user's own rules file compares to the frozen manifest, and
+    /// whether it classifies his library exactly like the embedded rules. Works
+    /// on COPIES of the config files; the install itself is only read.
+    ///
+    /// ```text
+    /// cargo test --lib harmonize::tests::real_install_diff_nul -- --ignored --nocapture
+    /// ```
+    /// `PITBOX_CONFIG_DIR` overrides `%APPDATA%\com.pitbox.app`.
+    #[test]
+    #[ignore = "reads the Pit Box configuration and library of this machine"]
+    fn real_install_diff_nul() {
+        let src = std::env::var_os("PITBOX_CONFIG_DIR")
+            .map(std::path::PathBuf::from)
+            .or_else(|| std::env::var_os("APPDATA").map(|d| std::path::Path::new(&d).join("com.pitbox.app")))
+            .expect("PITBOX_CONFIG_DIR or APPDATA");
+        let work = crate::testutil::temp_dir("real-diff-nul");
+        for f in ["config.json", "overlay.sqlite", "tag-rules.json", "taxonomy.json"] {
+            if src.join(f).is_file() {
+                std::fs::copy(src.join(f), work.join(f)).unwrap();
+            }
+        }
+        let cfg: AppConfig = serde_json::from_str(&std::fs::read_to_string(work.join("config.json")).unwrap()).unwrap();
+        let conn = overlay::open(&work.join("overlay.sqlite")).unwrap();
+        let file: Rules = std::fs::read_to_string(work.join("tag-rules.json"))
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default();
+
+        let classes = crate::rule_manifest::classify(&file, &crate::rule_manifest::pre_layer_rules());
+        for (sec, c) in &classes {
+            println!(
+                "{sec:36} intact {:3}  removed {:2}  own {:2}{}",
+                c.intact.len(),
+                c.removed.len(),
+                c.user.len(),
+                if c.reordered { "  REORDERED" } else { "" }
+            );
+        }
+        let mine = snapshot(&conn, &cfg, &rules::load_from_dir(&work)).unwrap();
+        let shipped = snapshot(&conn, &cfg, &rules::default_rules()).unwrap();
+        let diff = snapshot_diff(&mine, &shipped);
+        println!("{} mods classified, {} classified differently", mine.len(), diff.len());
+        for id in diff.iter().take(20) {
+            println!("  {id}");
+        }
+        if !crate::rule_manifest::has_decisions(&classes) {
+            assert!(
+                diff.is_empty(),
+                "a file holding no decision must classify like the catalogue"
+            );
+        }
+    }
+
     #[test]
     fn re_applying_the_rules_leaves_a_track_its_country() {
         let base = crate::testutil::temp_dir("harmo-track-country");

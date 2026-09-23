@@ -649,7 +649,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Signature Authenticode** | le workflow est prêt, il attend un certificat | `docs/windows-code-signing.md` |
 | **Refonte navigation et fiches** | livrée et fusionnée ; restent trois questions ouvertes, dont le markdown dans les notes | `docs/PLAN-refonte-navigation.md` |
 | **Taxonomies** | familles, onglets Catégories et Pays livrés ; reste l'onglet Marques (fusions, logos canoniques) | `docs/SPEC-taxonomies.md`, `docs/CHANTIERS.md` |
-| **Catalogue de règles** | tables de taxonomie en deux couches (catalogue + surcouche) ; restent les règles en liste, le rapport de mise à jour, l'écran Règles | `docs/SPEC-regles.md`, `docs/CHANTIERS.md` |
+| **Catalogue de règles** | tables de taxonomie en deux couches ; manifeste figé et banc « diff nul » des règles en liste faits ; restent leur surcouche, le rapport de mise à jour, l'écran Règles | `docs/SPEC-regles.md`, `docs/CHANTIERS.md` |
 | **Règles de tags divergentes** | deux fichiers décrivent la même ontologie, un seul est chargé | `docs/CHANTIERS.md` |
 
 ## Fin de tâche — dans cet ordre
