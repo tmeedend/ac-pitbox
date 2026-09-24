@@ -614,6 +614,12 @@ de reprendre. En cas d'écart, la spec fait foi.
       changer de version affiche « Catalogue de règles mis à jour » sans flèche.
       L'interrupteur global « Utiliser le catalogue Pit Box » (REGLES§7) reste
       à faire avec l'écran Règles.
+      **Vérifié dans l'app** en simulant une mise à jour (le catalogue « vu la
+      dernière fois » privé du tag `tuned` dans Route) : rapport juste, et c'est
+      cette vérification qui a trouvé le dernier trou — les **familles ne sont
+      pas stockées** (elles se dérivent des tags à l'affichage), donc le banc
+      annonçait « 0 mod reclassé » alors que l'index changeait. Le banc les
+      calcule désormais : 2 voitures reclassées sur l'install de dev.
       **Mystère non résolu, à surveiller** : sur la machine de dev
       (2026-09-23), un `tag-rules.json` plus ancien est **réapparu deux fois**
       dans le dossier de config, dates d'origine conservées (donc recopié, pas

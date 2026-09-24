@@ -151,6 +151,13 @@ pub fn count_affected(conn: &Connection, cfg: &AppConfig, rules: &Rules) -> rusq
 /// and NEVER stored: `mod id → classification` (rule tags, category, class,
 /// final country, spec fields), serialised so two runs compare as strings.
 ///
+/// **Plus a car's category families**, which are not stored at all - the
+/// library derives them from the tags when it displays them (`families.ts`) -
+/// but which the user sees change in the index. Left out, a catalogue update
+/// that only moved tags between families reported "0 mods reclassified" while
+/// the index had changed: measured on the dev install with `tuned` added to
+/// Street.
+///
 /// The "diff nul" bench of REGLES§13.5: restructuring how rules are stored
 /// must classify the library exactly as before, and the only proof is to
 /// classify it twice and compare. A mod whose files cannot be read is left
@@ -163,13 +170,25 @@ pub fn snapshot(
     rules: &Rules,
 ) -> rusqlite::Result<std::collections::BTreeMap<String, String>> {
     let mut out = std::collections::BTreeMap::new();
+    let owner = pitbox_catalog::taxonomy::lookup(&rules.car.category_families);
     for m in overlay::list_mods(conn)? {
         let Some((mut h, native)) = recompute_for(conn, cfg, rules, &m) else {
             continue;
         };
         let country = final_country(rules, &h, native.as_deref());
         h.tags_from_rule.sort();
-        let line = serde_json::to_string(&(&h, country)).unwrap_or_default();
+        // The three tag origins the library merges (`modTags`), as it does.
+        let families: std::collections::BTreeSet<&String> = if m.kind == "Car" {
+            m.tags_from_mod
+                .iter()
+                .chain(&h.tags_from_rule)
+                .chain(&m.tags_manual)
+                .filter_map(|t| owner.get(&pitbox_catalog::taxonomy::family_tag(t)))
+                .collect()
+        } else {
+            Default::default()
+        };
+        let line = serde_json::to_string(&(&h, country, families)).unwrap_or_default();
         out.insert(m.id_interne, line);
     }
     Ok(out)
@@ -300,6 +319,16 @@ mod tests {
             snapshot_diff(&before, &snapshot(&conn, &cfg, &changed).unwrap()),
             vec!["rss_car".to_string()],
             "losing the drivetrain extraction reclassifies the car"
+        );
+        // A family is derived, never stored - and still a reclassification.
+        let mut refamilied = rules.clone();
+        for f in &mut refamilied.car.category_families {
+            f.tags.retain(|t| t != "singleseater");
+        }
+        assert_eq!(
+            snapshot_diff(&before, &snapshot(&conn, &cfg, &refamilied).unwrap()),
+            vec!["rss_car".to_string()],
+            "leaving Open-wheel is a change the index shows"
         );
     }
 
