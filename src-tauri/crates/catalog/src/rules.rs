@@ -159,11 +159,20 @@ impl<T: Rule> ListOverlay<T> {
     /// about a rule the catalogue no longer has is kept, without effect
     /// (REGLES§4) - except a fork, which then stands as a rule of the user's
     /// (REGLES§6.1, case 5: nothing he wrote is lost).
+    ///
+    /// Every rule keeps an id - the catalogue's, or the user's own (`own-3`) -
+    /// so the engine can say which rule did what (the effect counters of the
+    /// Rules screen, REGLES§8.3). The user's rules can be switched off too.
     pub fn apply(&self, catalog: &[T]) -> Vec<T> {
-        let mut out: Vec<T> = self.own.iter().map(|r| r.clone().with_id(None)).collect();
+        let mut out: Vec<T> = self
+            .own
+            .iter()
+            .filter(|r| r.id().is_none_or(|id| !self.disabled.contains(id)))
+            .cloned()
+            .collect();
         for (id, f) in &self.forks {
-            if !catalog.iter().any(|c| c.id() == Some(id.as_str())) {
-                out.push(f.rule.clone().with_id(None));
+            if !catalog.iter().any(|c| c.id() == Some(id.as_str())) && !self.disabled.contains(id) {
+                out.push(f.rule.clone().with_id(Some(id.clone())));
             }
         }
         for c in catalog {
@@ -204,7 +213,7 @@ impl<T: Rule> ListOverlay<T> {
                         },
                     );
                 }
-                None => o.own.push(r.clone().with_id(None)),
+                None => o.own.push(r.clone()),
             }
         }
         for c in catalog {
@@ -214,7 +223,99 @@ impl<T: Rule> ListOverlay<T> {
                 }
             }
         }
-        o
+        o.normalized(catalog)
+    }
+
+    /// Every rule of the user carries an id of its own, unique and distinct
+    /// from the catalogue's: it is what his switch and his effect counter hang
+    /// on. Rules migrated from a pre-layer file, or typed in, get the next free
+    /// `own-N`. A fork restating its catalogue rule is no decision any more.
+    pub fn normalized(mut self, catalog: &[T]) -> Self {
+        let taken: BTreeSet<String> = catalog
+            .iter()
+            .filter_map(|c| c.id().map(str::to_string))
+            .chain(self.own.iter().filter_map(|r| r.id().map(str::to_string)))
+            .collect();
+        let mut seen = BTreeSet::new();
+        let mut next = 1;
+        let own = std::mem::take(&mut self.own);
+        for r in own {
+            let keep = r
+                .id()
+                .filter(|id| id.starts_with("own-") && !catalog.iter().any(|c| c.id() == Some(*id)))
+                .map(str::to_string)
+                .filter(|id| seen.insert(id.clone()));
+            let id = keep.unwrap_or_else(|| loop {
+                let candidate = format!("own-{next}");
+                next += 1;
+                if !taken.contains(&candidate) && seen.insert(candidate.clone()) {
+                    break candidate;
+                }
+            });
+            self.own.push(r.with_id(Some(id)));
+        }
+        // A fork made by the screen arrives without its origin: the screen
+        // cannot fingerprint, the catalogue rule it forks is found here.
+        for (id, f) in self.forks.iter_mut() {
+            if f.forked_from.is_empty() {
+                if let Some(c) = catalog.iter().find(|c| c.id() == Some(id.as_str())) {
+                    f.forked_from = fingerprint(c);
+                }
+            }
+        }
+        self.forks.retain(|id, f| {
+            catalog
+                .iter()
+                .find(|c| c.id() == Some(id.as_str()))
+                .is_none_or(|c| content(c) != content(&f.rule))
+        });
+        self
+    }
+
+    /// The rows of the Rules screen, in execution order (REGLES§8.1): the
+    /// user's rules, then the catalogue's - disabled ones included, a fork in
+    /// place of the rule it forks. Unlike `apply`, nothing is left out: a
+    /// disabled rule is a row with its switch off.
+    pub fn rows(&self, catalog: &[T]) -> Vec<Row<T>> {
+        let mut out: Vec<Row<T>> = self
+            .own
+            .iter()
+            .map(|r| Row {
+                disabled: r.id().is_some_and(|id| self.disabled.contains(id)),
+                rule: r.clone(),
+                origin: Origin::Own,
+                outdated: false,
+            })
+            .collect();
+        for (id, f) in &self.forks {
+            if !catalog.iter().any(|c| c.id() == Some(id.as_str())) {
+                out.push(Row {
+                    rule: f.rule.clone().with_id(Some(id.clone())),
+                    origin: Origin::Own,
+                    disabled: self.disabled.contains(id),
+                    outdated: false,
+                });
+            }
+        }
+        for c in catalog {
+            let id = c.id().unwrap_or_default().to_string();
+            let disabled = self.disabled.contains(&id);
+            out.push(match self.forks.get(&id) {
+                Some(f) => Row {
+                    rule: f.rule.clone().with_id(Some(id)),
+                    origin: Origin::Fork,
+                    disabled,
+                    outdated: f.forked_from != fingerprint(c),
+                },
+                None => Row {
+                    rule: c.clone(),
+                    origin: Origin::Catalog,
+                    disabled,
+                    outdated: false,
+                },
+            });
+        }
+        out
     }
 
     /// The decisions a pre-layer file held (REGLES§13.2), against the frozen
@@ -242,8 +343,30 @@ impl<T: Rule> ListOverlay<T> {
                 o.disabled.insert(id.to_string());
             }
         }
-        o
+        o.normalized(manifest)
     }
+}
+
+/// Where a row of the Rules screen comes from - what its badge says
+/// (REGLES§8.1): `PIT BOX`, `PIT BOX ✎`, or nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Origin {
+    Catalog,
+    Fork,
+    Own,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Row<T> {
+    /// The rule as it reads, with its id.
+    pub rule: T,
+    pub origin: Origin,
+    /// Switched off by the user.
+    pub disabled: bool,
+    /// A fork whose catalogue rule has changed since: "a new version exists"
+    /// (REGLES§6.1, case 4).
+    pub outdated: bool,
 }
 
 // --- Overlay of an ordered list of names --------------------------------------
@@ -315,6 +438,10 @@ pub const FORMAT: u32 = 1;
 pub struct RulesOverlay {
     #[serde(default)]
     pub format: u32,
+    /// The global switch (REGLES§7): off, the whole catalogue stops applying;
+    /// the user's rules - his forks included - go on.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub catalog_off: bool,
     #[serde(default, skip_serializing_if = "ListOverlay::is_empty")]
     pub brand_fix: ListOverlay<BrandFix>,
     #[serde(default, skip_serializing_if = "ListOverlay::is_empty")]
@@ -380,6 +507,11 @@ mod tests {
         assert_eq!(o.disabled, BTreeSet::from(["pitbox.brand.auriel".to_string()]));
         assert_eq!(o.forks.len(), 1);
         assert_eq!(o.own.len(), 1);
+        assert_eq!(
+            o.own[0].id.as_deref(),
+            Some("own-1"),
+            "his rule is given an id of its own"
+        );
         let back: Vec<String> = o.apply(&catalog()).iter().map(content).collect();
         let want: Vec<String> = edited.iter().map(content).collect();
         assert_eq!(back, want, "round trip");
@@ -426,7 +558,31 @@ mod tests {
         edited[2].set_brand = "Porsche AG".into();
         let o = ListOverlay::diff(&edited, &catalog());
         let out = o.apply(&catalog()[..2]);
-        assert!(out.iter().any(|r| r.set_brand == "Porsche AG" && r.id.is_none()));
+        assert!(out.iter().any(|r| r.set_brand == "Porsche AG"), "his version stands");
+    }
+
+    /// REGLES§8.1: the user's rules have a switch too, and the screen shows
+    /// every row - disabled ones included - in execution order.
+    #[test]
+    fn the_rows_show_everything_and_the_users_rules_can_be_switched_off() {
+        let mut edited = catalog();
+        edited.remove(1);
+        edited[1].set_brand = "Porsche AG".into();
+        edited.insert(0, fix(None, "lanzo", "RSS"));
+        let mut o = ListOverlay::diff(&edited, &catalog());
+        o.disabled.insert("own-1".into());
+        assert!(
+            o.apply(&catalog()).iter().all(|r| r.name_contains != "lanzo"),
+            "switched off"
+        );
+        let rows = o.rows(&catalog());
+        let origins: Vec<Origin> = rows.iter().map(|r| r.origin).collect();
+        assert_eq!(origins, [Origin::Own, Origin::Catalog, Origin::Catalog, Origin::Fork]);
+        assert!(
+            rows[0].disabled && rows[2].disabled,
+            "his rule and the disabled shipped one"
+        );
+        assert!(!rows[3].outdated, "forked from the current version");
     }
 
     /// REGLES§13.2 against a manifest without ids in the FILE: matched by
@@ -445,7 +601,11 @@ mod tests {
             BTreeSet::from(["pitbox.brand.auriel".to_string()]),
             "removed by him"
         );
-        assert_eq!(o.own, vec![fix(None, "lanzo", "RSS")]);
+        assert_eq!(
+            o.own,
+            vec![fix(Some("own-1"), "lanzo", "RSS")],
+            "his, under an id of its own"
+        );
         assert!(o.forks.is_empty());
         let mut improved = catalog();
         improved[0].set_brand = "BMW M".into();

@@ -84,14 +84,99 @@ export function getRules(): Promise<Rules> {
   return invoke<Rules>("get_rules");
 }
 
-/** Enregistre et réapplique ; renvoie le nombre de mods retraités. */
-export function saveRules(rules: Rules): Promise<number> {
-  return invoke<number>("save_rules", { rules });
+// --- List rules in two layers: the Rules screen (REGLES§8) -------------------
+
+/** A catalogue rule the user modified: his copy, frozen, and the fingerprint
+ * of the version it was made from. The screen leaves `forked_from` empty - the
+ * backend fills it, it alone can fingerprint. */
+export interface Fork<T> {
+  rule: T;
+  forked_from: string;
 }
 
-/** Aperçu d'impact : nombre de mods affectés par les règles candidates. */
-export function rulesImpact(rules: Rules): Promise<number> {
-  return invoke<number>("rules_impact", { rules });
+/** The user's decisions on one list of rules: shipped rules switched off,
+ * shipped rules modified, rules of his own (with `own-N` ids). */
+export interface ListOverlay<T> {
+  disabled?: string[];
+  forks?: Record<string, Fork<T>>;
+  own?: T[];
+}
+
+/** The user's decisions on the ordered allowlist of track categories. */
+export interface OrderOverlay {
+  removed?: string[];
+  added?: string[];
+  order?: string[] | null;
+}
+
+export interface RulesOverlay {
+  format?: number;
+  /** The global switch off: the catalogue stops applying (REGLES§7). */
+  catalog_off?: boolean;
+  brand_fix?: ListOverlay<BrandFix>;
+  name_to_tag?: ListOverlay<NameToTag>;
+  class_fix?: ListOverlay<ClassFix>;
+  car_tag_merge?: ListOverlay<TagMerge>;
+  drivetrain?: ListOverlay<SetRule>;
+  aspiration?: ListOverlay<SetRule>;
+  engine_config?: ListOverlay<SetRule>;
+  engine_pos?: ListOverlay<SetRule>;
+  gearbox?: ListOverlay<SetRule>;
+  track_tag_merge?: ListOverlay<TagMerge>;
+  track_categories?: OrderOverlay;
+}
+
+/** Where a row comes from - what its badge says: `PIT BOX`, `PIT BOX ✎`, or
+ * nothing. */
+export type Origin = "catalog" | "fork" | "own";
+
+export interface RuleRow<T> {
+  /** The rule as it reads, always with its id. */
+  rule: T;
+  origin: Origin;
+  disabled: boolean;
+  /** A fork whose shipped rule changed since: a new version exists. */
+  outdated: boolean;
+  /** Mods the rule acts on, measured on the library. */
+  effect: number;
+}
+
+export interface CategoryRow {
+  name: string;
+  shipped: boolean;
+  /** `false`: a shipped category the user removed. */
+  on: boolean;
+  effect: number;
+}
+
+export interface RulesView {
+  catalog_on: boolean;
+  catalog_version: string;
+  catalog_count: number;
+  overlay: RulesOverlay;
+  brand_fix: RuleRow<BrandFix>[];
+  name_to_tag: RuleRow<NameToTag>[];
+  class_fix: RuleRow<ClassFix>[];
+  car_tag_merge: RuleRow<TagMerge>[];
+  drivetrain: RuleRow<SetRule>[];
+  aspiration: RuleRow<SetRule>[];
+  engine_config: RuleRow<SetRule>[];
+  engine_pos: RuleRow<SetRule>[];
+  gearbox: RuleRow<SetRule>[];
+  track_tag_merge: RuleRow<TagMerge>[];
+  track_categories: CategoryRow[];
+}
+
+/** A READ that measures the whole library - slow on a large one, which is why
+ * it is `invoke` with a loading state rather than `invokeSafe`'s 5 s cut. */
+export function getRulesView(): Promise<RulesView> {
+  return invoke<RulesView>("get_rules_view");
+}
+
+/** Writes the decisions and re-applies them to the library; the view comes
+ * back with the counters of that pass. A WRITE: `invoke`, never `invokeSafe`. */
+export function saveRulesOverlay(overlay: RulesOverlay): Promise<RulesView> {
+  return invoke<RulesView>("save_rules_overlay", { overlay });
 }
 
 // --- Taxonomy tables in two layers (REGLES§2) --------------------------------

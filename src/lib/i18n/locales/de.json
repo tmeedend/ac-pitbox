@@ -733,17 +733,13 @@
     "repairReinstallFailed": "{count} Neuinstallation(en) fehlgeschlagen."
   },
   "rules": {
-    "savedMsg": "Gespeichert — {count} Mod(s) neu verarbeitet",
     "subtitle": "Bearbeitbare Ontologie — zerstörungsfrei angewendet. Die Datei der Mod wird nie verändert.",
     "loading": "Regeln werden geladen…",
     "tabCars": "Fahrzeuge",
     "tabTracks": "Strecken",
     "tagMerge": "Zusammenführung / Ableitung",
     "addRule": "Regel",
-    "tagMergeHint": "Synonyme → kanonische(r) Tag(s). Werte durch Kommas getrennt. Ein Tag",
-    "tagMergeHintCat": "kennzeichnet die Kategorie.",
     "trackCategoriesTitle": "Streckenkategorien (Positivliste)",
-    "trackCategoriesHint": "Zulässige Kategorien, in Prioritätsreihenfolge (die 1. ist die primäre). Eine Strecke übernimmt die ihrer Tags, die hier auftauchen. Mit ↑/↓ umsortieren.",
     "addCategoryPlaceholder": "Kategorie hinzufügen, z. B. #hillclimb (Enter)…",
     "moveUp": "Nach oben (höhere Priorität)",
     "moveDown": "Nach unten (niedrigere Priorität)",
@@ -761,10 +757,7 @@
     "fieldEngineConfig": "Motor",
     "fieldEnginePos": "Lage",
     "fieldGearbox": "Getriebe",
-    "impactText": "Mod(s) wären von diesen Regeln betroffen",
-    "calculatingImpact": "Auswirkung wird berechnet…",
-    "applying": "Wird angewendet…",
-    "saveAndReapply": "Speichern und neu anwenden"
+    "applying": "Wird angewendet…"
   },
   "profiles": {
     "subtitle": "Benannte Zusammenstellungen aktiver Mods — Fahrzeuge, Strecken, Andere Mods und Apps. Ein Profil anzuwenden gleicht alles genau an die Zusammenstellung an.",

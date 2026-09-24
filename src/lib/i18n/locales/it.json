@@ -733,17 +733,13 @@
     "repairReinstallFailed": "{count} reinstallazioni non riuscite."
   },
   "rules": {
-    "savedMsg": "Salvato — {count} mod rielaborate",
     "subtitle": "Ontologia modificabile — applicata senza distruggere nulla. Il file della mod non viene mai toccato.",
     "loading": "Caricamento delle regole…",
     "tabCars": "Auto",
     "tabTracks": "Circuiti",
     "tagMerge": "Unione / deduzione",
     "addRule": "Regola",
-    "tagMergeHint": "Sinonimi → tag canonico/i. Valori separati da virgole. Un tag",
-    "tagMergeHintCat": "indica la categoria.",
     "trackCategoriesTitle": "Categorie dei circuiti (elenco consentito)",
-    "trackCategoriesHint": "Categorie ammesse, in ordine di priorità (la 1ª è la principale). Un circuito prende quelle che, tra i suoi tag, compaiono qui. Riordina con ↑/↓.",
     "addCategoryPlaceholder": "aggiungi una categoria, es. #hillclimb (Invio)…",
     "moveUp": "Sposta in alto (priorità maggiore)",
     "moveDown": "Sposta in basso (priorità minore)",
@@ -761,10 +757,7 @@
     "fieldEngineConfig": "Motore",
     "fieldEnginePos": "Posizione",
     "fieldGearbox": "Cambio",
-    "impactText": "mod sarebbero interessate da queste regole",
-    "calculatingImpact": "calcolo dell'impatto…",
-    "applying": "Applicazione…",
-    "saveAndReapply": "Salva e riapplica"
+    "applying": "Applicazione…"
   },
   "profiles": {
     "subtitle": "Insiemi di mod attive con un nome — auto, circuiti, Altre mod e App. Applicare un profilo riallinea tutto per corrispondere esattamente all'insieme.",

@@ -1,5 +1,6 @@
-//! Commandes du moteur de tags (§5) : lecture, édition, aperçu d'impact et
-//! réapplication à toute la bibliothèque.
+//! Commands of the tag engine (§5): the rules in two layers (REGLES§2) and the
+//! Rules screen that edits their overlay (REGLES§8), the taxonomy tabs, the
+//! catalogue update report, and re-applying everything to the library.
 
 use super::prelude::*;
 
@@ -8,18 +9,42 @@ pub fn get_rules(app: AppHandle) -> Rules {
     crate::rules::load(&app)
 }
 
-/// Enregistre les règles et réapplique l'ontologie à toute la bibliothèque.
-/// Renvoie le nombre de mods retraités.
+fn rules_view(app: &AppHandle, o: &RulesOverlay, effects: &crate::harmonize::Effects) -> Result<RulesView, String> {
+    let dir = crate::rules::config_dir(app)?;
+    let version = crate::catalog_update::version_in_force(&dir);
+    Ok(crate::rule_overlay::view(
+        o,
+        &crate::rules::default_rules(),
+        effects,
+        version,
+    ))
+}
+
+/// The Rules screen: every section in execution order, each rule with the
+/// number of mods it acts on - measured, so the whole library is read.
 #[tauri::command]
-pub fn save_rules(app: AppHandle, db: State<Db>, rules: Rules) -> Result<usize, String> {
-    crate::rules::save(&app, &rules)?;
-    // Harmonise with the rules as they now APPLY, reloaded - not with what the
-    // screen sent: the overlay puts the user's rules first, and that order is
-    // the one the next start will use.
+pub fn get_rules_view(app: AppHandle, db: State<Db>) -> Result<RulesView, String> {
+    let o = crate::rules::load_rules_overlay(&app)?;
     let rules = crate::rules::load(&app);
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::harmonize::harmonize_all(&conn, &cfg, &rules).map_err(|e| e.to_string())
+    let effects = crate::harmonize::effects(&conn, &cfg, &rules).map_err(|e| e.to_string())?;
+    rules_view(&app, &o, &effects)
+}
+
+/// Writes the screen's decisions and re-applies them to the whole library;
+/// the counters come from that same pass (REGLES§8.3, "recalculated after
+/// every change").
+#[tauri::command]
+pub fn save_rules_overlay(app: AppHandle, db: State<Db>, overlay: RulesOverlay) -> Result<RulesView, String> {
+    let o = crate::rules::save_rules_overlay(&app, overlay)?;
+    // Harmonise with the rules as they now APPLY, reloaded from what was
+    // written - the order the next start will use.
+    let rules = crate::rules::load(&app);
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let (_, effects) = crate::harmonize::harmonize_all_counting(&conn, &cfg, &rules).map_err(|e| e.to_string())?;
+    rules_view(&app, &o, &effects)
 }
 
 /// The taxonomy tables in their two layers (REGLES§2): what the catalogue
@@ -125,15 +150,6 @@ pub fn set_catalog_reverted(app: AppHandle, db: State<Db>, reverted: bool) -> Re
 pub fn dismiss_catalog_report(app: AppHandle) -> Result<(), String> {
     let dir = crate::rules::config_dir(&app)?;
     crate::catalog_update::dismiss_report(&dir)
-}
-
-/// Aperçu d'impact : nombre de mods affectés par un jeu de règles candidat,
-/// sans rien enregistrer (§5).
-#[tauri::command]
-pub fn rules_impact(app: AppHandle, db: State<Db>, rules: Rules) -> Result<usize, String> {
-    let cfg = crate::config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::harmonize::count_affected(&conn, &cfg, &rules).map_err(|e| e.to_string())
 }
 
 /// Réapplique les règles enregistrées à toute la bibliothèque.

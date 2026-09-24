@@ -733,17 +733,13 @@
     "repairReinstallFailed": "{count} reinstalación(es) con error."
   },
   "rules": {
-    "savedMsg": "Guardado — {count} mod(s) reprocesado(s)",
     "subtitle": "Ontología editable — aplicada sin destruir nada. El archivo del mod nunca se modifica.",
     "loading": "Cargando las reglas…",
     "tabCars": "Coches",
     "tabTracks": "Circuitos",
     "tagMerge": "Fusión / deducción",
     "addRule": "Regla",
-    "tagMergeHint": "Sinónimos → tag(s) canónico(s). Valores separados por comas. Un tag",
-    "tagMergeHintCat": "marca la categoría.",
     "trackCategoriesTitle": "Categorías de circuito (lista permitida)",
-    "trackCategoriesHint": "Categorías admitidas, por orden de prioridad (la 1.ª es la principal). Un circuito toma las que, entre sus tags, aparecen aquí. Reordena con ↑/↓.",
     "addCategoryPlaceholder": "añadir una categoría, p. ej. #hillclimb (Intro)…",
     "moveUp": "Subir (mayor prioridad)",
     "moveDown": "Bajar (menor prioridad)",
@@ -761,10 +757,7 @@
     "fieldEngineConfig": "Motor",
     "fieldEnginePos": "Posición",
     "fieldGearbox": "Caja de cambios",
-    "impactText": "mod(s) se verían afectados por estas reglas",
-    "calculatingImpact": "calculando el impacto…",
-    "applying": "Aplicando…",
-    "saveAndReapply": "Guardar y reaplicar"
+    "applying": "Aplicando…"
   },
   "profiles": {
     "subtitle": "Conjuntos con nombre de mods activos — coches, circuitos, Otros mods y Apps. Aplicar un perfil ajusta todo para que coincida exactamente con el conjunto.",

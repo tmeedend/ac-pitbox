@@ -75,21 +75,52 @@ fn final_country(rules: &Rules, h: &Harmonized, native_country: Option<&str>) ->
 /// Réapplique l'ontologie à tous les mods (après édition des règles).
 /// Renvoie le nombre de mods retraités.
 pub fn harmonize_all(conn: &Connection, cfg: &AppConfig, rules: &Rules) -> rusqlite::Result<usize> {
-    let mods = overlay::list_mods(conn)?;
-    let mut n = 0;
-    for m in &mods {
-        if reharmonize_one(conn, cfg, rules, m).is_ok() {
-            n += 1;
-        }
-    }
-    Ok(n)
+    harmonize_all_counting(conn, cfg, rules).map(|(n, _)| n)
 }
 
-fn reharmonize_one(conn: &Connection, cfg: &AppConfig, rules: &Rules, m: &ModRow) -> rusqlite::Result<()> {
-    let Some((h, native_country)) = recompute_for(conn, cfg, rules, m) else {
-        return Ok(());
-    };
-    store(conn, &m.id_interne, &h, native_country.as_deref(), rules)
+/// `harmonize_all`, which also counts, per rule id, the mods each rule acted
+/// on (`Harmonized::fired`) - the effect counters of the Rules screen
+/// (REGLES§8.3), measured on the pass that stores, not on a second one.
+pub fn harmonize_all_counting(conn: &Connection, cfg: &AppConfig, rules: &Rules) -> rusqlite::Result<(usize, Effects)> {
+    let mods = overlay::list_mods(conn)?;
+    let mut n = 0;
+    let mut effects = Effects::new();
+    // One transaction for the whole pass: the Rules screen re-applies on every
+    // switch now, and a commit per mod is a disk sync per mod.
+    let tx = conn.unchecked_transaction()?;
+    for m in &mods {
+        let Some((h, native_country)) = recompute_for(conn, cfg, rules, m) else {
+            continue;
+        };
+        count(&mut effects, &h);
+        match store(conn, &m.id_interne, &h, native_country.as_deref(), rules) {
+            Ok(()) => n += 1,
+            Err(e) => log::warn!("harmonisation of {} not stored: {e}", m.id_interne),
+        }
+    }
+    tx.commit()?;
+    Ok((n, effects))
+}
+
+/// Rule id → number of mods it acts on.
+pub type Effects = std::collections::BTreeMap<String, usize>;
+
+fn count(effects: &mut Effects, h: &Harmonized) {
+    for id in &h.fired {
+        *effects.entry(id.clone()).or_default() += 1;
+    }
+}
+
+/// The effect counters without storing anything: what the Rules screen shows
+/// when it opens.
+pub fn effects(conn: &Connection, cfg: &AppConfig, rules: &Rules) -> rusqlite::Result<Effects> {
+    let mut effects = Effects::new();
+    for m in &overlay::list_mods(conn)? {
+        if let Some((h, _)) = recompute_for(conn, cfg, rules, m) {
+            count(&mut effects, &h);
+        }
+    }
+    Ok(effects)
 }
 
 /// Recalcule l'harmonisation d'un mod en relisant sa version active (lecture
@@ -127,26 +158,6 @@ fn recompute_for(
     Some((h, ui.country))
 }
 
-/// Aperçu d'impact (§5) : nombre de mods dont l'harmonisation changerait
-/// avec le jeu de règles candidat (comparé aux tags règle / catégorie / classe
-/// actuellement stockés). Ne modifie rien.
-pub fn count_affected(conn: &Connection, cfg: &AppConfig, rules: &Rules) -> rusqlite::Result<usize> {
-    use std::collections::BTreeSet;
-    let mods = overlay::list_mods(conn)?;
-    let mut n = 0;
-    for m in &mods {
-        let Some((h, _native)) = recompute_for(conn, cfg, rules, m) else {
-            continue;
-        };
-        let cand: BTreeSet<&String> = h.tags_from_rule.iter().collect();
-        let cur: BTreeSet<&String> = m.tags_from_rule.iter().collect();
-        if cand != cur || h.category != m.category || h.categories != m.categories || h.car_class != m.car_class {
-            n += 1;
-        }
-    }
-    Ok(n)
-}
-
 /// What the harmonisation would store for every mod under `rules`, computed
 /// and NEVER stored: `mod id → classification` (rule tags, category, class,
 /// final country, spec fields), serialised so two runs compare as strings.
@@ -162,8 +173,6 @@ pub fn count_affected(conn: &Connection, cfg: &AppConfig, rules: &Rules) -> rusq
 /// must classify the library exactly as before, and the only proof is to
 /// classify it twice and compare. A mod whose files cannot be read is left
 /// out on both sides.
-// Called by the diff-nul bench today, by the lot 3 migration next.
-#[cfg_attr(not(test), allow(dead_code))]
 pub fn snapshot(
     conn: &Connection,
     cfg: &AppConfig,
@@ -195,8 +204,6 @@ pub fn snapshot(
 }
 
 /// The mods two snapshots classify differently.
-// Called by the diff-nul bench today, by the lot 3 migration next.
-#[cfg_attr(not(test), allow(dead_code))]
 pub fn snapshot_diff(
     a: &std::collections::BTreeMap<String, String>,
     b: &std::collections::BTreeMap<String, String>,
@@ -342,6 +349,41 @@ mod tests {
     /// ```
     /// `PITBOX_CONFIG_DIR` overrides `%APPDATA%\com.pitbox.app`. Without a
     /// legacy file there (already migrated), the retired copy is used.
+    /// What the Rules screen costs on a real library (REGLES§8.3): the
+    /// counters when it opens, then a re-application as every switch does -
+    /// on a copy, the real base is never written. Prints the timings and the
+    /// busiest rules; `--nocapture` to read them.
+    #[test]
+    #[ignore = "reads the Pit Box configuration and library of this machine"]
+    fn real_install_effect_counters() {
+        let src = std::env::var_os("PITBOX_CONFIG_DIR")
+            .map(std::path::PathBuf::from)
+            .or_else(|| std::env::var_os("APPDATA").map(|d| std::path::Path::new(&d).join("com.pitbox.app")))
+            .expect("PITBOX_CONFIG_DIR or APPDATA");
+        let work = crate::testutil::temp_dir("real-effects");
+        for f in ["config.json", "overlay.sqlite", "taxonomy.json", "rules-overlay.json"] {
+            if src.join(f).is_file() {
+                std::fs::copy(src.join(f), work.join(f)).unwrap();
+            }
+        }
+        let cfg: AppConfig = serde_json::from_str(&std::fs::read_to_string(work.join("config.json")).unwrap()).unwrap();
+        let conn = overlay::open(&work.join("overlay.sqlite")).unwrap();
+        let rules = rules::load_from_dir(&work);
+
+        let t = std::time::Instant::now();
+        let fx = effects(&conn, &cfg, &rules).unwrap();
+        println!("counters: {} rules acting, {:?}", fx.len(), t.elapsed());
+        let t = std::time::Instant::now();
+        let (n, fx2) = harmonize_all_counting(&conn, &cfg, &rules).unwrap();
+        println!("re-application: {n} mods, {:?}", t.elapsed());
+        assert_eq!(fx, fx2, "the stored pass counts what the read-only one does");
+        let mut top: Vec<_> = fx.iter().collect();
+        top.sort_by(|a, b| b.1.cmp(a.1));
+        for (id, n) in top.iter().take(10) {
+            println!("  {n:>4}  {id}");
+        }
+    }
+
     #[test]
     #[ignore = "reads the Pit Box configuration and library of this machine"]
     fn real_install_diff_nul() {

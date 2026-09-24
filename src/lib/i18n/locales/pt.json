@@ -733,17 +733,13 @@
     "repairReinstallFailed": "{count} reinstalação(ões) com falha."
   },
   "rules": {
-    "savedMsg": "Salvo — {count} mod(s) reprocessado(s)",
     "subtitle": "Ontologia editável — aplicada sem destruir nada. O arquivo do mod nunca é modificado.",
     "loading": "Carregando as regras…",
     "tabCars": "Carros",
     "tabTracks": "Pistas",
     "tagMerge": "Fusão / dedução",
     "addRule": "Regra",
-    "tagMergeHint": "Sinônimos → tag(s) canônico(s). Valores separados por vírgulas. Um tag",
-    "tagMergeHintCat": "indica a categoria.",
     "trackCategoriesTitle": "Categorias de pista (lista permitida)",
-    "trackCategoriesHint": "Categorias permitidas, em ordem de prioridade (a 1ª é a principal). Uma pista assume as que, entre os seus tags, aparecem aqui. Reordene com ↑/↓.",
     "addCategoryPlaceholder": "adicionar uma categoria, ex.: #hillclimb (Enter)…",
     "moveUp": "Subir (prioridade maior)",
     "moveDown": "Descer (prioridade menor)",
@@ -761,10 +757,7 @@
     "fieldEngineConfig": "Motor",
     "fieldEnginePos": "Posição",
     "fieldGearbox": "Câmbio",
-    "impactText": "mod(s) seriam afetados por estas regras",
-    "calculatingImpact": "calculando o impacto…",
-    "applying": "Aplicando…",
-    "saveAndReapply": "Salvar e reaplicar"
+    "applying": "Aplicando…"
   },
   "profiles": {
     "subtitle": "Conjuntos nomeados de mods ativos — carros, pistas, Outros mods e Apps. Aplicar um perfil ajusta tudo para corresponder exatamente ao conjunto.",

@@ -564,16 +564,16 @@ de reprendre. En cas d'écart, la spec fait foi.
       bibliothèque (le pays est décidé à l'écriture). Non mesuré sur la
       bibliothèque réelle — si c'est lent, regrouper les écritures.
 
-- [ ] **Catalogue de règles et surcouche (`SPEC-regles.md`) — lot 1 fait.**
+- [ ] **Catalogue de règles et surcouche (`SPEC-regles.md`) — lots 1 à 5 faits.**
       Ordre convenu avec l'utilisateur : (1) deux couches pour les tables de
       taxonomie **— fait**, avec les marques livré / ajouté / retiré dans les
       onglets et `rules-tool` (`diff`, `promote`) pour promouvoir une
       curation faite dans l'app vers le catalogue ; (2) manifeste des catalogues passés + test « diff
       nul » pour les règles en liste **— fait** ; (3) identifiants stables et surcouche
       pour les règles en liste (marque, classe, fusion de tags, specs) **— fait** ;
-      (4) rapport de mise à jour et « Revenir à » **— fait** ; (4)
-      rapport de mise à jour et « Revenir à vN » ; (5) écran Règles refait
-      (liste unique, bascules, badges, compteurs d'effet). Le lot Marques des
+      (4) rapport de mise à jour et « Revenir à » **— fait** ; (5) écran
+      Règles refait (liste unique, bascules, badges, compteurs d'effet)
+      **— fait**. Le lot Marques des
       taxonomies vient **après** le lot 1, pour naître dans le bon format.
       **Mesuré avant de coder**, et ça a décidé de la migration : sur les 9
       versions publiées, les règles embarquées n'ont connu que **2** états
@@ -612,8 +612,8 @@ de reprendre. En cas d'écart, la spec fait foi.
       « Désactiver » sur les lignes du détail ; et le nom d'une version est
       celui de l'app, si bien qu'un build de dev qui change le catalogue sans
       changer de version affiche « Catalogue de règles mis à jour » sans flèche.
-      L'interrupteur global « Utiliser le catalogue Pit Box » (REGLES§7) reste
-      à faire avec l'écran Règles.
+      L'interrupteur global « Utiliser le catalogue Pit Box » (REGLES§7) est
+      venu avec l'écran Règles (lot 5).
       **Vérifié dans l'app** en simulant une mise à jour (le catalogue « vu la
       dernière fois » privé du tag `tuned` dans Route) : rapport juste, et c'est
       cette vérification qui a trouvé le dernier trou — les **familles ne sont
@@ -648,6 +648,31 @@ de reprendre. En cas d'écart, la spec fait foi.
       marque, le pays ou la classe d'un mod précis. (c) La liste blanche des
       catégories de circuit est encore une table recopiée : elle rejoint la
       surcouche avec les règles en liste.
+      **Lot 5.** L'écran édite la surcouche **geste par geste** au lieu de
+      listes entières : chaque bascule, modification ou suppression est écrite
+      aussitôt et réappliquée, et la barre « Enregistrer & réappliquer » a
+      disparu avec l'aperçu d'impact global — il n'y a plus rien en attente.
+      Ce que ça a demandé : (a) le moteur **nomme les règles qui agissent**
+      (`Harmonized::fired`), sans rien changer à ce qu'il classe — le champ
+      est hors sérialisation, donc hors du banc « diff nul » ; (b) les règles
+      de l'utilisateur ont un identifiant (`own-N`), attribué à la
+      normalisation et déterministe — c'est à lui que tiennent sa bascule et
+      son compteur ; (c) une dérivée faite par l'écran arrive sans empreinte
+      d'origine, et c'est Rust qui la remplit — le front ne sait pas calculer
+      l'empreinte FNV. Réapplication regroupée en **une transaction** : un
+      commit par mod, c'est une synchronisation disque par mod, et chaque
+      bascule réapplique désormais. Mesuré sur l'install de dev (350 mods,
+      debug) : 0,2 s à l'ouverture, 0,2 s par geste
+      (`harmonize::tests::real_install_effect_counters`, ignoré, sur des
+      copies). **Écarts assumés** : catalogue éteint, ses lignes disparaissent
+      de l'écran plutôt que d'apparaître grisées, et une dérivée y perd son
+      `✎` (elle s'applique alors comme une règle à soi, ce qu'elle est) ; les
+      règles à soi ne se réordonnent pas entre elles (la plus récente en
+      tête) ; le filtre « Mes règles seulement » n'est pas mémorisé.
+      **Reste du chantier** : l'export/import de la surcouche (REGLES§9) ; le
+      compteur **par règle** dans le rapport de mise à jour et « Désactiver »
+      sur ses lignes (REGLES§6.3) — `fired` le rend désormais possible ;
+      `promote` pour les règles en liste ; la marque `retired` (REGLES§4).
       **Outil de relevé — reporté, pas abandonné, et il a désormais sa
       maison** : une sous-commande `survey` de `rules-tool`. Un binaire du
       workspace, jamais livré (comme `kn5-tool`), qui fait tourner **le vrai moteur** sur

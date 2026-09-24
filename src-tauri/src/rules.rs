@@ -200,7 +200,7 @@ pub struct TrackRules {
 
 /// The list-rule types, with their stable id (REGLES§4) — defined in the
 /// `pitbox-catalog` crate, shared with `rules-tool`.
-pub use pitbox_catalog::rules::{BrandFix, ClassFix, NameToTag, SetRule, TagMerge};
+pub use pitbox_catalog::rules::{BrandFix, ClassFix, NameToTag, RulesOverlay, SetRule, TagMerge};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ExtractionSpecs {
@@ -337,6 +337,7 @@ pub fn load_from_dir_on(dir: &std::path::Path, catalog: &Rules) -> Rules {
     crate::taxonomy::apply(&mut rules, &crate::taxonomy::tables_of(catalog), &tax);
 
     let lists = crate::rule_overlay::load_or_migrate(&lists_path, legacy.as_ref());
+    let lists = crate::rule_overlay::normalized(lists, catalog);
     crate::rule_overlay::apply(&mut rules, catalog, &lists);
 
     if legacy.is_some() && tax_path.is_file() && lists_path.is_file() {
@@ -361,12 +362,20 @@ fn retired_path(dir: &std::path::Path) -> PathBuf {
         .expect("an unused name")
 }
 
-/// Saves what the Rules screen edited: as DECISIONS on the catalogue
-/// (`rule_overlay::diff`), never as a copy of it. The taxonomy tables it also
-/// carries are not the screen's to change - they have their own tabs.
-pub fn save(app: &AppHandle, rules: &Rules) -> Result<(), String> {
-    let o = crate::rule_overlay::diff(rules, &default_rules());
-    crate::rule_overlay::save(&config_dir(app)?.join("rules-overlay.json"), &o)
+/// The list-rules overlay as the Rules screen edits it: the user's decisions
+/// only, normalised against the catalogue in force.
+pub fn load_rules_overlay(app: &AppHandle) -> Result<RulesOverlay, String> {
+    let dir = config_dir(app)?;
+    let o = crate::rule_overlay::load_or_migrate(&dir.join("rules-overlay.json"), read_legacy(&dir).as_ref());
+    Ok(crate::rule_overlay::normalized(o, &default_rules()))
+}
+
+/// Writes what the Rules screen decided - decisions on the catalogue, never a
+/// copy of it (REGLES§2) - and returns it normalised.
+pub fn save_rules_overlay(app: &AppHandle, o: RulesOverlay) -> Result<RulesOverlay, String> {
+    let o = crate::rule_overlay::normalized(o, &default_rules());
+    crate::rule_overlay::save(&config_dir(app)?.join("rules-overlay.json"), &o)?;
+    Ok(o)
 }
 
 // --- Application (moteur) ---------------------------------------------------
@@ -374,6 +383,13 @@ pub fn save(app: &AppHandle, rules: &Rules) -> Result<(), String> {
 /// Résultat de l'harmonisation d'un mod (overlay, non destructif).
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct Harmonized {
+    /// Ids of the rules that acted on this mod (a first-match rule that
+    /// matched, every name → tag that matched, a track category found) - what
+    /// the effect counters of the Rules screen count (REGLES§8.3). Never
+    /// stored, never compared: it says who produced the result, it is not
+    /// part of it.
+    #[serde(skip)]
+    pub fired: Vec<String>,
     pub tags_from_rule: Vec<String>,
     /// Tag `#` principal = catégorie (§5). Pour un circuit : la 1ʳᵉ de
     /// `categories` (la plus prioritaire).
@@ -398,18 +414,21 @@ fn norm_tag(s: &str) -> String {
 }
 
 /// Cherche une valeur d'extraction pour un tag dans une liste de SetRule.
-fn extract(rules: &[SetRule], tag: &str) -> Option<String> {
-    rules
-        .iter()
-        .find(|r| r.from.iter().any(|f| norm_tag(f) == tag))
-        .map(|r| r.set.clone())
+fn extract<'a>(rules: &'a [SetRule], tag: &str) -> Option<&'a SetRule> {
+    rules.iter().find(|r| r.from.iter().any(|f| norm_tag(f) == tag))
 }
 
-fn merge_lookup<'a>(rules: &'a [TagMerge], tag: &str) -> Option<&'a [String]> {
-    rules
-        .iter()
-        .find(|r| r.from.iter().any(|f| norm_tag(f) == tag))
-        .map(|r| r.to.as_slice())
+fn merge_lookup<'a>(rules: &'a [TagMerge], tag: &str) -> Option<&'a TagMerge> {
+    rules.iter().find(|r| r.from.iter().any(|f| norm_tag(f) == tag))
+}
+
+/// Notes that a rule acted (`Harmonized::fired`).
+fn fired(h: &mut Harmonized, id: &Option<String>) {
+    if let Some(id) = id {
+        if !h.fired.contains(id) {
+            h.fired.push(id.clone());
+        }
+    }
 }
 
 /// Closed vocabulary for cars: every tag some rule is able to produce.
@@ -465,6 +484,7 @@ pub fn apply_car(rules: &Rules, raw_tags: &[String], name: &str, class: &str, co
     for r in &c.brand_fix {
         if name_l.contains(&r.name_contains.to_lowercase()) {
             h.brand = Some(r.set_brand.clone());
+            fired(&mut h, &r.id);
             break;
         }
     }
@@ -473,6 +493,7 @@ pub fn apply_car(rules: &Rules, raw_tags: &[String], name: &str, class: &str, co
     for r in &c.name_to_tag {
         if name_l.contains(&r.name_contains.to_lowercase()) {
             out.extend(r.add.iter().cloned());
+            fired(&mut h, &r.id);
         }
     }
 
@@ -487,6 +508,7 @@ pub fn apply_car(rules: &Rules, raw_tags: &[String], name: &str, class: &str, co
                     h.car_class = Some(sc.clone());
                 }
                 out.extend(r.add.iter().cloned());
+                fired(&mut h, &r.id);
                 break;
             }
         }
@@ -500,24 +522,30 @@ pub fn apply_car(rules: &Rules, raw_tags: &[String], name: &str, class: &str, co
             continue;
         }
         // Extraction technique (consomme le tag).
-        if let Some(v) = extract(&c.extraction_specs.drivetrain, &tag) {
-            h.drivetrain = Some(v);
+        let s = &c.extraction_specs;
+        if let Some(r) = extract(&s.drivetrain, &tag) {
+            h.drivetrain = Some(r.set.clone());
+            fired(&mut h, &r.id);
             continue;
         }
-        if let Some(v) = extract(&c.extraction_specs.aspiration, &tag) {
-            h.aspiration = Some(v);
+        if let Some(r) = extract(&s.aspiration, &tag) {
+            h.aspiration = Some(r.set.clone());
+            fired(&mut h, &r.id);
             continue;
         }
-        if let Some(v) = extract(&c.extraction_specs.engine_config, &tag) {
-            h.engine_config = Some(v);
+        if let Some(r) = extract(&s.engine_config, &tag) {
+            h.engine_config = Some(r.set.clone());
+            fired(&mut h, &r.id);
             continue;
         }
-        if let Some(v) = extract(&c.extraction_specs.engine_pos, &tag) {
-            h.engine_pos = Some(v);
+        if let Some(r) = extract(&s.engine_pos, &tag) {
+            h.engine_pos = Some(r.set.clone());
+            fired(&mut h, &r.id);
             continue;
         }
-        if let Some(v) = extract(&c.extraction_specs.gearbox, &tag) {
-            h.gearbox = Some(v);
+        if let Some(r) = extract(&s.gearbox, &tag) {
+            h.gearbox = Some(r.set.clone());
+            fired(&mut h, &r.id);
             continue;
         }
         // Extraction pays (si natif vide), consomme le tag.
@@ -531,8 +559,9 @@ pub fn apply_car(rules: &Rules, raw_tags: &[String], name: &str, class: &str, co
         // dropped here rather than kept: it is still the mod's raw file tag,
         // so nothing is lost — it is only denied the rule badge it never
         // earned, and denied becoming a category nobody declared.
-        if let Some(to) = merge_lookup(&c.tag_merge, &tag) {
-            out.extend(to.iter().cloned());
+        if let Some(r) = merge_lookup(&c.tag_merge, &tag) {
+            out.extend(r.to.iter().cloned());
+            fired(&mut h, &r.id);
         } else if known.contains(&tag) {
             out.insert(tag);
         }
@@ -550,13 +579,15 @@ pub fn apply_track(rules: &Rules, raw_tags: &[String]) -> Harmonized {
     let t = &rules.track;
     let known = known_track_tags(t);
     let mut out: BTreeSet<String> = BTreeSet::new();
+    let mut h = Harmonized::default();
     for raw in raw_tags {
         let tag = norm_tag(raw);
         if tag.is_empty() {
             continue;
         }
-        if let Some(to) = merge_lookup(&t.tag_merge, &tag) {
-            out.extend(to.iter().cloned());
+        if let Some(r) = merge_lookup(&t.tag_merge, &tag) {
+            out.extend(r.to.iter().cloned());
+            fired(&mut h, &r.id);
         } else if known.contains(&tag) {
             out.insert(tag);
         }
@@ -569,12 +600,14 @@ pub fn apply_track(rules: &Rules, raw_tags: &[String]) -> Harmonized {
     for cat in &categories {
         out.remove(&strip_hash(cat));
         out.insert(cat.clone());
+        // An allowlist entry has no id: its name is its key.
+        fired(&mut h, &Some(format!("track-category:{cat}")));
     }
     Harmonized {
         category: categories.first().cloned(),
         categories,
         tags_from_rule: out.into_iter().collect(),
-        ..Default::default()
+        ..h
     }
 }
 
@@ -861,5 +894,25 @@ mod tests {
         let a = default_rules().country_aliases;
         assert_eq!(canonical_country("  Freedonia ", &a).as_deref(), Some("Freedonia"));
         assert_eq!(canonical_country("   ", &a), None);
+    }
+
+    /// REGLES§8.3: the engine says which rules acted on a mod - the ids the
+    /// effect counters count - without that changing what it classifies.
+    #[test]
+    fn the_engine_names_the_rules_that_acted() {
+        let rules = default_rules();
+        let h = apply_car(&rules, &["rwd".into()], "Bayro M3 E30", "street", false);
+        assert!(h.fired.iter().any(|id| id == "pitbox.brand.bayro"), "{:?}", h.fired);
+        assert!(
+            h.fired.iter().any(|id| id.starts_with("pitbox.spec-drivetrain.")),
+            "{:?}",
+            h.fired
+        );
+        let t = apply_track(&rules, &["hillclimb".into()]);
+        assert!(
+            t.fired.contains(&"track-category:#hillclimb".to_string()),
+            "{:?}",
+            t.fired
+        );
     }
 }

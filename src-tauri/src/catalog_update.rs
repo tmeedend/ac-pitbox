@@ -323,6 +323,16 @@ pub fn save_state(dir: &Path, s: &CatalogState) -> Result<(), String> {
     std::fs::write(dir.join("catalog-state.json"), json).map_err(|e| e.to_string())
 }
 
+/// The name of the catalogue in force: the application's version, or the
+/// previous one's when the user went back to it (REGLES§7, the switch line).
+pub fn version_in_force(dir: &Path) -> String {
+    let s = load_state(dir);
+    s.previous
+        .filter(|_| s.reverted)
+        .map(|p| p.app_version)
+        .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string())
+}
+
 /// What startup has to do, decided from the state alone - the testable half.
 #[derive(Debug, PartialEq)]
 pub enum Startup {

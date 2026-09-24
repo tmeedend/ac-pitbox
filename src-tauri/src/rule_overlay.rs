@@ -20,8 +20,12 @@
 
 use std::path::Path;
 
-use pitbox_catalog::rules::{ListOverlay, OrderOverlay, RulesOverlay, FORMAT};
+use pitbox_catalog::rules::{
+    BrandFix, ClassFix, ListOverlay, NameToTag, OrderOverlay, Row, Rule, RulesOverlay, SetRule, TagMerge, FORMAT,
+};
+use serde::Serialize;
 
+use crate::harmonize::Effects;
 use crate::rules::Rules;
 
 const PRE_LAYER_RULES: &str = include_str!("../rules/manifests/pre-layer-rules.json");
@@ -31,8 +35,36 @@ pub fn pre_layer_rules() -> Rules {
     serde_json::from_str(PRE_LAYER_RULES).expect("the pre-layer rules manifest must be valid")
 }
 
+/// The catalogue with its list rules emptied: what applies when the global
+/// switch is off (REGLES§7). The user's rules go on, and his forks with them -
+/// against an empty catalogue they stand as his own, like the fork of a
+/// retired rule. The taxonomy tables are not rules (REGLES§11) and stay.
+fn switched_off(catalog: &Rules) -> Rules {
+    let mut r = catalog.clone();
+    let c = &mut r.car;
+    c.extraction_specs.drivetrain.clear();
+    c.extraction_specs.aspiration.clear();
+    c.extraction_specs.engine_config.clear();
+    c.extraction_specs.engine_pos.clear();
+    c.extraction_specs.gearbox.clear();
+    c.brand_fix.clear();
+    c.name_to_tag.clear();
+    c.class_fix.clear();
+    c.tag_merge.clear();
+    r.track.tag_merge.clear();
+    r.track.category_allowlist.clear();
+    r
+}
+
 /// Writes the effective list rules into `rules`: catalogue, then overlay.
 pub fn apply(rules: &mut Rules, catalog: &Rules, o: &RulesOverlay) {
+    let off;
+    let catalog = if o.catalog_off {
+        off = switched_off(catalog);
+        &off
+    } else {
+        catalog
+    };
     let (c, t) = (&catalog.car, &catalog.track);
     let (cs, s) = (&c.extraction_specs, &mut rules.car.extraction_specs);
     rules.car.brand_fix = o.brand_fix.apply(&c.brand_fix);
@@ -51,11 +83,153 @@ pub fn apply(rules: &mut Rules, catalog: &Rules, o: &RulesOverlay) {
 /// The decisions that turn `catalog` into `edited` — what the Rules screen
 /// saves (it still edits whole lists; the ids riding on each rule are what
 /// tell a disabled or forked shipped rule from a rule of the user's).
+/// Every rule of the user given an id, forks given their origin, forks that
+/// restate their catalogue rule dropped (`ListOverlay::normalized`). Done on
+/// every load and every save: the ids are what the switches and the effect
+/// counters hang on, and they are assigned deterministically, so an overlay
+/// written before they existed gets the same ones every time.
+pub fn normalized(mut o: RulesOverlay, catalog: &Rules) -> RulesOverlay {
+    let (c, cs) = (&catalog.car, &catalog.car.extraction_specs);
+    o.brand_fix = o.brand_fix.normalized(&c.brand_fix);
+    o.name_to_tag = o.name_to_tag.normalized(&c.name_to_tag);
+    o.class_fix = o.class_fix.normalized(&c.class_fix);
+    o.car_tag_merge = o.car_tag_merge.normalized(&c.tag_merge);
+    o.drivetrain = o.drivetrain.normalized(&cs.drivetrain);
+    o.aspiration = o.aspiration.normalized(&cs.aspiration);
+    o.engine_config = o.engine_config.normalized(&cs.engine_config);
+    o.engine_pos = o.engine_pos.normalized(&cs.engine_pos);
+    o.gearbox = o.gearbox.normalized(&cs.gearbox);
+    o.track_tag_merge = o.track_tag_merge.normalized(&catalog.track.tag_merge);
+    o.format = FORMAT;
+    o
+}
+
+// --- The Rules screen (REGLES§8) ---------------------------------------------
+
+/// A row and the number of mods its rule acts on (REGLES§8.3).
+#[derive(Debug, Serialize)]
+pub struct RowView<T> {
+    #[serde(flatten)]
+    pub row: Row<T>,
+    pub effect: usize,
+}
+
+/// A track category of the allowlist: an ordered name, not a rule with an id,
+/// so a row of its own. `on: false` is a shipped category the user removed.
+#[derive(Debug, Serialize)]
+pub struct CategoryRow {
+    pub name: String,
+    pub shipped: bool,
+    pub on: bool,
+    pub effect: usize,
+}
+
+/// Everything the Rules screen shows: the overlay it edits, and each section
+/// as rows in execution order with their counters.
+#[derive(Debug, Serialize)]
+pub struct RulesView {
+    pub catalog_on: bool,
+    /// The catalogue in force, named after the application that shipped it.
+    pub catalog_version: String,
+    /// Shipped list rules, all sections together.
+    pub catalog_count: usize,
+    pub overlay: RulesOverlay,
+    pub brand_fix: Vec<RowView<BrandFix>>,
+    pub name_to_tag: Vec<RowView<NameToTag>>,
+    pub class_fix: Vec<RowView<ClassFix>>,
+    pub car_tag_merge: Vec<RowView<TagMerge>>,
+    pub drivetrain: Vec<RowView<SetRule>>,
+    pub aspiration: Vec<RowView<SetRule>>,
+    pub engine_config: Vec<RowView<SetRule>>,
+    pub engine_pos: Vec<RowView<SetRule>>,
+    pub gearbox: Vec<RowView<SetRule>>,
+    pub track_tag_merge: Vec<RowView<TagMerge>>,
+    pub track_categories: Vec<CategoryRow>,
+}
+
+/// Key of an allowlist entry in `Effects` (`rules::apply_track`).
+pub fn category_key(name: &str) -> String {
+    format!("track-category:{name}")
+}
+
+fn rows<T: Rule>(o: &ListOverlay<T>, catalog: &[T], effects: &Effects) -> Vec<RowView<T>> {
+    o.rows(catalog)
+        .into_iter()
+        .map(|row| RowView {
+            effect: row.rule.id().and_then(|id| effects.get(id)).copied().unwrap_or(0),
+            row,
+        })
+        .collect()
+}
+
+/// The screen's view. The overlay must be `normalized`: the ids are what the
+/// counters are looked up by. Catalogue switched off, its rows are not shown -
+/// the user's rules, forks included, are what applies.
+pub fn view(o: &RulesOverlay, catalog: &Rules, effects: &Effects, version: String) -> RulesView {
+    let off = switched_off(catalog);
+    let shown = if o.catalog_off { &off } else { catalog };
+    let (c, cs) = (&shown.car, &shown.car.extraction_specs);
+    let allow = &shown.track.category_allowlist;
+    let mut track_categories: Vec<CategoryRow> = o
+        .track_categories
+        .apply(allow)
+        .into_iter()
+        .map(|name| CategoryRow {
+            shipped: allow.contains(&name),
+            on: true,
+            effect: effects.get(&category_key(&name)).copied().unwrap_or(0),
+            name,
+        })
+        .collect();
+    track_categories.extend(
+        allow
+            .iter()
+            .filter(|n| o.track_categories.removed.contains(*n))
+            .map(|name| CategoryRow {
+                name: name.clone(),
+                shipped: true,
+                on: false,
+                effect: 0,
+            }),
+    );
+    let (k, ks) = (&catalog.car, &catalog.car.extraction_specs);
+    RulesView {
+        catalog_on: !o.catalog_off,
+        catalog_version: version,
+        catalog_count: k.brand_fix.len()
+            + k.name_to_tag.len()
+            + k.class_fix.len()
+            + k.tag_merge.len()
+            + ks.drivetrain.len()
+            + ks.aspiration.len()
+            + ks.engine_config.len()
+            + ks.engine_pos.len()
+            + ks.gearbox.len()
+            + catalog.track.tag_merge.len(),
+        overlay: o.clone(),
+        brand_fix: rows(&o.brand_fix, &c.brand_fix, effects),
+        name_to_tag: rows(&o.name_to_tag, &c.name_to_tag, effects),
+        class_fix: rows(&o.class_fix, &c.class_fix, effects),
+        car_tag_merge: rows(&o.car_tag_merge, &c.tag_merge, effects),
+        drivetrain: rows(&o.drivetrain, &cs.drivetrain, effects),
+        aspiration: rows(&o.aspiration, &cs.aspiration, effects),
+        engine_config: rows(&o.engine_config, &cs.engine_config, effects),
+        engine_pos: rows(&o.engine_pos, &cs.engine_pos, effects),
+        gearbox: rows(&o.gearbox, &cs.gearbox, effects),
+        track_tag_merge: rows(&o.track_tag_merge, &shown.track.tag_merge, effects),
+        track_categories,
+    }
+}
+
+/// Builds the overlay from a whole edited rule set - how the pre-overlay
+/// screen saved, kept for the migration tests that prove the round trip.
+#[cfg(test)]
 pub fn diff(edited: &Rules, catalog: &Rules) -> RulesOverlay {
     let (e, c) = (&edited.car, &catalog.car);
     let (es, cs) = (&e.extraction_specs, &c.extraction_specs);
     RulesOverlay {
         format: FORMAT,
+        catalog_off: false,
         brand_fix: ListOverlay::diff(&e.brand_fix, &c.brand_fix),
         name_to_tag: ListOverlay::diff(&e.name_to_tag, &c.name_to_tag),
         class_fix: ListOverlay::diff(&e.class_fix, &c.class_fix),
@@ -89,6 +263,7 @@ pub fn migrate(file: &Rules, manifest: &Rules) -> RulesOverlay {
     let allowlist = &file.track.category_allowlist;
     RulesOverlay {
         format: FORMAT,
+        catalog_off: false,
         brand_fix: migrate_list(&f.brand_fix, &m.brand_fix),
         name_to_tag: migrate_list(&f.name_to_tag, &m.name_to_tag),
         class_fix: migrate_list(&f.class_fix, &m.class_fix),
@@ -298,5 +473,102 @@ mod tests {
         std::fs::write(&path, "{ not json").unwrap();
         assert!(!load_or_migrate(&path, Some(&pre_layer_rules())).has_decisions());
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "{ not json");
+    }
+
+    /// REGLES§7: the global switch off, the catalogue stops applying - all of
+    /// it - and the user's rules go on, his fork of a shipped rule included.
+    /// The screen then shows his rules only.
+    #[test]
+    fn switching_the_catalogue_off_leaves_the_users_rules_alone() {
+        let catalog = default_rules();
+        let mut o = RulesOverlay::default();
+        o.brand_fix.own.push(BrandFix {
+            id: None,
+            name_contains: "lanzo".into(),
+            set_brand: "RSS".into(),
+        });
+        let mut fork = catalog.car.brand_fix[0].clone();
+        fork.set_brand = "Bayro Motors".into();
+        o.brand_fix.forks.insert(
+            fork.id.clone().unwrap(),
+            pitbox_catalog::rules::Fork {
+                rule: fork,
+                forked_from: String::new(),
+            },
+        );
+        let o = normalized(o, &catalog);
+        assert!(
+            o.brand_fix.forks.values().all(|f| !f.forked_from.is_empty()),
+            "a fork made by the screen is given its origin"
+        );
+        assert_eq!(o.brand_fix.own[0].id.as_deref(), Some("own-1"), "his rule has an id");
+
+        let off = RulesOverlay {
+            catalog_off: true,
+            ..o.clone()
+        };
+        let mut rules = catalog.clone();
+        apply(&mut rules, &catalog, &off);
+        let brands: Vec<&str> = rules.car.brand_fix.iter().map(|r| r.set_brand.as_str()).collect();
+        assert_eq!(
+            brands,
+            ["RSS", "Bayro Motors"],
+            "his rule and his fork, nothing shipped"
+        );
+        assert!(rules.car.tag_merge.is_empty() && rules.track.category_allowlist.is_empty());
+        assert!(
+            !rules.car.category_families.is_empty(),
+            "the taxonomy tables are not rules"
+        );
+
+        let v = view(&off, &catalog, &Effects::new(), "0.7.0".into());
+        assert!(!v.catalog_on);
+        assert_eq!(v.brand_fix.len(), 2, "no shipped row while the catalogue is off");
+        assert!(v.catalog_count > 100, "the switch line still counts the catalogue");
+    }
+
+    /// REGLES§8.1, §8.3: one list per section in execution order - his rules
+    /// first - each row with the mods its rule acted on, `0` when none.
+    #[test]
+    fn the_view_lists_rows_in_execution_order_with_their_effect() {
+        let catalog = default_rules();
+        let mut o = RulesOverlay::default();
+        o.brand_fix.own.push(BrandFix {
+            id: None,
+            name_contains: "lanzo".into(),
+            set_brand: "RSS".into(),
+        });
+        o.brand_fix.disabled.insert("pitbox.brand.auriel".into());
+        o.track_categories.removed.insert("#rally".into());
+        let o = normalized(o, &catalog);
+        let mut effects = Effects::new();
+        effects.insert("pitbox.brand.bayro".into(), 3);
+        effects.insert(category_key("#hillclimb"), 2);
+        let v = view(&o, &catalog, &effects, "0.7.0".into());
+        assert_eq!(
+            v.brand_fix[0].row.origin,
+            pitbox_catalog::rules::Origin::Own,
+            "his rule runs first"
+        );
+        assert_eq!(
+            v.brand_fix.len(),
+            catalog.car.brand_fix.len() + 1,
+            "disabled rows are shown"
+        );
+        let row = |id: &str| {
+            v.brand_fix
+                .iter()
+                .find(|r| r.row.rule.id.as_deref() == Some(id))
+                .unwrap()
+        };
+        assert_eq!(row("pitbox.brand.bayro").effect, 3);
+        assert!(row("pitbox.brand.auriel").row.disabled);
+        let rally = v.track_categories.iter().find(|c| c.name == "#rally").unwrap();
+        assert!(
+            rally.shipped && !rally.on,
+            "a removed shipped category stays, switched off"
+        );
+        let hill = v.track_categories.iter().find(|c| c.name == "#hillclimb").unwrap();
+        assert_eq!(hill.effect, 2);
     }
 }
