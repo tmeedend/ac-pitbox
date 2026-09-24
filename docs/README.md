@@ -202,7 +202,8 @@ dans un commentaire de code.
   vraiment** : `kunos_dates.rs` l'embarque par `include_str!`.
 - **`src-tauri/rules/taxonomy-catalog.json`** (hors `docs/`, cité ici parce
   qu'on le cherche) — le catalogue des familles, alias et tags de pays, livré
-  à tous les utilisateurs. **Ne s'édite pas à la main** : on cure dans l'app,
+  à tous les utilisateurs, et **`src-tauri/rules/default-tag-rules.json`**, celui
+  des règles en liste. **Ne s'éditent pas à la main** : on cure dans l'app,
   puis `npm run rules:promote` (REGLES§2, `SPEC.md` §5). À côté,
   `rules/manifests/pre-layer-tables.json` est une photo **figée** qui ne sert
   qu'à la migration : ne jamais la mettre à jour.

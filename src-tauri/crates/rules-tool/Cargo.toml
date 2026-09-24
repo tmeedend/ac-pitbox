@@ -9,7 +9,10 @@ publish = false
 [dependencies]
 pitbox-catalog = { path = "../catalog" }
 serde = "1"
-serde_json = "1"
+serde_json = { version = "1", features = ["raw_value"] }
 
-# Aucune autre dépendance : deux sous-commandes et trois options tiennent en
+# `raw_value` lets `_meta` pass through untouched (`lists.rs`). Never
+# `preserve_order`: it would reach the whole workspace build and change the
+# key order `content()` - hence every fingerprint - depends on.
+# Aucune autre dépendance : deux sous-commandes et deux options tiennent en
 # quelques lignes, comme pour `kn5-tool`.

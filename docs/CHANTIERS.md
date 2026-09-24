@@ -632,12 +632,14 @@ de reprendre. En cas d'écart, la spec fait foi.
       **Piège évité de justesse** : la sauvegarde de démarrage (`backup.rs`)
       copiait `tag-rules.json` mais ignorait les fichiers de décisions — tout
       ce que l'utilisateur fait dans les règles aurait été hors du filet.
-      **Reste pour `rules-tool`** : `promote` ne sait promouvoir que les tables
-      de taxonomie ; les règles en liste demanderont un conteneur des sections
-      dans la crate (aujourd'hui dans `rules.rs`). Et une règle **retirée** du
-      catalogue n'a pas encore de marque `retired` (REGLES§4) : la supprimer
-      simplement laisse ses décisions orphelines, sans effet — acceptable, mais
-      le rapport du lot 4 devra le dire.
+      **`promote` pour les règles en liste — fait** (`rules-tool/src/lists.rs`).
+      Le fichier est lu en structures typées et non en `serde_json::Value`, qui
+      trie ses clés : l'option `preserve_order` qui l'éviterait s'étendrait à
+      toute la compilation du workspace, où l'ordre des clés fait l'empreinte
+      des dérivations (`content()`). Une promotion à vide rend le fichier à
+      l'octet près (testé). Les identifiants retirés vivent dans une liste
+      `retired` en tête de fichier, ignorée par l'app : une surcouche qui en
+      nomme un garde son entrée sans effet, ce qui était déjà le comportement.
       **Pièges pour la suite.** (a) « La règle utilisateur gagne » (REGLES§3)
       n'a pas le même sens selon le type, **et c'est tranché** : `brand_fix`,
       `class_fix`, `tag_merge` et l'extraction des specs s'arrêtent à la
@@ -671,8 +673,7 @@ de reprendre. En cas d'écart, la spec fait foi.
       tête) ; le filtre « Mes règles seulement » n'est pas mémorisé.
       **Reste du chantier** : l'export/import de la surcouche (REGLES§9) ; le
       compteur **par règle** dans le rapport de mise à jour et « Désactiver »
-      sur ses lignes (REGLES§6.3) — `fired` le rend désormais possible ;
-      `promote` pour les règles en liste ; la marque `retired` (REGLES§4).
+      sur ses lignes (REGLES§6.3) — `fired` le rend désormais possible.
       **Outil de relevé — reporté, pas abandonné, et il a désormais sa
       maison** : une sous-commande `survey` de `rules-tool`. Un binaire du
       workspace, jamais livré (comme `kn5-tool`), qui fait tourner **le vrai moteur** sur

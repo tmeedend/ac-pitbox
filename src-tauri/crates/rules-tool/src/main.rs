@@ -2,36 +2,72 @@
 //! Never shipped to users.
 //!
 //! The workflow it serves: curate in the application, with its screens
-//! (Workshop › Categories, Countries), then turn those decisions into the
-//! catalogue every user receives — instead of hand-editing JSON.
+//! (Workshop › Rules, Categories, Countries), then turn those decisions into
+//! the catalogue every user receives — instead of hand-editing JSON. A fix a
+//! user proposed (the Rules screen links to GitHub) goes the same way: made
+//! in the application, then promoted.
 //!
 //! ```text
 //! cargo run -p rules-tool -- diff      what my decisions would change in the catalogue
-//! cargo run -p rules-tool -- promote   write them into the catalogue, empty my overlay
+//! cargo run -p rules-tool -- promote   write them into the catalogue, empty my overlays
 //! ```
 //!
-//! Options: `--catalog <file>` (default: `src-tauri/rules/taxonomy-catalog.json`
-//! of this repository), `--overlay <file>` (default: the application's
-//! `%APPDATA%\com.pitbox.app\taxonomy.json`).
+//! Two catalogues, two overlays: `taxonomy-catalog.json` + `taxonomy.json`
+//! (families, countries) and `default-tag-rules.json` + `rules-overlay.json`
+//! (the list rules, `lists.rs`). Options: `--catalog-dir <dir>` (default:
+//! `src-tauri/rules` of this repository), `--config <dir>` (default: the
+//! application's `%APPDATA%\com.pitbox.app`).
 //!
 //! The merge is the application's own (`pitbox-catalog`): what `promote`
 //! writes is exactly what the application was showing.
+
+mod lists;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+use pitbox_catalog::rules::RulesOverlay;
 use pitbox_catalog::taxonomy::{TaxonomyOverlay, TaxonomyTables, FORMAT};
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 
-const USAGE: &str = "usage: rules-tool <diff|promote> [--catalog <file>] [--overlay <file>]";
+const USAGE: &str = "usage: rules-tool <diff|promote> [--catalog-dir <dir>] [--config <dir>]";
 
-fn default_catalog() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/taxonomy-catalog.json")
+fn default_catalog_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules")
 }
 
-fn default_overlay() -> Option<PathBuf> {
-    std::env::var_os("APPDATA").map(|d| Path::new(&d).join("com.pitbox.app").join("taxonomy.json"))
+#[cfg(test)]
+fn default_catalog() -> PathBuf {
+    default_catalog_dir().join("taxonomy-catalog.json")
+}
+
+fn default_config() -> Option<PathBuf> {
+    std::env::var_os("APPDATA").map(|d| Path::new(&d).join("com.pitbox.app"))
+}
+
+/// An overlay file, or no decision when there is none: a developer who never
+/// touched the Rules screen has no `rules-overlay.json`.
+fn read_overlay<T: DeserializeOwned + Default>(path: &Path) -> Result<T, String> {
+    if path.is_file() {
+        read(path)
+    } else {
+        Ok(T::default())
+    }
+}
+
+fn write(path: &Path, text: &str) -> Result<(), String> {
+    std::fs::write(path, text).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// Keeps the overlay aside, then writes what is left of it: a promotion is
+/// one command away from losing a curation session.
+fn replace_overlay<T: Serialize>(path: &Path, left: &T) -> Result<PathBuf, String> {
+    let backup = path.with_extension("json.bak");
+    std::fs::copy(path, &backup).map_err(|e| format!("{}: {e}", backup.display()))?;
+    write(path, &serde_json::to_string_pretty(left).expect("overlay serialises"))?;
+    Ok(backup)
 }
 
 fn read<T: DeserializeOwned>(path: &Path) -> Result<T, String> {
@@ -96,69 +132,91 @@ fn describe(before: &TaxonomyTables, after: &TaxonomyTables) -> Vec<String> {
 
 fn run(args: &[String]) -> Result<(), String> {
     let cmd = args.first().ok_or(USAGE)?;
-    let mut catalog_path = default_catalog();
-    let mut overlay_path = default_overlay();
+    if cmd != "diff" && cmd != "promote" {
+        return Err(USAGE.into());
+    }
+    let mut catalog_dir = default_catalog_dir();
+    let mut config = default_config();
     let mut rest = args[1..].iter();
     while let Some(a) = rest.next() {
         match a.as_str() {
-            "--catalog" => catalog_path = rest.next().ok_or(USAGE)?.into(),
-            "--overlay" => overlay_path = Some(rest.next().ok_or(USAGE)?.into()),
+            "--catalog-dir" => catalog_dir = rest.next().ok_or(USAGE)?.into(),
+            "--config" => config = Some(rest.next().ok_or(USAGE)?.into()),
             _ => return Err(USAGE.into()),
         }
     }
-    let overlay_path = overlay_path.ok_or("no --overlay given and APPDATA is not set")?;
-    let catalog: TaxonomyTables = read(&catalog_path)?;
-    let overlay: TaxonomyOverlay = read(&overlay_path)?;
-    let promoted = catalog.apply(&overlay);
-    let changes = describe(&catalog, &promoted);
+    let config = config.ok_or("no --config given and APPDATA is not set")?;
 
-    match cmd.as_str() {
-        "diff" => {
-            if changes.is_empty() {
-                println!("no decision to promote: the overlay changes nothing in the catalogue");
-            }
-            for c in &changes {
+    let tax_catalog_path = catalog_dir.join("taxonomy-catalog.json");
+    let tax_overlay_path = config.join("taxonomy.json");
+    let tax_catalog: TaxonomyTables = read(&tax_catalog_path)?;
+    let tax_overlay: TaxonomyOverlay = read_overlay(&tax_overlay_path)?;
+    let tax_promoted = tax_catalog.apply(&tax_overlay);
+    let tax_changes = describe(&tax_catalog, &tax_promoted);
+
+    let rules_catalog_path = catalog_dir.join("default-tag-rules.json");
+    let rules_overlay_path = config.join("rules-overlay.json");
+    let rules_catalog: lists::RulesFile = read(&rules_catalog_path)?;
+    let rules_overlay: RulesOverlay = read_overlay(&rules_overlay_path)?;
+    let rules = lists::promote(&rules_catalog, &rules_overlay);
+
+    for (title, changes) in [("taxonomy", &tax_changes), ("list rules", &rules.changes)] {
+        if !changes.is_empty() {
+            println!("{title}:");
+            for c in changes {
                 println!("{c}");
             }
-            Ok(())
         }
-        "promote" => {
-            if changes.is_empty() {
-                println!("nothing to promote");
-                return Ok(());
-            }
-            // The overlay is kept aside before being emptied: a promotion is
-            // one command away from losing a curation session.
-            let backup = overlay_path.with_extension("json.bak");
-            std::fs::copy(&overlay_path, &backup).map_err(|e| format!("{}: {e}", backup.display()))?;
-            std::fs::write(&catalog_path, render(&promoted)).map_err(|e| format!("{}: {e}", catalog_path.display()))?;
-            // The decisions now ARE the catalogue. Left in the overlay they
-            // would restate it - harmless, but every one of them would keep a
-            // ⚑ on a line that no longer differs from anything. What is not a
-            // table entry (the ignored countries) stays.
-            let emptied = TaxonomyOverlay {
-                format: FORMAT,
-                ignored_countries: overlay.ignored_countries.clone(),
-                ..Default::default()
-            };
-            let json = serde_json::to_string_pretty(&emptied).expect("overlay serialises");
-            std::fs::write(&overlay_path, json).map_err(|e| format!("{}: {e}", overlay_path.display()))?;
-            for c in &changes {
-                println!("{c}");
-            }
-            println!("\n{} change(s) written to {}", changes.len(), catalog_path.display());
-            println!("overlay emptied, previous one kept as {}", backup.display());
-            for f in promoted.families.iter().filter(|f| f.name.is_some()) {
-                println!(
-                    "note: family `{}` carries a name, shown untranslated - add `families.{}` to fr.json and en.json, then drop the name",
-                    f.id, f.id
-                );
-            }
-            println!("rebuild the application: until then it still embeds the previous catalogue");
-            Ok(())
-        }
-        _ => Err(USAGE.into()),
     }
+    if rules_overlay.catalog_off {
+        println!("note: the catalogue is switched off in this configuration - a preference, not promoted");
+    }
+    if tax_changes.is_empty() && rules.changes.is_empty() {
+        println!("no decision to promote: the overlays change nothing in the catalogue");
+        return Ok(());
+    }
+    if cmd == "diff" {
+        return Ok(());
+    }
+
+    if !tax_changes.is_empty() {
+        write(&tax_catalog_path, &render(&tax_promoted))?;
+        // The decisions now ARE the catalogue. Left in the overlay they would
+        // restate it - harmless, but each would keep its mark on a line that
+        // no longer differs from anything. What is not a table entry (the
+        // ignored countries) stays.
+        let emptied = TaxonomyOverlay {
+            format: FORMAT,
+            ignored_countries: tax_overlay.ignored_countries.clone(),
+            ..Default::default()
+        };
+        let backup = replace_overlay(&tax_overlay_path, &emptied)?;
+        println!(
+            "\n{} change(s) written to {}",
+            tax_changes.len(),
+            tax_catalog_path.display()
+        );
+        println!("taxonomy overlay emptied, previous one kept as {}", backup.display());
+        for f in tax_promoted.families.iter().filter(|f| f.name.is_some()) {
+            println!(
+                "note: family `{}` carries a name, shown untranslated - add `families.{}` to fr.json and en.json, then drop the name",
+                f.id, f.id
+            );
+        }
+    }
+    if !rules.changes.is_empty() {
+        write(&rules_catalog_path, &lists::render(&rules.file))?;
+        let backup = replace_overlay(&rules_overlay_path, &rules.left)?;
+        println!(
+            "\n{} change(s) written to {}",
+            rules.changes.len(),
+            rules_catalog_path.display()
+        );
+        println!("rules overlay emptied, previous one kept as {}", backup.display());
+        println!("the new ids are written once and for all - rename one now if it reads badly, never later");
+    }
+    println!("rebuild the application: until then it still embeds the previous catalogue");
+    Ok(())
 }
 
 fn main() -> ExitCode {

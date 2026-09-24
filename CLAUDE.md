@@ -481,8 +481,8 @@ Svelte. Les deux sont documentées comme écartées, en tête du script.
   l'utilisateur, indexées par la clé naturelle de l'entrée, une suppression
   étant une pierre tombale. La fusion des deux ne se calcule qu'à un endroit,
   la crate `pitbox-catalog`. **Pour faire évoluer ce catalogue, on ne
-  l'édite pas à la main** : on cure dans l'app (Atelier › Catégories, Pays),
-  puis `npm run rules:diff` / `npm run rules:promote`.
+  l'édite pas à la main** : on cure dans l'app (Atelier › Règles, Catégories,
+  Pays), puis `npm run rules:diff` / `npm run rules:promote`.
 - **`Prefs` (`config.rs`) est en `#[serde(default)]`** : un champ retiré est
   simplement ignoré dans les `config.json` existants, pas de migration à
   écrire. Un champ ajouté prend sa valeur par défaut chez les utilisateurs
