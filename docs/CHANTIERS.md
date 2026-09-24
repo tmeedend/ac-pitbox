@@ -512,11 +512,15 @@ de reprendre. En cas d'écart, la spec fait foi.
       Découpage convenu avec l'utilisateur, un lot à la fois avec une pause
       pour regarder : **Catégories (fait)**, **Pays (fait)**, **Marques
       (fusions) (fait)**, **Marques (logos) (fait, à valider)**. **Reste** :
-      les emblèmes dans l'éditeur de filtre et dans le résumé d'une puce
-      (TAXO§10, 18 px et 16 × 11 px), le raccourci de la fiche vers
-      `Atelier › Marques` (TAXO§10), et **la validation du seuil de fond cuit
-      sur le gros corpus** (l'autre PC, via l'outil de relevé — le banc
-      `logos::tests::real_install_logos` en est l'amorce).
+      **la validation du seuil de fond cuit sur le gros corpus** (l'autre PC,
+      via l'outil de relevé — le banc `logos::tests::real_install_logos` en
+      est l'amorce). Les emblèmes de TAXO§10 sont posés pour les marques
+      (suggestions et jetons de l'éditeur de filtre, puce à valeur unique) ;
+      les icônes de famille n'y sont pas encore — le filtre Famille montre
+      ses noms seuls. Le raccourci de la fiche vers `Atelier › Marques` est
+      une entrée du menu ⋮ (« Éditer la marque … ») plutôt qu'une action sur
+      le nom dans le sous-titre : même chemin, sans un second geste caché
+      dans une ligne de texte.
       **Marques (logos).** Écarts assumés : (1) la résolution est plafonnée à
       128 px dans l'élection (mesuré : sans ça, un Nissan unique de 4096 px
       battait le logo de sept voitures) ; (2) la pastille reprend `--txt`, le

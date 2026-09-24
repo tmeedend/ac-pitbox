@@ -22,6 +22,9 @@
   import FilterAddMenu from "./FilterAddMenu.svelte";
   import FilterEditor from "./FilterEditor.svelte";
   import { flagFor, loadFlags } from "$lib/flags.svelte";
+  import Emblem from "$lib/components/ui/Emblem.svelte";
+  import { logoOf } from "$lib/library/brandLogos.svelte";
+  import { previewSrc } from "$lib/library/library";
   import { t } from "$lib/i18n/index.svelte";
   import {
     blankState,
@@ -226,6 +229,12 @@
     {#if def.flags}
       {@const flag = flagFor(v.value)}
       {#if flag}<img class="flag" src={flag} alt="" />{/if}
+    {:else if def.logos && values.length === 1}
+      <!-- One value only (TAXO§10): logos side by side would break the
+           chip's height and make it unreadable. -->
+      {@const logo = logoOf(v.value)}
+      {@const src = logo ? previewSrc(logo.path) : null}
+      {#if logo && src}<span class="logo"><Emblem {src} plaque={logo.plaque} size={13} /></span>{/if}
     {/if}{v.label}
   {/each}
 {/snippet}
@@ -562,6 +571,11 @@
     object-fit: cover;
     border: 1px solid var(--line);
     vertical-align: -1px;
+    margin-right: 4px;
+  }
+  .chip .logo {
+    display: inline-flex;
+    vertical-align: -2px;
     margin-right: 4px;
   }
   .chip .x {

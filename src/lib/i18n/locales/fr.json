@@ -772,7 +772,8 @@
     "odometer": "Odomètre",
     "extrasForce": "Poser quand même",
     "extrasForcing": "Pose…",
-    "extrasForceHint": "Remplace ce qui occupe ce chemin par la version du mod. Le fichier actuel est sauvegardé d'abord, et restauré quand plus aucun mod ne réclame ce chemin."
+    "extrasForceHint": "Remplace ce qui occupe ce chemin par la version du mod. Le fichier actuel est sauvegardé d'abord, et restauré quand plus aucun mod ne réclame ce chemin.",
+    "editBrand": "Éditer la marque {brand}"
   },
   "lightbox": {
     "open": "Voir en grand",

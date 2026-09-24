@@ -93,6 +93,11 @@ export interface FilterDef {
    */
   flags?: boolean;
   /**
+   * The values are brands, drawn with the brand's elected logo
+   * (`brandLogos.svelte.ts`, TAXO§10: the TERM level, not a car's badge).
+   */
+  logos?: boolean;
+  /**
    * The filter offers the "carries none" value (`UNSET_VALUE`), under this
    * label. Only where the gap is worth seeing: a track without a country is a
    * hole in the data one may want to fill, and the index shows it as a tile.
@@ -155,7 +160,7 @@ export function filterDefs(kind: ModKind, families: CategoryFamily[] = []): Filt
     });
   }
   if (isCar) {
-    defs.push({ key: "brand", labelKey: "library.filterBrand", type: "val" });
+    defs.push({ key: "brand", labelKey: "library.filterBrand", type: "val", logos: true });
     // The one honest token for "the same car as mine" (WIKI§3.2). Matched on the
     // DISPLAY NAME rather than on the mod id: two mods of the same model then
     // both answer, which is what a one-make grid wants - and it keeps the

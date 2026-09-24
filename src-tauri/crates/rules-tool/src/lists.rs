@@ -65,6 +65,15 @@ struct TrackLists {
     category_allowlist: Vec<String>,
 }
 
+/// Reads the catalogue file. Line endings are made `\n` first: a Windows
+/// checkout turns them into `\r\n`, and `_meta`, passed through as raw text,
+/// would keep them - a promotion then wrote a file with mixed endings, and
+/// the no-change test caught it on the dev machine.
+pub fn read(path: &std::path::Path) -> Result<RulesFile, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    serde_json::from_str(&text.replace("\r\n", "\n")).map_err(|e| format!("{}: {e}", path.display()))
+}
+
 /// The catalogue as committed: pretty JSON, final newline.
 pub fn render(f: &RulesFile) -> String {
     format!("{}\n", serde_json::to_string_pretty(f).expect("rules serialise"))
@@ -248,9 +257,8 @@ mod tests {
 
     fn committed() -> (String, RulesFile) {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/default-tag-rules.json");
-        let text = std::fs::read_to_string(path).expect("catalogue in the repository");
-        let f = serde_json::from_str(&text).expect("valid catalogue");
-        (text.replace("\r\n", "\n"), f)
+        let text = std::fs::read_to_string(&path).expect("catalogue in the repository");
+        (text.replace("\r\n", "\n"), read(&path).expect("valid catalogue"))
     }
 
     /// Nothing to promote leaves the committed file byte for byte as it is -

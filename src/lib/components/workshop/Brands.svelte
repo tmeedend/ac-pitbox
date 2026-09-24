@@ -16,7 +16,9 @@
   // Saving re-applies to the whole library, like the Countries tab: the brand
   // is decided at write time. Same write queue, failures shown and logged
   // (CLAUDE.md rule 6).
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
+  import { brandFocus } from "$lib/workshop/brandFocus.svelte";
+  import { scrollIntoContainer } from "$lib/shell/shellScroll";
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
   import { listLibrary } from "$lib/library/library";
@@ -62,6 +64,7 @@
     try {
       const [v] = await Promise.all([getTaxonomy(), reloadCars(), loadBrandLogos()]);
       take(v);
+      await focusRequested();
     } catch (e) {
       error = errorText(e);
     } finally {
@@ -160,6 +163,18 @@
     opaque: "brandsTab.bgOpaque",
   };
 
+  /** Arriving from a car sheet: that brand opened, and brought into view. */
+  async function focusRequested() {
+    const brand = brandFocus.brand;
+    brandFocus.brand = null;
+    if (!brand) return;
+    open = brand;
+    loading = false;
+    await tick();
+    const el = document.querySelector<HTMLElement>(`[data-brand="${CSS.escape(brand)}"]`);
+    if (el) scrollIntoContainer(el, "center");
+  }
+
   function toggle(name: string) {
     open = open === name ? null : name;
     newAlias = "";
@@ -217,7 +232,7 @@
         {@const curated = touches(aliases, catAliases, r.name)}
         {@const logo = brandLogos.brands[r.name]}
         {@const logoSrc = logo?.path ? previewSrc(logo.path) : null}
-        <li>
+        <li data-brand={r.name}>
           <button type="button" class="row" aria-expanded={open === r.name} onclick={() => toggle(r.name)}>
             {#if logoSrc}<Emblem src={logoSrc} plaque={logo.plaque} size={20} />{:else}<span
                 class="no-logo"

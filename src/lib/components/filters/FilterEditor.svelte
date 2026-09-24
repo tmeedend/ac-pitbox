@@ -14,6 +14,9 @@
   import NumberStepper from "$lib/components/ui/NumberStepper.svelte";
   import Slider from "$lib/components/ui/Slider.svelte";
   import { flagFor } from "$lib/flags.svelte";
+  import Emblem from "$lib/components/ui/Emblem.svelte";
+  import { logoOf } from "$lib/library/brandLogos.svelte";
+  import { previewSrc } from "$lib/library/library";
   import { t } from "$lib/i18n/index.svelte";
   import { clampPerfPct, formatRatio, perfBand, PERF_MAX_PCT, PERF_MIN_PCT, PERF_STEP } from "$lib/detail/carSpecs";
   import { valueLabel, type FilterDef, type FilterOption, type FilterState, type PerfRef, type Sign } from "$lib/library/filters";
@@ -187,6 +190,12 @@
           {#if def.flags}
             {@const flag = flagFor(opt.value)}
             {#if flag}<img class="flag" src={flag} alt="" />{:else}<span class="flag flag-none"></span>{/if}
+          {:else if def.logos}
+            <!-- The brand's logo at 18 px (TAXO§10), a disc keeping the place
+                 when it has none - the names stay aligned. -->
+            {@const logo = logoOf(opt.value)}
+            {@const src = logo ? previewSrc(logo.path) : null}
+            {#if logo && src}<Emblem {src} plaque={logo.plaque} size={18} />{:else}<span class="logo-none"></span>{/if}
           {/if}
           <span class="oname" title={opt.label}>{opt.label}</span>
           <span class="ocount mono">{opt.count}</span>
@@ -225,6 +234,10 @@
               {#if def.flags}
                 {@const flag = flagFor(tk.value)}
                 {#if flag}<img class="flag" src={flag} alt="" />{/if}
+              {:else if def.logos}
+                {@const logo = logoOf(tk.value)}
+                {@const src = logo ? previewSrc(logo.path) : null}
+                {#if logo && src}<Emblem {src} plaque={logo.plaque} size={14} />{/if}
               {/if}
               <span class="label">{valueLabel(def, tk.value)}</span>
             </button>
@@ -559,6 +572,13 @@
      noms cesseraient de s'aligner d'une ligne à l'autre. */
   .flag-none {
     border-style: dashed;
+  }
+  .logo-none {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--raised);
   }
 
   .grouplbl {

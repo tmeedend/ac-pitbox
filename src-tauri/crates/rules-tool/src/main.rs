@@ -157,7 +157,7 @@ fn run(args: &[String]) -> Result<(), String> {
 
     let rules_catalog_path = catalog_dir.join("default-tag-rules.json");
     let rules_overlay_path = config.join("rules-overlay.json");
-    let rules_catalog: lists::RulesFile = read(&rules_catalog_path)?;
+    let rules_catalog = lists::read(&rules_catalog_path)?;
     let rules_overlay: RulesOverlay = read_overlay(&rules_overlay_path)?;
     let rules = lists::promote(&rules_catalog, &rules_overlay);
 

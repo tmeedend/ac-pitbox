@@ -772,7 +772,8 @@
     "odometer": "Odometer",
     "extrasForce": "Deploy anyway",
     "extrasForcing": "Deploying…",
-    "extrasForceHint": "Replace what currently occupies this path with the mod's version. The current file is backed up first, and restored when no mod claims the path any more."
+    "extrasForceHint": "Replace what currently occupies this path with the mod's version. The current file is backed up first, and restored when no mod claims the path any more.",
+    "editBrand": "Edit the brand {brand}"
   },
   "lightbox": {
     "open": "View full size",

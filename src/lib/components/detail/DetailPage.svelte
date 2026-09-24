@@ -3,6 +3,7 @@
   // Riche pour les voitures (héros + specs natives + fiche technique + courbe +
   // description + skins + tags/versions/historique). Panneaux Son et Distance =
   // placeholders « à venir » (lots §8 et §6). Réduite pour les circuits.
+  import { editBrand } from "$lib/workshop/brandFocus.svelte";
   import { isPlaque } from "$lib/library/brandLogos.svelte";
   import {
     activateMod,
@@ -1095,6 +1096,10 @@
         onclick: openShowroom,
         disabled: showroomBusy,
       });
+    }
+    if (isCar && d.brand) {
+      const brand = d.brand;
+      items.push({ label: t("detail.editBrand", { brand }), onclick: () => void editBrand(brand) });
     }
     items.push({ label: t("detail.openFolder"), onclick: openFolder });
     if (!d.is_stock) {
