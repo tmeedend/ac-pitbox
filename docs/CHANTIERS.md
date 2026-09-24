@@ -709,20 +709,28 @@ de reprendre. En cas d'écart, la spec fait foi.
       seul comportement. L'import **fusionne sans rien retirer** plutôt que
       de remplacer : la question « remplacer ou fusionner ? » n'avait pas de
       bonne réponse avant d'avoir vu le résultat.
-      **Reste du chantier** : l'outil de relevé, ci-dessous.
-      **Outil de relevé — reporté, pas abandonné, et il a désormais sa
-      maison** : une sous-commande `survey` de `rules-tool`. Un binaire du
-      workspace, jamais livré (comme `kn5-tool`), qui fait tourner **le vrai moteur** sur
-      une install et une bibliothèque, en lecture seule, et sort les voitures
-      non classées, les tags hors vocabulaire, les pays sans drapeau, les
-      variantes de marque, et la classification complète. Rejoué avant/après
-      une modification du catalogue, il donne l'écart mesuré — le même contenu
-      que le rapport de mise à jour du lot 4, donc le même code. L'utilisateur
-      l'imagine aussi **distribué à des contributeurs** qui enverraient leurs
-      résultats : il faudra alors un rapport anonymisé par construction (ids de
-      mods et métadonnées, jamais un chemin), montré à la personne avant
-      envoi, et un rapport brut qui ne se versionne jamais — le dépôt est
-      public.
+      **Reste du chantier** : lancer le relevé sur le gros corpus, ci-dessous.
+      **Outil de relevé — fait, dans l'app plutôt que dans `rules-tool`**
+      (`survey.rs`, Atelier › Maintenance › « Créer un relevé… »). Changement
+      de maison assumé : un contributeur a l'app, pas une chaîne Rust, et la
+      moitié du relevé (classement, logos, pays connus du jeu) vit déjà dans
+      le crate de l'app. Pour Claude Code sur une autre machine, le même relevé
+      sort sans l'app : `cargo test --lib survey::tests::real_install_survey
+      -- --ignored --nocapture` (sur des copies, `PITBOX_SURVEY_OUT` pour le
+      fichier). Anonyme par construction : identifiants de mods et ce que les
+      mods publient, jamais un chemin, un auteur, une note ni un tag saisi —
+      un test le vérifie. Il contient aussi les **décisions** de l'utilisateur
+      (le contenu d'un export) : c'est exactement ce que `rules-tool promote`
+      sait intégrer au catalogue. **Piège payé en le mesurant** : le moteur
+      écarte volontairement `street`/`race` (portés par la classe) et les tags
+      de pays (qui ne parlent que sans pays déclaré) ; comptés comme
+      « inconnus », ils écrasaient la liste (`street` 167, `race` 107, `japan`
+      52) — ils sont exclus du décompte. Sur l'install de dev : 324 voitures,
+      26 circuits, 1 s, 260 Ko ; 28 voitures sans famille ; en tête des tags
+      sans règle, `original` (22), `ddm` (17), `lightweight` (16),
+      `#vintage supercars` (12). **Reste** : le lancer sur le gros corpus
+      (l'autre PC) — valider le seuil de fond cuit des logos, puis curer et
+      promouvoir ce qu'il révèle.
 
 - [ ] **Deux jeux de règles de tags ont divergé — à trancher.**
       `docs/default-tag-rules-enriched.json` **n'est pas ce que l'app charge** :

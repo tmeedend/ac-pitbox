@@ -14,7 +14,9 @@
   import { runRepair, repairState } from "$lib/workshop/repairState.svelte";
   import { deleteLayer } from "$lib/library/library";
   import { indexStockContent } from "$lib/inventory/submods";
-  import { confirm } from "@tauri-apps/plugin-dialog";
+  import { confirm, save } from "@tauri-apps/plugin-dialog";
+  import { exportSurvey } from "$lib/workshop/rules";
+  import { ISSUE_URL, openExternal } from "$lib/links";
   import { t } from "$lib/i18n/index.svelte";
 
   import { errorText } from "$lib/errors";
@@ -53,6 +55,30 @@
    * (SESSION§3.1). Décoché par défaut : un réindex ordinaire ne doit jamais faire
    * perdre un renommage — c'était le cas, sans le dire. */
   let resetStockEdits = $state(false);
+
+  // The anonymous survey (`survey.rs`): read-only on the library, written
+  // where the user says, sent by him - to help the shipped rules improve.
+  let surveying = $state(false);
+  let surveyMsg = $state("");
+  async function doSurvey() {
+    const path = await save({
+      title: t("maintenance.surveyTitle"),
+      defaultPath: "pitbox-survey.json",
+      filters: [{ name: t("maintenance.surveyFilter"), extensions: ["json"] }],
+    });
+    if (!path) return;
+    surveying = true;
+    surveyMsg = "";
+    try {
+      const [cars, tracks] = await exportSurvey(path);
+      surveyMsg = t("maintenance.surveyDone", { cars, tracks });
+    } catch (e) {
+      console.error("export_survey", e);
+      surveyMsg = errorText(e);
+    } finally {
+      surveying = false;
+    }
+  }
 
   async function doIndexStock() {
     // La case seule ne suffit pas : elle se coche d'un clic, et ce qu'elle
@@ -290,6 +316,22 @@
         {/each}
       </ul>
     {/if}
+  </section>
+
+  <section class="stock-sec">
+    <h3>{t("maintenance.surveyTitle")}</h3>
+    <!-- Says what the file holds - and what it never holds - because it is
+         meant to be sent: the user decides on that, not on a promise. -->
+    <p class="hint">{t("maintenance.surveyHint")}</p>
+    <div class="stock-row">
+      <button class="btn" type="button" onclick={doSurvey} disabled={surveying}>
+        {surveying ? t("maintenance.surveying") : t("maintenance.survey")}
+      </button>
+      {#if surveyMsg}
+        <span class="stock-msg">{surveyMsg}</span>
+        <button class="btn" type="button" onclick={() => openExternal(ISSUE_URL)}>{t("maintenance.surveySend")}</button>
+      {/if}
+    </div>
   </section>
 
   {#if report}

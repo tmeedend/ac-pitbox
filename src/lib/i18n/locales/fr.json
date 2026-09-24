@@ -1096,7 +1096,14 @@
     "repairRedeployedDone": "{count} mod(s) actif(s) redéployé(s).",
     "repairRedeployFailed": "{count} redéploiement(s) en échec.",
     "repairReinstalledDone": "{count} mod(s) réinstallé(s) depuis leur archive source.",
-    "repairReinstallFailed": "{count} réinstallation(s) en échec."
+    "repairReinstallFailed": "{count} réinstallation(s) en échec.",
+    "surveyTitle": "Relevé anonyme de la bibliothèque",
+    "surveyHint": "Aide à améliorer les règles livrées avec Pit Box : comment vos mods sont classés, les tags qu'aucune règle ne connaît encore, les orthographes et logos de marque, et vos propres règles. Seulement les identifiants des mods et ce qu'ils publient — jamais un chemin, un auteur ni rien de ce que vous avez saisi. Rien n'est envoyé : vous enregistrez le fichier et décidez quoi en faire.",
+    "survey": "Créer un relevé…",
+    "surveying": "Relevé en cours…",
+    "surveyFilter": "Relevé Pit Box",
+    "surveyDone": "Relevé enregistré : {cars} voitures, {tracks} circuits",
+    "surveySend": "L'envoyer sur GitHub"
   },
   "rules": {
     "subtitle": "Ontologie éditable — appliquée de façon non destructive. Le fichier du mod n'est jamais modifié.",

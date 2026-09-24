@@ -195,6 +195,12 @@ export function importRules(path: string): Promise<ImportReport> {
   return invoke<ImportReport>("import_rules", { path });
 }
 
+/** Writes the anonymous survey of the library (`survey.rs`) to a file the
+ * user chose - he sends it himself. Returns the cars and tracks it covers. */
+export function exportSurvey(path: string): Promise<[number, number]> {
+  return invoke<[number, number]>("export_survey", { path });
+}
+
 /** Writes the decisions and re-applies them to the library; the view comes
  * back with the counters of that pass. A WRITE: `invoke`, never `invokeSafe`. */
 export function saveRulesOverlay(overlay: RulesOverlay): Promise<RulesView> {

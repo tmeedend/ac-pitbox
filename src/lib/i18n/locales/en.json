@@ -1096,7 +1096,14 @@
     "repairRedeployedDone": "{count} active mod(s) redeployed.",
     "repairRedeployFailed": "{count} redeployment(s) failed.",
     "repairReinstalledDone": "{count} mod(s) reinstalled from their source archive.",
-    "repairReinstallFailed": "{count} reinstall(s) failed."
+    "repairReinstallFailed": "{count} reinstall(s) failed.",
+    "surveyTitle": "Anonymous survey of the library",
+    "surveyHint": "Helps improve the rules shipped with Pit Box: how your mods are classified, the tags no rule knows yet, brand spellings and logos, and your own rules. Mod ids and what mods publish only - never a path, an author or anything you typed. Nothing is sent: you save the file and choose what to do with it.",
+    "survey": "Create a survey…",
+    "surveying": "Surveying…",
+    "surveyFilter": "Pit Box survey",
+    "surveyDone": "Survey saved: {cars} cars, {tracks} tracks",
+    "surveySend": "Send it on GitHub"
   },
   "rules": {
     "subtitle": "Editable ontology — applied non-destructively. The mod's file is never modified.",

@@ -398,6 +398,11 @@ pub struct Harmonized {
     /// part of it.
     #[serde(skip)]
     pub fired: Vec<String>,
+    /// Raw tags no rule recognised - dropped from the closed vocabulary (§5).
+    /// Never stored: what the survey counts, to tell which tags the catalogue
+    /// should learn next (`survey.rs`).
+    #[serde(skip)]
+    pub unrecognized: Vec<String>,
     pub tags_from_rule: Vec<String>,
     /// Tag `#` principal = catégorie (§5). Pour un circuit : la 1ʳᵉ de
     /// `categories` (la plus prioritaire).
@@ -572,6 +577,8 @@ pub fn apply_car(rules: &Rules, raw_tags: &[String], name: &str, class: &str, co
             fired(&mut h, &r.id);
         } else if known.contains(&tag) {
             out.insert(tag);
+        } else {
+            h.unrecognized.push(tag);
         }
     }
 
@@ -598,6 +605,8 @@ pub fn apply_track(rules: &Rules, raw_tags: &[String]) -> Harmonized {
             fired(&mut h, &r.id);
         } else if known.contains(&tag) {
             out.insert(tag);
+        } else {
+            h.unrecognized.push(tag);
         }
     }
     // Catégories = tags ∩ liste blanche, dans l'ordre de priorité de la liste.

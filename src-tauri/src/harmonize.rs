@@ -78,7 +78,7 @@ pub fn store(
 /// Le pays retenu : le natif s'il est renseigné, sinon celui qu'un tag a donné,
 /// puis **normalisé dans les deux cas** (`rules::canonical_country`). Extrait de
 /// `store` pour être testable sans base.
-fn final_country(rules: &Rules, h: &Harmonized, native_country: Option<&str>) -> Option<String> {
+pub fn final_country(rules: &Rules, h: &Harmonized, native_country: Option<&str>) -> Option<String> {
     native_country
         .filter(|c| !c.trim().is_empty())
         .map(|s| s.to_string())
@@ -153,6 +153,17 @@ fn recompute_for(
     rules: &Rules,
     m: &ModRow,
 ) -> Option<(Harmonized, Option<String>)> {
+    read_and_compute(conn, cfg, rules, m).map(|(ui, h)| (h, ui.country))
+}
+
+/// Reads a mod's active version (read-only) and classifies it: what its file
+/// says, and what the rules make of it. The survey needs both side by side.
+pub fn read_and_compute(
+    conn: &Connection,
+    cfg: &AppConfig,
+    rules: &Rules,
+    m: &ModRow,
+) -> Option<(uijson::UiInfo, Harmonized)> {
     let kind = if m.kind == "Track" {
         ModKind::Track
     } else {
@@ -177,7 +188,7 @@ fn recompute_for(
         ui.country.as_deref(),
         ui.brand.as_deref(),
     );
-    Some((h, ui.country))
+    Some((ui, h))
 }
 
 /// What the harmonisation would store for every mod under `rules`, computed

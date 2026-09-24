@@ -202,6 +202,20 @@ pub fn import_rules(app: AppHandle, db: State<Db>, path: String) -> Result<crate
     Ok(report)
 }
 
+/// Writes the anonymous survey of the library to `path` (`survey.rs`):
+/// read-only on the library, and the file goes nowhere by itself. Returns
+/// the counts shown to the user.
+#[tauri::command]
+pub fn export_survey(app: AppHandle, db: State<Db>, path: String) -> Result<(usize, usize), String> {
+    let dir = crate::rules::config_dir(&app)?;
+    let rules = crate::rules::load(&app);
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let s = crate::survey::build(&conn, &cfg, &rules, &dir).map_err(|e| e.to_string())?;
+    crate::survey::write(std::path::Path::new(&path), &s)?;
+    Ok((s.summary.cars, s.summary.tracks))
+}
+
 #[tauri::command]
 pub fn dismiss_catalog_report(app: AppHandle) -> Result<(), String> {
     let dir = crate::rules::config_dir(&app)?;

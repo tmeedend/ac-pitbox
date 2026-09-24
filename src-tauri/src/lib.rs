@@ -69,6 +69,7 @@ mod steering;
 mod stock;
 mod submods;
 mod sun;
+mod survey;
 mod taxonomy;
 #[cfg(test)]
 mod testutil;
@@ -477,6 +478,7 @@ pub fn run() {
             commands::rules::set_rule_enabled,
             commands::rules::export_rules,
             commands::rules::import_rules,
+            commands::rules::export_survey,
             commands::rules::get_taxonomy,
             commands::rules::save_family_overlay,
             commands::rules::save_country_overlay,

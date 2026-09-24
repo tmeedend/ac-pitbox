@@ -1486,6 +1486,8 @@ conditions (`SESSION§3`), l'aperçu 3D (`SESSION§4`) et l'écran Pilote
 
 ## 10. Maintenance, export, nettoyage
 
+**Relevé anonyme de la bibliothèque** (`survey.rs`, écran Maintenance). Le vrai moteur passé sur toute la bibliothèque, en lecture seule, dans un fichier JSON que l'utilisateur enregistre où il veut et envoie lui-même — rien ne part tout seul ; un bouton ouvre la page de ticket GitHub. Il sert à améliorer le catalogue livré depuis des bibliothèques plus grandes que celle du développeur : pour chaque mod, ce que son fichier dit et ce que les règles en font (marque, pays, catégories, familles, specs) ; en résumé, les voitures qu'aucune famille ne prend, les tags qu'aucune règle ne connaît (hors ceux que le moteur écarte exprès : `street`/`race`, portés par la classe, et les tags de pays), les pays sans drapeau du jeu, les marques et leurs orthographes ; les variantes de logo par marque, avec leur fond (le seuil du fond cuit se valide dessus) ; et les **décisions** de l'utilisateur sur les règles, le contenu d'un export, que `rules-tool promote` sait intégrer. **Anonyme par construction** : identifiants de mods et ce que les mods publient, jamais un chemin, un auteur, une note ni un tag saisi à la main.
+
 **Export d'archive autonome** : repackager un mod complet avec ses dépendances éparpillées (pilotes 3D, polices). Seule fonction qui justifie de lire le `data.acd` chiffré (extraction acd.bms, isolée dans le module d'export, jamais sur le chemin d'import/activation).
 
 **Nettoyage** : détection assistée des mods cassés (voitures sans `ui/`, circuits sans contenu valide, hardlinks orphelins pointant vers un mod supprimé).
