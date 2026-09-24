@@ -215,6 +215,13 @@ impl Playlist {
     }
 }
 
+/// The playlist no longer matches the folder: a track added, removed or
+/// renamed. Both lists come from `scan::list_tracks`, sorted, so a pairwise
+/// comparison is enough.
+fn playlist_is_stale(tracks: &[IndexedTrack], on_disk: &[PathBuf]) -> bool {
+    tracks.len() != on_disk.len() || tracks.iter().zip(on_disk).any(|(t, p)| &t.path != p)
+}
+
 fn apply_no_repeat_constraint(order: &mut [IndexedTrack], last_played: Option<&IndexedTrack>) {
     if order.len() < 2 {
         return;
@@ -416,8 +423,20 @@ impl Engine {
         Playlist::load(index::indexed_tracks(&self.folder_for(amb)), self.config.shuffle)
     }
 
+    /// Builds the ambience's playlist, or rebuilds it when the folder's files
+    /// changed on disk since. Checking only the folder *path* (`UpdateConfig`)
+    /// is not enough: a folder picked while still empty, then filled with the
+    /// app open, kept its empty playlist for good — the settings counted "3
+    /// tracks" (a live scan) while Big Picture started in silence until a
+    /// restart. Real bug. Listing the folder is a `read_dir`, cheap on every
+    /// transition; the costly index only runs when something actually changed.
     fn ensure_playlist(&mut self, amb: Ambience) {
-        if !self.playlists.contains_key(&amb) {
+        let on_disk = super::scan::list_tracks(&self.folder_for(amb));
+        let stale = self
+            .playlists
+            .get(&amb)
+            .is_none_or(|pl| playlist_is_stale(&pl.tracks, &on_disk));
+        if stale {
             let pl = self.new_playlist(amb);
             self.playlists.insert(amb, pl);
         }
@@ -941,5 +960,30 @@ mod tests {
         let mut pl = Playlist::load(Vec::new(), true);
         assert_eq!(pl.current(), None);
         assert_eq!(pl.advance(true), None);
+    }
+
+    // A folder picked while empty then filled with the app open must not keep
+    // its empty playlist (bug: "3 tracks detected" in the settings, silence in
+    // Big Picture until a restart). Any change of the file list rebuilds it.
+    #[test]
+    fn playlist_is_stale_whenever_the_folder_listing_changed() {
+        let paths = |names: &[&str]| names.iter().map(PathBuf::from).collect::<Vec<_>>();
+        let built = vec![track("a.mp3"), track("b.mp3")];
+
+        assert!(
+            playlist_is_stale(&[], &paths(&["a.mp3"])),
+            "empty playlist, folder since filled"
+        );
+        assert!(
+            playlist_is_stale(&built, &paths(&["a.mp3", "b.mp3", "c.mp3"])),
+            "track added"
+        );
+        assert!(playlist_is_stale(&built, &paths(&["a.mp3"])), "track removed");
+        assert!(playlist_is_stale(&built, &paths(&["a.mp3", "z.mp3"])), "track renamed");
+        assert!(
+            !playlist_is_stale(&built, &paths(&["a.mp3", "b.mp3"])),
+            "same files: position and order are kept"
+        );
+        assert!(!playlist_is_stale(&[], &[]), "still empty: nothing to rebuild");
     }
 }
