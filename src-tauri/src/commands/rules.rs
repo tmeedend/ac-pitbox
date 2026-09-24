@@ -171,6 +171,25 @@ pub fn set_rule_enabled(
     crate::harmonize::harmonize_all(&conn, &cfg, &rules).map_err(|e| e.to_string())
 }
 
+/// Writes the user's decisions to `path` (REGLES§9) - the overlays only.
+#[tauri::command]
+pub fn export_rules(app: AppHandle, path: String) -> Result<(), String> {
+    let dir = crate::rules::config_dir(&app)?;
+    crate::rules_share::write_export(&dir, &crate::rules::default_rules(), std::path::Path::new(&path))
+}
+
+/// Merges an export into the user's decisions, then re-applies the library.
+#[tauri::command]
+pub fn import_rules(app: AppHandle, db: State<Db>, path: String) -> Result<crate::rules_share::ImportReport, String> {
+    let dir = crate::rules::config_dir(&app)?;
+    let report = crate::rules_share::import(&dir, &crate::rules::default_rules(), std::path::Path::new(&path))?;
+    let rules = crate::rules::load(&app);
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::harmonize::harmonize_all(&conn, &cfg, &rules).map_err(|e| e.to_string())?;
+    Ok(report)
+}
+
 #[tauri::command]
 pub fn dismiss_catalog_report(app: AppHandle) -> Result<(), String> {
     let dir = crate::rules::config_dir(&app)?;

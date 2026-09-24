@@ -237,7 +237,7 @@ pub fn config_dir(app: &AppHandle) -> Result<PathBuf, String> {
 /// The legacy rules file, when there is one and it reads. One that exists but
 /// does not parse is logged and left where it is: it is not migrated, so it
 /// must not be retired either.
-fn read_legacy(dir: &std::path::Path) -> Option<Rules> {
+pub(crate) fn read_legacy(dir: &std::path::Path) -> Option<Rules> {
     let text = std::fs::read_to_string(dir.join(LEGACY_FILE)).ok()?;
     match serde_json::from_str(&text) {
         Ok(r) => Some(r),

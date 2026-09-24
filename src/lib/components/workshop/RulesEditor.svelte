@@ -12,7 +12,16 @@
   import { onMount } from "svelte";
   import Tabs from "$lib/components/ui/Tabs.svelte";
   import ContextMenu from "$lib/components/ui/ContextMenu.svelte";
-  import { getRulesView, saveRulesOverlay, type RuleRow, type RulesOverlay, type RulesView } from "$lib/workshop/rules";
+  import { open, save } from "@tauri-apps/plugin-dialog";
+  import {
+    exportRules,
+    getRulesView,
+    importRules,
+    saveRulesOverlay,
+    type RuleRow,
+    type RulesOverlay,
+    type RulesView,
+  } from "$lib/workshop/rules";
   import {
     CAR_SECTIONS,
     addCategory,
@@ -51,6 +60,9 @@
     null,
   );
   let catInput = $state("");
+  /** What the last export or import did - a report, not a toast: it stays
+   * until the next one. */
+  let shareMsg = $state("");
 
   onMount(async () => {
     try {
@@ -148,6 +160,48 @@
       rule: JSON.stringify({ ...row.rule, id: undefined }, null, 2),
     });
     openExternal(newIssueUrl(title, body));
+  }
+
+  const FILTERS = () => [{ name: t("rules.fileFilter"), extensions: ["json"] }];
+
+  async function doExport() {
+    const path = await save({ title: t("rules.exportTitle"), defaultPath: "pitbox-rules.json", filters: FILTERS() });
+    if (!path) return;
+    error = "";
+    try {
+      await exportRules(path);
+      shareMsg = t("rules.exported");
+    } catch (e) {
+      console.error("export_rules", e);
+      error = errorText(e);
+    }
+  }
+
+  /** REGLES§9: the import merges into his decisions and never removes one,
+   * so it needs no question first - the report says what it did. */
+  async function doImport() {
+    const picked = await open({ title: t("rules.importTitle"), multiple: false, filters: FILTERS() });
+    if (typeof picked !== "string") return;
+    busy = true;
+    error = "";
+    try {
+      const r = await importRules(picked);
+      bumpLibraryVersion();
+      view = await getRulesView();
+      shareMsg = [
+        t("rules.imported", { added: r.added }),
+        r.kept_yours ? t("rules.importedKept", { count: r.kept_yours }) : "",
+        r.unknown ? t("rules.importedUnknown", { count: r.unknown }) : "",
+        view && r.catalog_version !== view.catalog_version ? t("rules.importedOther", { version: r.catalog_version }) : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    } catch (e) {
+      console.error("import_rules", e);
+      error = errorText(e);
+    } finally {
+      busy = false;
+    }
   }
 
   function forkAnyway() {
@@ -341,8 +395,12 @@
             <input type="checkbox" bind:checked={mineOnly} />
             <span>{t("rules.mineOnly")}</span>
           </label>
-          {#if busy}<span class="busy">{t("rules.applying")}</span>{/if}
+          <button class="btn" type="button" disabled={busy} onclick={() => void doExport()}>{t("rules.export")}</button>
+          <button class="btn" type="button" disabled={busy} onclick={() => void doImport()}>{t("rules.import")}</button>
         </div>
+        {#if busy || shareMsg}
+          <p class="status">{busy ? t("rules.applying") : shareMsg}</p>
+        {/if}
 
         {#if tab === "car"}
           {#each carTop as s (s)}{@render section(s, false)}{/each}
@@ -499,9 +557,10 @@
     color: var(--muted);
     margin-left: auto;
   }
-  .busy {
+  .status {
     font-size: 11.5px;
     color: var(--muted);
+    margin: -6px 0 12px;
   }
   section {
     margin-bottom: 24px;

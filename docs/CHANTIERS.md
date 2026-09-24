@@ -678,7 +678,15 @@ de reprendre. En cas d'écart, la spec fait foi.
       moteur ne trace pas. Pas de « Voir » sur une ligne corrigée (la maquette
       de REGLES§6.3 le montre) : la liste des mods reclassés est en bas du
       détail.
-      **Reste du chantier** : l'export/import de la surcouche (REGLES§9).
+      **Export/import — fait** (REGLES§9). Écart assumé avec la spec : elle
+      dit qu'une décision visant une règle retirée est « ignorée » à l'import ;
+      ici elle est fusionnée et comptée à part, parce que c'est ce que fait
+      déjà une mise à jour qui retire une règle (REGLES§4 : éteinte, elle est
+      sans effet ; dérivée, elle devient une règle à soi) — deux chemins, un
+      seul comportement. L'import **fusionne sans rien retirer** plutôt que
+      de remplacer : la question « remplacer ou fusionner ? » n'avait pas de
+      bonne réponse avant d'avoir vu le résultat.
+      **Reste du chantier** : l'outil de relevé, ci-dessous.
       **Outil de relevé — reporté, pas abandonné, et il a désormais sa
       maison** : une sous-commande `survey` de `rules-tool`. Un binaire du
       workspace, jamais livré (comme `kn5-tool`), qui fait tourner **le vrai moteur** sur

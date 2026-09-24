@@ -173,6 +173,28 @@ export function getRulesView(): Promise<RulesView> {
   return invoke<RulesView>("get_rules_view");
 }
 
+/** What an import did (REGLES§9): it merges, never replaces. */
+export interface ImportReport {
+  added: number;
+  /** Entries both sides decided differently - the user's decision stayed. */
+  kept_yours: number;
+  already: number;
+  /** Decisions naming rules this catalogue does not have. */
+  unknown: number;
+  catalog_version: string;
+}
+
+/** Writes the user's decisions - the overlays, never the catalogue - to a
+ * file he chose. */
+export function exportRules(path: string): Promise<void> {
+  return invoke<void>("export_rules", { path });
+}
+
+/** Merges an export into his decisions and re-applies the library. */
+export function importRules(path: string): Promise<ImportReport> {
+  return invoke<ImportReport>("import_rules", { path });
+}
+
 /** Writes the decisions and re-applies them to the library; the view comes
  * back with the counters of that pass. A WRITE: `invoke`, never `invokeSafe`. */
 export function saveRulesOverlay(overlay: RulesOverlay): Promise<RulesView> {

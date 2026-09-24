@@ -10,6 +10,9 @@
 //! - `taxonomy`: the index tables (families, country aliases and tags), keyed
 //!   by their natural key.
 //! - `rules`: the list rules of the Rules screen, keyed by stable ids.
+//! - `merge`: importing someone else's decisions into one's own, without
+//!   taking any away (REGLES§9).
 
+pub mod merge;
 pub mod rules;
 pub mod taxonomy;

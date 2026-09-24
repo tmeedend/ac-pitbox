@@ -1149,7 +1149,17 @@
     "issueTitle": "Catalogue rule {id}",
     "issueTitleFix": "Proposed fix for catalogue rule {id}",
     "issueBody": "Rule `{id}` ({section}), catalogue v{version}:\n\n```json\n{rule}\n```\n\nWhat is wrong, and on which mods:\n",
-    "github": "GitHub"
+    "github": "GitHub",
+    "export": "Export my rules",
+    "import": "Import…",
+    "exportTitle": "Export my rules",
+    "importTitle": "Import rules",
+    "fileFilter": "Pit Box rules",
+    "exported": "Rules exported",
+    "imported": "{added} decisions added",
+    "importedKept": "{count} kept as you had them",
+    "importedUnknown": "{count} about rules this catalogue does not have",
+    "importedOther": "made on catalogue v{version}"
   },
   "profiles": {
     "subtitle": "Named sets of active mods — cars, tracks, Other mods and Apps. Applying a profile reconciles everything to match the set exactly.",
@@ -1496,7 +1506,9 @@
     "unmanagedNotActivatable": "This mod was installed in the game outside Pit Box: it is already there and cannot be activated from here. To manage it, delete its folder from the game, then import it into Pit Box.",
     "unmanagedNoLayer": "This mod was installed in the game outside Pit Box: nothing can be layered on top. Delete its folder from the game and import the mod into Pit Box to manage it here.",
     "wikiNotAnEntity": "Not a valid Wikidata identifier.",
-    "noPreviousCatalog": "No previous catalogue is kept."
+    "noPreviousCatalog": "No previous catalogue is kept.",
+    "notARulesExport": "This file is not a Pit Box rules export.",
+    "rulesExportTooNew": "This export was made by a newer version of Pit Box. Update to import it."
   },
   "pack": {
     "tabMembers": "Mods",

@@ -1149,7 +1149,17 @@
     "issueTitle": "Règle du catalogue {id}",
     "issueTitleFix": "Correction proposée pour la règle du catalogue {id}",
     "issueBody": "Règle `{id}` ({section}), catalogue v{version} :\n\n```json\n{rule}\n```\n\nCe qui ne va pas, et sur quels mods :\n",
-    "github": "GitHub"
+    "github": "GitHub",
+    "export": "Exporter mes règles",
+    "import": "Importer…",
+    "exportTitle": "Exporter mes règles",
+    "importTitle": "Importer des règles",
+    "fileFilter": "Règles Pit Box",
+    "exported": "Règles exportées",
+    "imported": "{added} décisions ajoutées",
+    "importedKept": "{count} gardées comme vous les aviez",
+    "importedUnknown": "{count} visent des règles absentes de ce catalogue",
+    "importedOther": "faites sur le catalogue v{version}"
   },
   "profiles": {
     "subtitle": "Ensembles nommés de mods activés — voitures, circuits, Autres mods et Apps. Appliquer un profil réconcilie tout pour correspondre exactement au set.",
@@ -1496,7 +1506,9 @@
     "unmanagedNotActivatable": "ce mod a été installé dans le jeu hors Pit Box : il est déjà là et ne s'active pas d'ici. Pour le gérer, supprimez son dossier du jeu, puis importez-le dans Pit Box.",
     "unmanagedNoLayer": "ce mod a été installé dans le jeu hors Pit Box : rien ne peut être posé par-dessus. Supprimez son dossier du jeu et importez le mod dans Pit Box pour le gérer ici.",
     "wikiNotAnEntity": "Identifiant Wikidata invalide.",
-    "noPreviousCatalog": "Aucun catalogue précédent n'est conservé."
+    "noPreviousCatalog": "Aucun catalogue précédent n'est conservé.",
+    "notARulesExport": "Ce fichier n'est pas un export de règles Pit Box.",
+    "rulesExportTooNew": "Cet export vient d'une version plus récente de Pit Box. Mettez l'application à jour pour l'importer."
   },
   "pack": {
     "tabMembers": "Mods",

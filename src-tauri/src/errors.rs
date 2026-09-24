@@ -16,6 +16,10 @@ pub const PACK_NOT_FOUND: &str = "errors.packNotFound";
 pub const AC_NOT_CONFIGURED: &str = "errors.acNotConfigured";
 // "Go back to the previous catalogue" with no previous one kept (REGLES§6.4).
 pub const NO_PREVIOUS_CATALOG: &str = "errors.noPreviousCatalog";
+// Importing rules from a file that is not a Pit Box rules export (REGLES§9),
+// or one written by a newer version than this one reads.
+pub const NOT_A_RULES_EXPORT: &str = "errors.notARulesExport";
+pub const RULES_EXPORT_TOO_NEW: &str = "errors.rulesExportTooNew";
 pub const LIBRARY_NOT_CONFIGURED: &str = "errors.libraryNotConfigured";
 pub const CM_NOT_CONFIGURED: &str = "errors.cmNotConfigured";
 // Launching a session onto content the game does not have (SESSION§2). Two

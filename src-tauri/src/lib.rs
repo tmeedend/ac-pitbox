@@ -57,6 +57,7 @@ mod raceini;
 mod resources;
 mod rule_overlay;
 mod rules;
+mod rules_share;
 mod saved_grids;
 mod saved_sessions;
 mod session_state;
@@ -468,6 +469,8 @@ pub fn run() {
             commands::rules::get_rules_view,
             commands::rules::save_rules_overlay,
             commands::rules::set_rule_enabled,
+            commands::rules::export_rules,
+            commands::rules::import_rules,
             commands::rules::get_taxonomy,
             commands::rules::save_family_overlay,
             commands::rules::save_country_overlay,
