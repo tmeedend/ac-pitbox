@@ -61,6 +61,7 @@ mod saved_grids;
 mod saved_sessions;
 mod session_state;
 mod sessionpreset;
+mod shadowdir;
 mod showroom;
 mod steering;
 mod stock;
@@ -113,10 +114,20 @@ pub fn run() {
             // Sauvegarde de démarrage (§6.2/SESSION§4), avant toute ouverture de
             // connexion : on veut la base et les préférences exactement
             // telles que la session précédente les a laissées.
+            shadowdir::warn_at_startup(&app.config().identifier);
             backup::run_startup_backup(app.handle());
 
             let db_path = app.path().app_config_dir()?.join("overlay.sqlite");
             let conn = overlay::open(&db_path)?;
+            // Corruption shows up otherwise as scattered "malformed" warnings
+            // from whichever startup pass happens to touch a damaged page —
+            // and went unnoticed for three days in 2026-09. One line naming
+            // the cause, before them.
+            match overlay::quick_check(&conn) {
+                Ok(v) if v == "ok" => {}
+                Ok(v) => log::warn!("overlay.sqlite failed its integrity check: {v}"),
+                Err(e) => log::warn!("overlay.sqlite failed its integrity check: {e}"),
+            }
 
             // Filet de sécurité (§4.5.4) : un fichier du jeu remplacé par un mod
             // et que plus personne ne réclame redevient celui du jeu. Rattrape
@@ -240,7 +251,10 @@ pub fn run() {
             // le démarrage, pour que la première navigation Big Picture de
             // la session ne subisse pas le scan complet du dossier.
             music::index::warm(app.handle(), music_cfg.clone());
-            let music_engine = music::engine::spawn(app.handle().clone(), music_cfg);
+            let track_handle = app.handle().clone();
+            let music_engine = music::engine::spawn(app.handle().clone(), music_cfg, move |path| {
+                commands::music::announce_track(&track_handle, path)
+            });
             // Le même fil sert deux clients : la musique de Big Picture, et la
             // génération des vignettes de la grille, qui se suspend pendant une
             // session pour rendre la machine au jeu (GRILLE§5.4).

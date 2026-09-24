@@ -102,13 +102,29 @@ impl MusicEngineHandle {
 /// Démarre le thread moteur (propriétaire de l'`OutputStream` WASAPI, jamais
 /// en mode exclusif — c'est le comportement par défaut de `rodio`/`cpal`,
 /// voir MUSIQUE§5.1 de la spec) et renvoie la poignée à manager côté Tauri.
-pub fn spawn(app: AppHandle, initial_config: MusicConfig) -> MusicEngineHandle {
+///
+/// `on_track` is called with the path of every track that starts playing, for
+/// the now-playing notification (MUSIQUE§5.5). A closure rather than an event
+/// emitted from here: a business module importing `tauri::Emitter` makes the
+/// lib's test binary unrunnable (see `CLAUDE.md`), so the facade emits. It runs
+/// on the engine thread, whose 30 ms tick drives the fades: it must hand the
+/// work off, not do it.
+pub fn spawn(
+    app: AppHandle,
+    initial_config: MusicConfig,
+    on_track: impl Fn(PathBuf) + Send + 'static,
+) -> MusicEngineHandle {
     let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || run(app, initial_config, rx));
+    std::thread::spawn(move || run(app, initial_config, Box::new(on_track), rx));
     MusicEngineHandle(Mutex::new(tx))
 }
 
-fn run(app: AppHandle, initial_config: MusicConfig, rx: Receiver<EngineCommand>) {
+fn run(
+    app: AppHandle,
+    initial_config: MusicConfig,
+    on_track: Box<dyn Fn(PathBuf) + Send>,
+    rx: Receiver<EngineCommand>,
+) {
     let (_stream, handle) = match OutputStream::try_default() {
         Ok(v) => v,
         Err(e) => {
@@ -118,6 +134,7 @@ fn run(app: AppHandle, initial_config: MusicConfig, rx: Receiver<EngineCommand>)
     };
     let mut engine = Engine {
         app,
+        on_track,
         handle,
         config: initial_config,
         slots: [Slot::empty(), Slot::empty()],
@@ -215,6 +232,13 @@ impl Playlist {
     }
 }
 
+/// The playlist no longer matches the folder: a track added, removed or
+/// renamed. Both lists come from `scan::list_tracks`, sorted, so a pairwise
+/// comparison is enough.
+fn playlist_is_stale(tracks: &[IndexedTrack], on_disk: &[PathBuf]) -> bool {
+    tracks.len() != on_disk.len() || tracks.iter().zip(on_disk).any(|(t, p)| &t.path != p)
+}
+
 fn apply_no_repeat_constraint(order: &mut [IndexedTrack], last_played: Option<&IndexedTrack>) {
     if order.len() < 2 {
         return;
@@ -302,6 +326,8 @@ fn open_track(path: &Path) -> Option<Decoder<BufReader<File>>> {
 
 struct Engine {
     app: AppHandle,
+    /// See `spawn`.
+    on_track: Box<dyn Fn(PathBuf) + Send>,
     handle: OutputStreamHandle,
     config: MusicConfig,
     slots: [Slot; 2],
@@ -416,8 +442,20 @@ impl Engine {
         Playlist::load(index::indexed_tracks(&self.folder_for(amb)), self.config.shuffle)
     }
 
+    /// Builds the ambience's playlist, or rebuilds it when the folder's files
+    /// changed on disk since. Checking only the folder *path* (`UpdateConfig`)
+    /// is not enough: a folder picked while still empty, then filled with the
+    /// app open, kept its empty playlist for good — the settings counted "3
+    /// tracks" (a live scan) while Big Picture started in silence until a
+    /// restart. Real bug. Listing the folder is a `read_dir`, cheap on every
+    /// transition; the costly index only runs when something actually changed.
     fn ensure_playlist(&mut self, amb: Ambience) {
-        if !self.playlists.contains_key(&amb) {
+        let on_disk = super::scan::list_tracks(&self.folder_for(amb));
+        let stale = self
+            .playlists
+            .get(&amb)
+            .is_none_or(|pl| playlist_is_stale(&pl.tracks, &on_disk));
+        if stale {
             let pl = self.new_playlist(amb);
             self.playlists.insert(amb, pl);
         }
@@ -513,6 +551,10 @@ impl Engine {
             total_duration,
             gain_db: track.gain_db,
         };
+        // Every audible change goes through here — next track, menu/grid
+        // switch, first track of Big Picture, resume after a session — and
+        // each one is "the music changed" to whoever is listening.
+        (self.on_track)(track.path.clone());
         true
     }
 
@@ -941,5 +983,30 @@ mod tests {
         let mut pl = Playlist::load(Vec::new(), true);
         assert_eq!(pl.current(), None);
         assert_eq!(pl.advance(true), None);
+    }
+
+    // A folder picked while empty then filled with the app open must not keep
+    // its empty playlist (bug: "3 tracks detected" in the settings, silence in
+    // Big Picture until a restart). Any change of the file list rebuilds it.
+    #[test]
+    fn playlist_is_stale_whenever_the_folder_listing_changed() {
+        let paths = |names: &[&str]| names.iter().map(PathBuf::from).collect::<Vec<_>>();
+        let built = vec![track("a.mp3"), track("b.mp3")];
+
+        assert!(
+            playlist_is_stale(&[], &paths(&["a.mp3"])),
+            "empty playlist, folder since filled"
+        );
+        assert!(
+            playlist_is_stale(&built, &paths(&["a.mp3", "b.mp3", "c.mp3"])),
+            "track added"
+        );
+        assert!(playlist_is_stale(&built, &paths(&["a.mp3"])), "track removed");
+        assert!(playlist_is_stale(&built, &paths(&["a.mp3", "z.mp3"])), "track renamed");
+        assert!(
+            !playlist_is_stale(&built, &paths(&["a.mp3", "b.mp3"])),
+            "same files: position and order are kept"
+        );
+        assert!(!playlist_is_stale(&[], &[]), "still empty: nothing to rebuild");
     }
 }

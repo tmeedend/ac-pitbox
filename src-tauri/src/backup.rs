@@ -67,12 +67,17 @@ fn backup_now(base: &Path, presets: Option<&Path>) -> Result<(), String> {
     std::fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
 
     let mut copied = 0;
+    let mut database_healthy = true;
     for name in BACKED_UP_FILES {
         let src = base.join(name);
         if !src.is_file() {
             continue;
         }
-        std::fs::copy(&src, dest.join(name)).map_err(|e| format!("{name}: {e}"))?;
+        if *name == DATABASE {
+            database_healthy = snapshot_database(&src, &dest.join(name))?;
+        } else {
+            std::fs::copy(&src, dest.join(name)).map_err(|e| format!("{name}: {e}"))?;
+        }
         copied += 1;
     }
     copied += copy_presets(presets, &dest)?;
@@ -83,7 +88,71 @@ fn backup_now(base: &Path, presets: Option<&Path>) -> Result<(), String> {
         return Ok(());
     }
 
+    // A damaged database is still saved (the bytes are evidence), but it
+    // must not rotate the healthy snapshots out. Measured on 2026-09-23/24:
+    // seven `tauri dev` restarts in one morning replaced all seven backups,
+    // so the last healthy copy was a few hours away from being pruned.
+    if !database_healthy {
+        log::warn!("backup: {DATABASE} is damaged, rotation skipped so older snapshots survive");
+        return Ok(());
+    }
     prune(&root)
+}
+
+const DATABASE: &str = "overlay.sqlite";
+
+/// Writes a consistent snapshot of the overlay database to `target`, and says
+/// whether the source read back healthy.
+///
+/// **`VACUUM INTO`, not a file copy.** The database runs in WAL mode and the
+/// app never closes its connection cleanly (the process exits without
+/// dropping managed state), so recent commits live in `overlay.sqlite-wal`
+/// until an automatic checkpoint — which only fires at 1 000 pages and can
+/// wait days. Copying `overlay.sqlite` alone saved the state of the last
+/// checkpoint: backups "looked healthy" precisely because they ignored
+/// everything the WAL held. `VACUUM INTO` reads through the WAL and writes a
+/// self-contained file with no `-wal` to lose.
+///
+/// The connection is read-only: a backup never writes the live database.
+/// When SQLite cannot read the source (corruption, not a database at all),
+/// the raw `overlay.sqlite` and its `-wal` are copied as they are — a pair
+/// kept together is what a later diagnosis needs — and `false` comes back.
+fn snapshot_database(src: &Path, target: &Path) -> Result<bool, String> {
+    match vacuum_into(src, target) {
+        Ok(()) => Ok(true),
+        Err(e) => {
+            log::warn!("backup: {} unreadable by SQLite ({e}), raw copy kept", src.display());
+            let _ = std::fs::remove_file(target);
+            std::fs::copy(src, target).map_err(|e| format!("{DATABASE}: {e}"))?;
+            let wal = wal_path(src);
+            if wal.is_file() {
+                std::fs::copy(&wal, wal_path(target)).map_err(|e| format!("{DATABASE}-wal: {e}"))?;
+            }
+            Ok(false)
+        }
+    }
+}
+
+fn vacuum_into(src: &Path, target: &Path) -> rusqlite::Result<()> {
+    use rusqlite::{Connection, OpenFlags};
+    let conn = Connection::open_with_flags(src, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    // `quick_check` first: `VACUUM INTO` only copies what the b-trees reach,
+    // and can succeed on a file whose damage lies in pages it never visits.
+    let verdict: String = conn.query_row("PRAGMA quick_check(1)", [], |r| r.get(0))?;
+    if verdict != "ok" {
+        return Err(rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CORRUPT),
+            Some(verdict),
+        ));
+    }
+    conn.execute("VACUUM INTO ?1", [target.to_string_lossy()])?;
+    Ok(())
+}
+
+fn wal_path(db: &Path) -> PathBuf {
+    let mut name = db.as_os_str().to_owned();
+    name.push("-wal");
+    PathBuf::from(name)
 }
 
 /// Copie les presets de session dans le sous-dossier dédié, et rend leur
@@ -199,6 +268,65 @@ mod tests {
         assert!(
             !snapshot.join("ui_prefs.json").exists(),
             "fichier absent non recréé de toutes pièces"
+        );
+    }
+
+    /// Protected rule (§6.2): the snapshot holds what the WAL holds. The app
+    /// keeps its connection open and never checkpoints on exit, so a plain
+    /// copy of `overlay.sqlite` silently dropped every commit since the last
+    /// checkpoint — days of work in the 2026-09 incident.
+    #[test]
+    fn backup_includes_commits_still_in_the_wal() {
+        let dir = crate::testutil::temp_dir("backup-wal");
+        let live = crate::overlay::open(&dir.join(DATABASE)).unwrap();
+        crate::overlay::set_meta(&live, "probe", "in the wal").unwrap();
+        assert!(
+            wal_path(&dir.join(DATABASE)).is_file(),
+            "the commit is still in the WAL"
+        );
+
+        backup_now(&dir, None).unwrap();
+
+        let stamp = std::fs::read_dir(backups_root(&dir))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        assert!(
+            !wal_path(&stamp.join(DATABASE)).exists(),
+            "the snapshot is self-contained, no -wal to lose"
+        );
+        let copy = rusqlite::Connection::open(stamp.join(DATABASE)).unwrap();
+        assert_eq!(
+            crate::overlay::get_meta(&copy, "probe").unwrap().as_deref(),
+            Some("in the wal"),
+            "the snapshot carries the uncheckpointed commit"
+        );
+        drop(live);
+    }
+
+    /// Protected rule (§6.2): a damaged database is still saved, raw, but it
+    /// never rotates the healthy snapshots out — otherwise a handful of
+    /// restarts on a broken base erase the only copies worth restoring.
+    #[test]
+    fn a_damaged_database_does_not_prune_healthy_backups() {
+        let dir = crate::testutil::temp_dir("backup-damaged");
+        let root = backups_root(&dir);
+        for i in 0..BACKUP_KEEP {
+            std::fs::create_dir_all(root.join(format!("2020-01-{i:02}_00-00-00"))).unwrap();
+        }
+        std::fs::write(dir.join(DATABASE), b"not a database").unwrap();
+
+        backup_now(&dir, None).unwrap();
+
+        let dirs: Vec<_> = std::fs::read_dir(&root).unwrap().filter_map(|e| e.ok()).collect();
+        assert_eq!(dirs.len(), BACKUP_KEEP + 1, "every older snapshot survives");
+        let newest = dirs.iter().map(|e| e.path()).max().unwrap();
+        assert_eq!(
+            std::fs::read(newest.join(DATABASE)).unwrap(),
+            b"not a database",
+            "the damaged bytes are kept as they are"
         );
     }
 

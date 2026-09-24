@@ -76,6 +76,12 @@ log = "0.4"
 # mp3/flac/vorbis/wav inclus par défaut, sortie via cpal (WASAPI partagé sous
 # Windows — jamais le mode exclusif, qui couperait le son d'Assetto Corsa).
 rodio = "0.19"
+# Now-playing notification (MUSIQUE§5.5): title, artist and cover read from the
+# track's own tags. Already in the tree through `rodio` (its mp3 decoder), so
+# the direct dependency costs nothing for mp3; `flac` and `ogg` add the two
+# small containers whose tags (Vorbis comments, embedded pictures) `rodio`'s
+# own decoders for those formats never expose.
+symphonia = { version = "0.5", default-features = false, features = ["mp3", "flac", "ogg"] }
 # Détection du lancement d'AC (acs.exe / AssettoCorsa.exe) par polling léger,
 # plus simple qu'un ManagementEventWatcher WMI (§4 de la spec musique).
 sysinfo = "0.32"

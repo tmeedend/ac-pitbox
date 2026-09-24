@@ -83,3 +83,30 @@ pub fn music_preview_start(path: PathBuf, volume: f32, preview: State<PreviewHan
 pub fn music_preview_stop(preview: State<PreviewHandle>) {
     preview.stop();
 }
+
+/// Now-playing notification (MUSIQUE§5.5): reads the tags of the track that
+/// just started and emits `music:track` to the front.
+///
+/// Called by the engine for every track it starts (`engine::spawn`), on its own
+/// thread — so the tags and the cover thumbnail are read on a thread of their
+/// own, off the 30 ms tick that drives the fades. Two quick changes in a row
+/// (menu → grid → menu) spawn two readers that may finish out of order: a
+/// generation counter lets only the latest one emit, or the notification
+/// would end on the track that is no longer playing.
+pub fn announce_track(app: &AppHandle, path: PathBuf) {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use tauri::Emitter;
+    static LATEST: AtomicU64 = AtomicU64::new(0);
+
+    let generation = LATEST.fetch_add(1, Ordering::SeqCst) + 1;
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let info = music::tags::read(&path);
+        if LATEST.load(Ordering::SeqCst) != generation {
+            return;
+        }
+        if let Err(e) = app.emit("music:track", info) {
+            log::warn!("music: now-playing event not emitted: {e}");
+        }
+    });
+}

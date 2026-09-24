@@ -88,8 +88,8 @@ const F0_RANGE: (f32, f32) = (20.0, 600.0);
 
 /// Base64, written here rather than pulled in as a dependency: it is twenty
 /// lines, it has no edge cases at this size, and the crate would exist in the
-/// tree for this one call.
-fn base64(bytes: &[u8]) -> String {
+/// tree for this and the now-playing cover (`music::tags`) only.
+pub(crate) fn base64(bytes: &[u8]) -> String {
     const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
     for chunk in bytes.chunks(3) {
