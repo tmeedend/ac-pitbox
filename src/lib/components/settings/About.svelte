@@ -7,18 +7,20 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { t } from "$lib/i18n/index.svelte";
   import licenseData from "$lib/generated/licenses.json";
+  import {
+    CHANGELOG_URL,
+    DISCORD_URL,
+    DONATE_URL,
+    ISSUE_URL as BUG_URL,
+    OVERTAKE_URL,
+    SOURCE_URL,
+  } from "$lib/links";
 
   const AC_URL = "https://store.steampowered.com/app/244210/Assetto_Corsa/";
   const CM_URL = "https://acstuff.club/app/";
   const QUICKBMS_URL = "https://aluigi.altervista.org/quickbms.htm";
   const FMOD_URL = "https://www.fmod.com/";
   const PIXABAY_URL = "https://pixabay.com/music/";
-  const DONATE_URL = "https://paypal.me/ktulu77";
-  const SOURCE_URL = "https://github.com/tmeedend/ac-pitbox";
-  const DISCORD_URL = "https://discord.gg/hgWTC2s49M";
-  const OVERTAKE_URL = "https://www.overtake.gg/members/ktulu77.1266672/";
-  const BUG_URL = "https://github.com/tmeedend/ac-pitbox/issues/new";
-  const CHANGELOG_URL = "https://github.com/tmeedend/ac-pitbox/commits/main";
 
   let version = $state("0.1.0");
   onMount(async () => {

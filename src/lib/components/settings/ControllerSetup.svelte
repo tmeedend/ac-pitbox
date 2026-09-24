@@ -12,6 +12,7 @@
   import { onMount } from "svelte";
   import { getVersion } from "@tauri-apps/api/app";
   import { openUrl } from "@tauri-apps/plugin-opener";
+  import { newIssueUrl } from "$lib/links";
   import { nav } from "$lib/shell/nav.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import {
@@ -48,7 +49,6 @@
   }
   let { onclose }: Props = $props();
 
-  const ISSUE_URL = "https://github.com/tmeedend/ac-pitbox/issues/new";
 
   // Les six premières étapes sont le socle (déplacer le curseur, valider,
   // revenir) ; les cinq suivantes sont des raccourcis (§7.4bis), et un
@@ -414,7 +414,7 @@
   function openTicket() {
     const title = `Profil manette : ${calDevice?.id ?? ""}`;
     const body = ["```json", reportText(), "```"].join("\n");
-    openUrl(`${ISSUE_URL}?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`).catch(() => {});
+    openUrl(newIssueUrl(title, body)).catch(() => {});
   }
 
   function saveProfile() {

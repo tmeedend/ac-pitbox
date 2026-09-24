@@ -1143,7 +1143,13 @@
     "disableInstead": "Disable instead",
     "save": "Save",
     "enabled": "Enabled",
-    "noneOfYours": "No rule of yours here."
+    "noneOfYours": "No rule of yours here.",
+    "forkShare": "Would your fix be right for everyone? Feel free to propose it:",
+    "proposeFix": "Propose this fix",
+    "issueTitle": "Catalogue rule {id}",
+    "issueTitleFix": "Proposed fix for catalogue rule {id}",
+    "issueBody": "Rule `{id}` ({section}), catalogue v{version}:\n\n```json\n{rule}\n```\n\nWhat is wrong, and on which mods:\n",
+    "github": "GitHub"
   },
   "profiles": {
     "subtitle": "Named sets of active mods — cars, tracks, Other mods and Apps. Applying a profile reconciles everything to match the set exactly.",

@@ -1143,7 +1143,13 @@
     "disableInstead": "Désactiver plutôt",
     "save": "Enregistrer",
     "enabled": "Activée",
-    "noneOfYours": "Aucune règle à vous ici."
+    "noneOfYours": "Aucune règle à vous ici.",
+    "forkShare": "Votre correction vaudrait pour tout le monde ? N'hésitez pas à la proposer :",
+    "proposeFix": "Proposer cette correction",
+    "issueTitle": "Règle du catalogue {id}",
+    "issueTitleFix": "Correction proposée pour la règle du catalogue {id}",
+    "issueBody": "Règle `{id}` ({section}), catalogue v{version} :\n\n```json\n{rule}\n```\n\nCe qui ne va pas, et sur quels mods :\n",
+    "github": "GitHub"
   },
   "profiles": {
     "subtitle": "Ensembles nommés de mods activés — voitures, circuits, Autres mods et Apps. Appliquer un profil réconcilie tout pour correspondre exactement au set.",

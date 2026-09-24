@@ -34,6 +34,7 @@
   } from "$lib/workshop/rulesEdit";
   import { bumpLibraryVersion } from "$lib/library/libraryVersion.svelte";
   import { errorText } from "$lib/errors";
+  import { OVERTAKE_URL, newIssueUrl, openExternal } from "$lib/links";
   import { t } from "$lib/i18n/index.svelte";
 
   let view = $state<RulesView | null>(null);
@@ -122,6 +123,7 @@
     ];
     if (row.origin === "fork") {
       items.push({ label: t("rules.restoreDefault"), onclick: () => void commit(restoreDefault(o, s, id)) });
+      items.push({ label: t("rules.proposeFix"), onclick: () => propose(s, row) });
     }
     if (row.origin === "own") {
       items.push({ label: t("common.delete"), onclick: () => void commit(removeRule(o, s, id)), danger: true });
@@ -130,6 +132,22 @@
     // divides by the zoom itself (`zoom.svelte.ts`).
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     menu = { x: rect.left - 150, y: rect.bottom + 4, items };
+  }
+
+  /** A GitHub issue about a shipped rule, pre-filled with what identifies it
+   * and the rule as it reads - his version for a fork. Opened in the browser,
+   * where he sees it all before sending: nothing leaves on its own. Only the
+   * rule travels, never a path or a mod of his library. */
+  function propose(s: Section, row: RuleRow<AnyRule>) {
+    const id = idOf(row);
+    const title = t(row.origin === "fork" ? "rules.issueTitleFix" : "rules.issueTitle", { id });
+    const body = t("rules.issueBody", {
+      id,
+      section: s,
+      version: view?.catalog_version ?? "",
+      rule: JSON.stringify({ ...row.rule, id: undefined }, null, 2),
+    });
+    openExternal(newIssueUrl(title, body));
   }
 
   function forkAnyway() {
@@ -408,6 +426,17 @@
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="fork-title">
       <p id="fork-title" class="m-title">{t("rules.forkTitle")}</p>
       <p class="m-text">{t("rules.forkText")}</p>
+      <!-- A fix good for everyone belongs in the catalogue, not in one
+           user's overlay: the invitation sits where the fork is decided. -->
+      <p class="m-share">
+        {t("rules.forkShare")}
+        <span class="m-links">
+          <button class="link" type="button" onclick={() => openExternal(OVERTAKE_URL)}>{t("about.overtake")}</button>
+          <button class="link" type="button" onclick={() => confirmFork && propose(confirmFork.section, confirmFork.row)}
+            >{t("rules.github")}</button
+          >
+        </span>
+      </p>
       <div class="m-acts">
         <button class="btn btn-primary" type="button" onclick={forkAnyway}>{t("rules.forkAnyway")}</button>
         <button class="btn" type="button" onclick={disableInstead}>{t("rules.disableInstead")}</button>
@@ -732,6 +761,32 @@
     color: var(--txt2);
     line-height: 1.5;
     margin-bottom: 16px;
+  }
+  .m-share {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+    margin: -6px 0 16px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+  }
+  .m-links {
+    display: inline-flex;
+    gap: 10px;
+    margin-left: 4px;
+  }
+  .link {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--txt2);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .link:hover {
+    color: var(--txt);
   }
   .m-acts {
     display: flex;
