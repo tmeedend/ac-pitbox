@@ -86,6 +86,47 @@ pub fn save_country_overlay(
     Ok(view(&rules, o))
 }
 
+/// The last catalogue update as the Workshop and the notification show it
+/// (REGLES§6.2): its report while not dismissed, and whether "go back" is
+/// possible or in force.
+#[derive(serde::Serialize)]
+pub struct CatalogReportView {
+    report: Option<crate::catalog_update::Report>,
+    can_revert: bool,
+    reverted: bool,
+    previous_version: Option<String>,
+    current_version: Option<String>,
+}
+
+#[tauri::command]
+pub fn get_catalog_report(app: AppHandle) -> Result<CatalogReportView, String> {
+    let dir = crate::rules::config_dir(&app)?;
+    let s = crate::catalog_update::load_state(&dir);
+    Ok(CatalogReportView {
+        report: s.report.filter(|_| !s.report_dismissed),
+        can_revert: s.previous.is_some(),
+        reverted: s.reverted,
+        previous_version: s.previous.map(|p| p.app_version),
+        current_version: s.current.map(|c| c.app_version),
+    })
+}
+
+/// "Go back to the previous catalogue", or return to the current one
+/// (REGLES§6.4). Re-classifies the library; returns the mods processed.
+#[tauri::command]
+pub fn set_catalog_reverted(app: AppHandle, db: State<Db>, reverted: bool) -> Result<usize, String> {
+    let dir = crate::rules::config_dir(&app)?;
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::catalog_update::set_reverted(&dir, &conn, &cfg, reverted)
+}
+
+#[tauri::command]
+pub fn dismiss_catalog_report(app: AppHandle) -> Result<(), String> {
+    let dir = crate::rules::config_dir(&app)?;
+    crate::catalog_update::dismiss_report(&dir)
+}
+
 /// Aperçu d'impact : nombre de mods affectés par un jeu de règles candidat,
 /// sans rien enregistrer (§5).
 #[tauri::command]

@@ -7,6 +7,7 @@ mod archive;
 mod attach;
 mod backup;
 mod bulk;
+mod catalog_update;
 mod cm_stats;
 mod cmimport;
 mod commands;
@@ -212,6 +213,16 @@ pub fn run() {
             }
 
             let lib_ready = cfg.library_path.as_deref().is_some_and(|p| p.is_dir());
+
+            // A new catalogue of rules shipped with this build (REGLES§6):
+            // applied, the library re-classified under it, and a report kept
+            // for the Workshop. Before anything reads the rules - it is also
+            // what re-installs the previous catalogue of a user who went back.
+            match app.path().app_config_dir() {
+                Ok(dir) => catalog_update::on_startup(&dir, &conn, &cfg, lib_ready),
+                Err(e) => log::warn!("catalogue update skipped: {e}"),
+            }
+
             let engine = rules::ENGINE_VERSION.to_string();
             let stamped = overlay::get_meta(&conn, overlay::META_ENGINE_VERSION).unwrap_or(None);
             if lib_ready && stamped.as_deref() != Some(engine.as_str()) {
@@ -458,6 +469,9 @@ pub fn run() {
             commands::rules::get_taxonomy,
             commands::rules::save_family_overlay,
             commands::rules::save_country_overlay,
+            commands::rules::get_catalog_report,
+            commands::rules::set_catalog_reverted,
+            commands::rules::dismiss_catalog_report,
             commands::rules::rules_impact,
             commands::rules::reapply_rules,
             commands::library::set_favorite,

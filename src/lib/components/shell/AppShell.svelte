@@ -41,6 +41,7 @@
   import PrefsToast from "$lib/components/toasts/PrefsToast.svelte";
   import BulkToasts from "$lib/components/toasts/BulkToasts.svelte";
   import RepairToast from "$lib/components/toasts/RepairToast.svelte";
+  import CatalogToast from "$lib/components/toasts/CatalogToast.svelte";
   import TitleBar from "./TitleBar.svelte";
   import ControllerSetup from "$lib/components/settings/ControllerSetup.svelte";
   import ImageSelectDropdown from "$lib/components/ui/ImageSelectDropdown.svelte";
@@ -1188,6 +1189,7 @@
   <ControllerToast />
   <BulkToasts />
   <RepairToast />
+  <CatalogToast />
   <ImportToasts />
   <!-- La génération des vignettes en dernier, donc au plus près du coin : elle
        dure des minutes là où les autres passent, et c'est celle qu'on revient

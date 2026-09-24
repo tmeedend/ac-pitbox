@@ -1474,7 +1474,8 @@
     "packNotFound": "Ce pack n'existe plus : aucun de ses mods n'est en bibliothèque.",
     "unmanagedNotActivatable": "ce mod a été installé dans le jeu hors Pit Box : il est déjà là et ne s'active pas d'ici. Pour le gérer, supprimez son dossier du jeu, puis importez-le dans Pit Box.",
     "unmanagedNoLayer": "ce mod a été installé dans le jeu hors Pit Box : rien ne peut être posé par-dessus. Supprimez son dossier du jeu et importez le mod dans Pit Box pour le gérer ici.",
-    "wikiNotAnEntity": "Identifiant Wikidata invalide."
+    "wikiNotAnEntity": "Identifiant Wikidata invalide.",
+    "noPreviousCatalog": "Aucun catalogue précédent n'est conservé."
   },
   "pack": {
     "tabMembers": "Mods",
@@ -1788,5 +1789,37 @@
     "added": "Ajouté par vous",
     "removed": "Livré avec Pit Box, retiré par vous",
     "putBack": "Remettre"
+  },
+  "catalogReport": {
+    "title": "Catalogue de règles mis à jour — {from} → {to}",
+    "titleSameVersion": "Catalogue de règles mis à jour",
+    "counts": "{added} ajoutées · {corrected} corrigées · {retired} retirées",
+    "reclassified": "{count} mods reclassés",
+    "details": "Voir le détail",
+    "hideDetails": "Masquer le détail",
+    "revert": "Revenir à {version}",
+    "reapply": "Réappliquer {version}",
+    "reverted": "Catalogue de règles revenu à {version}",
+    "applying": "Application…",
+    "close": "Fermer",
+    "added": "Ajoutées ({count})",
+    "corrected": "Corrigées ({count})",
+    "retired": "Retirées ({count})",
+    "list": {
+      "brand_fix": "Marque",
+      "name_to_tag": "Nom → tag",
+      "class_fix": "Classe",
+      "tag_merge": "Fusion de tags",
+      "drivetrain": "Transmission",
+      "aspiration": "Aspiration",
+      "engine_config": "Moteur",
+      "engine_pos": "Position du moteur",
+      "gearbox": "Boîte",
+      "track_tag_merge": "Fusion de tags (circuits)",
+      "track_category": "Catégorie de circuit",
+      "family": "Famille",
+      "country_alias": "Orthographe de pays",
+      "country_tag": "Tag de pays"
+    }
   }
 }

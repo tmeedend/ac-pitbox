@@ -14,6 +14,8 @@ pub const MOD_UNKNOWN: &str = "errors.modUnknown";
 // membre supprimé emporte ses fichiers.
 pub const PACK_NOT_FOUND: &str = "errors.packNotFound";
 pub const AC_NOT_CONFIGURED: &str = "errors.acNotConfigured";
+// "Go back to the previous catalogue" with no previous one kept (REGLES§6.4).
+pub const NO_PREVIOUS_CATALOG: &str = "errors.noPreviousCatalog";
 pub const LIBRARY_NOT_CONFIGURED: &str = "errors.libraryNotConfigured";
 pub const CM_NOT_CONFIGURED: &str = "errors.cmNotConfigured";
 // Launching a session onto content the game does not have (SESSION§2). Two

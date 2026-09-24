@@ -17,11 +17,21 @@ pub use pitbox_catalog::taxonomy::{FamilyOverlay, MapOverlay, TaxonomyOverlay, T
 
 use crate::rules::Rules;
 
-const CATALOG: &str = include_str!("../rules/taxonomy-catalog.json");
+pub const CATALOG: &str = include_str!("../rules/taxonomy-catalog.json");
 
-/// The catalogue shipped with this build.
+/// The taxonomy catalogue in force - the embedded one, or the previous one
+/// when the user went back to it (`catalog_update`).
 pub fn catalog() -> TaxonomyTables {
-    serde_json::from_str(CATALOG).expect("the embedded taxonomy catalogue must be valid")
+    tables_of(&crate::rules::default_rules())
+}
+
+/// The three taxonomy tables of a set of rules.
+pub fn tables_of(r: &Rules) -> TaxonomyTables {
+    TaxonomyTables {
+        families: r.car.category_families.clone(),
+        country_aliases: r.country_aliases.map.clone(),
+        country_tags: r.car.extraction_country.map.clone(),
+    }
 }
 
 /// The three tables as every pre-layer version copied them into
@@ -117,14 +127,6 @@ mod tests {
     use super::*;
     use crate::rules::default_rules;
     use pitbox_catalog::taxonomy::CategoryFamily;
-
-    fn tables_of(r: &Rules) -> TaxonomyTables {
-        TaxonomyTables {
-            families: r.car.category_families.clone(),
-            country_aliases: r.country_aliases.map.clone(),
-            country_tags: r.car.extraction_country.map.clone(),
-        }
-    }
 
     fn sorted(mut f: Vec<CategoryFamily>) -> Vec<(String, Vec<String>)> {
         for x in &mut f {

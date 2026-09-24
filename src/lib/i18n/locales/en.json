@@ -1474,7 +1474,8 @@
     "packNotFound": "This pack no longer exists: none of its mods are in the library.",
     "unmanagedNotActivatable": "This mod was installed in the game outside Pit Box: it is already there and cannot be activated from here. To manage it, delete its folder from the game, then import it into Pit Box.",
     "unmanagedNoLayer": "This mod was installed in the game outside Pit Box: nothing can be layered on top. Delete its folder from the game and import the mod into Pit Box to manage it here.",
-    "wikiNotAnEntity": "Not a valid Wikidata identifier."
+    "wikiNotAnEntity": "Not a valid Wikidata identifier.",
+    "noPreviousCatalog": "No previous catalogue is kept."
   },
   "pack": {
     "tabMembers": "Mods",
@@ -1788,5 +1789,37 @@
     "added": "Added by you",
     "removed": "Shipped with Pit Box, removed by you",
     "putBack": "Put back"
+  },
+  "catalogReport": {
+    "title": "Rules catalogue updated — {from} → {to}",
+    "titleSameVersion": "Rules catalogue updated",
+    "counts": "{added} added · {corrected} corrected · {retired} retired",
+    "reclassified": "{count} mods reclassified",
+    "details": "See details",
+    "hideDetails": "Hide details",
+    "revert": "Go back to {version}",
+    "reapply": "Re-apply {version}",
+    "reverted": "Rules catalogue back to {version}",
+    "applying": "Applying…",
+    "close": "Close",
+    "added": "Added ({count})",
+    "corrected": "Corrected ({count})",
+    "retired": "Retired ({count})",
+    "list": {
+      "brand_fix": "Brand",
+      "name_to_tag": "Name → tag",
+      "class_fix": "Class",
+      "tag_merge": "Tag merge",
+      "drivetrain": "Drivetrain",
+      "aspiration": "Aspiration",
+      "engine_config": "Engine",
+      "engine_pos": "Engine position",
+      "gearbox": "Gearbox",
+      "track_tag_merge": "Tag merge (tracks)",
+      "track_category": "Track category",
+      "family": "Family",
+      "country_alias": "Country spelling",
+      "country_tag": "Country tag"
+    }
   }
 }

@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
 /// Jeu de règles par défaut, embarqué à la compilation (seed).
-const DEFAULT_RULES: &str = include_str!("../rules/default-tag-rules.json");
+pub const DEFAULT_RULES: &str = include_str!("../rules/default-tag-rules.json");
 
 /// Harmonisation engine version. Bumped whenever the same rules would now
 /// yield a different result — the overlay then holds a stale computation, and
@@ -230,7 +230,7 @@ const LEGACY_FILE: &str = "tag-rules.json";
 /// Where the legacy file goes once migrated - kept, never deleted.
 const RETIRED_FILE: &str = "tag-rules.pre-overlay.json";
 
-fn config_dir(app: &AppHandle) -> Result<PathBuf, String> {
+pub fn config_dir(app: &AppHandle) -> Result<PathBuf, String> {
     app.path().app_config_dir().map_err(|e| e.to_string())
 }
 
@@ -273,13 +273,23 @@ pub fn save_taxonomy(
 /// The shipped rules — the catalogue: `default-tag-rules.json` for the list
 /// rules, plus the taxonomy catalogue that lives in its own file (`taxonomy.rs`
 /// says why).
+///
+/// The catalogue IN FORCE: the embedded one, or the previous one when the user
+/// went back to it (`catalog_update`, REGLES§6.4).
 pub fn default_rules() -> Rules {
-    let mut r: Rules = serde_json::from_str(DEFAULT_RULES).expect("the embedded rules must be valid");
-    let t = crate::taxonomy::catalog();
+    catalog_from(&crate::catalog_update::active())
+        .or_else(|| catalog_from(&crate::catalog_update::embedded()))
+        .expect("the embedded rules must be valid")
+}
+
+/// A catalogue from its two texts, `None` when they do not parse.
+pub fn catalog_from(texts: &crate::catalog_update::CatalogTexts) -> Option<Rules> {
+    let mut r: Rules = serde_json::from_str(&texts.rules).ok()?;
+    let t: crate::taxonomy::TaxonomyTables = serde_json::from_str(&texts.taxonomy).ok()?;
     r.car.category_families = t.families;
     r.country_aliases.map = t.country_aliases;
     r.car.extraction_country.map = t.country_tags;
-    r
+    Some(r)
 }
 
 /// The rules as they apply: the catalogue, with the user's decisions on top.
@@ -305,6 +315,12 @@ pub fn load(app: &AppHandle) -> Rules {
 /// read. It is retired only once BOTH overlays are on disk: a migration that
 /// failed to write runs again at the next load, from the same file.
 pub fn load_from_dir(dir: &std::path::Path) -> Rules {
+    load_from_dir_on(dir, &default_rules())
+}
+
+/// `load_from_dir` on an explicit catalogue - how a catalogue update classifies
+/// the library under the previous one to measure what changed.
+pub fn load_from_dir_on(dir: &std::path::Path, catalog: &Rules) -> Rules {
     let legacy = read_legacy(dir);
     let tax_path = dir.join("taxonomy.json");
     let lists_path = dir.join("rules-overlay.json");
@@ -315,14 +331,13 @@ pub fn load_from_dir(dir: &std::path::Path) -> Rules {
         // writes. Said in the log so the next occurrence can be dated.
         log::warn!("{LEGACY_FILE} reappeared after migration; set aside, not read");
     }
-    let catalog = default_rules();
     let mut rules = catalog.clone();
 
     let tax = crate::taxonomy::load_or_migrate(&tax_path, legacy.as_ref().unwrap_or(&Rules::default()));
-    crate::taxonomy::apply(&mut rules, &crate::taxonomy::catalog(), &tax);
+    crate::taxonomy::apply(&mut rules, &crate::taxonomy::tables_of(catalog), &tax);
 
     let lists = crate::rule_overlay::load_or_migrate(&lists_path, legacy.as_ref());
-    crate::rule_overlay::apply(&mut rules, &catalog, &lists);
+    crate::rule_overlay::apply(&mut rules, catalog, &lists);
 
     if legacy.is_some() && tax_path.is_file() && lists_path.is_file() {
         if let Err(e) = std::fs::rename(dir.join(LEGACY_FILE), retired_path(dir)) {

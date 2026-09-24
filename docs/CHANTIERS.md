@@ -570,7 +570,8 @@ de reprendre. En cas d'écart, la spec fait foi.
       onglets et `rules-tool` (`diff`, `promote`) pour promouvoir une
       curation faite dans l'app vers le catalogue ; (2) manifeste des catalogues passés + test « diff
       nul » pour les règles en liste **— fait** ; (3) identifiants stables et surcouche
-      pour les règles en liste (marque, classe, fusion de tags, specs) **— fait** ; (4)
+      pour les règles en liste (marque, classe, fusion de tags, specs) **— fait** ;
+      (4) rapport de mise à jour et « Revenir à » **— fait** ; (4)
       rapport de mise à jour et « Revenir à vN » ; (5) écran Règles refait
       (liste unique, bascules, badges, compteurs d'effet). Le lot Marques des
       taxonomies vient **après** le lot 1, pour naître dans le bon format.
@@ -600,6 +601,19 @@ de reprendre. En cas d'écart, la spec fait foi.
       `tag-rules.json` migré puis mis de côté en `tag-rules.pre-overlay.json`.
       La crate `pitbox-taxonomy` est devenue `pitbox-catalog` (modules
       `taxonomy` et `rules`). Banc réel : aucune décision, 350 mods, 0 écart.
+      **Lot 4.** Découvert en le préparant : **un catalogue amélioré n'atteignait
+      jamais la bibliothèque existante** — la classification est stockée, et
+      seul un changement de `ENGINE_VERSION` la recalculait au démarrage. Le
+      rapport de mise à jour est donc aussi ce qui la recalcule. Écarts avec la
+      spec, assumés pour ce lot : pas de compteur **par règle** (« a classé 4
+      mods », REGLES§6.3) — le rapport donne le total des mods reclassés, et le
+      compteur par règle viendra avec ceux de l'écran Règles (lot 5), qui
+      demandent au moteur de noter quelle règle a produit quoi ; pas de bouton
+      « Désactiver » sur les lignes du détail ; et le nom d'une version est
+      celui de l'app, si bien qu'un build de dev qui change le catalogue sans
+      changer de version affiche « Catalogue de règles mis à jour » sans flèche.
+      L'interrupteur global « Utiliser le catalogue Pit Box » (REGLES§7) reste
+      à faire avec l'écran Règles.
       **Mystère non résolu, à surveiller** : sur la machine de dev
       (2026-09-23), un `tag-rules.json` plus ancien est **réapparu deux fois**
       dans le dossier de config, dates d'origine conservées (donc recopié, pas

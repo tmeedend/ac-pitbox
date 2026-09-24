@@ -18,6 +18,7 @@
   import RulesEditor from "./RulesEditor.svelte";
   import Categories from "./Categories.svelte";
   import Countries from "./Countries.svelte";
+  import CatalogBanner from "./CatalogBanner.svelte";
   import Import from "./Import.svelte";
   import Profiles from "./Profiles.svelte";
   import Maintenance from "./Maintenance.svelte";
@@ -40,6 +41,11 @@
   <div class="head">
     <h2 class="lbl-screen">{t("nav.atelier")}</h2>
     <Tabs {tabs} active={nav.section} onselect={(id) => requestSection(id)} />
+    <!-- The last catalogue update (REGLES§6.2), on the three tabs whose
+         content it changes. -->
+    {#if nav.section === "rules" || nav.section === "categories" || nav.section === "countries"}
+      <CatalogBanner />
+    {/if}
   </div>
   <div class="body">
     {#if nav.section === "rules"}
