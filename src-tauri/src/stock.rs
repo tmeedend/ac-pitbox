@@ -214,7 +214,15 @@ pub fn index_stock_content(
 
             // Harmonisation (tags règle, catégorie, classe, specs dérivées, pays).
             let class = ui.class.clone().unwrap_or_default();
-            let h = harmonize::compute(rules, kind, &ui.tags, &name, &class, ui.country.as_deref());
+            let h = harmonize::compute(
+                rules,
+                kind,
+                &ui.tags,
+                &name,
+                &class,
+                ui.country.as_deref(),
+                ui.brand.as_deref(),
+            );
             harmonize::store(conn, &id, &h, ui.country.as_deref(), rules).map_err(|e| e.to_string())?;
 
             present.push(id);

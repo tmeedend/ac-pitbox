@@ -14,7 +14,12 @@ fn is_empty(c: Option<&str>) -> bool {
     c.is_none_or(|s| s.trim().is_empty())
 }
 
-/// Calcule l'harmonisation à partir des valeurs brutes du mod.
+/// Computes the harmonisation from the mod's raw values.
+///
+/// A car's brand is decided here, whole: a `brand_fix` rule's if one matched,
+/// else the file's - then the user's merges and the case/accent folding
+/// (`brands::canonical`, TAXO§7). So `Harmonized::brand` is the brand the car
+/// is filed under, not only a rule's correction.
 pub fn compute(
     rules: &Rules,
     kind: ModKind,
@@ -22,9 +27,18 @@ pub fn compute(
     name: &str,
     class: &str,
     native_country: Option<&str>,
+    native_brand: Option<&str>,
 ) -> Harmonized {
     match kind {
-        ModKind::Car => rules::apply_car(rules, raw_tags, name, class, is_empty(native_country)),
+        ModKind::Car => {
+            let mut h = rules::apply_car(rules, raw_tags, name, class, is_empty(native_country));
+            h.brand = h
+                .brand
+                .take()
+                .or_else(|| native_brand.map(str::to_string))
+                .and_then(|b| crate::brands::canonical(&b, &rules.brand_aliases));
+            h
+        }
         ModKind::Track => rules::apply_track(rules, raw_tags),
     }
 }
@@ -154,7 +168,15 @@ fn recompute_for(
     .unwrap_or_default();
     let class = ui.class.clone().unwrap_or_default();
     let name = ui.name.clone().unwrap_or_else(|| m.id_interne.clone());
-    let h = compute(rules, kind, &ui.tags, &name, &class, ui.country.as_deref());
+    let h = compute(
+        rules,
+        kind,
+        &ui.tags,
+        &name,
+        &class,
+        ui.country.as_deref(),
+        ui.brand.as_deref(),
+    );
     Some((h, ui.country))
 }
 
@@ -249,11 +271,11 @@ mod tests {
         let rules = rules::default_rules();
 
         // 1. Déclaré dans le fichier, orthographe non canonique.
-        let declared = compute(&rules, ModKind::Car, &[], "Any Car", "street", Some("U.S.A."));
+        let declared = compute(&rules, ModKind::Car, &[], "Any Car", "street", Some("U.S.A."), None);
         let from_file = super::final_country(&rules, &declared, Some("U.S.A."));
 
         // 2. Champ natif vide : c'est le tag qui parle.
-        let tagged = compute(&rules, ModKind::Car, &["usa".into()], "Any Car", "street", None);
+        let tagged = compute(&rules, ModKind::Car, &["usa".into()], "Any Car", "street", None, None);
         let from_tag = super::final_country(&rules, &tagged, None);
 
         assert_eq!(from_file.as_deref(), Some("United States"), "declared in the file");
@@ -273,6 +295,7 @@ mod tests {
             "Any Car",
             "street",
             Some("U.S.A."),
+            None,
         );
         assert_eq!(
             super::final_country(&rules, &h, Some("U.S.A.")).as_deref(),
@@ -515,7 +538,15 @@ mod tests {
     #[test]
     fn a_track_country_goes_through_the_same_table() {
         let rules = rules::default_rules();
-        let h = compute(&rules, ModKind::Track, &[], "Any Track", "", Some("Great Britain"));
+        let h = compute(
+            &rules,
+            ModKind::Track,
+            &[],
+            "Any Track",
+            "",
+            Some("Great Britain"),
+            None,
+        );
         assert_eq!(
             super::final_country(&rules, &h, Some("Great Britain")).as_deref(),
             Some("United Kingdom")

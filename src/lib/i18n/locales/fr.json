@@ -19,7 +19,8 @@
     "tracks": "Circuits",
     "railLabel": "Navigation principale",
     "alertLabel": "éléments à vérifier",
-    "openCmShort": "Content Manager"
+    "openCmShort": "Content Manager",
+    "brands": "Marques"
   },
   "titlebar": {
     "bigPicture": "Mode Big Picture (plein écran)",
@@ -1817,6 +1818,28 @@
     "addTag": "Ajouter un tag…",
     "removeTag": "Retirer ce tag"
   },
+  "brandsTab": {
+    "subtitle": "Les marques des voitures : le nom sous lequel chacune est rangée, et les orthographes qui y mènent.",
+    "unset": "{count} voitures sans marque",
+    "applying": "application à la bibliothèque…",
+    "proposals": "{count} fusions proposées",
+    "merge": "Fusionner",
+    "ignore": "Ignorer",
+    "cars": "{count} voitures",
+    "carOne": "1 voiture",
+    "noCar": "aucune voiture",
+    "aliasCount": "{count} orthographes",
+    "aliases": "Orthographes fusionnées",
+    "noAlias": "Aucune",
+    "addAlias": "Ajouter une orthographe…",
+    "removeAlias": "Séparer de nouveau cette orthographe",
+    "fileUnder": "Ranger sous…",
+    "file": "Ranger",
+    "restore": "Défaire mes fusions",
+    "showEmpty": "Afficher les marques sans voiture ({count})",
+    "ignored": "Propositions ignorées",
+    "unignore": "Proposer de nouveau"
+  },
   "taxonomyOrigin": {
     "shippedTitle": "Livrée avec Pit Box : les mises à jour la font évoluer",
     "added": "Ajouté par vous",
@@ -1852,7 +1875,8 @@
       "track_category": "Catégorie de circuit",
       "family": "Famille",
       "country_alias": "Orthographe de pays",
-      "country_tag": "Tag de pays"
+      "country_tag": "Tag de pays",
+      "brand_alias": "Orthographe de marque"
     },
     "disable": "Désactiver",
     "enable": "Réactiver"

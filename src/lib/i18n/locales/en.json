@@ -19,7 +19,8 @@
     "tracks": "Tracks",
     "railLabel": "Main navigation",
     "alertLabel": "items to check",
-    "openCmShort": "Content Manager"
+    "openCmShort": "Content Manager",
+    "brands": "Brands"
   },
   "titlebar": {
     "bigPicture": "Big Picture mode (fullscreen)",
@@ -1817,6 +1818,28 @@
     "addTag": "Add a tag…",
     "removeTag": "Remove this tag"
   },
+  "brandsTab": {
+    "subtitle": "The car brands: the name each is filed under, and the spellings that lead to it.",
+    "unset": "{count} cars without a brand",
+    "applying": "applying to the library…",
+    "proposals": "{count} proposed merges",
+    "merge": "Merge",
+    "ignore": "Ignore",
+    "cars": "{count} cars",
+    "carOne": "1 car",
+    "noCar": "no car",
+    "aliasCount": "{count} spellings",
+    "aliases": "Spellings merged into it",
+    "noAlias": "None",
+    "addAlias": "Add a spelling…",
+    "removeAlias": "Separate this spelling again",
+    "fileUnder": "File under…",
+    "file": "File",
+    "restore": "Undo my merges",
+    "showEmpty": "Show brands without a car ({count})",
+    "ignored": "Ignored proposals",
+    "unignore": "Propose again"
+  },
   "taxonomyOrigin": {
     "shippedTitle": "Shipped with Pit Box: updates keep improving it",
     "added": "Added by you",
@@ -1852,7 +1875,8 @@
       "track_category": "Track category",
       "family": "Family",
       "country_alias": "Country spelling",
-      "country_tag": "Country tag"
+      "country_tag": "Country tag",
+      "brand_alias": "Brand spelling"
     },
     "disable": "Disable",
     "enable": "Enable again"

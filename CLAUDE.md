@@ -300,7 +300,7 @@ chaque fois) et *Le jeu* (ce qui reste vrai jusqu'à nouvel ordre).
 | `apps` | `inventory/Apps.svelte` | écran à part entière depuis la refonte (§3.2) |
 | `others` | `inventory/Inventory.svelte` | **l'inventaire des compléments** — cinq sources en une liste |
 | `race` | `launch/Launch.svelte` | |
-| `rules` / `categories` / `countries` / `import` / `profiles` / `maintenance` | `workshop/Workshop.svelte` | **un écran, six onglets** — l'onglet EST la section, pas un état local |
+| `rules` / `brands` / `categories` / `countries` / `import` / `profiles` / `maintenance` | `workshop/Workshop.svelte` | **un écran, sept onglets** (la limite, TAXO§6) — l'onglet EST la section, pas un état local |
 | `settings` / `about` | `settings/Settings` / `settings/About` | |
 
 **Les trois écrans transversaux ont disparu** (Add-ons voiture, Add-ons
@@ -312,7 +312,7 @@ et `LayersSection.svelte` sont supprimés — la fiche d'un mod « autre »
 Deux pièges de ce regroupement : l'onglet de l'Atelier étant `nav.section`, un
 `requestSection("import")` posé ailleurs (glisser-déposer global, rapport
 d'import) continue d'atterrir au bon endroit — ne pas le remplacer par un état
-local ; et `RulesEditor` reste le seul des six à gérer son propre
+local ; et `RulesEditor` reste le seul des sept à gérer son propre
 défilement (`noPad`), d'où le mode `full` de `Workshop`.
 
 **Les fiches s'empilent**, et l'empilement est plat : `DetailPage` rend
@@ -649,7 +649,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Enrichissement Wikipédia** | livré et nettoyé ; reste la seule mesure des seuils, sur tes corrections manuelles | `docs/SPEC-wikipedia-fiche-detail.md` |
 | **Signature Authenticode** | le workflow est prêt, il attend un certificat | `docs/windows-code-signing.md` |
 | **Refonte navigation et fiches** | livrée et fusionnée ; restent trois questions ouvertes, dont le markdown dans les notes | `docs/PLAN-refonte-navigation.md` |
-| **Taxonomies** | familles, onglets Catégories et Pays livrés ; reste l'onglet Marques (fusions, logos canoniques) | `docs/SPEC-taxonomies.md`, `docs/CHANTIERS.md` |
+| **Taxonomies** | familles, onglets Catégories, Pays et Marques (fusions) livrés ; restent les logos de marque (canonique, pastille claire, logo personnel) | `docs/SPEC-taxonomies.md`, `docs/CHANTIERS.md` |
 | **Catalogue de règles** | livré (deux couches, rapport mesuré, écran Règles, export/import, `rules-tool promote`) ; reste l'outil de relevé | `docs/SPEC-regles.md`, `docs/CHANTIERS.md` |
 | **Règles de tags divergentes** | deux fichiers décrivent la même ontologie, un seul est chargé | `docs/CHANTIERS.md` |
 

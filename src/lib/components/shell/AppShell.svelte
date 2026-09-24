@@ -1159,7 +1159,7 @@
           <Library kind="Car" />
         {:else if nav.section === "tracks"}
           <Library kind="Track" />
-        {:else if nav.section === "rules" || nav.section === "categories" || nav.section === "countries" || nav.section === "import" || nav.section === "profiles" || nav.section === "maintenance"}
+        {:else if nav.section === "rules" || nav.section === "brands" || nav.section === "categories" || nav.section === "countries" || nav.section === "import" || nav.section === "profiles" || nav.section === "maintenance"}
           <Workshop />
         {:else if nav.section === "driver"}
           <DriverScreen />

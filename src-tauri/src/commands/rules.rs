@@ -58,19 +58,11 @@ pub struct TaxonomyView {
     effective: TaxonomyTables,
 }
 
-fn tables(r: &Rules) -> TaxonomyTables {
-    TaxonomyTables {
-        families: r.car.category_families.clone(),
-        country_aliases: r.country_aliases.map.clone(),
-        country_tags: r.car.extraction_country.map.clone(),
-    }
-}
-
 fn view(rules: &Rules, overlay: TaxonomyOverlay) -> TaxonomyView {
     TaxonomyView {
         catalog: crate::taxonomy::catalog(),
         overlay,
-        effective: tables(rules),
+        effective: crate::taxonomy::tables_of(rules),
     }
 }
 
@@ -104,6 +96,26 @@ pub fn save_country_overlay(
     o.country_aliases = aliases;
     o.country_tags = tags;
     o.ignored_countries = ignored;
+    let (rules, o) = crate::rules::save_taxonomy(&app, o)?;
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::harmonize::harmonize_all(&conn, &cfg, &rules).map_err(|e| e.to_string())?;
+    Ok(view(&rules, o))
+}
+
+/// Writes the brand decisions (TAXO§7) and re-applies them: like the
+/// country, the brand is decided at write time (`harmonize::compute`), so a
+/// merge changes what is stored for every car of that spelling.
+#[tauri::command]
+pub fn save_brand_overlay(
+    app: AppHandle,
+    db: State<Db>,
+    aliases: MapOverlay,
+    ignored: Vec<String>,
+) -> Result<TaxonomyView, String> {
+    let mut o = crate::rules::load_taxonomy(&app);
+    o.brand_aliases = aliases;
+    o.ignored_brand_merges = ignored;
     let (rules, o) = crate::rules::save_taxonomy(&app, o)?;
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;

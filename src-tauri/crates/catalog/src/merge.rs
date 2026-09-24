@@ -241,6 +241,15 @@ pub fn merge_taxonomy(mine: &mut TaxonomyOverlay, theirs: &TaxonomyOverlay, st: 
     merge_families(&mut mine.families, &theirs.families, st);
     merge_map(&mut mine.country_aliases, &theirs.country_aliases, st);
     merge_map(&mut mine.country_tags, &theirs.country_tags, st);
+    merge_map(&mut mine.brand_aliases, &theirs.brand_aliases, st);
+    for m in &theirs.ignored_brand_merges {
+        if mine.ignored_brand_merges.contains(m) {
+            st.already += 1;
+        } else {
+            mine.ignored_brand_merges.push(m.clone());
+            st.added += 1;
+        }
+    }
     for c in &theirs.ignored_countries {
         if mine.ignored_countries.contains(c) {
             st.already += 1;

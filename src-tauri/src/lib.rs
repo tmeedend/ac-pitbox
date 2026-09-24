@@ -6,6 +6,7 @@ mod apps;
 mod archive;
 mod attach;
 mod backup;
+mod brands;
 mod bulk;
 mod catalog_update;
 mod cm_stats;
@@ -212,6 +213,10 @@ pub fn run() {
             if let Some(root) = cfg.ac_install_path.as_deref() {
                 nationalities::set_known(nationalities::nationalities(std::path::Path::new(root)));
             }
+
+            // The brand spellings the library uses most, which case and accent
+            // variants fold onto (TAXO§7.1) - elected before any harmonisation.
+            brands::refresh_from(&conn);
 
             let lib_ready = cfg.library_path.as_deref().is_some_and(|p| p.is_dir());
 
@@ -474,6 +479,7 @@ pub fn run() {
             commands::rules::get_taxonomy,
             commands::rules::save_family_overlay,
             commands::rules::save_country_overlay,
+            commands::rules::save_brand_overlay,
             commands::rules::get_catalog_report,
             commands::rules::set_catalog_reverted,
             commands::rules::dismiss_catalog_report,

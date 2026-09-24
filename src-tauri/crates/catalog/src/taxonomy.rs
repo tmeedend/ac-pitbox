@@ -58,7 +58,7 @@ pub struct CategoryFamily {
     pub tags: Vec<String>,
 }
 
-/// The three tables, as a catalogue ships them or as they apply.
+/// The tables, as a catalogue ships them or as they apply.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct TaxonomyTables {
     #[serde(default)]
@@ -67,6 +67,11 @@ pub struct TaxonomyTables {
     pub country_aliases: BTreeMap<String, String>,
     #[serde(default)]
     pub country_tags: BTreeMap<String, String>,
+    /// How a brand is spelled (lowercased) → the brand it is filed under
+    /// (TAXO§7). Empty in the catalogue so far: a brand merge is a decision
+    /// the user makes from a proposal, never a silent one (TAXO§7.2).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub brand_aliases: BTreeMap<String, String>,
 }
 
 /// Overlay of a `key → value` table (country aliases, country tags).
@@ -298,6 +303,12 @@ pub struct TaxonomyOverlay {
     /// Values unknown to the game left as they are (TAXO§7.2, "Ignore").
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ignored_countries: Vec<String>,
+    #[serde(default, skip_serializing_if = "MapOverlay::is_empty")]
+    pub brand_aliases: MapOverlay,
+    /// Brand merges the user answered "Ignore" to, as `from → to` (TAXO§7.2:
+    /// definitive and remembered - the proposal does not come back).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ignored_brand_merges: Vec<String>,
 }
 
 impl TaxonomyOverlay {
@@ -314,19 +325,27 @@ impl TaxonomyOverlay {
             .collect();
         ignored.sort();
         ignored.dedup();
+        let mut ignored_merges = self.ignored_brand_merges;
+        ignored_merges.sort();
+        ignored_merges.dedup();
         TaxonomyOverlay {
             format: FORMAT,
             families: self.families.normalized(&catalog.families),
             country_aliases: self.country_aliases.normalized(&catalog.country_aliases),
             country_tags: self.country_tags.normalized(&catalog.country_tags),
             ignored_countries: ignored,
+            brand_aliases: self.brand_aliases.normalized(&catalog.brand_aliases),
+            ignored_brand_merges: ignored_merges,
         }
     }
 
     /// Whether any decision is recorded on the three tables (the ignored
     /// countries are a preference of the Countries tab, not a table entry).
     pub fn has_decisions(&self) -> bool {
-        !(self.families.is_empty() && self.country_aliases.is_empty() && self.country_tags.is_empty())
+        !(self.families.is_empty()
+            && self.country_aliases.is_empty()
+            && self.country_tags.is_empty()
+            && self.brand_aliases.is_empty())
     }
 }
 
@@ -337,6 +356,7 @@ impl TaxonomyTables {
             families: o.families.apply(&self.families),
             country_aliases: o.country_aliases.apply(&self.country_aliases),
             country_tags: o.country_tags.apply(&self.country_tags),
+            brand_aliases: o.brand_aliases.apply(&self.brand_aliases),
         }
     }
 }
@@ -408,12 +428,15 @@ mod tests {
             families: vec![fam("race", &["race", "gt3"])],
             country_aliases: map(&[("usa", "United States")]),
             country_tags: BTreeMap::new(),
+            brand_aliases: map(&[("alfa", "Alfa Romeo")]),
         };
         let mut o = TaxonomyOverlay::default();
+        o.brand_aliases.set.insert("ALFA".into(), "Alfa Romeo".into());
         o.country_aliases.set.insert(" USA ".into(), "United States".into());
         o.families.tags.insert("#GT3".into(), "race".into());
         let n = o.normalized(&catalog);
         assert!(n.country_aliases.set.is_empty());
+        assert!(n.brand_aliases.set.is_empty(), "a brand merge the catalogue makes too");
         assert!(n.families.tags.is_empty());
         assert!(!n.has_decisions());
     }

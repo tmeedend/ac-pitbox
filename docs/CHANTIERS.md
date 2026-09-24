@@ -510,12 +510,24 @@ de reprendre. En cas d'écart, la spec fait foi.
       fait : `car.category_families` dans les règles, huit familles livrées,
       un filtre `Famille`, et l'onglet Catégories de l'Atelier qui les édite.
       Découpage convenu avec l'utilisateur, un lot à la fois avec une pause
-      pour regarder : **Catégories (fait)**, **Pays (fait)**, puis Marques
-      (fusions), puis Marques (logos). **Reste** : l'onglet Marques, l'élection du logo canonique (TAXO§4 — fond transparent,
-      résolution, vote majoritaire), la détection du fond cuit et la pastille
-      claire (TAXO§5), les propositions de fusion avec `Ignorer` mémorisé
-      (TAXO§7), la migration des corrections de marque hors de Règles (TAXO§8),
-      les logos personnels (TAXO§9), les emblèmes dans les puces (TAXO§10).
+      pour regarder : **Catégories (fait)**, **Pays (fait)**, **Marques
+      (fusions) (fait)**, puis Marques (logos). **Reste** : l'élection du logo
+      canonique (TAXO§4 — fond transparent, résolution, vote majoritaire), la
+      détection du fond cuit et la pastille claire (TAXO§5), les logos
+      personnels (TAXO§9), les emblèmes dans les puces (TAXO§10).
+      **Marques (fusions).** La marque se décide dans `harmonize::compute`
+      (règle, sinon fichier, puis fusions, puis casse/accents) — c'est donc
+      `Harmonized::brand` qui porte la marque rangée, pas seulement la
+      correction d'une règle ; `ENGINE_VERSION` 6 pour que la bibliothèque
+      existante soit rangée au démarrage. La fusion automatique vise
+      l'orthographe **majoritaire de la bibliothèque**, faute d'une liste de
+      référence comme celle des pays du jeu. **TAXO§8 ne s'applique pas ici** :
+      les `brand_fix` sont des règles « le nom contient X », une heuristique,
+      pas une correspondance exacte — elles restent dans Règles (REGLES§11 les
+      y range aussi). Écarts assumés : pas d'emblème dans la liste (lot
+      logos), et la proposition « Nismo → Nissan » de la maquette ne sort pas
+      (distance 2 sur cinq lettres, au-delà du seuil) — mieux vaut rater une
+      proposition que d'en faire des fausses.
       **Ce que l'index fait en attendant, et qu'il faudra remplacer** : la
       tuile de marque montre le badge de la voiture au plus petit id (le seul
       critère d'élection sans analyse d'image), et les tuiles montrent les

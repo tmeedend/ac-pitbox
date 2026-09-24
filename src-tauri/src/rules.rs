@@ -36,7 +36,9 @@ pub const DEFAULT_RULES: &str = include_str!("../rules/default-tag-rules.json");
 ///     back, from their own `ui_track.json`.
 /// 5 — countries fold case, accents and ISO codes onto the game's spelling
 ///     (TAXO§7.1).
-pub const ENGINE_VERSION: u32 = 5;
+/// 6 — brands too: the user's merges, then case, spaces and accents onto the
+///     library's most used spelling (TAXO§7, `brands.rs`).
+pub const ENGINE_VERSION: u32 = 6;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Rules {
@@ -48,6 +50,11 @@ pub struct Rules {
     /// une voiture, et il l'écrit tout aussi librement.
     #[serde(default)]
     pub country_aliases: CountryAliases,
+    /// Brand spelling (lowercased) → the brand it is filed under (TAXO§7,
+    /// `brands.rs`). From the taxonomy catalogue and overlay, like the
+    /// country aliases.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub brand_aliases: BTreeMap<String, String>,
 }
 
 /// Comment un pays s'écrit, et le nom sous lequel on le range.
@@ -95,7 +102,7 @@ pub fn canonical_country(raw: &str, aliases: &CountryAliases) -> Option<String> 
 
 /// Case, spaces and accents folded away: `JAPAN`, ` japan ` and `Japán` are
 /// the same string, and merging them is not a decision (TAXO§7.1).
-fn fold(s: &str) -> String {
+pub(crate) fn fold(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.to_lowercase().chars() {
         let base = match c {
@@ -289,6 +296,7 @@ pub fn catalog_from(texts: &crate::catalog_update::CatalogTexts) -> Option<Rules
     r.car.category_families = t.families;
     r.country_aliases.map = t.country_aliases;
     r.car.extraction_country.map = t.country_tags;
+    r.brand_aliases = t.brand_aliases;
     Some(r)
 }
 

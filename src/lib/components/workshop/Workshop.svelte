@@ -18,6 +18,7 @@
   import RulesEditor from "./RulesEditor.svelte";
   import Categories from "./Categories.svelte";
   import Countries from "./Countries.svelte";
+  import Brands from "./Brands.svelte";
   import CatalogBanner from "./CatalogBanner.svelte";
   import Import from "./Import.svelte";
   import Profiles from "./Profiles.svelte";
@@ -25,7 +26,9 @@
   import { nav, requestSection } from "$lib/shell/nav.svelte";
   import { t } from "$lib/i18n/index.svelte";
 
-  const TAB_IDS = ["rules", "categories", "countries", "import", "profiles", "maintenance"] as const;
+  // Seven tabs: the limit TAXO§6 sets - the next tool calls for a side list
+  // in the screen, not an eighth tab.
+  const TAB_IDS = ["rules", "brands", "categories", "countries", "import", "profiles", "maintenance"] as const;
   // Recalculés à chaque changement de langue (`t` est réactif) : un tableau
   // `const` de libellés figés resterait dans l'ancienne langue.
   const tabs = $derived(TAB_IDS.map((id) => ({ id, label: t(`nav.${id}`) })));
@@ -43,7 +46,7 @@
     <Tabs {tabs} active={nav.section} onselect={(id) => requestSection(id)} />
     <!-- The last catalogue update (REGLES§6.2), on the three tabs whose
          content it changes. -->
-    {#if nav.section === "rules" || nav.section === "categories" || nav.section === "countries"}
+    {#if nav.section === "rules" || nav.section === "brands" || nav.section === "categories" || nav.section === "countries"}
       <CatalogBanner />
     {/if}
   </div>
@@ -52,6 +55,8 @@
       <RulesEditor />
     {:else if nav.section === "categories"}
       <Categories />
+    {:else if nav.section === "brands"}
+      <Brands />
     {:else if nav.section === "countries"}
       <Countries />
     {:else if nav.section === "import"}

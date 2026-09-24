@@ -127,6 +127,7 @@ fn describe(before: &TaxonomyTables, after: &TaxonomyTables) -> Vec<String> {
         &mut out,
     );
     maps("country tag", &before.country_tags, &after.country_tags, &mut out);
+    maps("brand alias", &before.brand_aliases, &after.brand_aliases, &mut out);
     out
 }
 

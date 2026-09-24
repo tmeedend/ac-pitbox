@@ -3141,7 +3141,15 @@ fn process_found(
 
     // Harmonisation des tags + extraction specs/pays (§5), stockée en overlay.
     let class = ui.class.clone().unwrap_or_default();
-    let h = harmonize::compute(rules, fm.kind, &ui.tags, &name, &class, ui.country.as_deref());
+    let h = harmonize::compute(
+        rules,
+        fm.kind,
+        &ui.tags,
+        &name,
+        &class,
+        ui.country.as_deref(),
+        ui.brand.as_deref(),
+    );
     harmonize::store(conn, &id_interne, &h, ui.country.as_deref(), rules).map_err(|e| e.to_string())?;
 
     let outcome = if is_update { "UPDATE_REPLACE" } else { "IMPORT" };
