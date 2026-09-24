@@ -34,6 +34,7 @@ pub mod session_state;
 pub mod sessionpreset;
 pub mod trackstate;
 pub mod ui_prefs;
+pub mod updates;
 pub mod usermeta;
 pub mod wiki;
 

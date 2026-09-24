@@ -1037,7 +1037,9 @@
     "pendingUnknownAction": "Aquela ação não se aplica a esta pasta.",
     "pendingAlreadyKnown": "Já existe um mod com esse nome.",
     "versionIsActive": "Esta é a versão instalada. Ative outra antes de excluí-la.",
-    "packNotFound": "Este pack não existe mais: nenhum dos seus mods está na biblioteca."
+    "packNotFound": "Este pack não existe mais: nenhum dos seus mods está na biblioteca.",
+    "updateRegistryUnavailable": "O registro de atualizações não está respondendo agora. Tente novamente mais tarde.",
+    "updateDownloadFailed": "O download da atualização foi interrompido. Tente novamente."
   },
   "pack": {
     "tabMembers": "Mods",
@@ -1054,5 +1056,35 @@
     "tokenExclude": "Excluir",
     "tokenInputHint": "Digite para buscar. Um « - » antes da palavra a exclui em vez de incluí-la.",
     "tokenNoMatch": "Nenhuma correspondência."
+  },
+  "modUpdates": {
+    "toastOne": "Um mod tem uma nova versão",
+    "toastMany": "{n} mods têm uma nova versão",
+    "later": "Mais tarde",
+    "openFiche": "Abrir o mod",
+    "update": "Atualizar",
+    "ignore": "Ignorar",
+    "ignoreHint": "Pular esta versão. Uma mais recente será anunciada de novo.",
+    "limitedHint": "Distribuído pelo autor (Patreon, hospedagem de arquivos): a página abre no navegador.",
+    "inBrowser": "Página aberta no navegador — arraste o arquivo para o Pit Box depois de baixado.",
+    "size": "{done} MB",
+    "sizeOf": "{done} / {total} MB",
+    "available": "Versão {version} disponível",
+    "installed": "instalada: {version}",
+    "phaseDownload": "Baixando…",
+    "phaseImport": "Importando…",
+    "whatsNew": "Novidades",
+    "noChangelog": "O autor não descreveu esta versão.",
+    "authorPage": "Página de {author}",
+    "authorPageAnon": "Página do autor",
+    "cardTooltip": "Versão {version} disponível",
+    "settingOnline": "Verificar atualizações de mods",
+    "settingHint": "Uma vez por dia, o Pit Box lê a lista das últimas versões publicadas pelos autores de mods — a mesma do Content Manager. A lista é igual para todos: nada da sua biblioteca é enviado.",
+    "checkNow": "Verificar agora",
+    "checking": "Verificando…",
+    "saveFirst": "Salve primeiro",
+    "upToDate": "Todos os mods estão atualizados.",
+    "foundCount": "{n} atualização(ões) disponível(is).",
+    "downloadPhase": "download"
   }
 }

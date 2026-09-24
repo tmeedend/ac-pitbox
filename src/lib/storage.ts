@@ -81,4 +81,10 @@ export const StorageKey = {
    * Une clé par voiture, comme le skin préféré : le filtre « pilote modifié »
    * de la bibliothèque la lit par carte, donc de façon synchrone. */
   driverOutfit: (carId: string) => `${PREFIX}.driver.car.${carId}`,
+  /** Mod updates (§4.7), two JSON maps `"<kind>/<id>" → version`, born in
+   * `ui_prefs.json`. `ignored`: the version the user chose to skip — a newer
+   * one is announced again. `announced`: the version a toast already
+   * announced — so the same update does not pop up at every startup. */
+  modUpdatesIgnored: `${PREFIX}.modUpdates.ignored`,
+  modUpdatesAnnounced: `${PREFIX}.modUpdates.announced`,
 } as const;

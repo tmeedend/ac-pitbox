@@ -41,6 +41,8 @@
   import PrefsToast from "$lib/components/toasts/PrefsToast.svelte";
   import BulkToasts from "$lib/components/toasts/BulkToasts.svelte";
   import RepairToast from "$lib/components/toasts/RepairToast.svelte";
+  import UpdateToast from "$lib/components/toasts/UpdateToast.svelte";
+  import { startModUpdateChecks } from "$lib/library/modUpdates.svelte";
   import TitleBar from "./TitleBar.svelte";
   import ControllerSetup from "$lib/components/settings/ControllerSetup.svelte";
   import ImageSelectDropdown from "$lib/components/ui/ImageSelectDropdown.svelte";
@@ -102,6 +104,10 @@
   // visible même si on change d'écran pendant.
   onMount(() => initBulkProgress());
   onMount(() => initRepairProgress());
+  // Mises à jour de mods (§4.7) : vérification une minute après le démarrage
+  // puis une fois par jour, et suivi du téléchargement en cours — monté ici
+  // pour la même raison que les lots.
+  onMount(() => startModUpdateChecks());
   // Plateau du dernier réglage de session : la garde d'activation doit savoir
   // ce qu'elle protège même quand l'écran de réglages n'est pas monté.
   onMount(() => void loadGridCars());
@@ -1186,6 +1192,7 @@
 <ToastStack>
   <PrefsToast />
   <ControllerToast />
+  <UpdateToast />
   <BulkToasts />
   <RepairToast />
   <ImportToasts />

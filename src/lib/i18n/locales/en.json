@@ -1475,7 +1475,9 @@
     "packNotFound": "This pack no longer exists: none of its mods are in the library.",
     "unmanagedNotActivatable": "This mod was installed in the game outside Pit Box: it is already there and cannot be activated from here. To manage it, delete its folder from the game, then import it into Pit Box.",
     "unmanagedNoLayer": "This mod was installed in the game outside Pit Box: nothing can be layered on top. Delete its folder from the game and import the mod into Pit Box to manage it here.",
-    "wikiNotAnEntity": "Not a valid Wikidata identifier."
+    "wikiNotAnEntity": "Not a valid Wikidata identifier.",
+    "updateRegistryUnavailable": "The update registry can't be reached right now. Try again later.",
+    "updateDownloadFailed": "The download of the update was interrupted. Try again."
   },
   "pack": {
     "tabMembers": "Mods",
@@ -1704,5 +1706,35 @@
   "prefs": {
     "writeFailedTitle": "Your settings are not being saved",
     "writeFailedBody": "Pit Box cannot write its preferences to disk. What you set stays active until you close the app, then it is lost — favourites, driver outfits, filters and views included."
+  },
+  "modUpdates": {
+    "toastOne": "A mod has a new version",
+    "toastMany": "{n} mods have a new version",
+    "later": "Later",
+    "openFiche": "Open the mod",
+    "update": "Update",
+    "ignore": "Ignore",
+    "ignoreHint": "Skip this version. A newer one will be announced again.",
+    "limitedHint": "Distributed by its author (Patreon, file host): the page opens in the browser.",
+    "inBrowser": "Page opened in the browser — drop the archive into Pit Box once downloaded.",
+    "size": "{done} MB",
+    "sizeOf": "{done} / {total} MB",
+    "available": "Version {version} available",
+    "installed": "installed: {version}",
+    "phaseDownload": "Downloading…",
+    "phaseImport": "Importing…",
+    "whatsNew": "What's new",
+    "noChangelog": "The author didn't describe this version.",
+    "authorPage": "{author}'s page",
+    "authorPageAnon": "Author's page",
+    "cardTooltip": "Version {version} available",
+    "settingOnline": "Check for mod updates",
+    "settingHint": "Once a day, Pit Box reads the list of latest versions published by mod authors — the same list Content Manager uses. The list is the same for everyone: nothing about your library is sent.",
+    "checkNow": "Check now",
+    "checking": "Checking…",
+    "saveFirst": "Save first",
+    "upToDate": "All mods are up to date.",
+    "foundCount": "{n} update(s) available.",
+    "downloadPhase": "download"
   }
 }

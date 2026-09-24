@@ -7,6 +7,7 @@
   // ni où elle en était, ni même si elle avançait. Elle rend maintenant la main
   // tout de suite ; ce composant est ce qui reste à l'écran pendant ce temps.
   import Toast from "./Toast.svelte";
+  import ProgressBar from "$lib/components/ui/ProgressBar.svelte";
   import { repairState, dismissRepairResult } from "$lib/workshop/repairState.svelte";
   import { t } from "$lib/i18n/index.svelte";
 
@@ -65,53 +66,24 @@
 {#if repairState.running && repairState.progress}
   {@const p = repairState.progress}
   <Toast title={t("maintenance.repairTitle")} truncate>
-    <div class="r-row">
-      <span class="r-phase">{t(PHASE_KEYS[p.phase] ?? p.phase)}</span>
-      {#if p.total > 1}<span class="r-count mono">{Math.max(1, p.index)} / {p.total}</span>{/if}
-    </div>
     {#if p.label}<div class="r-id mono">{p.label}</div>{/if}
-    <div class="r-bar">
-      <div class="r-fill" style:width="{p.ratio * 100}%"></div>
-    </div>
+    <ProgressBar ratio={p.ratio} phase={t(PHASE_KEYS[p.phase] ?? p.phase)}>
+      {#snippet detail()}
+        {#if p.total > 1}<span class="mono">{Math.max(1, p.index)} / {p.total}</span>{/if}
+      {/snippet}
+    </ProgressBar>
     {#if p.etaSecs != null}<div class="r-eta mono">{etaText(p.etaSecs)}</div>{/if}
   </Toast>
 {/if}
 
 <style>
-  .r-row {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-    min-width: 0;
-  }
-  .r-phase {
-    flex: 1;
-    min-width: 0;
-    font-size: 11.5px;
-    color: var(--txt2);
-  }
-  .r-count {
-    flex: none;
-    color: var(--muted);
-    font-size: 11px;
-  }
   .r-id {
     color: var(--muted);
     font-size: 11px;
-    margin: 2px 0 6px;
+    margin: 0 0 6px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  .r-bar {
-    height: 4px;
-    background: var(--line);
-    overflow: hidden;
-  }
-  .r-fill {
-    height: 100%;
-    background: var(--rosso);
-    transition: width 0.2s;
   }
   .r-eta {
     margin-top: 4px;

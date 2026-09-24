@@ -409,6 +409,30 @@ Aucune règle ne les sépare depuis le disque, et c'est le fond du problème : l
 
 **Ce qui reste automatique.** Un dossier de jeu livré à nu (`driver/` avec un `.kn5`) est toujours corrigé sans rien demander : c'est déterminable, et le §4.6 dit qu'une question à laquelle l'utilisateur ne peut pas mieux répondre que l'app est pire qu'un défaut. La décision est journalisée (`pathNormalized`) et relisible sur la fiche.
 
+### 4.7 Mises à jour des mods
+
+Pit Box annonce qu'un mod de la bibliothèque a une nouvelle version, et l'installe en un clic. C'est ce que fait Content Manager, et **par la même source** (`cup.rs`).
+
+**La source : le registre CUP** (*Content Update Provider*), tenu par l'auteur de CM. Les moddeurs y déclarent leur contenu et y publient chaque version. Une seule requête, `https://acstuff.club/cup/`, renvoie un JSON d'environ 40 Ko : par type (`car`, `track`, `app`, `luaapp`, `filter`), la dernière version de chaque id enregistré, sous la forme `"id": "1.71"` ou `"id": { "version", "limited" }`. Mesuré le 2026-09-24 : 992 voitures, 119 circuits. **La comparaison se fait sur la machine** : le registre ne reçoit rien de la bibliothèque, et c'est aussi pourquoi il suffit d'une requête pour toute la bibliothèque. Deux adresses de plus par id : `/cup/<type>/<id>` (changelog, auteur, page d'information, autres ids mis à jour par la même archive) et `/cup/<type>/<id>/get`, qui **redirige vers l'archive**, ou vers l'endroit où l'auteur l'héberge.
+
+**Ce qui compte comme une mise à jour** : un mod **géré par Pit Box**, voiture ou circuit, dont la version du registre est plus récente que le libellé de version de sa version active (le champ `version` du `ui_*.json`, relevé à l'import). Le contenu de base n'a rien à mettre à jour. Un mod installé hors Pit Box (§8.2) est exclu, parce que l'import refuserait ensuite de se poser dessus (§4.3) : annoncer une mise à jour que le bouton ne peut pas installer serait pire que ne rien dire. CM continue de les voir. Les apps ne sont pas vérifiées, car Pit Box ne leur connaît pas de version. **Les versions se comparent exactement comme dans CM** (`CompareAsVersionTo`) : un `v` en tête est retiré, le libellé est coupé sur les `.`, et chaque segment est comparé en ordre naturel. Conséquence : `1.5` est plus ancien que `1.46`. Un libellé absent est plus ancien que tout. Diverger de CM ferait annoncer, ou taire, des mises à jour qu'il ne signale pas.
+
+**Quand** : une minute après le démarrage, puis une fois par jour tant que l'app reste ouverte. La vérification peut être coupée dans Réglages › Général (`mod_updates_online`, §11), qui propose aussi « Vérifier maintenant ». Une vérification ratée garde la liste précédente et affiche son erreur dans les réglages, sans toast.
+
+**Où ça se voit** :
+
+- **Un toast** (`UpdateToast`) liste les mises à jour **pas encore annoncées**, chacune avec « Mettre à jour » et « Ignorer ». Une fois refermé, il ne revient pas pour les mêmes versions (`pitbox.modUpdates.announced` dans `ui_prefs.json`). Sans ça, il reparaîtrait à chaque démarrage.
+- **La carte** porte une pastille bleue avec la version disponible (une flèche dans la colonne Nom en vue tableau), jusqu'à ce que le mod soit mis à jour ou la version ignorée. Le bleu, parce que c'est une information (§7.2ter).
+- **La fiche** porte un bandeau sous ses onglets (`UpdateBanner`), avec « Nouveautés » (changelog chargé à la demande), « Ignorer » et « Mettre à jour ».
+
+**« Ignorer » porte sur une version**, comme dans CM : une version plus récente est de nouveau annoncée (`pitbox.modUpdates.ignored`).
+
+**Mettre à jour = télécharger, puis l'import ordinaire.** Le backend suit `/get` et télécharge dans un dossier temporaire `pitbox-update-*`. Puis l'archive passe par **le même chemin qu'un glisser-déposer** (§4.2) : même rapport, mêmes arbitrages, même ligne d'historique. L'import reconnaît seul la nouvelle version d'un mod existant (§4.1, §4.3). Rien dans ce chantier ne sait comment un mod se remplace. L'archive est nommée `<id>.<ext>` et non comme l'hébergeur l'appelle : une archive dont le contenu est à la racine tire son identité de son nom (§4.3bis). Elle est supprimée après l'import, sauf si un arbitrage resté en attente en a encore besoin (la reprise ré-extrait la source, §4.3). Ce qu'un arrêt brutal laisse est balayé au démarrage suivant. Un seul téléchargement à la fois, jamais pendant un import, et il s'annule depuis son toast de progression. Ce toast a **la même anatomie que celui de l'import** qui lui succède au même coin : le nom du mod en titre, une ligne de phase avec les Mo reçus sur le total, la barre, et « Arrêter ». La barre est une brique partagée (`ui/ProgressBar.svelte`, aussi utilisée par la réparation générale). Elle se remplit quand le serveur annonce une taille, et sinon un segment va et vient, sans pourcentage inventé. Le téléchargement tourne sur un thread à part (`spawn_blocking`), comme l'import : l'interface ne l'attend jamais.
+
+**Une archive ou le navigateur.** Ce que `/get` renvoie n'est téléchargé que si c'est **une archive, reconnue à ses premiers octets** (zip, 7z, rar) et non à un nom. Une page web (`text/html`) est reconnue dès les en-têtes, sans rien écrire. Tout le reste (page d'un hébergeur, mur de connexion, refus) est confié au **navigateur**, qui suit la même redirection et affiche à l'utilisateur la page qui lui demande quelque chose. L'utilisateur glisse ensuite l'archive dans Pit Box. Aucune liste d'hébergeurs à tenir à jour : la réponse se lit sur ce qui revient réellement. Mesuré sur les deux mises à jour qui ont motivé le chantier : `hsrc_subaru_gc8` mène à un `.7z` servi par acstuff et s'installe en un clic, alors que `lk_nissan_180sx_96` mène à mega.nz, où la clé de déchiffrement vit dans le fragment de l'URL et où seul le navigateur sait télécharger. Les entrées `limited` (128 voitures, surtout du Patreon payant) tombent dans le second cas.
+
+**Le client HTTP** est celui de l'enrichissement Wikipédia (`http.rs`, WinHTTP), étendu d'un téléchargement en flux vers le disque avec progression (`update:progress`, dix événements par seconde au plus) : pas de dépendance nouvelle.
+
 ---
 
 ## 5. Tags et harmonisation
@@ -1488,7 +1512,8 @@ Ce n'est un déchet que si le parent ne revient jamais. Ils sont donc **listés 
 
 **Préférences persistantes** : affichage des tags du fichier mod (masquables), état du panneau de suivi (global), vue bibliothèque + colonnes (par type), presets de session (par type), preset CM graphique/FFB par défaut, décor de l'aperçu 3D natif (SESSION§4), **aperçu 3D intégré affiché ou non sur la fiche voiture** (défaut affiché — SESSION§4), regroupement des skins (archive/voiture), extraction des fichiers annexes (Aucun / Informations seulement / Tout — §4.5.2), **conservation de l'archive source** (défaut désactivé — §10), **mode de déploiement** (hardlink/symlink, défaut hardlink — §2), **zoom du mode Big Picture** (§16, distinct du zoom normal — `None` reprend ce dernier),
 **enrichissement Wikipédia** (`wiki_online`, défaut activé — §6.3) et sa **langue de
-lecture** (automatique par défaut : la langue de l'app, puis la chaîne de repli).
+lecture** (automatique par défaut : la langue de l'app, puis la chaîne de repli),
+**vérification des mises à jour de mods** (`mod_updates_online`, défaut activé — §4.7).
 
 **Écran Réglages en onglets** (Général / Chemins / Aperçu 3D / Vignettes / Musique / Wikipédia) depuis le mode Big Picture (§16) — Général et Chemins partagent `AppConfig` et sa garde de navigation (§11) ; Aperçu 3D et Musique ont chacun leur propre stockage et **s'appliquent sans bouton Enregistrer** (`ui_prefs.json` pour l'un, `music.json` pour l'autre). L'onglet **Import** n'est plus ici : ses deux préférences vivent au pied de l'écran `Atelier › Importer` (§7.2quater).
 

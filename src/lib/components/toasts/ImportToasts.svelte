@@ -15,6 +15,7 @@
   } from "$lib/workshop/importState.svelte";
   import ImportReport from "$lib/components/workshop/ImportReport.svelte";
   import Toast from "./Toast.svelte";
+  import ProgressBar from "$lib/components/ui/ProgressBar.svelte";
   import { t } from "$lib/i18n/index.svelte";
 
   // Clés explicites plutôt qu'une clé construite à la volée : `t()` renvoyant la
@@ -73,15 +74,13 @@
         {importState.cancelling ? t("importOverlay.cancelling") : t("importOverlay.cancel")}
       </button>
     {/snippet}
-    <div class="p-phase-row">
-      <span class="mono p-phase">{t(PHASE_KEYS[p.phase] ?? p.phase)}</span>
-      {#if settled && p.sub_total > 1}
-        <span class="p-sub">{p.label} <span class="mono">({p.sub_current}/{p.sub_total})</span></span>
-      {/if}
-    </div>
-    <div class="p-bar">
-      <div class="p-fill" style:width="{p.item_ratio * 100}%" class:indeterminate={!settled}></div>
-    </div>
+    <ProgressBar ratio={settled ? p.item_ratio : null} phase={t(PHASE_KEYS[p.phase] ?? p.phase)}>
+      {#snippet detail()}
+        {#if settled && p.sub_total > 1}
+          {p.label} <span class="mono">({p.sub_current}/{p.sub_total})</span>
+        {/if}
+      {/snippet}
+    </ProgressBar>
     <!-- Compte du lot et temps restant sur la même ligne, mais deux
          conditions distinctes : le compte n'a de sens que pour un vrai lot
          (pour un seul mod, ce serait toujours « 1/1 ») alors que l'ETA reste
@@ -95,9 +94,7 @@
       </div>
     {/if}
     {#if p.item_count > 1}
-      <div class="p-bar global">
-        <div class="p-fill" style:width="{p.overall_ratio * 100}%"></div>
-      </div>
+      <ProgressBar ratio={p.overall_ratio} thin />
     {/if}
   </Toast>
 {/if}
@@ -109,26 +106,6 @@
   .p-cancel:disabled {
     color: var(--muted);
     cursor: default;
-  }
-  .p-phase-row {
-    display: flex;
-    align-items: baseline;
-    gap: 6px;
-    margin-bottom: 6px;
-    min-width: 0;
-  }
-  .p-sub {
-    color: var(--muted);
-    font-size: 11px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .p-phase {
-    flex: none;
-    color: var(--rosso-bright);
-    font-size: 10px;
-    text-transform: uppercase;
   }
   .p-overall {
     display: flex;
@@ -143,29 +120,8 @@
        auto l'emporte sur `justify-content` qu'il ait ou non un voisin. */
     margin-left: auto;
   }
-  .p-bar {
-    height: 4px;
-    background: var(--line);
-    overflow: hidden;
-  }
-  /* Barre du lot : plus discrète que celle du mod en cours, qui est
-     l'information immédiate. */
-  .p-bar.global {
-    height: 2px;
-  }
-  .p-fill {
-    height: 100%;
-    background: var(--rosso);
-    transition: width 0.2s;
-  }
-  .p-fill.indeterminate {
-    animation: slide 1s ease-in-out infinite;
-  }
-  @keyframes slide {
-    0% { margin-left: 0; }
-    50% { margin-left: 70%; }
-    100% { margin-left: 0; }
-  }
+  /* The bar itself (and its thin variant, the batch one) lives in
+     `ui/ProgressBar.svelte`, shared with the repair and the update download. */
   /* Les styles des lignes du rapport vivent dans `ImportReport.svelte` avec
      leur markup : le CSS des composants est scopé, déplacer l'un sans l'autre
      laisserait ici des règles qui ne s'appliquent plus à rien. */

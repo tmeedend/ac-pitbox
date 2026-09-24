@@ -6,6 +6,7 @@
   import FilterBar from "$lib/components/filters/FilterBar.svelte";
   import { matchesQuery } from "$lib/library/cardSearch";
   import { hasOwnDriver } from "$lib/driver/driverOverride.svelte";
+  import { updateFor } from "$lib/library/modUpdates.svelte";
   import BulkEditPanel from "./BulkEditPanel.svelte";
   import ContextMenu from "$lib/components/ui/ContextMenu.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
@@ -978,6 +979,12 @@
                    Posé en bas à gauche, en face du cœur : les deux disent la
                    même sorte de chose, « j'ai touché à ce mod ». -->
               {#if c.notes_user}<span class="card-note" title={c.notes_user}>✎</span>{/if}
+              <!-- Nouvelle version au registre (§4.7) : le toast se referme,
+                   la carte garde l'information jusqu'à la mise à jour. -->
+              {#if updateFor(kind, c.id_interne)}
+                {@const upd = updateFor(kind, c.id_interne)!}
+                <span class="card-upd mono" title={t("modUpdates.cardTooltip", { version: upd.available })}>⬆ {upd.available}</span>
+              {/if}
               <span
                 class="card-fav"
                 class:on={c.is_favorite}
@@ -1095,6 +1102,10 @@
                       {col.value(c)}
                     {:else if col.key === "name"}
                       {#if c.broken}<span class="broken-flag" title={t("library.brokenTooltip")}>⚠</span>{/if}
+                      {#if updateFor(kind, c.id_interne)}
+                        {@const upd = updateFor(kind, c.id_interne)!}
+                        <span class="upd-flag" title={t("modUpdates.cardTooltip", { version: upd.available })}>⬆</span>
+                      {/if}
                       {col.value(c)}
                     {:else}
                       {col.value(c)}
@@ -1404,6 +1415,25 @@
     color: var(--muted2);
     text-shadow: 0 0 3px var(--bg);
     pointer-events: auto;
+  }
+  /* Bleu = information (§7.2ter) : une version plus récente n'est ni une
+     alerte ni une sélection. En haut à droite, le seul coin de la vignette
+     que rien d'autre n'occupe. */
+  .card-upd {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: var(--blue-dim);
+    border: 1px solid var(--blue-border);
+    color: var(--blue);
+    font-size: 9px;
+    line-height: 1;
+    padding: 2px 4px;
+    z-index: 1;
+  }
+  .upd-flag {
+    color: var(--blue);
+    margin-right: 4px;
   }
   .card-fav {
     position: absolute;

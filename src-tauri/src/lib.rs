@@ -12,6 +12,7 @@ mod cmimport;
 mod commands;
 mod compose;
 mod config;
+mod cup;
 mod deploy;
 mod detect;
 mod driver;
@@ -27,6 +28,7 @@ mod fsb5;
 mod gamebackup;
 mod gridthumbs;
 mod harmonize;
+mod http;
 mod identity;
 mod import_bench;
 mod import_progress;
@@ -222,6 +224,11 @@ pub fn run() {
             // Drapeau d'annulation d'un import en cours (§4.2bis).
             app.manage(commands::import::ImportControl::default());
             app.manage(commands::bulk_ops::BulkControl::default());
+            // Mises à jour de mods (§4.7) : annulation du téléchargement en
+            // cours, et ménage des téléchargements qu'un arrêt brutal a laissés
+            // dans le dossier temporaire — au démarrage, aucun n'est en cours.
+            app.manage(commands::updates::UpdateDownloadControl::default());
+            cup::sweep_leftovers(&std::env::temp_dir());
 
             // Module musique du mode Big Picture (docs/spec-module-musique_2.md) :
             // dossiers par défaut créés au premier démarrage, peuplés du pack
@@ -270,6 +277,11 @@ pub fn run() {
             commands::import::execute_bulk_import,
             commands::import::resolve_conflict,
             commands::import::cancel_import,
+            commands::updates::check_mod_updates,
+            commands::updates::mod_update_details,
+            commands::updates::download_mod_update,
+            commands::updates::cancel_mod_update_download,
+            commands::updates::discard_mod_update_download,
             commands::bulk_ops::cancel_bulk,
             commands::import::split_dropped_paths,
             commands::import::list_pending_folders,

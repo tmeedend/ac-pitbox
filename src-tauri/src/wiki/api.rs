@@ -20,8 +20,8 @@ use std::time::Duration;
 
 use serde_json::Value;
 
-use super::http;
 use super::ids;
+use crate::http;
 
 /// Wikidata's own API host — entities live here, not on a language wiki.
 const WIKIDATA_HOST: &str = "www.wikidata.org";

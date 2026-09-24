@@ -3,8 +3,8 @@
 //! All six lots of WIKI§12 are in: the data model (WIKI§3, `store`), the automatic
 //! matching of cars and tracks (WIKI§4, `matchcar`/`matchtrack`/`matching`), the
 //! resolution at display time with its fallback chain (WIKI§5, `lang`), the Action
-//! API client (WIKI§6, `api`/`http`), and the tab and settings screen that consume
-//! them (WIKI§7 and WIKI§8, front-side).
+//! API client (WIKI§6, `api`, over the shared `crate::http`), and the tab and
+//! settings screen that consume them (WIKI§7 and WIKI§8, front-side).
 //!
 //! **The three beats of this file are the point of it.** `plan` reads the
 //! database, `fetch` talks to the network, `commit` writes back — split that
@@ -46,8 +46,6 @@ pub mod matchcar;
 pub mod matching;
 pub mod matchtrack;
 pub mod store;
-
-mod http;
 
 use chrono::{Duration, Local};
 use rusqlite::Connection;

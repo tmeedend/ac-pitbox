@@ -1037,7 +1037,9 @@
     "pendingUnknownAction": "Diese Aktion trifft auf diesen Ordner nicht zu.",
     "pendingAlreadyKnown": "Eine Mod mit diesem Namen existiert bereits.",
     "versionIsActive": "Das ist die installierte Version. Aktiviere eine andere, bevor du sie löschst.",
-    "packNotFound": "Dieses Pack existiert nicht mehr: keine seiner Mods ist in der Bibliothek."
+    "packNotFound": "Dieses Pack existiert nicht mehr: keine seiner Mods ist in der Bibliothek.",
+    "updateRegistryUnavailable": "Das Update-Verzeichnis ist gerade nicht erreichbar. Später erneut versuchen.",
+    "updateDownloadFailed": "Der Download des Updates wurde unterbrochen. Erneut versuchen."
   },
   "pack": {
     "tabMembers": "Mods",
@@ -1054,5 +1056,35 @@
     "tokenExclude": "Ausschließen",
     "tokenInputHint": "Zum Suchen tippen. Ein vorangestelltes „-“ schließt das Wort aus, statt es einzuschließen.",
     "tokenNoMatch": "Keine Treffer."
+  },
+  "modUpdates": {
+    "toastOne": "Ein Mod hat eine neue Version",
+    "toastMany": "{n} Mods haben eine neue Version",
+    "later": "Später",
+    "openFiche": "Mod öffnen",
+    "update": "Aktualisieren",
+    "ignore": "Ignorieren",
+    "ignoreHint": "Diese Version überspringen. Eine neuere wird wieder angekündigt.",
+    "limitedHint": "Vom Autor selbst verteilt (Patreon, Filehoster): die Seite öffnet sich im Browser.",
+    "inBrowser": "Seite im Browser geöffnet — das Archiv nach dem Download in Pit Box ziehen.",
+    "size": "{done} MB",
+    "sizeOf": "{done} / {total} MB",
+    "available": "Version {version} verfügbar",
+    "installed": "installiert: {version}",
+    "phaseDownload": "Download…",
+    "phaseImport": "Import…",
+    "whatsNew": "Neuerungen",
+    "noChangelog": "Der Autor hat diese Version nicht beschrieben.",
+    "authorPage": "Seite von {author}",
+    "authorPageAnon": "Seite des Autors",
+    "cardTooltip": "Version {version} verfügbar",
+    "settingOnline": "Nach Mod-Updates suchen",
+    "settingHint": "Einmal täglich liest Pit Box die Liste der neuesten Versionen, die Mod-Autoren veröffentlichen — dieselbe wie Content Manager. Die Liste ist für alle gleich: nichts aus deiner Bibliothek wird gesendet.",
+    "checkNow": "Jetzt prüfen",
+    "checking": "Wird geprüft…",
+    "saveFirst": "Zuerst speichern",
+    "upToDate": "Alle Mods sind aktuell.",
+    "foundCount": "{n} Update(s) verfügbar.",
+    "downloadPhase": "download"
   }
 }

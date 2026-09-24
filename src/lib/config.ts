@@ -34,6 +34,10 @@ export interface Prefs {
    * l'ouverture d'une fiche, ce qui révèle indirectement le contenu de la
    * bibliothèque — d'où un interrupteur, et non un simple confort. */
   wiki_online: boolean;
+  /** Vérification des mises à jour de mods au registre CUP (§4.7), celui que
+   * lit Content Manager. Même raison d'être un interrupteur que
+   * `wiki_online` : une requête vers un serveur tiers. */
+  mod_updates_online: boolean;
 }
 
 export interface AppConfig {
@@ -85,6 +89,7 @@ export function emptyConfig(): AppConfig {
       resource_extraction_mode: "info_only",
       keep_source_archive: false,
       wiki_online: true,
+      mod_updates_online: true,
       deploy_mode: "hardlink",
     },
   };

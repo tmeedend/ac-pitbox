@@ -122,7 +122,9 @@ windows = { version = "0.61", features = [
     # jusqu'ici. WinHTTP est livré avec Windows et apporte ce qu'un crate
     # aurait apporté — TLS sur le magasin de certificats de la machine, proxy
     # de l'utilisateur, redirections, délais — sans faire entrer une trentaine
-    # de crates et une pile TLS pour un onglet décoratif. `wiki/http.rs` note
+    # de crates et une pile TLS pour un onglet décoratif. `http.rs` note
     # les deux solutions écartées (reqwest, ureq) et ce qui les ferait gagner.
+    # Sert aussi aux mises à jour de mods (`cup.rs`, §4.7) : registre et
+    # téléchargement de l'archive, par le même module.
     "Win32_Networking_WinHttp",
 ] }
