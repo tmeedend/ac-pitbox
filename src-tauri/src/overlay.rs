@@ -47,6 +47,12 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
     Ok(conn)
 }
 
+/// `PRAGMA quick_check(1)`: `"ok"`, or the first problem found. Milliseconds
+/// on a library-sized base, so affordable at every startup.
+pub fn quick_check(conn: &Connection) -> rusqlite::Result<String> {
+    conn.query_row("PRAGMA quick_check(1)", [], |r| r.get(0))
+}
+
 /// Ajoute les colonnes L2 aux bases déjà créées en L1 (ALTER idempotent).
 fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     let cols = [
