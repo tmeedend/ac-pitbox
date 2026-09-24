@@ -233,7 +233,10 @@ pub fn run() {
             // le démarrage, pour que la première navigation Big Picture de
             // la session ne subisse pas le scan complet du dossier.
             music::index::warm(app.handle(), music_cfg.clone());
-            let music_engine = music::engine::spawn(app.handle().clone(), music_cfg);
+            let track_handle = app.handle().clone();
+            let music_engine = music::engine::spawn(app.handle().clone(), music_cfg, move |path| {
+                commands::music::announce_track(&track_handle, path)
+            });
             // Le même fil sert deux clients : la musique de Big Picture, et la
             // génération des vignettes de la grille, qui se suspend pendant une
             // session pour rendre la machine au jeu (GRILLE§5.4).

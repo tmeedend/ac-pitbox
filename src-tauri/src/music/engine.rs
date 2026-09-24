@@ -102,13 +102,29 @@ impl MusicEngineHandle {
 /// Démarre le thread moteur (propriétaire de l'`OutputStream` WASAPI, jamais
 /// en mode exclusif — c'est le comportement par défaut de `rodio`/`cpal`,
 /// voir MUSIQUE§5.1 de la spec) et renvoie la poignée à manager côté Tauri.
-pub fn spawn(app: AppHandle, initial_config: MusicConfig) -> MusicEngineHandle {
+///
+/// `on_track` is called with the path of every track that starts playing, for
+/// the now-playing notification (MUSIQUE§5.5). A closure rather than an event
+/// emitted from here: a business module importing `tauri::Emitter` makes the
+/// lib's test binary unrunnable (see `CLAUDE.md`), so the facade emits. It runs
+/// on the engine thread, whose 30 ms tick drives the fades: it must hand the
+/// work off, not do it.
+pub fn spawn(
+    app: AppHandle,
+    initial_config: MusicConfig,
+    on_track: impl Fn(PathBuf) + Send + 'static,
+) -> MusicEngineHandle {
     let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || run(app, initial_config, rx));
+    std::thread::spawn(move || run(app, initial_config, Box::new(on_track), rx));
     MusicEngineHandle(Mutex::new(tx))
 }
 
-fn run(app: AppHandle, initial_config: MusicConfig, rx: Receiver<EngineCommand>) {
+fn run(
+    app: AppHandle,
+    initial_config: MusicConfig,
+    on_track: Box<dyn Fn(PathBuf) + Send>,
+    rx: Receiver<EngineCommand>,
+) {
     let (_stream, handle) = match OutputStream::try_default() {
         Ok(v) => v,
         Err(e) => {
@@ -118,6 +134,7 @@ fn run(app: AppHandle, initial_config: MusicConfig, rx: Receiver<EngineCommand>)
     };
     let mut engine = Engine {
         app,
+        on_track,
         handle,
         config: initial_config,
         slots: [Slot::empty(), Slot::empty()],
@@ -309,6 +326,8 @@ fn open_track(path: &Path) -> Option<Decoder<BufReader<File>>> {
 
 struct Engine {
     app: AppHandle,
+    /// See `spawn`.
+    on_track: Box<dyn Fn(PathBuf) + Send>,
     handle: OutputStreamHandle,
     config: MusicConfig,
     slots: [Slot; 2],
@@ -532,6 +551,10 @@ impl Engine {
             total_duration,
             gain_db: track.gain_db,
         };
+        // Every audible change goes through here — next track, menu/grid
+        // switch, first track of Big Picture, resume after a session — and
+        // each one is "the music changed" to whoever is listening.
+        (self.on_track)(track.path.clone());
         true
     }
 
