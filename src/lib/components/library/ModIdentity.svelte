@@ -27,6 +27,8 @@
   // grande.
   import type { Snippet } from "svelte";
   import { previewSrc } from "$lib/library/library";
+  import { isPlaque } from "$lib/library/brandLogos.svelte";
+  import Emblem from "$lib/components/ui/Emblem.svelte";
 
   interface Props {
     /** Nom du modèle, marque déjà retirée par l'appelant. */
@@ -103,7 +105,9 @@
 
 {#if !empty || reserve}
   <div class="line" class:dim>
-    {#if badge}<img class="badge" src={previewSrc(badge)} alt="" loading="lazy" />{/if}
+    <!-- The car's own badge (TAXO§3: the car level, never curated), on the
+         light plate when its background is baked in (TAXO§5). -->
+    {#if badge}<span class="badge"><Emblem src={previewSrc(badge) ?? ""} plaque={isPlaque(badge)} size={13} /></span>{/if}
     <span class="text" use:titleIfClipped={label}>{label}</span>
     <!-- Hors de la boîte qui tronque : un ⚠ « mod non activé » avalé par une
          ellipse serait exactement l'avertissement qu'on ne voit pas. -->
@@ -152,9 +156,7 @@
   }
   .badge {
     flex: none;
-    width: 13px;
-    height: 13px;
-    object-fit: contain;
+    display: inline-flex;
     margin-right: 5px;
   }
 </style>

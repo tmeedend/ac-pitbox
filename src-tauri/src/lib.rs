@@ -42,6 +42,7 @@ mod layers;
 mod libpath;
 mod library;
 mod library_columns;
+mod logos;
 mod maintenance;
 mod media;
 mod modscan;
@@ -480,6 +481,9 @@ pub fn run() {
             commands::rules::save_family_overlay,
             commands::rules::save_country_overlay,
             commands::rules::save_brand_overlay,
+            commands::logos::get_brand_logos,
+            commands::logos::save_brand_logo,
+            commands::logos::import_brand_logo,
             commands::rules::get_catalog_report,
             commands::rules::set_catalog_reverted,
             commands::rules::dismiss_catalog_report,

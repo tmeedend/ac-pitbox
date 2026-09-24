@@ -511,10 +511,20 @@ de reprendre. En cas d'écart, la spec fait foi.
       un filtre `Famille`, et l'onglet Catégories de l'Atelier qui les édite.
       Découpage convenu avec l'utilisateur, un lot à la fois avec une pause
       pour regarder : **Catégories (fait)**, **Pays (fait)**, **Marques
-      (fusions) (fait)**, puis Marques (logos). **Reste** : l'élection du logo
-      canonique (TAXO§4 — fond transparent, résolution, vote majoritaire), la
-      détection du fond cuit et la pastille claire (TAXO§5), les logos
-      personnels (TAXO§9), les emblèmes dans les puces (TAXO§10).
+      (fusions) (fait)**, **Marques (logos) (fait, à valider)**. **Reste** :
+      les emblèmes dans l'éditeur de filtre et dans le résumé d'une puce
+      (TAXO§10, 18 px et 16 × 11 px), le raccourci de la fiche vers
+      `Atelier › Marques` (TAXO§10), et **la validation du seuil de fond cuit
+      sur le gros corpus** (l'autre PC, via l'outil de relevé — le banc
+      `logos::tests::real_install_logos` en est l'amorce).
+      **Marques (logos).** Écarts assumés : (1) la résolution est plafonnée à
+      128 px dans l'élection (mesuré : sans ça, un Nissan unique de 4096 px
+      battait le logo de sept voitures) ; (2) la pastille reprend `--txt`, le
+      ton clair de l'app, plutôt que le `#ececed` de la spec — pas un gris de
+      plus pour une surface ; (3) les choix de logo sont indexés par le nom de
+      marque : fusionner ou renommer une marque ne les emporte pas (à
+      reprendre si ça gêne à l'usage) ; (4) le « fanion de curation » de la
+      ligne ne tient compte que des fusions, pas du choix de logo.
       **Marques (fusions).** La marque se décide dans `harmonize::compute`
       (règle, sinon fichier, puis fusions, puis casse/accents) — c'est donc
       `Harmonized::brand` qui porte la marque rangée, pas seulement la
@@ -528,11 +538,8 @@ de reprendre. En cas d'écart, la spec fait foi.
       logos), et la proposition « Nismo → Nissan » de la maquette ne sort pas
       (distance 2 sur cinq lettres, au-delà du seuil) — mieux vaut rater une
       proposition que d'en faire des fausses.
-      **Ce que l'index fait en attendant, et qu'il faudra remplacer** : la
-      tuile de marque montre le badge de la voiture au plus petit id (le seul
-      critère d'élection sans analyse d'image), et les tuiles montrent les
-      valeurs brutes — `Alfa` et `Alfa Romeo` côte à côte tant qu'aucune fusion
-      n'existe (INDEX§8 l'accepte).
+      La tuile de marque de l'index montre désormais le logo élu (TAXO§4) ;
+      l'élection provisoire par le plus petit id (`brandBadges`) est retirée.
       **Deux écarts assumés avec les specs, à ne pas « corriger » sans les
       relire.** (1) Les familles sont un filtre **à part** (`family`), pas le
       filtre `category` réinterprété : la puce « même catégorie que ma

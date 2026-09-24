@@ -81,25 +81,6 @@ export function brandTiles(tiles: IndexTile[], total: number, unfolded: boolean)
   return { shown: [...head, ...[...rest].sort((a, b) => a.label.localeCompare(b.label))], hidden: 0 };
 }
 
-/**
- * The emblem of a brand tile, until the canonical logo exists (TAXO§4).
- *
- * The badge of the car with the alphabetically first id among those that have
- * one: arbitrary, but deterministic - two launches show the same logo, which is
- * criterion 4 of the canonical election and the only one that needs no image
- * analysis. The election proper (transparent background, resolution, majority
- * vote) replaces this, it does not add to it.
- */
-export function brandBadges(cards: { id_interne: string; brand: string | null; badge: string | null }[]): Map<string, string> {
-  const best = new Map<string, { id: string; badge: string }>();
-  for (const c of cards) {
-    if (!c.brand || !c.badge) continue;
-    const cur = best.get(c.brand);
-    if (!cur || c.id_interne < cur.id) best.set(c.brand, { id: c.id_interne, badge: c.badge });
-  }
-  return new Map([...best].map(([brand, v]) => [brand, v.badge]));
-}
-
 /** Initials of a brand without a logo - never an empty disc (INDEX§4.1). */
 export function initials(name: string): string {
   const words = name.split(/[\s\-_.]+/).filter(Boolean);

@@ -19,6 +19,7 @@ pub mod import;
 pub mod layers;
 pub mod library;
 pub mod library_columns;
+pub mod logos;
 pub mod maintenance;
 pub mod media;
 pub mod music;

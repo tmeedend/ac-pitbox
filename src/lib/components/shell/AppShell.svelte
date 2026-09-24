@@ -82,6 +82,7 @@
   import { bigPictureState, exitBigPicture } from "$lib/shell/bigpicture.svelte";
   import { musicEnterMenu, musicEnterGrid } from "$lib/shell/music";
   import { libraryVersion } from "$lib/library/libraryVersion.svelte";
+  import { loadBrandLogos } from "$lib/library/brandLogos.svelte";
 
   // Trois territoires étanches (SPEC §7.2) : le RAIL porte les lieux
   // (`NavRail.svelte`), la BARRE DE TITRE la forme de la fenêtre, cette
@@ -203,6 +204,13 @@
   // n'ont pas de notion de « problème » à remonter ; leur en inventer une
   // serait une décision produit, pas une conséquence de cette spec.
   let alerts = $state<Record<string, boolean>>({});
+  // The brand logos and the badges on the light plate (TAXO§4, §5), for every
+  // screen: re-read when the library changes - a new car may bring a better
+  // logo, or a badge with a baked background.
+  $effect(() => {
+    libraryVersion();
+    void loadBrandLogos();
+  });
   $effect(() => {
     libraryVersion();
     listOtherMods()

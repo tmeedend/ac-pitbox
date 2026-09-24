@@ -20,6 +20,9 @@ pub const NO_PREVIOUS_CATALOG: &str = "errors.noPreviousCatalog";
 // or one written by a newer version than this one reads.
 pub const NOT_A_RULES_EXPORT: &str = "errors.notARulesExport";
 pub const RULES_EXPORT_TOO_NEW: &str = "errors.rulesExportTooNew";
+// A brand logo of the user's (TAXO§9): PNG or SVG, a PNG of at least 64 px.
+pub const LOGO_FORMAT: &str = "errors.logoFormat";
+pub const LOGO_TOO_SMALL: &str = "errors.logoTooSmall";
 pub const LIBRARY_NOT_CONFIGURED: &str = "errors.libraryNotConfigured";
 pub const CM_NOT_CONFIGURED: &str = "errors.cmNotConfigured";
 // Launching a session onto content the game does not have (SESSION§2). Two

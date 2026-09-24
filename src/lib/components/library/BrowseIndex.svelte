@@ -19,6 +19,7 @@
   import { brandTiles, indexTiles, initials, type IndexTile } from "$lib/library/browseIndex";
   import type { CategoryFamily } from "$lib/library/families";
   import { familyIcon, NEUTRAL_ICON } from "$lib/library/familyIcons";
+  import Emblem from "$lib/components/ui/Emblem.svelte";
   import type { FilterOption } from "$lib/library/filters";
   import type { ModKind } from "$lib/library/library";
 
@@ -29,8 +30,9 @@
     /** Size of the library of this kind: what the brands have to cover. */
     total: number;
     families: CategoryFamily[];
-    /** URL of the logo drawn on a brand tile, or `null` for initials. */
-    badgeOf: (brand: string) => string | null;
+    /** The logo drawn on a brand tile (its URL, and whether it goes on the
+     * light plate), or `null` for initials. */
+    badgeOf: (brand: string) => { src: string; plaque: boolean } | null;
     onpose: (key: string, value: string) => void;
     /** "See all tracks": the unfiltered list, the one way to it that poses no
      * chip (INDEX§5.1). */
@@ -108,7 +110,7 @@
     {:else}
       {@const logo = badgeOf(tl.value)}
       <span class="logo">
-        {#if logo}<img src={logo} alt="" />{:else}<span aria-hidden="true">{initials(name)}</span>{/if}
+        {#if logo}<Emblem src={logo.src} plaque={logo.plaque} size={24} />{:else}<span aria-hidden="true">{initials(name)}</span>{/if}
       </span>
     {/if}
     <span class="nm">{name}</span>
@@ -341,11 +343,6 @@
     font-size: 10px;
     letter-spacing: 0.04em;
     color: var(--muted);
-  }
-  .logo img {
-    width: 24px;
-    height: 24px;
-    object-fit: contain;
   }
   .tile.brand .nm {
     font-size: 11.5px;

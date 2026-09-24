@@ -3,6 +3,7 @@
   // Riche pour les voitures (héros + specs natives + fiche technique + courbe +
   // description + skins + tags/versions/historique). Panneaux Son et Distance =
   // placeholders « à venir » (lots §8 et §6). Réduite pour les circuits.
+  import { isPlaque } from "$lib/library/brandLogos.svelte";
   import {
     activateMod,
     deactivateMod,
@@ -1233,6 +1234,7 @@
       glyph={isCar ? "▤" : "◠"}
       image={isCar && d.badge ? previewSrc(d.badge) : null}
       imageAlt={d.brand ?? ""}
+      imagePlaque={isCar && isPlaque(d.badge)}
       name={d.display_name ?? d.id_interne}
       {subtitle}
       category={d.category}

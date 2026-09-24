@@ -42,6 +42,9 @@ const BACKED_UP_FILES: &[&str] = &[
     // write would lose it with nothing to fall back on.
     "taxonomy.json",
     "rules-overlay.json",
+    // Which logo each brand shows (TAXO§4, §9). The files of his it names
+    // live in `logos/`, kept as long as they are named.
+    "brand_logos.json",
     // The pre-overlay rules file, while it exists (not yet migrated).
     "tag-rules.json",
 ];

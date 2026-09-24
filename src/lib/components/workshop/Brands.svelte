@@ -7,8 +7,11 @@
   // `BMW Motorsport`, `Nissan` and `Nismo`, may be distinctions he wants
   // (TAXO§7.2). Nothing is merged silently, and "Ignore" is remembered.
   //
-  // The logos - the canonical one per brand, the light plate - are the next
-  // lot (TAXO§4, §5); this tab curates the names.
+  // Each brand shows its logo, elected among its cars' badges (TAXO§4,
+  // `logos.rs`); the detail lets the user pick another variant, give a file of
+  // his (TAXO§9), or force the light plate (TAXO§5), with the logo previewed
+  // at the sizes it is actually drawn (TAXO§6.3) - one chosen on a large
+  // preview turns out unreadable at 13 px one time in three.
   //
   // Saving re-applies to the whole library, like the Countries tab: the brand
   // is decided at write time. Same write queue, failures shown and logged
@@ -21,6 +24,18 @@
   import { brandProposals, mergeBrand, mergeKey } from "$lib/workshop/brandEdit";
   import { keyOrigins, keysTo, removeEntry, restoreEntries, setEntry, touches } from "$lib/workshop/countryEdit";
   import { getTaxonomy, saveBrandOverlay, type MapOverlay, type TaxonomyView } from "$lib/workshop/rules";
+  import { open as openFile } from "@tauri-apps/plugin-dialog";
+  import Emblem from "$lib/components/ui/Emblem.svelte";
+  import Seg from "$lib/components/ui/Seg.svelte";
+  import { previewSrc } from "$lib/library/library";
+  import {
+    brandLogos,
+    importBrandLogo,
+    loadBrandLogos,
+    saveBrandLogo,
+    type BrandPref,
+    type LogoVariant,
+  } from "$lib/library/brandLogos.svelte";
 
   let view = $state<TaxonomyView | null>(null);
   /** The user's decisions: what every gesture edits, ahead of the save. */
@@ -45,7 +60,7 @@
 
   onMount(async () => {
     try {
-      const [v] = await Promise.all([getTaxonomy(), reloadCars()]);
+      const [v] = await Promise.all([getTaxonomy(), reloadCars(), loadBrandLogos()]);
       take(v);
     } catch (e) {
       error = errorText(e);
@@ -110,6 +125,41 @@
   const carsText = (n: number) =>
     n === 0 ? t("brandsTab.noCar") : n === 1 ? t("brandsTab.carOne") : t("brandsTab.cars", { count: n });
 
+  /** A logo choice: written at once (`brand_logos.json`), the logos re-read.
+   * Same failure path as the merges. */
+  async function logoChoice(write: () => Promise<void>) {
+    busy = true;
+    try {
+      await write();
+      error = "";
+    } catch (e) {
+      console.error("brand logo", e);
+      error = errorText(e);
+    } finally {
+      busy = false;
+    }
+  }
+
+  function pickVariant(brand: string, pref: BrandPref, v: LogoVariant) {
+    void logoChoice(() => saveBrandLogo(brand, { ...pref, variant: v.hash, custom: undefined }));
+  }
+
+  async function giveFile(brand: string) {
+    const picked = await openFile({
+      title: t("brandsTab.logoFileTitle"),
+      multiple: false,
+      filters: [{ name: t("brandsTab.logoFileFilter"), extensions: ["png", "svg"] }],
+    });
+    if (typeof picked === "string") void logoChoice(() => importBrandLogo(brand, picked));
+  }
+
+  const PREVIEW_SIZES = [13, 18, 20, 32];
+  const bgKey: Record<string, string> = {
+    transparent: "brandsTab.bgTransparent",
+    baked: "brandsTab.bgBaked",
+    opaque: "brandsTab.bgOpaque",
+  };
+
   function toggle(name: string) {
     open = open === name ? null : name;
     newAlias = "";
@@ -165,8 +215,14 @@
         {@const spelled = keysTo(effAliases, r.name)}
         {@const origin = keyOrigins(effAliases, catAliases, r.name)}
         {@const curated = touches(aliases, catAliases, r.name)}
+        {@const logo = brandLogos.brands[r.name]}
+        {@const logoSrc = logo?.path ? previewSrc(logo.path) : null}
         <li>
           <button type="button" class="row" aria-expanded={open === r.name} onclick={() => toggle(r.name)}>
+            {#if logoSrc}<Emblem src={logoSrc} plaque={logo.plaque} size={20} />{:else}<span
+                class="no-logo"
+                aria-hidden="true"
+              ></span>{/if}
             <span class="nm">{r.name}</span>
             <span class="num">{carsText(r.cars)}</span>
             <span class="num">{t("brandsTab.aliasCount", { count: spelled.length })}</span>
@@ -178,6 +234,68 @@
 
           {#if open === r.name}
             <div class="detail">
+              <div class="field">
+                <span class="lbl-key">{t("brandsTab.logo")}</span>
+                {#if logo && logoSrc}
+                  <!-- TAXO§6.3: the sizes it is drawn at, on the dark
+                       interface and on the light plate. -->
+                  <div class="previews">
+                    {#each [false, true] as onPlate (onPlate)}
+                      <div class="sizes" class:chosen={logo.plaque === onPlate}>
+                        {#each PREVIEW_SIZES as size (size)}<Emblem src={logoSrc} plaque={onPlate} {size} />{/each}
+                        <span class="lbl-sub">{onPlate ? t("brandsTab.renderPlaque") : t("brandsTab.renderDirect")}</span>
+                      </div>
+                    {/each}
+                  </div>
+                  <div class="render">
+                    <Seg
+                      items={[
+                        { value: "auto", label: t("brandsTab.renderAuto") },
+                        { value: "direct", label: t("brandsTab.renderDirect") },
+                        { value: "plaque", label: t("brandsTab.renderPlaque") },
+                      ]}
+                      value={logo.pref.plaque === undefined ? "auto" : logo.pref.plaque ? "plaque" : "direct"}
+                      onselect={(v) =>
+                        void logoChoice(() =>
+                          saveBrandLogo(r.name, { ...logo.pref, plaque: v === "auto" ? undefined : v === "plaque" }),
+                        )}
+                    />
+                  </div>
+                {:else}
+                  <span class="empty">{t("brandsTab.noLogo")}</span>
+                {/if}
+                {#if logo?.variants.length}
+                  <div class="variants">
+                    {#each logo.variants as v, i (v.hash)}
+                      {@const src = previewSrc(v.path)}
+                      <button
+                        type="button"
+                        class="variant"
+                        class:on={logo.choice !== "custom" && logo.path === v.path}
+                        disabled={busy}
+                        title={i === 0 ? t("brandsTab.elected") : undefined}
+                        onclick={() => pickVariant(r.name, logo.pref, v)}
+                      >
+                        {#if src}<Emblem {src} plaque={v.background === "baked"} size={32} />{/if}
+                        <span class="v-meta">
+                          {t(bgKey[v.background])} · {v.width}×{v.height}<br />{carsText(v.cars)}
+                        </span>
+                      </button>
+                    {/each}
+                  </div>
+                {/if}
+                <div class="logo-acts">
+                  <button type="button" class="btn" disabled={busy} onclick={() => void giveFile(r.name)}
+                    >{t("brandsTab.logoFile")}</button
+                  >
+                  {#if logo && (logo.pref.variant || logo.pref.custom || logo.pref.plaque !== undefined)}
+                    <button type="button" class="btn" disabled={busy} onclick={() => void logoChoice(() => saveBrandLogo(r.name, {}))}
+                      >{t("brandsTab.logoAuto")}</button
+                    >
+                  {/if}
+                </div>
+              </div>
+
               <div class="field">
                 <span class="lbl-key">{t("brandsTab.aliases")}</span>
                 <div class="tags">
@@ -330,7 +448,7 @@
   .row {
     width: 100%;
     display: grid;
-    grid-template-columns: 1fr 130px 120px 18px 16px;
+    grid-template-columns: 20px 1fr 130px 120px 18px 16px;
     align-items: center;
     gap: 12px;
     padding: 8px 10px;
@@ -440,5 +558,62 @@
     gap: 8px;
     font-size: 12px;
     color: var(--muted);
+  }
+  .no-logo {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--raised);
+  }
+  .previews {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .sizes {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    opacity: 0.6;
+  }
+  .sizes.chosen {
+    opacity: 1;
+    border-color: var(--muted2);
+  }
+  .render {
+    margin-bottom: 10px;
+  }
+  .variants {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .variant {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    color: var(--txt2);
+    text-align: left;
+    cursor: pointer;
+  }
+  .variant.on {
+    border-color: var(--txt2);
+  }
+  .v-meta {
+    font-size: 10.5px;
+    color: var(--muted);
+    line-height: 1.4;
+  }
+  .logo-acts {
+    display: flex;
+    gap: 8px;
   }
 </style>

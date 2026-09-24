@@ -1509,7 +1509,9 @@
     "wikiNotAnEntity": "Identifiant Wikidata invalide.",
     "noPreviousCatalog": "Aucun catalogue précédent n'est conservé.",
     "notARulesExport": "Ce fichier n'est pas un export de règles Pit Box.",
-    "rulesExportTooNew": "Cet export vient d'une version plus récente de Pit Box. Mettez l'application à jour pour l'importer."
+    "rulesExportTooNew": "Cet export vient d'une version plus récente de Pit Box. Mettez l'application à jour pour l'importer.",
+    "logoFormat": "Un logo doit être une image PNG ou SVG.",
+    "logoTooSmall": "Ce PNG est trop petit : au moins 64 px sur son plus petit côté."
   },
   "pack": {
     "tabMembers": "Mods",
@@ -1838,7 +1840,20 @@
     "restore": "Défaire mes fusions",
     "showEmpty": "Afficher les marques sans voiture ({count})",
     "ignored": "Propositions ignorées",
-    "unignore": "Proposer de nouveau"
+    "unignore": "Proposer de nouveau",
+    "logo": "Logo",
+    "noLogo": "Aucune de ses voitures ne livre de logo",
+    "renderAuto": "Automatique",
+    "renderDirect": "Tel quel",
+    "renderPlaque": "Sur pastille claire",
+    "bgTransparent": "fond transparent",
+    "bgBaked": "fond cuit",
+    "bgOpaque": "fond plein",
+    "elected": "Celui choisi automatiquement",
+    "logoFile": "Utiliser un fichier à moi…",
+    "logoFileTitle": "Un logo pour cette marque",
+    "logoFileFilter": "Image PNG ou SVG",
+    "logoAuto": "Revenir au choix automatique"
   },
   "taxonomyOrigin": {
     "shippedTitle": "Livrée avec Pit Box : les mises à jour la font évoluer",

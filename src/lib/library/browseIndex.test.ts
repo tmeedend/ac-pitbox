@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 // for its chip labels; nothing here translates (see `filters.test.ts`).
 vi.mock("$lib/i18n/index.svelte", () => ({ t: (key: string) => key }));
 
-const { brandBadges, brandTiles, indexTiles, initials, significantBrandCount } = await import("./browseIndex");
+const { brandTiles, indexTiles, initials, significantBrandCount } = await import("./browseIndex");
 const { buildCardIndex, buildPredicate, filterDefs, hasActiveFilter, poseValue, UNSET_VALUE } = await import("./filters");
 type ModCard = import("./library").ModCard;
 
@@ -74,20 +74,6 @@ describe("brandTiles", () => {
     const open = brandTiles(tiles, 100, true);
     expect(open.shown.slice(8).map((t) => t.value)).toEqual(["Abarth", "Zonda"]);
     expect(open.hidden).toBe(0);
-  });
-});
-
-describe("brandBadges", () => {
-  it("takes the badge of the first car id that has one, whatever the order", () => {
-    const cards = [
-      { id_interne: "ks_porsche_911", brand: "Porsche", badge: "b/911.png" },
-      { id_interne: "a_porsche_356", brand: "Porsche", badge: null },
-      { id_interne: "ks_porsche_718", brand: "Porsche", badge: "b/718.png" },
-      { id_interne: "x", brand: null, badge: "b/x.png" },
-    ];
-    expect(brandBadges(cards).get("Porsche")).toBe("b/718.png");
-    expect(brandBadges([...cards].reverse()).get("Porsche"), "deterministic").toBe("b/718.png");
-    expect(brandBadges(cards).size, "a brandless car names no brand").toBe(1);
   });
 });
 

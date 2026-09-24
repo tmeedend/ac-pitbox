@@ -8,7 +8,8 @@
   import { hasOwnDriver } from "$lib/driver/driverOverride.svelte";
   import BulkEditPanel from "./BulkEditPanel.svelte";
   import BrowseIndex from "./BrowseIndex.svelte";
-  import { brandBadges } from "$lib/library/browseIndex";
+  import { isPlaque, logoOf } from "$lib/library/brandLogos.svelte";
+  import Emblem from "$lib/components/ui/Emblem.svelte";
   import { categoryFamilies, loadFamilies } from "$lib/library/familyTable.svelte";
   import { countryLabel, flagFor, withCountryLabels } from "$lib/flags.svelte";
   import ContextMenu from "$lib/components/ui/ContextMenu.svelte";
@@ -761,8 +762,12 @@
   $effect(() => {
     if (filtering) untrack(() => (browseAll = false));
   });
-  /** The logo of a brand tile (see `brandBadges`), computed once per load. */
-  const badges = $derived(isCar ? brandBadges(typed) : new Map<string, string>());
+  /** The logo of a brand tile: the brand's elected one (TAXO§4), not a car's. */
+  function brandLogo(brand: string): { src: string; plaque: boolean } | null {
+    const l = isCar ? logoOf(brand) : null;
+    const src = l ? previewSrc(l.path) : null;
+    return l && src ? { src, plaque: l.plaque } : null;
+  }
 
   const sorted = $derived.by(() => {
     const col = columns.find((c) => c.key === sortKey);
@@ -1010,7 +1015,7 @@
         optionsFor={index.optionsFor}
         total={typed.length}
         families={isCar ? categoryFamilies() : []}
-        badgeOf={(brand) => previewSrc(badges.get(brand) ?? null)}
+        badgeOf={brandLogo}
         onpose={poseFromIndex}
         onshowall={showAll}
       />
@@ -1166,7 +1171,9 @@
                     {#if col.key === "active"}
                       <StateBadge active={c.active} stock={c.is_stock} unmanaged={c.is_unmanaged} />
                     {:else if col.key === "brand"}
-                      {#if c.badge}<img class="brand-badge" src={previewSrc(c.badge)} alt="" loading="lazy" />{/if}
+                      {#if c.badge}<span class="brand-badge"
+                          ><Emblem src={previewSrc(c.badge) ?? ""} plaque={isPlaque(c.badge)} size={13} /></span
+                        >{/if}
                       {col.value(c)}
                     {:else if col.key === "country" && c.country}
                       <!-- Translated like the chip and the index (TAXO§12); the
@@ -1516,10 +1523,7 @@
   /* `.brand-badge` reste ici pour la colonne « Marque » du TABLEAU seule — la
      grille, elle, passe par `ModIdentity`, qui porte le sien. */
   .brand-badge {
-    flex: none;
-    width: 13px;
-    height: 13px;
-    object-fit: contain;
+    display: inline-flex;
     /* Pour la colonne « Marque » du tableau, où le logo est en ligne dans du
        texte — sans effet dans la carte, qui est en flex. */
     vertical-align: -2px;

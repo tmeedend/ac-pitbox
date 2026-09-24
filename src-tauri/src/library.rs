@@ -147,6 +147,20 @@ fn badge_for(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<String> {
     layered(&entity_dirs(conn, cfg, m), inspect::brand_badge)
 }
 
+/// `(car id, brand, badge path)` of every car that has both - what the brand
+/// logos are elected from (`logos::elect`).
+pub fn car_badges(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<(String, String, String)>> {
+    Ok(overlay::list_mods(conn)?
+        .into_iter()
+        .filter(|m| m.kind == "Car")
+        .filter_map(|m| {
+            let brand = m.brand.clone().filter(|b| !b.trim().is_empty())?;
+            let badge = badge_for(conn, cfg, &m)?;
+            Some((m.id_interne, brand, badge))
+        })
+        .collect())
+}
+
 fn to_card(conn: &Connection, cfg: &AppConfig, m: ModRow) -> ModCard {
     let preview = preview_for(conn, cfg, &m);
     let outline = outline_for(conn, cfg, &m);

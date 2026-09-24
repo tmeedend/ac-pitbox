@@ -62,6 +62,9 @@
     /** La chose réelle : badge de marque, tracé, vignette. */
     image?: string | null;
     imageAlt?: string;
+    /** The image goes on the light plate: a logo whose background is baked
+     * in (TAXO§5). */
+    imagePlaque?: boolean;
     /** Nom d'affichage. Jamais l'identifiant technique (§6.1). */
     name: string;
     /** Sous-titre lisible : marque · année · par auteur. */
@@ -91,6 +94,7 @@
     glyph,
     image,
     imageAlt,
+    imagePlaque = false,
     name,
     subtitle,
     category,
@@ -123,7 +127,7 @@
 <header class="head" class:flush>
   <button class="back" type="button" onclick={onback} title={backLabel} aria-label={backLabel}>←</button>
   {#if image}
-    <img class="tile tile-img" src={image} alt={imageAlt ?? ""} />
+    <img class="tile tile-img" class:plaque={imagePlaque} src={image} alt={imageAlt ?? ""} />
   {:else}
     <span class="tile" aria-hidden="true">{glyph}</span>
   {/if}
@@ -214,6 +218,10 @@
     border: 1px solid var(--line);
     object-fit: contain;
     padding: 3px;
+  }
+  /* The light plate of `ui/Emblem` (TAXO§5, §11), at the tile's size. */
+  .tile-img.plaque {
+    background: var(--txt);
   }
   .title {
     min-width: 0;

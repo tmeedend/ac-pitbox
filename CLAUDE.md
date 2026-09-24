@@ -649,7 +649,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Enrichissement Wikipédia** | livré et nettoyé ; reste la seule mesure des seuils, sur tes corrections manuelles | `docs/SPEC-wikipedia-fiche-detail.md` |
 | **Signature Authenticode** | le workflow est prêt, il attend un certificat | `docs/windows-code-signing.md` |
 | **Refonte navigation et fiches** | livrée et fusionnée ; restent trois questions ouvertes, dont le markdown dans les notes | `docs/PLAN-refonte-navigation.md` |
-| **Taxonomies** | familles, onglets Catégories, Pays et Marques (fusions) livrés ; restent les logos de marque (canonique, pastille claire, logo personnel) | `docs/SPEC-taxonomies.md`, `docs/CHANTIERS.md` |
+| **Taxonomies** | familles, onglets Catégories, Pays et Marques (fusions, logos) livrés ; restent les emblèmes dans l'éditeur de filtre et la validation du seuil de fond cuit sur le gros corpus | `docs/SPEC-taxonomies.md`, `docs/CHANTIERS.md` |
 | **Catalogue de règles** | livré (deux couches, rapport mesuré, écran Règles, export/import, `rules-tool promote`) ; reste l'outil de relevé | `docs/SPEC-regles.md`, `docs/CHANTIERS.md` |
 | **Règles de tags divergentes** | deux fichiers décrivent la même ontologie, un seul est chargé | `docs/CHANTIERS.md` |
 

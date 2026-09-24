@@ -1509,7 +1509,9 @@
     "wikiNotAnEntity": "Not a valid Wikidata identifier.",
     "noPreviousCatalog": "No previous catalogue is kept.",
     "notARulesExport": "This file is not a Pit Box rules export.",
-    "rulesExportTooNew": "This export was made by a newer version of Pit Box. Update to import it."
+    "rulesExportTooNew": "This export was made by a newer version of Pit Box. Update to import it.",
+    "logoFormat": "A logo must be a PNG or SVG image.",
+    "logoTooSmall": "This PNG is too small: at least 64 px on its smaller side."
   },
   "pack": {
     "tabMembers": "Mods",
@@ -1838,7 +1840,20 @@
     "restore": "Undo my merges",
     "showEmpty": "Show brands without a car ({count})",
     "ignored": "Ignored proposals",
-    "unignore": "Propose again"
+    "unignore": "Propose again",
+    "logo": "Logo",
+    "noLogo": "None of its cars ships a logo",
+    "renderAuto": "Automatic",
+    "renderDirect": "As is",
+    "renderPlaque": "On a light plate",
+    "bgTransparent": "transparent background",
+    "bgBaked": "baked background",
+    "bgOpaque": "full background",
+    "elected": "The one chosen automatically",
+    "logoFile": "Use a file of mine…",
+    "logoFileTitle": "A logo for this brand",
+    "logoFileFilter": "PNG or SVG image",
+    "logoAuto": "Back to the automatic choice"
   },
   "taxonomyOrigin": {
     "shippedTitle": "Shipped with Pit Box: updates keep improving it",
