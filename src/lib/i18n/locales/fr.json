@@ -1841,6 +1841,8 @@
       "family": "Famille",
       "country_alias": "Orthographe de pays",
       "country_tag": "Tag de pays"
-    }
+    },
+    "disable": "Désactiver",
+    "enable": "Réactiver"
   }
 }

@@ -15,6 +15,9 @@ export interface CatalogChange {
   key: string;
   /** What the entry does, in the rules' own words - data, not prose. */
   label: string;
+  /** Reclassified mods this rule acted on; absent for the taxonomy tables,
+   * which the engine does not trace. */
+  mods?: number;
 }
 
 export interface CatalogReport {
@@ -31,6 +34,8 @@ export interface CatalogReportView {
   reverted: boolean;
   previous_version: string | null;
   current_version: string | null;
+  /** Rule ids (and `#track-category` names) the user switched off. */
+  disabled: string[];
 }
 
 export const catalogReport = $state<{ view: CatalogReportView | null; busy: boolean; error: string }>({
@@ -58,6 +63,24 @@ export async function setCatalogReverted(reverted: boolean): Promise<void> {
     bumpLibraryVersion();
   } catch (e) {
     console.error("set_catalog_reverted", e);
+    catalogReport.error = errorText(e);
+  } finally {
+    catalogReport.busy = false;
+    await loadCatalogReport();
+  }
+}
+
+/** "Disable" on a report line (REGLES§6.3): the Rules screen's switch, then
+ * the library re-applied. A WRITE: shown and logged on failure. */
+export async function setRuleEnabled(list: string, key: string, enabled: boolean): Promise<void> {
+  if (catalogReport.busy) return;
+  catalogReport.busy = true;
+  catalogReport.error = "";
+  try {
+    await invoke<number>("set_rule_enabled", { list, key, enabled });
+    bumpLibraryVersion();
+  } catch (e) {
+    console.error("set_rule_enabled", e);
     catalogReport.error = errorText(e);
   } finally {
     catalogReport.busy = false;

@@ -173,12 +173,29 @@ fn recompute_for(
 /// must classify the library exactly as before, and the only proof is to
 /// classify it twice and compare. A mod whose files cannot be read is left
 /// out on both sides.
+// The benches compare classifications; the application also needs the rules
+// that acted, and calls `snapshot_fired`.
+#[cfg(test)]
 pub fn snapshot(
     conn: &Connection,
     cfg: &AppConfig,
     rules: &Rules,
 ) -> rusqlite::Result<std::collections::BTreeMap<String, String>> {
+    snapshot_fired(conn, cfg, rules).map(|(lines, _)| lines)
+}
+
+/// Mod id → ids of the rules that acted on it (`Harmonized::fired`).
+pub type Fired = std::collections::BTreeMap<String, Vec<String>>;
+
+/// `snapshot`, plus which rules acted on each mod - what lets a catalogue
+/// update say which rule reclassified what (REGLES§6.3), from the same pass.
+pub fn snapshot_fired(
+    conn: &Connection,
+    cfg: &AppConfig,
+    rules: &Rules,
+) -> rusqlite::Result<(std::collections::BTreeMap<String, String>, Fired)> {
     let mut out = std::collections::BTreeMap::new();
+    let mut fired = Fired::new();
     let owner = pitbox_catalog::taxonomy::lookup(&rules.car.category_families);
     for m in overlay::list_mods(conn)? {
         let Some((mut h, native)) = recompute_for(conn, cfg, rules, &m) else {
@@ -198,9 +215,10 @@ pub fn snapshot(
             Default::default()
         };
         let line = serde_json::to_string(&(&h, country, families)).unwrap_or_default();
+        fired.insert(m.id_interne.clone(), std::mem::take(&mut h.fired));
         out.insert(m.id_interne, line);
     }
-    Ok(out)
+    Ok((out, fired))
 }
 
 /// The mods two snapshots classify differently.

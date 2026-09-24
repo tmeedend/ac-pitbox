@@ -104,6 +104,57 @@ pub fn normalized(mut o: RulesOverlay, catalog: &Rules) -> RulesOverlay {
     o
 }
 
+/// Switches one rule off or back on, named as a catalogue update report names
+/// it (`catalog_update::Change`): its list and its key - the id, or the name of
+/// a track category. How "Disable" works from the report (REGLES§6.3): an
+/// ordinary switch (REGLES§5), the rule keeps receiving improvements.
+pub fn set_enabled(o: &mut RulesOverlay, list: &str, key: &str, on: bool) -> Result<(), String> {
+    fn flip(d: &mut std::collections::BTreeSet<String>, key: &str, on: bool) {
+        if on {
+            d.remove(key);
+        } else {
+            d.insert(key.to_string());
+        }
+    }
+    match list {
+        "brand_fix" => flip(&mut o.brand_fix.disabled, key, on),
+        "name_to_tag" => flip(&mut o.name_to_tag.disabled, key, on),
+        "class_fix" => flip(&mut o.class_fix.disabled, key, on),
+        "tag_merge" | "car_tag_merge" => flip(&mut o.car_tag_merge.disabled, key, on),
+        "drivetrain" => flip(&mut o.drivetrain.disabled, key, on),
+        "aspiration" => flip(&mut o.aspiration.disabled, key, on),
+        "engine_config" => flip(&mut o.engine_config.disabled, key, on),
+        "engine_pos" => flip(&mut o.engine_pos.disabled, key, on),
+        "gearbox" => flip(&mut o.gearbox.disabled, key, on),
+        "track_tag_merge" => flip(&mut o.track_tag_merge.disabled, key, on),
+        "track_category" => flip(&mut o.track_categories.removed, key, on),
+        _ => return Err(format!("not a list of rules: {list}")),
+    }
+    Ok(())
+}
+
+/// Everything switched off, as the report names it: rule ids, and the names
+/// of removed track categories (`#…`, which no id can be).
+pub fn disabled_keys(o: &RulesOverlay) -> Vec<String> {
+    [
+        &o.brand_fix.disabled,
+        &o.name_to_tag.disabled,
+        &o.class_fix.disabled,
+        &o.car_tag_merge.disabled,
+        &o.drivetrain.disabled,
+        &o.aspiration.disabled,
+        &o.engine_config.disabled,
+        &o.engine_pos.disabled,
+        &o.gearbox.disabled,
+        &o.track_tag_merge.disabled,
+        &o.track_categories.removed,
+    ]
+    .into_iter()
+    .flatten()
+    .cloned()
+    .collect()
+}
+
 // --- The Rules screen (REGLES§8) ---------------------------------------------
 
 /// A row and the number of mods its rule acts on (REGLES§8.3).
@@ -570,5 +621,22 @@ mod tests {
         );
         let hill = v.track_categories.iter().find(|c| c.name == "#hillclimb").unwrap();
         assert_eq!(hill.effect, 2);
+    }
+
+    /// REGLES§6.3: "Disable" on a report line is the ordinary switch, found
+    /// by the names the report uses - `tag_merge` is the cars' list there.
+    #[test]
+    fn a_report_line_switches_its_rule() {
+        let mut o = RulesOverlay::default();
+        set_enabled(&mut o, "tag_merge", "pitbox.car-merge.gt1", false).unwrap();
+        set_enabled(&mut o, "track_category", "#rally", false).unwrap();
+        assert!(o.car_tag_merge.disabled.contains("pitbox.car-merge.gt1"));
+        assert_eq!(disabled_keys(&o), ["pitbox.car-merge.gt1", "#rally"]);
+        set_enabled(&mut o, "tag_merge", "pitbox.car-merge.gt1", true).unwrap();
+        assert!(o.car_tag_merge.disabled.is_empty(), "switched back on");
+        assert!(
+            set_enabled(&mut o, "family", "gt3", false).is_err(),
+            "a family is not a rule"
+        );
     }
 }

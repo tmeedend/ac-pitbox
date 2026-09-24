@@ -1841,6 +1841,8 @@
       "family": "Family",
       "country_alias": "Country spelling",
       "country_tag": "Country tag"
-    }
+    },
+    "disable": "Disable",
+    "enable": "Enable again"
   }
 }

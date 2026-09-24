@@ -89,6 +89,25 @@ pub struct Change {
     pub key: String,
     /// What it does, in the rules' own words (tags, names) - data, not prose.
     pub label: String,
+    /// The reclassified mods this rule acted on, before or after the update
+    /// (REGLES§6.3: "classified 4 mods" - the measured effect, which is what
+    /// lets one judge). `None` for the taxonomy tables, which the engine does
+    /// not trace: a family is an index read by the library, not a rule that
+    /// fires.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mods: Option<usize>,
+}
+
+impl Change {
+    /// The id the engine records when this entry acts (`Harmonized::fired`),
+    /// `None` for what it does not trace.
+    fn fired_key(&self) -> Option<String> {
+        match self.list.as_str() {
+            "family" | "country_alias" | "country_tag" => None,
+            "track_category" => Some(crate::rule_overlay::category_key(&self.key)),
+            _ => Some(self.key.clone()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -113,27 +132,21 @@ fn list_changes<T: pitbox_catalog::rules::Rule>(
 ) {
     use pitbox_catalog::rules::content;
     let key = |r: &T| r.id().unwrap_or("").to_string();
+    let change = |r: &T| Change {
+        list: list.into(),
+        key: key(r),
+        label: label(r),
+        mods: None,
+    };
     for n in new {
         match old.iter().find(|o| o.id().is_some() && o.id() == n.id()) {
-            None => out.added.push(Change {
-                list: list.into(),
-                key: key(n),
-                label: label(n),
-            }),
-            Some(o) if content(o) != content(n) => out.corrected.push(Change {
-                list: list.into(),
-                key: key(n),
-                label: label(n),
-            }),
+            None => out.added.push(change(n)),
+            Some(o) if content(o) != content(n) => out.corrected.push(change(n)),
             _ => {}
         }
     }
     for o in old.iter().filter(|o| !new.iter().any(|n| n.id() == o.id())) {
-        out.retired.push(Change {
-            list: list.into(),
-            key: key(o),
-            label: label(o),
-        });
+        out.retired.push(change(o));
     }
 }
 
@@ -143,6 +156,7 @@ fn map_changes(list: &str, old: &BTreeMap<String, String>, new: &BTreeMap<String
             list: list.into(),
             key: k.clone(),
             label: format!("{k} → {v}"),
+            mods: None,
         };
         match old.get(k) {
             None => out.added.push(c),
@@ -155,6 +169,7 @@ fn map_changes(list: &str, old: &BTreeMap<String, String>, new: &BTreeMap<String
             list: list.into(),
             key: k.clone(),
             label: format!("{k} → {v}"),
+            mods: None,
         });
     }
 }
@@ -217,6 +232,7 @@ pub fn changes(old: &Rules, new: &Rules) -> Changes {
             list: "track_category".into(),
             key: c.clone(),
             label: c.clone(),
+            mods: None,
         });
     }
     for c in oa.iter().filter(|c| !na.contains(c)) {
@@ -224,6 +240,7 @@ pub fn changes(old: &Rules, new: &Rules) -> Changes {
             list: "track_category".into(),
             key: c.clone(),
             label: c.clone(),
+            mods: None,
         });
     }
     // Families: tag by tag, the natural key of that table.
@@ -238,16 +255,19 @@ pub fn changes(old: &Rules, new: &Rules) -> Changes {
                 list: "family".into(),
                 key: t.clone(),
                 label: format!("{f}: + {t}"),
+                mods: None,
             }),
             (Some(f), None) => out.retired.push(Change {
                 list: "family".into(),
                 key: t.clone(),
                 label: format!("{f}: − {t}"),
+                mods: None,
             }),
             (Some(a), Some(b)) if a != b => out.corrected.push(Change {
                 list: "family".into(),
                 key: t.clone(),
                 label: format!("{a} → {b}: {t}"),
+                mods: None,
             }),
             _ => {}
         }
@@ -408,13 +428,20 @@ pub fn on_startup(dir: &Path, conn: &rusqlite::Connection, cfg: &crate::config::
             pin(None);
             let new_rules = crate::rules::load_from_dir(dir);
             let (changes, reclassified) = match &old_rules {
-                Some(old) => (
-                    changes(old, &new_rules),
-                    reclassify(conn, cfg, old, &new_rules).unwrap_or_else(|e| {
-                        log::warn!("catalogue update: classification not compared: {e}");
-                        Vec::new()
-                    }),
-                ),
+                Some(old) => {
+                    let mut changes = changes(old, &new_rules);
+                    let reclassified = match reclassify(conn, cfg, old, &new_rules) {
+                        Ok(r) => {
+                            measure(&mut changes, &r);
+                            r.mods
+                        }
+                        Err(e) => {
+                            log::warn!("catalogue update: classification not compared: {e}");
+                            Vec::new()
+                        }
+                    };
+                    (changes, reclassified)
+                }
                 None => {
                     log::warn!("catalogue update: previous catalogue unreadable, no report");
                     (Changes::default(), Vec::new())
@@ -453,10 +480,49 @@ fn reclassify(
     cfg: &crate::config::AppConfig,
     old: &Rules,
     new: &Rules,
-) -> rusqlite::Result<Vec<String>> {
-    let a = crate::harmonize::snapshot(conn, cfg, old)?;
-    let b = crate::harmonize::snapshot(conn, cfg, new)?;
-    Ok(crate::harmonize::snapshot_diff(&a, &b))
+) -> rusqlite::Result<Reclassified> {
+    let (a, fired_before) = crate::harmonize::snapshot_fired(conn, cfg, old)?;
+    let (b, fired_after) = crate::harmonize::snapshot_fired(conn, cfg, new)?;
+    Ok(Reclassified {
+        mods: crate::harmonize::snapshot_diff(&a, &b),
+        fired_before,
+        fired_after,
+    })
+}
+
+/// The mods an update reclassified, and which rules acted on each, under the
+/// old catalogue and under the new.
+struct Reclassified {
+    mods: Vec<String>,
+    fired_before: crate::harmonize::Fired,
+    fired_after: crate::harmonize::Fired,
+}
+
+/// Gives each traced line of the report its effect: the reclassified mods its
+/// rule acted on, before or after. Counting only the RECLASSIFIED ones is the
+/// point - a new rule that fires on 40 mods already classified the same way
+/// by another did nothing, and must not look busier than one that moved 3.
+fn measure(changes: &mut Changes, r: &Reclassified) {
+    let acted = |key: &str| {
+        r.mods
+            .iter()
+            .filter(|m| {
+                [&r.fired_before, &r.fired_after]
+                    .iter()
+                    .any(|f| f.get(*m).is_some_and(|ids| ids.iter().any(|id| id == key)))
+            })
+            .count()
+    };
+    for c in changes
+        .added
+        .iter_mut()
+        .chain(changes.corrected.iter_mut())
+        .chain(changes.retired.iter_mut())
+    {
+        if let Some(key) = c.fired_key() {
+            c.mods = Some(acted(&key));
+        }
+    }
 }
 
 /// "Go back to the previous catalogue" (`true`), or return to the current one
@@ -603,10 +669,19 @@ mod tests {
         let s = load_state(&config);
         let report = s.report.expect("a report");
         assert_eq!(report.reclassified, vec!["rss_car".to_string()], "the measured effect");
-        assert!(
-            report.changes.added.iter().any(|c| c.list == "drivetrain"),
-            "the rules that did it"
-        );
+        let rwd = report
+            .changes
+            .added
+            .iter()
+            .find(|c| c.key == "pitbox.spec-drivetrain.rwd")
+            .expect("the rule that did it");
+        assert_eq!(rwd.mods, Some(1), "with its measured effect");
+        let awd = report
+            .changes
+            .added
+            .iter()
+            .find(|c| c.key == "pitbox.spec-drivetrain.awd");
+        assert_eq!(awd.and_then(|c| c.mods), Some(0), "a rule that moved nothing says so");
         assert_eq!(report.from_version, "0.6.0");
         assert_eq!(s.previous.map(|p| p.texts), Some(old_texts), "kept for going back");
         assert!(!s.reverted);

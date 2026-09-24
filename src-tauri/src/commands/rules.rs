@@ -117,6 +117,9 @@ pub fn save_country_overlay(
 #[derive(serde::Serialize)]
 pub struct CatalogReportView {
     report: Option<crate::catalog_update::Report>,
+    /// What the user switched off - a report line then offers to switch it
+    /// back on rather than off.
+    disabled: Vec<String>,
     can_revert: bool,
     reverted: bool,
     previous_version: Option<String>,
@@ -127,8 +130,10 @@ pub struct CatalogReportView {
 pub fn get_catalog_report(app: AppHandle) -> Result<CatalogReportView, String> {
     let dir = crate::rules::config_dir(&app)?;
     let s = crate::catalog_update::load_state(&dir);
+    let disabled = crate::rule_overlay::disabled_keys(&crate::rules::load_rules_overlay(&app)?);
     Ok(CatalogReportView {
         report: s.report.filter(|_| !s.report_dismissed),
+        disabled,
         can_revert: s.previous.is_some(),
         reverted: s.reverted,
         previous_version: s.previous.map(|p| p.app_version),
@@ -144,6 +149,26 @@ pub fn set_catalog_reverted(app: AppHandle, db: State<Db>, reverted: bool) -> Re
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::catalog_update::set_reverted(&dir, &conn, &cfg, reverted)
+}
+
+/// "Disable" on a line of the update report (REGLES§6.3): the same switch
+/// as the Rules screen's, then the library re-applied. Returns the mods
+/// processed.
+#[tauri::command]
+pub fn set_rule_enabled(
+    app: AppHandle,
+    db: State<Db>,
+    list: String,
+    key: String,
+    enabled: bool,
+) -> Result<usize, String> {
+    let mut o = crate::rules::load_rules_overlay(&app)?;
+    crate::rule_overlay::set_enabled(&mut o, &list, &key, enabled)?;
+    crate::rules::save_rules_overlay(&app, o)?;
+    let rules = crate::rules::load(&app);
+    let cfg = crate::config::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::harmonize::harmonize_all(&conn, &cfg, &rules).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

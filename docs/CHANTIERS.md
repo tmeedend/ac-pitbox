@@ -671,9 +671,14 @@ de reprendre. En cas d'écart, la spec fait foi.
       `✎` (elle s'applique alors comme une règle à soi, ce qu'elle est) ; les
       règles à soi ne se réordonnent pas entre elles (la plus récente en
       tête) ; le filtre « Mes règles seulement » n'est pas mémorisé.
-      **Reste du chantier** : l'export/import de la surcouche (REGLES§9) ; le
-      compteur **par règle** dans le rapport de mise à jour et « Désactiver »
-      sur ses lignes (REGLES§6.3) — `fired` le rend désormais possible.
+      **Compteur par règle du rapport et « Désactiver » — faits** : les deux
+      classements de la mise à jour (ancien et nouveau catalogue) notent déjà
+      qui a agi (`harmonize::snapshot_fired`), le compteur n'a coûté aucune
+      passe de plus. Pas de compteur sur les familles et les pays, que le
+      moteur ne trace pas. Pas de « Voir » sur une ligne corrigée (la maquette
+      de REGLES§6.3 le montre) : la liste des mods reclassés est en bas du
+      détail.
+      **Reste du chantier** : l'export/import de la surcouche (REGLES§9).
       **Outil de relevé — reporté, pas abandonné, et il a désormais sa
       maison** : une sous-commande `survey` de `rules-tool`. Un binaire du
       workspace, jamais livré (comme `kn5-tool`), qui fait tourner **le vrai moteur** sur

@@ -467,6 +467,7 @@ pub fn run() {
             commands::rules::get_rules,
             commands::rules::get_rules_view,
             commands::rules::save_rules_overlay,
+            commands::rules::set_rule_enabled,
             commands::rules::get_taxonomy,
             commands::rules::save_family_overlay,
             commands::rules::save_country_overlay,

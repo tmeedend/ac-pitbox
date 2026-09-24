@@ -13,6 +13,7 @@
     dismissCatalogReport,
     sameVersion,
     setCatalogReverted,
+    setRuleEnabled,
     type CatalogChange,
   } from "$lib/workshop/catalogReport.svelte";
 
@@ -23,12 +24,15 @@
   const groups = $derived(
     report
       ? ([
-          ["catalogReport.added", report.changes.added],
-          ["catalogReport.corrected", report.changes.corrected],
-          ["catalogReport.retired", report.changes.retired],
-        ] as [string, CatalogChange[]][]).filter(([, l]) => l.length)
+          ["catalogReport.added", report.changes.added, true],
+          ["catalogReport.corrected", report.changes.corrected, true],
+          ["catalogReport.retired", report.changes.retired, false],
+        ] as [string, CatalogChange[], boolean][]).filter(([, l]) => l.length)
       : [],
   );
+
+  const effectText = (n: number) =>
+    n === 0 ? "—" : n === 1 ? t("rules.effectOne") : t("rules.effect", { count: n });
 </script>
 
 {#if view?.reverted}
@@ -71,12 +75,31 @@
     {#if catalogReport.error}<div class="err">{catalogReport.error}</div>{/if}
     {#if open}
       <div class="detail">
-        {#each groups as [key, list] (key)}
+        {#each groups as [key, list, switchable] (key)}
           <div class="group">
             <span class="lbl-key">{t(key, { count: list.length })}</span>
             <ul>
               {#each list as ch (`${ch.list}:${ch.key}`)}
-                <li><span class="kind">{t(`catalogReport.list.${ch.list}`)}</span><span class="mono">{ch.label}</span></li>
+                {@const off = view.disabled.includes(ch.key)}
+                <li class:off>
+                  <span class="kind">{t(`catalogReport.list.${ch.list}`)}</span>
+                  <span class="mono label">{ch.label}</span>
+                  {#if ch.mods !== undefined}
+                    <!-- The measured effect (REGLES§6.3): reclassified mods
+                         this rule acted on. -->
+                    <span class="effect" class:none={ch.mods === 0}>{effectText(ch.mods)}</span>
+                  {/if}
+                  {#if switchable && ch.mods !== undefined}
+                    <button
+                      type="button"
+                      class="btn mini"
+                      disabled={catalogReport.busy}
+                      onclick={() => void setRuleEnabled(ch.list, ch.key, off)}
+                    >
+                      {off ? t("catalogReport.enable") : t("catalogReport.disable")}
+                    </button>
+                  {/if}
+                </li>
               {/each}
             </ul>
           </div>
@@ -150,10 +173,33 @@
   }
   .group li {
     display: flex;
+    align-items: center;
     gap: 10px;
     font-size: 12px;
     color: var(--txt2);
     padding: 1px 0;
+    min-height: 24px;
+  }
+  .group li.off {
+    opacity: 0.55;
+  }
+  .label {
+    flex: 1;
+    min-width: 0;
+  }
+  .effect {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--txt2);
+    min-width: 56px;
+    text-align: right;
+  }
+  .effect.none {
+    color: var(--faint);
+  }
+  .mini {
+    padding: 2px 8px;
+    font-size: 11px;
   }
   .kind {
     min-width: 170px;
