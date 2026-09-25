@@ -1517,7 +1517,7 @@
     "unmanagedNoLayer": "ce mod a été installé dans le jeu hors Pit Box : rien ne peut être posé par-dessus. Supprimez son dossier du jeu et importez le mod dans Pit Box pour le gérer ici.",
     "wikiNotAnEntity": "Identifiant Wikidata invalide.",
     "noPreviousCatalog": "Aucun catalogue précédent n'est conservé.",
-    "notARulesExport": "Ce fichier n'est pas un export de règles Pit Box.",
+    "notARulesExport": "Ce fichier n'est ni un export de règles ni un relevé Pit Box.",
     "rulesExportTooNew": "Cet export vient d'une version plus récente de Pit Box. Mettez l'application à jour pour l'importer.",
     "logoFormat": "Un logo doit être une image PNG ou SVG.",
     "logoTooSmall": "Ce PNG est trop petit : au moins 64 px sur son plus petit côté.",

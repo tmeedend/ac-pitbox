@@ -16,8 +16,9 @@ pub const PACK_NOT_FOUND: &str = "errors.packNotFound";
 pub const AC_NOT_CONFIGURED: &str = "errors.acNotConfigured";
 // "Go back to the previous catalogue" with no previous one kept (REGLES§6.4).
 pub const NO_PREVIOUS_CATALOG: &str = "errors.noPreviousCatalog";
-// Importing rules from a file that is not a Pit Box rules export (REGLES§9),
-// or one written by a newer version than this one reads.
+// Importing rules from a file that is neither a Pit Box rules export nor a
+// library survey (REGLES§9), or one written by a newer version than this one
+// reads.
 pub const NOT_A_RULES_EXPORT: &str = "errors.notARulesExport";
 pub const RULES_EXPORT_TOO_NEW: &str = "errors.rulesExportTooNew";
 // A brand logo of the user's (TAXO§9): PNG or SVG, a PNG of at least 64 px.

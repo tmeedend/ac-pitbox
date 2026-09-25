@@ -76,10 +76,22 @@ pub fn write_export(dir: &Path, catalog: &Rules, path: &Path) -> Result<(), Stri
 /// Merges an export into the overlays of `dir` and writes them. The files as
 /// they were are kept beside them (`*.before-import.json`): an import is one
 /// click, and the way back should not depend on the startup backup's timing.
+/// The decisions a file carries: a rules export, or a library survey
+/// (`survey.rs`), whose `decisions` section IS an export - so one file is
+/// enough, for the developer bringing back his other machine's survey as for
+/// a contributor who only sends his.
+fn read_decisions(text: &str) -> Result<RulesExport, serde_json::Error> {
+    let v: serde_json::Value = serde_json::from_str(text)?;
+    match v.get("decisions") {
+        Some(d) if v.get("pitbox_survey").is_some() => serde_json::from_value(d.clone()),
+        _ => serde_json::from_value(v),
+    }
+}
+
 pub fn import(dir: &Path, catalog: &Rules, path: &Path) -> Result<ImportReport, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let file: RulesExport = serde_json::from_str(&text).map_err(|e| {
-        log::warn!("{} is not a rules export: {e}", path.display());
+    let file = read_decisions(&text).map_err(|e| {
+        log::warn!("{} is neither a rules export nor a survey: {e}", path.display());
         crate::errors::NOT_A_RULES_EXPORT.to_string()
     })?;
     if file.pitbox_rules_export > FORMAT {
@@ -169,6 +181,37 @@ mod tests {
             b.join("rules-overlay.before-import.json").is_file(),
             "the way back is kept"
         );
+    }
+
+    /// A survey carries the same decisions as an export: importing it takes
+    /// them, the rest of the survey is not read.
+    #[test]
+    fn a_survey_imports_its_decisions() {
+        let base = crate::testutil::temp_dir("rules-share-survey");
+        let (a, b) = (base.join("a"), base.join("b"));
+        std::fs::create_dir_all(&a).unwrap();
+        std::fs::create_dir_all(&b).unwrap();
+        let catalog = default_rules();
+        let mut o = RulesOverlay::default();
+        o.brand_fix.own.push(BrandFix {
+            id: None,
+            name_contains: "lanzo".into(),
+            set_brand: "Lamborghini".into(),
+        });
+        crate::rule_overlay::save(&a.join("rules-overlay.json"), &o).unwrap();
+        let survey = serde_json::json!({
+            "pitbox_survey": 1,
+            "summary": {},
+            "cars": [],
+            "decisions": export(&a, &catalog),
+        });
+        let file = base.join("survey.json");
+        std::fs::write(&file, survey.to_string()).unwrap();
+
+        let r = import(&b, &catalog, &file).unwrap();
+        assert_eq!(r.stats.added, 1, "{r:?}");
+        let got = crate::rule_overlay::load_or_migrate(&b.join("rules-overlay.json"), None);
+        assert_eq!(got.brand_fix.own[0].set_brand, "Lamborghini");
     }
 
     #[test]

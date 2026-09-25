@@ -1517,7 +1517,7 @@
     "unmanagedNoLayer": "This mod was installed in the game outside Pit Box: nothing can be layered on top. Delete its folder from the game and import the mod into Pit Box to manage it here.",
     "wikiNotAnEntity": "Not a valid Wikidata identifier.",
     "noPreviousCatalog": "No previous catalogue is kept.",
-    "notARulesExport": "This file is not a Pit Box rules export.",
+    "notARulesExport": "This file is neither a Pit Box rules export nor a library survey.",
     "rulesExportTooNew": "This export was made by a newer version of Pit Box. Update to import it.",
     "logoFormat": "A logo must be a PNG or SVG image.",
     "logoTooSmall": "This PNG is too small: at least 64 px on its smaller side.",
