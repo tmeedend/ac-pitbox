@@ -26,7 +26,8 @@
     "check:refs": "node scripts/check-refs.mjs",
     "check:conventions": "node scripts/check-conventions.mjs",
     "report:docs": "node scripts/report-docs.mjs",
-    "report:code": "node scripts/report-code.mjs"
+    "report:code": "node scripts/report-code.mjs",
+    "review:done": "node scripts/report-code.mjs --review-done"
   },
   "license": "MIT",
   "dependencies": {

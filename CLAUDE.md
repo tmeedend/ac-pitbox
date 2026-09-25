@@ -158,6 +158,31 @@ Une consigne écrite s'oublie — ce fichier le constate plus bas à propos de
   aussi lent finirait désactivé) : `npm run verify` reste l'étape 2 de « Fin de
   tâche ».
 
+### Revue de refactoring
+
+Régulière, mais **cadencée par l'activité, pas par le calendrier** : le projet
+avance sur du temps libre, avec des semaines à cent commits et des mois à
+zéro. Une revue hebdomadaire relirait un code qui n'a pas bougé. Au-delà de
+50 commits depuis la dernière (≈ une semaine active au rythme mesuré),
+`npm run check` affiche `[code] refactoring review due`, et le hook de commit
+le fait remonter.
+
+Quand la ligne apparaît : finir la tâche en cours, puis **demander** en fin de
+compte rendu si on fait la revue maintenant — ne jamais la lancer d'office.
+
+- **Oui** : relire les fichiers les plus lourds et ceux qui ont le plus bougé
+  depuis la dernière revue (`git log --stat refs/pitbox/refactoring-review..HEAD`),
+  et rendre 3 à 5 refactorings classés par bénéfice sur risque, chacun avec sa
+  taille. Ne rien modifier : l'utilisateur choisit ce qu'on lance, et ce qu'il
+  reporte va dans `docs/CHANTIERS.md`.
+- **Non, pas maintenant** : rien de plus.
+
+Dans les deux cas, `npm run review:done` remet le compteur à zéro — sans quoi
+la question reviendrait à chaque commit. Le compteur est une référence git
+locale (`refs/pitbox/refactoring-review`), partagée par tous les worktrees et
+jamais poussée ; sur un clone neuf, où elle n'existe pas, `npm run review:done`
+la crée et le décompte démarre.
+
 ## Langues — à ne pas confondre
 
 L'application a vocation à être **publique et open source**. D'où trois régimes

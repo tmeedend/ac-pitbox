@@ -6,7 +6,8 @@
 // (`report-docs.mjs`). This prints, on every `npm run check`, the heaviest
 // source files, the heavy files that grew on the current branch, and the long
 // Rust functions in the files the branch touched: the refactoring candidates
-// CLAUDE.md asks to flag in every end-of-task report.
+// CLAUDE.md asks to flag in every end-of-task report. It also says when a
+// refactoring review is due (`--review-done` resets that counter).
 //
 // **No threshold fails anything.** A gate that refuses a commit because a file
 // grew by ten lines ends up disabled — the lesson of `check-conventions.mjs`.
@@ -32,6 +33,16 @@ function git(...args) {
   }
 }
 
+// Refactoring review pacing: see the comment above the review report below.
+const REVIEW_EVERY = 50;
+const REVIEW_REF = "refs/pitbox/refactoring-review";
+
+if (process.argv.includes("--review-done")) {
+  git("update-ref", REVIEW_REF, "HEAD");
+  console.log(`[code] refactoring review marker moved to HEAD: next one in ${REVIEW_EVERY} commits`);
+  process.exit(0);
+}
+
 const isSource = (f) => EXTENSIONS.test(f) && ROOTS.some((r) => f.startsWith(r)) && !EXCLUDED.test(f);
 const lineCount = (f) => readFileSync(f, "utf8").split(/\r?\n/).length;
 const fmt = (n) => n.toLocaleString("fr-FR");
@@ -50,6 +61,25 @@ const total = [...sizes.values()].reduce((a, b) => a + b, 0);
 const heaviest = [...sizes].sort((a, b) => b[1] - a[1]).slice(0, 3);
 console.log(`[code] ${files.length} source files, ${fmt(total)} lines`);
 console.log(`[code] heaviest: ${heaviest.map(([f, n]) => `${short(f)} (${fmt(n)})`).join(" · ")}`);
+
+// Refactoring review, paced by activity rather than by the calendar: this is a
+// hobby project, with weeks at 100 commits and whole months at zero (summer
+// 2026). A weekly schedule would review an idle codebase; counting commits
+// asks only when there is something new to look at. 50 commits ≈ one active
+// week at the measured pace. The marker is a plain ref — shared by every
+// worktree, never pushed — moved by `npm run review:done` once the user has
+// answered, yes or no (CLAUDE.md, « Revue de refactoring »). No marker (CI, a
+// fresh clone): nothing to say.
+const reviewed = git("rev-parse", "--verify", "-q", REVIEW_REF);
+if (reviewed) {
+  const since = Number(git("rev-list", "--count", "--no-merges", `${REVIEW_REF}..HEAD`) ?? 0);
+  const when = git("log", "-1", "--format=%as", REVIEW_REF);
+  console.log(
+    since >= REVIEW_EVERY
+      ? `[code] refactoring review due: ${since} commits since the last one (${when}) — ask the user (CLAUDE.md, « Revue de refactoring »)`
+      : `[code] refactoring review: ${since}/${REVIEW_EVERY} commits since the last one (${when})`,
+  );
+}
 
 // Growth is measured against the fork point with main, working tree included,
 // so uncommitted work counts too. On main itself the fork point is HEAD, which
