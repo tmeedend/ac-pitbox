@@ -150,7 +150,10 @@
     // A brand only spellings lead to - its cars gone - stays, hidden unless
     // asked for (TAXO§9): the merges curated for it are kept.
     for (const to of Object.values(effAliases)) row(to);
-    return [...m.values()].sort((a, b) => b.cars - a.cars || a.name.localeCompare(b.name));
+    // By name, not by count (asked at use, 2026-09-25): the tab is where one
+    // looks a brand up, and forty brands read like a directory. TAXO§6.1's
+    // "by decreasing count" suits an index, which the library has.
+    return [...m.values()].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
   });
   const shownRows = $derived(rows.filter((r) => showEmpty || r.cars > 0));
   const emptyCount = $derived(rows.filter((r) => r.cars === 0).length);

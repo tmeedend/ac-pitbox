@@ -481,7 +481,7 @@ Svelte. Les deux sont documentées comme écartées, en tête du script.
   l'utilisateur, indexées par la clé naturelle de l'entrée, une suppression
   étant une pierre tombale. La fusion des deux ne se calcule qu'à un endroit,
   la crate `pitbox-catalog`. **Pour faire évoluer ce catalogue, on ne
-  l'édite pas à la main** : on cure dans l'app (Atelier › Règles, Catégories,
+  l'édite pas à la main** : on cure dans l'app (Atelier › Règles, Marques, Familles,
   Pays), puis `npm run rules:diff` / `npm run rules:promote`.
 - **`Prefs` (`config.rs`) est en `#[serde(default)]`** : un champ retiré est
   simplement ignoré dans les `config.json` existants, pas de migration à
@@ -649,7 +649,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Enrichissement Wikipédia** | livré et nettoyé ; reste la seule mesure des seuils, sur tes corrections manuelles | `docs/SPEC-wikipedia-fiche-detail.md` |
 | **Signature Authenticode** | le workflow est prêt, il attend un certificat | `docs/windows-code-signing.md` |
 | **Refonte navigation et fiches** | livrée et fusionnée ; restent trois questions ouvertes, dont le markdown dans les notes | `docs/PLAN-refonte-navigation.md` |
-| **Taxonomies** | familles, onglets Catégories, Pays et Marques (fusions, logos) livrés ; restent les emblèmes dans l'éditeur de filtre et la validation du seuil de fond cuit sur le gros corpus | `docs/SPEC-taxonomies.md`, `docs/CHANTIERS.md` |
+| **Taxonomies** | familles, onglets Familles, Pays et Marques (fusions, logos, règles sur le nom) livrés ; reste la validation du seuil de fond cuit sur le gros corpus | `docs/SPEC-taxonomies.md`, `docs/CHANTIERS.md` |
 | **Catalogue de règles** | livré (deux couches, rapport mesuré, écran Règles, export/import, `rules-tool promote`, relevé anonyme) ; reste à lancer le relevé sur le gros corpus et promouvoir ce qu'il révèle | `docs/SPEC-regles.md`, `docs/CHANTIERS.md` |
 | **Corrections par mod** | à faire : marque, pays, classe, fiche technique d'un mod précis | `docs/CHANTIERS.md` |
 | **Règles de tags divergentes** | deux fichiers décrivent la même ontologie, un seul est chargé | `docs/CHANTIERS.md` |
