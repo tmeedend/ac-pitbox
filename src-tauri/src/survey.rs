@@ -287,20 +287,12 @@ pub fn write(path: &Path, survey: &Survey) -> Result<(), String> {
 mod tests {
     use super::*;
 
-    /// The survey says what the engine did and what it did not know - and it
-    /// carries no path: it is meant to be sent, and the repository it feeds
-    /// is public.
-    #[test]
-    fn a_survey_reports_the_unknown_and_never_a_path() {
-        let base = crate::testutil::temp_dir("survey");
+    /// A library of one car, `rss_car`, whose `ui_car.json` is `ui_car`.
+    fn one_car_library(base: &Path, ui_car: &str) -> (Connection, AppConfig) {
         let lib = base.join("lib");
         let dir = lib.join("cars").join("rss_car").join("v");
         std::fs::create_dir_all(dir.join("ui")).unwrap();
-        std::fs::write(
-            dir.join("ui").join("ui_car.json"),
-            r#"{"name":"RSS Formula","brand":"RSS","class":"race","author":"Some One","tags":["rwd","weirdtag"]}"#,
-        )
-        .unwrap();
+        std::fs::write(dir.join("ui").join("ui_car.json"), ui_car).unwrap();
         let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
         let now = chrono::Local::now().to_rfc3339();
         crate::overlay::upsert_mod(
@@ -333,9 +325,22 @@ mod tests {
         .unwrap();
         crate::overlay::set_active_version(&conn, "rss_car", "rss_car_v").unwrap();
         let cfg = AppConfig {
-            library_path: Some(lib.clone()),
+            library_path: Some(lib),
             ..Default::default()
         };
+        (conn, cfg)
+    }
+
+    /// The survey says what the engine did and what it did not know - and it
+    /// carries no path: it is meant to be sent, and the repository it feeds
+    /// is public.
+    #[test]
+    fn a_survey_reports_the_unknown_and_never_a_path() {
+        let base = crate::testutil::temp_dir("survey");
+        let (conn, cfg) = one_car_library(
+            &base,
+            r#"{"name":"RSS Formula","brand":"RSS","class":"race","author":"Some One","tags":["rwd","weirdtag"]}"#,
+        );
 
         let s = build(&conn, &cfg, &crate::rules::default_rules(), &base).unwrap();
         assert_eq!(s.summary.cars, 1);
