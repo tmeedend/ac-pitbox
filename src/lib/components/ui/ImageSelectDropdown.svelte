@@ -259,7 +259,7 @@
      l'alignement des valeurs qui coûterait cher, pas les pixels d'image.
      Pas de cadre à elle : à pleine hauteur, il doublerait celui de la ligne à
      un pixel de distance.
-     `gap: 8px` et non 9 : même gouttière que `.field` d'`AppShell`, dont les
+     `gap: 8px` et non 9 : même gouttière que `.field` de `SessionColumn`, dont les
      lignes voisinent les nôtres dans la même colonne. L'écart valait 2 px sur
      le début de la valeur, et il se voit d'autant mieux que les vignettes sont
      maintenant larges. */

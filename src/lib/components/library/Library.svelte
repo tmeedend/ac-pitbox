@@ -99,7 +99,7 @@
   let selectedIds = $state<Set<string>>(new Set());
   // Page détail pleine page (§6.3) : double-clic sur une carte, ou bouton
   // « Agrandir » du panneau latéral. État centralisé dans nav.openFull (voir
-  // nav.svelte.ts) — la navigation manette globale (AppShell) doit savoir si
+  // nav.svelte.ts) — la navigation manette globale (`gamepadNav.ts`) doit savoir si
   // elle est ouverte pour céder gauche/droite au visualiseur et gérer B=fermer.
 
   // Filtres persistés par type (rechargés au retour sur la page). Défauts

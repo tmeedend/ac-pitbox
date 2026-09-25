@@ -48,7 +48,7 @@ export function pinShell(from?: HTMLElement | null): void {
 }
 
 /**
- * Filet global, monté une fois par `AppShell`.
+ * Filet global, monté une fois par `startShellServices`.
  *
  * Écoute le défilement du **document** — celui qui ne devrait jamais avoir
  * lieu. L'écouteur est en capture pour voir passer aussi les événements des

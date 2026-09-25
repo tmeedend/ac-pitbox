@@ -465,9 +465,12 @@ coûtait avant d'exister.
 ### Carte des écrans
 
 `AppShell.svelte` est la coquille : **rail de navigation** (`NavRail.svelte`,
-les lieux) + **colonne de session** (ce qu'on lance) + aiguillage sur
-`nav.section` (`src/lib/shell/nav.svelte.ts`). Les trois territoires et leur
-frontière étanche sont au §7.2 du SPEC. Correspondance section → composant :
+les lieux) + **colonne de session** (`shell/session/SessionColumn.svelte`, ce
+qu'on lance) + aiguillage sur `nav.section` (`src/lib/shell/nav.svelte.ts`).
+Les trois territoires et leur frontière étanche sont au §7.2 du SPEC. Ce qui
+tourne en fond pour toute l'app (glisser-déposer, manette, suivi des lots,
+mises à jour…) se démarre dans `src/lib/shell/shellServices.ts`, pas par un
+`onMount` de plus dans la coquille. Correspondance section → composant :
 
 Le rail a **deux rangs**, et ils ne classent pas par type de contenu mais par
 **durée de validité** de ce qu'on y règle : *La session* (ce qui se décide à
@@ -506,8 +509,9 @@ sa liste. Le retour ferme la fiche du dessus, jamais l'écran entier.
 panneau latéral compact qui la doublait à droite de la grille a été retiré —
 il montrait moins, et toute évolution de fiche était à faire deux fois.
 
-Hors aiguillage : `NavRail`, `TitleBar`, `ImportOverlay` (les modales d'arbitrage) et
-`ToastStack` (`ImportToasts` + `ControllerToast`) — tous dans `AppShell` —,
+Hors aiguillage : `NavRail`, `TitleBar`, `SessionColumn`, `ImportOverlay` (les
+modales d'arbitrage) et `ShellToasts` (la pile de notifications : une
+notification nouvelle s'ajoute là, pas dans la coquille) — tous dans `AppShell` —,
 `SetupWizard` (dans `routes/+page.svelte`, première configuration),
 `BulkEditPanel` / `ContextMenu` (dans `Library`), `OpponentPicker` /
 `SavedSessionsDialog` (dans `Launch`).

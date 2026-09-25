@@ -34,7 +34,7 @@
  *    profils (`SetupWizard.svelte`) — une nouvelle installation repart donc
  *    directement sur les défauts de l'ancien profil « Normal », qui était de
  *    toute façon le présélectionné ;
- *  - la tâche de fond de génération (`AppShell.svelte`).
+ *  - la tâche de fond de génération (`ShellToasts.svelte`).
  *
  * **Et surtout : `gridThumbsOn()` rend `false`**, ce qui suffit à ce qu'aucune
  * vignette ne soit demandée, produite ni affichée. Les cartes reprennent la

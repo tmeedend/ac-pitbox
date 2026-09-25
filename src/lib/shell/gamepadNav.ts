@@ -219,7 +219,7 @@ function initFocusTracking() {
   });
 }
 
-// Régions de mise en page (AppShell.svelte : `.side` = menu latéral, `.content`
+// Régions de mise en page (`.side` de SessionColumn = menu latéral, `.content` d'AppShell
 // = zone d'écran active). Le plus proche voisin géométrique seul peut
 // préférer un bouton du menu latéral — horizontalement proche du bord gauche
 // du contenu — à une carte de la grille plus bas dans le contenu : bug réel
