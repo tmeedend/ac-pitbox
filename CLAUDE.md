@@ -3,6 +3,161 @@
 Gestionnaire de mods **Assetto Corsa** : remplace Mod Organizer 2 et pilote
 Content Manager (CM) comme moteur de lancement. Application desktop Windows.
 
+## Personne ne relit le code — c'est toi le relecteur
+
+Le projet avance sans relecture humaine du code : l'utilisateur lit les
+comptes rendus et teste l'app, mais n'ouvre presque jamais un diff. Tout ce
+qu'une revue attrape d'ordinaire — la duplication, le fichier qui enfle, le
+nom devenu faux — n'est attrapé par personne si ce n'est pas fait pendant
+l'écriture. **La qualité du code passe avant la vitesse de livraison.**
+
+### Refactoriser en écrivant, pas après
+
+Quand le code à modifier est mal découpé pour accueillir le changement, on le
+remet d'aplomb **d'abord**, puis on fait le changement. Deux cas, et le
+critère est le risque, pas le goût :
+
+- **Refactoring simple → le faire, sans demander.** Limité aux fichiers qu'on
+  touche déjà, sans changement de comportement, couvert par les tests
+  existants ou par le typage : extraire une fonction, factoriser une logique
+  qui apparaît pour la troisième fois, renommer ce qui ment, descendre dans
+  son module métier la logique qui grossit dans `commands/`, sortir d'un
+  composant un bloc qui a sa propre raison de changer. **Dans un commit à part,
+  avant le changement fonctionnel** : l'historique doit distinguer « même
+  comportement, autre forme » de « nouveau comportement ».
+- **Refactoring complexe ou long → s'arrêter et demander.** Dès qu'une de ces
+  conditions est vraie : il traverse plusieurs domaines ; il change la
+  signature d'une commande Tauri ou le format d'un fichier persisté
+  (`overlay.sqlite`, `ui_prefs.json`, `config.json`…) ; il touche une zone des
+  règles d'or (`activation.rs`, `deploy.rs`, `gamebackup.rs`,
+  `maintenance.rs`) ; ou il pèse plus lourd que le changement demandé
+  lui-même. Présenter alors en quelques lignes : ce qui gêne, ce que le
+  refactoring toucherait, sa taille (quelques minutes / une session /
+  plusieurs), le risque, et trois issues — **maintenant**, **plus tard**
+  (entrée dans `docs/CHANTIERS.md`), **jamais**. Sans réponse, faire la tâche
+  demandée par le chemin le plus propre possible sans lui.
+
+Dans une zone des règles d'or, **les tests d'abord** : un test qui fige le
+comportement actuel, vert avant de toucher quoi que ce soit, puis le
+refactoring. Sans filet, pas de refactoring là — même petit.
+
+### Signaler ce qu'on voit sans le traiter
+
+Un refactoring repéré hors du périmètre de la tâche ne se fait pas en douce :
+il se **signale**. Ce qui mérite au moins une mention :
+
+- un fichier au-delà de ~1 500 lignes qu'on vient encore de faire grossir ;
+- une fonction de plus de ~80 lignes, ou à plus de trois niveaux d'imbrication ;
+- la même logique à trois endroits ;
+- un paramètre booléen qui fait bifurquer toute une fonction ;
+- un composant Svelte qui mêle plusieurs domaines ou plusieurs écrans ;
+- un nom, un commentaire ou une doc devenus faux après le changement.
+
+Les lignes `[code]` de `npm run check` (voir « L'outillage » plus bas) en
+repèrent une partie mécaniquement ; le reste demande de lire.
+
+### Ne jamais affaiblir un contrôle pour le faire passer
+
+Quand un test, clippy, `npm run check` ou la CI échoue, **on corrige le code,
+pas le contrôle**. C'est le risque premier d'un projet sans relecture : une
+porte verte qu'on a pliée ressemble exactement à une porte verte qu'on a
+satisfaite. Aucun de ces gestes sans le dire explicitement dans le compte
+rendu — quoi, où, et pourquoi c'est légitime :
+
+- changer l'attendu d'un test existant, le supprimer, le marquer `#[ignore]`
+  ou `.skip` ;
+- `#[allow(clippy::…)]`, `#[allow(dead_code)]`, `// conventions: allow …`,
+  `@ts-ignore`, `@ts-expect-error`, `any`, `as unknown as` ;
+- ajouter une entrée au socle `scripts/refs-baseline.json` ;
+- retirer une étape de `npm run verify`, de la CI ou du hook de commit.
+
+Un test dont l'attendu change parce que le comportement a **volontairement**
+changé est légitime — et c'est justement ce qu'il faut dire : pour qui ne lit
+pas le diff, c'est le seul signe qu'un comportement protégé a bougé.
+
+### Chercher avant d'écrire
+
+Avant d'écrire une fonction utilitaire, un composant, un type ou une commande,
+**chercher s'il existe déjà** — par son nom probable et par ce qu'il fait. Les
+doublons d'une IA ne viennent pas de la paresse mais de l'ignorance de
+l'existant : les modules racine de `src/lib/`, les briques de
+`components/ui/`, `crate::testutil`, les fabriques de test d'un module en
+contiennent déjà beaucoup. Réutiliser ou étendre ; un deuxième exemplaire
+presque identique est un refactoring à signaler.
+
+### Rester dans le périmètre
+
+Faire ce qui est demandé, pas davantage. Un bug, une incohérence ou une
+amélioration repérés en passant **se signalent** (compte rendu, ou tâche à
+part) — jamais corrigés en douce au milieu d'un autre changement : un
+changement que personne ne voit est un changement que personne n'a validé.
+Seule exception, le refactoring simple ci-dessus, qui a son propre commit.
+
+### Les données des utilisateurs survivent aux mises à jour
+
+`overlay.sqlite`, `config.json`, `ui_prefs.json` et les autres fichiers
+d'`app_config_dir` ont été écrits par une version antérieure de l'app, chez
+des utilisateurs réels. Donc :
+
+- **un ajout** (colonne, champ JSON) prend une valeur par défaut, passe par un
+  `ALTER` idempotent dans `migrate()` ou par `#[serde(default)]`, et l'ancien
+  fichier se relit sans erreur ;
+- **une suppression, un renommage ou un changement de sens** d'une donnée
+  persistée se demande avant d'être fait — jamais de `DROP`, jamais de colonne
+  renommée en place ;
+- dans les deux cas, un test charge l'ancien format et vérifie ce qu'on en
+  lit.
+
+### Relire son diff avant de commiter
+
+Avant chaque commit, relire `git diff --staged` **en entier**, comme un
+relecteur qui ne connaît pas la conversation : code mort laissé derrière,
+`dbg!`/`console.log` oubliés, commentaire ou doc devenus faux, chaîne visible
+en dur, fichier touché par erreur. Pour un changement qui dépasse une poignée
+de fichiers, ou qui touche une zone des règles d'or, lancer `/code-review` et
+traiter ce qu'il trouve avant de commiter.
+
+### Le compte rendu : la seule fenêtre sur le code
+
+Le compte rendu de fin de tâche est tout ce que l'utilisateur lira du
+travail. Il suit toujours la même forme, pour que « tests verts » et « vu
+fonctionner à l'écran » ne puissent jamais se confondre :
+
+- **Fait** — ce qui change pour qui utilise l'app, en une ou deux phrases.
+- **Vérifié** — comment, précisément : quels tests (nouveaux ou existants),
+  `npm run verify` vert ou non, app lancée et écran regardé ou non.
+  « Ça compile » n'est pas « ça marche ».
+- **Pas vérifié** — ce qui ne l'a pas été, et pourquoi (pas d'échantillon
+  réel, dépend de CM, rendu visuel à regarder…).
+- **Décidé à ta place** — les choix non triviaux faits sans demander : une
+  valeur par défaut, un cas limite, un libellé, pour pouvoir les contester.
+- **Refactoring** — ce qui a été refactorisé en passant (et dans quel commit),
+  ce qui a été repéré sans être traité, chaque point avec sa taille estimée et
+  le risque qu'il y a à le laisser.
+
+Une rubrique vide s'écrit « rien » plutôt que de disparaître : son absence ne
+dirait pas si la question a été posée.
+
+### L'outillage qui tient ces règles
+
+Une consigne écrite s'oublie — ce fichier le constate plus bas à propos de
+`scrollIntoView`. Deux de ces règles sont donc aussi tenues par des outils :
+
+- **`[code]` dans `npm run check`** (`scripts/report-code.mjs`) : les fichiers
+  les plus lourds, ceux de plus de 1 500 lignes qui grossissent encore sur la
+  branche, et les fonctions Rust de plus de 80 lignes dans les fichiers que la
+  branche touche. **Un rapport, pas une porte**, sur le modèle de
+  `report-docs.mjs`. Ses seuils sont ceux de la section « Signaler » ci-dessus :
+  l'un ne bouge pas sans l'autre.
+- **Le hook de commit** (`.claude/settings.json` →
+  `scripts/hook-precommit-check.mjs`) : tout `git commit` passé par l'outil
+  Bash ou PowerShell lance d'abord `npm run check` (~15 s), et un échec
+  **bloque** le commit en renvoyant la sortie. En cas de succès, les lignes
+  `[code]` reviennent en contexte : c'est le moment d'écrire la rubrique
+  Refactoring. Seulement `check`, pas `verify` (plusieurs minutes, un hook
+  aussi lent finirait désactivé) : `npm run verify` reste l'étape 2 de « Fin de
+  tâche ».
+
 ## Langues — à ne pas confondre
 
 L'application a vocation à être **publique et open source**. D'où trois régimes
@@ -680,6 +835,9 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 4. **Démarrer l'application** pour que les développements soient disponibles,
    via la configuration `tauri (app desktop)` de `.claude/launch.json`
    (`npm run tauri dev`).
+5. **Rendre compte** dans la forme fixe de « Le compte rendu : la seule
+   fenêtre sur le code » (en tête de ce fichier), rubrique Refactoring
+   comprise.
 
 ## Vérification : l'aperçu navigateur ne prouve rien
 
