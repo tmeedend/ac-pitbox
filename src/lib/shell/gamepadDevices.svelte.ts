@@ -241,7 +241,7 @@ async function migrateLegacyMode(): Promise<void> {
   removeUiPref(LEGACY_MODE_KEY);
 }
 
-/** Starts watching for devices. One loop, mounted once in `AppShell`; returns
+/** Starts watching for devices. One loop, mounted once by `startShellServices`; returns
  *  a stop function.
  *
  *  `requestAnimationFrame` and not `setInterval`: observed empirically under

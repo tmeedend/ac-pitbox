@@ -202,7 +202,7 @@ body {
  * (15px) est l'écart, pas la référence.
  *
  * La navigation, elle, n'a plus d'identité rouge : ses titres de section
- * (`.nsec` d'AppShell) sont de la STRUCTURE, pas un état. Le rouge y est
+ * (`.nsec` de SessionColumn) sont de la STRUCTURE, pas un état. Le rouge y est
  * désormais réservé au filet de l'entrée active et au bouton de lancement
  * (barème de la spec accent) — quand tout est accent, rien ne l'est.
  *

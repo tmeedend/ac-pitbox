@@ -88,7 +88,7 @@ export const nav = $state<{
   sessionTrack: SessionPick | null;
   /** Id du mod affiché en fiche pleine page (Library), ou null si aucune n'est
    * ouverte — centralisé ici (plutôt que local à Library) pour que la
-   * navigation manette globale (AppShell) sache si elle doit céder la main
+   * navigation manette globale (`gamepadNav.ts`) sache si elle doit céder la main
    * gauche/droite au visualiseur (mod précédent/suivant) et gérer B = fermer. */
   openFull: string | null;
   /** Nom du pack affiché en fiche pleine page (§4.4), ou `null`. Posé par
@@ -134,7 +134,7 @@ export const nav = $state<{
   search: null,
   // Hydraté juste en dessous, de façon asynchrone (lecture fichier côté
   // Rust) : reste `null` le temps d'un aller-retour IPC au tout premier
-  // rendu, comme le zoom/la langue (`getConfig()` dans AppShell.svelte).
+  // rendu, comme le zoom/la langue (`getConfig()` dans `shellServices.ts`).
   sessionCar: null,
   sessionTrack: null,
   openFull: null,

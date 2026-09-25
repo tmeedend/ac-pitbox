@@ -159,7 +159,7 @@ export const PAUSE_STUDIO = "studio";
  * Posée **dès le clic** sur « Démarrer » (`launchSession`) et levée à la
  * **fermeture du jeu**, que l'app sait voir : le fil qui coupe et reprend la
  * musique de Big Picture surveille déjà le process d'Assetto Corsa
- * (`music/watch.rs`), et `AppShell` s'abonne à ce qu'il annonce.
+ * (`music/watch.rs`), et `shellServices.ts` s'abonne à ce qu'il annonce.
  *
  * Les deux bouts ne suivent pas le même signal, et c'est voulu : la musique
  * continue pendant tout l'écran de chargement et ne se coupe qu'une fois la
