@@ -470,9 +470,20 @@ mod tests {
         file.car.tag_merge.remove(3);
         file.track.category_allowlist.swap(0, 2);
         let o = migrate(&file, &pre_layer_rules());
-        let mut rebuilt = default_rules();
-        apply(&mut rebuilt, &default_rules(), &o);
+        // Over the catalogue the file was COPIED from - the frozen manifest -
+        // the decisions give the file back exactly. It used to be checked over
+        // the current catalogue, which only held while the two were the same:
+        // the first real promotion (2026-09-25) set them apart.
+        let mut rebuilt = pre_layer_rules();
+        apply(&mut rebuilt, &pre_layer_rules(), &o);
         assert_eq!(lists(&rebuilt), lists(&file), "diff nul");
+        // Over today's catalogue, his decisions still hold, and what the
+        // catalogue added since reaches him.
+        let mut today = default_rules();
+        apply(&mut today, &default_rules(), &o);
+        let brands: Vec<&str> = today.car.brand_fix.iter().map(|r| r.set_brand.as_str()).collect();
+        assert_eq!(brands[0], "RSS", "his rule, first");
+        assert!(brands.contains(&"Lamborghini"), "a rule shipped after his copy");
     }
 
     /// What the Rules screen saves comes back as saved.
