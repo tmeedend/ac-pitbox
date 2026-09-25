@@ -45,6 +45,12 @@ export const FAMILY_ICONS: Record<string, string> = {
     `<path d="M10 40c-2 0-3-1-3-3l.5-6c.4-3 3-5 6-6l8-1 9-8c2-2 5-3 8-3h20c3 0 6 1 8 3l8 8 10 1c4 .6 7 3 7 6l.5 6c0 2-1 3-3 3z"/>` +
     `<path class="cut" d="M42 17h-8l-7 7h15zm5 0h14l7 7H47z"/><path d="M78 11h16v5H78z"/>` +
     `<rect x="18" y="44" width="10" height="7" rx="1"/><rect x="88" y="44" width="10" height="7" rx="1"/>${wheels(32, 86, 10)}`,
+  // A light truck, cab and box: the traffic packs are mostly vans, trucks
+  // and buses - a car silhouette would read as a second Street.
+  traffic:
+    `<path d="M9 40c-2 0-3-1-3-3V26c0-2 1-4 3-5l8-6c1-1 3-2 5-2h13v27z"/>` +
+    `<path d="M38 8h70c2 0 3 1 3 3v26c0 2-1 3-3 3H38z"/>` +
+    `<path class="cut" d="M14 23l6-6h11v6z"/>${wheels(24, 92, 9)}`,
 };
 
 /** The neutral glyph: `Unclassified`, and any family without a known icon. */

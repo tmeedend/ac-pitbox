@@ -829,8 +829,8 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Enrichissement Wikipédia** | livré et nettoyé ; reste la seule mesure des seuils, sur tes corrections manuelles | `docs/SPEC-wikipedia-fiche-detail.md` |
 | **Signature Authenticode** | le workflow est prêt, il attend un certificat | `docs/windows-code-signing.md` |
 | **Refonte navigation et fiches** | livrée et fusionnée ; restent trois questions ouvertes, dont le markdown dans les notes | `docs/PLAN-refonte-navigation.md` |
-| **Taxonomies** | familles, onglets Familles, Pays et Marques (fusions, logos, règles sur le nom) livrés ; reste la validation du seuil de fond cuit sur le gros corpus | `docs/SPEC-taxonomies.md`, `docs/CHANTIERS.md` |
-| **Catalogue de règles** | livré (deux couches, rapport mesuré, écran Règles, export/import, `rules-tool promote`, relevé anonyme) ; reste à lancer le relevé sur le gros corpus et promouvoir ce qu'il révèle | `docs/SPEC-regles.md`, `docs/CHANTIERS.md` |
+| **Taxonomies** | livré (familles lues aussi dans la classe, onglets Familles, Pays et Marques : fusions, logos, règles sur le nom, « pas une marque ») ; reste une liste livrée de marques connues, si la recherche dans le nom manque de vocabulaire | `docs/SPEC-taxonomies.md`, `docs/CHANTIERS.md` |
+| **Catalogue de règles** | livré, et enrichi par deux relevés réels promus (2026-09-25) ; restent les relevés de contributeurs, quand il y en aura | `docs/SPEC-regles.md`, `docs/CHANTIERS.md` |
 | **Corrections par mod** | à faire : marque, pays, classe, fiche technique d'un mod précis | `docs/CHANTIERS.md` |
 | **Règles de tags divergentes** | deux fichiers décrivent la même ontologie, un seul est chargé | `docs/CHANTIERS.md` |
 

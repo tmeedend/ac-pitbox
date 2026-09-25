@@ -748,7 +748,11 @@ de reprendre. En cas d'écart, la spec fait foi.
       trouvé un défaut du relevé (les tags qu'une famille prend comptés
       « inconnus », corrigé) et un du catalogue (`lmdh` inconnu : les LMDh
       tombaient en `#lmp1`), et donné les propositions de marques RSS/VRC —
-      à relire par l'utilisateur avant promotion. **Relevé d'un dossier** ajouté
+      relues par l'utilisateur puis **promues** (2026-09-25) : 46 règles sur
+      le nom, 26 packs « pas une marque », 13 fusions de marques, 8 pays, la
+      famille Trafic, `lmdh`, `#wsc60`, `#gt1` pour les RSS GT, IMSA GTO. La
+      détection des fonds cuits s'est confirmée sur les deux corpus (seul le
+      Porsche Kunos, aucune fausse alerte). **Relevé d'un dossier** ajouté
       pour le PC sous Mod Organizer, dont le montage virtuel n'est visible que
       des programmes qu'il lance.
       **Relevé Mod Organizer (678 voitures, 318 circuits)** : deux changements

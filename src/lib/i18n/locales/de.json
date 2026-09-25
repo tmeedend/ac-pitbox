@@ -1058,7 +1058,8 @@
     "openwheel": "Formelwagen",
     "prototype": "Prototyp",
     "drift": "Drift",
-    "rally": "Rallye"
+    "rally": "Rallye",
+    "traffic": "Verkehr"
   },
   "index": {
     "byCountry": "Nach Land durchsuchen",

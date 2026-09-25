@@ -1762,7 +1762,8 @@
     "openwheel": "Open-wheel",
     "prototype": "Prototype",
     "drift": "Drift",
-    "rally": "Rally"
+    "rally": "Rally",
+    "traffic": "Traffic"
   },
   "index": {
     "byCountry": "Browse by country",

@@ -144,12 +144,28 @@
         "group b",
         "wrc"
       ]
+    },
+    {
+      "id": "traffic",
+      "icon": "traffic",
+      "tags": [
+        "traffic",
+        "traffic-jp"
+      ]
     }
   ],
   "country_aliases": {
     "deutschland": "Germany",
+    "france/usa": "United States",
+    "germany / schleswig-holstein": "Germany",
     "great britain": "United Kingdom",
     "holland": "Netherlands",
+    "italy /usa": "United States",
+    "jap": "Japan",
+    "macedonia": "Macedonia, {the former Yugoslav Republic of}",
+    "principality of monaco": "Monaco",
+    "provence alps": "France",
+    "russia": "Russian Federation",
     "u.k.": "United Kingdom",
     "u.s.a.": "United States",
     "uk": "United Kingdom",
@@ -184,5 +200,48 @@
     "united kingdom": "United Kingdom",
     "united states": "United States",
     "usa": "United States"
-  }
+  },
+  "brand_aliases": {
+    "beijing zhonghua automobile manufacturing co. ltd.": "Zhonghua",
+    "chevy": "Chevrolet",
+    "citroã«n": "Citroen",
+    "fiat": "Fiat",
+    "izuzu": "Isuzu",
+    "lambo": "Lamborghini",
+    "lotus classic cars": "Lotus",
+    "mercedes": "Mercedes-Benz",
+    "opel": "Opel",
+    "oreca technology": "Oreca",
+    "tvr / griffith": "TVR",
+    "venom": "Saleen",
+    "vw": "Volkswagen"
+  },
+  "not_brands": [
+    "ac forum sk",
+    "aer",
+    "asr owc 1990",
+    "asr owc 1991",
+    "cross car",
+    "endurancegt",
+    "f1 vrc owc",
+    "fia gt championship",
+    "gentle mind performance",
+    "gt-rally",
+    "imsa gtp",
+    "initial d",
+    "lenny",
+    "mod",
+    "pikespeak",
+    "race sim studio",
+    "rally legend",
+    "superstock",
+    "tcr",
+    "traffic",
+    "vrc",
+    "wdts",
+    "wec lmp2 2021",
+    "wsc legends",
+    "wsc60 legends",
+    "wsc69 legends"
+  ]
 }

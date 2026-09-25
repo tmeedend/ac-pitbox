@@ -1058,7 +1058,8 @@
     "openwheel": "Monoposto",
     "prototype": "Prototipo",
     "drift": "Drift",
-    "rally": "Rally"
+    "rally": "Rally",
+    "traffic": "Traffico"
   },
   "index": {
     "byCountry": "Sfoglia per paese",

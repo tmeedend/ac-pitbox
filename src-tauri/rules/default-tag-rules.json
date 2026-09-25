@@ -15,6 +15,236 @@
   "car": {
     "brand_fix": [
       {
+        "id": "pitbox.brand.lanzo",
+        "name_contains": "lanzo",
+        "set_brand": "Lamborghini"
+      },
+      {
+        "id": "pitbox.brand.bayer",
+        "name_contains": "bayer",
+        "set_brand": "BMW"
+      },
+      {
+        "id": "pitbox.brand.protech",
+        "name_contains": "protech",
+        "set_brand": "Porsche"
+      },
+      {
+        "id": "pitbox.brand.macca",
+        "name_contains": "macca",
+        "set_brand": "McLaren"
+      },
+      {
+        "id": "pitbox.brand.furiano",
+        "name_contains": "furiano",
+        "set_brand": "Ferrari"
+      },
+      {
+        "id": "pitbox.brand.adonis",
+        "name_contains": "adonis",
+        "set_brand": "Aston Martin"
+      },
+      {
+        "id": "pitbox.brand.callahan",
+        "name_contains": "callahan",
+        "set_brand": "Cadillac"
+      },
+      {
+        "id": "pitbox.brand.gt-m-lux",
+        "name_contains": "gt-m lux",
+        "set_brand": "Lexus"
+      },
+      {
+        "id": "pitbox.brand.beamer",
+        "name_contains": "beamer",
+        "set_brand": "BMW"
+      },
+      {
+        "id": "pitbox.brand.alfio-romani",
+        "name_contains": "alfio romani",
+        "set_brand": "Alfa Romeo"
+      },
+      {
+        "id": "pitbox.brand.pageau",
+        "name_contains": "pageau",
+        "set_brand": "Peugeot"
+      },
+      {
+        "id": "pitbox.brand.renoir",
+        "name_contains": "renoir",
+        "set_brand": "Renault"
+      },
+      {
+        "id": "pitbox.brand.vokker",
+        "name_contains": "vokker",
+        "set_brand": "Volkswagen"
+      },
+      {
+        "id": "pitbox.brand.fortix",
+        "name_contains": "fortix",
+        "set_brand": "Ford"
+      },
+      {
+        "id": "pitbox.brand.chevrette",
+        "name_contains": "chevrette",
+        "set_brand": "Chevrolet"
+      },
+      {
+        "id": "pitbox.brand.ferrenzo",
+        "name_contains": "ferrenzo",
+        "set_brand": "Ferrari"
+      },
+      {
+        "id": "pitbox.brand.isola-santini",
+        "name_contains": "isola santini",
+        "set_brand": "Isotta Fraschini"
+      },
+      {
+        "id": "pitbox.brand.tagomi",
+        "name_contains": "tagomi",
+        "set_brand": "Toyota"
+      },
+      {
+        "id": "pitbox.brand.revenga",
+        "name_contains": "revenga",
+        "set_brand": "Rebellion"
+      },
+      {
+        "id": "pitbox.brand.vrc-prototype-cadenza",
+        "name_contains": "vrc prototype - cadenza",
+        "set_brand": "Cadillac"
+      },
+      {
+        "id": "pitbox.brand.vrc-prototype-h-cadenza",
+        "name_contains": "vrc prototype h - cadenza",
+        "set_brand": "Cadillac"
+      },
+      {
+        "id": "pitbox.brand.bycollin",
+        "name_contains": "bycollin",
+        "set_brand": "ByKolles"
+      },
+      {
+        "id": "pitbox.brand.ferruccio",
+        "name_contains": "ferruccio",
+        "set_brand": "Ferrari"
+      },
+      {
+        "id": "pitbox.brand.gt-m-cortex",
+        "name_contains": "gt-m cortex",
+        "set_brand": "Chevrolet"
+      },
+      {
+        "id": "pitbox.brand.hyperion",
+        "name_contains": "hyperion",
+        "set_brand": "Ford"
+      },
+      {
+        "id": "pitbox.brand.gt-shadow",
+        "name_contains": "gt shadow",
+        "set_brand": "Dodge"
+      },
+      {
+        "id": "pitbox.brand.gt-tornado",
+        "name_contains": "gt tornado",
+        "set_brand": "Lister"
+      },
+      {
+        "id": "pitbox.brand.gt-vortex",
+        "name_contains": "gt vortex",
+        "set_brand": "Lamborghini"
+      },
+      {
+        "id": "pitbox.brand.ta2-dagger",
+        "name_contains": "ta2 dagger",
+        "set_brand": "Dodge"
+      },
+      {
+        "id": "pitbox.brand.ta2-mare",
+        "name_contains": "ta2 mare",
+        "set_brand": "Ford"
+      },
+      {
+        "id": "pitbox.brand.gojira",
+        "name_contains": "gojira",
+        "set_brand": "Honda"
+      },
+      {
+        "id": "pitbox.brand.vorax",
+        "name_contains": "vorax",
+        "set_brand": "Vauxhall"
+      },
+      {
+        "id": "pitbox.brand.bradley-project",
+        "name_contains": "bradley project",
+        "set_brand": "Bentley"
+      },
+      {
+        "id": "pitbox.brand.pavey",
+        "name_contains": "pavey",
+        "set_brand": "Panoz"
+      },
+      {
+        "id": "pitbox.brand.vendetta-v60",
+        "name_contains": "vendetta v60",
+        "set_brand": "Ginetta"
+      },
+      {
+        "id": "pitbox.brand.arden-v24",
+        "name_contains": "arden v24",
+        "set_brand": "Alpine"
+      },
+      {
+        "id": "pitbox.brand.rmt-1",
+        "name_contains": "rmt 1",
+        "set_brand": "BMW"
+      },
+      {
+        "id": "pitbox.brand.puriano",
+        "name_contains": "puriano",
+        "set_brand": "Porsche"
+      },
+      {
+        "id": "pitbox.brand.marod",
+        "name_contains": "marod",
+        "set_brand": "Ford"
+      },
+      {
+        "id": "pitbox.brand.carma-308",
+        "name_contains": "carma 308",
+        "set_brand": "Ferrari"
+      },
+      {
+        "id": "pitbox.brand.yamamoto-delikata",
+        "name_contains": "yamamoto delikata",
+        "set_brand": "Toyota"
+      },
+      {
+        "id": "pitbox.brand.lardo-monastir",
+        "name_contains": "lardo monastir",
+        "set_brand": "Lancia"
+      },
+      {
+        "id": "pitbox.brand.arthur-merlin",
+        "name_contains": "arthur merlin",
+        "set_brand": "Aston Martin"
+      },
+      {
+        "id": "pitbox.brand.t5-aura",
+        "name_contains": "t5 aura",
+        "set_brand": "Audi"
+      },
+      {
+        "id": "pitbox.brand.formula-rtt-1999",
+        "name_contains": "formula rtt 1999",
+        "set_brand": "Ferrari"
+      },
+      {
+        "id": "pitbox.brand.volvo",
+        "name_contains": "volvo",
+        "set_brand": "Volvo"
+      },
+      {
         "id": "pitbox.brand.bayro",
         "name_contains": "bayro",
         "set_brand": "BMW"
@@ -41,6 +271,48 @@
       }
     ],
     "name_to_tag": [
+      {
+        "id": "pitbox.name.gt-ferruccio",
+        "name_contains": "gt ferruccio",
+        "add": [
+          "#gt1"
+        ]
+      },
+      {
+        "id": "pitbox.name.gt-lanzo",
+        "name_contains": "gt lanzo",
+        "add": [
+          "#gt1"
+        ]
+      },
+      {
+        "id": "pitbox.name.gt-shadow",
+        "name_contains": "gt shadow",
+        "add": [
+          "#gt1"
+        ]
+      },
+      {
+        "id": "pitbox.name.gt-tornado",
+        "name_contains": "gt tornado",
+        "add": [
+          "#gt1"
+        ]
+      },
+      {
+        "id": "pitbox.name.gt-vortex",
+        "name_contains": "gt vortex",
+        "add": [
+          "#gt1"
+        ]
+      },
+      {
+        "id": "pitbox.name.auriel-90",
+        "name_contains": "auriel 90",
+        "add": [
+          "#imsa gto"
+        ]
+      },
       {
         "id": "pitbox.name.police",
         "name_contains": "police",
@@ -310,6 +582,28 @@
       }
     ],
     "tag_merge": [
+      {
+        "id": "pitbox.car-merge.lmdh",
+        "from": [
+          "lmdh"
+        ],
+        "to": [
+          "#lmdh",
+          "prototype",
+          "endurance"
+        ]
+      },
+      {
+        "id": "pitbox.car-merge.wsc60",
+        "from": [
+          "#wsc60",
+          "wsc60"
+        ],
+        "to": [
+          "#wsc60",
+          "endurance"
+        ]
+      },
       {
         "id": "pitbox.car-merge.group-5",
         "from": [
@@ -766,7 +1060,8 @@
       {
         "id": "pitbox.car-merge.traffic",
         "from": [
-          "traffic"
+          "traffic",
+          "traffic-jp"
         ],
         "to": [
           "#traffic"
