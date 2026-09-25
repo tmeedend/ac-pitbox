@@ -151,10 +151,15 @@ pub fn build(conn: &Connection, cfg: &AppConfig, rules: &Rules, dir: &Path) -> r
         };
         let is_car = m.kind != "Track";
         let country = crate::harmonize::final_country(rules, &h, ui.country.as_deref());
+        // A tag a family takes is known too, rules or not: the families read a
+        // car's raw tags (INDEX§6.1). Counted, `formula`, `trackday` and
+        // `#vintage supercars` topped the list of the first real survey
+        // while every car carrying them was already in its family.
+        let known_to_families = |t: &String| is_car && owner.contains_key(&pitbox_catalog::taxonomy::family_tag(t));
         let unknown: BTreeSet<String> = h
             .unrecognized
             .iter()
-            .filter(|t| !dropped.contains(*t))
+            .filter(|t| !dropped.contains(*t) && !known_to_families(t))
             .cloned()
             .collect();
         for t in &unknown {
@@ -357,6 +362,25 @@ mod tests {
         let base_text = base.to_string_lossy().replace('\\', "\\\\");
         assert!(!text.contains(&*base_text), "no path in a survey");
         assert!(!text.contains("Some One"), "no author either");
+    }
+
+    /// A tag no rule knows but a family takes is no unknown tag: the families
+    /// read raw tags. Bug of the first real survey, where `formula` came
+    /// second while all its cars were open-wheelers.
+    #[test]
+    fn a_tag_a_family_takes_is_not_reported_unknown() {
+        let base = crate::testutil::temp_dir("survey-family-tag");
+        let (conn, cfg) = one_car_library(
+            &base,
+            r#"{"name":"Some Car","class":"race","tags":["formula","weirdtag"]}"#,
+        );
+        let s = build(&conn, &cfg, &crate::rules::default_rules(), &base).unwrap();
+        let unknown: Vec<&str> = s.summary.unrecognized_tags.iter().map(|c| c.value.as_str()).collect();
+        assert_eq!(unknown, ["weirdtag"], "`formula` belongs to the open-wheel family");
+        assert!(
+            s.summary.unclassified_cars.is_empty(),
+            "and the car is classified by it"
+        );
     }
 
     /// The survey of this machine's library, without the application - how
