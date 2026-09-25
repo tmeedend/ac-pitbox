@@ -251,6 +251,7 @@
     "preview": "Eine Vorschau abspielen",
     "trackCount": "{count} Titel erkannt",
     "shuffle": "Zufällige Wiedergabe",
+    "showNowPlaying": "Aktuellen Titel anzeigen",
     "volume": "Lautstärke",
     "crossfade": "Überblendung"
   },

@@ -40,6 +40,9 @@ pub struct MusicConfig {
     pub crossfade_ms: u32,
     pub fade_out_ms: u32,
     pub fade_in_ms: u32,
+    /// Now-playing notification (MUSIQUE§5.5). Off by default: a card popping
+    /// up at every track is something one opts into, not something to turn off.
+    pub show_now_playing: bool,
 }
 
 impl Default for MusicConfig {
@@ -55,6 +58,7 @@ impl Default for MusicConfig {
             crossfade_ms: 2500,
             fade_out_ms: 1500,
             fade_in_ms: 2000,
+            show_now_playing: false,
         }
     }
 }
@@ -199,6 +203,7 @@ mod tests {
         assert!(!cfg.use_custom_folders, "pack embarqué utilisé par défaut");
         assert!((cfg.volume - 0.45).abs() < f32::EPSILON);
         assert_eq!(cfg.crossfade_ms, 2500);
+        assert!(!cfg.show_now_playing, "now-playing notification off by default");
     }
 
     #[test]

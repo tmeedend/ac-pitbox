@@ -553,8 +553,12 @@ impl Engine {
         };
         // Every audible change goes through here — next track, menu/grid
         // switch, first track of Big Picture, resume after a session — and
-        // each one is "the music changed" to whoever is listening.
-        (self.on_track)(track.path.clone());
+        // each one is "the music changed" to whoever is listening. Read at
+        // the moment the track starts: toggling the setting takes effect from
+        // the next one, without touching the tags when nobody wants them.
+        if self.config.show_now_playing {
+            (self.on_track)(track.path.clone());
+        }
         true
     }
 

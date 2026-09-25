@@ -251,6 +251,7 @@
     "preview": "Ouvir uma prévia",
     "trackCount": "{count} faixas detectadas",
     "shuffle": "Reprodução aleatória",
+    "showNowPlaying": "Mostrar a faixa em reprodução",
     "volume": "Volume",
     "crossfade": "Transição suave"
   },

@@ -234,7 +234,9 @@ Contrainte supplémentaire : lors d'une nouvelle permutation, si la première pi
 
 ### 5.5 Notification de piste
 
-À chaque piste qui démarre — piste suivante, bascule MENU ↔ GRID, entrée dans Big Picture, reprise après une session — une notification apparaît dans la pile bas-droite (§4.2bis du SPEC) : titre, artiste, album et pochette, lus dans les tags du fichier (ID3v2 pour le mp3, commentaires Vorbis et image embarquée pour FLAC et Ogg). Rien de tout ça n'est obligatoire : une piste sans tags affiche son nom de fichier sans extension, et les deux pistes du pack embarqué, qui n'en ont pas, reprennent le titre et l'auteur de leurs crédits (écran À propos).
+**Facultative, et éteinte par défaut** : case « Afficher le titre en cours de lecture » dans Réglages → Musique (`show_now_playing` dans `music.json`, absent = décoché). Une carte qui surgit à chaque piste se choisit, elle ne s'impose pas. Décochée, le moteur n'annonce plus rien et les tags ne sont même pas lus ; le changement vaut à partir de la piste suivante.
+
+Une fois activée, à chaque piste qui démarre — piste suivante, bascule MENU ↔ GRID, entrée dans Big Picture, reprise après une session — une notification apparaît dans la pile bas-droite (§4.2bis du SPEC) : titre, artiste, album et pochette, lus dans les tags du fichier (ID3v2 pour le mp3, commentaires Vorbis et image embarquée pour FLAC et Ogg). Rien de tout ça n'est obligatoire : une piste sans tags affiche son nom de fichier sans extension, et les deux pistes du pack embarqué, qui n'en ont pas, reprennent le titre et l'auteur de leurs crédits (écran À propos).
 
 **C'est la seule notification de la pile qui se ferme seule**, au bout de six secondes : les autres portent une perte, une question ou un rapport, celle-ci une information de passage, et une carte laissée par piste finirait par masquer l'écran qu'elle accompagne. Elle tient tant que le pointeur est dessus, repart pour deux secondes quand il la quitte, et disparaît avec la sortie de Big Picture. Une nouvelle piste pendant qu'elle est affichée remplace son contenu et relance le délai — jamais une deuxième carte.
 

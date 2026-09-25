@@ -18,6 +18,8 @@ export interface MusicConfig {
   crossfade_ms: number;
   fade_out_ms: number;
   fade_in_ms: number;
+  /** Now-playing notification (MUSIQUE§5.5), off by default. */
+  show_now_playing: boolean;
 }
 
 export function emptyMusicConfig(): MusicConfig {
@@ -32,6 +34,7 @@ export function emptyMusicConfig(): MusicConfig {
     crossfade_ms: 2500,
     fade_out_ms: 1500,
     fade_in_ms: 2000,
+    show_now_playing: false,
   };
 }
 

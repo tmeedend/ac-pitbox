@@ -177,6 +177,13 @@
 </section>
 
 <section class="lang-section">
+  <label class="check">
+    <input type="checkbox" bind:checked={config.show_now_playing} />
+    <span>{t("music.showNowPlaying")}</span>
+  </label>
+</section>
+
+<section class="lang-section">
   <Slider
     label={t("music.volume")}
     value={pct(config.volume)}

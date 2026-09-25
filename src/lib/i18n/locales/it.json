@@ -251,6 +251,7 @@
     "preview": "Ascolta un'anteprima",
     "trackCount": "{count} brani rilevati",
     "shuffle": "Riproduzione casuale",
+    "showNowPlaying": "Mostra il brano in riproduzione",
     "volume": "Volume",
     "crossfade": "Dissolvenza incrociata"
   },

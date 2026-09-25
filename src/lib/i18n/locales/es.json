@@ -251,6 +251,7 @@
     "preview": "Escuchar una muestra",
     "trackCount": "{count} pistas detectadas",
     "shuffle": "Reproducción aleatoria",
+    "showNowPlaying": "Mostrar la pista en reproducción",
     "volume": "Volumen",
     "crossfade": "Fundido encadenado"
   },

@@ -356,6 +356,7 @@
     "preview": "Écouter un extrait",
     "trackCount": "{count} pistes détectées",
     "shuffle": "Lecture aléatoire",
+    "showNowPlaying": "Afficher le titre en cours de lecture",
     "volume": "Volume",
     "crossfade": "Fondu"
   },

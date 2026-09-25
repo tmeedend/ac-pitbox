@@ -356,6 +356,7 @@
     "preview": "Play a preview",
     "trackCount": "{count} tracks detected",
     "shuffle": "Shuffle playback",
+    "showNowPlaying": "Show the track now playing",
     "volume": "Volume",
     "crossfade": "Crossfade"
   },
