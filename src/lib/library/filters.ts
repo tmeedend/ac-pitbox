@@ -19,7 +19,7 @@
 // (cars and tracks) share them and they stay readable on their own.
 import { carPerf, clampPerfPct, perfBand, PERF_DEFAULT_PCT } from "$lib/detail/carSpecs";
 import { modTags } from "./cardSearch";
-import { familiesOfTags, familyLookup, type CategoryFamily } from "./families";
+import { familiesOfTags, familyLookup, familyTagsOf, type CategoryFamily } from "./families";
 import type { ModCard, ModKind } from "./library";
 import { t } from "$lib/i18n/index.svelte";
 
@@ -838,7 +838,7 @@ export function buildCardIndex(
   const familyIndex = new Map<string, string[]>();
   const lookup = familyLookup(families);
   for (const c of cards) {
-    if (families.length) familyIndex.set(c.id_interne, familiesOfTags(modTags(c), lookup, families));
+    if (families.length) familyIndex.set(c.id_interne, familiesOfTags(familyTagsOf(c), lookup, families));
     if (c.description) descIndex.set(c.id_interne, c.description.replace(/<[^>]*>/g, " ").toLowerCase());
     if (c.notes_user) noteIndex.set(c.id_interne, c.notes_user.toLowerCase());
     if (!isCar) continue;

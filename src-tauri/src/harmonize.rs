@@ -217,6 +217,23 @@ pub fn snapshot(
     snapshot_fired(conn, cfg, rules).map(|(lines, _)| lines)
 }
 
+/// What a car's families are read from - the Rust twin of `familyTagsOf`
+/// (`families.ts`): its file's tags, the rules' tags, the user's, AND its
+/// class. A road car whose file only says `"class": "street"` belonged to no
+/// family while the tags alone were read (35 of the 43 unclassified cars of
+/// the first Mod Organizer survey).
+pub fn family_tags<'a>(
+    from_mod: &'a [String],
+    h: &'a Harmonized,
+    manual: &'a [String],
+) -> impl Iterator<Item = &'a String> {
+    from_mod
+        .iter()
+        .chain(&h.tags_from_rule)
+        .chain(manual)
+        .chain(h.car_class.iter())
+}
+
 /// Mod id → ids of the rules that acted on it (`Harmonized::fired`).
 pub type Fired = std::collections::BTreeMap<String, Vec<String>>;
 
@@ -236,12 +253,9 @@ pub fn snapshot_fired(
         };
         let country = final_country(rules, &h, native.as_deref());
         h.tags_from_rule.sort();
-        // The three tag origins the library merges (`modTags`), as it does.
+        // What the library reads a car's families from (`familyTagsOf`), as it does.
         let families: std::collections::BTreeSet<&String> = if m.kind == "Car" {
-            m.tags_from_mod
-                .iter()
-                .chain(&h.tags_from_rule)
-                .chain(&m.tags_manual)
+            family_tags(&m.tags_from_mod, &h, &m.tags_manual)
                 .filter_map(|t| owner.get(&pitbox_catalog::taxonomy::family_tag(t)))
                 .collect()
         } else {

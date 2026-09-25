@@ -18,7 +18,7 @@ import type { ModCard } from "./library";
 
 /** All three tag origins merged — they are equivalent for filtering; only the
  * detail sheet tells them apart. */
-export function modTags(c: ModCard): string[] {
+export function modTags(c: Pick<ModCard, "tags_from_mod" | "tags_from_rule" | "tags_manual">): string[] {
   return [...c.tags_from_mod, ...c.tags_from_rule, ...c.tags_manual];
 }
 

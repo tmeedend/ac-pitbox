@@ -19,11 +19,10 @@
   import { onMount } from "svelte";
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
-  import { familiesOfTags, familyLookup, familyTag, type CategoryFamily } from "$lib/library/families";
+  import { familiesOfTags, familyLookup, familyTag, familyTagsOf, type CategoryFamily } from "$lib/library/families";
   import { FAMILY_ICONS, NEUTRAL_ICON, familyIcon } from "$lib/library/familyIcons";
   import { setFamilies } from "$lib/library/familyTable.svelte";
   import { listLibrary } from "$lib/library/library";
-  import { modTags } from "$lib/library/cardSearch";
   import {
     attachTag,
     createFamily,
@@ -59,7 +58,7 @@
       families = view.effective.families;
       shipped = view.catalog.families;
       overlay = view.overlay.families;
-      cars = cards.filter((c) => c.kind === "Car").map(modTags);
+      cars = cards.filter((c) => c.kind === "Car").map(familyTagsOf);
     } catch (e) {
       error = errorText(e);
     } finally {

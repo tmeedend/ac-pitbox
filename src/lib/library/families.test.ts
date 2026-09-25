@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import catalog from "../../../src-tauri/rules/taxonomy-catalog.json";
-import { familiesOfTags, familyLookup, familyTag } from "./families";
+import { familiesOfTags, familyLookup, familyTag, familyTagsOf } from "./families";
 import { FAMILY_ICONS } from "./familyIcons";
 
 const FAMILIES = [
@@ -10,6 +10,16 @@ const FAMILIES = [
 ];
 
 describe("families", () => {
+  // A road car whose file only says `"class": "street"` is a road car: the
+  // class is read with the tags (35 unclassified cars of the first Mod
+  // Organizer survey).
+  it("reads the class along with the tags", () => {
+    const car = { tags_from_mod: ["rwd"], tags_from_rule: [], tags_manual: [], car_class: "street" };
+    const fams = [{ id: "street", tags: ["street"] }];
+    expect(familiesOfTags(familyTagsOf(car), familyLookup(fams), fams)).toEqual(["street"]);
+    expect(familyTagsOf({ ...car, car_class: null })).toEqual(["rwd"]);
+  });
+
   // The same tag reaches a car as `#rally` through a rule and as `rally` from
   // its file: a tile count must not depend on where the tag came from.
   it("compares tags without case and without their leading #", () => {

@@ -249,12 +249,10 @@ impl Known {
             .filter(|t| !self.dropped.contains(*t) && !(is_car && self.family_of(t).is_some()))
             .cloned()
             .collect();
-        // Families from the tags the library merges (`modTags`) - the file's
-        // and the rules', never the ones the user typed: those are his.
+        // Families as the library reads them (`harmonize::family_tags`) - but
+        // never from the tags the user typed: those are his.
         let families: BTreeSet<String> = if is_car {
-            ui.tags
-                .iter()
-                .chain(&h.tags_from_rule)
+            crate::harmonize::family_tags(&ui.tags, &h, &[])
                 .filter_map(|t| self.family_of(t).cloned())
                 .collect()
         } else {
@@ -465,7 +463,9 @@ mod tests {
             "the tag no rule knows"
         );
         assert_eq!(s.cars[0].specs.get("drivetrain").map(String::as_str), Some("RWD"));
-        assert_eq!(s.summary.unclassified_cars, ["rss_car"], "no family takes it");
+        // Its tags reach no family, but its class does: Race.
+        assert_eq!(s.cars[0].families, ["race"], "the class counts");
+        assert!(s.summary.unclassified_cars.is_empty());
 
         let file = base.join("survey.json");
         write(&file, &s).unwrap();

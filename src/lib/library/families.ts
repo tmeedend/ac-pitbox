@@ -12,6 +12,8 @@
 //
 // Pure on purpose — no i18n, no Svelte — so the lookup is testable on its own.
 import type { CategoryFamily } from "$lib/workshop/rules";
+import { modTags } from "./cardSearch";
+import type { ModCard } from "./library";
 
 export type { CategoryFamily };
 
@@ -39,6 +41,24 @@ export function familyLookup(families: CategoryFamily[]): Map<string, string> {
     }
   }
   return m;
+}
+
+/**
+ * What a car's families are read from: its tags - the file's, the rules',
+ * the user's (`modTags`) - AND its class.
+ *
+ * The class is a tag the file declares in another field: `street` or `race`
+ * (or what a class rule made of it). Read from the tags alone, a road car
+ * whose file only says `"class": "street"` belonged to no family - measured
+ * on the first Mod Organizer survey: 35 of its 43 unclassified cars (Tesla
+ * Model 3, Subaru 22B, Honda Prelude…). The engine drops the `street`/`race`
+ * TAGS precisely because the class carries them.
+ */
+export function familyTagsOf(
+  c: Pick<ModCard, "tags_from_mod" | "tags_from_rule" | "tags_manual" | "car_class">,
+): string[] {
+  const tags = modTags(c);
+  return c.car_class ? [...tags, c.car_class] : tags;
 }
 
 /** Families a set of tags reaches, each once, in the order of the table. */
