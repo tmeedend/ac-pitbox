@@ -4,15 +4,11 @@
   import {
     launchSession,
     assistLevelFrom,
-    AI_LEVEL_MAX,
-    AI_LEVEL_MIN,
     clampAiLevel,
     START_MODES,
-    newOpponent,
     type StartMode,
     isSteamRunning,
     nearestGrip,
-    listModSkins,
     getModCspFeatures,
     weatherOptions,
     weatherConditions,
@@ -25,7 +21,6 @@
     type RaceSetup,
     type Season,
     type SessionType,
-    type SkinItem,
     type Nationality,
     type TrackStateOption,
     type TrackStateRef,
@@ -34,11 +29,6 @@
   } from "$lib/launch/launch";
   import { carClassOf, driverFor, isEmpty } from "$lib/driver/driverOverride.svelte";
   import { centerSpreadOf } from "$lib/launch/aiBand";
-  import { buildCardIndex, buildPredicate, filterDefs, parseFilters, serializeFilters, type FilterMap } from "$lib/library/filters";
-  import { withCountryLabels } from "$lib/flags.svelte";
-  import { matchesQuery } from "$lib/library/cardSearch";
-  import { hasOwnDriver } from "$lib/driver/driverOverride.svelte";
-  import { defaultGridFilters } from "$lib/launch/opponentPool";
   import { setGridCars } from "$lib/launch/gridMods.svelte";
   import { playerHandicap, setPlayerHandicap } from "$lib/launch/playerHandicap.svelte";
   import { getModDetail, listLibrary, previewSrc, type ModCard } from "$lib/library/library";
@@ -66,6 +56,8 @@
     type SessionPreset,
   } from "$lib/launch/savedSessions";
   import { deleteSavedGrid, listSavedGrids, saveGrid, type SavedGrid } from "$lib/launch/savedGrids";
+  import { OpponentGrid } from "$lib/launch/opponentGrid.svelte";
+  import { restoreOpponent, type SavedPool } from "$lib/launch/gridRules";
 
   import { errorText } from "$lib/errors";
   import { StorageKey } from "$lib/storage";
@@ -81,14 +73,6 @@
   // libre plutôt que d'offrir un menu vide.
   let nationalityList = $state<Nationality[]>([]);
   let selectedIntent = $state("");
-  let opponentCount = $state(7);
-  // Jeton de génération du plateau (§6.3ter) : `regenerateGrid` est asynchrone
-  // (résolution des skins par IPC) et peut encore être « en vol » quand
-  // `applyOpponentsAction` prend la main — sans garde, son résultat arrive
-  // après coup et écrase les adversaires qu'on vient d'imposer. Toute
-  // régénération capture le jeton courant et n'applique son résultat que s'il
-  // n'a pas été invalidé entre-temps par un appel plus récent.
-  let opponentsGen = 0;
   let launching = $state(false);
   let error = $state("");
   let info = $state("");
@@ -230,212 +214,21 @@
   const player = $derived(carPool.find((c) => c.id_interne === setup.car_id) ?? null);
   const currentWeather = $derived(weathers.find((w) => w.id === selectedIntent));
 
-  // --- The pool (CIBLE§3.3) ---------------------------------------------------
+  // --- The opponents grid (CIBLE§3.3) -----------------------------------------
   //
-  // **The filter defines the pool, never the grid.** Three tabs used to do it
-  // (`Same car` / `By category` / `Free`), and they were a poorer copy of the
-  // filter bar: they could not combine `#gt3` AND 2010-2016 AND "except
-  // Kunos", which chips make trivial. What the tabs really carried was the
-  // GESTURE that turns a pool into a grid, and there are now two of them,
-  // explicit and both working on this same set: `Fill` and `Choose`.
-  //
-  // The whole car library comes in — including the car being driven. No hidden
-  // "except mine" rule: a rule the chips do not show is exactly the kind of
-  // reconciliation this refactor exists to delete, and the `Same car` chip
-  // needs the car to be in there anyway.
-  const gridDefs = withCountryLabels(filterDefs("Car"));
-  let gridFilters = $state<FilterMap>(defaultGridFilters());
-  // Aucun filtre épinglé : la barre s'ouvre sur son champ de recherche et son
-  // menu, et les trois puces sont ce qui la remplit en un clic.
-  let gridPinned = $state<string[]>([]);
-  let gridQuery = $state("");
-  const gridIndex = $derived(buildCardIndex(carPool, gridDefs, true, hasOwnDriver, setup.car_id));
-  const gridMatches = $derived(buildPredicate(gridDefs, gridFilters, gridIndex.ctx));
-  const gridPool = $derived(carPool.filter((c) => gridMatches(c) && matchesQuery(c, gridQuery)));
+  // Its pool, its liveries and every gesture on its rows live in `OpponentGrid`;
+  // what stays here is what belongs to the screen: the dialogs and the
+  // messages they leave in the banner.
+  const grid = new OpponentGrid({
+    get setup() {
+      return setup;
+    },
+    get carPool() {
+      return carPool;
+    },
+  });
 
-  // --- Skins par voiture (cache, SESSION§3.3) : chargés à la demande pour
-  // assigner un skin à chaque adversaire, et réutilisés par la popup. ---
-  let skinsByCarId = $state<Record<string, SkinItem[]>>({});
-  async function ensureSkins(carId: string): Promise<SkinItem[]> {
-    const cached = skinsByCarId[carId];
-    if (cached) return cached;
-    let skins: SkinItem[];
-    try {
-      skins = await listModSkins(carId);
-    } catch {
-      skins = [];
-    }
-    skinsByCarId = { ...skinsByCarId, [carId]: skins };
-    return skins;
-  }
-  /**
-   * Pioche un skin pour `carId`, en évitant ce qui est déjà pris.
-   *
-   * **Deux choses à éviter, pas une.** Le skin lui-même, pour que deux lignes
-   * de la même voiture ne soient pas la même image ; et surtout le **pilote**
-   * qu'il déclare — le jeu nomme l'IA d'après le `ui_skin.json` de sa livrée,
-   * donc deux livrées différentes portant « 59 Juan » produisent deux lignes
-   * qu'on ne distingue pas, alors même que les skins diffèrent. C'était le
-   * défaut visible : un plateau avec deux fois le même pilote.
-   *
-   * `taken` est partagé par TOUT le plateau et non par voiture : c'est
-   * l'identité du pilote qui doit être unique dans la grille, pas dans une
-   * marque. Quand le vivier de livrées est épuisé, on reprend — un plateau
-   * tronqué serait pire, et l'avertissement de vivier maigre l'a déjà annoncé.
-   */
-  interface TakenIdentities {
-    skins: Set<string>;
-    drivers: Set<string>;
-  }
-  const newTaken = (): TakenIdentities => ({ skins: new Set(), drivers: new Set() });
-
-  /** Ce qui doit rester unique : le couple numéro + nom, insensible à la
-   * casse. Une livrée muette ne participe pas — elle n'impose rien. */
-  function driverKey(skin: SkinItem): string | null {
-    const key = `${skin.number ?? ""}|${skin.driver ?? ""}`.trim().toLowerCase();
-    return key === "|" ? null : key;
-  }
-
-  /** Le registre de ce que le plateau courant porte déjà : une ligne ajoutée
-   * après coup doit éviter les mêmes pilotes que le tirage initial. `skip`
-   * exclut la ligne qu'on est en train de remplacer, qui ne se fait pas
-   * concurrence à elle-même. */
-  async function takenFromGrid(skip = -1): Promise<TakenIdentities> {
-    const taken = newTaken();
-    for (const [i, o] of setup.opponents.entries()) {
-      if (i === skip || !o.car_skin) continue;
-      taken.skins.add(o.car_skin);
-      const sk = (await ensureSkins(o.car_id)).find((x) => x.id === o.car_skin);
-      const key = sk && driverKey(sk);
-      if (key) taken.drivers.add(key);
-    }
-    return taken;
-  }
-
-  async function skinFor(carId: string, taken: TakenIdentities): Promise<string | null> {
-    const skins = await ensureSkins(carId);
-    if (!skins.length) return null;
-    const free = skins.filter((sk) => {
-      if (taken.skins.has(sk.id)) return false;
-      const key = driverKey(sk);
-      return !key || !taken.drivers.has(key);
-    });
-    // Repli en deux temps : d'abord une livrée simplement pas encore prise,
-    // ensuite n'importe laquelle. Mieux vaut répéter un pilote que rendre une
-    // ligne sans livrée.
-    const from = free.length ? free : skins.filter((sk) => !taken.skins.has(sk.id));
-    const pool = from.length ? from : skins;
-    const pick = pool[Math.floor(Math.random() * pool.length)];
-    taken.skins.add(pick.id);
-    const key = driverKey(pick);
-    if (key) taken.drivers.add(key);
-    return pick.id;
-  }
-
-  /** Génère `n` adversaires pour le mode courant. `excludeCarIds` = mods déjà
-   * présents dans le plateau, évités en priorité (sauf en « même voiture »,
-   * `excludeCarIds` = mods déjà présents dans le plateau, évités en priorité.
-   * Si le vivier distinct est épuisé (un vivier d'une seule voiture, par
-   * exemple), on complète en dupliquant un mod déjà choisi avec un skin
-   * différent plutôt que de tronquer le plateau — c'est ce que
-   * l'avertissement de vivier maigre annonce (CIBLE§3.5).
-   *
-   * **Aucun repli sur la bibliothèque entière quand le vivier est vide** : un
-   * filtre qui ne garde rien doit rendre un plateau vide, pas un plateau tiré
-   * ailleurs. Le repli d'avant venait des onglets, dont le vivier pouvait être
-   * vide sans que rien ne le dise ; le compteur `Pool · 0 cars` le dit
-   * maintenant, et les deux boutons sont éteints. */
-  async function generateOpponents(n: number, excludeCarIds: Set<string>): Promise<Opponent[]> {
-    if (n <= 0) return [];
-    const source = gridPool;
-    if (!source.length) return [];
-
-    const fresh = source.filter((c) => !excludeCarIds.has(c.id_interne)).sort(() => Math.random() - 0.5);
-    const picks: ModCard[] = fresh.slice(0, n);
-    const dupSource = picks.length ? picks : source;
-    let idx = 0;
-    while (picks.length < n) {
-      picks.push(dupSource[idx % dupSource.length]);
-      idx++;
-    }
-
-    const taken = newTaken();
-    const out: Opponent[] = [];
-    for (const c of picks) out.push(newOpponent(c.id_interne, await skinFor(c.id_interne, taken)));
-    return out;
-  }
-
-  /** `Fill N at random` (CIBLE§3.3) : tire N voitures dans le vivier et **remplace**
-   * le plateau. Le chemin de celui qui veut courir tout de suite. */
-  async function fillGrid() {
-    const gen = ++opponentsGen;
-    const opponents = await generateOpponents(opponentCount, new Set());
-    // Une action plus récente (nouvelle régénération, ou adversaires imposés
-    // depuis la bibliothèque) a pris le dessus entre-temps : ne pas écraser.
-    if (gen === opponentsGen) setup.opponents = opponents;
-  }
-
-  /** `Regenerate` (§4.1) : garde les voitures, **retire au sort ce qui avait
-   * été tiré sur elles** — skin et force. Ce n'est pas `Fill` sous un autre
-   * nom : « le plateau est bon mais les livrées se répètent » et « le plateau
-   * n'est pas le bon » sont deux gestes qu'on veut séparément. */
-  async function regenerateGrid() {
-    const gen = ++opponentsGen;
-    const taken = newTaken();
-    const out: Opponent[] = [];
-    for (const opp of setup.opponents) {
-      // La livrée est retirée au sort, **pas** les cellules `Auto` : `Auto`
-      // n'est pas une valeur qu'on tire, c'est l'absence de surcharge, et
-      // c'est le jeu qui tire dedans (§4.1). Ce qui change vraiment ici est
-      // donc la livrée — et avec elle le nom de pilote `Auto`, qui en vient.
-      out.push({ ...opp, car_skin: await skinFor(opp.car_id, taken) });
-    }
-    if (gen === opponentsGen) setup.opponents = out;
-  }
-
-  async function applyOpponentCount(raw: number) {
-    const n = Math.max(0, Math.min(30, Math.round(raw) || 0));
-    opponentCount = n;
-    const current = setup.opponents;
-    if (n < current.length) {
-      setup.opponents = current.slice(0, n);
-    } else if (n > current.length) {
-      const exclude = new Set(current.map((o) => o.car_id));
-      const extra = await generateOpponents(n - current.length, exclude);
-      setup.opponents = [...current, ...extra];
-    }
-  }
-
-  function removeOpponent(index: number) {
-    setup.opponents = setup.opponents.filter((_, i) => i !== index);
-    opponentCount = setup.opponents.length;
-  }
-
-  /** Réglage individuel du niveau IA d'un adversaire (clic sur le chiffre),
-   * indépendant de la fourchette globale qui ne sert qu'à la génération. */
-  /** Remet une ligne relue sur disque dans la forme courante : les quatre
-   * champs de §4.2 n'existaient pas, et `??` ne suffirait pas — un `undefined`
-   * qui traverserait jusqu'au backend s'y lirait comme un champ absent, pas
-   * comme `Auto`. */
-  function restoreOpponent(o: Opponent): Opponent {
-    return {
-      car_id: o.car_id,
-      ai_level: o.ai_level == null ? null : clampAiLevel(o.ai_level),
-      car_skin: o.car_skin ?? null,
-      driver_name: o.driver_name ?? null,
-      nationality: o.nationality ?? null,
-      ballast: o.ballast ?? 0,
-      restrictor: o.restrictor ?? 0,
-    };
-  }
-
-  // --- Grilles enregistrées (§5) -------------------------------------------
-  //
-  // Une grille n'est PAS une session : elle ne porte que les adversaires et ce
-  // qui fait le caractère du plateau (fourchette de force, agressivité), donc
-  // la charger dans une session déjà configurée ne touche ni à la météo, ni à
-  // l'heure, ni au type de session. C'est le cas réel : le même plateau GT3 sur
-  // dix circuits.
+  // --- Grilles enregistrées (§5) : two buttons and a dialog, as for sessions.
   let gridDialog = $state<"save" | "load" | null>(null);
   let savedGrids = $state<SavedGrid[]>([]);
 
@@ -447,45 +240,21 @@
   async function doSaveGrid(name: string) {
     gridDialog = null;
     try {
-      await saveGrid({
-        name,
-        savedAt: new Date().toISOString(),
-        // Une **copie**, jamais un lien (CIBLE§5.1) : sans `$state.snapshot`, c'est
-        // le proxy réactif du plateau courant qui partirait au backend, et
-        // modifier le plateau changerait la grille enregistrée.
-        opponents: $state.snapshot(setup.opponents),
-        // Les grilles gardent les bornes : c'est le vocabulaire de Content
-        // Manager, d'où viennent les grilles importées. La conversion se fait
-        // ici, à la frontière, plutôt que deux vocabulaires dans le modèle.
-        aiLevelMin: Math.max(AI_LEVEL_MIN, setup.ai_level - setup.ai_spread),
-        aiLevelMax: Math.min(AI_LEVEL_MAX, setup.ai_level + setup.ai_spread),
-        aggression: setup.aggression,
-      });
+      await saveGrid(grid.toSaved(name));
     } catch (e) {
       error = errorText(e);
     }
   }
 
-  /** Charge une grille : **seuls les adversaires changent**, plus ce qui fait
-   * le caractère du plateau. Une voiture disparue de la bibliothèque depuis
-   * l'enregistrement est retirée en le disant, jamais en échouant — une grille
-   * survit à des années de bibliothèque remaniée. */
+  /** Une voiture disparue de la bibliothèque depuis l'enregistrement est
+   * retirée en le disant, jamais en échouant. */
   async function doLoadGrid(name: string) {
-    const grid = savedGrids.find((g) => g.name === name);
+    const saved = savedGrids.find((g) => g.name === name);
     gridDialog = null;
-    if (!grid) return;
-    const known = new Set(carPool.map((c) => c.id_interne));
-    const kept = grid.opponents.filter((o) => known.has(o.car_id)).map(restoreOpponent);
-    const missing = grid.opponents.length - kept.length;
-    opponentsGen++;
-    setup.opponents = kept;
-    opponentCount = kept.length;
-    const band = centerSpreadOf(clampAiLevel(grid.aiLevelMin), clampAiLevel(grid.aiLevelMax));
-    setup.ai_level = band.center;
-    setup.ai_spread = band.spread;
-    setup.aggression = Math.max(0, Math.min(100, grid.aggression));
+    if (!saved) return;
+    const { kept, missing } = grid.loadSaved(saved);
     warning = missing ? t("launch.gridMissingCars", { count: missing }) : "";
-    info = t("launch.gridLoaded", { name: grid.name, count: kept.length });
+    info = t("launch.gridLoaded", { name: saved.name, count: kept });
   }
 
   async function removeSavedGrid(name: string) {
@@ -493,62 +262,13 @@
     savedGrids = await listSavedGrids();
   }
 
-  /** Une cellule d'une ligne du plateau (§4.1/§4.2). `null` sur un texte, et
-   * `null` sur la force, valent **`Auto`** : la ligne n'a pas de surcharge et
-   * le jeu décide. C'est ce que fait un champ vidé — le geste naturel pour dire
-   * « je ne décide pas », et la raison pour laquelle aucun menu de ligne n'est
-   * nécessaire pour y revenir. Le lest et la bride n'ont pas d'`Auto` : « rien »
-   * s'y dit par 0, comme dans le preset. */
-  function setOpponentCell(index: number, patch: Partial<Opponent>) {
-    const opponents = [...setup.opponents];
-    opponents[index] = { ...opponents[index], ...patch };
-    setup.opponents = opponents;
-  }
-
-  /** Force d'une ligne. `null` = la cellule repasse en `Auto` — c'est ce que
-   * fait un champ vidé, le geste naturel pour dire « je ne décide pas ». */
-  function setOpponentLevel(index: number, raw: number | null) {
-    const opponents = [...setup.opponents];
-    opponents[index] = { ...opponents[index], ai_level: raw == null ? null : clampAiLevel(raw) };
-    setup.opponents = opponents;
-  }
-
-  /** Ajoute la même voiture qu'un adversaire existant, avec un skin différent
-   * (pas encore pris par un autre adversaire de ce mod dans le plateau) —
-   * rebouclé sur les skins déjà pris si tous sont épuisés (`skinFor`, même
-   * logique que la génération initiale). Insérée juste après la ligne source. */
-  async function duplicateOpponentWithVariant(index: number) {
-    const source = setup.opponents[index];
-    const skin = await skinFor(source.car_id, await takenFromGrid());
-    const clone: Opponent = { ...source, car_skin: skin };
-    setup.opponents = [...setup.opponents.slice(0, index + 1), clone, ...setup.opponents.slice(index + 1)];
-    opponentCount = setup.opponents.length;
-  }
-
   /** Adversaires envoyés depuis la sélection groupée de la bibliothèque
-   * voitures (§6.3ter). Bascule sur le type Course et le mode « libre »
-   * directement (sans passer par `selectGridMode`, qui régénérerait le
-   * plateau et écraserait les adversaires en cours). « set » remplace
-   * entièrement la liste ; « add » la complète — dans les deux cas, les
-   * adversaires déjà présents (même issus d'un mode même-voiture/même-catégorie
-   * avant bascule) sont préservés pour « add », perdus pour « set ».
-   *
-   * Deux gardes contre une régénération asynchrone qui écraserait le résultat
-   * après coup : (1) `lastCarForGrid` aligné AVANT de toucher `session_type` —
-   * l'effet de resynchronisation de session (plus haut) lit aussi
-   * `setup.session_type`/`setup.car_id`, donc passer `session_type` à "race"
-   * `opponentsGen` est incrémenté pour invalider toute génération DÉJÀ en vol
-   * (ex. si le type de session était déjà "course" à l'arrivée sur cet écran,
-   * `onMount` en a lancé une) : sans ça, son résultat arrive après coup et
-   * écrase les adversaires qu'on vient d'imposer. */
+   * voitures (§6.3ter). Bascule sur le type Course directement : les
+   * adversaires imposés ne doivent pas être écrasés par un plateau tiré pour
+   * l'occasion — `impose` invalide toute génération déjà en vol. */
   function applyOpponentsAction(action: OpponentsAction) {
-    opponentsGen++;
     setup.session_type = "race";
-    const additions: Opponent[] = action.carIds.map((carId) =>
-      newOpponent(carId, getPreferredSkin(carId)?.id ?? null),
-    );
-    setup.opponents = action.mode === "set" ? additions : [...setup.opponents, ...additions];
-    opponentCount = setup.opponents.length;
+    grid.impose(action);
   }
 
   // --- Modale de sélection d'adversaire (SESSION§3) ---
@@ -574,54 +294,17 @@
     pickerAdding = false;
   }
 
-  /** Remplacement d'une ligne : la force est celle de la ligne, le skin est
-   * tiré dans ceux de la nouvelle voiture (SESSION§3). */
   async function replaceOpponent(carId: string) {
     const i = pickerIndex;
     closePicker();
     if (i == null) return;
-    const skin = await skinFor(carId, await takenFromGrid(i));
-    const opponents = [...setup.opponents];
-    opponents[i] = { ...opponents[i], car_id: carId, car_skin: skin };
-    setup.opponents = opponents;
+    await grid.replace(i, carId);
   }
 
-  /** Ajout en fin de plateau, dans l'ordre de la liste. Skin et force suivent
-   * les règles déjà en place — rien de neuf ici. */
   async function addOpponentsFromPicker(carIds: string[]) {
     closePicker();
-    const additions: Opponent[] = [];
-    const taken = await takenFromGrid();
-    for (const carId of carIds) additions.push(newOpponent(carId, await skinFor(carId, taken)));
-    if (!additions.length) return;
-    setup.opponents = [...setup.opponents, ...additions];
-    opponentCount = setup.opponents.length;
+    await grid.add(carIds);
   }
-
-  /** La livrée d'une ligne, quand elle est connue — et par elle, le pilote que
-   * le jeu nommera. */
-  function skinOfOpponent(opp: Opponent): SkinItem | undefined {
-    return opp.car_skin ? skinsByCarId[opp.car_id]?.find((sk) => sk.id === opp.car_skin) : undefined;
-  }
-
-  /** Deux pilotes sous la même identité (SETUP§1.9). La génération l'évite ; ceci
-   * n'attrape que ce que l'utilisateur a forcé à la main, et le dit plutôt que
-   * de le corriger dans son dos.
-   *
-   * Calculé ici et non dans le plateau depuis que l'alerte doit **remonter sur
-   * l'entrée de navigation** (L5§1.3) : une alerte sur une page qu'on ne
-   * regarde pas ne vaut pas mieux que pas d'alerte. */
-  const duplicateDrivers = $derived.by(() => {
-    const seen = new Set<string>();
-    for (const opp of setup.opponents) {
-      const sk = skinOfOpponent(opp);
-      const key = `${opp.driver_name ?? sk?.number ?? ""}|${opp.driver_name ?? sk?.driver ?? ""}`.trim().toLowerCase();
-      if (key === "|") continue;
-      if (seen.has(key)) return true;
-      seen.add(key);
-    }
-    return false;
-  });
 
   /** Sur quelle page de l'écran on est (L5§1) — la sous-entrée n'existe
    * que sous un type qui aligne un plateau. */
@@ -637,12 +320,6 @@
     if (setup.session_type !== "hotlap" && setup.session_type !== "race") return false;
     return !cats.some((c) => c.replace(/^#/, "").toLowerCase() === "circuit");
   });
-
-  // --- Fourchette de niveau IA (SESSION§3) : bornes réutilisées par le réglage
-  // individuel d'un adversaire (setOpponentLevel) — le curseur double lui-même
-  // est rendu par OpponentsBlock. ---
-  const RANGE_MIN = AI_LEVEL_MIN;
-  const RANGE_MAX = AI_LEVEL_MAX;
 
   // --- Météo (intentions + température/vent, SESSION§3.3/SESSION§3) ---
   // Air, piste et vent sont des valeurs **recommandées** par météo+saison, mais
@@ -713,7 +390,9 @@
   }
 
   // --- Presets de session par type (SESSION§3) ---
-  interface Persisted {
+  // The pool fields (`grid_filters`, and the tab-era ones still read back) are
+  // declared by `SavedPool`, next to the migration that reads them.
+  interface Persisted extends SavedPool {
     /** Centre et écart (SETUP§2.9). Un preset d'avant porte encore `ai_level_min`
      * et `ai_level_max` : `applyPreset` les convertit, il ne les jette pas. */
     ai_level?: number; ai_spread?: number; aggression_spread?: number;
@@ -722,17 +401,6 @@
     /** Absents sur un preset antérieur au §4.4 : les défauts de Content
      * Manager, dernier sur la grille et agressivité nulle. */
     aggression?: number; start_mode?: StartMode; ghost_advantage?: number;
-    /** Vivier d'adversaires (CIBLE§3.3), sérialisé par `serializeFilters` — la même
-     * forme que les filtres de bibliothèque, relue par le même `parseFilters`.
-     * Absent sur un preset antérieur aux jetons : `migrateGridPreset` reprend
-     * alors les trois anciens champs (`grid_mode`, `category_selection`,
-     * `year_min`/`year_max`), qui restent déclarés pour cette seule relecture
-     * et ne sont plus jamais écrits. */
-    grid_filters?: string;
-    grid_pinned?: string[];
-    grid_mode?: "same_car" | "same_category" | "free";
-    category_selection?: string;
-    year_min?: number; year_max?: number;
     laps: number; time_hours: number;
     penalties: boolean; jump_start_penalty: number;
     /** L'état de piste entier (L4§4.7). `grip` reste écrit pour qu'un retour en
@@ -783,49 +451,12 @@
     persistLaunchState();
   });
 
-  /**
-   * Rétablit le vivier d'un preset, **ou le reconstruit** depuis les trois
-   * champs de l'époque des onglets (CIBLE§3.1).
-   *
-   * Une migration plutôt qu'un repli sur les défauts : un utilisateur qui
-   * courait en « Même catégorie / 2010-2016 » retrouve exactement ce vivier,
-   * dit cette fois par deux jetons qu'il peut combiner. Le mode « même
-   * voiture » se traduit par le jeton `Model` de la voiture du preset — la
-   * seule perte assumée est qu'il ne suit plus la voiture pilotée, ce qui est
-   * précisément ce que « une puce pose un jeton et rien d'autre » signifie.
-   */
-  function applyGridPreset(p: Persisted) {
-    if (p.grid_filters) {
-      const snap = parseFilters(p.grid_filters, gridDefs);
-      gridQuery = snap.query;
-      gridFilters = snap.filters;
-      gridPinned = p.grid_pinned ?? [];
-      return;
-    }
-    const migrated: FilterMap = defaultGridFilters();
-    if (p.grid_mode === "same_car") {
-      const name = player?.display_name ?? player?.id_interne;
-      if (name) migrated.model = { type: "val", values: [{ value: name, sign: 1 }], op: "and" };
-    } else if (p.grid_mode === "same_category") {
-      const cat = p.category_selection && p.category_selection !== "__same_category__" ? p.category_selection : player?.category;
-      if (cat) migrated.category = { type: "val", values: [{ value: cat, sign: 1 }], op: "and" };
-    }
-    // 0 des deux côtés voulait déjà dire « pas de borne » (`inYearRange`), et
-    // `parseFilters` traite un 0 de la même façon : rien à convertir.
-    const min = p.year_min && p.year_min > 0 ? p.year_min : null;
-    const max = p.year_max && p.year_max > 0 ? p.year_max : null;
-    if (min != null || max != null) migrated.year = { type: "range", min, max };
-    gridQuery = "";
-    gridFilters = migrated;
-    gridPinned = [];
-  }
-
   function savePreset() {
     presets[setup.session_type] = {
       ai_level: setup.ai_level, ai_spread: setup.ai_spread, aggression_spread: setup.aggression_spread,
       aggression: setup.aggression, start_mode: setup.start_mode, ghost_advantage: setup.ghost_advantage,
-      opponent_count: opponentCount,
-      grid_filters: serializeFilters(gridQuery, gridFilters), grid_pinned: [...gridPinned],
+      opponent_count: grid.count,
+      grid_filters: grid.serializedPool(), grid_pinned: [...grid.pinned],
       laps: setup.laps, time_hours: setup.time_hours,
       penalties: setup.penalties, jump_start_penalty: setup.jump_start_penalty,
       track_state: setup.track_state ? { ...setup.track_state } : null, grip: setup.grip,
@@ -865,8 +496,8 @@
       // preset portant `second` ou `random` revenait sur `random` en silence.
       setup.start_mode = START_MODES.includes(p.start_mode as StartMode) ? (p.start_mode as StartMode) : "random";
       setup.ghost_advantage = Math.max(0, Math.min(5, p.ghost_advantage ?? 0));
-      opponentCount = p.opponent_count ?? 7;
-      applyGridPreset(p);
+      grid.count = p.opponent_count ?? 7;
+      grid.restorePool(p, player);
       setup.laps = p.laps; setup.time_hours = p.time_hours;
       setup.penalties = p.penalties; setup.jump_start_penalty = p.jump_start_penalty ?? 0;
       // L'état entier s'il est là, le pourcentage seul sinon : `TrackConditionBlock`
@@ -891,12 +522,12 @@
     // de l'écran course/trackday, ou aucun adversaire restauré) — jamais en
     // écrasant silencieusement un plateau déjà construit (SESSION§3.3, bug réel).
     //
-    // `fillGrid` et non `regenerateGrid` : celle-ci **garde les voitures** et
+    // `fill` et non `regenerate` : celle-ci **garde les voitures** et
     // ne retire au sort que ce qui est posé dessus, donc sur un plateau vide
     // elle ne faisait rien du tout. Une course ouverte pour la première fois
     // restait sans adversaire, alors qu'on doit pouvoir la lancer sans être
     // allé sur la page adversaires (L5§1.5).
-    if (hasOpponents(type) && setup.opponents.length === 0) await fillGrid();
+    if (hasOpponents(type) && setup.opponents.length === 0) await grid.fill();
     applying = false;
   }
   async function setSessionType(type: SessionType) {
@@ -935,7 +566,7 @@
     // Les deux alertes de la page (L5§1.3) : un vivier trop maigre pour le nombre
     // demandé — vide compris —, et deux pilotes sous la même identité.
     sessionNav.alert =
-      hasOpponents(setup.session_type) && (gridPool.length < opponentCount || duplicateDrivers);
+      hasOpponents(setup.session_type) && (grid.pool.length < grid.count || grid.duplicateDrivers);
   });
 
   // ABS et contrôle de traction : même circulation à sens unique que le lest
@@ -961,7 +592,7 @@
 
   $effect(() => {
     void [setup.ai_level, setup.ai_spread, setup.aggression, setup.aggression_spread, setup.start_mode, setup.ghost_advantage,
-      opponentCount, gridFilters, gridQuery, gridPinned,
+      grid.count, grid.filters, grid.query, grid.pinned,
       setup.laps,
       setup.time_hours, setup.penalties, setup.jump_start_penalty, setup.grip, setup.track_state,
       setup.practice_enabled, setup.practice_minutes, setup.qualify_minutes,
@@ -1012,7 +643,7 @@
     const first = weathers.find((w) => w.available);
     if (first) await selectIntent(first);
     await applyPreset(setup.session_type);
-    if (setup.opponents.length) opponentCount = setup.opponents.length;
+    if (setup.opponents.length) grid.count = setup.opponents.length;
     ready = true;
     // Migration depuis `localStorage`, ou simplement première écriture :
     // s'assure que `launch_state.json` reflète l'état actuel sans attendre un
@@ -1245,9 +876,9 @@
         name,
         savedAt: new Date().toISOString(),
         setup: $state.snapshot(setup),
-        opponentCount,
-        gridFilters: serializeFilters(gridQuery, gridFilters),
-        gridPinned: [...gridPinned],
+        opponentCount: grid.count,
+        gridFilters: grid.serializedPool(),
+        gridPinned: [...grid.pinned],
         season,
         intent: selectedIntent,
         trackSkins,
@@ -1282,11 +913,13 @@
     // Le type fait partie de ce qui est rechargé, et il vit désormais dans la
     // colonne de session : sans ça, la liste resterait sur l'ancien.
     sessionNav.type = s.setup.session_type;
-    opponentCount = s.opponentCount;
+    grid.count = s.opponentCount;
     // Même migration que pour un preset par type : une sauvegarde d'avant les
     // jetons retrouve son vivier, elle ne retombe pas sur les défauts.
-    applyGridPreset({ grid_filters: s.gridFilters, grid_pinned: s.gridPinned, grid_mode: s.gridMode,
-      category_selection: s.categorySelection } as Persisted);
+    grid.restorePool(
+      { grid_filters: s.gridFilters, grid_pinned: s.gridPinned, grid_mode: s.gridMode, category_selection: s.categorySelection },
+      player,
+    );
     season = s.season;
     selectedIntent = s.intent;
 
@@ -1315,7 +948,7 @@
       warnings.push(t("launch.loadWarnCarMissing", { id: carId }));
       return;
     }
-    const skins = await ensureSkins(carId);
+    const skins = await grid.ensureSkins(carId);
     // Sans skin enregistré — le cas de tout preset Content Manager, dont le
     // format n'a pas de champ pour lui (SESSION§3.6) —, c'est la mémoire par
     // voiture qui décide, comme partout ailleurs dans l'app. Prendre `null`
@@ -1429,31 +1062,31 @@
       <div class="oppopage">
         <OpponentsBlock
           {setup}
-          {opponentCount}
-          defs={gridDefs}
-          bind:filters={gridFilters}
-          bind:pinned={gridPinned}
-          bind:query={gridQuery}
-          index={gridIndex}
-          poolCount={gridPool.length}
+          opponentCount={grid.count}
+          defs={grid.defs}
+          bind:filters={grid.filters}
+          bind:pinned={grid.pinned}
+          bind:query={grid.query}
+          index={grid.index}
+          poolCount={grid.pool.length}
           playerCard={player}
-          oncountchange={applyOpponentCount}
-          onfill={() => void fillGrid()}
+          oncountchange={(n) => grid.setCount(n)}
+          onfill={() => void grid.fill()}
         />
         <GridBlock
           {setup}
           {carPool}
-          {skinsByCarId}
-          index={gridIndex}
-          poolCount={gridPool.length}
+          skinsByCarId={grid.skinsByCarId}
+          index={grid.index}
+          poolCount={grid.pool.length}
           {nationalityList}
-          {duplicateDrivers}
+          duplicateDrivers={grid.duplicateDrivers}
           onchoose={openAddPicker}
-          onregenerate={() => void regenerateGrid()}
-          onremove={removeOpponent}
-          onduplicate={duplicateOpponentWithVariant}
-          onsetlevel={setOpponentLevel}
-          onsetcell={setOpponentCell}
+          onregenerate={() => void grid.regenerate()}
+          onremove={(i) => grid.remove(i)}
+          onduplicate={(i) => grid.duplicate(i)}
+          onsetlevel={(i, raw) => grid.setLevel(i, raw)}
+          onsetcell={(i, patch) => grid.setCell(i, patch)}
           onsavegrid={() => void openGridDialog("save")}
           onloadgrid={() => void openGridDialog("load")}
           onopenpicker={openPicker}
@@ -1566,12 +1199,12 @@
   <OpponentPicker
     pool={carPool}
     mode={pickerIndex != null ? "replace" : "add"}
-    bind:filters={gridFilters}
-    bind:pinned={gridPinned}
-    bind:query={gridQuery}
+    bind:filters={grid.filters}
+    bind:pinned={grid.pinned}
+    bind:query={grid.query}
     perfRefId={setup.car_id}
     gridCount={setup.opponents.length}
-    gridTarget={opponentCount}
+    gridTarget={grid.count}
     slotNumber={(pickerIndex ?? 0) + 1}
     currentCarId={pickerIndex != null ? setup.opponents[pickerIndex].car_id : null}
     onadd={addOpponentsFromPicker}

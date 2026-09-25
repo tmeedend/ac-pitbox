@@ -15,8 +15,9 @@
   // cette convention existe : sans lui, la hauteur de la page serait fonction du
   // nombre d'IA, et le cas normal d'une course GT3 en aligne 24.
   //
-  // Présentation seulement : la génération (`generateOpponents`, le cache de
-  // livrées) reste dans `Launch.svelte`, qui la déclenche aussi d'ailleurs.
+  // Presentation only: generation and the livery cache live in
+  // `$lib/launch/opponentGrid.svelte.ts`, which `Launch.svelte` also drives
+  // from elsewhere (presets, saved sessions).
   import { formatRatio } from "$lib/detail/carSpecs";
   import type { CardIndex } from "$lib/library/filters";
   import {

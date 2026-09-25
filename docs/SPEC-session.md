@@ -100,7 +100,7 @@ deux endroits sans qu'aucun ne dise ce que l'app savait faire.
   ce qui est **mémorisé**. Quitter Course pour un type sans plateau referme
   simplement la page adversaires.
 - **Une session est lançable sans avoir ouvert la page adversaires** : ouvrir un
-  type Course ou Track day vierge remplit le plateau au hasard (`fillGrid`).
+  type Course ou Track day vierge remplit le plateau au hasard (`OpponentGrid.fill`).
 - Le type vit dans un **store partagé** (`sessionNav.svelte.ts`) et non dans
   l'écran de réglages : la liste est à l'écran en permanence, l'écran de
   réglages n'est monté que pendant qu'on le regarde. Même circulation à sens
