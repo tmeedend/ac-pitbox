@@ -74,7 +74,8 @@
   let cars = $state<{ id: string; brand: string | null; name: string; label: string }[]>([]);
   /** The Rules screen's view: the `brand_fix` rows, with their counters. */
   let rulesView = $state<RulesView | null>(null);
-  let refile = $state<{ word: string; to: string } | null>(null);
+  /** A word of the name, typed to bring the cars it catches here. */
+  let nameWord = $state("");
   let loading = $state(true);
   let busy = $state(false);
   let error = $state("");
@@ -215,11 +216,11 @@
   const nameRules = (brand: string): RuleRow<BrandFix>[] =>
     (rulesView?.brand_fix ?? []).filter((r) => r.rule.set_brand === brand);
 
-  /** This brand's cars a word would catch - as the engine matches: the file's
-   * name, lowercased, containing it. */
-  const caught = (brand: string, word: string) => {
+  /** Every car a word would catch - as the engine matches: the file's name,
+   * lowercased, containing it - wherever it is filed now. */
+  const caught = (word: string) => {
     const w = word.trim().toLowerCase();
-    return w ? cars.filter((c) => c.brand === brand && c.name.toLowerCase().includes(w)) : [];
+    return w ? cars.filter((c) => c.name.toLowerCase().includes(w)) : [];
   };
 
   /** A rules decision from this tab: the same write as the Rules screen's,
@@ -241,18 +242,17 @@
       .finally(() => (busy = false));
   }
 
-  function createRefile(brand: string) {
-    if (!rulesView || !refile) return;
-    const word = refile.word.trim().toLowerCase();
-    const to = refile.to.trim();
-    if (!word || !to || to === brand || !caught(brand, word).length) return;
-    commitRules(addRule(rulesView.overlay, "brand_fix", { name_contains: word, set_brand: to }));
-    refile = null;
+  /** "name contains → this brand": a rule of his, first of his rules. */
+  function fileByName(brand: string) {
+    const word = nameWord.trim().toLowerCase();
+    if (!rulesView || !word || !caught(word).some((c) => c.brand !== brand)) return;
+    commitRules(addRule(rulesView.overlay, "brand_fix", { name_contains: word, set_brand: brand }));
+    nameWord = "";
   }
 
   function toggle(name: string) {
     open = open === name ? null : name;
-    refile = null;
+    nameWord = "";
     newAlias = "";
     fileUnder = "";
   }
@@ -325,6 +325,8 @@
 
           {#if open === r.name}
             {@const rulesHere = nameRules(r.name)}
+            {@const target = fileUnder.trim()}
+            {@const exists = rows.some((x) => x.name === target)}
             <div class="detail">
               <div class="field">
                 <span class="lbl-key">{t("brandsTab.logo")}</span>
@@ -388,52 +390,55 @@
                 </div>
               </div>
 
+              <!-- The two ways a car lands in this brand, side by side and
+                   worded alike, so their difference reads by itself: what
+                   the FILE's brand field says (a spelling, merged), or what
+                   the car's NAME contains (a Rules-screen heuristic). -->
               <div class="field">
-                <span class="lbl-key">{t("brandsTab.aliases")}</span>
-                <div class="tags">
-                  {#each origin.keys as { key: alias, mine } (alias)}
-                    <span class="tok" class:mine title={mine ? t("taxonomyOrigin.added") : undefined}
-                      >{#if mine}<span class="mark" aria-hidden="true">✎</span>{/if}{alias}<button
-                        type="button"
-                        class="x"
-                        title={t("brandsTab.removeAlias")}
-                        disabled={busy}
-                        onclick={() => commit({ aliases: removeEntry(aliases, catAliases, alias) })}>×</button
-                      ></span
-                    >
-                  {:else}
-                    <span class="empty">{t("brandsTab.noAlias")}</span>
-                  {/each}
-                  {#each origin.gone as alias (alias)}
-                    <span class="tok gone" title={t("taxonomyOrigin.removed")}
-                      ><s>{alias}</s><button
-                        type="button"
-                        class="x"
-                        title={t("taxonomyOrigin.putBack")}
-                        disabled={busy}
-                        onclick={() => commit({ aliases: setEntry(aliases, catAliases, alias, r.name, true) })}>↺</button
-                      ></span
-                    >
-                  {/each}
+                <span class="lbl-key">{t("brandsTab.filedHere")}</span>
+                <div class="how">
+                  <span class="how-lbl">{t("brandsTab.whenFileSays")}</span>
+                  <div class="tags">
+                    <span class="tok self">{r.name}</span>
+                    {#each origin.keys as { key: alias, mine } (alias)}
+                      <span class="tok" class:mine title={mine ? t("taxonomyOrigin.added") : undefined}
+                        >{#if mine}<span class="mark" aria-hidden="true">✎</span>{/if}{alias}<button
+                          type="button"
+                          class="x"
+                          title={t("brandsTab.removeAlias")}
+                          disabled={busy}
+                          onclick={() => commit({ aliases: removeEntry(aliases, catAliases, alias) })}>×</button
+                        ></span
+                      >
+                    {/each}
+                    {#each origin.gone as alias (alias)}
+                      <span class="tok gone" title={t("taxonomyOrigin.removed")}
+                        ><s>{alias}</s><button
+                          type="button"
+                          class="x"
+                          title={t("taxonomyOrigin.putBack")}
+                          disabled={busy}
+                          onclick={() => commit({ aliases: setEntry(aliases, catAliases, alias, r.name, true) })}>↺</button
+                        ></span
+                      >
+                    {/each}
+                    <input
+                      class="input add"
+                      autocomplete="off"
+                      placeholder={t("brandsTab.addAlias")}
+                      bind:value={newAlias}
+                      disabled={busy}
+                      onkeydown={(e) => {
+                        if (e.key !== "Enter" || !newAlias.trim()) return;
+                        commit({ aliases: setEntry(aliases, catAliases, newAlias, r.name, true) });
+                        newAlias = "";
+                      }}
+                    />
+                  </div>
                 </div>
-                <input
-                  class="input add"
-                  placeholder={t("brandsTab.addAlias")}
-                  bind:value={newAlias}
-                  disabled={busy}
-                  onkeydown={(e) => {
-                    if (e.key !== "Enter" || !newAlias.trim()) return;
-                    commit({ aliases: setEntry(aliases, catAliases, newAlias, r.name, true) });
-                    newAlias = "";
-                  }}
-                />
-              </div>
 
-              <!-- The "name contains" rules filing cars here, from the
-                   catalogue or his - switch and count as in Rules. -->
-              {#if rulesHere.length}
-                <div class="field">
-                  <span class="lbl-key">{t("brandsTab.byName")}</span>
+                <div class="how">
+                  <span class="how-lbl">{t("brandsTab.whenNameContains")}</span>
                   <div class="name-rules">
                     {#each rulesHere as nr (nr.rule.id)}
                       <div class="name-rule" class:off={nr.disabled}>
@@ -448,8 +453,8 @@
                             rulesView && commitRules(setEnabled(rulesView.overlay, "brand_fix", nr.rule.id ?? "", nr.disabled))}
                           ><span></span></button
                         >
+                        <span class="tok">{nr.rule.name_contains}</span>
                         {#if nr.origin !== "own"}<span class="badge">{t("rules.badgeCatalog")}</span>{/if}
-                        <span class="nr-what">{t("brandsTab.nameContains", { word: nr.rule.name_contains })}</span>
                         <span class="nr-count mono">{nr.effect ? carsText(nr.effect) : "—"}</span>
                         {#if nr.origin === "own"}
                           <button
@@ -467,63 +472,62 @@
                         {/if}
                       </div>
                     {/each}
+                    <input
+                      class="input add"
+                      autocomplete="off"
+                      placeholder={t("brandsTab.nameWord")}
+                      bind:value={nameWord}
+                      disabled={busy || !rulesView}
+                      onkeydown={(e) => e.key === "Enter" && fileByName(r.name)}
+                    />
                   </div>
-                </div>
-              {/if}
-
-              <!-- A brand that is no brand (a modder, `traffic`): its cars
-                   say their real brand in their name. -->
-              {#if r.cars}
-                <div class="field">
-                  <span class="lbl-key">{t("brandsTab.refile")}</span>
-                  {#if !refile}
+                  {#if nameWord.trim()}
+                    <!-- Every car the word catches, wherever it is filed now:
+                         the point is to bring cars HERE. -->
+                    {@const hit = caught(nameWord)}
+                    {@const moving = hit.filter((c) => c.brand !== r.name)}
+                    {#if hit.length}
+                      <ul class="caught">
+                        {#each hit.slice(0, 12) as c (c.id)}
+                          <li class:here={c.brand === r.name}>
+                            <span class="c-name">{c.label}</span>
+                            <span class="c-brand">{c.brand === r.name ? t("brandsTab.alreadyHere") : (c.brand ?? "—")}</span>
+                          </li>
+                        {/each}
+                        {#if hit.length > 12}<li class="more">{t("brandsTab.moreCars", { count: hit.length - 12 })}</li>{/if}
+                      </ul>
+                    {:else}
+                      <p class="empty">{t("brandsTab.noCarCaught")}</p>
+                    {/if}
                     <div>
-                      <button type="button" class="btn" disabled={busy || !rulesView} onclick={() => (refile = { word: "", to: "" })}
-                        >{t("brandsTab.refileStart")}</button
-                      >
+                      <button type="button" class="btn" disabled={busy || !moving.length} onclick={() => fileByName(r.name)}>
+                        {moving.length === 1 ? t("brandsTab.fileHereOne") : t("brandsTab.fileHere", { count: moving.length })}
+                      </button>
                     </div>
-                  {:else}
-                    {@const hit = caught(r.name, refile.word)}
-                    <div class="refile">
-                      <input class="input" placeholder={t("brandsTab.refileWord")} bind:value={refile.word} disabled={busy} />
-                      <span class="arrow">→</span>
-                      <input
-                        class="input"
-                        list="brand-names"
-                        placeholder={t("brandsTab.refileTo")}
-                        bind:value={refile.to}
-                        disabled={busy}
-                      />
-                      <button
-                        type="button"
-                        class="btn"
-                        disabled={busy || !hit.length || !refile.to.trim() || refile.to.trim() === r.name}
-                        onclick={() => createRefile(r.name)}
-                        >{hit.length === 1 ? t("brandsTab.refileCreateOne") : t("brandsTab.refileCreate", { count: hit.length })}</button
-                      >
-                      <button type="button" class="btn" onclick={() => (refile = null)}>{t("common.cancel")}</button>
-                    </div>
-                    <ul class="refile-cars">
-                      {#each cars.filter((c) => c.brand === r.name) as c (c.id)}
-                        <li class:hit={hit.some((h) => h.id === c.id)}>{c.label}</li>
-                      {/each}
-                    </ul>
                   {/if}
                 </div>
-              {/if}
+              </div>
 
-              <!-- Renaming and merging are one gesture: filing the brand
-                   under another name, existing or new. -->
+              <!-- Renaming and merging are one gesture; the button says which
+                   one it is about to do. The list offers the existing brands
+                   (a merge without a typo); the browser's typing history is
+                   off - it offered names typed in unrelated fields. -->
               <div class="field">
-                <span class="lbl-key">{t("brandsTab.fileUnder")}</span>
+                <span class="lbl-key">{t("brandsTab.renameOrMerge")}</span>
                 <div class="attach">
-                  <input class="input pick" list="brand-names" bind:value={fileUnder} disabled={busy} />
-                  <button
-                    type="button"
-                    class="btn"
-                    disabled={busy || !fileUnder.trim() || fileUnder.trim() === r.name}
-                    onclick={() => merge(r.name, fileUnder)}>{t("brandsTab.file")}</button
-                  >
+                  <input
+                    class="input pick"
+                    list="brand-names"
+                    autocomplete="off"
+                    placeholder={t("brandsTab.renamePlaceholder")}
+                    bind:value={fileUnder}
+                    disabled={busy}
+                  />
+                  <button type="button" class="btn" disabled={busy || !target || target === r.name} onclick={() => merge(r.name, fileUnder)}>
+                    {#if !target || target === r.name}{t("brandsTab.renameOrMerge")}{:else if exists}{t("brandsTab.mergeInto", {
+                        name: target,
+                      })}{:else}{t("brandsTab.renameTo", { name: target })}{/if}
+                  </button>
                 </div>
               </div>
 
@@ -806,9 +810,6 @@
   .name-rule.off {
     opacity: 0.55;
   }
-  .nr-what {
-    flex: 1;
-  }
   .nr-count {
     font-size: 11.5px;
     color: var(--muted);
@@ -864,24 +865,47 @@
   .link:hover {
     color: var(--txt);
   }
-  .refile {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  .how {
+    display: grid;
+    grid-template-columns: 190px 1fr;
+    gap: 6px 12px;
+    align-items: start;
+    margin-top: 6px;
   }
-  .refile .input {
+  .how-lbl {
+    font-size: 11.5px;
+    color: var(--muted);
+    padding-top: 3px;
+  }
+  .how > :global(*):nth-child(n + 3) {
+    grid-column: 2;
+  }
+  .tok.self {
+    color: var(--muted);
+  }
+  .caught {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: 11.5px;
+  }
+  .caught li {
+    display: flex;
+    gap: 10px;
+    padding: 1px 0;
+    color: var(--txt2);
+  }
+  .caught li.here {
+    color: var(--faint);
+  }
+  .c-name {
     flex: 1;
     min-width: 0;
   }
-  .refile-cars {
-    list-style: none;
-    margin: 8px 0 0;
-    padding: 0;
-    columns: 2;
-    font-size: 11.5px;
-    color: var(--faint);
+  .c-brand {
+    color: var(--muted);
   }
-  .refile-cars li.hit {
-    color: var(--txt);
+  .caught .more {
+    color: var(--faint);
   }
 </style>

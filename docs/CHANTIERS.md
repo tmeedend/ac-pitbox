@@ -536,11 +536,19 @@ de reprendre. En cas d'écart, la spec fait foi.
       existante soit rangée au démarrage. La fusion automatique vise
       l'orthographe **majoritaire de la bibliothèque**, faute d'une liste de
       référence comme celle des pays du jeu. **Les règles sur le nom se créent
-      aussi depuis l'onglet Marques** (« Ranger certaines voitures sous une
-      autre marque »), sans changer de maison : décidé avec l'utilisateur après
-      mesure — la seule correction livrée qui agit chez lui range deux VRC
-      Auriel 4 sous Audi, et leur champ marque dit `VRC` : une fusion aurait
-      emmené les quatorze VRC. **TAXO§8 ne s'applique pas ici** :
+      aussi depuis l'onglet Marques** (« quand leur nom contient »), sans
+      changer de maison : décidé avec l'utilisateur après mesure — la seule
+      correction livrée qui agit chez lui range deux VRC Auriel 4 sous Audi,
+      et leur champ marque dit `VRC` : une fusion aurait emmené les quatorze
+      VRC. **Piège de la première version, relevé à l'usage** : le geste
+      partait de la marque de DÉPART (« envoyer ces voitures ailleurs ») et ne
+      cherchait que dans ses voitures ; l'utilisateur, dans Lamborghini, a
+      tapé `lanzo` et ne trouvait rien — la Lanzo était chez RSS. On pense
+      depuis la marque d'arrivée : le mot cherche dans toute la bibliothèque.
+      Même relecture pour les libellés : « orthographes fusionnées » et
+      « rangées ici par leur nom » ne disaient pas en quoi elles différaient ;
+      deux lignes parallèles (« quand leur fichier écrit la marque » / « quand
+      leur nom contient ») le disent. **TAXO§8 ne s'applique pas ici** :
       les `brand_fix` sont des règles « le nom contient X », une heuristique,
       pas une correspondance exacte — elles restent dans Règles (REGLES§11 les
       y range aussi). Écarts assumés : pas d'emblème dans la liste (lot
