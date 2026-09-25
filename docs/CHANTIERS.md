@@ -795,3 +795,27 @@ de reprendre. En cas d'écart, la spec fait foi.
       parce que deux fichiers qui décrivent la même ontologie finiront toujours
       par se séparer à nouveau. L'avertissement est écrit dans
       `docs/README.md` et au §14 de `SPEC.md` en attendant.
+
+- [ ] **Refactorings repérés, reportés (2026-09-25).** Relevés en découpant
+      `AppShell` puis `DetailPage`, classés par bénéfice sur risque ; aucun ne
+      change le comportement, aucun ne touche un format persisté.
+      1. **`DetailPage.svelte` : les actions du menu** (supprimer, réinstaller,
+         exporter, versions, activer/désactiver) vers un module `$lib/detail/`.
+         Environ 300 des 1 400 lignes. Une demi-session ; risque moyen — ce
+         sont des gestes qui écrivent sur disque, même si la logique ne fait
+         que se déplacer.
+      2. **`CarPreview3D.svelte` : 1 600 lignes de script** pour 40 de
+         balisage. La scène three.js (chargement, éclairage, caméra, sol) se
+         découperait en modules TS. Une session ; risque moyen, tout est
+         visuel — à faire vérifier à l'écran sur plusieurs voitures.
+      3. **`importer.rs` : 3 200 lignes de code** (plus 2 800 de tests), le
+         plus gros fichier du projet — mais c'est là que se décide le
+         classement à l'import, le terrain de la règle d'or n°3. D'abord des
+         tests qui figent le comportement, puis un découpage en plusieurs
+         passes. Plusieurs sessions ; risque élevé. À ne prendre qu'en même
+         temps qu'un vrai chantier d'import.
+      4. **Le curseur de régime existe en deux exemplaires** :
+         `detail/EngineSoundBlock.svelte` et `inventory/SoundDetail.svelte`
+         (même `revControls`, même `Slider`, même bouton de démonstration).
+         Quelques minutes, sans risque ; à mettre en commun au plus tard à la
+         troisième copie.

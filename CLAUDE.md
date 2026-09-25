@@ -837,6 +837,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Catalogue de règles** | livré, et enrichi par deux relevés réels promus (2026-09-25) ; restent les relevés de contributeurs, quand il y en aura | `docs/SPEC-regles.md`, `docs/CHANTIERS.md` |
 | **Corrections par mod** | à faire : marque, pays, classe, fiche technique d'un mod précis | `docs/CHANTIERS.md` |
 | **Règles de tags divergentes** | deux fichiers décrivent la même ontologie, un seul est chargé | `docs/CHANTIERS.md` |
+| **Refactorings reportés** | quatre repérés et chiffrés (actions de la fiche, aperçu 3D, `importer.rs`, curseur de régime) | `docs/CHANTIERS.md` |
 
 ## Fin de tâche — dans cet ordre
 
