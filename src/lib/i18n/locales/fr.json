@@ -1861,7 +1861,16 @@
     "logoFile": "Utiliser un fichier à moi…",
     "logoFileTitle": "Un logo pour cette marque",
     "logoFileFilter": "Image PNG ou SVG",
-    "logoAuto": "Revenir au choix automatique"
+    "logoAuto": "Revenir au choix automatique",
+    "byName": "Rangées ici par leur nom",
+    "nameContains": "le nom contient « {word} »",
+    "editInRules": "Modifier dans Règles",
+    "refile": "Ranger certaines voitures sous une autre marque",
+    "refileStart": "Par un mot de leur nom…",
+    "refileWord": "mot du nom (ex. auriel)",
+    "refileTo": "marque",
+    "refileCreate": "Ranger {count} voitures",
+    "refileCreateOne": "Ranger 1 voiture"
   },
   "taxonomyOrigin": {
     "shippedTitle": "Livrée avec Pit Box : les mises à jour la font évoluer",

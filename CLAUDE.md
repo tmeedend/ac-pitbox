@@ -651,6 +651,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Refonte navigation et fiches** | livrée et fusionnée ; restent trois questions ouvertes, dont le markdown dans les notes | `docs/PLAN-refonte-navigation.md` |
 | **Taxonomies** | familles, onglets Catégories, Pays et Marques (fusions, logos) livrés ; restent les emblèmes dans l'éditeur de filtre et la validation du seuil de fond cuit sur le gros corpus | `docs/SPEC-taxonomies.md`, `docs/CHANTIERS.md` |
 | **Catalogue de règles** | livré (deux couches, rapport mesuré, écran Règles, export/import, `rules-tool promote`, relevé anonyme) ; reste à lancer le relevé sur le gros corpus et promouvoir ce qu'il révèle | `docs/SPEC-regles.md`, `docs/CHANTIERS.md` |
+| **Corrections par mod** | à faire : marque, pays, classe, fiche technique d'un mod précis | `docs/CHANTIERS.md` |
 | **Règles de tags divergentes** | deux fichiers décrivent la même ontologie, un seul est chargé | `docs/CHANTIERS.md` |
 
 ## Fin de tâche — dans cet ordre

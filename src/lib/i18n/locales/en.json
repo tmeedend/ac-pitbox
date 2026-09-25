@@ -1861,7 +1861,16 @@
     "logoFile": "Use a file of mine…",
     "logoFileTitle": "A logo for this brand",
     "logoFileFilter": "PNG or SVG image",
-    "logoAuto": "Back to the automatic choice"
+    "logoAuto": "Back to the automatic choice",
+    "byName": "Filed here by their name",
+    "nameContains": "name contains “{word}”",
+    "editInRules": "Edit in Rules",
+    "refile": "File some cars under another brand",
+    "refileStart": "By a word of their name…",
+    "refileWord": "word of the name (e.g. auriel)",
+    "refileTo": "brand",
+    "refileCreate": "File {count} cars",
+    "refileCreateOne": "File 1 car"
   },
   "taxonomyOrigin": {
     "shippedTitle": "Shipped with Pit Box: updates keep improving it",

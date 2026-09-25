@@ -535,7 +535,12 @@ de reprendre. En cas d'écart, la spec fait foi.
       correction d'une règle ; `ENGINE_VERSION` 6 pour que la bibliothèque
       existante soit rangée au démarrage. La fusion automatique vise
       l'orthographe **majoritaire de la bibliothèque**, faute d'une liste de
-      référence comme celle des pays du jeu. **TAXO§8 ne s'applique pas ici** :
+      référence comme celle des pays du jeu. **Les règles sur le nom se créent
+      aussi depuis l'onglet Marques** (« Ranger certaines voitures sous une
+      autre marque »), sans changer de maison : décidé avec l'utilisateur après
+      mesure — la seule correction livrée qui agit chez lui range deux VRC
+      Auriel 4 sous Audi, et leur champ marque dit `VRC` : une fusion aurait
+      emmené les quatorze VRC. **TAXO§8 ne s'applique pas ici** :
       les `brand_fix` sont des règles « le nom contient X », une heuristique,
       pas une correspondance exacte — elles restent dans Règles (REGLES§11 les
       y range aussi). Écarts assumés : pas d'emblème dans la liste (lot
@@ -731,6 +736,17 @@ de reprendre. En cas d'écart, la spec fait foi.
       `#vintage supercars` (12). **Reste** : le lancer sur le gros corpus
       (l'autre PC) — valider le seuil de fond cuit des logos, puis curer et
       promouvoir ce qu'il révèle.
+
+- [ ] **Corrections par mod — à faire, chantier à part.** Aujourd'hui on
+      corrige d'un mod son nom, sa description et ses tags (couche 4 de
+      REGLES§14), mais **ni sa marque, ni son pays, ni sa classe, ni sa fiche
+      technique**. Demandé par l'utilisateur (2026-09-24) en discutant des
+      fausses marques : pour deux ou trois voitures, une correction directe
+      est plus simple qu'une règle. À concevoir comme la couche la plus
+      prioritaire de la cascade (REGLES§3), par mod, jamais exportée ni
+      remontée par le relevé (elle appartient à une bibliothèque, pas à une
+      façon de classer), et visible sur la fiche comme « modifié par vous »
+      avec retour à la valeur calculée.
 
 - [ ] **Deux jeux de règles de tags ont divergé — à trancher.**
       `docs/default-tag-rules-enriched.json` **n'est pas ce que l'app charge** :

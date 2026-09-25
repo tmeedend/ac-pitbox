@@ -13,6 +13,16 @@
   // at the sizes it is actually drawn (TAXO§6.3) - one chosen on a large
   // preview turns out unreadable at 13 px one time in three.
   //
+  // A brand is also where one notices that it is no brand at all - `VRC`, a
+  // modder, filing 14 cars; `traffic`. Those cars say their real brand in
+  // their NAME ("VRC ERC - Auriel 4" is an Audi), which a spelling merge
+  // cannot read: filing all of VRC under Audi would be wrong. So the tab
+  // creates the Rules screen's "name contains → brand" rules (`brand_fix`)
+  // from here, and shows, on each brand, the rules that file cars into it -
+  // with their switch and their count. Stored once, in the rules overlay:
+  // this is a second door onto them, not a second mechanism (REGLES§11 keeps
+  // a heuristic in Rules, with its counter and its update report).
+  //
   // Saving re-applies to the whole library, like the Countries tab: the brand
   // is decided at write time. Same write queue, failures shown and logged
   // (CLAUDE.md rule 6).
@@ -25,7 +35,19 @@
   import { bumpLibraryVersion } from "$lib/library/libraryVersion.svelte";
   import { brandProposals, mergeBrand, mergeKey } from "$lib/workshop/brandEdit";
   import { keyOrigins, keysTo, removeEntry, restoreEntries, setEntry, touches } from "$lib/workshop/countryEdit";
-  import { getTaxonomy, saveBrandOverlay, type MapOverlay, type TaxonomyView } from "$lib/workshop/rules";
+  import {
+    getRulesView,
+    getTaxonomy,
+    saveBrandOverlay,
+    saveRulesOverlay,
+    type BrandFix,
+    type MapOverlay,
+    type RuleRow,
+    type RulesView,
+    type TaxonomyView,
+  } from "$lib/workshop/rules";
+  import { addRule, removeRule, setEnabled } from "$lib/workshop/rulesEdit";
+  import { requestSection } from "$lib/shell/nav.svelte";
   import { open as openFile } from "@tauri-apps/plugin-dialog";
   import Emblem from "$lib/components/ui/Emblem.svelte";
   import Seg from "$lib/components/ui/Seg.svelte";
@@ -47,6 +69,12 @@
   const catAliases = $derived(view?.catalog.brand_aliases ?? {});
   /** Stored brand of every car. */
   let brands = $state<(string | null)[]>([]);
+  /** Every car with its brand and the name its file gives - what a
+   * "name contains" rule reads (`rules::apply_car`). */
+  let cars = $state<{ id: string; brand: string | null; name: string; label: string }[]>([]);
+  /** The Rules screen's view: the `brand_fix` rows, with their counters. */
+  let rulesView = $state<RulesView | null>(null);
+  let refile = $state<{ word: string; to: string } | null>(null);
   let loading = $state(true);
   let busy = $state(false);
   let error = $state("");
@@ -57,12 +85,20 @@
 
   async function reloadCars() {
     const cards = await listLibrary();
-    brands = cards.filter((c) => c.kind === "Car").map((c) => c.brand);
+    const carCards = cards.filter((c) => c.kind === "Car");
+    brands = carCards.map((c) => c.brand);
+    cars = carCards.map((c) => ({
+      id: c.id_interne,
+      brand: c.brand,
+      name: c.display_name_file ?? c.id_interne,
+      label: c.display_name ?? c.display_name_file ?? c.id_interne,
+    }));
   }
 
   onMount(async () => {
     try {
-      const [v] = await Promise.all([getTaxonomy(), reloadCars(), loadBrandLogos()]);
+      const [v, rv] = await Promise.all([getTaxonomy(), getRulesView(), reloadCars(), loadBrandLogos()]);
+      rulesView = rv;
       take(v);
       await focusRequested();
     } catch (e) {
@@ -175,8 +211,48 @@
     if (el) scrollIntoContainer(el, "center");
   }
 
+  /** The "name contains" rules that file cars under `brand`. */
+  const nameRules = (brand: string): RuleRow<BrandFix>[] =>
+    (rulesView?.brand_fix ?? []).filter((r) => r.rule.set_brand === brand);
+
+  /** This brand's cars a word would catch - as the engine matches: the file's
+   * name, lowercased, containing it. */
+  const caught = (brand: string, word: string) => {
+    const w = word.trim().toLowerCase();
+    return w ? cars.filter((c) => c.brand === brand && c.name.toLowerCase().includes(w)) : [];
+  };
+
+  /** A rules decision from this tab: the same write as the Rules screen's,
+   * then the brands read back - the rule moved cars. */
+  function commitRules(next: import("$lib/workshop/rules").RulesOverlay) {
+    queue = queue
+      .then(async () => {
+        busy = true;
+        rulesView = await saveRulesOverlay(next);
+        await reloadCars();
+        await loadBrandLogos();
+        bumpLibraryVersion();
+        error = "";
+      })
+      .catch((e) => {
+        console.error("save_rules_overlay", e);
+        error = errorText(e);
+      })
+      .finally(() => (busy = false));
+  }
+
+  function createRefile(brand: string) {
+    if (!rulesView || !refile) return;
+    const word = refile.word.trim().toLowerCase();
+    const to = refile.to.trim();
+    if (!word || !to || to === brand || !caught(brand, word).length) return;
+    commitRules(addRule(rulesView.overlay, "brand_fix", { name_contains: word, set_brand: to }));
+    refile = null;
+  }
+
   function toggle(name: string) {
     open = open === name ? null : name;
+    refile = null;
     newAlias = "";
     fileUnder = "";
   }
@@ -248,6 +324,7 @@
           </button>
 
           {#if open === r.name}
+            {@const rulesHere = nameRules(r.name)}
             <div class="detail">
               <div class="field">
                 <span class="lbl-key">{t("brandsTab.logo")}</span>
@@ -351,6 +428,89 @@
                   }}
                 />
               </div>
+
+              <!-- The "name contains" rules filing cars here, from the
+                   catalogue or his - switch and count as in Rules. -->
+              {#if rulesHere.length}
+                <div class="field">
+                  <span class="lbl-key">{t("brandsTab.byName")}</span>
+                  <div class="name-rules">
+                    {#each rulesHere as nr (nr.rule.id)}
+                      <div class="name-rule" class:off={nr.disabled}>
+                        <button
+                          type="button"
+                          class="switch"
+                          role="switch"
+                          aria-checked={!nr.disabled}
+                          aria-label={t("rules.enabled")}
+                          disabled={busy || !rulesView}
+                          onclick={() =>
+                            rulesView && commitRules(setEnabled(rulesView.overlay, "brand_fix", nr.rule.id ?? "", nr.disabled))}
+                          ><span></span></button
+                        >
+                        {#if nr.origin !== "own"}<span class="badge">{t("rules.badgeCatalog")}</span>{/if}
+                        <span class="nr-what">{t("brandsTab.nameContains", { word: nr.rule.name_contains })}</span>
+                        <span class="nr-count mono">{nr.effect ? carsText(nr.effect) : "—"}</span>
+                        {#if nr.origin === "own"}
+                          <button
+                            type="button"
+                            class="x"
+                            title={t("common.delete")}
+                            disabled={busy || !rulesView}
+                            onclick={() => rulesView && commitRules(removeRule(rulesView.overlay, "brand_fix", nr.rule.id ?? ""))}
+                            >×</button
+                          >
+                        {:else}
+                          <button type="button" class="link" onclick={() => void requestSection("rules")}
+                            >{t("brandsTab.editInRules")}</button
+                          >
+                        {/if}
+                      </div>
+                    {/each}
+                  </div>
+                </div>
+              {/if}
+
+              <!-- A brand that is no brand (a modder, `traffic`): its cars
+                   say their real brand in their name. -->
+              {#if r.cars}
+                <div class="field">
+                  <span class="lbl-key">{t("brandsTab.refile")}</span>
+                  {#if !refile}
+                    <div>
+                      <button type="button" class="btn" disabled={busy || !rulesView} onclick={() => (refile = { word: "", to: "" })}
+                        >{t("brandsTab.refileStart")}</button
+                      >
+                    </div>
+                  {:else}
+                    {@const hit = caught(r.name, refile.word)}
+                    <div class="refile">
+                      <input class="input" placeholder={t("brandsTab.refileWord")} bind:value={refile.word} disabled={busy} />
+                      <span class="arrow">→</span>
+                      <input
+                        class="input"
+                        list="brand-names"
+                        placeholder={t("brandsTab.refileTo")}
+                        bind:value={refile.to}
+                        disabled={busy}
+                      />
+                      <button
+                        type="button"
+                        class="btn"
+                        disabled={busy || !hit.length || !refile.to.trim() || refile.to.trim() === r.name}
+                        onclick={() => createRefile(r.name)}
+                        >{hit.length === 1 ? t("brandsTab.refileCreateOne") : t("brandsTab.refileCreate", { count: hit.length })}</button
+                      >
+                      <button type="button" class="btn" onclick={() => (refile = null)}>{t("common.cancel")}</button>
+                    </div>
+                    <ul class="refile-cars">
+                      {#each cars.filter((c) => c.brand === r.name) as c (c.id)}
+                        <li class:hit={hit.some((h) => h.id === c.id)}>{c.label}</li>
+                      {/each}
+                    </ul>
+                  {/if}
+                </div>
+              {/if}
 
               <!-- Renaming and merging are one gesture: filing the brand
                    under another name, existing or new. -->
@@ -630,5 +790,98 @@
   .logo-acts {
     display: flex;
     gap: 8px;
+  }
+  .name-rules {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .name-rule {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--txt2);
+  }
+  .name-rule.off {
+    opacity: 0.55;
+  }
+  .nr-what {
+    flex: 1;
+  }
+  .nr-count {
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+  /* The Rules screen's switch and badge (REGLES§12), same values. */
+  .switch {
+    flex: none;
+    width: 26px;
+    height: 14px;
+    padding: 0;
+    border: 1px solid var(--faint);
+    border-radius: 8px;
+    background: var(--panel2);
+    position: relative;
+    cursor: pointer;
+  }
+  .switch span {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--muted2);
+    transition: left 0.12s;
+  }
+  .switch[aria-checked="true"] {
+    border-color: var(--muted);
+    background: var(--mat);
+  }
+  .switch[aria-checked="true"] span {
+    left: 14px;
+    background: var(--txt);
+  }
+  .badge {
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 1px 4px;
+  }
+  .link {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--muted);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+    font-size: 11.5px;
+  }
+  .link:hover {
+    color: var(--txt);
+  }
+  .refile {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .refile .input {
+    flex: 1;
+    min-width: 0;
+  }
+  .refile-cars {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+    columns: 2;
+    font-size: 11.5px;
+    color: var(--faint);
+  }
+  .refile-cars li.hit {
+    color: var(--txt);
   }
 </style>
