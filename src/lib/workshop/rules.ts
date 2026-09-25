@@ -201,6 +201,12 @@ export function exportSurvey(path: string): Promise<[number, number]> {
   return invoke<[number, number]>("export_survey", { path });
 }
 
+/** The same survey, of a folder of mods Pit Box does not hold (a Mod
+ * Organizer `mods` folder) - read-only, nothing imported. */
+export function exportFolderSurvey(root: string, path: string): Promise<[number, number]> {
+  return invoke<[number, number]>("export_folder_survey", { root, path });
+}
+
 /** Writes the decisions and re-applies them to the library; the view comes
  * back with the counters of that pass. A WRITE: `invoke`, never `invokeSafe`. */
 export function saveRulesOverlay(overlay: RulesOverlay): Promise<RulesView> {

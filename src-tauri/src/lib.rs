@@ -505,6 +505,7 @@ pub fn run() {
             commands::rules::export_rules,
             commands::rules::import_rules,
             commands::rules::export_survey,
+            commands::rules::export_folder_survey,
             commands::rules::get_taxonomy,
             commands::rules::save_family_overlay,
             commands::rules::save_country_overlay,

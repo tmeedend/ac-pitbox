@@ -216,6 +216,22 @@ pub fn export_survey(app: AppHandle, db: State<Db>, path: String) -> Result<(usi
     Ok((s.summary.cars, s.summary.tracks))
 }
 
+/// The same survey, of a folder of mods Pit Box does not hold (a Mod
+/// Organizer `mods` folder). Read-only; can take a while on thousands of
+/// mods, hence off the main thread.
+#[tauri::command]
+pub async fn export_folder_survey(app: AppHandle, root: String, path: String) -> Result<(usize, usize), String> {
+    let dir = crate::rules::config_dir(&app)?;
+    let rules = crate::rules::load(&app);
+    tauri::async_runtime::spawn_blocking(move || {
+        let s = crate::survey::build_from_folder(std::path::Path::new(&root), &rules, &dir);
+        crate::survey::write(std::path::Path::new(&path), &s)?;
+        Ok((s.summary.cars, s.summary.tracks))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 pub fn dismiss_catalog_report(app: AppHandle) -> Result<(), String> {
     let dir = crate::rules::config_dir(&app)?;

@@ -1104,7 +1104,9 @@
     "surveying": "Relevé en cours…",
     "surveyFilter": "Relevé Pit Box",
     "surveyDone": "Relevé enregistré : {cars} voitures, {tracks} circuits",
-    "surveySend": "L'envoyer sur GitHub"
+    "surveySend": "L'envoyer sur GitHub",
+    "surveyFolder": "Relever un dossier de mods…",
+    "surveyFolderTitle": "Dossier de mods à relever (ex. mods de Mod Organizer)"
   },
   "rules": {
     "subtitle": "Ontologie éditable — appliquée de façon non destructive. Le fichier du mod n'est jamais modifié.",

@@ -1104,7 +1104,9 @@
     "surveying": "Surveying…",
     "surveyFilter": "Pit Box survey",
     "surveyDone": "Survey saved: {cars} cars, {tracks} tracks",
-    "surveySend": "Send it on GitHub"
+    "surveySend": "Send it on GitHub",
+    "surveyFolder": "Survey a folder of mods…",
+    "surveyFolderTitle": "Folder of mods to survey (e.g. Mod Organizer's mods)"
   },
   "rules": {
     "subtitle": "Editable ontology — applied non-destructively. The mod's file is never modified.",

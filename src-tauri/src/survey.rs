@@ -153,6 +153,56 @@ pub fn build(conn: &Connection, cfg: &AppConfig, rules: &Rules, dir: &Path) -> r
     Ok(assemble(mods, &badges, rules, dir))
 }
 
+/// The survey of a folder of mods Pit Box does not hold - a Mod Organizer
+/// `mods` folder, one sub-folder per mod, or any archive of extracted mods.
+/// Read-only: nothing is imported, copied or written. The cars and tracks are
+/// found the way a bulk import finds them (`modscan::scan`), wherever each
+/// mod nests them; the same car shipped by two folders counts once.
+///
+/// The case/accent folding of brands uses the spellings this machine's
+/// library elected (`brands.rs`) - on a machine without one, variants of case
+/// stay apart in the survey. It changes nothing to the rules the survey
+/// feeds, which are decided by name.
+pub fn build_from_folder(root: &Path, rules: &Rules, dir: &Path) -> Survey {
+    use crate::modscan::ModKind;
+    let mut found = crate::modscan::scan(root);
+    found.sort_by(|a, b| a.dir.cmp(&b.dir));
+    let mut seen = BTreeSet::new();
+    let (mut mods, mut badges) = (Vec::new(), Vec::new());
+    for f in found {
+        let Some(id) = f.dir.file_name().and_then(|n| n.to_str()).map(str::to_string) else {
+            continue;
+        };
+        let is_car = f.kind == ModKind::Car;
+        if !seen.insert((is_car, id.clone())) {
+            continue;
+        }
+        let ui = match f.kind {
+            ModKind::Car => crate::uijson::read_car(&f.dir),
+            ModKind::Track => crate::uijson::read_track(&f.dir),
+        }
+        .unwrap_or_default();
+        let class = ui.class.clone().unwrap_or_default();
+        let name = ui.name.clone().unwrap_or_else(|| id.clone());
+        let h = crate::harmonize::compute(
+            rules,
+            f.kind,
+            &ui.tags,
+            &name,
+            &class,
+            ui.country.as_deref(),
+            ui.brand.as_deref(),
+        );
+        if is_car {
+            if let (Some(brand), Some(badge)) = (&h.brand, crate::inspect::brand_badge(&f.dir)) {
+                badges.push((id.clone(), brand.clone(), badge));
+            }
+        }
+        mods.push(Surveyed { id, is_car, ui, h });
+    }
+    assemble(mods, &badges, rules, dir)
+}
+
 /// What tells a known tag, a flag, a family - read once for the whole survey.
 struct Known {
     families: BTreeMap<String, String>,
@@ -441,6 +491,64 @@ mod tests {
         assert!(
             s.summary.unclassified_cars.is_empty(),
             "and the car is classified by it"
+        );
+    }
+
+    /// A folder of mods laid out as Mod Organizer keeps them - one folder per
+    /// mod, the car or track nested at any depth - is surveyed without being
+    /// imported; the same car in two mod folders counts once, and no path
+    /// reaches the file.
+    #[test]
+    fn a_folder_of_mods_is_surveyed_as_it_is() {
+        let base = crate::testutil::temp_dir("survey-folder");
+        let root = base.join("mods");
+        let car = |mod_dir: &str| {
+            let d = root
+                .join(mod_dir)
+                .join("content")
+                .join("cars")
+                .join("rss_gtm_lanzo_v8")
+                .join("ui");
+            std::fs::create_dir_all(&d).unwrap();
+            std::fs::write(
+                d.join("ui_car.json"),
+                r#"{"name":"GT-M Lanzo V8","brand":"Race Sim Studio","class":"race","tags":["gt3","weirdtag"]}"#,
+            )
+            .unwrap();
+        };
+        car("RSS GT-M Lanzo V8");
+        car("RSS GT-M Lanzo V8 - older copy");
+        let t = root
+            .join("Some Track")
+            .join("content")
+            .join("tracks")
+            .join("some_track")
+            .join("ui");
+        std::fs::create_dir_all(&t).unwrap();
+        std::fs::write(
+            t.join("ui_track.json"),
+            r#"{"name":"Some Track","country":"USA","tags":["circuit"]}"#,
+        )
+        .unwrap();
+
+        let s = build_from_folder(&root, &crate::rules::default_rules(), &base);
+        assert_eq!(
+            (s.summary.cars, s.summary.tracks),
+            (1, 1),
+            "one car, once, and the track"
+        );
+        assert_eq!(s.cars[0].id, "rss_gtm_lanzo_v8");
+        assert_eq!(s.cars[0].categories, ["#gt3"], "classified by the real engine");
+        assert_eq!(s.summary.unrecognized_tags[0].value, "weirdtag");
+        assert!(root.join("RSS GT-M Lanzo V8").is_dir(), "nothing moved");
+
+        let file = base.join("survey.json");
+        write(&file, &s).unwrap();
+        let text = std::fs::read_to_string(&file).unwrap();
+        assert!(!text.contains("RSS GT-M Lanzo V8 - older copy"), "no mod folder name");
+        assert!(
+            !text.contains(&*base.to_string_lossy().replace('\\', "\\\\")),
+            "no path"
         );
     }
 

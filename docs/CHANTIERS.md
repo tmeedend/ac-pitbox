@@ -744,6 +744,13 @@ de reprendre. En cas d'écart, la spec fait foi.
       `#vintage supercars` (12). **Reste** : le lancer sur le gros corpus
       (l'autre PC) — valider le seuil de fond cuit des logos, puis curer et
       promouvoir ce qu'il révèle.
+      **Premier relevé réel (2026-09-25)** : 397 voitures, 138 circuits. Il a
+      trouvé un défaut du relevé (les tags qu'une famille prend comptés
+      « inconnus », corrigé) et un du catalogue (`lmdh` inconnu : les LMDh
+      tombaient en `#lmp1`), et donné les propositions de marques RSS/VRC —
+      à relire par l'utilisateur avant promotion. **Relevé d'un dossier** ajouté
+      pour le PC sous Mod Organizer, dont le montage virtuel n'est visible que
+      des programmes qu'il lance.
 
 - [ ] **Corrections par mod — à faire, chantier à part.** Aujourd'hui on
       corrige d'un mod son nom, sa description et ses tags (couche 4 de
