@@ -1,0 +1,7 @@
+# LF everywhere, in the repository and in the working tree, whatever the
+# contributor's core.autocrlf. With autocrlf=true (Git for Windows' default) the
+# checkout wrote CRLF, while the tools that rewrite files here — Node scripts
+# (sync-version.mjs), cargo, editors — write LF: every such write left a file
+# "modified" with an empty diff, which then blocked merges. Binary files are
+# still detected and left untouched by text=auto.
+* text=auto eol=lf
