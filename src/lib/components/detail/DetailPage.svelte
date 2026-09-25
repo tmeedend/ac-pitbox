@@ -85,6 +85,7 @@
   import DecisionsBlock from "./DecisionsBlock.svelte";
   import ExtrasBlock from "./ExtrasBlock.svelte";
   import HistoryBlock from "./HistoryBlock.svelte";
+  import UpdateBanner from "./UpdateBanner.svelte";
   import ProvenanceBlock from "./ProvenanceBlock.svelte";
   import TagsBlock from "./TagsBlock.svelte";
   import MediaScreenshots from "./MediaScreenshots.svelte";
@@ -1254,6 +1255,8 @@
     />
 
     <Tabs flush tabs={tabItems} active={activeTab} onselect={(v) => (activeTab = v as DetailTab)} />
+
+    <UpdateBanner kind={isCar ? "Car" : "Track"} id={d.id_interne} />
 
     {#if actionError}<div class="errbox">{actionError}</div>{/if}
     {#if reinstallOk}<div class="export-ok">{t("detail.reinstallSuccess")}</div>{/if}

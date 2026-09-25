@@ -1519,7 +1519,9 @@
     "notARulesExport": "This file is not a Pit Box rules export.",
     "rulesExportTooNew": "This export was made by a newer version of Pit Box. Update to import it.",
     "logoFormat": "A logo must be a PNG or SVG image.",
-    "logoTooSmall": "This PNG is too small: at least 64 px on its smaller side."
+    "logoTooSmall": "This PNG is too small: at least 64 px on its smaller side.",
+    "updateRegistryUnavailable": "The update registry can't be reached right now. Try again later.",
+    "updateDownloadFailed": "The download of the update was interrupted. Try again."
   },
   "pack": {
     "tabMembers": "Mods",
@@ -1913,5 +1915,35 @@
     },
     "disable": "Disable",
     "enable": "Enable again"
+  },
+  "modUpdates": {
+    "toastOne": "A mod has a new version",
+    "toastMany": "{n} mods have a new version",
+    "later": "Later",
+    "openFiche": "Open the mod",
+    "update": "Update",
+    "ignore": "Ignore",
+    "ignoreHint": "Skip this version. A newer one will be announced again.",
+    "limitedHint": "Distributed by its author (Patreon, file host): the page opens in the browser.",
+    "inBrowser": "Page opened in the browser — drop the archive into Pit Box once downloaded.",
+    "size": "{done} MB",
+    "sizeOf": "{done} / {total} MB",
+    "available": "Version {version} available",
+    "installed": "installed: {version}",
+    "phaseDownload": "Downloading…",
+    "phaseImport": "Importing…",
+    "whatsNew": "What's new",
+    "noChangelog": "The author didn't describe this version.",
+    "authorPage": "{author}'s page",
+    "authorPageAnon": "Author's page",
+    "cardTooltip": "Version {version} available",
+    "settingOnline": "Check for mod updates",
+    "settingHint": "Once a day, Pit Box reads the list of latest versions published by mod authors — the same list Content Manager uses. The list is the same for everyone: nothing about your library is sent.",
+    "checkNow": "Check now",
+    "checking": "Checking…",
+    "saveFirst": "Save first",
+    "upToDate": "All mods are up to date.",
+    "foundCount": "{n} update(s) available.",
+    "downloadPhase": "download"
   }
 }

@@ -1029,7 +1029,9 @@
     "pendingUnknownAction": "Esa acción no se aplica a esta carpeta.",
     "pendingAlreadyKnown": "Ya existe un mod con ese nombre.",
     "versionIsActive": "Es la versión instalada. Activa otra antes de eliminarla.",
-    "packNotFound": "Este pack ya no existe: ninguno de sus mods está en la biblioteca."
+    "packNotFound": "Este pack ya no existe: ninguno de sus mods está en la biblioteca.",
+    "updateRegistryUnavailable": "El registro de actualizaciones no responde por ahora. Vuelve a intentarlo más tarde.",
+    "updateDownloadFailed": "La descarga de la actualización se interrumpió. Vuelve a intentarlo."
   },
   "pack": {
     "tabMembers": "Mods",
@@ -1075,5 +1077,35 @@
     "carOne": "{count} coche",
     "viewIndex": "Índice",
     "viewList": "Lista completa"
+  },
+  "modUpdates": {
+    "toastOne": "Un mod tiene una nueva versión",
+    "toastMany": "{n} mods tienen una nueva versión",
+    "later": "Más tarde",
+    "openFiche": "Abrir el mod",
+    "update": "Actualizar",
+    "ignore": "Ignorar",
+    "ignoreHint": "Omitir esta versión. Se volverá a avisar de una más reciente.",
+    "limitedHint": "Distribuido por su autor (Patreon, alojamiento de archivos): la página se abre en el navegador.",
+    "inBrowser": "Página abierta en el navegador — arrastra el archivo a Pit Box una vez descargado.",
+    "size": "{done} MB",
+    "sizeOf": "{done} / {total} MB",
+    "available": "Versión {version} disponible",
+    "installed": "instalada: {version}",
+    "phaseDownload": "Descargando…",
+    "phaseImport": "Importando…",
+    "whatsNew": "Novedades",
+    "noChangelog": "El autor no describió esta versión.",
+    "authorPage": "Página de {author}",
+    "authorPageAnon": "Página del autor",
+    "cardTooltip": "Versión {version} disponible",
+    "settingOnline": "Buscar actualizaciones de mods",
+    "settingHint": "Una vez al día, Pit Box lee la lista de las últimas versiones publicadas por los autores de mods — la misma que Content Manager. La lista es igual para todos: no se envía nada de tu biblioteca.",
+    "checkNow": "Comprobar ahora",
+    "checking": "Comprobando…",
+    "saveFirst": "Guarda primero",
+    "upToDate": "Todos los mods están al día.",
+    "foundCount": "{n} actualización(es) disponible(s).",
+    "downloadPhase": "descarga"
   }
 }

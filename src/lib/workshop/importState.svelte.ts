@@ -151,11 +151,15 @@ export function setCopyMode(v: boolean): void {
 
 /** Lance un import et récolte conflits flous + cas ambigus (§4.2/§4.4). La
  * `source` est mémorisée pour pouvoir reprendre un cas ambigu après décision. */
-async function runImport(source: { paths: string[]; folder: boolean; copy: boolean }): Promise<void> {
+async function runImport(source: {
+  paths: string[];
+  folder: boolean;
+  copy: boolean;
+}): Promise<ArchiveResult[] | null> {
   // Un seul lot à la fois : le backend n'a qu'un drapeau d'annulation et qu'un
   // état de progression, deux lots concurrents se marcheraient dessus. Les
   // boutons sont déjà désactivés pendant un import, mais pas le glisser-déposer.
-  if (importState.importing) return;
+  if (importState.importing) return null;
   importState.importing = true;
   importState.cancelling = false;
   // Retour immédiat (§4.2) : la commande est asynchrone côté backend et met
@@ -227,11 +231,30 @@ async function runImport(source: { paths: string[]; folder: boolean; copy: boole
       return [...mods, ...subs];
     });
     bumpLibraryVersion();
+    return report;
   } finally {
     importState.importing = false;
     importState.cancelling = false;
     importState.progress = null;
   }
+}
+
+/** Imports an archive the app downloaded itself (a mod update, §4.7) through
+ * the very same path as a drop — report, arbitration, everything. `null` when
+ * another import is running.
+ *
+ * `stillNeeded` says whether an arbitration left pending by this import
+ * points at the archive: resuming it re-extracts the source (§4.3), so the
+ * file must outlive the import until the question is answered. */
+export async function importDownloadedArchive(
+  path: string,
+): Promise<{ report: ArchiveResult[]; stillNeeded: boolean } | null> {
+  const report = await runImport({ paths: [path], folder: false, copy: false });
+  if (!report) return null;
+  const stillNeeded = [...importState.pendingAmbiguous, ...importState.pendingFragments].some((p) =>
+    p.source.paths.includes(path),
+  );
+  return { report, stillNeeded };
 }
 
 export async function pickAndImportArchive(): Promise<void> {

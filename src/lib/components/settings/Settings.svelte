@@ -33,6 +33,7 @@
     setDeviceUse,
     setGamepadEnabled,
   } from "$lib/shell/gamepadDevices.svelte";
+  import { checkModUpdates, modUpdates } from "$lib/library/modUpdates.svelte";
 
   import { errorText } from "$lib/errors";
 
@@ -191,7 +192,14 @@
     try {
       await saveConfig(config);
       saved = true;
+      const updatesWereOn = savedConfig.prefs.mod_updates_online;
       savedConfig = structuredClone($state.snapshot(config));
+      // The update check follows the switch at once (§4.7): off, what was
+      // announced disappears; on, the registry is asked without waiting a day.
+      if (updatesWereOn !== config.prefs.mod_updates_online) {
+        if (config.prefs.mod_updates_online) void checkModUpdates();
+        else modUpdates.list = [];
+      }
     } catch (e) {
       error = errorText(e);
     } finally {
@@ -332,6 +340,38 @@
 
       <section class="lang-section">
         <label class="check">
+          <input type="checkbox" bind:checked={config.prefs.mod_updates_online} />
+          <span>{t("modUpdates.settingOnline")}</span>
+        </label>
+        <p class="hint">{t("modUpdates.settingHint")}</p>
+        {#if config.prefs.mod_updates_online}
+          <div class="upd-check">
+            <!-- The backend reads the SAVED switch: checking before saving a
+                 fresh "on" would ask nothing and report nothing. -->
+            <button
+              class="btn"
+              type="button"
+              disabled={modUpdates.checking || dirty}
+              title={dirty ? t("modUpdates.saveFirst") : undefined}
+              onclick={() => void checkModUpdates()}
+            >
+              {modUpdates.checking ? t("modUpdates.checking") : t("modUpdates.checkNow")}
+            </button>
+            {#if modUpdates.lastCheck?.error}
+              <span class="upd-err">{modUpdates.lastCheck.error}</span>
+            {:else if modUpdates.lastCheck}
+              <span class="hint">
+                {modUpdates.list.length
+                  ? t("modUpdates.foundCount", { n: modUpdates.list.length })
+                  : t("modUpdates.upToDate")}
+              </span>
+            {/if}
+          </div>
+        {/if}
+      </section>
+
+      <section class="lang-section">
+        <label class="check">
           <input
             type="checkbox"
             checked={gamepadEnabled()}
@@ -432,6 +472,20 @@
     font-size: 11px;
     color: var(--faint);
     line-height: 1.5;
+  }
+  .upd-check {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  /* Its `.hint` sits beside the button, not under a field. */
+  .upd-check .hint {
+    margin-top: 0;
+  }
+  .upd-err {
+    font-size: 11px;
+    color: var(--rosso-bright);
   }
   .device-lbl {
     margin-top: 16px;

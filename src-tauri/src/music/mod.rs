@@ -31,6 +31,7 @@ pub mod config;
 pub mod engine;
 pub mod index;
 pub mod scan;
+pub mod tags;
 pub mod watch;
 
 pub use config::MusicConfig;

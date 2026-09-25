@@ -232,6 +232,14 @@ Contrainte supplémentaire : lors d'une nouvelle permutation, si la première pi
 
 **Transition MENU ↔ GRID :** chaque ambiance conserve sa propre position de lecture. Au retour vers MENU, reprendre la piste là où elle en était plutôt que d'en relancer une au hasard — la continuité est nettement plus agréable si l'utilisateur fait des allers-retours rapides.
 
+### 5.5 Notification de piste
+
+À chaque piste qui démarre — piste suivante, bascule MENU ↔ GRID, entrée dans Big Picture, reprise après une session — une notification apparaît dans la pile bas-droite (§4.2bis du SPEC) : titre, artiste, album et pochette, lus dans les tags du fichier (ID3v2 pour le mp3, commentaires Vorbis et image embarquée pour FLAC et Ogg). Rien de tout ça n'est obligatoire : une piste sans tags affiche son nom de fichier sans extension, et les deux pistes du pack embarqué, qui n'en ont pas, reprennent le titre et l'auteur de leurs crédits (écran À propos).
+
+**C'est la seule notification de la pile qui se ferme seule**, au bout de six secondes : les autres portent une perte, une question ou un rapport, celle-ci une information de passage, et une carte laissée par piste finirait par masquer l'écran qu'elle accompagne. Elle tient tant que le pointeur est dessus, repart pour deux secondes quand il la quitte, et disparaît avec la sortie de Big Picture. Une nouvelle piste pendant qu'elle est affichée remplace son contenu et relance le délai — jamais une deuxième carte.
+
+La lecture des tags ne se fait pas sur le fil du moteur, dont le pas de 30 ms règle les fondus, mais sur un fil à part ; deux changements rapprochés ne laissent passer que le dernier (compteur de génération), sans quoi la notification pourrait finir sur la piste qui ne joue plus. La pochette est réduite à 160 px côté Rust avant de voyager : l'image embarquée pèse couramment plusieurs Mo.
+
 ---
 
 ## 6. Interface de configuration

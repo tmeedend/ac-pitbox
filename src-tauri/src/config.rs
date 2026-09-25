@@ -89,6 +89,13 @@ pub struct Prefs {
     /// Deux candidats circuit plus proches que ça l'un de l'autre, en mètres,
     /// sont à égalité — donc ambigus.
     pub wiki_track_tie_margin_m: f64,
+    /// Checks the CUP registry for newer versions of library mods (§4.7).
+    /// On by default — it is what Content Manager does — but switchable for
+    /// the same reason as `wiki_online`: it is a request to a third-party
+    /// server, and some players keep the game offline on purpose. The request
+    /// itself reveals nothing of the library (one list for everyone, compared
+    /// locally); only a download names a mod.
+    pub mod_updates_online: bool,
 }
 
 impl Default for Prefs {
@@ -131,6 +138,7 @@ impl Default for Prefs {
             // repli par le nom peut rattraper — `matchtrack` s'en charge.
             wiki_track_radius_m: 10_000,
             wiki_track_tie_margin_m: 150.0,
+            mod_updates_online: true,
         }
     }
 }

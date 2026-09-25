@@ -108,3 +108,8 @@ pub const WIKI_NOT_AN_ENTITY: &str = "errors.wikiNotAnEntity";
 pub const PREVIEW_MODEL_NOT_FOUND: &str = "errors.previewModelNotFound";
 pub const PREVIEW_PROTECTED: &str = "errors.previewProtected";
 pub const PREVIEW_SUPERSEDED: &str = "errors.previewSuperseded";
+// Mod updates (§4.7). Two keys, because they call for two different moves:
+// the registry being out of reach means "try again later", a download that
+// breaks off means "try that one again".
+pub const UPDATE_REGISTRY_UNAVAILABLE: &str = "errors.updateRegistryUnavailable";
+pub const UPDATE_DOWNLOAD_FAILED: &str = "errors.updateDownloadFailed";

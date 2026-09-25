@@ -1519,7 +1519,9 @@
     "notARulesExport": "Ce fichier n'est pas un export de règles Pit Box.",
     "rulesExportTooNew": "Cet export vient d'une version plus récente de Pit Box. Mettez l'application à jour pour l'importer.",
     "logoFormat": "Un logo doit être une image PNG ou SVG.",
-    "logoTooSmall": "Ce PNG est trop petit : au moins 64 px sur son plus petit côté."
+    "logoTooSmall": "Ce PNG est trop petit : au moins 64 px sur son plus petit côté.",
+    "updateRegistryUnavailable": "Le registre des mises à jour ne répond pas pour le moment. Réessaie plus tard.",
+    "updateDownloadFailed": "Le téléchargement de la mise à jour s'est interrompu. Réessaie."
   },
   "pack": {
     "tabMembers": "Mods",
@@ -1913,5 +1915,35 @@
     },
     "disable": "Désactiver",
     "enable": "Réactiver"
+  },
+  "modUpdates": {
+    "toastOne": "Un mod a une nouvelle version",
+    "toastMany": "{n} mods ont une nouvelle version",
+    "later": "Plus tard",
+    "openFiche": "Ouvrir le mod",
+    "update": "Mettre à jour",
+    "ignore": "Ignorer",
+    "ignoreHint": "Passer cette version. Une version plus récente sera de nouveau annoncée.",
+    "limitedHint": "Diffusé par son auteur (Patreon, hébergeur de fichiers) : la page s'ouvre dans le navigateur.",
+    "inBrowser": "Page ouverte dans le navigateur — glisse l'archive dans Pit Box une fois téléchargée.",
+    "size": "{done} Mo",
+    "sizeOf": "{done} / {total} Mo",
+    "available": "Version {version} disponible",
+    "installed": "installée : {version}",
+    "phaseDownload": "Téléchargement…",
+    "phaseImport": "Import…",
+    "whatsNew": "Nouveautés",
+    "noChangelog": "L'auteur n'a pas décrit cette version.",
+    "authorPage": "Page de {author}",
+    "authorPageAnon": "Page de l'auteur",
+    "cardTooltip": "Version {version} disponible",
+    "settingOnline": "Vérifier les mises à jour des mods",
+    "settingHint": "Une fois par jour, Pit Box lit la liste des dernières versions publiées par les auteurs de mods — la même que Content Manager. La liste est la même pour tout le monde : rien de ta bibliothèque n'est envoyé.",
+    "checkNow": "Vérifier maintenant",
+    "checking": "Vérification…",
+    "saveFirst": "Enregistre d'abord",
+    "upToDate": "Tous les mods sont à jour.",
+    "foundCount": "{n} mise(s) à jour disponible(s).",
+    "downloadPhase": "téléchargement"
   }
 }
