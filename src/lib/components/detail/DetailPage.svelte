@@ -1,8 +1,13 @@
 <script lang="ts">
-  // Page de détail pleine page (§6.3, maquette maquettes/archive/pitbox-fiche-B-revisee.html).
-  // Riche pour les voitures (héros + specs natives + fiche technique + courbe +
-  // description + skins + tags/versions/historique). Panneaux Son et Distance =
-  // placeholders « à venir » (lots §8 et §6). Réduite pour les circuits.
+  // Full-page detail sheet of a car or a track (§6.3): header, three tabs, and
+  // the sheets that open over it (a layer, an attached mod).
+  //
+  // This component owns the data and the gestures — loading, reloading when
+  // the library or the deployed content changes, what gets remembered and
+  // pushed to the session. The cards it lays out (`DetailHero`, `PickerCard`,
+  // `EngineSoundBlock`, `TrackSkinsBlock`, `DescriptionCard`…) only draw what
+  // they are given: most of them are unmounted on every tab switch, and state
+  // kept there would be reloaded, or lost, each time.
   import { editBrand } from "$lib/workshop/brandFocus.svelte";
   import { isPlaque } from "$lib/library/brandLogos.svelte";
   import {
@@ -20,7 +25,6 @@
     type ModCard,
     type ModDetail,
     type ModKind,
-    type NativeSpecs,
     type LayoutItem,
     type LayerRow,
     layerLayoutOrigins,
@@ -28,29 +32,15 @@
   } from "$lib/library/library";
   import { listMediaScreenshots, listMediaReplays, listMediaBackgrounds } from "$lib/detail/media";
   import { listModSkins, openNativeShowroom, type SkinItem } from "$lib/launch/launch";
-  import CarPreview3D from "./CarPreview3D.svelte";
-  import InlineEdit from "$lib/components/ui/InlineEdit.svelte";
   import Tabs from "$lib/components/ui/Tabs.svelte";
-  import WikiBlock from "./WikiBlock.svelte";
   import { getWikiPanel, setWikiLang, wikiLang, type WikiPanel } from "$lib/wiki/wiki";
-  import PickerBar from "./PickerBar.svelte";
   import FicheHeader from "./FicheHeader.svelte";
   import { setEntityNote } from "$lib/detail/userMeta";
-  import NoteBlock from "./NoteBlock.svelte";
   import LayerDetail from "./LayerDetail.svelte";
-  import OtherModDetail from "$lib/components/inventory/OtherModDetail.svelte";
   import { listAttached, type InventoryRow } from "$lib/inventory/inventory";
-  import { listOtherMods, activateOther, deactivateOther, openOtherModFolder, type OtherModRow } from "$lib/inventory/others";
-  import { setEntityDisplayName } from "$lib/detail/userMeta";
-  import StateBadge from "$lib/components/ui/StateBadge.svelte";
+  import { listOtherMods, type OtherModRow } from "$lib/inventory/others";
   import { tick, untrack } from "svelte";
   import { focusGamepadElement, isGamepadDriving } from "$lib/shell/gamepadNav";
-  import {
-    preview3dPrefs,
-    resetPreview3dView,
-    savePreview3dPrefs,
-    setPreview3dEnabled,
-  } from "$lib/preview3d/preview3dPrefs.svelte";
   import {
     exportMod,
     deletePack,
@@ -70,15 +60,10 @@
     type SubModRow,
   } from "$lib/inventory/submods";
   import { open, confirm } from "@tauri-apps/plugin-dialog";
-  import PowerCurve from "./PowerCurve.svelte";
-  import TechSheet from "./TechSheet.svelte";
   import { nav, pickSession, requestSection } from "$lib/shell/nav.svelte";
   import { libraryVersion } from "$lib/library/libraryVersion.svelte";
   import { getPreferredSkin, setPreferredSkin, getPreferredLayout, setPreferredLayout } from "$lib/preferred";
-  import { getConfig } from "$lib/config";
-  import { countryLabel, flagFor, loadFlags } from "$lib/flags.svelte";
   import { t } from "$lib/i18n/index.svelte";
-  import { odometerText } from "$lib/detail/odometer";
   import { trackLength } from "$lib/detail/trackLength";
   import LayersBlock from "./LayersBlock.svelte";
   import ResourcesBlock from "./ResourcesBlock.svelte";
@@ -91,19 +76,16 @@
   import MediaScreenshots from "./MediaScreenshots.svelte";
   import MediaReplays from "./MediaReplays.svelte";
   import MediaBackgrounds from "./MediaBackgrounds.svelte";
-  import IgnitionKey from "./IgnitionKey.svelte";
-  import {
-    engineControls,
-    engineRev,
-    engineShowcase,
-    engineState,
-    setEnginePedal,
-  setEngineRev,
-    setEngineShowcase,
-    stopEngine,
-    toggleEngine,
-  } from "$lib/detail/enginePlayer.svelte";
-  import Slider from "$lib/components/ui/Slider.svelte";
+  import DetailHero from "./DetailHero.svelte";
+  import CarSpecsBlock from "./CarSpecsBlock.svelte";
+  import EngineSoundBlock from "./EngineSoundBlock.svelte";
+  import PickerCard from "./PickerCard.svelte";
+  import TrackInfoBlock from "./TrackInfoBlock.svelte";
+  import TrackSkinsBlock from "./TrackSkinsBlock.svelte";
+  import DescriptionCard, { type TextTab } from "./DescriptionCard.svelte";
+  import AttachedBlock from "./AttachedBlock.svelte";
+  import AttachedModSheet from "./AttachedModSheet.svelte";
+  import { stopEngine, toggleEngine } from "$lib/detail/enginePlayer.svelte";
 
   import { errorText } from "$lib/errors";
   interface Props {
@@ -146,13 +128,6 @@
    * « Posé sur ce mod » — l'un pour les lire, l'autre pour les gérer. */
   const attachedDocs = $derived(attached.filter((a) => a.kind === "DOCUMENT"));
 
-  // Table des drapeaux : la fiche d'un circuit montre son pays sans passer par
-  // `TechSheet`, qui la charge de son côté. Idempotent, donc chaque composant
-  // qui montre un drapeau la demande plutôt que de compter sur un voisin.
-  $effect(() => {
-    void loadFlags();
-  });
-
   /** Fiche d'un mod greffé, ouverte par-dessus celle de l'hôte — comme celle
    * d'une couche, et pour la même raison : on y est arrivé DEPUIS ce mod. */
   let openAttached = $state<OtherModRow | null>(null);
@@ -167,51 +142,6 @@
         if (current === id) attached = [];
       });
   });
-
-  /** Les gestes que la fiche d'un mod greffé peut demander. Mêmes commandes que
-   * l'inventaire, et relecture derrière : sans elle, l'écran ment jusqu'au
-   * prochain passage. */
-  async function refreshAttached() {
-    try {
-      const all = await listOtherMods();
-      if (openAttached) openAttached = all.find((o) => o.id === openAttached!.id) ?? null;
-      attached = await listAttached(id);
-    } catch (e) {
-      actionError = errorText(e);
-    }
-  }
-
-  async function toggleAttached() {
-    const row = openAttached;
-    if (!row) return;
-    try {
-      if (row.is_active) await deactivateOther(row.id);
-      else await activateOther(row.id);
-      await refreshAttached();
-    } catch (e) {
-      actionError = errorText(e);
-    }
-  }
-
-  async function renameAttached(value: string | null) {
-    if (!openAttached) return;
-    try {
-      await setEntityDisplayName("OTHER", openAttached.id, value ?? "");
-      await refreshAttached();
-    } catch (e) {
-      actionError = errorText(e);
-    }
-  }
-
-  async function noteAttached(value: string | null) {
-    if (!openAttached) return;
-    try {
-      await setEntityNote("OTHER", openAttached.id, value ?? "");
-      await refreshAttached();
-    } catch (e) {
-      actionError = errorText(e);
-    }
-  }
 
   /** La ligne complète d'un mod « autre », chargée à la demande : elle coûte un
    * parcours de fichiers qu'on ne paie qu'en ouvrant la fiche. */
@@ -248,11 +178,8 @@
       });
   });
   const originOf = $derived((layoutId: string) => layoutOrigins.find((o) => o.layout === layoutId) ?? null);
-  /** Sous-onglet du bloc textuel (§7.4). **Jamais « Notes » par défaut** : la
-   * description est ce qu'on vient lire, la note ce qu'on vient ajouter.
-   * L'onglet « Le modèle réel » viendra du chantier Wikipédia et sera absent
-   * tant qu'aucun article n'est apparié. */
-  type TextTab = "desc" | "notes" | "wiki";
+  /** Sub-tab of the text block (§7.4), back on the description whenever
+   * another mod is opened. */
   let textTab = $state<TextTab>("desc");
 
   /** Ce que l'onglet Wikipédia affiche (§7). `null` = la recherche tourne
@@ -308,7 +235,6 @@
   let previewLayout = $state(0);
   let sounds = $state<SubModRow[]>([]);
   let soundBusy = $state(false);
-  const activeSound = $derived(sounds.find((s) => s.is_active) ?? null);
   let trackSkins = $state<SubModRow[]>([]);
   let activeTrackSkins = $state<string[]>([]);
   let trackSkinsLoading = $state(true);
@@ -320,8 +246,6 @@
   // Provenance / pack d'origine (§4.4).
   let siblings = $state<ModCard[]>([]);
   let packBusy = $state(false);
-  // Couches / extensions rattachées (§4.4).
-  // Fichiers annexes du mod (§4.5.2, Bloc Ressources) — lus en direct sur disque.
 
   /** Décompte de l'onglet Médias : la **somme** des quatre blocs qu'il réunit
    * (REFONTE§7.8). `null` tant qu'aucun n'a répondu — afficher « (0) » avant de savoir
@@ -558,43 +482,12 @@
   // native dans la page a été tentée puis abandonnée (voir showroom.rs).
   let showroomBusy = $state(false);
 
-  // Aperçu 3D maison (KN5 → glTF → three.js, docs/SPEC-preview-3d-kn5.md) :
-  // il **coexiste** avec le showroom natif ci-dessus, il ne le remplace pas.
-  // Les deux ne rendent pas le même service : celui-ci est inline et
-  // manipulable dans la fiche, l'autre donne le rendu fidèle du jeu.
-  // La bascule et les réglages de cadrage vivent dans `preview3dPrefs` : le
-  // même réglage se change aussi depuis l'écran Réglages, et les deux doivent
-  // rester d'accord sans qu'aucun des deux écrans n'ait à être remonté.
-  const preview3d = $derived(preview3dPrefs().enabled);
+  // The in-app 3D preview lives in `DetailHero`, next to the photo it replaces.
   /** Panneau de réglages posé sur l'aperçu. Ouvert, il garde la barre d'outils
    * visible même quand la souris s'en va — sinon régler un curseur la ferait
    * disparaître sous les doigts. */
   let preview3dPanel = $state(false);
 
-  /** Raccourci vers Réglages → Aperçu, qui porte l'aperçu 3D et les treize
-   * réglages. Passe par `nav.settingsTab` : l'onglet actif est un état interne
-   * de `Settings.svelte`, et le lui demander avant de naviguer évite de sortir
-   * cet état de son composant pour un seul appelant. */
-  function openPreviewSettings() {
-    nav.settingsTab = "preview";
-    nav.section = "settings";
-  }
-
-  // **Pas de bouton « refaire la vignette » ici**, et c'est un retrait, pas un
-  // oubli. Il a existé, pour le cas d'un rendu abîmé sans que le mod y soit
-  // pour rien — contexte WebGL perdu, textures non arrivées. Le contrôle de
-  // plausibilité qui refuse ces images avant de les écrire
-  // (`gridThumbs.svelte.ts`) est censé rendre le cas impossible ; on le vérifie
-  // à l'usage plutôt que de garder un bouton de dépannage sur un écran qui n'en
-  // a pas besoin. `regenerateGridThumb` reste, un `{#if}` de le ramener.
-
-  function togglePreview3d() {
-    setPreview3dEnabled(!preview3d);
-    // Enregistré sur-le-champ, contrairement aux curseurs de l'écran Réglages :
-    // c'est un interrupteur, pas un formulaire. Personne ne s'attend à devoir
-    // aller valider ailleurs pour qu'une bascule d'un clic tienne.
-    void savePreview3dPrefs().catch((e) => console.error("save_ui_prefs", e));
-  }
   // Résolu une fois les skins de la fiche courante chargés (§skin sélectionné) —
   // `openShowroom` l'attend pour ne jamais ouvrir avant de connaître le skin
   // sélectionné (sinon SKIN= part vide → voiture toute blanche au 1er affichage,
@@ -827,14 +720,6 @@
    * d'un déploiement, et écouter n'en est pas un. Les deux gestes doivent
    * rester possibles en même temps.
    */
-  // `null` tant que le chemin natif ne joue pas, ou quand l'événement joué
-  // n'expose aucun paramètre de régime reconnaissable — il s'entend quand même,
-  // il ne se règle simplement pas (FMOD§2.4).
-  const revControls = $derived.by(() => {
-    const c = engineControls();
-    return c && c.revParam ? c : null;
-  });
-
   async function listenSound(subId: string | null) {
     if (!detail) return;
     actionError = "";
@@ -1029,32 +914,6 @@
     onchange?.();
   }
 
-  /** Cases vides à ajouter en fin de grille (§ correctif damier) : `.skins`
-   * est une vraie grille CSS à colonnes fixes, donc la dernière ligne
-   * incomplète laisse des cellules sans le moindre élément dedans — rien n'y
-   * peint la couleur de carte (`--panel2`), c'est le fond de la grille
-   * (`--card`, la couleur DERRIÈRE les cartes) qui s'y voit à la place (bug
-   * réel signalé). Une case fantôme, muette pour tout le monde (souris,
-   * clavier, lecteur d'écran), comble le trou avec la bonne couleur plutôt
-   * que de la laisser transparente. */
-  const SKINS_GRID_COLUMNS = 3;
-  function gridFillerCount(n: number): number {
-    return (SKINS_GRID_COLUMNS - (n % SKINS_GRID_COLUMNS)) % SKINS_GRID_COLUMNS;
-  }
-
-  function decodeDescription(html: string): string {
-    return html
-      .replace(/<\/?br\s*\/?>/gi, "\n")
-      .replace(/<[^>]+>/g, "")
-      .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n))
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;|&apos;/g, "'")
-      .trim();
-  }
-
   /** Sous-titre de l'en-tête (§6.1) : ce qui identifie l'objet en une ligne,
    * auteur compris — c'est une propriété du mod, elle n'a rien à faire en bas
    * de colonne. Les parties absentes ne laissent pas de séparateur orphelin. */
@@ -1128,75 +987,6 @@
 
 </script>
 
-<!-- Bloc textuel à sous-onglets (§7.4), identique pour une voiture et pour un
-     circuit : seule la source du texte change. **Hauteur constante**, c'est le
-     contenu qui change — la longueur d'un texte cesse ainsi d'être un problème
-     de mise en page, ce qui comptera le jour où un article encyclopédique
-     viendra s'y ajouter. Rendu MÊME VIDE, sans quoi un mod sans description
-     n'offrirait aucun endroit où en écrire une (§5bis.3). -->
-{#snippet textCard(text: string | null, overridden: boolean)}
-  <section class="text-zone">
-    <!-- Largeur de mesure, marges automatiques : les sous-onglets partagent le
-         même conteneur que le texte, sans quoi la bande courrait sur toute la
-         page au-dessus d'un paragraphe de 430 px. -->
-    <div class="reading">
-    <Tabs
-      gamepad={false}
-      tabs={[
-        { id: "desc", label: t("common.description") },
-        { id: "notes", label: t("notes.title"), marker: !!detail?.notes_user },
-        // **Permanent**, contre la §7.1 et décidé avec l'utilisateur : un
-        // onglet absent ne se distingue ni d'une recherche en cours, ni d'une
-        // fonctionnalité qui n'existe pas — et c'est quand rien n'est trouvé
-        // qu'il y a le plus à faire. La pastille dit qu'il y a un article à
-        // lire, sans rien promettre quand il n'y en a pas.
-        {
-          id: "wiki",
-          label: isCar ? t("wiki.tabCar") : t("wiki.tabTrack"),
-          marker: !!wikiPanel?.article,
-        },
-      ]}
-      active={textTab}
-      onselect={(v) => (textTab = v as TextTab)}
-    >
-      {#snippet trailing()}
-        {#if textTab === "desc"}
-          <InlineEdit
-            value={text}
-            original={overridden ? null : text}
-            {overridden}
-            multiline
-            label={t("detail.editDescriptionLabel")}
-            placeholder={t("detail.editDescriptionPlaceholder")}
-            onsave={(v) => saveOverride("description_user", v)}
-          />
-        {/if}
-      {/snippet}
-    </Tabs>
-    <div class="text-body">
-      {#if textTab === "desc"}
-        <div class="read-box desc-body" class:empty-desc={!text}>
-          {text ? decodeDescription(text) : t("detail.noDescription")}
-        </div>
-      {:else if textTab === "wiki"}
-        <!-- Même boîte que les deux autres : le texte de Wikipédia est un
-             contenu de plus dans le même cadre, jamais fondu dans la
-             description (§2). -->
-        <div class="read-box">
-          <WikiBlock modKey={detail?.id_interne ?? ""} panel={wikiPanel} onreload={reloadWiki} />
-        </div>
-      {:else}
-        <!-- Même boîte que la description : les deux sous-onglets échangent un
-             contenu, pas une mise en page. -->
-        <div class="read-box">
-          <NoteBlock bare value={detail?.notes_user ?? null} onsave={saveNote} />
-        </div>
-      {/if}
-    </div>
-    </div>
-  </section>
-{/snippet}
-
 <div class="page">
   <!-- Fiches posées PAR-DESSUS celle du mod : une couche (REFONTE§8.4), un mod greffé
        (§4.3). La fermer ramène ici, ce qui est le chemin par lequel on y est
@@ -1216,17 +1006,11 @@
     </div>
   {:else if openAttached}
     <div class="sheet-wrap">
-      <OtherModDetail
-        row={openAttached}
-        busy={false}
-        warnings={[]}
-        onclose={() => (openAttached = null)}
-        ontoggle={() => void toggleAttached()}
-        ontogglePriority={() => {}}
-        onopenFolder={() => void openOtherModFolder(openAttached!.id)}
-        ondelete={() => (openAttached = null)}
-        onrename={(v) => void renameAttached(v)}
-        onnote={(v) => void noteAttached(v)}
+      <AttachedModSheet
+        bind:row={openAttached}
+        hostId={id}
+        onattached={(rows) => (attached = rows)}
+        onerror={(m) => (actionError = m)}
       />
     </div>
   {:else if !detail}
@@ -1279,401 +1063,87 @@
            son enfant : `.hero` est un conteneur flex centré à ratio fixe, un
            second enfant s'y retrouvait posé au milieu de l'image (signalé). -->
       <div class="maincol">
-      <div class="hero">
-        <!-- Photo et aperçu 3D partagent le même cadre (§ correctif marge) :
-             la photo est un enfant normal, `CarPreview3D` se pose en absolu
-             `inset:0` — sans ce conteneur commun, chacun résolvait sa marge
-             contre un ancêtre différent (`.hero` avec son padding pour l'un,
-             `.hero` sans aucun pour l'autre), d'où le décalage constaté entre
-             les deux vues. -->
-        <div class="hero-inner">
-          <!-- **Rien sous l'aperçu 3D.** La photo est un enfant normal et
-               l'aperçu se pose par-dessus en absolu : tant que le modèle n'est
-               pas prêt, son canevas est transparent et c'est donc la photo
-               qu'on voyait — celle du premier skin, derrière le témoin de
-               chargement. Quand l'aperçu 3D tient la zone, il la tient
-               entièrement ; c'est lui qui remet la photo, entière, s'il ne peut
-               pas aboutir (`fallbackSrc`). -->
-          {#if !(isCar && preview3d)}
-            {#if heroImg}
-              <img src={heroImg} alt={d.display_name ?? d.id_interne} />
-            {:else}
-              <div class="hero-icon">{isCar ? "🚗" : "🏁"}</div>
-            {/if}
-          {/if}
-          {#if isCar && preview3d}
-            <CarPreview3D
-              carId={d.id_interne}
-              skinId={skins[previewSkin]?.id ?? null}
-              fallbackSrc={heroImg}
-              carClass={d.car_class}
-              revision={contentRevision}
-            />
-          {/if}
-        </div>
-        {#if isCar}
-          <!-- Commandes de l'aperçu : révélées au survol de la zone héros, pour
-               qu'elles ne mangent pas l'image le reste du temps. Le focus
-               clavier les révèle aussi (`:focus-within`), sans quoi elles
-               seraient inatteignables autrement qu'à la souris. -->
-          <div class="hero-tools" class:open={preview3dPanel}>
-            <button
-              class="hero-btn"
-              type="button"
-              onclick={togglePreview3d}
-              title={preview3d ? t("detail.preview3dShowPhoto") : t("detail.preview3dShow3d")}
-              aria-label={preview3d ? t("detail.preview3dShowPhoto") : t("detail.preview3dShow3d")}
-            >
-              {#if preview3d}
-                <!-- Retour à la photo : un cadre et sa montagne. -->
-                <svg viewBox="0 0 16 16" aria-hidden="true">
-                  <rect x="1.5" y="3.5" width="13" height="9" rx="1" />
-                  <path d="M2.5 11 L6 7.5 L8.5 10 L10.5 8.5 L13.5 11.5" fill="none" />
-                  <circle cx="5.5" cy="6" r="1" />
-                </svg>
-              {:else}
-                <!-- Passage en 3D : un volume en perspective. -->
-                <svg viewBox="0 0 16 16" aria-hidden="true">
-                  <path d="M8 1.8 L14 5 V11 L8 14.2 L2 11 V5 Z" fill="none" />
-                  <path d="M2 5 L8 8.2 L14 5" fill="none" />
-                  <path d="M8 8.2 V14.2" fill="none" />
-                </svg>
-              {/if}
-            </button>
-            {#if preview3d}
-              <button
-                class="hero-btn"
-                type="button"
-                onclick={resetPreview3dView}
-                title={t("detail.preview3dReplace")}
-                aria-label={t("detail.preview3dReplace")}
-              >
-                <!-- Replacer et relancer : une flèche qui reboucle. -->
-                <svg viewBox="0 0 16 16" aria-hidden="true">
-                  <path d="M13.2 8 A5.2 5.2 0 1 1 11.4 4.1" fill="none" />
-                  <path d="M11.9 1.2 V4.5 H8.6" fill="none" />
-                </svg>
-              </button>
-              <button
-                class="hero-btn"
-                class:on={preview3dPanel}
-                type="button"
-                onclick={() => (preview3dPanel = !preview3dPanel)}
-                title={t("detail.preview3dSettings")}
-                aria-label={t("detail.preview3dSettings")}
-                aria-expanded={preview3dPanel}
-              >
-                <!-- Réglages : deux curseurs. -->
-                <svg viewBox="0 0 16 16" aria-hidden="true">
-                  <path d="M2 5.5 H14" fill="none" />
-                  <path d="M2 10.5 H14" fill="none" />
-                  <circle cx="6" cy="5.5" r="1.8" />
-                  <circle cx="10.5" cy="10.5" r="1.8" />
-                </svg>
-              </button>
-            {/if}
-          </div>
-          {#if preview3d && preview3dPanel}
-            <!-- Les curseurs vivaient ici, en version compacte. Ils sont
-                 partis dans Réglages → Aperçu, qui porte désormais son
-                 propre aperçu 3D : on y règle en voyant le résultat, sur les
-                 treize réglages et non sur les cinq qui tenaient dans ce
-                 panneau. Reste le raccourci. -->
-            <div class="hero-panel">
-              <p class="hero-panel-t">{t("detail.preview3dSettingsMoved")}</p>
-              <button class="btn" type="button" onclick={openPreviewSettings}>
-                {t("detail.preview3dSettingsOpen")}
-              </button>
-            </div>
-          {/if}
-        {/if}
-        {#if showroomBusy}
-          <!-- Lancement d'acShowroom : pastille discrète le temps que le
-               process démarre, il s'affichera ensuite par-dessus l'app. -->
-          <div class="hero-loading" title={t("detail.showroomLoading")}>
-            <span class="spinner"></span>
-          </div>
-        {/if}
-        {#if !isCar}
-          {@const ol = previewSrc(d.track?.layouts[previewLayout]?.outline ?? null)}
-          {#if ol}<img class="hero-outline" src={ol} alt="" />{/if}
-        {/if}
-        </div>
+        <DetailHero
+          car={isCar}
+          modId={d.id_interne}
+          name={d.display_name ?? d.id_interne}
+          image={heroImg}
+          skinId={skins[previewSkin]?.id ?? null}
+          carClass={d.car_class}
+          revision={contentRevision}
+          outline={isCar ? null : previewSrc(d.track?.layouts[previewLayout]?.outline ?? null)}
+          {showroomBusy}
+          bind:panelOpen={preview3dPanel}
+        />
       </div>
 
       <div class="data">
         {#if isCar}
-          {@const hasCurve = !!d.specs && d.specs.power_curve.length > 1}
-          <div class="tech-curve" class:with-curve={hasCurve}>
-            <section class="blk fiche">
-              <header class="blk-h"><span class="blk-t">{t("detail.techSheet")}</span></header>
-              <TechSheet detail={d} surface="panel2" framed={false} />
-            </section>
-            {#if hasCurve && d.specs}
-              <section class="blk curve-col">
-                <header class="blk-h">
-                  <span class="blk-t">{t("detail.curve")}</span>
-                  <span class="blk-n"><span class="lg-pow">— bhp</span> <span class="lg-tor">— Nm</span></span>
-                </header>
-                <div class="blk-b curve-box">
-                  <PowerCurve power={d.specs.power_curve} torque={d.specs.torque_curve} />
-                </div>
-              </section>
-            {/if}
-          </div>
-
-          <section class="blk">
-            <header class="blk-h"><span class="blk-t">{t("detail.engineSound")}</span></header>
-            <div class="blk-b">
-          <div class="sounds">
-            <!-- Deux boutons par ligne, et c'est délibéré : le premier **active**
-                 le son (il remplace les fichiers du jeu), la clé ne fait
-                 qu'écouter. Un bouton imbriqué dans un autre serait invalide, et
-                 surtout les deux gestes ne doivent pas se confondre. -->
-            <div class="sound-row">
-              <button class="sound" class:sel={!activeSound} type="button" onclick={() => pickSound(null)} disabled={soundBusy}>
-                <span class="radio"></span>
-                <span class="s-name">{t("detail.soundOrigin")}</span>
-                <span class="s-tag mono">{t("library.baseBadge")}</span>
-              </button>
-              <IgnitionKey state={engineState(detail.id_interne, null)} onclick={() => listenSound(null)} />
-            </div>
-            {#each sounds as snd (snd.id)}
-              <div class="sound-row">
-                <button class="sound" class:sel={snd.is_active} type="button" onclick={() => pickSound(snd.id)} disabled={soundBusy}>
-                  <span class="radio"></span>
-                  <span class="s-name">{snd.name}</span>
-                  <span class="s-tag mono">{t("detail.modTag")}</span>
-                </button>
-                <IgnitionKey state={engineState(detail.id_interne, snd.id)} onclick={() => listenSound(snd.id)} />
-              </div>
-            {/each}
-          </div>
-          <!-- Le curseur n'apparaît que quand le vrai moteur du jeu tourne : le
-               repli joue un échantillon figé, qu'il n'y a rien à régler. Sa
-               plage vient de la courbe de puissance de **cette** voiture, d'où
-               un F1 qui monte à 19 500 et un utilitaire diesel à 5 000. -->
-          {#if revControls}
-            <div class="rev-row">
-              <!-- Le curseur disparaît pendant la démonstration : les deux
-                   pilotent le même paramètre, et un curseur qui ne suit pas ce
-                   qu'on entend serait pire qu'absent. -->
-              {#if !engineShowcase()}
-                <Slider
-                  compact
-                  label={t("detail.soundRev")}
-                  min={revControls.revFloor}
-                  max={revControls.revCeiling}
-                  step={50}
-                  value={engineRev()}
-                  display={t("detail.soundRevValue", { rpm: Math.round(engineRev()).toLocaleString() })}
-                  oninput={setEngineRev}
-                  onpress={() => setEnginePedal(true)}
-                  onrelease={() => setEnginePedal(false)}
-                />
-              {/if}
-              <button
-                class="blip"
-                class:on={engineShowcase()}
-                type="button"
-                onclick={() => setEngineShowcase(!engineShowcase())}
-              >
-                {engineShowcase() ? t("detail.soundBlipStop") : t("detail.soundBlip")}
-              </button>
-            </div>
-          {/if}
-          <!-- L'exclusivité et l'absence de mod se lisent sur les boutons radio
-               eux-mêmes : « Origine » seule et cochée dit tout. -->
-            </div>
-          </section>
-
-          <!-- Le sélecteur de livrée est une carte de cette colonne, pas une
-               barre nue sous l'aperçu : posé entre la fiche technique et le
-               son, il en reprend le cadre et l'en-tête rouge. Un contrôle n'a
-               pas à se distinguer de ses voisins pour rester un contrôle — ce
-               qui le désigne comme tel, c'est qu'il agisse, pas qu'il détonne.
-               L'intitulé quitte le champ : l'en-tête le dit déjà. -->
-          <section class="blk">
-            <header class="blk-h">
-              <span class="blk-t">{t("detail.skinsLabel")}</span>
-              {#if skins.length}<span class="blk-n">{skins.length}</span>{/if}
-            </header>
-            <div class="blk-b pick-b">
-              <PickerBar
-                items={skins.map((sk) => ({
-                  id: sk.id,
-                  name: sk.name,
-                  // `livery.png` — couleurs et motif de la livrée seule — et non la
-                  // photo de la voiture entière : à 20 px dans une liste déroulante,
-                  // celle-ci ne montre plus rien. Même choix que le sélecteur de la
-                  // colonne de session, et la convention de CM. La photo reprend ses
-                  // droits dans la grille dépliée, où elle a la place.
-                  image: previewSrc(sk.livery ?? sk.preview, contentRevision),
-                }))}
-                index={previewSkin}
-                onpick={selectSkin}
-                expanded={pickerOpen}
-                ontoggle={() => (pickerOpen = !pickerOpen)}
-                emptyText={t("detail.noSkins")}
-              />
-              {#if pickerOpen && skins.length}
-                <div class="skins">
-                  {#each skins as sk, i (sk.id)}
-                    {@const sp = previewSrc(sk.preview, contentRevision)}
-                    {@const lv = previewSrc(sk.livery, contentRevision)}
-                    <button
-                      class="skin"
-                      class:preview={i === previewSkin}
-                      onclick={() => selectSkin(i)}
-                      title={t("detail.chooseSkinTooltip")}
-                    >
-                      <div class="skin-img">
-                        {#if sp}<img src={sp} alt={sk.name} loading="lazy" />{:else}<span class="skin-noimg">▦</span>{/if}
-                        <!-- `livery.png` (SESSION§1) : couleurs/motif du skin seul, en
-                             complément de la photo de la voiture — jamais sur la
-                             grande image du skin sélectionné (heroImg), juste ici
-                             dans la grille de choix. -->
-                        {#if lv}<img class="skin-livery" src={lv} alt="" loading="lazy" />{/if}
-                        {#if i === previewSkin}<span class="skin-apercu mono">{t("library.sessionBadge")}</span>{/if}
-                      </div>
-                      <div class="skin-b">
-                        <span class="skin-name">{sk.name}</span>
-                      </div>
-                    </button>
-                  {/each}
-                  {#each Array.from({ length: gridFillerCount(skins.length) }) as _}
-                    <div class="skin-filler" aria-hidden="true"></div>
-                  {/each}
-                </div>
-              {/if}
-            </div>
-          </section>
-
+          <CarSpecsBlock detail={d} />
+          <EngineSoundBlock modId={d.id_interne} {sounds} busy={soundBusy} onpick={pickSound} onlisten={listenSound} />
+          <PickerCard
+            title={t("detail.skinsLabel")}
+            items={skins.map((sk) => ({
+              id: sk.id,
+              name: sk.name,
+              // `livery.png` — couleurs et motif de la livrée seule — et non la
+              // photo de la voiture entière : à 20 px dans une liste déroulante,
+              // celle-ci ne montre plus rien. Même choix que le sélecteur de la
+              // colonne de session, et la convention de CM. La photo reprend ses
+              // droits dans la grille dépliée, où elle a la place.
+              thumb: previewSrc(sk.livery ?? sk.preview, contentRevision),
+              image: previewSrc(sk.preview, contentRevision),
+              livery: previewSrc(sk.livery, contentRevision),
+            }))}
+            index={previewSkin}
+            onpick={selectSkin}
+            expanded={pickerOpen}
+            ontoggle={() => (pickerOpen = !pickerOpen)}
+            emptyText={t("detail.noSkins")}
+            cellTitle={t("detail.chooseSkinTooltip")}
+          />
         {:else}
-          {@const lay = d.track?.layouts[previewLayout]}
-          {@const layoutCount = d.track?.layouts.length ?? 0}
-          <!-- Les quatre chiffres d'un circuit, dans une seule carte (maquette
-               écran 7). Le **nom** du tracé n'y est pas : le sélecteur le dit
-               déjà, à quelques pixels au-dessus, et c'est lui qui le change.
-               L'odomètre y entre comme il entre dans la fiche technique d'une
-               voiture : la carte « Distance » qui le portait à part n'existait
-               que parce qu'un circuit n'avait aucune carte de données où le
-               mettre. Il en a une. -->
-          <section class="blk">
-            <header class="blk-h"><span class="blk-t">{t("detail.trackInfo")}</span></header>
-            <div class="specgrid" style="grid-template-columns:1fr 1fr;">
-              <div>
-                <div class="k lbl-key">{t("detail.lengthLabel")}</div>
-                <div class="v">{trackLength(lay?.length) ?? "—"}</div>
-              </div>
-              <div>
-                <div class="k lbl-key">{t("detail.layoutsLabel")}</div>
-                <div class="v">
-                  {layoutCount}
-                  {#if layoutOrigins.length}<span class="v-sub"
-                      >{t("detail.layoutsAdded", { count: layoutOrigins.length })}</span
-                    >{/if}
-                </div>
-              </div>
-              <!-- Même pastille que la fiche technique d'une voiture : un circuit
-                   déclare son pays comme elle, et se reconnaît de même. -->
-              <div>
-                <div class="k lbl-key">{t("columns.country")}</div>
-                <div class="v">
-                  {#if d.country}{@const flag = flagFor(d.country)}
-                    {#if flag}<img class="flag" src={flag} alt="" />{/if}{countryLabel(d.country)}
-                  {:else}—{/if}
-                </div>
-              </div>
-              <div><div class="k lbl-key">{t("detail.odometer")}</div><div class="v">{odometerText(d)}</div></div>
-            </div>
-          </section>
-
-          <!-- Habillages de circuit : deuxième carte de cette colonne, et non
-               une rangée à part sous la fiche. C'est tout l'argument de
-               l'écran 7 — sans fiche technique ni courbe, la colonne droite a
-               la place, et une rangée basse d'une carte et demie rouvrait
-               précisément le trou qu'on venait de fermer. -->
-          <section class="blk">
-            <header class="blk-h">
-              <span class="blk-t">{t("detail.trackSkinsLabelPlain")}</span>
-              {#if !trackSkinsLoading}<span class="blk-n">{trackSkins.length}</span>{/if}
-            </header>
-            <div class="blk-b">
-              {#if trackSkinsLoading}
-                <div class="muted small loading-inline"><span class="spinner-sm"></span>{t("common.loading")}</div>
-              {:else if trackSkins.length}
-                <ul class="tsk-list">
-                  {#each trackSkins as sk (sk.id)}
-                    {@const active = activeTrackSkins.includes(sk.name)}
-                    <li class:inactive={!active}>
-                      <label class="tog" title={active ? t("detail.trackSkinActiveOn") : t("detail.trackSkinActiveOff")}>
-                        <input
-                          type="checkbox"
-                          checked={active}
-                          disabled={trackSkinBusy}
-                          onchange={() => toggleTrackSkin(sk.name)}
-                        />
-                      </label>
-                      <span class="tsk-name">{sk.name}</span>
-                      {#if sk.source_archive}<span class="tsk-src mono">{sk.source_archive}</span>{/if}
-                    </li>
-                  {/each}
-                </ul>
-                <div class="muted small">{t("detail.trackSkinsNote")}</div>
-              {:else}
-                <div class="muted small">{t("detail.noTrackSkins")}</div>
-              {/if}
-            </div>
-          </section>
-
+          <TrackInfoBlock
+            detail={d}
+            layout={d.track?.layouts[previewLayout]}
+            addedLayouts={layoutOrigins.length}
+          />
+          <TrackSkinsBlock
+            skins={trackSkins}
+            active={activeTrackSkins}
+            loading={trackSkinsLoading}
+            busy={trackSkinBusy}
+            ontoggle={toggleTrackSkin}
+          />
           <!-- Même carte que le sélecteur de livrée, et même raison : il vit
                parmi les cartes de la colonne, il en prend le cadre. -->
-          <section class="blk">
-            <header class="blk-h">
-              <span class="blk-t">{t("detail.layoutsLabel")}</span>
-              {#if layoutCount}<span class="blk-n">{layoutCount}</span>{/if}
-            </header>
-            <div class="blk-b pick-b">
-              {#if d.track}
-              <PickerBar
-                fit="contain"
-                items={d.track.layouts.map((l, i) => ({
-                  id: l.id || String(i),
-                  name: l.name,
-                  image: previewSrc(l.outline),
-                }))}
-                index={previewLayout}
-                onpick={selectLayout}
-                expanded={pickerOpen}
-                ontoggle={() => (pickerOpen = !pickerOpen)}
-                emptyText={t("detail.singleLayout")}
-                note={trackLength(d.track.layouts[previewLayout]?.length) ?? undefined}
-              />
-              {#if pickerOpen && d.track.layouts.length}
-                <div class="skins">
-                  {#each d.track.layouts as l, i (l.id || i)}
-                    {@const o = previewSrc(l.outline)}
-                    {@const from = originOf(l.id)}
-                    <button class="skin" class:preview={i === previewLayout} onclick={() => selectLayout(i)} title={t("detail.chooseLayoutTooltip")}>
-                      <div class="skin-img layout-img">
-                        {#if o}<img src={o} alt={l.name} loading="lazy" />{:else}<span class="skin-noimg">▦</span>{/if}
-                        {#if i === previewLayout}<span class="skin-apercu mono">{t("library.sessionBadge")}</span>{/if}
-                        <!-- Marque d'origine (REFONTE§7.7) : ce tracé n'est pas dans le mod,
-                             c'est une couche qui l'apporte. -->
-                        {#if from}<span class="skin-from mono" title={t("detail.layoutFromLayerTip", { layer: from.layer_name })}>{t("detail.layoutFromLayer")}</span>{/if}
-                      </div>
-                      <div class="skin-b"><span class="skin-name">{l.name}</span></div>
-                    </button>
-                  {/each}
-                  {#each Array.from({ length: gridFillerCount(d.track.layouts.length) }) as _}
-                    <div class="skin-filler" aria-hidden="true"></div>
-                  {/each}
-                </div>
-              {/if}
-              {/if}
-            </div>
-          </section>
+          <PickerCard
+            title={t("detail.layoutsLabel")}
+            fit="contain"
+            items={d.track?.layouts.map((l, i) => {
+              const from = originOf(l.id);
+              const outline = previewSrc(l.outline);
+              return {
+                id: l.id || String(i),
+                name: l.name,
+                thumb: outline,
+                image: outline,
+                origin: from
+                  ? {
+                      label: t("detail.layoutFromLayer"),
+                      title: t("detail.layoutFromLayerTip", { layer: from.layer_name }),
+                    }
+                  : null,
+              };
+            }) ?? null}
+            index={previewLayout}
+            onpick={selectLayout}
+            expanded={pickerOpen}
+            ontoggle={() => (pickerOpen = !pickerOpen)}
+            emptyText={t("detail.singleLayout")}
+            cellTitle={t("detail.chooseLayoutTooltip")}
+            note={trackLength(d.track?.layouts[previewLayout]?.length) ?? undefined}
+          />
         {/if}
       </div>
     </div>
@@ -1685,10 +1155,18 @@
          laisse se refermer sur la hauteur de l'aperçu, et gagne au passage une
          ligne lisible : un paragraphe qui court sur 900 px se relit mal, l'œil
          perdant le début de la ligne suivante. -->
-    {@render textCard(
-      isCar ? (d.specs?.description ?? null) : (d.track?.description ?? null),
-      !!d.description_user,
-    )}
+    <DescriptionCard
+      car={isCar}
+      modKey={d.id_interne}
+      text={isCar ? (d.specs?.description ?? null) : (d.track?.description ?? null)}
+      overridden={!!d.description_user}
+      notes={d.notes_user ?? null}
+      {wikiPanel}
+      bind:tab={textTab}
+      ondescription={(v) => saveOverride("description_user", v)}
+      onnote={saveNote}
+      onreloadwiki={reloadWiki}
+    />
 
     {:else if activeTab === "media"}
       <!-- Quatre blocs, deux groupes (REFONTE§7.8) : ce que TU as produit (captures,
@@ -1725,40 +1203,7 @@
            temps que l'origine et les décisions d'import. -->
       <div class="tab-body install">
         <div class="col">
-          <!-- Ce qui est posé sur ce mod (§4.3). Sans ce bloc, une notice
-               livrée avec la voiture n'était atteignable que par l'inventaire :
-               ses fichiers appartiennent au mod qui la porte, pas à la voiture,
-               donc l'onglet Médias ne la montrera jamais.
-               C'est aussi ce qui rend le rattachement déduit sans danger : une
-               déduction ratée coûte un raccourci manquant ici, jamais un mod
-               introuvable — il reste dans l'inventaire quoi qu'il arrive. -->
-          {#if attached.length}
-            <section class="blk">
-              <header class="blk-h">
-                <span class="blk-t">{t("detail.attachedTitle")}</span>
-                <span class="blk-n">{attached.length}</span>
-              </header>
-              <div class="blk-b">
-                <ul class="attached">
-                  {#each attached as a (a.uid)}
-                    <li>
-                      <button
-                        class="a-row"
-                        type="button"
-                        disabled={!a.uid.startsWith("OTHER:")}
-                        title={a.uid.startsWith("OTHER:") ? t("inventory.openFiche") : t("inventory.noFiche")}
-                        onclick={() => void openAttachedFiche(a)}
-                      >
-                        <span class="a-name">{a.name}</span>
-                        <span class="a-type mono">{t(`inventory.type${a.kind}`)}</span>
-                        {#if a.active === false}<span class="a-off mono">{t("common.inactive")}</span>{/if}
-                      </button>
-                    </li>
-                  {/each}
-                </ul>
-              </div>
-            </section>
-          {/if}
+          <AttachedBlock rows={attached} onopen={(a) => void openAttachedFiche(a)} />
           <ExtrasBlock modId={id} />
           <DecisionsBlock modId={id} />
         </div>
@@ -1812,7 +1257,8 @@
     min-height: 100%;
     background: var(--card);
     /* Conteneur de référence des requêtes ci-dessous : c'est cette largeur-là,
-       celle qui reste à la fiche, qui décide de la mise en colonnes. */
+       celle qui reste à la fiche, qui décide de la mise en colonnes. Also
+       the container of `DescriptionCard`'s reading widths. */
     container: detail / inline-size;
   }
   .empty {
@@ -1822,118 +1268,10 @@
   }
   /* Onglets : `Tabs.svelte` (variante `flush`), partagé avec Réglages,
      Add-ons et Règles de tags — plus de style local ici. */
-  /* ZONE 2 — le bloc de lecture.
-     Pleine largeur pour le fond et le filet qui le sépare de la rangée, mais
-     contenu ramené à une largeur de mesure et centré. */
-  .text-zone {
-    border-top: 1px solid var(--line);
-    background: var(--card);
-    padding: 22px 32px 30px;
-  }
-  /* Largeur du bloc de lecture : **des paliers, pas un pourcentage** — le
-     `.container` de Bootstrap, et pour les mêmes raisons.
-     Un `%` donne une largeur différente à chaque résolution, donc un rendu
-     qu'on ne peut régler pour personne : correct sur l'écran où on l'a
-     choisi, étalé sur le suivant. Une largeur fixe, elle, déborde dès que la
-     fenêtre rétrécit. Les paliers prennent les deux : **100 % tant que la
-     place manque**, puis une largeur arrêtée qui laisse la marge croître à
-     gauche et à droite — ce sont les valeurs de Bootstrap, éprouvées et
-     reconnaissables.
-     **Requêtes de conteneur et non de média** (même raison qu'au-dessus, §13) :
-     le seuil doit se mesurer sur la largeur qui reste à la fiche, rail et
-     colonne de session déduits, et le zoom d'interface déplace un seuil de
-     média sans déplacer cette largeur-là. */
-  .reading {
-    width: 100%;
-    margin: 0 auto;
-    /* Le corps de l'interface, comme partout ailleurs sur la fiche : un bloc
-       plus large n'est pas une raison d'écrire plus gros. Défini ici plutôt
-       que sur le paragraphe, pour que description et note — deux contenus du
-       même bloc — ne puissent pas diverger. */
-    font-size: 11px;
-    line-height: 1.55;
-  }
-  @container detail (min-width: 576px) {
-    .reading {
-      max-width: 540px;
-    }
-  }
-  @container detail (min-width: 768px) {
-    .reading {
-      max-width: 720px;
-    }
-  }
-  @container detail (min-width: 992px) {
-    .reading {
-      max-width: 960px;
-    }
-  }
-  @container detail (min-width: 1200px) {
-    .reading {
-      max-width: 1140px;
-    }
-  }
-  @container detail (min-width: 1400px) {
-    .reading {
-      max-width: 1320px;
-    }
-  }
-  .reading :global(.tabs) {
-    margin-bottom: 0;
-  }
-  /* **Plus de hauteur minimale.** Elle valait 150 px pour qu'une description de
-     trois mots ne fasse pas sauter la colonne d'à côté en changeant de
-     sous-onglet — mais il n'y a plus de colonne à côté : le bloc est seul sur
-     sa rangée, donc une ligne de texte occupe une ligne. */
-  .text-body {
-    min-width: 0;
-  }
   /* Fiche posée par-dessus celle du mod : même respiration que le corps d'un
      onglet, puisqu'elle en occupe la place. */
   .sheet-wrap {
     padding: 18px;
-  }
-  .attached {
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .a-row {
-    width: 100%;
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-    background: transparent;
-    padding: 4px 2px;
-    text-align: left;
-  }
-  .a-row:hover:not(:disabled) {
-    background: var(--raised);
-  }
-  .a-row:disabled {
-    cursor: default;
-  }
-  .a-name {
-    flex: 1;
-    min-width: 0;
-    color: var(--txt2);
-    font-size: 11.5px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .a-type {
-    flex: none;
-    color: var(--muted2);
-    font-size: 9px;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-  }
-  .a-off {
-    flex: none;
-    color: var(--orange);
-    font-size: 9px;
   }
   .tab-body {
     padding: 18px;
@@ -1986,7 +1324,7 @@
     /* Fond de page (`.page`, plus bas), pas une couleur de carte : c'est ce
        qui se voit dans l'interligne de 1px entre héros et panneau de
        données, et sous le héros lui-même quand celui-ci (16:9, jamais
-       étiré — voir `.hero` plus bas) est plus court que sa ligne. `--line`
+       étiré — voir `.hero` dans DetailHero) est plus court que sa ligne. `--line`
        y ressortait comme un gris clair qui ne se voyait nulle part ailleurs
        (bug réel signalé). */
     background: var(--card);
@@ -2033,319 +1371,17 @@
        n'a pas de largeur propre : il se réduirait à rien. */
     align-self: start;
   }
-  .hero {
-    /* **Même carte que ses voisines.** Le panneau de données d'à côté est fait
-       de `.blk` — encadré, fond `--panel2` — et le héros était un simple `div`
-       au fond `--card` sans bordure : deux traitements différents pour deux
-       blocs de la même rangée, ce qui se voyait (retour utilisateur). Il prend
-       essayé la bordure et le fond `--panel2` d'un `.blk` : **les deux ont été
-       retirés**. Le média n'occupe que l'intérieur du cadre, donc le fond plus
-       sombre se voyait en bandes le long des bords, et la bordure ressortait
-       comme un trait vertical au bord de l'aperçu — deux retours utilisateur
-       successifs. Ce qui fait la parenté avec les cartes voisines, ici, c'est
-       le retrait du média (`--hero-pad`, aligné sur `.blk-b`), pas un trait. */
-    background: var(--card);
-    /* Retrait du média dans le cadre. Les incrustations (commandes, caracté-
-       ristiques, pastille de chargement) s'en déduisent : elles sont posées
-       sur `.hero` et non dans `.hero-inner`, sinon ce dernier les **rogne** au
-       bord du média — bug constaté, capture à l'appui : « Native spec » et les
-       trois boutons coupés en deux. Elles ne sont pas le média, rien ne les
-       oblige à partager son cadre. */
-    --hero-pad: 14px;
-    min-height: 300px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    overflow: hidden;
-    /* Même respiration que les autres cartes (`.data`/`.col`) — l'image
-       collée aux bords haut/gauche était un retour utilisateur direct.
-       Pour une voiture, ce padding est repris par `.hero-inner` à la place
-       (voir plus bas) : lui seul encadre aussi l'aperçu 3D. */
-    padding: var(--hero-pad);
-  }
-  /* Photo et aperçu 3D (voiture uniquement) partagent ce cadre : la photo y
-     est un enfant normal, l'aperçu 3D s'y pose en absolu `inset:0` — sans ce
-     conteneur commun, chacun résolvait sa marge contre un ancêtre différent
-     (`.hero` et son padding pour l'un, `.hero` sans aucun pour l'autre), d'où
-     le décalage constaté entre les deux vues. Pour un circuit, simple
-     passe-plat en flux normal : `.hero` garde son padding, rien ne change. */
-  .hero-inner {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  /* Voiture : cadre à ratio fixe 16:9 (celui des previews AC), aligné en haut
-     — `.hero` reste dimensionné par SON PROPRE ratio (`align-self: start`,
-     ci-dessous), jamais étiré à la hauteur du panneau de données voisin.
-     Un essai précédent avait fait l'inverse (`.hero` étiré, ratio seulement
-     sur `.hero-inner`) pour que le fond de `.hero` couvre l'espace sous un
-     aperçu court — mais rien ne garantissait plus que `.hero` reste assez
-     haut pour SON PROPRE contenu : une fiche à description courte ramenait
-     la ligne de grille sous la hauteur qu'exige le 16:9, et le bloc suivant
-     (skins/distance) rognait l'aperçu par-dessus (bug réel signalé). Revenu
-     à la version qui ne peut pas rogner : `.hero` a toujours exactement la
-     taille de son média, l'espace qui reste dans sa ligne de grille montre le
-     fond de `.row` (`--card`, identique au sien) plutôt que le sien propre. */
-  .row.top:not(.track) .hero {
-    --hero-pad: 16px;
-    aspect-ratio: 16 / 9;
-    min-height: 0;
-    padding: 0;
-  }
-  .row.top:not(.track) .hero-inner {
-    position: absolute;
-    /* 16px comme le corps d'une carte (`.blk-b`) : c'est ce qui fait lire les
-       deux blocs de la rangée comme une paire. */
-    inset: var(--hero-pad);
-  }
-  .hero img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  /* Bascule photo / 3D, en bas à droite pour ne pas gêner le badge d'état de
-     l'aperçu ni la pastille de lancement du showroom, tous deux en haut. */
-  .hero-tools {
-    position: absolute;
-    /* **Sur le média**, à dix pixels de son bord : leur fond est un noir
-       translucide, qui a besoin de l'image derrière lui pour se détacher.
-       Posées sur la bande de fond du cadre, elles devenaient quasi invisibles
-       — retour utilisateur. */
-    right: calc(var(--hero-pad) + 10px);
-    bottom: calc(var(--hero-pad) + 10px);
-    display: flex;
-    gap: 6px;
-    z-index: 4;
-    /* Effacées tant qu'on ne survole pas la zone : l'aperçu est là pour être
-       regardé, pas pour montrer ses commandes. */
-    opacity: 0;
-    transition: opacity 0.15s ease;
-  }
-  .hero:hover .hero-tools,
-  .hero:focus-within .hero-tools,
-  .hero-tools.open {
-    opacity: 1;
-  }
-  .hero-btn {
-    width: 26px;
-    height: 26px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    /* Assez opaque pour se détacher d'une carrosserie claire comme d'un fond
-       noir, et une bordure plus franche que `--line`, qui disparaissait sur
-       les deux. */
-    background: rgba(6, 6, 9, 0.82);
-    border: 1px solid var(--muted2);
-    color: var(--txt);
-    cursor: pointer;
-  }
-  .hero-btn:hover {
-    border-color: var(--rosso);
-    color: var(--txt);
-  }
-  .hero-btn.on {
-    border-color: var(--rosso);
-    color: var(--rosso-bright);
-  }
-  .hero-btn svg {
-    width: 14px;
-    height: 14px;
-    /* Tracé plutôt que remplissage, comme les boutons de la barre de titre :
-       une seule couleur à piloter, et un rendu net à cette taille. */
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.3;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-  .hero-panel {
-    position: absolute;
-    right: calc(var(--hero-pad) + 10px);
-    bottom: calc(var(--hero-pad) + 44px);
-    /* Bornée à la largeur disponible : le panneau porte maintenant une phrase
-       et un bouton, et une largeur fixe le faisait déborder sur une fiche
-       étroite. */
-    width: min(240px, calc(100% - 2 * var(--hero-pad) - 20px));
-    padding: 10px 12px 12px;
-    background: rgba(8, 8, 12, 0.9);
-    border: 1px solid var(--line);
-    z-index: 4;
-  }
-  .hero-panel-t {
-    margin: 0 0 10px;
-    font-size: 11.5px;
-    line-height: 1.5;
-    color: var(--txt2);
-  }
-  /* Pastille de lancement de l'aperçu 3D : petite, en haut à droite, sans
-     assombrir l'image — le showroom s'ouvrira par-dessus l'app. */
-  .hero-loading {
-    position: absolute;
-    top: calc(var(--hero-pad) + 10px);
-    right: calc(var(--hero-pad) + 10px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    background: rgba(8, 8, 12, 0.6);
-    border: 1px solid var(--line);
-    z-index: 3;
-  }
-  .hero-loading .spinner {
-    width: 15px;
-    height: 15px;
-    border: 2px solid var(--line);
-    border-top-color: var(--rosso);
-    border-radius: 50%;
-    animation: hero-spin 0.8s linear infinite;
-  }
-  @keyframes hero-spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-  /* Tracé du layout superposé à la photo du circuit (§6.1). */
-  .hero img.hero-outline {
-    position: absolute;
-    inset: 0;
-    object-fit: contain;
-    padding: 24px;
-  }
-  .hero-icon {
-    font-size: 90px;
-    opacity: 0.5;
-  }
   .data {
     background: var(--card);
     padding: 14px;
     min-width: 0;
   }
   /* La rangée se refermant sur son contenu, la marge basse de la dernière
-     carte se lirait comme un reste de l'ancien fond qui courait jusqu'en bas. */
-  .data > :last-child {
+     carte se lirait comme un reste de l'ancien fond qui courait jusqu'en bas.
+     `:global` because the cards are now child components, whose root elements
+     do not carry this component's scoping class. */
+  .data > :global(:last-child) {
     margin-bottom: 0;
-  }
-  /* Corps de la carte d'un sélecteur : la ligne de contrôle, puis la grille
-     dépliée. Retrait un peu plus serré que `.blk-b` — ce corps est une ligne
-     d'outils, pas un paragraphe. */
-  .pick-b {
-    padding: 12px;
-  }
-  .pick-b .skins {
-    margin-top: 12px;
-  }
-  /* Fiche technique + courbe carrée côte à côte (§6). */
-  .tech-curve {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    align-items: flex-start;
-    margin-bottom: 12px;
-  }
-  .tech-curve .fiche {
-    flex: 1 1 200px;
-    min-width: 0;
-    margin-bottom: 0;
-  }
-  /* Plus de règle de colonnes ici : la fiche technique partagée
-     (`TechSheet.svelte`) déduit leur nombre de la largeur qu'on lui donne,
-     donc elle se resserre d'elle-même quand la courbe occupe la moitié de la
-     rangée. */
-  .curve-col {
-    flex: 1 1 200px;
-    max-width: 260px;
-    min-width: 0;
-  }
-  /* Bandeau de tête d'encadré : c'est une rubrique (`.lbl`), simplement
-     rendue en bandeau — d'où l'habillage local et la marge basse annulée. */
-  .specgrid {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    background: var(--line);
-    gap: 1px;
-  }
-  .specgrid > div {
-    background: var(--panel2);
-    padding: 7px 10px;
-  }
-  .specgrid .k {
-    margin-bottom: 3px;
-  }
-  /* Complément d'une valeur, dans la même cellule : « 2 » puis « dont 1
-     ajouté ». Un second champ l'aurait séparé du chiffre qu'il qualifie. */
-  .specgrid .v-sub {
-    color: var(--muted);
-    font-size: 10px;
-    margin-left: 5px;
-  }
-  .specgrid .v {
-    color: var(--txt2);
-    font-size: 11px;
-    font-family: var(--mono);
-  }
-  /* Mêmes valeurs que la fiche technique, les filtres et le plateau : une
-     seule taille de drapeau dans l'app, et un filet parce que beaucoup ont du
-     blanc sur un bord. Le CSS des composants étant scopé, la ressemblance se
-     réécrit, elle ne s'hérite pas. */
-  .specgrid .flag {
-    width: 16px;
-    height: 12px;
-    object-fit: cover;
-    border: 1px solid var(--line);
-    vertical-align: -1px;
-    margin-right: 5px;
-  }
-  .lg-pow {
-    color: var(--rosso-bright);
-  }
-  .lg-tor {
-    color: var(--yellow);
-  }
-  .curve-box {
-    border: 1px solid var(--line);
-    padding: 8px;
-    margin-bottom: 0;
-  }
-  /* La boîte du texte : bord supérieur absent, c'est celui de la bande
-     d'onglets qui la ferme — les deux se lisent comme un seul panneau. */
-  .read-box {
-    border: 1px solid var(--line);
-    border-top: none;
-    background: var(--panel2);
-    padding: 12px 14px 14px;
-  }
-  /* La note reprend la taille de la prose : dans la même boîte, sous le même
-     onglet, deux corps différents se verraient. Imposé d'ici plutôt que dans
-     `NoteBlock`, qui sert aussi les quatre autres fiches où il n'est pas dans
-     une colonne de lecture. */
-  .reading :global(.read-box button),
-  .reading :global(.read-box textarea) {
-    font-size: inherit;
-    line-height: inherit;
-  }
-  .desc-body {
-    color: var(--txt2);
-    /* Hérite de `.reading` : la taille de la prose est définie à un seul
-       endroit, celui qui calcule aussi la mesure — sans quoi les deux
-       divergeraient et la colonne ne ferait plus le nombre de caractères
-       annoncé. */
-    font-size: inherit;
-    line-height: inherit;
-    white-space: pre-line;
-    /* Une description de mod contient volontiers une URL de cent caractères
-       sans une seule césure possible (bug réel : `ddm_daihatsu_copen_street`
-       et son lien vers un dyno, qui poussait la carte hors de la colonne et
-       décalait toute la fiche). `anywhere` et non `break-word` : le second
-       n'agit qu'après avoir déjà tenté de placer le mot entier, donc il ne
-       corrige la mise en page qu'une fois sur deux. */
-    overflow-wrap: anywhere;
   }
   .csp-row {
     display: flex;
@@ -2363,278 +1399,4 @@
     background: var(--card);
     padding: 14px;
   }
-
-  .skins {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1px;
-    /* Fond de page dans l'interligne de 1px entre vignettes, comme `.row`
-       plus haut — pas une couleur de carte (bug réel signalé : `--line`,
-       trop clair, y ressortait comme un gris qui ne se voyait nulle part
-       ailleurs). */
-    background: var(--card);
-    border: 1px solid var(--line);
-  }
-  .skin {
-    /* Même fond que les autres cartes de la fiche (`.blk`, global.css) : plus
-       sombre que la page, c'est ce contraste qui détache la vignette. */
-    background: var(--panel2);
-    padding: 0;
-    text-align: left;
-    cursor: pointer;
-    position: relative;
-  }
-  /* Case fantôme de fin de grille (§ correctif damier, `gridFillerCount`) :
-     même fond que `.skin`, sans rien d'interactif. */
-  .skin-filler {
-    background: var(--panel2);
-  }
-  /* Cadre du choix de session en calque par-dessus la vignette : un `outline`
-     inset était peint avant les descendants positionnés (.skin-img), donc
-     masqué par le tracé/la preview qui remplit la cellule. */
-  .skin.preview::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border: 2px solid var(--rosso);
-    pointer-events: none;
-    z-index: 2;
-  }
-  .skin-img {
-    /* Ratio des previews AC (~16:9) : la hauteur suit la largeur de la cellule,
-       au lieu d'une hauteur fixe qui rognait la voiture. */
-    aspect-ratio: 16 / 9;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-bottom: 1px solid var(--line);
-    position: relative;
-    overflow: hidden;
-    background: var(--bg);
-  }
-  .skin-img img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  /* Tracé de layout : afficher la forme complète (pas de recadrage). */
-  .layout-img img {
-    object-fit: contain;
-    padding: 4px;
-  }
-  .skin-noimg {
-    color: var(--faint);
-    font-size: 16px;
-  }
-  /* Même gabarit que la pastille de session, l'autre coin et le bleu des
-     fichiers de mod (§7.2ter) : elle informe, elle n'alerte pas. */
-  .skin-from {
-    position: absolute;
-    top: 3px;
-    right: 3px;
-    background: var(--blue-dim);
-    border: 1px solid var(--blue-border);
-    color: var(--blue);
-    font-size: 7px;
-    padding: 0 3px;
-  }
-  .skin-apercu {
-    position: absolute;
-    bottom: 3px;
-    left: 3px;
-    background: var(--rosso);
-    color: #fff;
-    font-size: 7px;
-    padding: 0 3px;
-  }
-  /* `livery.png` (SESSION§1) : coin supérieur droit, libre (le badge session est
-     en bas à gauche). Bordure pour rester lisible sur une preview claire.
-     Sélecteur descendant obligatoire, et pas par style : `.skin-img img`
-     (0,1,1) l'emporte sur `.skin-livery` (0,1,0) quel que soit l'ordre des
-     règles, donc le médaillon héritait de `width/height: 100%` et recouvrait
-     la photo de la voiture — soit exactement ce que le SESSION§1 interdit. */
-  .skin-img img.skin-livery {
-    position: absolute;
-    top: 4px;
-    right: 4px;
-    width: 22px;
-    height: 22px;
-    object-fit: cover;
-    border: 1px solid var(--line);
-    background: var(--bg);
-  }
-  .skin-b {
-    padding: 5px 7px;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-  }
-  .skin-name {
-    font-size: 10px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    flex: 1;
-  }
-
-  .sounds {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-  }
-  .rev-row {
-    display: flex;
-    align-items: flex-end;
-    gap: 12px;
-    margin-top: 10px;
-  }
-
-  /* Le curseur prend la place restante ; le bouton garde la sienne. */
-  .rev-row :global(.slider) {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .blip {
-    flex: 0 0 auto;
-    margin-left: auto;
-    padding: 6px 12px;
-    border: 1px solid var(--rosso-border);
-    border-radius: 4px;
-    background: var(--rosso-dim);
-    color: var(--txt);
-    font-size: 11.5px;
-    cursor: pointer;
-  }
-
-  .blip:hover {
-    border-color: var(--rosso-bright);
-  }
-
-  .blip.on {
-    background: var(--rosso-bright);
-    border-color: var(--rosso-bright);
-    color: #fff;
-  }
-
-  .sound-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .sound-row .sound {
-    flex: 1;
-    min-width: 0;
-  }
-  .sound {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--panel2);
-    border: 1px solid var(--line);
-    padding: 7px 10px;
-    text-align: left;
-  }
-  .sound.sel {
-    border-color: var(--rosso-border);
-    background: var(--rosso-dim);
-  }
-  .sound:disabled {
-    opacity: 0.6;
-  }
-  .radio {
-    width: 13px;
-    height: 13px;
-    border-radius: 50%;
-    border: 1px solid var(--muted2);
-    flex: none;
-  }
-  .sound.sel .radio {
-    border-color: var(--rosso-bright);
-    background: radial-gradient(var(--rosso-bright) 40%, transparent 45%);
-  }
-  .s-name {
-    flex: 1;
-    font-size: 11px;
-    color: var(--txt2);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .s-tag {
-    font-size: 7px;
-    padding: 1px 5px;
-    border: 1px solid var(--line);
-    color: var(--muted);
-  }
-
-  .muted {
-    color: var(--muted);
-  }
-  .small {
-    font-size: 11px;
-  }
-
-  .tsk-list {
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin-bottom: 6px;
-  }
-  .tsk-list li {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    border: 1px solid var(--line);
-    background: var(--panel2);
-    padding: 5px 9px;
-  }
-  .tsk-list li.inactive {
-    opacity: 0.6;
-  }
-  .tsk-list .tog {
-    flex: none;
-    display: flex;
-    align-items: center;
-    cursor: pointer;
-  }
-  .tsk-name {
-    flex: 1;
-    font-size: 11px;
-    color: var(--txt2);
-  }
-  .tsk-src {
-    font-size: 9px;
-    color: var(--muted2);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 120px;
-  }
-  .loading-inline {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .spinner-sm {
-    flex: none;
-    width: 12px;
-    height: 12px;
-    border: 2px solid var(--line);
-    border-top-color: var(--rosso);
-    border-radius: 50%;
-    animation: tsk-spin 0.8s linear infinite;
-  }
-  @keyframes tsk-spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  /* Couches / extensions (§4.4) */
-
-  /* Bloc Ressources (§4.5.2) : déplacé dans son propre onglet (§6.1) */
-
-  /* Provenance / pack d'origine (§4.4) */
 </style>

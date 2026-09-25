@@ -1,6 +1,6 @@
 <script lang="ts">
-  // The one tech sheet of a car. Only the full detail page
-  // (`DetailPage.svelte`) draws it now, since the compact side panel was
+  // The one tech sheet of a car. Only the full detail page draws it now
+  // (`CarSpecsBlock.svelte`, inside `DetailPage.svelte`), since the compact side panel was
   // removed — but the rows stay here rather than inlined there, because of how
   // they came to be shared in the first place.
   //
