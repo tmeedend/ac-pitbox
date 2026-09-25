@@ -72,6 +72,11 @@ pub struct TaxonomyTables {
     /// the user makes from a proposal, never a silent one (TAXO§7.2).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub brand_aliases: BTreeMap<String, String>,
+    /// Values of the brand field that are no brand - a pack, a series, a
+    /// modder (`AER`, `WSC Legends`, `traffic`), lowercased: the real brand is
+    /// read from the car's name instead (`brands::from_name` in the app).
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub not_brands: BTreeSet<String>,
 }
 
 /// Overlay of a `key → value` table (country aliases, country tags).
@@ -84,6 +89,51 @@ pub struct MapOverlay {
     /// absence would let the next catalogue bring the entry back.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub removed: BTreeSet<String>,
+}
+
+/// Overlay of a set of names (the brands that are no brand): entries added,
+/// catalogue entries removed - a removal being a tombstone, as everywhere.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct SetOverlay {
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub added: BTreeSet<String>,
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub removed: BTreeSet<String>,
+}
+
+impl SetOverlay {
+    pub fn apply(&self, catalog: &BTreeSet<String>) -> BTreeSet<String> {
+        catalog
+            .iter()
+            .filter(|k| !self.removed.contains(*k))
+            .chain(&self.added)
+            .cloned()
+            .collect()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.added.is_empty() && self.removed.is_empty()
+    }
+
+    /// Entries in their compared form (lowercased, trimmed); adding what the
+    /// catalogue has, or removing what it has not, is no decision.
+    fn normalized(self, catalog: &BTreeSet<String>) -> Self {
+        let key = |k: String| k.trim().to_lowercase();
+        SetOverlay {
+            added: self
+                .added
+                .into_iter()
+                .map(key)
+                .filter(|k| !k.is_empty() && !catalog.contains(k))
+                .collect(),
+            removed: self
+                .removed
+                .into_iter()
+                .map(key)
+                .filter(|k| catalog.contains(k))
+                .collect(),
+        }
+    }
 }
 
 impl MapOverlay {
@@ -309,6 +359,8 @@ pub struct TaxonomyOverlay {
     /// definitive and remembered - the proposal does not come back).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ignored_brand_merges: Vec<String>,
+    #[serde(default, skip_serializing_if = "SetOverlay::is_empty")]
+    pub not_brands: SetOverlay,
 }
 
 impl TaxonomyOverlay {
@@ -336,6 +388,7 @@ impl TaxonomyOverlay {
             ignored_countries: ignored,
             brand_aliases: self.brand_aliases.normalized(&catalog.brand_aliases),
             ignored_brand_merges: ignored_merges,
+            not_brands: self.not_brands.normalized(&catalog.not_brands),
         }
     }
 
@@ -345,7 +398,8 @@ impl TaxonomyOverlay {
         !(self.families.is_empty()
             && self.country_aliases.is_empty()
             && self.country_tags.is_empty()
-            && self.brand_aliases.is_empty())
+            && self.brand_aliases.is_empty()
+            && self.not_brands.is_empty())
     }
 }
 
@@ -357,6 +411,7 @@ impl TaxonomyTables {
             country_aliases: o.country_aliases.apply(&self.country_aliases),
             country_tags: o.country_tags.apply(&self.country_tags),
             brand_aliases: o.brand_aliases.apply(&self.brand_aliases),
+            not_brands: o.not_brands.apply(&self.not_brands),
         }
     }
 }
@@ -429,6 +484,7 @@ mod tests {
             country_aliases: map(&[("usa", "United States")]),
             country_tags: BTreeMap::new(),
             brand_aliases: map(&[("alfa", "Alfa Romeo")]),
+            not_brands: BTreeSet::new(),
         };
         let mut o = TaxonomyOverlay::default();
         o.brand_aliases.set.insert("ALFA".into(), "Alfa Romeo".into());
@@ -448,5 +504,33 @@ mod tests {
         let o = MapOverlay::diff(&user, &catalog);
         assert!(o.removed.contains("holland"), "a removed shipped entry is a tombstone");
         assert_eq!(o.apply(&catalog), user);
+    }
+
+    /// "Not a brand" is a set in two layers like the others: added by the
+    /// user, removed as a tombstone over the catalogue, and a file written
+    /// before it existed reads as no decision.
+    #[test]
+    fn not_a_brand_is_a_set_in_two_layers() {
+        let catalog = TaxonomyTables {
+            not_brands: ["traffic".to_string()].into(),
+            ..Default::default()
+        };
+        let mut o = TaxonomyOverlay::default();
+        o.not_brands.added.insert(" AER ".into());
+        o.not_brands.added.insert("traffic".into());
+        o.not_brands.removed.insert("TRAFFIC".into());
+        let o = o.normalized(&catalog);
+        assert_eq!(
+            o.not_brands.added,
+            ["aer".to_string()].into(),
+            "compared form, no restating"
+        );
+        assert_eq!(
+            catalog.apply(&o).not_brands,
+            ["aer".to_string()].into(),
+            "the tombstone holds"
+        );
+        let old: TaxonomyOverlay = serde_json::from_str(r#"{"format":1,"families":{}}"#).unwrap();
+        assert!(old.not_brands.is_empty(), "an older taxonomy.json reads as no decision");
     }
 }

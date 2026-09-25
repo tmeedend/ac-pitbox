@@ -751,6 +751,16 @@ de reprendre. En cas d'écart, la spec fait foi.
       à relire par l'utilisateur avant promotion. **Relevé d'un dossier** ajouté
       pour le PC sous Mod Organizer, dont le montage virtuel n'est visible que
       des programmes qu'il lance.
+      **Relevé Mod Organizer (678 voitures, 318 circuits)** : deux changements
+      décidés avec l'utilisateur. (1) Les familles lisent aussi la **classe**
+      (43 non classées → 2). (2) **« Ce n'est pas une marque »** pour les packs
+      et séries, la marque lue dans le nom — préféré à une quarantaine de
+      règles « le nom contient ferrari → Ferrari », dont la recherche par
+      sous-chaîne se trompait (« Formula Ford », « Jordan-Ford », « 2-seater »).
+      Limite connue : la recherche ne connaît que les marques de la
+      bibliothèque et des fusions ; sur une petite bibliothèque, un
+      « Benetton B191 » reste sous son pack faute de Benetton connu. Une liste
+      livrée de marques connues lèverait la limite — à faire si ça gêne.
 
 - [ ] **Corrections par mod — à faire, chantier à part.** Aujourd'hui on
       corrige d'un mod son nom, sa description et ses tags (couche 4 de

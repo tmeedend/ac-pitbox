@@ -3,7 +3,7 @@
 // like the country aliases, and reuses their operations; what is proper to the
 // brands is the PROPOSALS, since no fixed list (the game's countries) tells
 // the right name.
-import type { MapOverlay } from "$lib/workshop/rules";
+import type { MapOverlay, SetOverlay } from "$lib/workshop/rules";
 import { removeEntry, retarget, setEntry } from "./countryEdit";
 
 type Table = Record<string, string>;
@@ -21,6 +21,21 @@ export function mergeBrand(overlay: MapOverlay, catalog: Table, effective: Table
   o = setEntry(o, catalog, from, target, true);
   if (target.toLowerCase() in effective) o = removeEntry(o, catalog, target);
   return o;
+}
+
+/**
+ * Marks a brand as no brand - a pack, a series, a modder - or as one again.
+ * A shipped entry gets a tombstone when switched off; what the catalogue
+ * already says is no decision. Compared lowercased, as Rust stores them.
+ */
+export function setNotBrand(o: SetOverlay, catalog: string[], name: string, notBrand: boolean): SetOverlay {
+  const k = name.trim().toLowerCase();
+  const added = (o.added ?? []).filter((x) => x !== k);
+  const removed = (o.removed ?? []).filter((x) => x !== k);
+  const shipped = catalog.includes(k);
+  if (notBrand && !shipped) added.push(k);
+  if (!notBrand && shipped) removed.push(k);
+  return { added, removed };
 }
 
 /** How "Ignore" remembers a proposal (TAXO§7.2). */

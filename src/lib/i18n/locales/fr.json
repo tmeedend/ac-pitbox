@@ -1876,7 +1876,9 @@
     "renameOrMerge": "Renommer ou fusionner",
     "renamePlaceholder": "un nouveau nom, ou une autre marque",
     "renameTo": "Renommer en {name}",
-    "mergeInto": "Fusionner avec {name}"
+    "mergeInto": "Fusionner avec {name}",
+    "notBrand": "Ce n'est pas une marque (un pack, une série, un moddeur)",
+    "notBrandBadge": "pas une marque"
   },
   "taxonomyOrigin": {
     "shippedTitle": "Livrée avec Pit Box : les mises à jour la font évoluer",
@@ -1914,7 +1916,8 @@
       "family": "Famille",
       "country_alias": "Orthographe de pays",
       "country_tag": "Tag de pays",
-      "brand_alias": "Orthographe de marque"
+      "brand_alias": "Orthographe de marque",
+      "not_brand": "Pas une marque"
     },
     "disable": "Désactiver",
     "enable": "Réactiver"

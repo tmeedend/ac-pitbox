@@ -33,7 +33,7 @@
   import { t } from "$lib/i18n/index.svelte";
   import { listLibrary } from "$lib/library/library";
   import { bumpLibraryVersion } from "$lib/library/libraryVersion.svelte";
-  import { brandProposals, mergeBrand, mergeKey } from "$lib/workshop/brandEdit";
+  import { brandProposals, mergeBrand, mergeKey, setNotBrand } from "$lib/workshop/brandEdit";
   import { keyOrigins, keysTo, removeEntry, restoreEntries, setEntry, touches } from "$lib/workshop/countryEdit";
   import {
     getRulesView,
@@ -42,6 +42,7 @@
     saveRulesOverlay,
     type BrandFix,
     type MapOverlay,
+    type SetOverlay,
     type RuleRow,
     type RulesView,
     type TaxonomyView,
@@ -65,6 +66,10 @@
   /** The user's decisions: what every gesture edits, ahead of the save. */
   let aliases = $state<MapOverlay>({});
   let ignored = $state<string[]>([]);
+  let notBrands = $state<SetOverlay>({});
+  const effNotBrands = $derived(view?.effective.not_brands ?? []);
+  const catNotBrands = $derived(view?.catalog.not_brands ?? []);
+  const isNotBrand = (name: string) => effNotBrands.includes(name.trim().toLowerCase());
   const effAliases = $derived(view?.effective.brand_aliases ?? {});
   const catAliases = $derived(view?.catalog.brand_aliases ?? {});
   /** Stored brand of every car. */
@@ -113,20 +118,22 @@
     view = v;
     aliases = v.overlay.brand_aliases ?? {};
     ignored = v.overlay.ignored_brand_merges ?? [];
+    notBrands = v.overlay.not_brands ?? {};
   }
 
   let queue: Promise<void> = Promise.resolve();
   /** Takes the decisions at once, writes and re-applies them, then reads the
    * library back: the counts only mean something once the stored brands
    * moved. The `catch` keeps one failure from freezing every later write. */
-  function commit(next: { aliases?: MapOverlay; ignored?: string[] }) {
+  function commit(next: { aliases?: MapOverlay; ignored?: string[]; notBrands?: SetOverlay }) {
     aliases = next.aliases ?? aliases;
     ignored = next.ignored ?? ignored;
-    const [a, ig] = [aliases, ignored];
+    notBrands = next.notBrands ?? notBrands;
+    const [a, ig, nb] = [aliases, ignored, notBrands];
     queue = queue
       .then(async () => {
         busy = true;
-        take(await saveBrandOverlay(a, ig));
+        take(await saveBrandOverlay(a, ig, nb));
         await reloadCars();
         bumpLibraryVersion();
         error = "";
@@ -150,6 +157,9 @@
     // A brand only spellings lead to - its cars gone - stays, hidden unless
     // asked for (TAXO§9): the merges curated for it are kept.
     for (const to of Object.values(effAliases)) row(to);
+    // A pack marked as no brand may have lost every car to its real brands:
+    // it stays listed (among the brands without a car) so it can be unmarked.
+    for (const n of effNotBrands) if (![...m.keys()].some((k) => k.toLowerCase() === n)) row(n);
     // By name, not by count (asked at use, 2026-09-25): the tab is where one
     // looks a brand up, and forty brands read like a directory. TAXO§6.1's
     // "by decreasing count" suits an index, which the library has.
@@ -317,7 +327,9 @@
                 class="no-logo"
                 aria-hidden="true"
               ></span>{/if}
-            <span class="nm">{r.name}</span>
+            <span class="nm"
+              >{r.name}{#if isNotBrand(r.name)}<span class="not-brand">{t("brandsTab.notBrandBadge")}</span>{/if}</span
+            >
             <span class="num">{carsText(r.cars)}</span>
             <span class="num">{t("brandsTab.aliasCount", { count: spelled.length })}</span>
             <span class="curated" class:on={curated} title={curated ? t("categories.curated") : undefined} aria-hidden={!curated}
@@ -392,6 +404,20 @@
                   {/if}
                 </div>
               </div>
+
+              <!-- A pack, a series, a modder filed as a brand: marked, its
+                   cars go to the brand their name gives, and only those whose
+                   name gives none stay here. -->
+              <label class="not-brand-toggle">
+                <input
+                  type="checkbox"
+                  checked={isNotBrand(r.name)}
+                  disabled={busy}
+                  onchange={(e) =>
+                    commit({ notBrands: setNotBrand(notBrands, catNotBrands, r.name, e.currentTarget.checked) })}
+                />
+                <span>{t("brandsTab.notBrand")}</span>
+              </label>
 
               <!-- The two ways a car lands in this brand, side by side and
                    worded alike, so their difference reads by itself: what
@@ -910,5 +936,20 @@
   }
   .caught .more {
     color: var(--faint);
+  }
+  .not-brand {
+    margin-left: 8px;
+    font-size: 10px;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 0 4px;
+  }
+  .not-brand-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--txt2);
   }
 </style>

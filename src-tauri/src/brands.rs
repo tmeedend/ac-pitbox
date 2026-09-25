@@ -15,7 +15,7 @@
 //!    stays: the stored brands are then all elected ones, and a car imported
 //!    later with another case joins the brand already there.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::RwLock;
 
 /// Folded spelling → the spelling elected for it.
@@ -97,6 +97,66 @@ pub fn canonical(raw: &str, aliases: &BTreeMap<String, String>) -> Option<String
     canonical_in(raw, aliases, &known)
 }
 
+/// Whether a brand is no brand - a pack, a series, a modder the user marked
+/// as such (`not_brands`, TAXO§7).
+pub fn is_not_brand(brand: &str, not_brands: &BTreeSet<String>) -> bool {
+    let key = fold(brand);
+    not_brands.iter().any(|n| fold(n) == key)
+}
+
+/// The brand a car's NAME gives, for a car filed under something that is no
+/// brand (`AER`: "Ferrari 488 GTE"; `WSC Legends`: "WSC60 Ford GT40 MkII").
+/// The words sought are the brands this library knows, every brand a merge
+/// leads to, and every spelling merged into one (`chevy` → Chevrolet catches
+/// "Chevy Camaro") - never a brand marked as none.
+pub fn from_name(name: &str, aliases: &BTreeMap<String, String>, not_brands: &BTreeSet<String>) -> Option<String> {
+    let known = KNOWN.read().map(|k| k.clone()).unwrap_or_default();
+    from_name_in(name, aliases, not_brands, &known)
+}
+
+/// Words, folded: what a name is matched on. Whole words only - "ford" must
+/// not be found in "Oxford", nor "seat" in "2-seater".
+fn words(s: &str) -> Vec<String> {
+    fold(s)
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+pub fn from_name_in(
+    name: &str,
+    aliases: &BTreeMap<String, String>,
+    not_brands: &BTreeSet<String>,
+    known: &BTreeMap<String, String>,
+) -> Option<String> {
+    let name = words(name);
+    let vocabulary = known
+        .values()
+        .map(|b| (b.clone(), b.clone()))
+        .chain(aliases.iter().map(|(spelling, b)| (spelling.clone(), b.clone())))
+        .chain(aliases.values().map(|b| (b.clone(), b.clone())))
+        .filter(|(_, b)| !is_not_brand(b, not_brands));
+    // The EARLIEST brand in the name wins, then the longest: "Jordan-Ford
+    // 191" is a Jordan with a Ford engine, "Alfa Romeo" beats "Alfa".
+    let mut best: Option<(usize, usize, String)> = None;
+    for (spelling, brand) in vocabulary {
+        let w = words(&spelling);
+        if w.is_empty() || w.len() > name.len() {
+            continue;
+        }
+        if let Some(at) = (0..=name.len() - w.len()).find(|&i| name[i..i + w.len()] == w[..]) {
+            let better = best
+                .as_ref()
+                .is_none_or(|(a, l, _)| at < *a || (at == *a && w.len() > *l));
+            if better {
+                best = Some((at, w.len(), brand));
+            }
+        }
+    }
+    best.map(|(_, _, b)| b)
+}
+
 pub fn canonical_in(raw: &str, aliases: &BTreeMap<String, String>, known: &BTreeMap<String, String>) -> Option<String> {
     let cleaned = clean(raw);
     if cleaned.is_empty() {
@@ -133,6 +193,36 @@ mod tests {
             "unknown stays"
         );
         assert_eq!(canonical_in("  ", &none, &known), None);
+    }
+
+    /// A pack is no brand: the car's name says its brand - whole words only,
+    /// the earliest in the name, the longest on a tie; a merged spelling
+    /// counts; nothing found, the pack stays.
+    #[test]
+    fn a_pack_gives_way_to_the_brand_in_the_name() {
+        let known = elect(["Ferrari", "Ford", "Jordan", "Alfa Romeo", "Alfa", "AER", "Chevrolet"]);
+        let aliases = BTreeMap::from([
+            ("chevy".to_string(), "Chevrolet".to_string()),
+            ("oreca technology".to_string(), "Oreca".to_string()),
+        ]);
+        let not: BTreeSet<String> = ["aer".to_string()].into();
+        let find = |n: &str| from_name_in(n, &aliases, &not, &known);
+        assert_eq!(find("Ferrari 488 GTE").as_deref(), Some("Ferrari"));
+        assert_eq!(find("Jordan-Ford 191").as_deref(), Some("Jordan"), "the earliest");
+        assert_eq!(find("Alfa Romeo 155 TI").as_deref(), Some("Alfa Romeo"), "the longest");
+        assert_eq!(
+            find("Chevy_Camaro_1968").as_deref(),
+            Some("Chevrolet"),
+            "a merged spelling"
+        );
+        assert_eq!(
+            find("Oreca 07").as_deref(),
+            Some("Oreca"),
+            "a merge's target is a brand"
+        );
+        assert_eq!(find("Oxford Special"), None, "a whole word, not a part of one");
+        assert_eq!(find("AER Benetton B191"), None, "never the pack itself");
+        assert!(is_not_brand("  aer ", &not));
     }
 
     /// TAXO§7.2: a merge is the user's decision, and it wins over the

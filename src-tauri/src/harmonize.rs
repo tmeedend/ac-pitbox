@@ -37,6 +37,17 @@ pub fn compute(
                 .take()
                 .or_else(|| native_brand.map(str::to_string))
                 .and_then(|b| crate::brands::canonical(&b, &rules.brand_aliases));
+            // Filed under a pack, a series, a modder: the name says the brand
+            // (AER's "Ferrari 488 GTE"). Nothing found, the pack stays - it
+            // is still where the user looks for those cars.
+            if h.brand
+                .as_deref()
+                .is_some_and(|b| crate::brands::is_not_brand(b, &rules.not_brands))
+            {
+                if let Some(real) = crate::brands::from_name(name, &rules.brand_aliases, &rules.not_brands) {
+                    h.brand = Some(real);
+                }
+            }
             h
         }
         ModKind::Track => rules::apply_track(rules, raw_tags),
@@ -310,6 +321,24 @@ mod tests {
 
     /// A declared country always wins over a tag: the author took the trouble
     /// to write it. The alias table normalises it, it never overrides it.
+    /// TAXO§7: a car filed under something that is no brand takes the brand
+    /// its name gives; one whose name gives none keeps the pack.
+    #[test]
+    fn a_car_of_a_pack_is_filed_under_the_brand_in_its_name() {
+        let mut rules = rules::default_rules();
+        rules.not_brands.insert("aer".into());
+        // A merged spelling is part of what a name is searched for - and
+        // needs no library to be known, unlike the elected brands.
+        rules.brand_aliases.insert("ferrari".into(), "Ferrari".into());
+        let car = |name: &str| compute(&rules, ModKind::Car, &[], name, "race", None, Some("AER")).brand;
+        assert_eq!(car("Ferrari 488 GTE").as_deref(), Some("Ferrari"));
+        assert_eq!(
+            car("Benetton B191").as_deref(),
+            Some("AER"),
+            "nothing found, the pack stays"
+        );
+    }
+
     #[test]
     fn a_declared_country_is_normalised_not_replaced_by_a_tag() {
         let rules = rules::default_rules();

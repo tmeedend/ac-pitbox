@@ -17,7 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 
 use crate::rules::{content, ListOverlay, OrderOverlay, Rule, RulesOverlay};
-use crate::taxonomy::{FamilyOverlay, MapOverlay, TaxonomyOverlay};
+use crate::taxonomy::{FamilyOverlay, MapOverlay, SetOverlay, TaxonomyOverlay};
 
 /// What an import did, counted by decision.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -196,6 +196,30 @@ pub fn merge_map(mine: &mut MapOverlay, theirs: &MapOverlay, st: &mut MergeStats
     }
 }
 
+/// A set: what one side added the other removed is a conflict, his stays.
+fn merge_set(mine: &mut SetOverlay, theirs: &SetOverlay, st: &mut MergeStats) {
+    for k in &theirs.added {
+        if mine.added.contains(k) {
+            st.already += 1;
+        } else if mine.removed.contains(k) {
+            st.kept_yours += 1;
+        } else {
+            mine.added.insert(k.clone());
+            st.added += 1;
+        }
+    }
+    for k in &theirs.removed {
+        if mine.removed.contains(k) {
+            st.already += 1;
+        } else if mine.added.contains(k) {
+            st.kept_yours += 1;
+        } else {
+            mine.removed.insert(k.clone());
+            st.added += 1;
+        }
+    }
+}
+
 fn merge_families(mine: &mut FamilyOverlay, theirs: &FamilyOverlay, st: &mut MergeStats) {
     for (id, m) in &theirs.meta {
         match mine.meta.get(id) {
@@ -242,6 +266,7 @@ pub fn merge_taxonomy(mine: &mut TaxonomyOverlay, theirs: &TaxonomyOverlay, st: 
     merge_map(&mut mine.country_aliases, &theirs.country_aliases, st);
     merge_map(&mut mine.country_tags, &theirs.country_tags, st);
     merge_map(&mut mine.brand_aliases, &theirs.brand_aliases, st);
+    merge_set(&mut mine.not_brands, &theirs.not_brands, st);
     for m in &theirs.ignored_brand_merges {
         if mine.ignored_brand_merges.contains(m) {
             st.already += 1;

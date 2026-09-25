@@ -55,6 +55,10 @@ pub struct Rules {
     /// country aliases.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub brand_aliases: BTreeMap<String, String>,
+    /// Brand-field values that are no brand (a pack, a series, a modder),
+    /// lowercased: the brand is read from the car's name (`brands.rs`).
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub not_brands: BTreeSet<String>,
 }
 
 /// Comment un pays s'écrit, et le nom sous lequel on le range.
@@ -297,6 +301,7 @@ pub fn catalog_from(texts: &crate::catalog_update::CatalogTexts) -> Option<Rules
     r.country_aliases.map = t.country_aliases;
     r.car.extraction_country.map = t.country_tags;
     r.brand_aliases = t.brand_aliases;
+    r.not_brands = t.not_brands;
     Some(r)
 }
 

@@ -112,10 +112,12 @@ pub fn save_brand_overlay(
     db: State<Db>,
     aliases: MapOverlay,
     ignored: Vec<String>,
+    not_brands: pitbox_catalog::taxonomy::SetOverlay,
 ) -> Result<TaxonomyView, String> {
     let mut o = crate::rules::load_taxonomy(&app);
     o.brand_aliases = aliases;
     o.ignored_brand_merges = ignored;
+    o.not_brands = not_brands;
     let (rules, o) = crate::rules::save_taxonomy(&app, o)?;
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;

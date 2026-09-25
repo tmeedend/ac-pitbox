@@ -103,7 +103,7 @@ impl Change {
     /// `None` for what it does not trace.
     fn fired_key(&self) -> Option<String> {
         match self.list.as_str() {
-            "family" | "country_alias" | "country_tag" | "brand_alias" => None,
+            "family" | "country_alias" | "country_tag" | "brand_alias" | "not_brand" => None,
             "track_category" => Some(crate::rule_overlay::category_key(&self.key)),
             _ => Some(self.key.clone()),
         }
@@ -285,6 +285,14 @@ pub fn changes(old: &Rules, new: &Rules) -> Changes {
         &mut out,
     );
     map_changes("brand_alias", &old.brand_aliases, &new.brand_aliases, &mut out);
+    let set = |k: &String| Change {
+        list: "not_brand".into(),
+        key: k.clone(),
+        label: k.clone(),
+        mods: None,
+    };
+    out.added.extend(new.not_brands.difference(&old.not_brands).map(set));
+    out.retired.extend(old.not_brands.difference(&new.not_brands).map(set));
     out
 }
 

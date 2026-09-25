@@ -1876,7 +1876,9 @@
     "renameOrMerge": "Rename or merge",
     "renamePlaceholder": "a new name, or another brand",
     "renameTo": "Rename to {name}",
-    "mergeInto": "Merge into {name}"
+    "mergeInto": "Merge into {name}",
+    "notBrand": "This is not a brand (a pack, a series, a modder)",
+    "notBrandBadge": "not a brand"
   },
   "taxonomyOrigin": {
     "shippedTitle": "Shipped with Pit Box: updates keep improving it",
@@ -1914,7 +1916,8 @@
       "family": "Family",
       "country_alias": "Country spelling",
       "country_tag": "Country tag",
-      "brand_alias": "Brand spelling"
+      "brand_alias": "Brand spelling",
+      "not_brand": "Not a brand"
     },
     "disable": "Disable",
     "enable": "Enable again"

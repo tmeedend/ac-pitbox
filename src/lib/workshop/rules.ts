@@ -240,6 +240,13 @@ export interface TaxonomyOverlay {
   brand_aliases?: MapOverlay;
   /** Brand merges answered "Ignore", as `from → to` (TAXO§7.2). */
   ignored_brand_merges?: string[];
+  not_brands?: SetOverlay;
+}
+
+/** Overlay of a set of names: added by the user, catalogue ones removed. */
+export interface SetOverlay {
+  added?: string[];
+  removed?: string[];
 }
 
 export interface TaxonomyTables {
@@ -248,6 +255,9 @@ export interface TaxonomyTables {
   country_tags: Record<string, string>;
   /** Brand spelling (lowercased) → the brand it is filed under (TAXO§7). */
   brand_aliases?: Record<string, string>;
+  /** Brand-field values that are no brand (a pack, a series), lowercased:
+   * the brand is read from the car's name. */
+  not_brands?: string[];
 }
 
 /** What the catalogue ships, what the user decided, what applies. */
@@ -270,8 +280,8 @@ export function saveFamilyOverlay(families: FamilyOverlay): Promise<TaxonomyView
 
 /** Writes the brand decisions and re-applies them to the library: the brand
  * is decided at write time, like the country. */
-export function saveBrandOverlay(aliases: MapOverlay, ignored: string[]): Promise<TaxonomyView> {
-  return invoke<TaxonomyView>("save_brand_overlay", { aliases, ignored });
+export function saveBrandOverlay(aliases: MapOverlay, ignored: string[], notBrands: SetOverlay): Promise<TaxonomyView> {
+  return invoke<TaxonomyView>("save_brand_overlay", { aliases, ignored, notBrands });
 }
 
 /** Writes the country decisions and re-applies them to the library: the

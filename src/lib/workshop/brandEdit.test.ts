@@ -1,7 +1,7 @@
 // Brand merges (TAXO§7): proposed on proximity, never made silently, and an
 // ignored proposal does not come back.
 import { describe, expect, it } from "vitest";
-import { brandProposals, mergeBrand, mergeKey } from "./brandEdit";
+import { brandProposals, mergeBrand, mergeKey, setNotBrand } from "./brandEdit";
 
 describe("brand proposals", () => {
   it("proposes a name inside another and a typo, into the brand the library uses most", () => {
@@ -46,6 +46,16 @@ describe("brand proposals", () => {
       [],
     );
     expect(p).toEqual([{ from: "Alfa", to: "Alfa Romeo", fromCars: 3, toCars: 3 }]);
+  });
+});
+
+describe("not a brand", () => {
+  it("is his decision over the catalogue, and switching back leaves none", () => {
+    const on = setNotBrand({}, ["traffic"], "AER", true);
+    expect(on).toEqual({ added: ["aer"], removed: [] });
+    expect(setNotBrand(on, ["traffic"], "AER", false)).toEqual({ added: [], removed: [] });
+    expect(setNotBrand({}, ["traffic"], "traffic", false)).toEqual({ added: [], removed: ["traffic"] });
+    expect(setNotBrand({}, ["traffic"], "traffic", true)).toEqual({ added: [], removed: [] });
   });
 });
 

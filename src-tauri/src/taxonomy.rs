@@ -32,6 +32,7 @@ pub fn tables_of(r: &Rules) -> TaxonomyTables {
         country_aliases: r.country_aliases.map.clone(),
         country_tags: r.car.extraction_country.map.clone(),
         brand_aliases: r.brand_aliases.clone(),
+        not_brands: r.not_brands.clone(),
     }
 }
 
@@ -86,6 +87,7 @@ pub fn apply(rules: &mut Rules, catalog: &TaxonomyTables, o: &TaxonomyOverlay) {
     rules.country_aliases.ignored = o.ignored_countries.clone();
     rules.car.extraction_country.map = t.country_tags;
     rules.brand_aliases = t.brand_aliases;
+    rules.not_brands = t.not_brands;
 }
 
 /// Reads `taxonomy.json`, or builds it from the tables of the rules file the
