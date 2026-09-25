@@ -320,6 +320,7 @@ pub fn run() {
             commands::import::resolve_conflict,
             commands::import::cancel_import,
             commands::updates::check_mod_updates,
+            commands::updates::recheck_mod_updates,
             commands::updates::mod_update_details,
             commands::updates::download_mod_update,
             commands::updates::cancel_mod_update_download,

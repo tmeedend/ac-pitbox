@@ -48,7 +48,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -211,8 +211,9 @@ fn digit_run(it: &mut std::iter::Peekable<std::str::Chars<'_>>) -> String {
 }
 
 /// One mod of the library with a newer version in the registry. Mirrored by
-/// `ModUpdate` in `src/lib/library/modUpdates.svelte.ts`.
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+/// `ModUpdate` in `src/lib/library/modUpdates.svelte.ts`, which sends its
+/// list back to `still_pending`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ModUpdate {
     /// "Car" | "Track", as everywhere in the library.
@@ -255,6 +256,32 @@ pub fn find_updates(mods: &[ModRow], registry: &Registry) -> Vec<ModUpdate> {
         key(a).cmp(&key(b))
     });
     out
+}
+
+/// The updates of `pending` the library still needs, against what is
+/// installed **now** — without asking the registry again.
+///
+/// The registry is asked once a day, but the library changes in between: an
+/// update the browser had to download (a mega.nz page, §4.7) is installed by
+/// dropping the archive, and nothing tied that import to the announced update.
+/// The banner kept offering a version already installed until the next day's
+/// check. The versions the registry gave are still true; only the installed
+/// side moved, so the same comparison (`find_updates`) is simply run again on
+/// it. A mod updated to that version or beyond, removed, or no longer managed
+/// drops out; one still behind stays, with its installed version refreshed.
+pub fn still_pending(mods: &[ModRow], pending: &[ModUpdate]) -> Vec<ModUpdate> {
+    let registry: Registry = pending
+        .iter()
+        .filter_map(|u| {
+            let key = (cup_type(&u.kind)?.to_string(), u.id.to_lowercase());
+            let latest = Latest {
+                version: u.available.clone(),
+                limited: u.limited,
+            };
+            Some((key, latest))
+        })
+        .collect();
+    find_updates(mods, &registry)
 }
 
 /// What the registry says about one update, beyond its version number.
@@ -645,6 +672,46 @@ mod tests {
             vec!["a_track", "Newer", "unversioned"],
             "sorted by name, id matched case-insensitively, kind respected"
         );
+    }
+
+    /// Rule (§4.7): once the library changes, an announced update is weighed
+    /// again against the installed version, without the registry. Real case:
+    /// an update the browser had to download, installed by dropping the
+    /// archive, stayed announced until the next day's check.
+    #[test]
+    fn an_update_installed_by_hand_is_no_longer_pending() {
+        let pending = |id: &str, available: &str| ModUpdate {
+            kind: "Track".into(),
+            id: id.into(),
+            name: Some(id.into()),
+            installed: Some("1.0".into()),
+            available: available.into(),
+            limited: false,
+        };
+        let announced = vec![
+            pending("installed_by_hand", "1.2"),
+            pending("went_beyond", "1.2"),
+            pending("still_behind", "1.2"),
+            pending("removed", "1.2"),
+        ];
+        let mods = vec![
+            row("Track", "Installed_By_Hand", Some("1.2")),
+            row("Track", "went_beyond", Some("1.3")),
+            row("Track", "still_behind", Some("1.1")),
+            row("Track", "never_announced", None),
+        ];
+        let left = still_pending(&mods, &announced);
+        assert_eq!(
+            left.iter().map(|u| u.id.as_str()).collect::<Vec<_>>(),
+            vec!["still_behind"],
+            "installed, overtaken or removed updates are gone; nothing new is invented"
+        );
+        assert_eq!(
+            left[0].installed.as_deref(),
+            Some("1.1"),
+            "the installed version is the one read now"
+        );
+        assert_eq!(left[0].available, "1.2", "the registry's version is kept");
     }
 
     /// Rule (§4.7): the details are read from the real answer, alternative ids

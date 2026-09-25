@@ -49,6 +49,19 @@ pub async fn check_mod_updates(app: AppHandle) -> Result<Vec<crate::cup::ModUpda
     .map_err(|e| e.to_string())?
 }
 
+/// The updates of `pending` still ahead of what the library holds now, read
+/// without the network (`cup::still_pending`): called whenever the library
+/// changes, so an update installed by hand stops being offered at once.
+#[tauri::command]
+pub fn recheck_mod_updates(
+    db: State<Db>,
+    pending: Vec<crate::cup::ModUpdate>,
+) -> Result<Vec<crate::cup::ModUpdate>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let mods = crate::overlay::list_mods(&conn).map_err(|e| e.to_string())?;
+    Ok(crate::cup::still_pending(&mods, &pending))
+}
+
 /// Changelog, author and information page of one update.
 #[tauri::command]
 pub async fn mod_update_details(kind: String, id: String) -> Result<crate::cup::UpdateDetails, String> {

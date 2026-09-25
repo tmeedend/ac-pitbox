@@ -419,6 +419,8 @@ Pit Box annonce qu'un mod de la bibliothèque a une nouvelle version, et l'insta
 
 **Quand** : une minute après le démarrage, puis une fois par jour tant que l'app reste ouverte. La vérification peut être coupée dans Réglages › Général (`mod_updates_online`, §11), qui propose aussi « Vérifier maintenant ». Une vérification ratée garde la liste précédente et affiche son erreur dans les réglages, sans toast.
 
+**Entre deux vérifications, la liste suit la bibliothèque.** À chaque changement de la bibliothèque (import, activation, changement de version, suppression), les mises à jour en attente sont comparées de nouveau à la version installée, **sans requête** : les versions données par le registre restent vraies, seul le côté installé a bougé (`cup::still_pending`, qui rejoue la même comparaison). Une mise à jour qu'il a fallu télécharger dans le navigateur, puis glisser dans Pit Box, disparaît donc dès l'import, au lieu d'être encore proposée jusqu'au lendemain. Il suffit que la version installée atteigne celle du registre : c'est le libellé `version` de l'archive importée qui fait foi, et un auteur qui ne l'a pas mis à jour laisse la mise à jour affichée, comme dans CM. Le même recalcul suit le bouton « Mettre à jour », à la place d'une nouvelle requête au registre.
+
 **Où ça se voit** :
 
 - **Un toast** (`UpdateToast`) liste les mises à jour **pas encore annoncées**, chacune avec « Mettre à jour » et « Ignorer ». Une fois refermé, il ne revient pas pour les mêmes versions (`pitbox.modUpdates.announced` dans `ui_prefs.json`). Sans ça, il reparaîtrait à chaque démarrage.

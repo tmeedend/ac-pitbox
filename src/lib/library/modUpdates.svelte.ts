@@ -6,10 +6,17 @@
 // toast, the library cards, the fiche), and an update started from a fiche
 // keeps going when the fiche is closed.
 //
+// The list follows the library between two checks: every change to it
+// (`libraryVersion`) weighs the pending updates again against what is
+// installed, without the network. An update the browser had to download is
+// installed by dropping the archive, like any other import, and must stop
+// being offered as soon as it is.
+//
 // The update itself is two steps the user sees as one: the backend downloads
 // the archive, then the **ordinary import** takes it (`importDownloadedArchive`)
 // — same report, same arbitrations, same history line as a drop on the window.
 // Nothing here knows how a mod is replaced.
+import { untrack } from "svelte";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -17,6 +24,7 @@ import { errorText } from "$lib/errors";
 import { StorageKey } from "$lib/storage";
 import { getUiPrefs, setUiPref } from "$lib/uiPrefs.svelte";
 import { importDownloadedArchive, importState } from "$lib/workshop/importState.svelte";
+import { libraryVersion } from "./libraryVersion.svelte";
 import type { ModKind } from "./library";
 
 /** Mirrors `cup::ModUpdate`. */
@@ -117,6 +125,42 @@ function loadPrefs(): Promise<void> {
   return prefsLoaded;
 }
 
+/** Forgets what was noted about updates that left the list: whether a toast
+ * announced them, and how their last attempt ended. Without it, the "page
+ * opened in the browser" note would come back if the same version were ever
+ * listed again. */
+function forgetResolved(before: ModUpdate[]): void {
+  const still = new Set(modUpdates.list.map(updateKey));
+  const gone = before.map(updateKey).filter((k) => !still.has(k));
+  if (!gone.length) return;
+  const outcomes = { ...modUpdates.outcome };
+  for (const k of gone) delete outcomes[k];
+  modUpdates.outcome = outcomes;
+  const announced = { ...modUpdates.announced };
+  for (const k of gone) delete announced[k];
+  if (Object.keys(announced).length !== Object.keys(modUpdates.announced).length) {
+    modUpdates.announced = announced;
+    setUiPref(StorageKey.modUpdatesAnnounced, JSON.stringify(announced));
+  }
+}
+
+/** Weighs the pending updates again against the library as it is now — no
+ * request, the registry's versions are still true (`cup::still_pending`).
+ * Never throws: on failure the list stays as it was until the next check. */
+export async function recheckModUpdates(): Promise<void> {
+  const before = modUpdates.list;
+  if (!before.length || modUpdates.checking) return;
+  try {
+    const left = await invoke<ModUpdate[]>("recheck_mod_updates", { pending: $state.snapshot(before) });
+    // A registry check that landed meanwhile has the fresher answer.
+    if (modUpdates.list !== before) return;
+    modUpdates.list = left;
+    forgetResolved(before);
+  } catch (e) {
+    console.error("recheck_mod_updates", e);
+  }
+}
+
 /** Asks the registry now. Never throws: a failed check keeps the previous
  * list (an update known this morning is still real tonight) and records the
  * error for the Settings screen. */
@@ -207,10 +251,11 @@ export async function installUpdate(u: ModUpdate): Promise<void> {
         console.error("discard_mod_update_download", e),
       );
     }
-    // The registry is asked again rather than the entry dropped by hand: an
-    // import that stopped on a question has not updated anything yet, and
-    // only the installed version can say.
-    await checkModUpdates();
+    // Weighed again rather than the entry dropped by hand: an import that
+    // stopped on a question has not updated anything yet, and only the
+    // installed version can say. Awaited here, although the library change
+    // triggers it too, so the banner never shows "Update" again in between.
+    await recheckModUpdates();
   } catch (e) {
     console.error("installUpdate", e);
     modUpdates.outcome = { ...modUpdates.outcome, [key]: { error: errorText(e) } };
@@ -226,6 +271,12 @@ export function startModUpdateChecks(): () => void {
   void loadPrefs();
   const first = setTimeout(() => void checkModUpdates(), FIRST_CHECK_MS);
   const daily = setInterval(() => void checkModUpdates(), CHECK_EVERY_MS);
+  const stopFollowing = $effect.root(() => {
+    $effect(() => {
+      libraryVersion();
+      untrack(() => void recheckModUpdates());
+    });
+  });
   const unlisten = listen<UpdateProgress>("update:progress", (e) => {
     const busy = modUpdates.busy;
     if (!busy || busy.id !== e.payload.id) return;
@@ -235,6 +286,7 @@ export function startModUpdateChecks(): () => void {
   return () => {
     clearTimeout(first);
     clearInterval(daily);
+    stopFollowing();
     unlisten.then((f) => f());
   };
 }
