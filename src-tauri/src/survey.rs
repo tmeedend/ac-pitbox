@@ -125,76 +125,91 @@ fn counts(map: BTreeMap<String, usize>) -> Vec<Count> {
     v
 }
 
-pub fn build(conn: &Connection, cfg: &AppConfig, rules: &Rules, dir: &Path) -> rusqlite::Result<Survey> {
-    let owner = pitbox_catalog::taxonomy::lookup(&rules.car.category_families);
-    let flags: Option<BTreeSet<String>> =
-        crate::nationalities::with_known(|k| (!k.is_empty()).then(|| k.iter().map(|n| n.name.clone()).collect()));
-    let (mut cars, mut tracks) = (Vec::new(), Vec::new());
-    let mut unrecognized: BTreeMap<String, usize> = BTreeMap::new();
-    let mut flagless: BTreeMap<String, usize> = BTreeMap::new();
-    let mut brands: BTreeMap<String, (usize, BTreeSet<String>)> = BTreeMap::new();
-    let mut unclassified = Vec::new();
-    // Tags the engine drops ON PURPOSE, not for want of a rule: the two class
-    // values (the `class` field carries them) and the country tags, which only
-    // speak when the file declares no country. Counted, they buried the tags
-    // the catalogue could learn - measured on the dev library: `street` 167,
-    // `race` 107, `japan` 52 at the top of the list.
-    let dropped: BTreeSet<String> = ["street", "race"]
-        .into_iter()
-        .map(str::to_string)
-        .chain(rules.car.extraction_country.map.keys().cloned())
-        .collect();
+/// One mod as the survey reads it: what its file says, and what the rules
+/// make of it. Where it comes from - the library, or a folder - is the
+/// caller's business; the survey is assembled the same way.
+pub struct Surveyed {
+    pub id: String,
+    pub is_car: bool,
+    pub ui: crate::uijson::UiInfo,
+    pub h: crate::rules::Harmonized,
+}
 
-    for m in crate::overlay::list_mods(conn)? {
-        let Some((ui, h)) = crate::harmonize::read_and_compute(conn, cfg, rules, &m) else {
-            continue;
-        };
-        let is_car = m.kind != "Track";
+/// The survey of the library: every mod of it, and its cars' badges.
+pub fn build(conn: &Connection, cfg: &AppConfig, rules: &Rules, dir: &Path) -> rusqlite::Result<Survey> {
+    let mods = crate::overlay::list_mods(conn)?
+        .into_iter()
+        .filter_map(|m| {
+            let (ui, h) = crate::harmonize::read_and_compute(conn, cfg, rules, &m)?;
+            Some(Surveyed {
+                is_car: m.kind != "Track",
+                id: m.id_interne,
+                ui,
+                h,
+            })
+        })
+        .collect();
+    let badges = crate::library::car_badges(conn, cfg)?;
+    Ok(assemble(mods, &badges, rules, dir))
+}
+
+/// What tells a known tag, a flag, a family - read once for the whole survey.
+struct Known {
+    families: BTreeMap<String, String>,
+    /// Tags the engine drops ON PURPOSE, not for want of a rule: the two class
+    /// values (the `class` field carries them) and the country tags, which
+    /// only speak when the file declares no country. Counted, they buried the
+    /// tags the catalogue could learn - measured on the dev library: `street`
+    /// 167, `race` 107, `japan` 52 at the top of the list.
+    dropped: BTreeSet<String>,
+    /// The game's countries, `None` when its table could not be read.
+    flags: Option<BTreeSet<String>>,
+}
+
+impl Known {
+    fn new(rules: &Rules) -> Self {
+        Known {
+            families: pitbox_catalog::taxonomy::lookup(&rules.car.category_families),
+            dropped: ["street", "race"]
+                .into_iter()
+                .map(str::to_string)
+                .chain(rules.car.extraction_country.map.keys().cloned())
+                .collect(),
+            flags: crate::nationalities::with_known(|k| {
+                (!k.is_empty()).then(|| k.iter().map(|n| n.name.clone()).collect())
+            }),
+        }
+    }
+
+    fn family_of(&self, tag: &str) -> Option<&String> {
+        self.families.get(&pitbox_catalog::taxonomy::family_tag(tag))
+    }
+
+    /// One mod's line.
+    fn line(&self, rules: &Rules, m: Surveyed) -> ModLine {
+        let Surveyed { id, is_car, ui, h } = m;
         let country = crate::harmonize::final_country(rules, &h, ui.country.as_deref());
         // A tag a family takes is known too, rules or not: the families read a
         // car's raw tags (INDEX§6.1). Counted, `formula`, `trackday` and
         // `#vintage supercars` topped the list of the first real survey
         // while every car carrying them was already in its family.
-        let known_to_families = |t: &String| is_car && owner.contains_key(&pitbox_catalog::taxonomy::family_tag(t));
-        let unknown: BTreeSet<String> = h
+        let unrecognized: BTreeSet<String> = h
             .unrecognized
             .iter()
-            .filter(|t| !dropped.contains(*t) && !known_to_families(t))
+            .filter(|t| !self.dropped.contains(*t) && !(is_car && self.family_of(t).is_some()))
             .cloned()
             .collect();
-        for t in &unknown {
-            *unrecognized.entry(t.clone()).or_default() += 1;
-        }
-        if let (Some(c), Some(known)) = (&country, &flags) {
-            if !known.contains(c) {
-                *flagless.entry(c.clone()).or_default() += 1;
-            }
-        }
         // Families from the tags the library merges (`modTags`) - the file's
         // and the rules', never the ones the user typed: those are his.
-        let families: Vec<String> = if is_car {
-            let set: BTreeSet<String> = ui
-                .tags
+        let families: BTreeSet<String> = if is_car {
+            ui.tags
                 .iter()
                 .chain(&h.tags_from_rule)
-                .filter_map(|t| owner.get(&pitbox_catalog::taxonomy::family_tag(t)).cloned())
-                .collect();
-            set.into_iter().collect()
+                .filter_map(|t| self.family_of(t).cloned())
+                .collect()
         } else {
-            Vec::new()
+            BTreeSet::new()
         };
-        if is_car {
-            if families.is_empty() {
-                unclassified.push(m.id_interne.clone());
-            }
-            if let Some(b) = &h.brand {
-                let e = brands.entry(b.clone()).or_default();
-                e.0 += 1;
-                if let Some(raw) = ui.brand.as_deref().map(str::trim).filter(|r| !r.is_empty() && *r != b) {
-                    e.1.insert(raw.to_string());
-                }
-            }
-        }
         let specs: BTreeMap<&'static str, String> = [
             ("drivetrain", &h.drivetrain),
             ("aspiration", &h.aspiration),
@@ -207,14 +222,14 @@ pub fn build(conn: &Connection, cfg: &AppConfig, rules: &Rules, dir: &Path) -> r
         .collect();
         let mut tags = h.tags_from_rule.clone();
         tags.sort();
-        let line = ModLine {
-            id: m.id_interne.clone(),
-            name: ui.name.clone(),
+        ModLine {
+            id,
+            name: ui.name,
             file: FromFile {
-                brand: ui.brand.clone(),
-                class: ui.class.clone(),
-                country: ui.country.clone(),
-                tags: ui.tags.clone(),
+                brand: ui.brand,
+                class: ui.class,
+                country: ui.country,
+                tags: ui.tags,
             },
             brand: if is_car { h.brand.clone() } else { None },
             country,
@@ -223,20 +238,70 @@ pub fn build(conn: &Connection, cfg: &AppConfig, rules: &Rules, dir: &Path) -> r
             } else {
                 h.categories.clone()
             },
-            families,
+            families: families.into_iter().collect(),
             tags,
             specs,
-            unrecognized: unknown.into_iter().collect(),
-        };
-        if is_car {
-            cars.push(line);
-        } else {
-            tracks.push(line);
+            unrecognized: unrecognized.into_iter().collect(),
         }
     }
 
-    let badges = crate::library::car_badges(conn, cfg)?;
-    let logos = crate::logos::elect(&badges, &crate::logos::Prefs::new(), dir)
+    /// What to look at first, counted over the lines.
+    fn summary(&self, cars: &[ModLine], tracks: &[ModLine]) -> Summary {
+        let mut unrecognized: BTreeMap<String, usize> = BTreeMap::new();
+        let mut flagless: BTreeMap<String, usize> = BTreeMap::new();
+        let mut brands: BTreeMap<String, (usize, BTreeSet<String>)> = BTreeMap::new();
+        for l in cars.iter().chain(tracks) {
+            for t in &l.unrecognized {
+                *unrecognized.entry(t.clone()).or_default() += 1;
+            }
+            if let (Some(c), Some(known)) = (&l.country, &self.flags) {
+                if !known.contains(c) {
+                    *flagless.entry(c.clone()).or_default() += 1;
+                }
+            }
+        }
+        for l in cars {
+            if let Some(b) = &l.brand {
+                let e = brands.entry(b.clone()).or_default();
+                e.0 += 1;
+                if let Some(raw) = l
+                    .file
+                    .brand
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|r| !r.is_empty() && r != b)
+                {
+                    e.1.insert(raw.to_string());
+                }
+            }
+        }
+        let mut brand_lines: Vec<BrandLine> = brands
+            .into_iter()
+            .map(|(name, (cars, spellings))| BrandLine {
+                name,
+                cars,
+                spellings: spellings.into_iter().collect(),
+            })
+            .collect();
+        brand_lines.sort_by(|a, b| b.cars.cmp(&a.cars).then_with(|| a.name.cmp(&b.name)));
+        Summary {
+            cars: cars.len(),
+            tracks: tracks.len(),
+            unclassified_cars: cars
+                .iter()
+                .filter(|l| l.families.is_empty())
+                .map(|l| l.id.clone())
+                .collect(),
+            unrecognized_tags: counts(unrecognized),
+            countries_without_flag: self.flags.as_ref().map(|_| counts(flagless)),
+            brands: brand_lines,
+        }
+    }
+}
+
+/// The logo variants of each brand, without a path (TAXO§4).
+fn logo_lines(badges: &[(String, String, String)], dir: &Path) -> Vec<LogoLine> {
+    crate::logos::elect(badges, &crate::logos::Prefs::new(), dir)
         .into_values()
         .filter(|b| !b.variants.is_empty())
         .map(|b| LogoLine {
@@ -252,35 +317,31 @@ pub fn build(conn: &Connection, cfg: &AppConfig, rules: &Rules, dir: &Path) -> r
                 })
                 .collect(),
         })
-        .collect();
+        .collect()
+}
 
-    let mut brand_lines: Vec<BrandLine> = brands
-        .into_iter()
-        .map(|(name, (cars, spellings))| BrandLine {
-            name,
-            cars,
-            spellings: spellings.into_iter().collect(),
-        })
-        .collect();
-    brand_lines.sort_by(|a, b| b.cars.cmp(&a.cars).then_with(|| a.name.cmp(&b.name)));
-
-    Ok(Survey {
+/// The survey of a set of mods and of their cars' badges `(car id, brand,
+/// badge path)`.
+fn assemble(mods: Vec<Surveyed>, badges: &[(String, String, String)], rules: &Rules, dir: &Path) -> Survey {
+    let known = Known::new(rules);
+    let (mut cars, mut tracks) = (Vec::new(), Vec::new());
+    for m in mods {
+        if m.is_car {
+            cars.push(known.line(rules, m));
+        } else {
+            tracks.push(known.line(rules, m));
+        }
+    }
+    Survey {
         pitbox_survey: FORMAT,
         app_version: env!("CARGO_PKG_VERSION").to_string(),
         catalog_version: crate::catalog_update::version_in_force(dir),
-        summary: Summary {
-            cars: cars.len(),
-            tracks: tracks.len(),
-            unclassified_cars: unclassified,
-            unrecognized_tags: counts(unrecognized),
-            countries_without_flag: flags.map(|_| counts(flagless)),
-            brands: brand_lines,
-        },
+        summary: known.summary(&cars, &tracks),
         cars,
         tracks,
-        logos,
+        logos: logo_lines(badges, dir),
         decisions: crate::rules_share::export(dir, &crate::rules::default_rules()),
-    })
+    }
 }
 
 pub fn write(path: &Path, survey: &Survey) -> Result<(), String> {
