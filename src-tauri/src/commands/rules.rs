@@ -3,6 +3,7 @@
 //! catalogue update report, and re-applying everything to the library.
 
 use super::prelude::*;
+use tauri::Manager;
 
 #[tauri::command]
 pub fn get_rules(app: AppHandle) -> Rules {
@@ -207,15 +208,25 @@ pub fn import_rules(app: AppHandle, db: State<Db>, path: String) -> Result<crate
 /// Writes the anonymous survey of the library to `path` (`survey.rs`):
 /// read-only on the library, and the file goes nowhere by itself. Returns
 /// the counts shown to the user.
+///
+/// Off the main thread: it reads every mod's files and every badge, tens of
+/// seconds on a large library, and a synchronous command froze the whole
+/// window meanwhile (reported at use, 2026-09-25).
 #[tauri::command]
-pub fn export_survey(app: AppHandle, db: State<Db>, path: String) -> Result<(usize, usize), String> {
+pub async fn export_survey(app: AppHandle, path: String) -> Result<(usize, usize), String> {
     let dir = crate::rules::config_dir(&app)?;
     let rules = crate::rules::load(&app);
     let cfg = crate::config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let s = crate::survey::build(&conn, &cfg, &rules, &dir).map_err(|e| e.to_string())?;
-    crate::survey::write(std::path::Path::new(&path), &s)?;
-    Ok((s.summary.cars, s.summary.tracks))
+    tauri::async_runtime::spawn_blocking(move || {
+        let db = app.state::<Db>();
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        let s = crate::survey::build(&conn, &cfg, &rules, &dir).map_err(|e| e.to_string())?;
+        drop(conn);
+        crate::survey::write(std::path::Path::new(&path), &s)?;
+        Ok((s.summary.cars, s.summary.tracks))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// The same survey, of a folder of mods Pit Box does not hold (a Mod

@@ -110,6 +110,10 @@ pub struct Survey {
     pub pitbox_survey: u32,
     pub app_version: String,
     pub catalog_version: String,
+    /// When it was made, in UTC - no time zone, which would say where.
+    pub generated_at: String,
+    /// `library` (Pit Box's) or `folder` (a folder of mods read in place).
+    pub source: &'static str,
     pub summary: Summary,
     pub cars: Vec<ModLine>,
     pub tracks: Vec<ModLine>,
@@ -150,7 +154,7 @@ pub fn build(conn: &Connection, cfg: &AppConfig, rules: &Rules, dir: &Path) -> r
         })
         .collect();
     let badges = crate::library::car_badges(conn, cfg)?;
-    Ok(assemble(mods, &badges, rules, dir))
+    Ok(assemble(mods, &badges, rules, dir, "library"))
 }
 
 /// The survey of a folder of mods Pit Box does not hold - a Mod Organizer
@@ -200,7 +204,7 @@ pub fn build_from_folder(root: &Path, rules: &Rules, dir: &Path) -> Survey {
         }
         mods.push(Surveyed { id, is_car, ui, h });
     }
-    assemble(mods, &badges, rules, dir)
+    assemble(mods, &badges, rules, dir, "folder")
 }
 
 /// What tells a known tag, a flag, a family - read once for the whole survey.
@@ -370,7 +374,13 @@ fn logo_lines(badges: &[(String, String, String)], dir: &Path) -> Vec<LogoLine> 
 
 /// The survey of a set of mods and of their cars' badges `(car id, brand,
 /// badge path)`.
-fn assemble(mods: Vec<Surveyed>, badges: &[(String, String, String)], rules: &Rules, dir: &Path) -> Survey {
+fn assemble(
+    mods: Vec<Surveyed>,
+    badges: &[(String, String, String)],
+    rules: &Rules,
+    dir: &Path,
+    source: &'static str,
+) -> Survey {
     let known = Known::new(rules);
     let (mut cars, mut tracks) = (Vec::new(), Vec::new());
     for m in mods {
@@ -384,6 +394,8 @@ fn assemble(mods: Vec<Surveyed>, badges: &[(String, String, String)], rules: &Ru
         pitbox_survey: FORMAT,
         app_version: env!("CARGO_PKG_VERSION").to_string(),
         catalog_version: crate::catalog_update::version_in_force(dir),
+        generated_at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        source,
         summary: known.summary(&cars, &tracks),
         cars,
         tracks,
@@ -458,6 +470,8 @@ mod tests {
 
         let s = build(&conn, &cfg, &crate::rules::default_rules(), &base).unwrap();
         assert_eq!(s.summary.cars, 1);
+        assert_eq!(s.source, "library");
+        assert!(s.generated_at.ends_with('Z'), "a date, in UTC: {}", s.generated_at);
         assert_eq!(
             s.summary.unrecognized_tags[0].value, "weirdtag",
             "the tag no rule knows"
@@ -537,6 +551,7 @@ mod tests {
             (1, 1),
             "one car, once, and the track"
         );
+        assert_eq!(s.source, "folder");
         assert_eq!(s.cars[0].id, "rss_gtm_lanzo_v8");
         assert_eq!(s.cars[0].categories, ["#gt3"], "classified by the real engine");
         assert_eq!(s.summary.unrecognized_tags[0].value, "weirdtag");

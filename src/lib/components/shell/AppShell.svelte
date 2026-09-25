@@ -41,6 +41,7 @@
   import PrefsToast from "$lib/components/toasts/PrefsToast.svelte";
   import BulkToasts from "$lib/components/toasts/BulkToasts.svelte";
   import RepairToast from "$lib/components/toasts/RepairToast.svelte";
+  import SurveyToast from "$lib/components/toasts/SurveyToast.svelte";
   import CatalogToast from "$lib/components/toasts/CatalogToast.svelte";
   import UpdateToast from "$lib/components/toasts/UpdateToast.svelte";
   import { startModUpdateChecks } from "$lib/library/modUpdates.svelte";
@@ -1205,6 +1206,7 @@
   <UpdateToast />
   <BulkToasts />
   <RepairToast />
+  <SurveyToast />
   <CatalogToast />
   <ImportToasts />
   <MusicToast />

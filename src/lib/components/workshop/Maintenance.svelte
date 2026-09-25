@@ -16,7 +16,7 @@
   import { indexStockContent } from "$lib/inventory/submods";
   import { confirm, open as openDialog, save } from "@tauri-apps/plugin-dialog";
   import { exportFolderSurvey, exportSurvey } from "$lib/workshop/rules";
-  import { ISSUE_URL, openExternal } from "$lib/links";
+  import { runSurvey, surveyState } from "$lib/workshop/surveyState.svelte";
   import { t } from "$lib/i18n/index.svelte";
 
   import { errorText } from "$lib/errors";
@@ -57,9 +57,9 @@
   let resetStockEdits = $state(false);
 
   // The anonymous survey (`survey.rs`): read-only on the library, written
-  // where the user says, sent by him - to help the shipped rules improve.
-  let surveying = $state(false);
-  let surveyMsg = $state("");
+  // where the user says, sent by him - to help the shipped rules improve. Its
+  // progress and outcome are in the notification stack (`surveyState`): it
+  // takes tens of seconds, and one may leave this screen meanwhile.
   /** `root`: a folder of mods to survey instead of the library - a Mod
    * Organizer `mods` folder, read as it is, nothing imported. */
   async function doSurvey(root: string | null = null) {
@@ -69,17 +69,7 @@
       filters: [{ name: t("maintenance.surveyFilter"), extensions: ["json"] }],
     });
     if (!path) return;
-    surveying = true;
-    surveyMsg = "";
-    try {
-      const [cars, tracks] = root ? await exportFolderSurvey(root, path) : await exportSurvey(path);
-      surveyMsg = t("maintenance.surveyDone", { cars, tracks });
-    } catch (e) {
-      console.error("export_survey", e);
-      surveyMsg = errorText(e);
-    } finally {
-      surveying = false;
-    }
+    await runSurvey(() => (root ? exportFolderSurvey(root, path) : exportSurvey(path)));
   }
 
   async function doIndexStock() {
@@ -326,22 +316,18 @@
          meant to be sent: the user decides on that, not on a promise. -->
     <p class="hint">{t("maintenance.surveyHint")}</p>
     <div class="stock-row">
-      <button class="btn" type="button" onclick={() => doSurvey()} disabled={surveying}>
-        {surveying ? t("maintenance.surveying") : t("maintenance.survey")}
+      <button class="btn" type="button" onclick={() => doSurvey()} disabled={surveyState.running}>
+        {surveyState.running ? t("maintenance.surveying") : t("maintenance.survey")}
       </button>
       <button
         class="btn"
         type="button"
-        disabled={surveying}
+        disabled={surveyState.running}
         onclick={async () => {
           const root = await openDialog({ directory: true, multiple: false, title: t("maintenance.surveyFolderTitle") });
           if (typeof root === "string") await doSurvey(root);
         }}>{t("maintenance.surveyFolder")}</button
       >
-      {#if surveyMsg}
-        <span class="stock-msg">{surveyMsg}</span>
-        <button class="btn" type="button" onclick={() => openExternal(ISSUE_URL)}>{t("maintenance.surveySend")}</button>
-      {/if}
     </div>
   </section>
 
