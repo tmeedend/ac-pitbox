@@ -166,11 +166,26 @@ fn recompose_stock(
     } else if link.exists() {
         std::fs::remove_dir_all(link).map_err(|e| format!("retrait du dossier de base : {e}"))?;
     }
-    let layer_paths: Vec<PathBuf> = layers
+    deploy::compose_tree(&stock_base, &layer_dirs(Some(library), layers), link, id, kind.into())
+}
+
+/// Library folders of `layers`, in the order given (the last one wins). A layer
+/// whose stored path cannot be resolved is left out, as it always was.
+fn layer_dirs(library: Option<&Path>, layers: &[LayerRow]) -> Vec<PathBuf> {
+    layers
         .iter()
-        .filter_map(|l| crate::libpath::resolve(Some(library), &l.library_path))
-        .collect();
-    deploy::compose_tree(&stock_base, &layer_paths, link, id, kind.into())
+        .filter_map(|l| crate::libpath::resolve(library, &l.library_path))
+        .collect()
+}
+
+/// Library folder of a managed mod's active version: the base it is deployed
+/// from.
+fn managed_base(conn: &Connection, cfg: &AppConfig, m: &overlay::ModRow) -> Result<PathBuf, String> {
+    let vid = m.active_version_id.clone().ok_or(crate::errors::NO_ACTIVE_VERSION)?;
+    let stored = overlay::get_version_path(conn, &vid)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::VERSION_NOT_FOUND)?;
+    crate::libpath::resolve(cfg.library_path.as_deref(), &stored).ok_or(crate::errors::LIBRARY_NOT_CONFIGURED.into())
 }
 
 /// Mod géré : la base est sa version active en bibliothèque (intacte). On ne
@@ -188,12 +203,7 @@ fn recompose_managed(
     if !activation::is_mod_active(cfg, kind, mod_id) {
         return Ok(()); // mod inactif : rien à projeter
     }
-    let vid = m.active_version_id.clone().ok_or(crate::errors::NO_ACTIVE_VERSION)?;
-    let stored = overlay::get_version_path(conn, &vid)
-        .map_err(|e| e.to_string())?
-        .ok_or(crate::errors::VERSION_NOT_FOUND)?;
-    let base =
-        crate::libpath::resolve(cfg.library_path.as_deref(), &stored).ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
+    let base = managed_base(conn, cfg, m)?;
 
     // Garde-fou : un mod géré ne doit jamais recouvrir un vrai dossier de content/.
     if link.exists() && !is_junction(link) && !deploy::is_deployed(link) {
@@ -204,11 +214,13 @@ fn recompose_managed(
     if layers.is_empty() {
         activation::deploy_base(cfg, &base, link, mod_id, kind)
     } else {
-        let layer_paths: Vec<PathBuf> = layers
-            .iter()
-            .filter_map(|l| crate::libpath::resolve(cfg.library_path.as_deref(), &l.library_path))
-            .collect();
-        deploy::compose_tree(&base, &layer_paths, link, mod_id, kind.into())
+        deploy::compose_tree(
+            &base,
+            &layer_dirs(cfg.library_path.as_deref(), layers),
+            link,
+            mod_id,
+            kind.into(),
+        )
     }
 }
 
@@ -250,11 +262,13 @@ fn recompose_app(conn: &Connection, cfg: &AppConfig, app: &overlay::AppRow) -> R
         }
         return activation::create_junction(&link, &base);
     }
-    let layer_paths: Vec<PathBuf> = layers
-        .iter()
-        .filter_map(|l| crate::libpath::resolve(cfg.library_path.as_deref(), &l.library_path))
-        .collect();
-    deploy::compose_tree(&base, &layer_paths, &link, &app.id, HostKind::App)
+    deploy::compose_tree(
+        &base,
+        &layer_dirs(cfg.library_path.as_deref(), &layers),
+        &link,
+        &app.id,
+        HostKind::App,
+    )
 }
 
 // --- Actions couche (recomposent après coup) --------------------------------
