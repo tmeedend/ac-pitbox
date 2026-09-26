@@ -11,11 +11,19 @@
   // en attente, et le rapport d'import garde la ligne pour y revenir.
   import { importState, closePendingDialog, refreshPendingCount } from "$lib/workshop/importState.svelte";
   import { errorText } from "$lib/errors";
-  import { listPendingFolders, resolvePendingFolder, type PendingAction, type PendingFolder } from "$lib/workshop/pending";
+  import {
+    groupPending,
+    listPendingFolders,
+    resolvePendingFolder,
+    type PendingAction,
+    type PendingFolder,
+    type PendingGroup,
+  } from "$lib/workshop/pending";
   import { t } from "$lib/i18n/index.svelte";
   import PendingCard from "./PendingCard.svelte";
 
   let folders = $state<PendingFolder[]>([]);
+  /** Key of the question being answered — one folder or a whole group. */
   let busy = $state<string | null>(null);
   let error = $state<string | null>(null);
   /**
@@ -28,9 +36,23 @@
    * decides what the card shows.
    */
   let settled = $state<Record<string, PendingAction>>({});
+  /** Groups the user chose to answer folder by folder, for this opening. */
+  let split = $state<string[]>([]);
+  /** The questions: identical folders asked once (§4.6ter). Forty questions
+   * for twenty VRC cars, each delivering the same two folders, was the
+   * reported case — twenty times the same answer is not a decision. */
+  const groups = $derived(groupPending(folders, new Set(split)));
+
+  /** The answer shared by every folder of a question, if they all have one. */
+  function answerOf(g: PendingGroup): PendingAction | undefined {
+    const first = settled[g.folders[0].id];
+    return first && g.folders.every((f) => settled[f.id] === first) ? first : undefined;
+  }
+
   /** Ce qui attend encore une réponse : le décompte de l'en-tête, et ce que dit
-   * le bouton de fermeture. */
-  const waiting = $derived(folders.filter((f) => !settled[f.id]));
+   * le bouton de fermeture. Des questions, pas des dossiers : c'est ce que
+   * l'utilisateur a devant lui. */
+  const waiting = $derived(groups.filter((g) => !answerOf(g)));
 
   // Rechargée à chaque ouverture : un lot a pu en ajouter, et un autre écran a
   // pu en trancher entre-temps.
@@ -45,6 +67,7 @@
       // A fresh opening lists only what is still pending, so no answer from a
       // previous opening has a card to sit on any more.
       settled = {};
+      split = [];
     } catch (e) {
       error = errorText(e);
       folders = [];
@@ -55,27 +78,39 @@
     await refreshPendingCount();
   }
 
-  async function settle(f: PendingFolder, action: PendingAction): Promise<void> {
-    busy = f.id;
+  /** Gives the answer to every folder of the question, one after the other:
+   * each is its own move on disk, and one failure must not cost the others. */
+  async function settle(g: PendingGroup, action: PendingAction): Promise<void> {
+    busy = g.key;
     error = null;
-    try {
-      await resolvePendingFolder(f.id, action);
-      settled = { ...settled, [f.id]: action };
-      // The list is NOT reloaded: the card keeps its place. Only the count the
-      // import report reads has to follow.
-      //
-      // And NOTHING scrolls. Bringing the next question up was tried and taken
-      // back out: the list holds still under the answer, so a view that moves
-      // by itself right after a click reads as a consequence of that click,
-      // and whoever wanted to re-read what they just answered has to find it
-      // again. The card that keeps its size is the whole point - moving the
-      // viewport instead gives back the disorientation it removed.
-      await refreshPendingCount();
-    } catch (e) {
-      error = errorText(e);
-    } finally {
-      busy = null;
+    let failed = false;
+    for (const f of g.folders) {
+      try {
+        await resolvePendingFolder(f.id, action);
+        settled = { ...settled, [f.id]: action };
+      } catch (e) {
+        failed = true;
+        error ??= errorText(e);
+      }
     }
+    // A group answered only in part is shown folder by folder: the answered
+    // ones say so, and the ones that failed are still there to answer.
+    if (failed && g.folders.length > 1) splitGroup(g);
+    // The list is NOT reloaded: the card keeps its place. Only the count the
+    // import report reads has to follow.
+    //
+    // And NOTHING scrolls. Bringing the next question up was tried and taken
+    // back out: the list holds still under the answer, so a view that moves
+    // by itself right after a click reads as a consequence of that click,
+    // and whoever wanted to re-read what they just answered has to find it
+    // again. The card that keeps its size is the whole point - moving the
+    // viewport instead gives back the disorientation it removed.
+    await refreshPendingCount();
+    busy = null;
+  }
+
+  function splitGroup(g: PendingGroup): void {
+    if (!split.includes(g.key)) split = [...split, g.key];
   }
 </script>
 
@@ -91,12 +126,13 @@
       <p class="dlg-note">{t("importOverlay.pendingNote")}</p>
 
       <div class="dlg-body">
-        {#each folders as f (f.id)}
+        {#each groups as g (g.key)}
           <PendingCard
-            folder={f}
-            done={settled[f.id]}
-            busy={busy === f.id}
-            onsettle={(a) => settle(f, a)}
+            folders={g.folders}
+            done={answerOf(g)}
+            busy={busy === g.key}
+            onsettle={(a) => settle(g, a)}
+            onsplit={() => splitGroup(g)}
             onerror={(m) => (error = m)}
           />
         {/each}

@@ -5,25 +5,43 @@
   // Out of `PendingDialog` because it has its own reasons to change — what a
   // question shows — while the dialog decides which questions there are and
   // when it closes.
+  //
+  // One question may stand for several folders (`groupPending`): twenty mods
+  // delivering the same `Wallpapers/` are asked once, and the answer goes to
+  // each. The card then shows what they share — the name, the shape, the
+  // notice of the first — and totals the rest.
   import { errorText } from "$lib/errors";
   import { fmtSize } from "$lib/format";
-  import { readPendingDocument, type PendingAction, type PendingFolder } from "$lib/workshop/pending";
+  import { folderName, readPendingDocument, type PendingAction, type PendingFolder } from "$lib/workshop/pending";
   import { t } from "$lib/i18n/index.svelte";
 
   let {
-    folder: f,
+    folders,
     done,
     busy,
     onsettle,
+    onsplit,
     onerror,
   }: {
-    folder: PendingFolder;
+    /** One folder, or several asked as one question — never empty. */
+    folders: PendingFolder[];
     /** Answer given during this opening of the dialog, if any. */
     done: PendingAction | undefined;
     busy: boolean;
     onsettle: (action: PendingAction) => void;
+    /** Asks a group folder by folder instead. */
+    onsplit: () => void;
     onerror: (message: string) => void;
   } = $props();
+
+  const f = $derived(folders[0]);
+  const many = $derived(folders.length > 1);
+  const fileCount = $derived(folders.reduce((n, x) => n + x.file_count, 0));
+  const sizeBytes = $derived(folders.reduce((n, x) => n + x.size_bytes, 0));
+  /** Who the group's folders belong to. Three names read at a glance; the
+   * rest is a count. */
+  const SHOWN_OWNERS = 3;
+  const owners = $derived(folders.map((x) => x.owner_id).filter((o): o is string => !!o));
 
   /** Notice text once unfolded; `null` = folded. */
   let notice = $state<string | null>(null);
@@ -80,17 +98,33 @@
   <div class="c-head">
     {#if f.title}
       <span class="c-title">{f.title}</span>
+    {:else if many}
+      <!-- The archive paths differ from one mod to the next; the name the
+           authors gave the folder is what they share. -->
+      <span class="c-title mono">{folderName(f.rel_path)}</span>
     {:else}
       <span class="c-title mono">{f.rel_path}</span>
     {/if}
+    {#if many}<span class="c-count">{t("importOverlay.pendingGroupCount", { count: folders.length })}</span>{/if}
     <span class="c-shape">{t(SHAPE_LABEL[f.shape] ?? SHAPE_LABEL.unknown)}</span>
   </div>
-  {#if f.title}<div class="c-path mono">{f.rel_path}</div>{/if}
+  {#if f.title && !many}<div class="c-path mono">{f.rel_path}</div>{/if}
   {#if f.description}<p class="c-desc">{f.description}</p>{/if}
 
   <div class="c-facts">
-    <span>{t("importOverlay.pendingFiles", { count: f.file_count, size: fmtSize(f.size_bytes) })}</span>
-    {#if f.skin_target}
+    <span>{t("importOverlay.pendingFiles", { count: fileCount, size: fmtSize(sizeBytes) })}</span>
+    {#if many}
+      {#if owners.length > SHOWN_OWNERS}
+        <span class="info">
+          {t("importOverlay.pendingForMore", {
+            names: owners.slice(0, SHOWN_OWNERS).join(", "),
+            count: owners.length - SHOWN_OWNERS,
+          })}
+        </span>
+      {:else if owners.length}
+        <span class="info">{t("importOverlay.pendingFor", { name: owners.join(", ") })}</span>
+      {/if}
+    {:else if f.skin_target}
       <span class="info">{t("importOverlay.pendingOverwrites", { name: f.skin_target })}</span>
     {:else if f.owner_id}
       <span class="info">{t("importOverlay.pendingFor", { name: f.owner_id })}</span>
@@ -148,6 +182,11 @@
       </button>
     {/each}
   </div>
+  {#if many && !done}
+    <button class="c-split" type="button" disabled={busy} onclick={onsplit}>
+      {t("importOverlay.pendingSplit")}
+    </button>
+  {/if}
 </article>
 
 <style>
@@ -180,6 +219,11 @@
     font-size: 13.5px;
     color: var(--txt);
     overflow-wrap: anywhere;
+  }
+  .c-count {
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
   }
   .c-shape {
     font-size: 9px;
@@ -232,7 +276,10 @@
     line-height: 1.5;
     color: var(--muted);
   }
-  .c-notice-btn {
+  /* Same discreet link as the notice: splitting is a way out, not a fifth
+     answer competing with the four. */
+  .c-notice-btn,
+  .c-split {
     display: block;
     margin-top: 8px;
     background: none;
@@ -247,8 +294,13 @@
     text-underline-offset: 2px;
   }
   .c-notice-btn:hover,
-  .c-notice-btn:focus-visible {
+  .c-notice-btn:focus-visible,
+  .c-split:hover:not(:disabled),
+  .c-split:focus-visible {
     color: var(--rosso-bright);
+  }
+  .c-split {
+    margin-top: 10px;
   }
   .c-notice-btn.as-text {
     cursor: default;

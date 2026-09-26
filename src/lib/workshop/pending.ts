@@ -35,7 +35,8 @@ export interface PendingFolder {
   replaced: number;
   file_count: number;
   size_bytes: number;
-  suggestion: PendingAction;
+  /** Pre-filled answer; `""` when the app has no opinion (§4.6bis). */
+  suggestion: PendingAction | "";
   /** Actions qui ont un sens pour ce dossier-ci, la proposition en tête. */
   actions: PendingAction[];
 }
@@ -53,4 +54,54 @@ export function resolvePendingFolder(id: string, action: PendingAction): Promise
  * précisément ce qui fait cliquer au hasard (§4.6bis). */
 export function readPendingDocument(id: string, name: string): Promise<string> {
   return invoke<string>("read_pending_document", { id, name });
+}
+
+/** Several pending folders asked as one question. */
+export interface PendingGroup {
+  /** Stable render key: the grouping key, or the folder id for a lone one. */
+  key: string;
+  folders: PendingFolder[];
+}
+
+/** Last segment of an archive path — the name the author gave the folder. */
+export function folderName(relPath: string): string {
+  const parts = relPath.split("/").filter((p) => p.length > 0);
+  return parts[parts.length - 1] ?? relPath;
+}
+
+/**
+ * What makes two questions the same question: the folder the author named the
+ * same way, recognised as the same shape, offered the same answers. Twenty VRC
+ * cars each delivering `Wallpapers/` ask one thing twenty times.
+ *
+ * `null` = never grouped. A folder that replaces base-game files stays alone:
+ * that answer changes every session, not one mod (§4.6bis), and it is read
+ * against its own count of replaced files.
+ */
+export function groupKey(f: PendingFolder): string | null {
+  if (f.replaced > 0) return null;
+  return [folderName(f.rel_path).toLowerCase(), f.title ?? "", f.shape, f.actions.join(","), f.suggestion].join("|");
+}
+
+/** Pending folders as questions, in the order of their first folder. Groups
+ * whose key is in `split` are asked folder by folder, as the user asked. */
+export function groupPending(folders: PendingFolder[], split: ReadonlySet<string>): PendingGroup[] {
+  const groups: PendingGroup[] = [];
+  const byKey = new Map<string, PendingGroup>();
+  for (const f of folders) {
+    const key = groupKey(f);
+    if (key === null || split.has(key)) {
+      groups.push({ key: `id:${f.id}`, folders: [f] });
+      continue;
+    }
+    const known = byKey.get(key);
+    if (known) {
+      known.folders.push(f);
+    } else {
+      const g = { key, folders: [f] };
+      byKey.set(key, g);
+      groups.push(g);
+    }
+  }
+  return groups;
 }
