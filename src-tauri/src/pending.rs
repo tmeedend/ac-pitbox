@@ -585,11 +585,31 @@ fn into_resources(row: &PendingFolderRow, library: &Path, dir: &Path) -> Result<
     // Sous son propre nom : deux dossiers proposés du même mod (« 2K Skins » et
     // « No Dust Skins ») ne doivent pas se mélanger une fois rangés.
     let name = leaf_name(&row.rel_path);
-    let dest = crate::importer::unique_dir(&resources_dir_of(row, library).join(name));
+    if !is_plain_folder_name(&name) {
+        return Err(crate::errors::PENDING_NOT_FOUND.into());
+    }
+    let dest = resources_dir_of(row, library).join(name);
+    // The same folder kept again replaces the previous copy. It used to land
+    // beside it under a suffixed name (`Wallpapers-1a2b3c4d`): every reimport
+    // of a mod answered "keep" added one more copy of the same wallpapers.
+    // Only ever the owner's resources — never anything under `content/`.
+    if dest.is_dir() {
+        std::fs::remove_dir_all(&dest).map_err(|e| e.to_string())?;
+    } else if dest.exists() {
+        std::fs::remove_file(&dest).map_err(|e| e.to_string())?;
+    }
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     crate::archive::move_dir(dir, &dest).map_err(|e| e.to_string())
+}
+
+/// A single, ordinary folder name — the only thing allowed to name what is
+/// replaced or removed inside a mod's resources. Neither empty, `.` nor `..`,
+/// and no separator: joined to the resources folder, it can only designate a
+/// child of it.
+fn is_plain_folder_name(name: &str) -> bool {
+    !name.is_empty() && name != "." && name != ".." && !name.contains(['/', '\\', ':'])
 }
 
 /// Sort les documents d'information posés **à la racine** du dossier proposé
@@ -1135,6 +1155,66 @@ mod tests {
             b"PATCH",
             "et le patch reprend sa place sans qu'on redemande"
         );
+    }
+
+    /// Rule (§4.6ter): keeping the same folder again replaces the copy kept
+    /// before. Real bug: a reimported mod answered "keep" twice ended up with
+    /// `Wallpapers` and `Wallpapers-1a2b3c4d` side by side.
+    #[test]
+    fn keeping_the_same_folder_again_replaces_the_previous_copy() {
+        let base = crate::testutil::temp_dir("pending-resources-again");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        for (edition, file) in [("v1", "01.jpg"), ("v2", "02.jpg")] {
+            let src = base.join("src").join(edition).join("Wallpapers");
+            write(&src.join(file), edition.as_bytes());
+            let id = park(
+                &conn,
+                &library,
+                "Car.7z",
+                Path::new("Wallpapers"),
+                &src,
+                Some(("vrc_car", OwnerKind::Car)),
+                Detected {
+                    shape: SHAPE_UNKNOWN.into(),
+                    ..Default::default()
+                },
+                true,
+                0,
+            )
+            .expect("mis en attente");
+            resolve(&conn, &cfg, &id, ACTION_RESOURCES).unwrap();
+        }
+
+        let res = resources::resources_dir_for(&library, "cars", &["vrc_car"]);
+        let kept: Vec<String> = std::fs::read_dir(&res)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(kept, vec!["Wallpapers".to_string()], "one copy, under its own name");
+        assert!(
+            res.join("Wallpapers").join("02.jpg").is_file(),
+            "the new edition is kept"
+        );
+        assert!(
+            !res.join("Wallpapers").join("01.jpg").exists(),
+            "the previous edition is not merged into it"
+        );
+    }
+
+    #[test]
+    fn a_folder_name_from_outside_can_only_name_a_child() {
+        for bad in ["", ".", "..", "a/b", "a\\b", "C:"] {
+            assert!(!is_plain_folder_name(bad), "{bad:?} refused");
+        }
+        assert!(is_plain_folder_name("Wallpapers"));
+        assert!(is_plain_folder_name("CM Previews Template"));
     }
 
     #[test]
