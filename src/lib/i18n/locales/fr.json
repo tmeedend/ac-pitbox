@@ -1345,7 +1345,7 @@
     "pendingHideNotice": "Masquer la notice",
     "pendingActionGame": "Ajouter au jeu",
     "pendingActionLayer": "Ajouter au dossier du mod",
-    "pendingActionResources": "Garder dans l'onglet Ressources",
+    "pendingActionResources": "Garder dans les ressources du mod",
     "pendingActionOther": "Garder à part",
     "pendingActionDiscard": "Ne pas importer",
     "pendingActionGameHint": "Posé ailleurs dans l'installation d'Assetto Corsa, avec les autres ajouts au jeu du mod. Retiré quand le mod est désactivé.",

@@ -1345,7 +1345,7 @@
     "pendingHideNotice": "Hide notice",
     "pendingActionGame": "Add to the game",
     "pendingActionLayer": "Add to the mod's folder",
-    "pendingActionResources": "Keep in the Resources tab",
+    "pendingActionResources": "Keep in the mod's resources",
     "pendingActionOther": "Keep separately",
     "pendingActionDiscard": "Do not import",
     "pendingActionGameHint": "Placed elsewhere in the Assetto Corsa install, alongside the mod's other game additions. Removed when the mod is disabled.",

@@ -898,7 +898,7 @@
     "pendingHideNotice": "Ocultar las instrucciones",
     "pendingActionGame": "Añadir al juego",
     "pendingActionLayer": "Añadir a la carpeta del mod",
-    "pendingActionResources": "Conservar en la pestaña Recursos",
+    "pendingActionResources": "Conservar en los recursos del mod",
     "pendingActionOther": "Conservar por separado",
     "pendingActionDiscard": "No importar",
     "pendingActionGameHint": "Colocado en otra parte de la instalación de Assetto Corsa, junto a las demás adiciones al juego del mod. Se quita cuando el mod se desactiva.",
