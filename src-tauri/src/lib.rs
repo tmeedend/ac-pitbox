@@ -28,6 +28,7 @@ mod fmod;
 mod fragment;
 mod fsb5;
 mod gamebackup;
+mod gamestate;
 mod gridthumbs;
 mod harmonize;
 mod http;
@@ -267,6 +268,9 @@ pub fn run() {
             // cours, et ménage des téléchargements qu'un arrêt brutal a laissés
             // dans le dossier temporaire — au démarrage, aucun n'est en cours.
             app.manage(commands::updates::UpdateDownloadControl::default());
+            // The game folder index of the session (DOSSIER§5.3): empty until
+            // the screen asks for a first scan.
+            app.manage(gamestate::Store::default());
             cup::sweep_leftovers(&std::env::temp_dir());
 
             // Module musique du mode Big Picture (docs/spec-module-musique_2.md) :
@@ -430,6 +434,13 @@ pub fn run() {
             commands::maintenance::reinstall_from_archive,
             commands::maintenance::repair_all,
             commands::maintenance::export_mod,
+            commands::gamestate::game_folder_status,
+            commands::gamestate::scan_game_folder,
+            commands::gamestate::game_folder_children,
+            commands::gamestate::game_folder_detail,
+            commands::gamestate::game_folder_search,
+            commands::gamestate::game_folder_reveal,
+            commands::gamestate::show_game_path,
             commands::bulk_ops::bulk_set_favorite,
             commands::bulk_ops::bulk_set_category,
             commands::bulk_ops::bulk_add_tag,

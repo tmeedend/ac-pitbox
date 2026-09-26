@@ -71,6 +71,7 @@ pub fn bulk_remove_tag(db: State<Db>, ids: Vec<String>, tag: String) -> Result<(
 
 #[tauri::command]
 pub async fn bulk_activate(app: AppHandle, ids: Vec<String>) -> Result<crate::bulk::BulkReport, String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     tauri::async_runtime::spawn_blocking(move || {
         let (cancel, emit) = begin(&app);
         let ctx = BulkCtx::new(&emit, "activate", cancel);
@@ -85,6 +86,7 @@ pub async fn bulk_activate(app: AppHandle, ids: Vec<String>) -> Result<crate::bu
 
 #[tauri::command]
 pub async fn bulk_deactivate(app: AppHandle, ids: Vec<String>) -> Result<crate::bulk::BulkReport, String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     tauri::async_runtime::spawn_blocking(move || {
         let (cancel, emit) = begin(&app);
         let ctx = BulkCtx::new(&emit, "deactivate", cancel);
@@ -100,6 +102,7 @@ pub async fn bulk_deactivate(app: AppHandle, ids: Vec<String>) -> Result<crate::
 /// Supprime en masse (fichiers + junction + overlay pour chacun, SESSION§3).
 #[tauri::command]
 pub async fn bulk_delete(app: AppHandle, ids: Vec<String>) -> Result<crate::bulk::BulkReport, String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     tauri::async_runtime::spawn_blocking(move || {
         let (cancel, emit) = begin(&app);
         let ctx = BulkCtx::new(&emit, "delete", cancel);

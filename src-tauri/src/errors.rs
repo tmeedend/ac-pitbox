@@ -14,6 +14,9 @@ pub const MOD_UNKNOWN: &str = "errors.modUnknown";
 // membre supprimé emporte ses fichiers.
 pub const PACK_NOT_FOUND: &str = "errors.packNotFound";
 pub const AC_NOT_CONFIGURED: &str = "errors.acNotConfigured";
+// The game folder screen asked about an index no scan has produced yet
+// (DOSSIER§5.4) - or one a later scan replaced, whose node ids mean nothing.
+pub const GAME_FOLDER_NOT_SCANNED: &str = "errors.gameFolderNotScanned";
 // "Go back to the previous catalogue" with no previous one kept (REGLES§6.4).
 pub const NO_PREVIOUS_CATALOG: &str = "errors.noPreviousCatalog";
 // Importing rules from a file that is neither a Pit Box rules export nor a

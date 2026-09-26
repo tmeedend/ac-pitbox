@@ -182,6 +182,42 @@ pub fn compose_layers_into(layers: &[PathBuf], dest: &Path) -> Result<(), String
     Ok(())
 }
 
+/// Who a hardlink deployment belongs to, as its marker says: `(mod_id, kind)`,
+/// `kind` being [`HostKind::as_str`]. Read only - the game folder screen
+/// (DOSSIER§4.1) uses it to name the owner of a folder, and to spot a marker
+/// whose mod no longer exists. `None` without a readable marker.
+pub fn read_marker(dir: &Path) -> Option<(String, String)> {
+    let raw = std::fs::read_to_string(dir.join(MARKER_FILE)).ok()?;
+    let m: Marker = serde_json::from_str(&raw)
+        .inspect_err(|e| log::warn!("deploy marker {}: {e}", dir.display()))
+        .ok()?;
+    Some((m.mod_id, m.kind))
+}
+
+/// The files a deployment of `base` topped by `layers` holds, **without
+/// writing anything**: path relative to the deployed folder → the library file
+/// that provides it.
+///
+/// Same walk as [`compose_tree`] (junctions followed, the last layer wins), so
+/// that what the game folder screen calls "missing" or "modified" (DOSSIER§4.3)
+/// is measured against what the engine really lays down, not against a second
+/// reading of it that could drift apart. The marker is not listed: it is
+/// written after the files, it is not part of the content.
+pub fn planned_files(base: &Path, layers: &[PathBuf]) -> std::collections::HashMap<PathBuf, PathBuf> {
+    let mut plan = std::collections::HashMap::new();
+    for source in std::iter::once(base).chain(layers.iter().map(PathBuf::as_path)) {
+        for entry in walk_following(source) {
+            if !entry.file_type().is_file() {
+                continue;
+            }
+            if let Ok(rel) = entry.path().strip_prefix(source) {
+                plan.insert(rel.to_path_buf(), entry.path().to_path_buf());
+            }
+        }
+    }
+    plan
+}
+
 /// Retire un déploiement hardlinks. Garde-fou : refuse si le marqueur est
 /// absent (jamais un dossier qu'on n'a pas soi-même créé). Les fichiers de la
 /// bibliothèque source ne sont jamais affectés — un hardlink est une entrée de
@@ -322,6 +358,60 @@ mod tests {
         );
         assert!(dest.join("only_b.txt").is_file(), "ajout de couche présent");
         assert!(is_deployed(&dest));
+    }
+
+    /// Rule (DOSSIER§4.3): the game folder screen measures a deployed folder
+    /// against `planned_files`, so the plan must be exactly what `compose_tree`
+    /// lays down - same files, each from the source that wins. A plan that
+    /// disagreed would report healthy files as drifted, or miss real drift.
+    #[test]
+    fn planned_files_is_exactly_what_compose_tree_lays_down() {
+        let base = temp();
+        let src = base.join("base");
+        std::fs::create_dir_all(src.join("data")).unwrap();
+        std::fs::write(src.join("conf.txt"), "base").unwrap();
+        std::fs::write(src.join("data").join("car.ini"), "base").unwrap();
+        // A livery projected into the base by junction: followed by the walk.
+        let store = base.join("store").join("red");
+        std::fs::create_dir_all(&store).unwrap();
+        std::fs::write(store.join("livery.dds"), "DDS").unwrap();
+        std::fs::create_dir_all(src.join("skins")).unwrap();
+        crate::activation::create_junction(&src.join("skins").join("red"), &store).unwrap();
+        let layer = base.join("layer");
+        std::fs::create_dir_all(layer.join("data")).unwrap();
+        std::fs::write(layer.join("data").join("car.ini"), "layer").unwrap();
+        std::fs::write(layer.join("extra.txt"), "new").unwrap();
+
+        let dest = base.join("dest");
+        compose_tree(&src, std::slice::from_ref(&layer), &dest, "car", HostKind::Car).unwrap();
+        let plan = planned_files(&src, std::slice::from_ref(&layer));
+
+        let laid: std::collections::BTreeSet<PathBuf> = WalkDir::new(&dest)
+            .into_iter()
+            .flatten()
+            .filter(|e| e.file_type().is_file() && e.file_name() != MARKER_FILE)
+            .map(|e| e.path().strip_prefix(&dest).unwrap().to_path_buf())
+            .collect();
+        let planned: std::collections::BTreeSet<PathBuf> = plan.keys().cloned().collect();
+        assert_eq!(planned, laid, "the plan lists exactly the files laid down");
+        for (rel, from) in &plan {
+            assert_eq!(
+                std::fs::read(dest.join(rel)).unwrap(),
+                std::fs::read(from).unwrap(),
+                "{} comes from the source the plan names",
+                rel.display()
+            );
+        }
+        assert_eq!(
+            plan[Path::new("data").join("car.ini").as_path()],
+            layer.join("data").join("car.ini"),
+            "the last layer wins"
+        );
+        assert_eq!(
+            read_marker(&dest),
+            Some(("car".to_string(), "Car".to_string())),
+            "the marker names the deployed mod"
+        );
     }
 
     #[test]

@@ -33,6 +33,7 @@ pub fn reindex_library(app: AppHandle, db: State<Db>, recalc_size: bool) -> Resu
 /// Supprime un mod cassé (fichiers + junction + overlay).
 #[tauri::command]
 pub fn delete_broken_mod(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::maintenance::delete_broken(&conn, &cfg, &id)
@@ -46,6 +47,7 @@ pub fn delete_mod_version(
     db: State<Db>,
     version_id: String,
 ) -> Result<crate::maintenance::DeleteVersionOutcome, String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::maintenance::delete_version(&conn, &cfg, &version_id)
@@ -70,12 +72,14 @@ pub fn purge_orphan_subs(app: AppHandle, db: State<Db>) -> Result<usize, String>
 /// Retire une junction orpheline (garde-fou junction).
 #[tauri::command]
 pub fn remove_orphan_junction(app: AppHandle, kind: String, id: String) -> Result<(), String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     crate::maintenance::remove_orphan(&crate::config::load(&app), &kind, &id)
 }
 
 /// Désinstalle tout un pack (§4.4) : supprime chaque mod du pack. Renvoie le nb supprimé.
 #[tauri::command]
 pub fn delete_pack(app: AppHandle, db: State<Db>, pack: String) -> Result<usize, String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::maintenance::delete_pack(&conn, &cfg, &pack)
@@ -84,6 +88,7 @@ pub fn delete_pack(app: AppHandle, db: State<Db>, pack: String) -> Result<usize,
 /// Réinstalle un mod depuis son archive/dossier source conservé (§10/§11).
 #[tauri::command]
 pub fn reinstall_from_archive(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::maintenance::reinstall_from_archive(&conn, &cfg, &id)
@@ -107,6 +112,7 @@ pub fn reinstall_from_archive(app: AppHandle, db: State<Db>, id: String) -> Resu
 /// la toute fin, c'est-à-dire quand plus personne n'en a besoin.
 #[tauri::command]
 pub async fn repair_all(app: AppHandle, reinstall_broken: bool) -> Result<crate::maintenance::RepairAllReport, String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     tauri::async_runtime::spawn_blocking(move || {
         let emit = |p: crate::maintenance::RepairProgress| {
             let _ = app.emit("repair:progress", p);

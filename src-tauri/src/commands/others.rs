@@ -65,6 +65,7 @@ pub fn set_other_priority(db: State<Db>, id: String, priority: bool) -> Result<(
 /// Active un mod « autre » par junction (§7.3).
 #[tauri::command]
 pub fn activate_other(app: AppHandle, db: State<Db>, id: String) -> Result<crate::others::ActivateOtherResult, String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::others::activate_other(&conn, &cfg, &id)
@@ -73,6 +74,7 @@ pub fn activate_other(app: AppHandle, db: State<Db>, id: String) -> Result<crate
 /// Désactive un mod « autre » (§7.3).
 #[tauri::command]
 pub fn deactivate_other(db: State<Db>, id: String) -> Result<(), String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::others::deactivate_other(&conn, &id)
 }
@@ -80,6 +82,7 @@ pub fn deactivate_other(db: State<Db>, id: String) -> Result<(), String> {
 /// Supprime un mod « autre » : jonctions + fichiers + overlay (§7.3).
 #[tauri::command]
 pub fn delete_other_mod(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::others::delete_other(&conn, &cfg, &id)

@@ -1454,6 +1454,7 @@
   },
   "errors": {
     "acNotConfigured": "dossier AC non configuré.",
+    "gameFolderNotScanned": "Le dossier du jeu n'a pas encore été analysé.",
     "activeVersionNotFound": "version active introuvable.",
     "appNotFound": "app introuvable.",
     "bundledNotRemovable": "fourni avec le contenu initial du mod : non supprimable individuellement.",

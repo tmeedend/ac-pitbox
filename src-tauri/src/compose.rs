@@ -74,6 +74,36 @@ pub fn recompose(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), Str
     }
 }
 
+/// What [`recompose`] lays down for host `id` when it deploys by hardlinks,
+/// **read only**: the base and its active layers, in priority order.
+///
+/// Same dispatch and same sources as the writing path - a managed mod's active
+/// version, the saved Kunos base of a composed stock entry, an app's library
+/// folder - so that the game folder screen (DOSSIER§4.3) compares the disk to
+/// what the engine would write, not to its own idea of it. `None` for a host
+/// that is not composed from the library: stock content without a layer is the
+/// game's own folder.
+pub(crate) fn planned_sources(conn: &Connection, cfg: &AppConfig, id: &str) -> Option<(PathBuf, Vec<PathBuf>)> {
+    let library = cfg.library_path.as_deref();
+    if let Some(m) = overlay::get_mod(conn, id).ok().flatten() {
+        let kind = kind_of(&m.kind);
+        let layers = overlay::active_layers(conn, id, kind.into()).ok()?;
+        let base = if m.is_stock {
+            if layers.is_empty() {
+                return None;
+            }
+            stock_base_dir(library?, kind, id)
+        } else {
+            managed_base(conn, cfg, &m).ok()?
+        };
+        return Some((base, layer_dirs(library, &layers)));
+    }
+    let app = overlay::get_app(conn, id).ok().flatten()?;
+    let base = crate::libpath::resolve(library, &app.library_path)?;
+    let layers = overlay::active_layers(conn, id, HostKind::App).ok()?;
+    Some((base, layer_dirs(library, &layers)))
+}
+
 fn recompose_mod(conn: &Connection, cfg: &AppConfig, m: &overlay::ModRow, mod_id: &str) -> Result<(), String> {
     let kind = kind_of(&m.kind);
     let (Some(library), Some(link)) = (cfg.library_path.as_ref(), activation::content_link(cfg, kind, mod_id)) else {

@@ -178,6 +178,7 @@ pub fn list_mod_extras(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<
 /// explicite, elle n'est pas irréversible.
 #[tauri::command]
 pub fn force_mod_extra(app: AppHandle, db: State<Db>, id: String, rel_path: String) -> Result<usize, String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     let m = crate::overlay::get_mod(&conn, &id)

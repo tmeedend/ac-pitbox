@@ -112,16 +112,29 @@ const EXTERNALLY_MANAGED: &[&[&str]] = &[
 /// Vrai si `rel` tombe dans une zone qu'un outil externe synchronise
 /// ([`EXTERNALLY_MANAGED`]).
 pub fn is_externally_managed(rel: &Path) -> bool {
-    let segs: Vec<String> = rel
-        .components()
-        .filter_map(|c| c.as_os_str().to_str())
-        .map(|s| s.to_ascii_lowercase())
-        .collect();
+    let segs = lower_segments(rel);
     EXTERNALLY_MANAGED
         .iter()
         // `>` et non `>=` : le préfixe seul est le dossier, pas un fichier
         // dedans — c'est le contenu qui est géré, pas le dossier lui-même.
         .any(|p| segs.len() > p.len() && segs.iter().zip(p.iter()).all(|(a, b)| a == b))
+}
+
+/// True if `rel` is the folder of such a zone itself: everything below it is
+/// [`is_externally_managed`]. Lets the game folder screen (DOSSIER§4.2) mark a
+/// whole subtree from its root instead of testing every file of the install.
+pub fn is_externally_managed_root(rel: &Path) -> bool {
+    let segs = lower_segments(rel);
+    EXTERNALLY_MANAGED
+        .iter()
+        .any(|p| segs.len() == p.len() && segs.iter().zip(p.iter()).all(|(a, b)| a == b))
+}
+
+fn lower_segments(rel: &Path) -> Vec<String> {
+    rel.components()
+        .filter_map(|c| c.as_os_str().to_str())
+        .map(|s| s.to_ascii_lowercase())
+        .collect()
 }
 
 /// Racine réelle d'une livraison, en traversant l'**emballage** de l'auteur.
@@ -529,6 +542,30 @@ mod tests {
             !is_externally_managed(Path::new("extension/vao-patches")),
             "le dossier lui-même n'est pas un fichier géré"
         );
+    }
+
+    /// Rule (DOSSIER§4.2): the root of a CM zone is what the game folder screen
+    /// marks from, so it must be exactly the folder whose files are managed -
+    /// not a parent, not a file inside.
+    #[test]
+    fn a_cm_zone_root_is_the_folder_whose_files_are_managed() {
+        for root in ["extension/config/tracks/loaded", "Extension/VAO-Patches"] {
+            assert!(is_externally_managed_root(Path::new(root)), "{root} is a zone root");
+            assert!(
+                is_externally_managed(&Path::new(root).join("any.ini")),
+                "and what it holds is managed"
+            );
+        }
+        for not_root in [
+            "extension/config/tracks",
+            "extension/config/tracks/loaded/spa.ini",
+            "extension",
+        ] {
+            assert!(
+                !is_externally_managed_root(Path::new(not_root)),
+                "{not_root} is not a zone root"
+            );
+        }
     }
 
     #[test]

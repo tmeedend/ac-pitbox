@@ -21,6 +21,7 @@ pub fn list_layers_by_kind(db: State<Db>, kind: String) -> Result<Vec<crate::ove
 /// recompose le parent (§4.4).
 #[tauri::command]
 pub fn delete_layer(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::compose::remove_layer(&conn, &cfg, &id)
@@ -29,6 +30,7 @@ pub fn delete_layer(app: AppHandle, db: State<Db>, id: String) -> Result<(), Str
 /// Active/désactive une couche puis recompose le contenu en jeu (§4.4).
 #[tauri::command]
 pub fn set_layer_active(app: AppHandle, db: State<Db>, id: String, active: bool) -> Result<(), String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::compose::set_layer_active(&conn, &cfg, &id, active)
@@ -37,6 +39,7 @@ pub fn set_layer_active(app: AppHandle, db: State<Db>, id: String, active: bool)
 /// Réordonne une couche (up = plus prioritaire) puis recompose (§4.4).
 #[tauri::command]
 pub fn reorder_layer(app: AppHandle, db: State<Db>, id: String, direction: String) -> Result<(), String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::compose::reorder_layer(&conn, &cfg, &id, &direction)

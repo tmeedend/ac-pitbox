@@ -41,6 +41,7 @@ pub fn list_subs_by_type(
 /// les skins d'un circuit pour qu'ils y apparaissent.
 #[tauri::command]
 pub fn sync_track_skins(app: AppHandle, db: State<Db>, track_id: String) -> Result<(), String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::submods::sync_bundled_track_skins(&conn, &cfg, &track_id);
@@ -76,6 +77,7 @@ pub fn set_track_skin_active(
     skin_name: String,
     active: bool,
 ) -> Result<(), String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::submods::set_track_skin_active(&conn, &cfg, &track_id, &skin_name, active)
@@ -84,6 +86,7 @@ pub fn set_track_skin_active(
 /// Active un mod de son (bascule exclusive du sfx/, §8.3).
 #[tauri::command]
 pub fn activate_sound(app: AppHandle, db: State<Db>, sub_id: String) -> Result<(), String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::submods::activate_sound(&conn, &cfg, &sub_id)
@@ -368,6 +371,7 @@ pub fn read_sound_resource(
 /// Restaure le son d'origine d'une voiture (§8.3).
 #[tauri::command]
 pub fn restore_sound(app: AppHandle, db: State<Db>, parent_id: String) -> Result<(), String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::submods::restore_sound(&conn, &cfg, &parent_id)
@@ -376,6 +380,7 @@ pub fn restore_sound(app: AppHandle, db: State<Db>, parent_id: String) -> Result
 /// Supprime proprement un sous-élément (skin/son) : junction + fichiers + overlay (§8.3).
 #[tauri::command]
 pub fn delete_sub_mod(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::submods::remove_sub(&conn, &cfg, &id)
@@ -384,6 +389,7 @@ pub fn delete_sub_mod(app: AppHandle, db: State<Db>, id: String) -> Result<(), S
 /// Supprime proprement une app : junction + fichiers + overlay (§8.4).
 #[tauri::command]
 pub fn delete_app(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::apps::remove_app(&conn, &cfg, &id)
@@ -401,6 +407,7 @@ pub fn list_apps(app: AppHandle, db: State<Db>) -> Result<Vec<crate::apps::AppIt
 /// détecté, §8.4).
 #[tauri::command]
 pub fn activate_app(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::apps::activate_app(&conn, &cfg, &id)
@@ -409,6 +416,7 @@ pub fn activate_app(app: AppHandle, db: State<Db>, id: String) -> Result<(), Str
 /// Désactive une app (§8.4).
 #[tauri::command]
 pub fn deactivate_app(app: AppHandle, db: State<Db>, id: String) -> Result<(), String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::apps::deactivate_app(&conn, &cfg, &id)

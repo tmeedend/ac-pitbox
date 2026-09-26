@@ -80,6 +80,7 @@ pub async fn download_mod_update(
     kind: String,
     id: String,
 ) -> Result<crate::cup::DownloadOutcome, String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     tauri::async_runtime::spawn_blocking(move || {
         let cancel = {
             let control = app.state::<UpdateDownloadControl>();

@@ -43,6 +43,7 @@ pub async fn import_archives(
     // Décisions update/extension pour reprendre un import ambigu (§4.4). Vide au 1er appel.
     decisions: Option<Vec<crate::importer::ImportDecision>>,
 ) -> Result<Vec<ArchiveResult>, String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     tauri::async_runtime::spawn_blocking(move || {
         let ctx = begin(&app);
         let cfg = crate::config::load(&app);
@@ -67,6 +68,7 @@ pub async fn import_folders(
     copy: bool,
     decisions: Option<Vec<crate::importer::ImportDecision>>,
 ) -> Result<Vec<ArchiveResult>, String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     tauri::async_runtime::spawn_blocking(move || {
         let ctx = begin(&app);
         let cfg = crate::config::load(&app);
@@ -112,6 +114,7 @@ pub async fn execute_bulk_import(
     items: Vec<crate::importer::BulkExecItem>,
     copy: bool,
 ) -> Result<Vec<ArchiveResult>, String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     tauri::async_runtime::spawn_blocking(move || {
         let ctx = begin(&app);
         let cfg = crate::config::load(&app);
@@ -171,6 +174,7 @@ pub fn resolve_conflict(
     old_id: String,
     action: String,
 ) -> Result<(), String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::importer::resolve_conflict(&conn, &cfg, &new_id, &old_id, &action)
@@ -223,6 +227,7 @@ pub fn list_pending_folders(app: AppHandle, db: State<Db>) -> Result<Vec<crate::
 /// "game" | "layer" | "resources" | "other" | "discard".
 #[tauri::command]
 pub fn resolve_pending_folder(app: AppHandle, db: State<Db>, id: String, action: String) -> Result<(), String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::pending::resolve(&conn, &cfg, &id, &action)

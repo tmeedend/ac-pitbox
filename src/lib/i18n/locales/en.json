@@ -1454,6 +1454,7 @@
   },
   "errors": {
     "acNotConfigured": "Assetto Corsa folder is not configured.",
+    "gameFolderNotScanned": "The game folder has not been scanned yet.",
     "activeVersionNotFound": "Active version not found.",
     "appNotFound": "App not found.",
     "bundledNotRemovable": "Bundled with the mod: cannot be removed on its own.",

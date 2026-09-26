@@ -74,6 +74,7 @@ pub fn car_factory_assists(
 /// Construit le preset Quick Drive et lance la session via Content Manager (SESSION§2).
 #[tauri::command]
 pub fn launch_session(app: AppHandle, db: State<Db>, setup: crate::launch::RaceSetup) -> Result<(), String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::launch::launch(&conn, &cfg, &setup)

@@ -14,6 +14,7 @@ pub mod addons;
 pub mod bulk_ops;
 pub mod cmimport;
 pub mod config;
+pub mod gamestate;
 pub mod gridthumbs;
 pub mod import;
 pub mod layers;

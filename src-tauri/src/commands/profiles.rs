@@ -19,6 +19,7 @@ pub fn create_profile(app: AppHandle, db: State<Db>, name: String) -> Result<Str
 /// Applique un profil (réconciliation des junctions).
 #[tauri::command]
 pub fn apply_profile(app: AppHandle, db: State<Db>, id: String) -> Result<crate::profiles::ApplyReport, String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::profiles::apply(&conn, &cfg, &id)

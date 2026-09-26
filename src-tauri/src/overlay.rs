@@ -1235,6 +1235,34 @@ pub fn get_extra_links(conn: &Connection, mod_id: &str) -> rusqlite::Result<Vec<
     rows.collect()
 }
 
+/// One claim on an AC path, as `extra_links` stores it (§4.5.3).
+#[derive(Debug, Clone)]
+pub struct ExtraLinkRow {
+    pub mod_id: String,
+    pub ac_path: String,
+    pub is_dir: bool,
+    /// [`crate::extras::OwnerKind::category`], as written by [`set_extra_links`].
+    pub kind: String,
+    /// This claim provides the copy laid in AC (at most one per path).
+    pub provided: bool,
+}
+
+/// Every claim of every mod, in one read - the game folder scan (DOSSIER§5.1)
+/// crosses them with the disk instead of asking path by path.
+pub fn list_all_extra_links(conn: &Connection) -> rusqlite::Result<Vec<ExtraLinkRow>> {
+    let mut stmt = conn.prepare("SELECT mod_id, ac_path, is_dir, kind, provided FROM extra_links")?;
+    let rows = stmt.query_map([], |r| {
+        Ok(ExtraLinkRow {
+            mod_id: r.get(0)?,
+            ac_path: r.get(1)?,
+            is_dir: r.get::<_, i64>(2)? != 0,
+            kind: r.get(3)?,
+            provided: r.get::<_, i64>(4)? != 0,
+        })
+    })?;
+    rows.collect()
+}
+
 /// Mods qui réclament ce fichier d'AC — `(mod_id, kind, claimed_at)`. C'est le
 /// compteur de références des fichiers partagés (§4.5.4) : tant qu'il reste au
 /// moins une ligne, le fichier est encore réclamé et ne doit pas être retiré
@@ -2184,6 +2212,13 @@ pub fn is_forced_extra(conn: &Connection, mod_id: &str, ac_path: &str) -> bool {
     .unwrap_or(false)
 }
 
+/// Every explicit authorisation (§4.6ter): `(mod_id, ac_path)`.
+pub fn list_forced_extras(conn: &Connection) -> rusqlite::Result<Vec<(String, String)>> {
+    let mut stmt = conn.prepare("SELECT mod_id, ac_path FROM forced_extras")?;
+    let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+    rows.collect()
+}
+
 /// Retire les autorisations d'un mod — a la suppression du mod, jamais a sa
 /// desactivation : desactiver puis reactiver ne doit pas reposer la question.
 pub fn clear_forced_extras(conn: &Connection, mod_id: &str) -> rusqlite::Result<()> {
@@ -2384,6 +2419,11 @@ mod tests {
         list_subs_by_type(&conn, "SKIN").expect("sub_mods");
         list_layers(&conn, "x", HostKind::Track).expect("layers");
         pending_answer(&conn, "x", "cars", "Wallpapers").expect("pending_answers");
+        list_all_extra_links(&conn).expect("extra_links");
+        list_forced_extras(&conn).expect("forced_extras");
+        list_game_backups(&conn).expect("game_backups");
+        list_all_layers(&conn).expect("all layers");
+        list_all_subs(&conn).expect("all sub_mods");
         drop(base);
     }
 
