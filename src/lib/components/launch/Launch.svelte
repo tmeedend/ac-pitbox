@@ -1,34 +1,23 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
-  import { invoke } from "@tauri-apps/api/core";
   import {
     launchSession,
-    assistLevelFrom,
-    clampAiLevel,
-    START_MODES,
-    type StartMode,
     isSteamRunning,
-    nearestGrip,
     getModCspFeatures,
     weatherOptions,
     weatherConditions,
     trackSun,
     trackStates,
     nationalities,
-    type AssistLevel,
-    type Opponent,
-    type PracticeStart,
     type RaceSetup,
     type Season,
     type SessionType,
     type Nationality,
     type TrackStateOption,
-    type TrackStateRef,
     type TrackSun,
     type WeatherOption,
   } from "$lib/launch/launch";
   import { carClassOf, driverFor, isEmpty } from "$lib/driver/driverOverride.svelte";
-  import { centerSpreadOf } from "$lib/launch/aiBand";
   import { setGridCars } from "$lib/launch/gridMods.svelte";
   import { playerHandicap, setPlayerHandicap } from "$lib/launch/playerHandicap.svelte";
   import { getModDetail, listLibrary, previewSrc, type ModCard } from "$lib/library/library";
@@ -36,8 +25,8 @@
   import { nav, pickSession, type OpponentsAction } from "$lib/shell/nav.svelte";
   import { hasOpponents, openSetupPage, sessionNav, sessionNavReady } from "$lib/shell/sessionNav.svelte";
   import { carAssists, setCarAssists } from "$lib/launch/carAssists.svelte";
-  import { getPreferredSkin, setPreferredLayout, setPreferredSkin } from "$lib/preferred";
-  import { listActiveTrackSkins, listTrackSkinOptions, setTrackSkinActive, syncTrackSkins } from "$lib/inventory/submods";
+  import { getPreferredSkin } from "$lib/preferred";
+  import { listActiveTrackSkins } from "$lib/inventory/submods";
   import { t } from "$lib/i18n/index.svelte";
   import ConditionsBlock from "./ConditionsBlock.svelte";
   import OpponentsBlock from "./OpponentsBlock.svelte";
@@ -57,10 +46,12 @@
   } from "$lib/launch/savedSessions";
   import { deleteSavedGrid, listSavedGrids, saveGrid, type SavedGrid } from "$lib/launch/savedGrids";
   import { OpponentGrid } from "$lib/launch/opponentGrid.svelte";
-  import { restoreOpponent, type SavedPool } from "$lib/launch/gridRules";
+  import { restoreOpponent } from "$lib/launch/gridRules";
+  import { presetFromSetup, readPreset } from "$lib/launch/typePresets";
+  import { loadLaunchState, saveLaunchState, selectionOf, type TypePresets } from "$lib/launch/launchState";
+  import { restoreCar, restoreTrack } from "$lib/launch/sessionRestore";
 
   import { errorText } from "$lib/errors";
-  import { StorageKey } from "$lib/storage";
   let libCards = $state<ModCard[]>([]);
   let weathers = $state<WeatherOption[]>([]);
   // Lus côté Rust dans la table du jeu (SETUP§2.2) : l'écran ne connaît plus la
@@ -366,84 +357,15 @@
       refreshConditions(false);
     }
   });
-  // --- Mémorisation de la sélection + presets (SESSION§3) ---
-  // `opponents` en fait partie (SESSION§3.3, bug réel) : sans elle, revenir sur cet
-  // écran après être allé choisir un circuit/une voiture démonte puis remonte
-  // Launch.svelte — `setup.opponents` (état local) repart de zéro, et
-  // `applyPreset` régénère alors un plateau aléatoire à la place de celui,
-  // potentiellement construit à la main (mode « libre »), qu'avait l'utilisateur.
-  //
-  // Persisté côté Rust (`launch_state.json`, écriture synchrone), pas en
-  // `localStorage` : même bug que le duo voiture/circuit (SESSION§3, voir
-  // `nav.svelte.ts`/`session_state.rs`) — `localStorage` n'est pas garanti
-  // synchrone sur disque côté WebView2, ce qui perdait les réglages de
-  // session à la fermeture de l'app plutôt qu'au prochain changement d'onglet.
-  interface Selection {
-    car_id: string;
-    car_skin: string | null;
-    track_id: string;
-    track_layout: string | null;
-    session_type: SessionType;
-    opponents: Opponent[];
-    player_ballast: number;
-    player_restrictor: number;
-  }
-
-  // --- Presets de session par type (SESSION§3) ---
-  // The pool fields (`grid_filters`, and the tab-era ones still read back) are
-  // declared by `SavedPool`, next to the migration that reads them.
-  interface Persisted extends SavedPool {
-    /** Centre et écart (SETUP§2.9). Un preset d'avant porte encore `ai_level_min`
-     * et `ai_level_max` : `applyPreset` les convertit, il ne les jette pas. */
-    ai_level?: number; ai_spread?: number; aggression_spread?: number;
-    ai_level_min?: number; ai_level_max?: number;
-    opponent_count: number;
-    /** Absents sur un preset antérieur au §4.4 : les défauts de Content
-     * Manager, dernier sur la grille et agressivité nulle. */
-    aggression?: number; start_mode?: StartMode; ghost_advantage?: number;
-    laps: number; time_hours: number;
-    penalties: boolean; jump_start_penalty: number;
-    /** L'état de piste entier (L4§4.7). `grip` reste écrit pour qu'un retour en
-     * arrière de version retrouve quelque chose, et relu quand `track_state`
-     * manque. */
-    track_state?: TrackStateRef | null; grip: number;
-    practice_enabled: boolean; practice_minutes: number;
-    qualify_enabled: boolean; qualify_minutes: number; ghost_car: boolean; practice_start: PracticeStart;
-    damage: number; fuel_rate: number; tyre_wear: number; tyre_blankets: boolean; intent: string; season: Season;
-    /** Trois états depuis SESSION§3 ; `abs_auto`/`traction_control_auto` sont les
-     * booléens d'avant, relus une dernière fois par `assistLevelFrom`. */
-    abs?: AssistLevel; traction_control?: AssistLevel;
-    abs_auto?: boolean; traction_control_auto?: boolean;
-    ideal_line: boolean;
-  }
-  let presets: Record<string, Persisted> = {};
+  // --- Mémorisation de la sélection + presets par type (SESSION§3) ---
+  // The file and its format live in `launchState.ts` and `typePresets.ts`;
+  // the screen only says when to write and applies what it reads back.
+  let presets: TypePresets = {};
   let applying = false;
 
-  interface LaunchStateFile {
-    selection: Selection | null;
-    presets: Record<string, Persisted> | null;
-  }
-  function loadLaunchState(): Promise<LaunchStateFile> {
-    return invoke<LaunchStateFile>("get_launch_state").catch(() => ({ selection: null, presets: null }));
-  }
-  // Envoie systématiquement l'état complet (sélection + presets) : la commande
-  // réécrit tout le fichier à chaque appel, comme `save_session_picks` — un
-  // envoi partiel effacerait l'autre moitié.
   function persistLaunchState() {
     if (!ready) return;
-    const selection: Selection = {
-      car_id: setup.car_id,
-      car_skin: setup.car_skin,
-      track_id: setup.track_id,
-      track_layout: setup.track_layout,
-      session_type: setup.session_type,
-      opponents: setup.opponents,
-      // Dans la sélection et non dans les presets par type : ces deux-là ne
-      // dépendent pas du type de session (SETUP§2.7).
-      player_ballast: setup.player_ballast,
-      player_restrictor: setup.player_restrictor,
-    };
-    invoke("save_launch_state", { state: { selection, presets } }).catch((e) => console.error("save_launch_state", e));
+    saveLaunchState(selectionOf(setup), presets);
   }
   $effect(() => {
     void [setup.car_id, setup.car_skin, setup.track_id, setup.track_layout, setup.session_type, setup.opponents,
@@ -452,70 +374,27 @@
   });
 
   function savePreset() {
-    presets[setup.session_type] = {
-      ai_level: setup.ai_level, ai_spread: setup.ai_spread, aggression_spread: setup.aggression_spread,
-      aggression: setup.aggression, start_mode: setup.start_mode, ghost_advantage: setup.ghost_advantage,
-      opponent_count: grid.count,
-      grid_filters: grid.serializedPool(), grid_pinned: [...grid.pinned],
-      laps: setup.laps, time_hours: setup.time_hours,
-      penalties: setup.penalties, jump_start_penalty: setup.jump_start_penalty,
-      track_state: setup.track_state ? { ...setup.track_state } : null, grip: setup.grip,
-      practice_enabled: setup.practice_enabled, practice_minutes: setup.practice_minutes,
-      qualify_enabled: setup.qualify_enabled, qualify_minutes: setup.qualify_minutes, ghost_car: setup.ghost_car,
-      practice_start: setup.practice_start,
-      damage: setup.damage, fuel_rate: setup.fuel_rate, tyre_wear: setup.tyre_wear, tyre_blankets: setup.tyre_blankets,
-      intent: selectedIntent, season,
-      abs: setup.abs, traction_control: setup.traction_control, ideal_line: setup.ideal_line,
-    };
+    presets[setup.session_type] = presetFromSetup(
+      setup,
+      { count: grid.count, pool: grid.serializedPool(), pinned: grid.pinned },
+      selectedIntent,
+      season,
+    );
     persistLaunchState();
   }
   async function applyPreset(type: SessionType) {
     const p = presets[type];
     applying = true;
     if (p) {
-      // Recalés : un preset enregistré quand le plancher était 60 porte des
-      // valeurs que Content Manager n'accepte pas, et les envoyer telles quelles
-      // ferait courir une session que l'écran n'annonce pas.
-      //
-      // Et converti : un preset d'avant le modèle centre ± écart porte deux
-      // bornes. Les convertir plutôt que retomber sur le défaut, sinon une
-      // difficulté réglée depuis des mois se réinitialise sans un mot.
-      if (p.ai_level != null) {
-        setup.ai_level = clampAiLevel(p.ai_level);
-        setup.ai_spread = Math.max(0, p.ai_spread ?? 0);
-      } else {
-        const band = centerSpreadOf(clampAiLevel(p.ai_level_min ?? 92), clampAiLevel(p.ai_level_max ?? 98));
-        setup.ai_level = band.center;
-        setup.ai_spread = band.spread;
-      }
-      setup.aggression_spread = Math.max(0, Math.min(100, p.aggression_spread ?? 0));
-      setup.aggression = Math.max(0, Math.min(100, p.aggression ?? 0));
-      // Les quatre valeurs courantes se relisent telles quelles ; seul le
-      // `"custom"` d'avant les segments retombe sur le défaut. La liste était
-      // écrite à l'envers — elle n'acceptait que `first` et `last`, donc un
-      // preset portant `second` ou `random` revenait sur `random` en silence.
-      setup.start_mode = START_MODES.includes(p.start_mode as StartMode) ? (p.start_mode as StartMode) : "random";
-      setup.ghost_advantage = Math.max(0, Math.min(5, p.ghost_advantage ?? 0));
-      grid.count = p.opponent_count ?? 7;
+      const v = readPreset(p);
+      Object.assign(setup, v.setup);
+      grid.count = v.opponentCount;
       grid.restorePool(p, player);
-      setup.laps = p.laps; setup.time_hours = p.time_hours;
-      setup.penalties = p.penalties; setup.jump_start_penalty = p.jump_start_penalty ?? 0;
-      // L'état entier s'il est là, le pourcentage seul sinon : `TrackConditionBlock`
-      // retrouve alors l'état natif le plus proche, ce que faisait l'ancien select.
-      setup.track_state = p.track_state ?? null;
-      setup.grip = nearestGrip(p.grip ?? 100);
-      setup.practice_enabled = p.practice_enabled ?? false; setup.practice_minutes = p.practice_minutes ?? 20;
-      setup.qualify_enabled = p.qualify_enabled ?? true; setup.qualify_minutes = p.qualify_minutes ?? 10;
-      setup.ghost_car = p.ghost_car ?? false; setup.practice_start = p.practice_start ?? "pit";
-      setup.damage = p.damage ?? 50;
-      setup.fuel_rate = p.fuel_rate ?? 100; setup.tyre_wear = p.tyre_wear ?? 100;
-      setup.tyre_blankets = p.tyre_blankets ?? false;
       // Par le store, qui est la valeur vivante : les écrire dans `setup` seul
       // laisserait la carte voiture du panneau gauche afficher les anciennes.
-      setCarAssists(assistLevelFrom(p.abs, p.abs_auto), assistLevelFrom(p.traction_control, p.traction_control_auto));
-      setup.ideal_line = p.ideal_line ?? false;
-      applySeason(p.season ?? "");
-      const opt = weathers.find((w) => w.id === p.intent && w.available);
+      setCarAssists(v.abs, v.tractionControl);
+      applySeason(v.season);
+      const opt = weathers.find((w) => w.id === v.intent && w.available);
       if (opt) await selectIntent(opt);
     }
     // Ne remplit que s'il n'y a vraiment rien à préserver (première visite
@@ -612,14 +491,8 @@
     ]);
 
     const state = await loadLaunchState();
-    // Repli sur l'ancien `localStorage` seulement si le fichier Rust n'a rien
-    // (première ouverture après la mise à jour) — voir `nav.svelte.ts` pour le
-    // même schéma sur le duo voiture/circuit.
-    const hasPersisted = state.selection !== null || state.presets !== null;
-    presets = hasPersisted ? (state.presets ?? {}) : JSON.parse(localStorage.getItem(StorageKey.launchPresets) ?? "{}");
-    const saved: Partial<Selection> = hasPersisted
-      ? (state.selection ?? {})
-      : JSON.parse(localStorage.getItem(StorageKey.launchSelection) ?? "{}");
+    presets = state.presets;
+    const saved = state.selection;
     // Le type vient de la colonne de session, qui a hydraté le sien depuis ce
     // même fichier — attendre sa lecture plutôt que de relire la nôtre :
     // les deux se courent sinon après, et un type choisi dans la liste avant
@@ -648,7 +521,7 @@
     // Migration depuis `localStorage`, ou simplement première écriture :
     // s'assure que `launch_state.json` reflète l'état actuel sans attendre un
     // changement de réglage par l'utilisateur.
-    if (!hasPersisted) persistLaunchState();
+    if (!state.fromFile) persistLaunchState();
   });
 
   // Applique le duo de session (SESSION§3) au setup : voiture, skin piloté, circuit,
@@ -923,8 +796,8 @@
     season = s.season;
     selectedIntent = s.intent;
 
-    await restoreCar(s.setup.car_id, s.setup.car_skin, warnings);
-    await restoreTrack(s.setup.track_id, s.setup.track_layout, s.trackSkins, warnings);
+    await restoreCar(s.setup.car_id, s.setup.car_skin, libCards, (id) => grid.ensureSkins(id), warnings);
+    await restoreTrack(s.setup.track_id, s.setup.track_layout, s.trackSkins, libCards, warnings);
 
     // Réaligne `setup` sur le duo de session : `pickSession` l'a mis à jour
     // pour ce qui a été retrouvé, et pour ce qui manquait c'est la sélection
@@ -935,90 +808,6 @@
     syncFromSession();
 
     warning = warnings.join(" ");
-  }
-
-  /** Rétablit la voiture pilotée et son skin. Passe par `pickSession` et non
-   * par `setup` : le duo de session est la source de vérité (SESSION§3), l'effet de
-   * resynchronisation réécrirait sinon `setup.car_id` avec la voiture restée
-   * dans la barre latérale. */
-  async function restoreCar(carId: string, skinId: string | null, warnings: string[]) {
-    if (!carId) return;
-    const card = carPool.find((c) => c.id_interne === carId);
-    if (!card) {
-      warnings.push(t("launch.loadWarnCarMissing", { id: carId }));
-      return;
-    }
-    const skins = await grid.ensureSkins(carId);
-    // Sans skin enregistré — le cas de tout preset Content Manager, dont le
-    // format n'a pas de champ pour lui (SESSION§3.6) —, c'est la mémoire par
-    // voiture qui décide, comme partout ailleurs dans l'app. Prendre `null`
-    // pour « aucun skin » déshabillerait la voiture au chargement.
-    const wanted = skinId ?? getPreferredSkin(carId)?.id ?? null;
-    const skin = wanted ? skins.find((sk) => sk.id === wanted) ?? null : null;
-    if (skinId && !skin) warnings.push(t("launch.loadWarnCarSkinMissing", { id: skinId }));
-    if (skinId && skin) setPreferredSkin(carId, skin);
-    const meta = [card.brand, card.year].filter(Boolean).join(" · ");
-    pickSession("Car", {
-      id: carId,
-      name: card.display_name ?? carId,
-      meta,
-      preview: skin?.preview ?? card.preview,
-      layout: null,
-      skin: skin?.id ?? null,
-      outline: null,
-    });
-  }
-
-  /** Rétablit le circuit, son tracé et ses skins. Même principe que
-   * `restoreCar` : tout passe par le duo de session. */
-  async function restoreTrack(trackId: string, layoutId: string | null, trackSkins: string[] | undefined, warnings: string[]) {
-    if (!trackId) return;
-    const card = libCards.find((c) => c.id_interne === trackId && c.kind === "Track");
-    if (!card) {
-      warnings.push(t("launch.loadWarnTrackMissing", { id: trackId }));
-      return;
-    }
-    const detail = await getModDetail(trackId).catch(() => null);
-    const layouts = detail?.track?.layouts ?? [];
-    const layout = layoutId ? layouts.find((l) => l.id === layoutId) ?? null : null;
-    if (layoutId && !layout) warnings.push(t("launch.loadWarnLayoutMissing", { id: layoutId }));
-    if (layout) setPreferredLayout(trackId, layout);
-    // Avant `pickSession`, pas après : la barre latérale recharge sa liste de
-    // skins de circuit quand `nav.sessionTrack` change, donc basculer les
-    // skins d'abord lui fait lire l'état déjà à jour. Dans l'autre ordre, elle
-    // afficherait les cases de l'état précédent jusqu'au prochain changement
-    // de circuit.
-    await restoreTrackSkins(trackId, trackSkins, warnings);
-    const meta = card.author ?? "";
-    pickSession("Track", {
-      id: trackId,
-      name: card.display_name ?? trackId,
-      meta,
-      preview: layout?.preview ?? card.preview,
-      layout: layout?.id ?? null,
-      skin: null,
-      outline: layout?.outline ?? card.outline,
-    });
-  }
-
-  /** Remet exactement le jeu de skins de circuit de la sauvegarde (§8) :
-   * ceux qui manquent sont activés, ceux en trop désactivés — un skin resté
-   * actif d'une session précédente changerait sinon l'apparence du circuit
-   * sans que rien ne le signale. */
-  async function restoreTrackSkins(trackId: string, wanted: string[] | undefined, warnings: string[]) {
-    if (!wanted) return;
-    try {
-      await syncTrackSkins(trackId);
-      const options = await listTrackSkinOptions(trackId);
-      const missing = wanted.filter((name) => !options.some((o) => o.name === name));
-      if (missing.length) warnings.push(t("launch.loadWarnTrackSkinsMissing", { names: missing.join(", ") }));
-      for (const o of options) {
-        const active = wanted.includes(o.name);
-        if (o.active !== active) await setTrackSkinActive(trackId, o.name, active);
-      }
-    } catch (e) {
-      warnings.push(t("launch.loadWarnTrackSkinsFailed", { error: errorText(e) }));
-    }
   }
 </script>
 
