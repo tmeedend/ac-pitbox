@@ -26,13 +26,12 @@
   import { listOtherMods } from "$lib/inventory/others";
   import { getConfig, validateConfig } from "$lib/config";
 
-  // Trois territoires étanches (SPEC §7.2) : le RAIL porte les lieux
-  // (`NavRail.svelte`), la BARRE DE TITRE la forme de la fenêtre, la COLONNE
-  // DE SESSION ce qu'on lance (`session/SessionColumn.svelte`). Les deux
-  // grilles de boutons « Add-ons » et « Atelier » qui vivaient dans la colonne
-  // sont parties dans le rail : elles n'étaient pas mal dessinées, elles
-  // étaient mal placées — la colonne de session faisait office de navigation
-  // en plus de son travail propre.
+  // Three watertight territories (SPEC §7.2): the RAIL carries what does not
+  // belong to the session (`NavRail.svelte`), the TITLE BAR the shape of the
+  // window, and the SESSION COLUMN is the session itself, each of its parts
+  // leading to its own screen (`session/SessionColumn.svelte`). The "Add-ons"
+  // and "Workshop" button grids that used to live in the column went to the
+  // rail: they were not badly drawn, they were in the wrong place.
   //
   // What stays here is what the three territories share: the screen switch,
   // the navigation history, and the path diagnosis that both the rail and
@@ -219,7 +218,7 @@
     flex: 1;
     min-height: 0;
     display: grid;
-    /* Rail (lieux) · colonne de session (ce qu'on lance) · contenu.
+    /* Rail (hors session) · colonne de session (la session) · contenu.
        222px tant que la bibliothèque gardait son panneau de détail à droite ;
        celui-ci retiré, la zone principale n'a plus besoin d'autant de largeur
        et la colonne de session peut respirer — c'est elle qui porte le duo

@@ -1,17 +1,17 @@
 <script lang="ts">
-  // Rail de navigation (SPEC §7.2) : le premier des trois territoires — le
-  // rail porte les LIEUX, la barre de titre la forme de la fenêtre, la colonne
-  // de session ce qu'on lance. La répartition doit rester étanche : toute
-  // entrée nouvelle se rattache à l'un des trois, et « Ouvrir CM » vit dans la
-  // colonne parce que c'est un chemin de lancement, pas une destination.
+  // Navigation rail (SPEC §7.2): the first of the three territories. The rail
+  // carries what does not belong to the session; the session column IS the
+  // session, and its parts are destinations in their own right (track card,
+  // car card, driver line, session types) — which is why the rail has a single
+  // `Session` entry for all of them. The title bar carries the shape of the
+  // window. The split must stay watertight: any new entry belongs to one of
+  // the three.
   //
-  // Les quatre inventaires sont des entrées à part entière et non les onglets
-  // d'un écran « Add-ons » : ils possèdent DÉJÀ leurs propres onglets internes
-  // (skins/sons, catégories…), et les grouper produirait deux rangées
-  // d'onglets horizontales de forme identique, sans que rien n'indique
-  // laquelle commande l'autre. L'Atelier, à l'inverse, réunit quatre outils
-  // qui n'ont aucune sous-rubrique — c'est la seule raison pour laquelle ce
-  // regroupement-là est légitime.
+  // Apps and Extras are entries of their own, not tabs of an "Add-ons" screen:
+  // they ALREADY have their own facets or tabs, and grouping them would stack
+  // two identical rows of horizontal tabs with nothing to say which one drives
+  // the other. The Workshop, on the contrary, gathers tools that have no
+  // sub-section — the only reason that grouping is legitimate.
   import { nav, requestSection, openSessionZone, SESSION_ZONE } from "$lib/shell/nav.svelte";
   import { openContentManager } from "$lib/launch/launch";
   import { bigPictureState, exitBigPicture } from "$lib/shell/bigpicture.svelte";
