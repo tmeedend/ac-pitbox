@@ -4,6 +4,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { StorageKey } from "$lib/storage";
+import { durableWriter, type WriteFailure } from "$lib/durableWrite.svelte";
 
 export interface LaunchPrefill {
   kind: "Car" | "Track";
@@ -63,8 +64,18 @@ function loadPicks(): Promise<SessionPicks> {
   return invoke<SessionPicks>("get_session_picks").catch(() => ({ car: null, track: null }));
 }
 
+// Retried once, then shown on screen (`PrefsToast`): see `durableWrite.svelte.ts`.
+const picksWriter = durableWriter<SessionPicks>("save_session_picks", (picks) =>
+  invoke<void>("save_session_picks", { picks }),
+);
+
 function savePicks(picks: SessionPicks): void {
-  invoke("save_session_picks", { picks }).catch((e) => console.error("save_session_picks", e));
+  picksWriter.save(picks);
+}
+
+/** A write of the session pair that did not reach the disk, and since when. */
+export function sessionPicksWriteFailure(): WriteFailure {
+  return picksWriter.failure;
 }
 
 export const nav = $state<{

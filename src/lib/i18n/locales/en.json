@@ -1753,7 +1753,7 @@
   "prefs": {
     "writeFailedTitle": "Your settings are not being saved",
     "writeFailedBody": "Pit Box cannot write its preferences to disk. What you set stays active until you close the app, then it is lost — favourites, driver outfits, filters and views included.",
-    "writeFailedSessionBody": "Pit Box cannot write the session settings to disk. They stay active until you close the app, then they are lost — the settings of each session type and the opponents grid included."
+    "writeFailedSessionBody": "Pit Box cannot write the session settings to disk. They stay active until you close the app, then they are lost — the chosen car and track, the settings of each session type and the opponents grid included."
   },
   "families": {
     "street": "Street",

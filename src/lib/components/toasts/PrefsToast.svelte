@@ -12,18 +12,21 @@
   // périphérique) : ce n'est pas une information de passage, c'est une perte
   // de données en cours.
   //
-  // Two files can fail this way: `ui_prefs.json` and `launch_state.json`, the
-  // session screen's settings. One notification for both — the same loss, the
-  // same title — with a sentence and a reason for each file that fails.
+  // Three files can fail this way: `ui_prefs.json`, and the two of the
+  // session — `session.json` (the chosen car and track) and `launch_state.json`
+  // (the session screen's settings). One notification for all — the same loss,
+  // the same title — with a sentence for the preferences, one for the session,
+  // and the reason of each file that fails.
   import Toast from "./Toast.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { prefsWriteFailure } from "$lib/uiPrefs.svelte";
   import { launchStateWriteFailure } from "$lib/launch/launchState.svelte";
+  import { sessionPicksWriteFailure } from "$lib/shell/nav.svelte";
 
   let dismissed = $state(false);
   const prefs = $derived(prefsWriteFailure());
-  const session = $derived(launchStateWriteFailure());
-  const visible = $derived((prefs.since !== null || session.since !== null) && !dismissed);
+  const session = $derived([sessionPicksWriteFailure(), launchStateWriteFailure()].filter((f) => f.since !== null));
+  const visible = $derived((prefs.since !== null || session.length > 0) && !dismissed);
 </script>
 
 {#if visible}
@@ -32,9 +35,9 @@
       <p class="body">{t("prefs.writeFailedBody")}</p>
       <p class="why mono">{prefs.reason}</p>
     {/if}
-    {#if session.since !== null}
+    {#if session.length}
       <p class="body">{t("prefs.writeFailedSessionBody")}</p>
-      <p class="why mono">{session.reason}</p>
+      {#each session as f}<p class="why mono">{f.reason}</p>{/each}
     {/if}
   </Toast>
 {/if}
