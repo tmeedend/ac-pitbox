@@ -142,6 +142,28 @@ fn root_of(sat: &Path) -> PathBuf {
     crate::acpath::effective_root(sat)
 }
 
+/// The library copy through which `owner` provides AC path `rel`: under the
+/// traversed root of its tree ([`root_of`]), exactly where the deployment reads
+/// it.
+pub(crate) fn library_copy(library: &Path, owner: OwnerKind, id: &str, rel: &Path) -> PathBuf {
+    root_of(&dir(library, owner, id)).join(rel)
+}
+
+/// Every owner that has a tree of game additions in the library: `(kind, id)`.
+pub(crate) fn stored_owners(library: &Path) -> Vec<(OwnerKind, String)> {
+    [OwnerKind::Car, OwnerKind::Track, OwnerKind::App, OwnerKind::Pack]
+        .into_iter()
+        .flat_map(|owner| {
+            std::fs::read_dir(library.join("extras").join(owner.category()))
+                .into_iter()
+                .flatten()
+                .flatten()
+                .filter(|e| e.path().is_dir())
+                .map(move |e| (owner, e.file_name().to_string_lossy().into_owned()))
+        })
+        .collect()
+}
+
 /// Range un reste dans les ajouts au jeu du mod, à `rel` (son chemin relatif à la
 /// racine de l'archive, donc à la racine d'AC). Fusionne avec l'existant : une
 /// mise à jour du mod remplace ses propres fichiers, sans effacer les autres.
@@ -282,11 +304,11 @@ fn best_claim(conn: &Connection, cfg: &AppConfig, ac_path: &Path) -> Arbitration
                 log::warn!("extras claim {mod_id}: unknown kind {kind:?}, ignored");
                 return None;
             };
-            // `root_of` et non `dir` : l'exemplaire vit sous la racine
-            // traversée, comme à la pose. Sans ça, l'arbre d'un mod emballé
-            // n'est jamais résolu, donc jamais désigné fournisseur — le fichier
-            // est posé mais la fiche le dit non posé.
-            let src = root_of(&dir(library, kind, &mod_id)).join(rel);
+            // Sous la racine traversée (`library_copy`), comme à la pose.
+            // Sans ça, l'arbre d'un mod emballé n'est jamais résolu, donc
+            // jamais désigné fournisseur — le fichier est posé mais la fiche le
+            // dit non posé.
+            let src = library_copy(library, kind, &mod_id, rel);
             let mtime = std::fs::metadata(&src)
                 .and_then(|m| m.modified())
                 .inspect_err(|e| log::warn!("extras claim {mod_id}: {}: {e}", src.display()))
@@ -502,7 +524,7 @@ pub fn deploy(conn: &Connection, cfg: &AppConfig, owner: OwnerKind, mod_id: &str
 ///
 /// Source illisible = « pas à nous » : dans le doute on laisse en place, comme
 /// partout ailleurs ici.
-fn is_still_ours(src: &Path, deployed: &Path) -> bool {
+pub(crate) fn is_still_ours(src: &Path, deployed: &Path) -> bool {
     let (Ok(a), Ok(b)) = (std::fs::metadata(src), std::fs::metadata(deployed)) else {
         return false;
     };
@@ -714,21 +736,10 @@ pub fn migrate_app_extras_to_layers(conn: &Connection, cfg: &AppConfig) -> usize
     let Some(library) = cfg.library_path.as_ref() else {
         return 0;
     };
-    let mut created = 0usize;
-    for owner in [OwnerKind::Car, OwnerKind::Track, OwnerKind::App, OwnerKind::Pack] {
-        let cat = library.join("extras").join(owner.category());
-        let owners: Vec<String> = std::fs::read_dir(&cat)
-            .into_iter()
-            .flatten()
-            .flatten()
-            .filter(|e| e.path().is_dir())
-            .map(|e| e.file_name().to_string_lossy().into_owned())
-            .collect();
-        for owner_id in owners {
-            created += migrate_one_owner(conn, cfg, library, owner, &owner_id);
-        }
-    }
-    created
+    stored_owners(library)
+        .into_iter()
+        .map(|(owner, owner_id)| migrate_one_owner(conn, cfg, library, owner, &owner_id))
+        .sum()
 }
 
 fn migrate_one_owner(conn: &Connection, cfg: &AppConfig, library: &Path, owner: OwnerKind, owner_id: &str) -> usize {
