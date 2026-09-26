@@ -27,6 +27,7 @@ désigne `SPEC.md`** et les autres documents portent une étiquette :
 | `INDEX§` | `SPEC-index-bibliotheque.md` |
 | `TAXO§` | `SPEC-taxonomies.md` |
 | `REGLES§` | `SPEC-regles.md` |
+| `DOSSIER§` | `SPEC-etat-dossier.md` |
 | `SETUP§` | `LOT-session-setup.md` |
 | `CIBLE§` | `CIBLE-reglages-session.md` |
 | `L1§` | `LOT1-forme-ecran-session.md` |
@@ -113,6 +114,13 @@ fait — en cas d'écart, la spec fait foi.
   Circuits et Voitures devient un **index** de tuiles (pays ; familles puis
   marques). Porte la règle qui tient tout le reste : la tuile **pose une
   puce**, elle n'ouvre pas un second mécanisme. Livrée.
+- **`SPEC-etat-dossier.md`** (`DOSSIER§`) — l'écran **Dossier du jeu** : le
+  dossier Assetto Corsa tel qu'il est sur le disque, et pour chaque chemin
+  d'où il vient (posé, remplace le jeu, en attente, dérive, à personne), avec
+  une recherche qui couvre aussi la bibliothèque. **Lecture seule** au lot 1 ;
+  les tailles sont collectées dès le lot 1 et affichées au lot 2. Porte la
+  règle qui tient le reste : **un seul arbre, la provenance est un filtre**.
+  Maquette : `maquettes/pitbox-etat-dossier.html`. À construire.
 - **`SPEC-taxonomies.md`** (`TAXO§`) — marques, pays et familles de catégorie
   deviennent des **termes** (nom canonique, alias, emblème), curés dans trois
   onglets de l'Atelier. **Seule la table des familles est livrée** (pour

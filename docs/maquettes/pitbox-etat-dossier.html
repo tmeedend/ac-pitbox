@@ -1,0 +1,655 @@
+<title>Pit Box — dossier du jeu</title>
+<style>
+  /* Jetons repris tels quels de src/lib/styles/global.css. L'app n'a qu'un thème, sombre : la maquette aussi. */
+  :root{
+    color-scheme:dark;
+    --rosso:#d40000;--rosso-bright:#ff5555;--rosso-dim:#1a0606;--rosso-border:#5c1212;
+    --bg:#08080c;--rail:#101013;--panel:#0d0d12;--panel2:#0a0a0f;--card:#13131a;--raised:#15151c;--line:#1e1e26;
+    --txt:#f2f2f4;--txt2:#cfd2d9;--muted:#86868f;--muted2:#5d6470;--faint:#4a4a55;--faint2:#3a3a44;
+    --green:#5dcaa5;--green-dim:#0a1a14;--green-border:#16382c;
+    --blue:#6a9ec9;--blue-dim:#0c1620;--blue-border:#1d3148;
+    --yellow:#f1d83c;--yellow-dim:#1a1708;--yellow-border:#4a4426;
+    --mono:"SF Mono",ui-monospace,"Cascadia Code","Roboto Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#050507;color:var(--txt);font:13px/1.45 var(--sans);-webkit-font-smoothing:antialiased;
+    padding-inline:16px;padding-block:24px 48px}
+  .page{max-width:1380px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+  .pagehead h1{font-size:12px;letter-spacing:.24em;color:var(--muted);font-weight:500;margin:0 0 4px;text-transform:uppercase}
+  .pagehead p{font-size:12px;color:var(--muted2);margin:0;max-width:80ch}
+  .pagehead code{font-family:var(--mono);font-size:11px;background:var(--raised);padding:1px 5px;color:var(--txt2)}
+
+  .scroll{overflow-x:auto;border:1px solid #1c1d20}
+  .app{min-width:1040px;background:var(--bg);display:grid;grid-template-columns:74px 1fr;height:760px}
+  .brand{grid-column:1/-1;height:2px;background:var(--rosso)}
+
+  /* ---- rail ---- */
+  .rail{background:var(--rail);display:flex;flex-direction:column;padding:8px 0;gap:2px}
+  .ri{display:flex;flex-direction:column;align-items:center;gap:4px;padding:9px 4px;color:var(--muted);font-size:10px;text-align:center;line-height:1.2;cursor:default}
+  .ri svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6}
+  .ri.on{color:var(--txt);box-shadow:inset 2px 0 0 var(--rosso)}
+  .ri.on svg{fill:rgba(242,242,244,.12)}
+  .rsep{height:1px;background:var(--line);margin:6px 12px}
+  .rfoot{margin-top:auto}
+
+  /* ---- écran ---- */
+  .screen{display:flex;flex-direction:column;min-height:0;padding:18px 20px 0;gap:12px}
+  .t{font-size:18px;font-weight:600}
+  .tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-top:-4px}
+  .tab{padding:8px 14px;font-size:12px;color:var(--muted);cursor:default}
+  .tab.on{color:var(--txt);box-shadow:inset 0 -2px 0 var(--rosso)}
+  .head{display:flex;align-items:flex-start;gap:16px}
+  .head .sub{font-size:12px;color:var(--muted)}
+  .head .root{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:4px}
+  .scan{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--muted);font-size:11.5px;white-space:nowrap}
+  .scan b{color:var(--txt2);font-weight:500;font-variant-numeric:tabular-nums}
+  .btn{display:inline-flex;align-items:center;gap:7px;padding:7px 12px;font:600 12px var(--sans);letter-spacing:.3px;
+    background:var(--raised);border:1px solid var(--line);color:var(--txt2);cursor:pointer}
+  .btn:hover{background:var(--card);border-color:var(--faint)}
+  .btn-ghost{background:transparent;border-color:transparent;color:var(--muted)}
+  .btn-ghost:hover{background:var(--raised);color:var(--txt2)}
+  :focus-visible{outline:2px solid var(--yellow);outline-offset:-2px}
+
+  /* bilan */
+  .bilan{display:grid;grid-template-columns:repeat(7,1fr);border:1px solid var(--line);background:var(--panel2)}
+  .bt{padding:9px 12px;border:0;border-right:1px solid var(--line);background:none;text-align:left;cursor:pointer;color:inherit;font-family:inherit;display:flex;flex-direction:column;gap:2px}
+  .bt:last-child{border-right:0}
+  .bt:hover{background:var(--panel)}
+  .bt .k{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:6px}
+  .bt .v{font-family:var(--mono);font-size:17px;font-variant-numeric:tabular-nums;color:var(--txt2)}
+  .bt.on{background:var(--raised);box-shadow:inset 0 -2px 0 var(--c)}
+  .bt.on .v{color:var(--txt)}
+  .dot{width:7px;height:7px;background:var(--c);flex:0 0 7px}
+
+  /* barre */
+  .bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .search{height:32px;width:340px;display:flex;align-items:center;gap:8px;padding:0 10px;background:var(--panel2);border:1px solid var(--line)}
+  .search:focus-within{border-color:var(--rosso-border)}
+  .search span{color:var(--muted2)}
+  .search input{flex:1;background:none;border:0;outline:0;color:var(--txt);font:12.5px var(--sans);min-width:0}
+  .search input::placeholder{color:var(--muted2)}
+  .add{height:32px;padding:0 12px;background:none;border:1px dashed var(--faint2);color:var(--muted);font:12px var(--sans);cursor:pointer}
+  .chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 3px 0 8px;border:1px solid var(--rosso-border);background:var(--rosso-dim);font-size:12px;white-space:nowrap}
+  .chip .k{color:var(--muted)}
+  .chip button{width:18px;height:18px;border:0;background:none;color:var(--muted);cursor:pointer;font-size:13px}
+  .chip button:hover{color:var(--txt)}
+  .clear{border:0;background:none;color:var(--muted2);font:11.5px var(--sans);cursor:pointer}
+  .clear:hover{color:var(--txt2)}
+
+  /* corps */
+  .body{flex:1;min-height:0;display:grid;grid-template-columns:1fr 360px;border-top:1px solid var(--line);margin-inline:-20px}
+  .left{min-height:0;overflow:auto;padding:8px 0 20px}
+  .right{min-height:0;overflow:auto;background:var(--panel);border-left:1px solid var(--line);padding:16px}
+
+  .back{display:flex;align-items:center;gap:8px;padding:4px 20px 8px;font-size:11.5px;color:var(--muted)}
+  .back button{border:0;background:none;color:var(--blue);font:inherit;cursor:pointer;padding:0}
+
+  /* arbre */
+  .row{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:10px;height:27px;padding-right:20px;cursor:pointer;white-space:nowrap}
+  .row:hover{background:var(--panel)}
+  .row.sel{background:var(--raised);box-shadow:inset 2px 0 0 var(--yellow)}
+  .lead{display:flex;align-items:center;gap:6px}
+  .chev{width:14px;color:var(--muted2);font-size:9px;text-align:center}
+  .ico{width:15px;height:15px;flex:0 0 15px;fill:none;stroke:var(--muted);stroke-width:1.5}
+  .ico.mod{stroke:var(--txt2)}
+  .nm{font-family:var(--mono);font-size:12px;color:var(--txt2);overflow:hidden;text-overflow:ellipsis;min-width:0;display:flex;align-items:center;gap:8px}
+  .nm .x{font-family:var(--sans);font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+  .row.pers .nm{color:var(--muted)}
+  .row.grp .nm{font-family:var(--sans);font-style:italic;color:var(--muted)}
+  .prov{font-size:11.5px;color:var(--txt2);overflow:hidden;text-overflow:ellipsis;max-width:260px}
+  .prov i{font-style:normal;color:var(--muted)}
+  .pills{display:flex;gap:4px;justify-content:flex-end;min-width:120px}
+  .pill{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;padding:1px 6px;border:1px solid var(--line);color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .p-pose{color:var(--green);border-color:var(--green-border);background:var(--green-dim)}
+  .p-remp{color:var(--rosso-bright);border-color:var(--rosso-border);background:var(--rosso-dim)}
+  .p-att,.p-derive{color:var(--yellow);border-color:var(--yellow-border);background:var(--yellow-dim)}
+  .p-cm{color:var(--blue);border-color:var(--blue-border);background:var(--blue-dim)}
+  mark{background:rgba(241,216,60,.22);color:var(--txt);padding:0 1px}
+
+  /* résultats */
+  .rg{padding:6px 0 12px}
+  .rgh{display:flex;align-items:baseline;gap:10px;padding:6px 20px;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted)}
+  .rgh b{font-family:var(--mono);font-weight:400;color:var(--txt2);letter-spacing:0;font-size:11px}
+  .rr{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px;padding:6px 20px;cursor:pointer}
+  .rr:hover{background:var(--panel)}
+  .rr .a{min-width:0}
+  .rr .n{font-size:12.5px;color:var(--txt)}
+  .rr .s{font-family:var(--mono);font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rr .kind{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-left:8px}
+  .rr .f{border:1px solid var(--line);background:none;color:var(--muted);font:11px var(--sans);padding:3px 8px;cursor:pointer}
+  .rr .f:hover{color:var(--txt2);border-color:var(--faint)}
+  .none{padding:28px 20px;color:var(--txt2);font-size:13px;max-width:60ch}
+  .none span{display:block;color:var(--muted);font-size:12px;margin-top:6px}
+
+  /* panneau */
+  .dh{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+  .dh .n{font-family:var(--mono);font-size:14px;color:var(--txt);word-break:break-all}
+  .dh .p{font-family:var(--mono);font-size:11px;color:var(--muted);word-break:break-all;user-select:all}
+  .dh .say{font-size:12.5px;color:var(--txt2);line-height:1.55}
+  .blk{border:1px solid var(--line);background:var(--panel2);margin-bottom:12px}
+  .blk-h{padding:9px 12px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:10.5px;letter-spacing:2px;text-transform:uppercase;color:var(--rosso-bright)}
+  .blk-b{padding:10px 12px;font-size:12px;color:var(--txt2);display:flex;flex-direction:column;gap:6px}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px}
+  .kv .k{font-size:8.5px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);padding-top:2px}
+  .kv .v{font-family:var(--mono);font-size:11px;color:var(--txt2);word-break:break-all}
+  .lnk{color:var(--blue);cursor:pointer;background:none;border:0;padding:0;font:inherit;text-align:left}
+  .lnk:hover{text-decoration:underline}
+  .claim{display:flex;justify-content:space-between;gap:10px}
+  .claim span{color:var(--muted);font-size:11px}
+  .dec{display:grid;grid-template-columns:1fr auto;gap:4px 10px;font-variant-numeric:tabular-nums}
+  .dec .c{font-family:var(--mono);color:var(--txt2)}
+  .foot{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+  .foot .btn{justify-content:flex-start}
+  .warn{background:var(--yellow-dim);border:1px solid var(--yellow-border);color:var(--yellow);padding:8px 10px;font-size:11.5px;line-height:1.45}
+
+  /* notes */
+  .notes{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .nb{border:1px solid #1c1d20;background:#0e0e11;padding:14px 16px}
+  .nb h4{margin:0 0 8px;font-size:10px;letter-spacing:.2em;color:var(--muted);font-weight:500;text-transform:uppercase}
+  .nb p{margin:0 0 9px;font-size:12px;color:#9a9ba2;line-height:1.65}
+  .nb p:last-child{margin:0}
+  .nb b{color:var(--txt2);font-weight:500}
+  .nb code{font-family:var(--mono);font-size:11px;background:var(--raised);padding:1px 4px;color:var(--txt2)}
+  @media (max-width:900px){.notes{grid-template-columns:1fr}}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="page">
+  <div class="pagehead">
+    <h1>Fichiers › Dossier du jeu — lot 1, lecture seule</h1>
+    <p>Cliquez dans l'arbre, posez un état depuis le bilan, tapez dans la recherche (essayez <code>lanzo</code>, <code>forza</code>, <code>loaded</code>, <code>f2004</code>, <code>zonda</code>). Le rail montre le découpage retenu : l'Atelier devient <b style="color:var(--txt2);font-weight:500">Classement</b> (Règles, Marques, Familles, Pays) et <b style="color:var(--txt2);font-weight:500">Fichiers</b> (Importer, Profils, Maintenance, Dossier du jeu). Accompagne <code>SPEC-etat-dossier.md</code>. Données inventées ; les couleurs et les jetons sont ceux de <code>global.css</code>.</p>
+  </div>
+
+  <div class="scroll">
+    <div class="app">
+      <div class="brand"></div>
+      <nav class="rail" aria-label="Navigation">
+        <div class="ri"><svg viewBox="0 0 24 24"><path d="M5 17l2-6c.4-1.2 1.5-2 2.8-2h4.4c1.3 0 2.4.8 2.8 2l2 6M4 17h16v2H4zM7 19v1.5M17 19v1.5"/></svg>Session</div>
+        <div class="rsep"></div>
+        <div class="ri"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7"/><rect x="13" y="4" width="7" height="7"/><rect x="4" y="13" width="7" height="7"/><rect x="13" y="13" width="7" height="7"/></svg>Apps</div>
+        <div class="ri"><svg viewBox="0 0 24 24"><path d="M12 3l8 4-8 4-8-4zM4 12l8 4 8-4M4 17l8 4 8-4"/></svg>Complé&shy;ments</div>
+        <div class="ri"><svg viewBox="0 0 24 24"><path d="M4 5h9l7 7-8 8-8-8zM8.5 9.5v.01"/></svg>Classement</div>
+        <div class="ri on" aria-current="page"><svg viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v11H3z"/></svg>Fichiers</div>
+        <div class="rfoot">
+          <div class="ri"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>Réglages</div>
+          <div class="ri"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/></svg>Content Manager</div>
+          <div class="ri"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>À propos</div>
+        </div>
+      </nav>
+
+      <main class="screen">
+        <div class="t">Fichiers</div>
+        <div class="tabs" role="tablist">
+          <span class="tab" role="tab">Importer</span><span class="tab" role="tab">Profils</span><span class="tab" role="tab">Maintenance</span><span class="tab on" role="tab" aria-selected="true">Dossier du jeu</span>
+        </div>
+        <div class="head">
+          <div>
+            <div class="sub">Le dossier Assetto Corsa tel qu'il est sur le disque, et pour chaque chemin, d'où il vient.</div>
+            <div class="root">D:\SteamLibrary\steamapps\common\assettocorsa</div>
+          </div>
+          <div class="scan">Scanné il y a 2 min · <b>412 318</b> entrées <button class="btn btn-ghost" id="rescan" type="button">⟳ Rescanner</button></div>
+        </div>
+
+        <div class="bilan" id="bilan"></div>
+
+        <div class="bar">
+          <label class="search"><span>⌕</span><input id="q" type="search" placeholder="Mod, dossier ou fichier…" autocomplete="off" aria-label="Rechercher dans le dossier du jeu et la bibliothèque"></label>
+          <button class="add" type="button">+ Filtre</button>
+          <div id="chips" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>
+        </div>
+
+        <div class="body">
+          <div class="left" id="left" tabindex="0" aria-label="Arbre du dossier du jeu"></div>
+          <aside class="right" id="right" aria-live="polite"></aside>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="nb">
+      <h4>Un seul arbre, la provenance filtre</h4>
+      <p>Il n'y a pas de vue « par mod » à côté de l'arbre. <b>« Filtrer sur ce mod »</b> pose une puce Provenance et élague l'arbre à ce que le mod pose, où que ce soit : son dossier, ses ajouts dans <code>extension/</code>, ses livrées en junction.</p>
+      <p>Un fichier qu'il réclame sans le fournir reste affiché, avec le nom du gagnant. C'est la réponse à « pourquoi mon exemplaire n'est pas posé ».</p>
+    </div>
+    <div class="nb">
+      <h4>L'origine est là, mais écrasée</h4>
+      <p>Tout ce que personne ne réclame tient en <b>une ligne repliée par dossier</b> : « 41 voitures d'origine, intactes ». La recherche le trouve quand même : <code>f2004</code> répond « contenu d'origine ».</p>
+      <p>Les mods non gérés, eux, gardent leur ligne : ce sont les mods de l'utilisateur. Poser l'état « À personne » défait le regroupement.</p>
+    </div>
+    <div class="nb">
+      <h4>Lecture seule, sorties explicites</h4>
+      <p>Aucun bouton n'écrit. Ce que le panneau constate sans pouvoir le corriger, il dit <b>où</b> le corriger : la fiche du mod, ou la Maintenance pour une dérive.</p>
+      <p>« Rescanner » est le seul bouton d'action : il ne fait que relire le disque.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============ données d'exemple ============ */
+const MODS = {
+  lanzo:{name:"RSS GTM Lanzo V10",kind:"voiture",id:"rss_gtm_lanzo_v10",presence:"jeu",path:"content/cars/rss_gtm_lanzo_v10"},
+  forza:{name:"RSS GTM Forza V8",kind:"voiture",id:"rss_gtm_forza_v8",presence:"off"},
+  hybrid:{name:"RSS Formula Hybrid 2023",kind:"voiture",id:"rss_formula_hybrid_2023",presence:"jeu",path:"content/cars/rss_formula_hybrid_2023"},
+  lanzohd:{name:"Livrées HD Lanzo",kind:"livrée",id:"lanzo_hd_liveries",presence:"jeu",path:"content/cars/rss_gtm_lanzo_v10/skins/hd_rosso"},
+  e30:{name:"E30 S14 Sound Mod",kind:"son",id:"e30_s14_sound",presence:"jeu",path:"content/cars/ks_bmw_m3_e30/sfx"},
+  suzuka:{name:"Suzuka Circuit",kind:"circuit",id:"rt_suzuka",presence:"jeu",path:"content/tracks/rt_suzuka"},
+  canyons:{name:"LA Canyons 1.2",kind:"circuit",id:"la_canyons",presence:"jeu",path:"content/tracks/la_canyons"},
+  pageau:{name:"VRC Pageau 9T8",kind:"voiture",id:"vrc_pageau_9t8",presence:"jeu",path:"content/cars/vrc_pageau_9t8"},
+  f599:{name:"Ferrari 599 GTO",kind:"voiture",id:"ferrari_599_gto",presence:"jeu",path:"content/cars/ferrari_599_gto"},
+  hud:{name:"Minimal HUD",kind:"autre mod",id:"minimal_hud",presence:"jeu",path:"content/gui"},
+  shader:{name:"Shader fix pack",kind:"autre mod",id:"shader_fix_pack",presence:"jeu",path:"system/shaders"},
+  rsss:{name:"RSS Settings",kind:"app",id:"RSS_Settings",presence:"jeu",path:"apps/lua/RSS_Settings"},
+  camtool:{name:"CamTool 2",kind:"app",id:"CamTool_2",presence:"jeu",path:"apps/python/CamTool_2"},
+  porsche962:{name:"Porsche 962C Longtail",kind:"voiture",id:"urd_962c_lt",presence:"off"},
+  vrcna:{name:"VRC Formula NA 2021",kind:"voiture",id:"vrc_formula_na_2021",presence:"nong",path:"content/cars/vrc_formula_na_2021"},
+  f2004:{name:"Ferrari F2004",kind:"voiture",id:"ks_ferrari_f2004",presence:"orig",path:"content/cars/ks_ferrari_f2004"},
+  nords:{name:"Nordschleife",kind:"circuit",id:"ks_nordschleife",presence:"orig",path:"content/tracks/ks_nordschleife"},
+  zonda:{name:"Pagani Zonda R",kind:"voiture",id:"ks_pagani_zonda_r",presence:"orig",path:"content/cars/ks_pagani_zonda_r"},
+};
+const LIB = "E:\\PitBox Library";
+
+const F=(n,st,prov,x={})=>({n,t:"f",st,prov,...x});
+const J=(n,st,prov,x={})=>({n,t:"j",st,prov,...x});
+const D=(n,c,x={})=>({n,t:"d",c,...x});
+const G=(label,count,members,x={})=>({n:label,t:"g",count,members,...x});
+const posed=(names,prov,x)=>names.map(n=>F(n,"pose",prov,x));
+
+const TREE = D("assettocorsa",[
+  D("content",[
+    D("cars",[
+      D("rss_gtm_lanzo_v10",[
+        ...posed(["data.acd","rss_gtm_lanzo_v10.kn5","rss_gtm_lanzo_v10_lod_b.kn5","body_shadow.png","collider.kn5"],"lanzo",{mech:"hl"}),
+        D("ui",posed(["ui_car.json","badge.png","upgrade.png"],"lanzo",{mech:"hl"})),
+        D("skins",[
+          D("00_rosso",posed(["livery.png","preview.jpg","ui_skin.json"],"lanzo",{mech:"hl"})),
+          J("hd_rosso","pose","lanzohd",{target:"skins\\cars\\rss_gtm_lanzo_v10\\hd_rosso"}),
+          J("hd_nero","pose","lanzohd",{target:"skins\\cars\\rss_gtm_lanzo_v10\\hd_nero"}),
+        ]),
+      ],{mod:"lanzo",marked:true}),
+      D("rss_formula_hybrid_2023",[
+        ...posed(["data.acd","rss_formula_hybrid_2023.kn5","body_shadow.png"],"hybrid",{mech:"hl"}),
+        D("ui",posed(["ui_car.json","badge.png"],"hybrid",{mech:"hl"})),
+      ],{mod:"hybrid",marked:true}),
+      D("vrc_pageau_9t8",[
+        ...posed(["data.acd","vrc_pageau_9t8.kn5"],"pageau",{mech:"hl"}),
+        D("ui",[...posed(["ui_car.json"],"pageau",{mech:"hl"}),F("badge.png","derive","pageau",{drift:"manquant",mech:"hl"})]),
+      ],{mod:"pageau",marked:true}),
+      D("ks_bmw_m3_e30",[
+        D("sfx",[F("bmw_m3_e30.bank","remp","e30",{mech:"sfx"}),F("GUIDs.txt","remp","e30",{mech:"sfx"})]),
+        G("47 éléments d'origine",47,["data.acd","bmw_m3_e30.kn5","ui","skins","animations"]),
+      ],{pop:"origine"}),
+      D("tatuusfa1_old",[F(".pitbox-deployed.json","derive",null,{drift:"orphelin"}),F("data.acd","derive",null,{drift:"orphelin"}),F("tatuusfa1.kn5","derive",null,{drift:"orphelin"})],{marked:true,orphan:"Tatuus FA01 (supprimé le 02/09/2026)"}),
+      D("vrc_formula_na_2021",[G("64 éléments",64,["data.acd","vrc_formula_na_2021.kn5","ui","skins"])],{pop:"nong",mod:"vrcna"}),
+      G("41 voitures d'origine, intactes",41,["ks_ferrari_f2004","ks_pagani_zonda_r","ks_porsche_911_gt3_rs","ks_mazda_mx5_cup","ks_lotus_exos_125","ks_mclaren_p1","…"]),
+    ]),
+    D("tracks",[
+      D("rt_suzuka",[
+        ...posed(["rt_suzuka.kn5","models.ini","surfaces.ini"],"suzuka",{mech:"hl"}),
+        D("skins",[D("cm_skins",[J("night_lights","pose","suzuka",{target:"skins\\tracks\\rt_suzuka\\night_lights"})])]),
+      ],{mod:"suzuka",marked:true}),
+      D("la_canyons",[...posed(["la_canyons.kn5","models_full.ini","surfaces.ini"],"canyons",{mech:"hl"}),
+        D("extension",[F("pitcrew.kn5","remp","canyons",{mech:"hl",forced:true})])],{mod:"canyons",marked:true}),
+      G("21 circuits d'origine, intacts",21,["ks_nordschleife","ks_monza","ks_spa","ks_brands_hatch","ks_silverstone","…"]),
+    ]),
+    D("driver",[F("driver_501.kn5","pose","f599",{mech:"hl"}),G("6 éléments d'origine",6,["driver.kn5","driver_60.kn5","driver_70.kn5","…"])]),
+    D("fonts",[F("vrc_digital.ttf","pose","pageau",{mech:"hl"}),G("18 éléments d'origine",18,["digital.ttf","…"])]),
+    D("gui",[D("icons",[F("tyres.png","remp","hud",{mech:"hl"}),F("fuel.png","remp","hud",{mech:"hl"}),F("delta.png","remp","hud",{mech:"hl"})]),G("312 éléments d'origine",312,["…"])]),
+  ]),
+  D("extension",[
+    D("textures",[D("common",[D("rss",[
+      F("carbon_detail.dds","pose","lanzo",{mech:"hl",claims:["lanzo","hybrid"]}),
+      F("brake_disc_glow.dds","pose","hybrid",{mech:"hl",claims:["hybrid","lanzo"]}),
+      F("tyre_sidewall.dds","pose","lanzo",{mech:"hl",claims:["lanzo","hybrid"]}),
+    ])])]),
+    D("config",[
+      D("cars",[D("rss",[D("rss_gtm_lanzo_v10",posed(["lights.ini","brakes.ini","tyres.ini"],"lanzo",{mech:"hl"}))])]),
+      D("tracks",[D("loaded",[
+        F("rt_suzuka.ini","derive","suzuka",{cm:true,drift:"modifie",mech:"hl",sizes:"14 832 → 15 107 octets"}),
+        F("la_canyons.ini","att","canyons",{cm:true,mech:"hl"}),
+        G("1 204 éléments à personne",1204,["ks_nordschleife.ini","ks_monza.ini","…"]),
+      ])]),
+    ]),
+    G("3 118 éléments à personne",3118,["lua","shaders","weather","sfx","…"]),
+  ]),
+  D("system",[D("shaders",[F("ksPerPixelMultiMap.fx","remp","shader",{mech:"hl"}),G("412 éléments d'origine",412,["…"])])]),
+  D("apps",[
+    D("lua",[J("RSS_Settings","pose","rsss",{target:"apps\\lua\\RSS_Settings"}),G("9 éléments à personne",9,["…"])]),
+    D("python",[J("CamTool_2","pose","camtool",{target:"apps\\python\\CamTool_2"}),J("sidekick","derive",null,{drift:"cassee",target:"apps\\python\\sidekick (absent)"}),G("14 éléments d'origine",14,["…"])]),
+  ]),
+  G("27 éléments à personne",27,["acs.exe","dwrite.dll","cfg","launcher","…"]),
+]);
+
+/* ============ modèle ============ */
+const ST = {
+  pose:{l:"Posé",c:"var(--green)",p:"p-pose"},
+  remp:{l:"Remplace le jeu",c:"var(--rosso-bright)",p:"p-remp"},
+  att:{l:"En attente",c:"var(--yellow)",p:"p-att"},
+  derive:{l:"Dérive",c:"var(--yellow)",p:"p-derive",g:"≠ "},
+  cm:{l:"Zone CM",c:"var(--blue)",p:"p-cm"},
+  shared:{l:"Partagé",c:"var(--txt2)",p:""},
+  pers:{l:"À personne",c:"var(--muted)",p:""},
+};
+const ORDER = ["derive","remp","att","cm","pose","pers"];
+const BILAN = {pose:38204,remp:23,att:4,derive:7,cm:61,shared:412,pers:373019};
+
+let uid=0; const byId={};
+(function link(n,parent,path){
+  n.id=++uid; n.parent=parent; n.path=path; byId[n.id]=n;
+  if(n.c) n.c.forEach(ch=>link(ch,n,path?path+"/"+ch.n:ch.n));
+})(TREE,null,"");
+
+const S = {states:new Set(),prov:null,q:"",results:false,open:new Set([TREE.id]),sel:null,openGroups:new Set()};
+
+function fileMatches(f){
+  if(S.states.size){
+    const ok=[...S.states].some(s=> s==="cm"?f.cm : s==="shared"?(f.claims&&f.claims.length>1) : s===f.st);
+    if(!ok) return false;
+  }
+  if(S.prov && !(f.prov===S.prov || (f.claims||[]).includes(S.prov))) return false;
+  return true;
+}
+const filtering=()=>S.states.size>0||!!S.prov;
+function counts(n){
+  const r={};
+  const add=(k,v)=>r[k]=(r[k]||0)+v;
+  (function walk(x){
+    if(x.t==="g"){ if(!S.prov && (!S.states.size||S.states.has("pers"))) add("pers",x.count); return; }
+    if(x.t==="d"){ x.c.forEach(walk); return; }
+    if(!fileMatches(x)) return;
+    add(x.st,1); if(x.cm) add("cm",1);
+  })(n);
+  return r;
+}
+function visible(n){
+  if(!filtering()) return true;
+  if(n.t==="g") return !S.prov && S.states.has("pers");
+  if(n.t==="d") return n.c.some(visible);
+  return fileMatches(n);
+}
+
+/* ============ rendu : bilan & puces ============ */
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmt=n=>n.toLocaleString("fr-FR");
+
+function renderBilan(){
+  $("bilan").innerHTML=["pose","remp","att","derive","cm","shared","pers"].map(k=>
+    `<button class="bt ${S.states.has(k)?"on":""}" style="--c:${ST[k].c}" data-st="${k}" type="button" aria-pressed="${S.states.has(k)}">
+      <span class="k"><span class="dot"></span>${ST[k].l}</span><span class="v">${fmt(BILAN[k])}</span></button>`).join("");
+}
+function renderChips(){
+  let h="";
+  if(S.states.size) h+=`<span class="chip"><span class="k">État</span> ${[...S.states].map(s=>ST[s].l).join(" ou ")}<button data-x="st" aria-label="Retirer">×</button></span>`;
+  if(S.prov) h+=`<span class="chip"><span class="k">Provenance</span> ${esc(MODS[S.prov].name)}<button data-x="prov" aria-label="Retirer">×</button></span>`;
+  if(h) h+=`<button class="clear" data-x="all" type="button">Tout effacer</button>`;
+  $("chips").innerHTML=h;
+}
+
+/* ============ rendu : arbre ============ */
+const ICON={
+  d:'<svg class="ico" viewBox="0 0 16 16"><path d="M1.5 3.5h5l1.5 1.5h6.5v8h-13z"/></svg>',
+  m:'<svg class="ico mod" viewBox="0 0 16 16"><path d="M1.5 3.5h5l1.5 1.5h6.5v8h-13z"/><path d="M5 9.5h6"/></svg>',
+  f:'<svg class="ico" viewBox="0 0 16 16"><path d="M3.5 1.5h6l3 3v10h-9z"/></svg>',
+  j:'<svg class="ico" viewBox="0 0 16 16"><path d="M1.5 3.5h5l1.5 1.5h6.5v8h-13z"/><path d="M6 11l4-4M7 7h3v3"/></svg>',
+  g:'<svg class="ico" viewBox="0 0 16 16"><path d="M3 8h10" stroke-dasharray="2 2"/></svg>',
+};
+function pillsFor(n){
+  if(n.t==="f"||n.t==="j"){
+    let h=`<span class="pill ${ST[n.st].p}">${ST[n.st].g||""}${ST[n.st].l}</span>`;
+    if(n.cm) h=`<span class="pill p-cm">Zone CM</span>`+h;
+    return h;
+  }
+  if(n.t==="g") return "";
+  const c=counts(n); const ks=ORDER.filter(k=>k!=="pers"&&c[k]);
+  if(ks.length===1&&ks[0]==="pose") return `<span class="pill p-pose">Posé</span>`;
+  return ks.slice(0,2).map(k=>`<span class="pill ${ST[k].p}">${ST[k].g||""}${fmt(c[k])} ${ST[k].l.toLowerCase()}</span>`).join("");
+}
+function provFor(n){
+  if(n.t==="d"){ if(n.mod) return esc(MODS[n.mod].name); if(n.orphan) return `<i>${esc(n.orphan)}</i>`; return ""; }
+  if(!n.prov) return "";
+  const others=(n.claims||[]).length-1;
+  return esc(MODS[n.prov].name)+(others>0?` <i>+${others}</i>`:"");
+}
+function isPers(n){ return n.t==="g" || (n.t!=="d" && n.st==="pers") || (n.t==="d" && !Object.keys(counts(n)).some(k=>k!=="pers")); }
+
+function rowHTML(n,depth){
+  const sel=S.sel===n.id?" sel":"";
+  const pad=`style="padding-left:${20+depth*16}px"`;
+  if(n.t==="g"){
+    const open=S.openGroups.has(n.id)||(filtering());
+    return `<div class="row grp${sel}" data-id="${n.id}" ${pad}><span class="lead"><span class="chev">${open?"▾":"▸"}</span>${ICON.g}</span><span class="nm">${esc(n.n)}</span><span></span><span class="pills"></span></div>`
+      + (open? n.members.map(m=>`<div class="row pers" ${`style="padding-left:${20+(depth+1)*16}px"`}><span class="lead"><span class="chev"></span>${ICON.f}</span><span class="nm">${esc(m)}</span><span></span><span class="pills"></span></div>`).join(""):"");
+  }
+  const isDir=n.t==="d";
+  const open=S.open.has(n.id);
+  const kind=isDir?(n.marked?"m":"d"):n.t;
+  let x="";
+  if(n.pop==="nong") x=`<span class="x">non géré</span>`;
+  if(n.pop==="origine") x=`<span class="x">origine</span>`;
+  const pers=isPers(n)?" pers":"";
+  return `<div class="row${sel}${pers}" data-id="${n.id}" ${pad} role="treeitem" aria-expanded="${isDir?open:""}">
+    <span class="lead"><span class="chev">${isDir?(open?"▾":"▸"):""}</span>${ICON[kind]}</span>
+    <span class="nm">${esc(n.n)}${x}</span><span class="prov">${provFor(n)}</span><span class="pills">${pillsFor(n)}</span></div>`;
+}
+function sortKids(c){
+  return [...c].sort((a,b)=>{
+    const r=x=>x.t==="g"?2:(x.t==="d"||x.t==="j")?0:1;
+    return r(a)-r(b)||a.n.localeCompare(b.n);
+  });
+}
+function renderTree(){
+  let h="";
+  if(S.q.trim().length>=2) h+=`<div class="back"><button type="button" id="toRes">← Résultats (${lastResults.total})</button><span>pour « ${esc(S.q)} »</span></div>`;
+  const walk=(n,depth)=>{
+    sortKids(n.c).forEach(ch=>{
+      if(!visible(ch)) return;
+      h+=rowHTML(ch,depth);
+      if(ch.t==="d"&&(S.open.has(ch.id)||(filtering()&&depth<6))) walk(ch,depth+1);
+    });
+  };
+  h+=rowHTML(TREE,0).replace('class="row','class="row root');
+  if(S.open.has(TREE.id)||filtering()) walk(TREE,1);
+  $("left").innerHTML=h;
+}
+
+/* ============ recherche ============ */
+const norm=s=>s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/\\/g,"/");
+let lastResults={total:0};
+function search(q){
+  const words=norm(q).split(/\s+/).filter(Boolean);
+  const hit=s=>{const t=norm(s);return words.every(w=>t.includes(w));};
+  const mods=Object.entries(MODS).filter(([k,m])=>hit(m.name+" "+m.id)).map(([k])=>k);
+  const dirs=[],files=[];
+  Object.values(byId).forEach(n=>{
+    if(n===TREE||n.t==="g") return;
+    const target=words.some(w=>w.includes("/"))?n.path:n.n;
+    if(!hit(target)) return;
+    if(filtering()&&!visible(n)) return;
+    (n.t==="f"?files:dirs).push(n);
+  });
+  // membres de groupes : cherchables aussi
+  Object.values(byId).filter(n=>n.t==="g").forEach(g=>g.members.forEach(m=>{
+    if(m!=="…"&&hit(m)&&!filtering()) dirs.push({n:m,path:(g.parent.path?g.parent.path+"/":"")+m,t:"gm",group:g});
+  }));
+  lastResults={mods,dirs,files,total:mods.length+dirs.length+files.length};
+  return lastResults;
+}
+function hl(s){
+  const words=norm(S.q).split(/\s+/).filter(w=>w&&!w.includes("/"));
+  if(!words.length) return esc(s);
+  const t=norm(s); let marks=new Array(s.length).fill(false);
+  words.forEach(w=>{let i=t.indexOf(w);while(i>=0){for(let k=i;k<i+w.length;k++)marks[k]=true;i=t.indexOf(w,i+1);}});
+  let out="",on=false;
+  for(let i=0;i<s.length;i++){ if(marks[i]!==on){out+=marks[i]?"<mark>":"</mark>";on=marks[i];} out+=esc(s[i]); }
+  return out+(on?"</mark>":"");
+}
+const PRES={jeu:['p-pose',"Dans le jeu"],off:['',"Bibliothèque · désactivé"],nong:['',"Dans le jeu · non géré"],orig:['',"Contenu d'origine"]};
+function renderResults(){
+  const r=search(S.q);
+  if(!r.total){
+    $("left").innerHTML=`<div class="none">Rien ne correspond à « ${esc(S.q)} », ni dans le dossier du jeu, ni dans la bibliothèque.<span>${filtering()?"Les puces posées limitent aussi la recherche : les retirer peut faire apparaître des résultats.":"Vous n'avez pas ce mod."}</span></div>`;
+    return;
+  }
+  let h="";
+  if(r.mods.length){
+    h+=`<div class="rg"><div class="rgh">Mods <b>${r.mods.length}</b></div>`+r.mods.map(k=>{const m=MODS[k];const p=PRES[m.presence];
+      return `<div class="rr" data-mod="${k}"><div class="a"><div class="n">${hl(m.name)}<span class="kind">${m.kind}</span></div><div class="s">${hl(m.id)}</div></div>
+      <span class="pill ${p[0]}">${p[1]}</span>${m.presence==="jeu"?`<button class="f" data-filter="${k}" type="button">Filtrer</button>`:"<span></span>"}</div>`;}).join("")+`</div>`;
+  }
+  if(r.dirs.length){
+    h+=`<div class="rg"><div class="rgh">Dossiers <b>${r.dirs.length}</b></div>`+r.dirs.map(n=>{
+      const parent=n.path.split("/").slice(0,-1).join("\\");
+      const id=n.t==="gm"?`data-group="${n.group.id}"`:`data-id="${n.id}"`;
+      return `<div class="rr" ${id}><div class="a"><div class="n">${hl(n.n)}</div><div class="s">${esc(parent)}\\</div></div>
+      <span class="pills" style="min-width:0">${n.t==="gm"?'<span class="pill">Origine</span>':pillsFor(n)}</span><span></span></div>`;}).join("")+`</div>`;
+  }
+  if(r.files.length){
+    h+=`<div class="rg"><div class="rgh">Fichiers <b>${r.files.length}</b></div>`+r.files.map(n=>{
+      const parent=n.path.split("/").slice(0,-1).join("\\");
+      return `<div class="rr" data-id="${n.id}"><div class="a"><div class="n">${hl(n.n)}</div><div class="s">${esc(parent)}\\</div></div>
+      <span class="pills" style="min-width:0">${pillsFor(n)}</span><span class="prov" style="max-width:170px">${provFor(n)}</span></div>`;}).join("")+`</div>`;
+  }
+  $("left").innerHTML=h;
+}
+
+/* ============ panneau ============ */
+const MECH={hl:"Hardlink vers la bibliothèque",sfx:"Remplacement du contenu de sfx/, original sauvegardé"};
+const DRIFT={
+  manquant:["Manquant","Réclamé et attendu dans la composition du mod actif, absent du disque. Cause probable : suppression à la main, ou une copie de la bibliothèque faite sans le jeu."],
+  modifie:["Modifié depuis la pose","Dans cette zone, c'est généralement Content Manager qui a resynchronisé sa propre version."],
+  orphelin:["Orphelin","Marqué comme posé par Pit Box, mais plus aucun mod actif ne le réclame. Cause probable : l'app a été fermée entre deux étapes d'une suppression."],
+  cassee:["Junction cassée","La cible de cette junction n'existe plus dans la bibliothèque. Cause probable : bibliothèque déplacée ou copiée sans ses junctions."],
+};
+function libPath(n){
+  const m=MODS[n.prov]; if(!m) return "";
+  if(n.t==="j") return LIB+"\\"+n.target;
+  const rel=n.path.split("/");
+  if(n.path.startsWith("content/cars/"+m.id)||n.path.startsWith("content/tracks/"+m.id)) return LIB+"\\"+(m.kind==="circuit"?"tracks":"cars")+"\\"+m.id+"\\v1\\"+rel.slice(3).join("\\");
+  return LIB+"\\extras\\"+(m.kind==="circuit"?"tracks":m.kind==="app"?"apps":"cars")+"\\"+m.id+"\\"+rel.join("\\");
+}
+function say(n){
+  if(n.t==="g") return "Ce que personne ne réclame est regroupé en une ligne. Pit Box n'y touche pas.";
+  if(n.t==="d"){
+    if(n.orphan) return `Dossier marqué comme posé par Pit Box pour ${esc(n.orphan)}. Plus aucun mod ne le réclame.`;
+    if(n.pop==="nong") return "Un mod posé à la main avant Pit Box. Pit Box le voit et n'y touche pas. Pour le lui confier, retirez son dossier du jeu puis importez-le.";
+    if(n.pop==="origine") return "Contenu d'origine d'Assetto Corsa. Une partie a été remplacée par un mod : voir le détail ci-dessous.";
+    if(n.mod) return `Dossier du mod ${esc(MODS[n.mod].name)}, posé en hardlinks et marqué par <span style="font-family:var(--mono)">.pitbox-deployed.json</span>.`;
+    if(n===TREE) return "La racine du jeu. Le bilan ci-dessus en donne les totaux ; la décomposition ici ne compte que l'exemple.";
+    return "Un dossier du jeu. Il n'a pas d'état propre : il porte le décompte des états de ses fichiers.";
+  }
+  const m=n.prov&&MODS[n.prov];
+  switch(n.st){
+    case "pose": return n.t==="j"?`Livrée ou app de ${esc(m.name)}, posée par junction.`:`Fourni par ${esc(m.name)}.`+((n.claims||[]).length>1?` ${n.claims.length-1} autres mods réclament ce chemin ; cet exemplaire est le plus récent.`:"");
+    case "remp": return `Remplace un fichier d'Assetto Corsa${m?` au profit de ${esc(m.name)}`:""}. L'original est sauvegardé et reviendra quand plus aucun mod ne réclamera ce chemin.`;
+    case "att": return `Un fichier que Pit Box n'a pas posé occupe ce chemin. L'exemplaire de ${esc(m.name)} attend en bibliothèque.`;
+    case "derive": return DRIFT[n.drift][0]+". "+(n.sizes?`Ce fichier a changé depuis que Pit Box l'a posé (taille : ${n.sizes}). `:"")+DRIFT[n.drift][1];
+    default: return "Ni Pit Box ni un mod de la bibliothèque n'ont posé ce fichier. Pit Box n'y touche pas.";
+  }
+}
+function renderDetail(){
+  const n=byId[S.sel]||TREE;
+  const pathWin=n.path?n.path.split("/").join("\\"):".\\";
+  let h=`<div class="dh"><div class="n">${esc(n.n)}</div><div class="p">${esc(pathWin)}</div>`;
+  if(n.t==="f"||n.t==="j") h+=`<div>${pillsFor(n)}</div>`;
+  h+=`<div class="say">${say(n)}</div></div>`;
+
+  if(n.t==="f"||n.t==="j"){
+    const mech=n.t==="j"?`Junction`:(MECH[n.mech]||"Fichier réel");
+    h+=`<div class="blk"><div class="blk-h">Mécanisme</div><div class="blk-b"><div class="kv">
+      <span class="k">Type</span><span class="v" style="font-family:var(--sans);font-size:12px">${mech}</span>
+      ${n.prov||n.target?`<span class="k">${n.t==="j"?"Cible":"Exemplaire"}</span><span class="v">${esc(n.t==="j"&&!n.prov?LIB+"\\"+n.target:libPath(n))}</span>`:""}
+      ${n.st==="remp"?`<span class="k">Original</span><span class="v">${esc(LIB+"\\game_backup\\"+pathWin)}</span>`:""}
+      </div></div></div>`;
+  }
+  if(n.prov){
+    const claims=n.claims||[n.prov];
+    h+=`<div class="blk"><div class="blk-h">Provenance</div><div class="blk-b">`+claims.map((k,i)=>
+      `<div class="claim"><button class="lnk" data-open="${k}">${esc(MODS[k].name)}</button><span>${i===0?(n.forced?"fournit · autorisé explicitement":n.st==="att"?"réclame · en attente":"fournit"):MODS[k].presence==="off"?"réclame · mod désactivé":"réclame · exemplaire plus ancien, 12/03/2024"}</span></div>`).join("")+`</div></div>`;
+  }
+  if(n.st==="remp"){
+    h+=`<div class="blk"><div class="blk-h">Revenir en arrière</div><div class="blk-b">Désactiver ${esc(MODS[n.prov].name)} restaure l'original. Cet écran ne le fait pas : c'est un geste de la fiche.</div></div>`;
+  }
+  if(n.st==="derive"||(n.t==="d"&&n.orphan)){
+    h+=`<div class="blk"><div class="blk-h">Dérive</div><div class="blk-b"><div class="warn">${n.orphan?"Orphelin":DRIFT[n.drift][0]} — Pit Box ne corrige pas une dérive tout seul. ${n.drift==="orphelin"||n.orphan?"Le nettoyage des orphelins":"La réparation générale"} s'en charge.</div><button class="lnk" type="button">Aller à la Maintenance →</button></div></div>`;
+  }
+  if(n.t==="d"){
+    const c=counts(n); const ks=ORDER.filter(k=>c[k]);
+    h+=`<div class="blk"><div class="blk-h">Contenu</div><div class="blk-b"><div class="dec">`+
+      (ks.length?ks.map(k=>`<span><span class="pill ${ST[k].p}">${ST[k].g||""}${ST[k].l}</span></span><span class="c">${fmt(c[k])}</span>`).join(""):`<span style="color:var(--muted)">Rien ne passe les filtres posés.</span><span></span>`)+`</div></div></div>`;
+    const contrib={};
+    (function w(x){ if(x.t==="d") x.c.forEach(w); else if((x.t==="f"||x.t==="j")&&x.prov&&fileMatches(x)) contrib[x.prov]=(contrib[x.prov]||0)+1; })(n);
+    const top=Object.entries(contrib).sort((a,b)=>b[1]-a[1]);
+    if(top.length&&!n.mod){
+      h+=`<div class="blk"><div class="blk-h">Mods qui y posent</div><div class="blk-b">`+top.slice(0,5).map(([k,v])=>`<div class="claim"><button class="lnk" data-open="${k}">${esc(MODS[k].name)}</button><span>${v} fichier${v>1?"s":""}</span></div>`).join("")+(top.length>5?`<span style="color:var(--muted)">et ${top.length-5} autres</span>`:"")+`</div></div>`;
+    }
+    if(n.mod&&n.marked) h+=`<div class="blk"><div class="blk-h">Version déployée</div><div class="blk-b"><div class="kv"><span class="k">Version</span><span class="v">v1 · importée le 14/08/2026</span><span class="k">Couches</span><span class="v" style="font-family:var(--sans);font-size:12px">${n.mod==="lanzo"?"Livrées HD Lanzo (active)":"aucune"}</span></div></div></div>`;
+  }
+  const mod=n.mod||n.prov;
+  h+=`<div class="foot">`;
+  if(mod) h+=`<button class="btn" data-open="${mod}" type="button">Ouvrir la fiche</button><button class="btn" data-filter="${mod}" type="button">Filtrer sur ce mod</button>`;
+  if(n.t!=="g") h+=`<button class="btn btn-ghost" type="button">Afficher dans l'Explorateur</button>`;
+  h+=`</div>`;
+  $("right").innerHTML=h;
+}
+function renderModCard(k){
+  const m=MODS[k];
+  $("right").innerHTML=`<div class="dh"><div class="n">${esc(m.name)}</div><div class="p">${esc(m.id)}</div><div><span class="pill">${PRES[m.presence][1]}</span></div>
+    <div class="say">Ce mod est dans la bibliothèque mais n'est pas activé : il n'a aucun fichier dans le dossier du jeu, donc rien à montrer dans l'arbre.</div></div>
+    <div class="foot"><button class="btn" data-open="${k}" type="button">Ouvrir la fiche</button></div>`;
+}
+
+/* ============ orchestration ============ */
+function render(){
+  renderBilan(); renderChips();
+  if(S.results&&S.q.trim().length>=2) renderResults(); else { if(S.q.trim().length>=2) search(S.q); renderTree(); }
+  if(S.modCard) renderModCard(S.modCard); else renderDetail();
+}
+function reveal(n){ let p=n.parent; while(p){S.open.add(p.id);p=p.parent;} S.sel=n.id; S.modCard=null; }
+function scrollSel(){ const el=document.querySelector(".row.sel"); if(el) el.scrollIntoView({block:"nearest"}); }
+
+document.addEventListener("click",e=>{
+  const t=e.target.closest("[data-st],[data-x],[data-filter],[data-open],[data-id],[data-mod],[data-group],#toRes,#rescan");
+  if(!t) return;
+  if(t.id==="rescan"){ t.textContent="⟳ Lecture… 184 220 entrées"; setTimeout(()=>{t.textContent="⟳ Rescanner";},1200); return; }
+  if(t.id==="toRes"){ S.results=true; render(); return; }
+  if(t.dataset.st){ const k=t.dataset.st; S.states.has(k)?S.states.delete(k):S.states.add(k); render(); return; }
+  if(t.dataset.x){ const x=t.dataset.x; if(x==="st"||x==="all") S.states.clear(); if(x==="prov"||x==="all") S.prov=null; render(); return; }
+  if(t.dataset.filter){ e.stopPropagation(); S.prov=t.dataset.filter; S.results=false; S.modCard=null; const m=MODS[S.prov]; const n=Object.values(byId).find(x=>x.path===m.path); if(n) reveal(n); render(); scrollSel(); return; }
+  if(t.dataset.open){ const b=t; const old=b.textContent; if(b.classList.contains("btn")){ b.textContent="→ ouvre la fiche (navigation)"; setTimeout(()=>b.textContent=old,1100);} return; }
+  if(t.dataset.mod){ const m=MODS[t.dataset.mod]; const n=m.path&&Object.values(byId).find(x=>x.path===m.path);
+    if(n){ reveal(n); S.results=false; }
+    else if(m.presence==="orig"){ const g=Object.values(byId).find(x=>x.t==="g"&&x.members.includes(m.id)); if(g){reveal(g);S.openGroups.add(g.id);S.results=false;} }
+    else { S.modCard=t.dataset.mod; renderModCard(S.modCard); return; }
+    render(); scrollSel(); return; }
+  if(t.dataset.group){ const g=byId[t.dataset.group]; reveal(g); S.openGroups.add(g.id); S.results=false; render(); scrollSel(); return; }
+  if(t.dataset.id){ const n=byId[t.dataset.id];
+    if(t.classList.contains("rr")){ reveal(n); S.results=false; render(); scrollSel(); return; }
+    S.sel=n.id; S.modCard=null;
+    if(n.t==="d"){ S.open.has(n.id)?S.open.delete(n.id):S.open.add(n.id); }
+    if(n.t==="g"){ S.openGroups.has(n.id)?S.openGroups.delete(n.id):S.openGroups.add(n.id); }
+    render(); }
+});
+let deb;
+$("q").addEventListener("input",e=>{ clearTimeout(deb); deb=setTimeout(()=>{ S.q=e.target.value; S.results=S.q.trim().length>=2; S.modCard=null; render(); },150); });
+
+/* clavier : ↑ ↓ → ← dans l'arbre */
+$("left").addEventListener("keydown",e=>{
+  if(S.results) return;
+  const rows=[...document.querySelectorAll("#left .row[data-id]")]; const i=rows.findIndex(r=>+r.dataset.id===S.sel);
+  const n=byId[S.sel];
+  if(e.key==="ArrowDown"&&i<rows.length-1){S.sel=+rows[i+1].dataset.id;}
+  else if(e.key==="ArrowUp"&&i>0){S.sel=+rows[i-1].dataset.id;}
+  else if(e.key==="ArrowRight"&&n&&n.t==="d"){S.open.add(n.id);}
+  else if(e.key==="ArrowLeft"&&n){ if(n.t==="d"&&S.open.has(n.id)) S.open.delete(n.id); else if(n.parent) S.sel=n.parent.id; }
+  else return;
+  e.preventDefault(); S.modCard=null; render(); scrollSel();
+});
+document.addEventListener("keydown",e=>{ if((e.ctrlKey&&e.key==="f")||(e.key==="/"&&document.activeElement.tagName!=="INPUT")){e.preventDefault();$("q").focus();} });
+
+/* état initial : content/cars déplié, le dossier Lanzo sélectionné */
+const start=Object.values(byId).find(x=>x.path==="content/cars/rss_gtm_lanzo_v10");
+reveal(start); S.open.add(Object.values(byId).find(x=>x.path==="extension").id);
+render();
+</script>

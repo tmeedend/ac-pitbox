@@ -52,6 +52,8 @@ const DOCS = {
   TAXO: "SPEC-taxonomies.md",
   // Le catalogue de règles livré et la surcouche de l'utilisateur.
   REGLES: "SPEC-regles.md",
+  // L'écran Dossier du jeu : l'état réel du dossier AC, en lecture seule.
+  DOSSIER: "SPEC-etat-dossier.md",
   // Les instructions par lot de la refonte de l'écran de session. Livrées,
   // gardées pour leurs arguments — et parce que le code y renvoie.
   L5: "LOT5-refonte-ecran-session.md",
