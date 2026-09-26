@@ -17,7 +17,8 @@
     "railLabel": "Main navigation",
     "alertLabel": "items to check",
     "openCmShort": "Content Manager",
-    "brands": "Brands"
+    "brands": "Brands",
+    "gamefolder": "Game folder"
   },
   "titlebar": {
     "bigPicture": "Big Picture mode (fullscreen)",
@@ -773,7 +774,8 @@
     "extrasForce": "Deploy anyway",
     "extrasForcing": "Deploying…",
     "extrasForceHint": "Replace what currently occupies this path with the mod's version. The current file is backed up first, and restored when no mod claims the path any more.",
-    "editBrand": "Edit the brand {brand}"
+    "editBrand": "Edit the brand {brand}",
+    "showInGameFolder": "Show in the game folder"
   },
   "lightbox": {
     "open": "View full size",
@@ -1105,7 +1107,8 @@
     "surveyDone": "Survey saved: {cars} cars, {tracks} tracks",
     "surveySend": "Send it on GitHub",
     "surveyFolder": "Survey a folder of mods…",
-    "surveyFolderTitle": "Folder of mods to survey (e.g. Mod Organizer's mods)"
+    "surveyFolderTitle": "Folder of mods to survey (e.g. Mod Organizer's mods)",
+    "seeDrifts": "See the drifts"
   },
   "rules": {
     "subtitle": "Editable ontology — applied non-destructively. The mod's file is never modified.",
@@ -1958,5 +1961,117 @@
     "upToDate": "All mods are up to date.",
     "foundCount": "{n} update(s) available.",
     "downloadPhase": "download"
+  },
+  "gamefolder": {
+    "subtitle": "The Assetto Corsa folder as it is on the disk, and for every path, where it comes from.",
+    "searchPlaceholder": "Mod, folder or file…",
+    "filterState": "State",
+    "filterProvenance": "Provenance",
+    "fileCount": "{count} files",
+    "entries": "entries",
+    "rescan": "Rescan",
+    "scannedNow": "Scanned just now",
+    "scannedMinutes": "Scanned {count} min ago",
+    "scannedHours": "Scanned {count} h ago",
+    "scanningDisk": "Reading the disk… {count} entries",
+    "scanningClassify": "Classifying {count} entries…",
+    "classifying": "classifying…",
+    "firstScan": "Reading the game folder…",
+    "staleBanner": "Pit Box wrote into the game since this scan: what the screen shows may be out of date.",
+    "treeLabel": "Game folder tree",
+    "rootName": "Game folder",
+    "groupOriginCars": "{count} official cars, intact",
+    "groupOriginTracks": "{count} official tracks, intact",
+    "groupNobody": "{count} items nobody laid",
+    "showNext": "Show the next {count}",
+    "mentionOrigin": "official",
+    "mentionUnmanaged": "unmanaged",
+    "cmShort": "CM",
+    "state": {
+      "posed": "Laid",
+      "replacesGame": "Replaces the game",
+      "waiting": "Waiting",
+      "drift": "Drift",
+      "nobody": "Nobody's",
+      "cmZone": "CM zone",
+      "shared": "Shared"
+    },
+    "drift": {
+      "modified": "Changed since laid",
+      "missing": "Missing",
+      "orphan": "Orphan",
+      "brokenLink": "Broken junction"
+    },
+    "cause": {
+      "modified": "A tool rewrote it; in a Content Manager zone, it is nearly always CM. Fixed by the general repair.",
+      "missing": "Deleted by hand, or the library was copied without the game. Fixed by the general repair.",
+      "orphan": "The app was closed between two steps, or the database was restored. Fixed by the Maintenance clean-up.",
+      "brokenLink": "The library was moved, or copied without its junctions. Fixed by the general repair."
+    },
+    "say": {
+      "missing": "Pit Box laid this file; it is no longer on the disk.",
+      "orphan": "Laid by Pit Box, but nothing claims it any more.",
+      "brokenLink": "This link points to a folder that no longer exists."
+    },
+    "presence": {
+      "inGame": "In the game",
+      "disabled": "Disabled",
+      "unmanaged": "Unmanaged",
+      "origin": "Official"
+    },
+    "ownerKind": {
+      "car": "car",
+      "track": "track",
+      "app": "app",
+      "skin": "skin",
+      "trackSkin": "track skin",
+      "sound": "sound",
+      "other": "other mod",
+      "pack": "pack"
+    },
+    "groupMods": "Mods",
+    "groupDirs": "Folders",
+    "groupFiles": "Files",
+    "seeOthers": "See the {count} others",
+    "filter": "Filter",
+    "noResult": "Nothing matches “{query}”, neither in the game folder nor in the library.",
+    "backToResults": "Results ({count})",
+    "sayPosed": "Provided by {name}. Laid from the library.",
+    "sayPosedLink": "Provided by {name}, through a junction to the library.",
+    "sayReplaces": "Replaces an Assetto Corsa file. The original is kept and comes back once no mod claims this path any more.",
+    "sayWaiting": "A file Pit Box did not lay holds this path. The copy of {name} waits in the library.",
+    "sayModified": "This file changed since Pit Box laid it (size: {before} → {after} bytes).",
+    "sayModifiedCm": "In this zone, that is usually Content Manager.",
+    "sayNobody": "Neither Pit Box nor a mod of the library laid this file. Pit Box does not touch it.",
+    "sayOrigin": "Official Assetto Corsa content, intact. Pit Box does not touch it.",
+    "sayUnmanaged": "A mod installed outside Pit Box. Pit Box does not touch it.",
+    "sayModFolder": "Deployed folder of {name}.",
+    "sayNotInGame": "In the library, not in the game: there is nothing to show in the game folder.",
+    "blkMechanism": "Mechanism",
+    "blkProvenance": "Provenance",
+    "blkRevert": "Going back",
+    "blkDrift": "Drift",
+    "blkFolder": "Content",
+    "mechLibrary": "Laid from the library (hardlink, or a copy across two disks):",
+    "mechLink": "Junction to:",
+    "mechLinkBroken": "Junction to a folder that is gone:",
+    "mechReplaced": "Content replaced; the original sleeps in:",
+    "mechMissing": "Expected, not on the disk.",
+    "mechReal": "Real file.",
+    "reasonProvides": "provides the laid copy",
+    "reasonForced": "provides the laid copy, authorised explicitly",
+    "reasonOlder": "older copy, {date}",
+    "reasonSameDate": "same date, installed earlier",
+    "reasonWaiting": "waiting: a foreign file holds the path",
+    "revertSay": "Deactivating {names} restores the original.",
+    "openSheetOf": "Open the sheet of {name}",
+    "goMaintenance": "Go to Maintenance",
+    "version": "Version",
+    "layers": "Layers",
+    "contributors": "Mods laying files here",
+    "andOthers": "and {count} more",
+    "openSheet": "Open the sheet",
+    "filterOn": "Filter on this mod",
+    "showInExplorer": "Show in Explorer"
   }
 }

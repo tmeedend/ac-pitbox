@@ -388,6 +388,8 @@ src-tauri/src/          Backend Rust — un module par domaine
   launch.rs quickdrive.rs weather.rs   Lancement de session via CM
   rules.rs harmonize.rs                Moteur de tags
   maintenance.rs export.rs             Outils
+  gamestate/            L'écran Dossier du jeu : scan du disque croisé avec la
+                        base, en lecture seule (DOSSIER§9)
   uijson.rs inspect.rs identity.rs     Lecture des fichiers AC
 src-tauri/crates/       Crates du workspace (aperçu 3D, docs/SPEC-preview-3d-kn5.md)
   kn5/                  Parsing du format KN5 — pur, sans I/O ni Tauri
@@ -409,6 +411,7 @@ src/lib/                Modules : un dossier par domaine, comme le backend
   inventory/            Les compléments : apps, autres mods, sous-éléments
   workshop/             Classement et Fichiers, l'ancien Atelier : règles,
                         taxonomies, import, profils, maintenance
+  gamestate/            Le dossier du jeu : pont, filtres, portes d'entrée
   *.ts                  Ce qui ne relève d'aucun domaine : `config`, `errors`,
                         `features`, `format`, `invokeSafe`, `storage`,
                         `uiPrefs`, `preferred`
@@ -488,7 +491,7 @@ circuit, ligne pilote) qui dit lequel est ouvert (§7.2).
 | `others` | `inventory/Inventory.svelte` | **l'inventaire des compléments** — cinq sources en une liste |
 | `race` | `launch/Launch.svelte` | |
 | `rules` / `brands` / `categories` / `countries` | `workshop/Workshop.svelte` | entrée **Classement**, quatre onglets — l'onglet EST la section, pas un état local |
-| `import` / `profiles` / `maintenance` | `workshop/Workshop.svelte` | entrée **Fichiers**, même écran, mêmes règles (`tabGroupOf` de `nav.svelte.ts`) |
+| `import` / `profiles` / `maintenance` / `gamefolder` | `workshop/Workshop.svelte` | entrée **Fichiers**, même écran, mêmes règles (`tabGroupOf` de `nav.svelte.ts`) ; l'onglet Dossier du jeu est `gamestate/GameFolder.svelte` |
 | `settings` / `about` | `settings/Settings` / `settings/About` | |
 
 **Les trois écrans transversaux ont disparu** (Add-ons voiture, Add-ons
@@ -701,7 +704,7 @@ Svelte. Les deux sont documentées comme écartées, en tête du script.
 `gridthumbs.rs` et `SPEC.md` dans `importer.rs`. Donc : **`§4.5` nu = `SPEC.md`**
 (le défaut, inchangé), et une **étiquette** pour les autres — `SESSION§3.2`,
 `GRILLE§5.3`, `WIKI§4.2`, `PILOTE§6.3`, `PREVIEW§8.1`, `FMOD§2bis`,
-`MUSIQUE§3.4`, `IMPORT§`, `REFONTE§`, `TEXTURE§`, `INDEX§`, `TAXO§`, `REGLES§`. La liste fait foi dans
+`MUSIQUE§3.4`, `IMPORT§`, `REFONTE§`, `TEXTURE§`, `INDEX§`, `TAXO§`, `REGLES§`, `DOSSIER§`. La liste fait foi dans
 `scripts/check-refs.mjs`.
 
 **`npm run check` affiche aussi le poids de la documentation** — nombre de
@@ -842,6 +845,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Catalogue de règles** | livré, et enrichi par deux relevés réels promus (2026-09-25) ; restent les relevés de contributeurs, quand il y en aura | `docs/SPEC-regles.md`, `docs/CHANTIERS.md` |
 | **Corrections par mod** | à faire : marque, pays, classe, fiche technique d'un mod précis | `docs/CHANTIERS.md` |
 | **Règles de tags divergentes** | deux fichiers décrivent la même ontologie, un seul est chargé | `docs/CHANTIERS.md` |
+| **Dossier du jeu** | lot 1 livré (lecture seule) ; reste le lot 2, les tailles | `docs/SPEC-etat-dossier.md`, `docs/CHANTIERS.md` |
 | **Refactorings reportés** | quatre repérés et chiffrés (actions de la fiche, aperçu 3D, `importer.rs`, curseur de régime) | `docs/CHANTIERS.md` |
 
 ## Fin de tâche — dans cet ordre

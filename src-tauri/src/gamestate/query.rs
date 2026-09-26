@@ -1,5 +1,5 @@
 //! What the screen asks of an index: the children of a folder (DOSSIER§8.1),
-//! the detail panel (§8.2), the search (§7) and the chain down to a path (§7.5).
+//! the detail panel (DOSSIER§8.2), the search (DOSSIER§7) and the chain down to a path (DOSSIER§7.5).
 //! All read the index in memory - none touches the disk, except the detail
 //! panel reading the dates of the library copies it names.
 
@@ -20,6 +20,8 @@ pub struct Row {
     pub kind: EntryKind,
     pub present: bool,
     pub has_children: bool,
+    /// The root of a deployed mod folder (the one holding the marker).
+    pub mod_folder: bool,
     pub population: Population,
     pub state: State,
     pub drift: Option<Drift>,
@@ -45,6 +47,9 @@ pub struct GroupRow {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChildrenPage {
+    /// The folder's own counts under the filters - what the screen shows as
+    /// its number of files.
+    pub counts: Counts,
     pub rows: Vec<Row>,
     /// Rows in total, of which `rows` is the page asked for.
     pub total: usize,
@@ -98,6 +103,14 @@ pub struct DriftView {
 #[serde(rename_all = "camelCase")]
 pub struct Contributor {
     pub owner: Owner,
+    pub files: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OwnerOption {
+    pub owner: Owner,
+    /// Files it owns in the game - 0 for an element that is not laid.
     pub files: u32,
 }
 
@@ -161,8 +174,10 @@ impl Default for SearchLimits {
 pub struct ModHit {
     pub owner: Owner,
     pub presence: Presence,
-    /// Its node in the tree, when it is in the game.
+    /// Its node in the tree, when it is in the game, and that node's path -
+    /// what the tree unfolds to when the line is chosen (DOSSIER§7.5).
     pub node: Option<NodeId>,
+    pub path: Option<String>,
     /// In the game but drifted (DOSSIER§7.4): the gap is the thing to see.
     pub drift: bool,
 }
@@ -241,6 +256,7 @@ impl Index {
                 } else {
                     !n.children.is_empty()
                 },
+            mod_folder: self.folders.contains_key(&id),
             population: c.population,
             state: c.state,
             drift: c.drift,
@@ -291,6 +307,7 @@ impl Index {
     pub fn children(&self, id: NodeId, f: &Filters, members: bool, offset: usize, limit: usize) -> ChildrenPage {
         if id as usize >= self.tree.len() {
             return ChildrenPage {
+                counts: Counts::default(),
                 rows: Vec::new(),
                 total: 0,
                 group: None,
@@ -317,6 +334,7 @@ impl Index {
         });
         let list = if members { grouped } else { main };
         ChildrenPage {
+            counts: counts[id as usize],
             total: list.len(),
             rows: list
                 .iter()
@@ -501,6 +519,28 @@ impl Index {
         (top, more)
     }
 
+    /// Every element the Provenance chip can name (DOSSIER§6.2), with the
+    /// number of files it owns in the game, most first.
+    pub fn owner_options(&self) -> Vec<OwnerOption> {
+        let mut files = vec![0u32; self.owners.len()];
+        for id in 0..self.tree.len() as NodeId {
+            if let (true, Some(o)) = (self.is_leaf(id), self.class[id as usize].owner) {
+                files[o as usize] += 1;
+            }
+        }
+        let mut out: Vec<OwnerOption> = self
+            .owners
+            .iter()
+            .zip(files)
+            .map(|(owner, files)| OwnerOption {
+                owner: owner.clone(),
+                files,
+            })
+            .collect();
+        out.sort_by(|a, b| b.files.cmp(&a.files).then_with(|| a.owner.name.cmp(&b.owner.name)));
+        out
+    }
+
     /// The chain of nodes down to `rel` - what the tree unfolds to reach it
     /// (DOSSIER§7.5). `None` when this scan does not have it.
     pub fn reveal(&self, rel: &str) -> Option<Vec<NodeId>> {
@@ -594,6 +634,7 @@ impl Index {
                     owner: self.owner_of(it.owner),
                     presence: it.presence,
                     node: it.node,
+                    path: it.node.map(|n| self.tree.rel_path(n).to_string_lossy().into_owned()),
                     drift: it.node.is_some_and(|n| self.counts[n as usize].drift > 0),
                 })
                 .collect(),

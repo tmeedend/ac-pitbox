@@ -440,6 +440,7 @@ pub fn run() {
             commands::gamestate::game_folder_detail,
             commands::gamestate::game_folder_search,
             commands::gamestate::game_folder_reveal,
+            commands::gamestate::game_folder_owners,
             commands::gamestate::show_game_path,
             commands::bulk_ops::bulk_set_favorite,
             commands::bulk_ops::bulk_set_category,

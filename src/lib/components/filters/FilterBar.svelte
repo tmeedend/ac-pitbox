@@ -73,6 +73,9 @@
      * Collé aux puces, il n'a plus besoin de le dire.
      */
     inlineCount?: boolean;
+    /** What the search field invites to type, when the screen does not search
+     * the library (the game folder searches mods, folders and files). */
+    placeholderKey?: string;
   }
   let {
     defs,
@@ -87,6 +90,7 @@
     perfUnreadable = 0,
     end,
     inlineCount = false,
+    placeholderKey = "library.searchPlaceholder",
   }: Props = $props();
 
   const defOf = (key: string) => defs.find((d) => d.key === key);
@@ -248,7 +252,7 @@
   <label class="search">
     <span class="sr">{t("library.search")}</span>
     <span class="field">
-      <input class="input" placeholder={t("library.searchPlaceholder")} bind:value={query} />
+      <input class="input" placeholder={t(placeholderKey)} bind:value={query} />
       {#if query}
         <button type="button" class="wipe" title={t("filters.clearSearch")} onclick={() => (query = "")}>×</button>
       {/if}

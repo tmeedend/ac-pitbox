@@ -1,6 +1,6 @@
-//! Façades de l'écran Dossier du jeu (DOSSIER§9.1). Toutes en lecture : le scan
-//! lit le disque et un instantané de la base, les requêtes lisent l'index en
-//! mémoire.
+//! Facades of the game folder screen (DOSSIER§9.1). All of them read: the scan
+//! reads the disk and a snapshot of the database, the queries read the index in
+//! memory.
 
 use std::sync::Arc;
 
@@ -8,7 +8,7 @@ use tauri::{Emitter, Manager};
 
 use super::prelude::*;
 use crate::gamestate::{
-    self, ChildrenPage, Detail, Filters, NodeId, SearchLimits, SearchResults, Snapshot, Status, Store,
+    self, ChildrenPage, Detail, Filters, NodeId, OwnerOption, SearchLimits, SearchResults, Snapshot, Status, Store,
 };
 
 fn index(store: &Store) -> Result<Arc<gamestate::Index>, String> {
@@ -89,6 +89,12 @@ pub fn game_folder_search(
     limits: SearchLimits,
 ) -> Result<SearchResults, String> {
     Ok(index(&store)?.search(&query, &filters, limits))
+}
+
+/// What the Provenance chip offers (DOSSIER§6.2).
+#[tauri::command]
+pub fn game_folder_owners(store: State<Store>) -> Result<Vec<OwnerOption>, String> {
+    Ok(index(&store)?.owner_options())
 }
 
 /// The chain of nodes down to `path` (relative to the game folder), or `null`

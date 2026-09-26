@@ -1,9 +1,9 @@
 <script lang="ts">
   // The two tabbed screens of the rail (SPEC §7.2quater, DOSSIER§3.1):
   // **Sorting** (rules, brands, families, countries) and **Files** (import,
-  // profiles, maintenance). They split the former Workshop, and share this
-  // container because they have exactly the same mechanics - only their tabs
-  // and their title differ (`tabGroupOf`).
+  // profiles, maintenance, game folder). They split the former Workshop, and
+  // share this container because they have exactly the same mechanics - only
+  // their tabs and their title differ (`tabGroupOf`).
   //
   // Grouping tools as tabs is legitimate ONLY because none of them has a
   // sub-section of its own - which is what sets them apart from the
@@ -25,6 +25,7 @@
   import Import from "./Import.svelte";
   import Profiles from "./Profiles.svelte";
   import Maintenance from "./Maintenance.svelte";
+  import GameFolder from "$lib/components/gamestate/GameFolder.svelte";
   import { nav, requestSection, tabGroupOf, SORTING_TABS } from "$lib/shell/nav.svelte";
   import { t } from "$lib/i18n/index.svelte";
 
@@ -34,11 +35,12 @@
   // frozen labels would stay in the previous language.
   const tabs = $derived(group.map((id) => ({ id, label: t(`nav.${id}`) })));
 
-  /** The rules editor handles its own scrolling and carries an action bar at
-   * its foot (`noPad` in AppShell): the screen must then be a full-height
+  /** The rules editor and the game folder handle their own scrolling - an
+   * action bar at the foot of the one, a virtualised tree and a side panel in
+   * the other (`noPad` in AppShell): the screen must then be a full-height
    * column, not content laid in a scrolling area. The other tabs are ordinary
    * content. */
-  const full = $derived(nav.section === "rules");
+  const full = $derived(nav.section === "rules" || nav.section === "gamefolder");
 </script>
 
 <div class="workshop" class:full>
@@ -66,6 +68,8 @@
       <Profiles />
     {:else if nav.section === "maintenance"}
       <Maintenance />
+    {:else if nav.section === "gamefolder"}
+      <GameFolder />
     {/if}
   </div>
 </div>

@@ -112,6 +112,15 @@
    * rouvre est celui qu'on avait laissé.
    */
   onMount(async () => {
+    // A sheet asked for from another screen (the game folder, DOSSIER§8.2):
+    // consumed once, like `nav.openSkin`.
+    const wanted = nav.openSheet;
+    if (wanted && wanted.kind !== "app") {
+      nav.openSheet = null;
+      if (wanted.kind === "sound") fullSound = wanted.id;
+      else if (wanted.kind === "skin") fullSkin = wanted.id;
+      else void openOtherSheet(wanted.id);
+    }
     await load();
     const saved = await getUiPrefs([
       StorageKey.inventoryQuery,
@@ -291,6 +300,10 @@
       await openHost(r);
       return;
     }
+    await openOtherSheet(r.id);
+  }
+
+  async function openOtherSheet(id: string) {
     if (!otherRows) {
       try {
         otherRows = await listOtherMods();
@@ -299,7 +312,7 @@
         return;
       }
     }
-    fullOther = otherRows.find((o) => o.id === r.id) ?? null;
+    fullOther = otherRows.find((o) => o.id === id) ?? null;
   }
 
   /** Enveloppe commune des actions : état occupé, erreur remontée, relecture.

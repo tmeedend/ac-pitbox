@@ -1,4 +1,4 @@
-//! The second phase of the scan (DOSSIER§4, §5.1): crossing the disk tree with
+//! The second phase of the scan (DOSSIER§4, DOSSIER§5.1): crossing the disk tree with
 //! the database snapshot. Each step decides a **population** for what no
 //! earlier step claimed — first match wins, in the order of DOSSIER§4.1 — and
 //! the state that goes with it.
@@ -493,7 +493,7 @@ impl Classifier<'_> {
         }
     }
 
-    // --- Stored copies nobody claims (DOSSIER§4.2 "waiting", §4.3 "orphan") --
+    // --- Stored copies nobody claims (DOSSIER§4.2 "waiting", DOSSIER§4.3 "orphan") --
 
     /// Is the owner of a stored additions tree deployed? The engine's own
     /// answer, taken in the snapshot.
@@ -599,7 +599,7 @@ impl Classifier<'_> {
         }
     }
 
-    // --- The library, for the search (DOSSIER§7.1, §7.4) ---------------------
+    // --- The library, for the search (DOSSIER§7.1, DOSSIER§7.4) ---------------------
 
     fn items(&self) -> Vec<LibItem> {
         let present = |rel: PathBuf| self.tree.find(&rel).filter(|&id| self.tree.node(id).present);

@@ -9,6 +9,7 @@
   // they are given: most of them are unmounted on every tab switch, and state
   // kept there would be reloaded, or lost, each time.
   import { editBrand } from "$lib/workshop/brandFocus.svelte";
+  import { showInGameFolder } from "$lib/gamestate/gameFolder.svelte";
   import { isPlaque } from "$lib/library/brandLogos.svelte";
   import {
     activateMod,
@@ -936,6 +937,11 @@
     return parts.filter(Boolean).join(" · ");
   });
 
+  /** The game folder pruned to what this mod lays (DOSSIER§3.2). */
+  function showThisInGameFolder() {
+    void showInGameFolder({ kind: isCar ? "car" : "track", id }, detail?.display_name ?? id);
+  }
+
   // Actions de la fiche (§6.3) : le ⋮ de `FicheHeader` les rend et les
   // positionne — ici ne reste que leur liste. Cœur favori et pastille d'état
   // n'y sont pas : ils se lisent en permanence, ce ne sont pas des actions.
@@ -962,6 +968,7 @@
       items.push({ label: t("detail.editBrand", { brand }), onclick: () => void editBrand(brand) });
     }
     items.push({ label: t("detail.openFolder"), onclick: openFolder });
+    items.push({ label: t("detail.showInGameFolder"), onclick: showThisInGameFolder });
     if (!d.is_stock) {
       items.push({
         label: exporting ? t("detail.exporting") : t("detail.export"),
@@ -1204,7 +1211,7 @@
       <div class="tab-body install">
         <div class="col">
           <AttachedBlock rows={attached} onopen={(a) => void openAttachedFiche(a)} />
-          <ExtrasBlock modId={id} />
+          <ExtrasBlock modId={id} ongamefolder={showThisInGameFolder} />
           <DecisionsBlock modId={id} />
         </div>
         <div class="col">

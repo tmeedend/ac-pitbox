@@ -4,6 +4,8 @@
 
 *Un écran qui montre le dossier Assetto Corsa tel qu'il est sur le disque et, pour chaque chemin, d'où il vient. Lecture seule. Ne remplace rien : il rend visible ce que `SPEC.md` §4.5.3 à §4.5.5 et IMPORT§6 à IMPORT§7 décrivent.*
 
+> **Lot 1 livré (2026-09-26).** Les écarts assumés avec ce texte sont notés dans `CHANTIERS.md`, entrée « Dossier du jeu ».
+
 > **Une maquette accompagne cette spec** : `maquettes/pitbox-etat-dossier.html`. Elle sert à juger la disposition, l'ordre de lecture et les gestes, **pas de référence graphique** : couleurs, polices et hauteurs viennent de `styles/global.css`. Ses chiffres et ses noms sont plausibles mais inventés. En cas de divergence, la spec gagne.
 >
 > **Étiquette de renvoi : `DOSSIER§`.** À ajouter à la table de `scripts/check-refs.mjs` en même temps que le premier renvoi du code.

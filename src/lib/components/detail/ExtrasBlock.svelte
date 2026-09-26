@@ -15,6 +15,7 @@
   let {
     modId,
     source = "mod",
+    ongamefolder,
   }: {
     modId: string;
     /** Une app pose ses ajouts au jeu exactement comme une voiture (§4.5.3) :
@@ -23,6 +24,9 @@
      * ajouts au jeu que rien n'affichait avant sa fiche : `listModExtras` ne
      * regarde que `extras/<type>/<id>`, jamais `extras/packs/<nom>`. */
     source?: "mod" | "app" | "pack";
+    /** "Show in the game folder" (DOSSIER§3.2): the tree pruned to what this
+     * mod lays, wherever it is. Absent, no link. */
+    ongamefolder?: () => void;
   } = $props();
 
   let files = $state<ExtraFile[]>([]);
@@ -201,6 +205,9 @@
       <p class="empty">{t("detail.noExtras")}</p>
     {/if}
     {#if forceError}<p class="errbox">{forceError}</p>{/if}
+    {#if ongamefolder}
+      <button class="to-folder" type="button" onclick={ongamefolder}>{t("detail.showInGameFolder")}</button>
+    {/if}
   </div>
 </section>
 
@@ -226,6 +233,16 @@
   .empty {
     color: var(--muted);
     font-size: 12px;
+  }
+  .to-folder {
+    background: none;
+    padding: 0;
+    margin-top: 12px;
+    color: var(--blue);
+    font-size: 11.5px;
+  }
+  .to-folder:hover {
+    text-decoration: underline;
   }
   .grp-list,
   .file-list {

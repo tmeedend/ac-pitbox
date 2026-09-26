@@ -17,7 +17,8 @@
     "railLabel": "Navigation principale",
     "alertLabel": "éléments à vérifier",
     "openCmShort": "Content Manager",
-    "brands": "Marques"
+    "brands": "Marques",
+    "gamefolder": "Dossier du jeu"
   },
   "titlebar": {
     "bigPicture": "Mode Big Picture (plein écran)",
@@ -773,7 +774,8 @@
     "extrasForce": "Poser quand même",
     "extrasForcing": "Pose…",
     "extrasForceHint": "Remplace ce qui occupe ce chemin par la version du mod. Le fichier actuel est sauvegardé d'abord, et restauré quand plus aucun mod ne réclame ce chemin.",
-    "editBrand": "Éditer la marque {brand}"
+    "editBrand": "Éditer la marque {brand}",
+    "showInGameFolder": "Voir dans le dossier du jeu"
   },
   "lightbox": {
     "open": "Voir en grand",
@@ -1105,7 +1107,8 @@
     "surveyDone": "Relevé enregistré : {cars} voitures, {tracks} circuits",
     "surveySend": "L'envoyer sur GitHub",
     "surveyFolder": "Relever un dossier de mods…",
-    "surveyFolderTitle": "Dossier de mods à relever (ex. mods de Mod Organizer)"
+    "surveyFolderTitle": "Dossier de mods à relever (ex. mods de Mod Organizer)",
+    "seeDrifts": "Voir les dérives"
   },
   "rules": {
     "subtitle": "Ontologie éditable — appliquée de façon non destructive. Le fichier du mod n'est jamais modifié.",
@@ -1958,5 +1961,117 @@
     "upToDate": "Tous les mods sont à jour.",
     "foundCount": "{n} mise(s) à jour disponible(s).",
     "downloadPhase": "téléchargement"
+  },
+  "gamefolder": {
+    "subtitle": "Le dossier Assetto Corsa tel qu'il est sur le disque, et pour chaque chemin, d'où il vient.",
+    "searchPlaceholder": "Mod, dossier ou fichier…",
+    "filterState": "État",
+    "filterProvenance": "Provenance",
+    "fileCount": "{count} fichiers",
+    "entries": "entrées",
+    "rescan": "Rescanner",
+    "scannedNow": "Scanné à l'instant",
+    "scannedMinutes": "Scanné il y a {count} min",
+    "scannedHours": "Scanné il y a {count} h",
+    "scanningDisk": "Lecture du disque… {count} entrées",
+    "scanningClassify": "Classement de {count} entrées…",
+    "classifying": "classement…",
+    "firstScan": "Lecture du dossier du jeu…",
+    "staleBanner": "Pit Box a écrit dans le jeu depuis ce scan : ce que montre l'écran n'est peut-être plus à jour.",
+    "treeLabel": "Arbre du dossier du jeu",
+    "rootName": "Dossier du jeu",
+    "groupOriginCars": "{count} voitures d'origine, intactes",
+    "groupOriginTracks": "{count} circuits d'origine, intacts",
+    "groupNobody": "{count} éléments à personne",
+    "showNext": "Afficher les {count} suivants",
+    "mentionOrigin": "origine",
+    "mentionUnmanaged": "non géré",
+    "cmShort": "CM",
+    "state": {
+      "posed": "Posé",
+      "replacesGame": "Remplace le jeu",
+      "waiting": "En attente",
+      "drift": "Dérive",
+      "nobody": "À personne",
+      "cmZone": "Zone CM",
+      "shared": "Partagé"
+    },
+    "drift": {
+      "modified": "Modifié depuis la pose",
+      "missing": "Manquant",
+      "orphan": "Orphelin",
+      "brokenLink": "Junction cassée"
+    },
+    "cause": {
+      "modified": "Un outil l'a réécrit ; dans une zone Content Manager, c'est presque toujours CM. À corriger par la réparation générale.",
+      "missing": "Supprimé à la main, ou bibliothèque copiée sans le jeu. À corriger par la réparation générale.",
+      "orphan": "L'app a été fermée entre deux étapes, ou la base a été restaurée. À corriger par le nettoyage de la Maintenance.",
+      "brokenLink": "La bibliothèque a été déplacée, ou copiée sans ses junctions. À corriger par la réparation générale."
+    },
+    "say": {
+      "missing": "Pit Box a posé ce fichier ; il n'est plus sur le disque.",
+      "orphan": "Posé par Pit Box, mais plus rien ne le réclame.",
+      "brokenLink": "Ce lien pointe vers un dossier qui n'existe plus."
+    },
+    "presence": {
+      "inGame": "Dans le jeu",
+      "disabled": "Désactivé",
+      "unmanaged": "Non géré",
+      "origin": "Origine"
+    },
+    "ownerKind": {
+      "car": "voiture",
+      "track": "circuit",
+      "app": "app",
+      "skin": "skin",
+      "trackSkin": "skin de circuit",
+      "sound": "son",
+      "other": "autre mod",
+      "pack": "pack"
+    },
+    "groupMods": "Mods",
+    "groupDirs": "Dossiers",
+    "groupFiles": "Fichiers",
+    "seeOthers": "Voir les {count} autres",
+    "filter": "Filtrer",
+    "noResult": "Rien ne correspond à « {query} », ni dans le dossier du jeu, ni dans la bibliothèque.",
+    "backToResults": "Résultats ({count})",
+    "sayPosed": "Fourni par {name}. Posé depuis la bibliothèque.",
+    "sayPosedLink": "Fourni par {name}, par une junction vers la bibliothèque.",
+    "sayReplaces": "Remplace un fichier d'Assetto Corsa. L'original est sauvegardé et reviendra quand plus aucun mod ne réclamera ce chemin.",
+    "sayWaiting": "Un fichier que Pit Box n'a pas posé occupe ce chemin. L'exemplaire de {name} attend en bibliothèque.",
+    "sayModified": "Ce fichier a changé depuis que Pit Box l'a posé (taille : {before} → {after} octets).",
+    "sayModifiedCm": "Dans cette zone, c'est généralement Content Manager.",
+    "sayNobody": "Ni Pit Box ni un mod de la bibliothèque n'ont posé ce fichier. Pit Box n'y touche pas.",
+    "sayOrigin": "Contenu d'origine d'Assetto Corsa, intact. Pit Box n'y touche pas.",
+    "sayUnmanaged": "Un mod installé hors de Pit Box. Pit Box n'y touche pas.",
+    "sayModFolder": "Dossier déployé de {name}.",
+    "sayNotInGame": "Dans la bibliothèque, pas dans le jeu : il n'y a rien à montrer dans le dossier du jeu.",
+    "blkMechanism": "Mécanisme",
+    "blkProvenance": "Provenance",
+    "blkRevert": "Revenir en arrière",
+    "blkDrift": "Dérive",
+    "blkFolder": "Contenu",
+    "mechLibrary": "Posé depuis la bibliothèque (hardlink, ou copie entre deux disques) :",
+    "mechLink": "Junction vers :",
+    "mechLinkBroken": "Junction vers un dossier disparu :",
+    "mechReplaced": "Remplacement du contenu ; l'original dort dans :",
+    "mechMissing": "Attendu, absent du disque.",
+    "mechReal": "Fichier réel.",
+    "reasonProvides": "fournit l'exemplaire posé",
+    "reasonForced": "fournit l'exemplaire posé, autorisé explicitement",
+    "reasonOlder": "exemplaire plus ancien, {date}",
+    "reasonSameDate": "même date, installé plus tôt",
+    "reasonWaiting": "en attente : un fichier étranger occupe le chemin",
+    "revertSay": "Désactiver {names} restaure l'original.",
+    "openSheetOf": "Ouvrir la fiche de {name}",
+    "goMaintenance": "Aller à la Maintenance",
+    "version": "Version",
+    "layers": "Couches",
+    "contributors": "Mods qui y contribuent",
+    "andOthers": "et {count} autres",
+    "openSheet": "Ouvrir la fiche",
+    "filterOn": "Filtrer sur ce mod",
+    "showInExplorer": "Afficher dans l'Explorateur"
   }
 }

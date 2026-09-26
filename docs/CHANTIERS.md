@@ -25,6 +25,39 @@ de reprendre. En cas d'écart, la spec fait foi.
 
 ---
 
+- [ ] **Dossier du jeu — lot 1 livré, le lot 2 (les tailles) reste.**
+      Livré (`SPEC-etat-dossier.md`) : l'onglet Fichiers › Dossier du jeu,
+      son scan (`src-tauri/src/gamestate/`), le partage de l'Atelier en
+      Classement et Fichiers. Les tailles sont déjà dans l'index, pas encore
+      à l'écran (DOSSIER§10).
+      **Écarts assumés avec la spec**, à trancher s'ils gênent :
+      - *Manette* : haut/bas et A marchent (la navigation géométrique de
+        l'app) ; gauche/droite ne plient ni ne déplient, elles quittent
+        l'arbre comme partout ailleurs — le clavier, lui, fait tout
+        (DOSSIER§8.3 : « l'existant gagne »). Un clic sur un dossier le
+        sélectionne **et** le déplie, pour que A suffise.
+      - *Mécanisme* : « hardlink ou copie » n'est pas départagé — le nombre
+        de liens NTFS n'est pas lisible en Rust stable, et la spec dit qu'il
+        n'est pas nécessaire (DOSSIER§10).
+      - *Mod non géré* : un dossier de premier niveau de `content/cars` ou
+        `content/tracks` ni officiel ni indexé est lui aussi « non géré »
+        (la spec demandait l'entité en base) : c'est un mod de
+        l'utilisateur, il doit garder sa ligne.
+      - *En attente* se lit sur l'arbre des ajouts d'un mod **actif** dont
+        la copie n'est réclamée par aucune ligne : quand un fichier étranger
+        gagne l'arbitrage, `extras::deploy` n'enregistre pas de
+        réclamation — la base seule ne le verrait jamais.
+      - *Fiche d'une livrée* : « Ouvrir la fiche » ouvre sa fiche dans
+        Compléments ; celle d'un pack n'est pas proposée.
+      - *Compteur de génération* : bougé par les façades qui écrivent dans le
+        jeu (`GameWrite`, au début **et** à la fin), pas au plus bas niveau.
+        Une façade oubliée laisserait l'index se croire à jour ; le bouton
+        Rescanner et l'heure du scan restent le filet.
+      **Piège payé** : `preview_start` lance toujours `tauri dev` depuis le
+      dossier principal, même dans une session de worktree — il montrait donc
+      le code de `main`. Pour voir une branche, lancer `npm run tauri dev`
+      détaché depuis le worktree.
+
 - [ ] **Sessions au format `.cmpreset` — une seule vérification reste.**
       Livré (SESSION§3.6) : une session enregistrée est un preset Quick Drive
       écrit chez Content Manager, portant en plus une clé `PitBox` avec

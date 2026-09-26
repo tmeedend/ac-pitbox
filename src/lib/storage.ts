@@ -85,6 +85,11 @@ export const StorageKey = {
    * `ui_prefs.json`. `ignored`: the version the user chose to skip — a newer
    * one is announced again. `announced`: the version a toast already
    * announced — so the same update does not pop up at every startup. */
+  /** The game folder screen (DOSSIER§6.4): chips and search as the library
+   * stores them (`serializeFilters`), and the path of the selected node - a
+   * path, not a node id, which a new scan renumbers. Born in `ui_prefs.json`. */
+  gameFolderView: `${PREFIX}.gamefolder.view`,
+  gameFolderSelected: `${PREFIX}.gamefolder.selected`,
   modUpdatesIgnored: `${PREFIX}.modUpdates.ignored`,
   modUpdatesAnnounced: `${PREFIX}.modUpdates.announced`,
 } as const;

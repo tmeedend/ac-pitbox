@@ -13,6 +13,8 @@
   import AppDetail from "./AppDetail.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import StateBadge from "$lib/components/ui/StateBadge.svelte";
+  import { untrack } from "svelte";
+  import { nav } from "$lib/shell/nav.svelte";
 
   import { errorText } from "$lib/errors";
 
@@ -37,6 +39,14 @@
   let error = $state("");
   /** Fiche ouverte, `null` = la liste. Même schéma que `Library`/`DetailPage`. */
   let fullId = $state<string | null>(null);
+
+  // A sheet asked for from another screen (the game folder, DOSSIER§8.2):
+  // consumed once, like `nav.openSkin`.
+  const wantedSheet = untrack(() => nav.openSheet);
+  if (wantedSheet?.kind === "app") {
+    fullId = wantedSheet.id;
+    nav.openSheet = null;
+  }
 
   // Relu depuis la liste plutôt que mémorisé : après une activation, la fiche
   // doit refléter le nouvel état sans qu'on la remonte.

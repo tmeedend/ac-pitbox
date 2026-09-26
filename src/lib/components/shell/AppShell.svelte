@@ -130,7 +130,8 @@
   // frère de la zone qui défile : en `position: fixed`, elle se plaçait dans
   // le repère de `100vh` (non divisé par le zoom d'interface) et passait donc
   // sous le bord bas de la fenêtre — voir le commentaire de `.r-footer`.
-  const noPad = $derived(isLibrary || nav.section === "race" || nav.section === "rules");
+  // The game folder too: a virtualised tree and its panel fill the height.
+  const noPad = $derived(isLibrary || nav.section === "race" || nav.section === "rules" || nav.section === "gamefolder");
 </script>
 
 {#if !bigPictureState.active}

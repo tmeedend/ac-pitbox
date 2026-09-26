@@ -136,10 +136,16 @@ export const nav = $state<{
    * `autoLaunch`. Sert au raccourci « régler l'aperçu » de la fiche voiture,
    * qui doit tomber directement sur l'onglet Aperçu et non sur Général. */
   settingsTab: string | null;
+  /** A sheet to open on arrival on the Apps or Extras screen, set by a screen
+   * that names an element without owning its sheet - the game folder's
+   * "open the sheet" (DOSSIER§8.2). Read and cleared by the arriving screen,
+   * like `openSkin`. */
+  openSheet: { kind: "app" | "other" | "sound" | "skin"; id: string } | null;
 }>({
   section: "cars",
   prefill: null,
   settingsTab: null,
+  openSheet: null,
   openMod: null,
   openSkin: null,
   search: null,
@@ -267,8 +273,9 @@ export function openSessionZone(): Promise<boolean> {
 
 /** How the library is sorted: rules, and the three taxonomy tabs (TAXO§6). */
 export const SORTING_TABS: readonly string[] = ["rules", "brands", "categories", "countries"];
-/** What is on the disk: mods coming in, bulk activation, repair. */
-export const FILES_TABS: readonly string[] = ["import", "profiles", "maintenance"];
+/** What is on the disk: mods coming in, bulk activation, repair, and the game
+ * folder as it is (DOSSIER§3.1). */
+export const FILES_TABS: readonly string[] = ["import", "profiles", "maintenance", "gamefolder"];
 
 /** The tabs of the tabbed screen `section` belongs to, or `null` when it is
  * not one of them. The first tab is the one the rail entry opens. */

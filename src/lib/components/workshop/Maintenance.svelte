@@ -12,6 +12,7 @@
     type WaitingLayer,
   } from "$lib/workshop/maintenance";
   import { runRepair, repairState } from "$lib/workshop/repairState.svelte";
+  import { showGameFolderDrifts } from "$lib/gamestate/gameFolder.svelte";
   import { deleteLayer } from "$lib/library/library";
   import { indexStockContent } from "$lib/inventory/submods";
   import { confirm, open as openDialog, save } from "@tauri-apps/plugin-dialog";
@@ -284,6 +285,9 @@
       </button>
       {#if repairMsg}<span class="stock-msg">{repairMsg}</span>{/if}
     </div>
+    <!-- What the repair would fix, seen path by path: the game folder with
+         State = drift (DOSSIER§3.2). -->
+    <button class="see-drifts" type="button" onclick={() => void showGameFolderDrifts()}>{t("maintenance.seeDrifts")}</button>
     {#if projectionFailures.length}
       <ul class="list repair-fail-list">
         {#each projectionFailures as f (f)}
@@ -550,6 +554,16 @@
     color: var(--muted);
     padding: 40px 0;
     text-align: center;
+  }
+  .see-drifts {
+    background: none;
+    padding: 0;
+    margin-top: 10px;
+    color: var(--blue);
+    font-size: 11.5px;
+  }
+  .see-drifts:hover {
+    text-decoration: underline;
   }
   .stock-sec {
     border: 1px solid var(--line);

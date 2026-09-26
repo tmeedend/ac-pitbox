@@ -1,6 +1,6 @@
 //! End-to-end tests of the game folder scan (DOSSIER§9.3): one fixture game
-//! folder holding at least one case of every line of the tables §4.1, §4.2 and
-//! §4.3, laid by the engine itself wherever the engine lays it - activation,
+//! folder holding at least one case of every line of the tables DOSSIER§4.1, DOSSIER§4.2 and
+//! DOSSIER§4.3, laid by the engine itself wherever the engine lays it - activation,
 //! game additions, backups - so that the scan is measured against what really
 //! happens, not against a hand-made imitation of it.
 
@@ -286,7 +286,7 @@ fn node(idx: &Index, rel: &str) -> NodeId {
     idx.tree.find(Path::new(rel)).unwrap()
 }
 
-/// Rule (DOSSIER§4.1 to §4.3): every path of the fixture gets the population,
+/// Rule (DOSSIER§4.1 to DOSSIER§4.3): every path of the fixture gets the population,
 /// the state and the kind of drift the spec gives it.
 #[test]
 fn every_case_of_the_tables_is_classified() {
@@ -420,7 +420,7 @@ fn the_scan_leaves_the_disk_untouched() {
     assert!(before.1 == after.1, "the library is identical after the scan");
 }
 
-/// Rule (DOSSIER§4.5, §8.1): what is entirely nobody's folds into one line per
+/// Rule (DOSSIER§4.5, DOSSIER§8.1): what is entirely nobody's folds into one line per
 /// folder - official cars under their own label -, an unmanaged mod keeps its
 /// line, a State chip unfolds everything, and a large folder is served in
 /// slices.

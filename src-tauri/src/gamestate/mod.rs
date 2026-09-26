@@ -31,7 +31,7 @@ use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
-pub use query::{ChildrenPage, Detail, SearchLimits, SearchResults};
+pub use query::{ChildrenPage, Detail, OwnerOption, SearchLimits, SearchResults};
 pub use snapshot::Snapshot;
 pub use tree::NodeId;
 use tree::Tree;

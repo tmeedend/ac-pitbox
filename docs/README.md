@@ -120,7 +120,8 @@ fait — en cas d'écart, la spec fait foi.
   une recherche qui couvre aussi la bibliothèque. **Lecture seule** au lot 1 ;
   les tailles sont collectées dès le lot 1 et affichées au lot 2. Porte la
   règle qui tient le reste : **un seul arbre, la provenance est un filtre**.
-  Maquette : `maquettes/pitbox-etat-dossier.html`. À construire.
+  Maquette : `maquettes/pitbox-etat-dossier.html`. Lot 1 livré ; le lot 2
+  (les tailles) reste à faire.
 - **`SPEC-taxonomies.md`** (`TAXO§`) — marques, pays et familles de catégorie
   deviennent des **termes** (nom canonique, alias, emblème), curés dans trois
   onglets de l'Atelier. **Seule la table des familles est livrée** (pour
