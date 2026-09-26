@@ -1752,7 +1752,8 @@
   },
   "prefs": {
     "writeFailedTitle": "Vos réglages ne sont pas enregistrés",
-    "writeFailedBody": "Pit Box n'arrive pas à écrire ses préférences sur le disque. Ce que vous réglez reste actif jusqu'à la fermeture, puis sera perdu — favoris, tenues de pilote, filtres et vues comprises."
+    "writeFailedBody": "Pit Box n'arrive pas à écrire ses préférences sur le disque. Ce que vous réglez reste actif jusqu'à la fermeture, puis sera perdu — favoris, tenues de pilote, filtres et vues comprises.",
+    "writeFailedSessionBody": "Pit Box n'arrive pas à écrire les réglages de session sur le disque. Ils restent actifs jusqu'à la fermeture, puis seront perdus — réglages de chaque type de session et plateau d'adversaires compris."
   },
   "families": {
     "street": "Route",

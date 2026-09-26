@@ -11,19 +11,31 @@
   // Elle ne se referme pas toute seule (comme la notification de nouveau
   // périphérique) : ce n'est pas une information de passage, c'est une perte
   // de données en cours.
+  //
+  // Two files can fail this way: `ui_prefs.json` and `launch_state.json`, the
+  // session screen's settings. One notification for both — the same loss, the
+  // same title — with a sentence and a reason for each file that fails.
   import Toast from "./Toast.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { prefsWriteFailure } from "$lib/uiPrefs.svelte";
+  import { launchStateWriteFailure } from "$lib/launch/launchState.svelte";
 
   let dismissed = $state(false);
-  const failure = $derived(prefsWriteFailure());
-  const visible = $derived(failure.since !== null && !dismissed);
+  const prefs = $derived(prefsWriteFailure());
+  const session = $derived(launchStateWriteFailure());
+  const visible = $derived((prefs.since !== null || session.since !== null) && !dismissed);
 </script>
 
 {#if visible}
   <Toast tone="warn" icon="⚠" title={t("prefs.writeFailedTitle")} onclose={() => (dismissed = true)}>
-    <p class="body">{t("prefs.writeFailedBody")}</p>
-    <p class="why mono">{failure.reason}</p>
+    {#if prefs.since !== null}
+      <p class="body">{t("prefs.writeFailedBody")}</p>
+      <p class="why mono">{prefs.reason}</p>
+    {/if}
+    {#if session.since !== null}
+      <p class="body">{t("prefs.writeFailedSessionBody")}</p>
+      <p class="why mono">{session.reason}</p>
+    {/if}
   </Toast>
 {/if}
 
@@ -40,5 +52,9 @@
     font-size: 10.5px;
     color: var(--muted2);
     overflow-wrap: anywhere;
+  }
+  /* Both files failing: a gap between the two. */
+  .why + .body {
+    margin-top: 10px;
   }
 </style>

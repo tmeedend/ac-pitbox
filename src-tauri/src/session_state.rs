@@ -89,7 +89,14 @@ pub fn load_launch_state(app: &AppHandle) -> LaunchState {
     }
 }
 
+/// Logged as well as returned: the screen calls this on every change, and a
+/// failure the user never sees must at least leave a trace in the log file —
+/// a packaged app has no console (golden rule 6).
 pub fn save_launch_state(app: &AppHandle, state: &LaunchState) -> Result<(), String> {
+    write_launch_state(app, state).inspect_err(|e| log::warn!("launch_state.json not saved: {e}"))
+}
+
+fn write_launch_state(app: &AppHandle, state: &LaunchState) -> Result<(), String> {
     let path = launch_state_file(app).ok_or("dossier de config indisponible")?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;

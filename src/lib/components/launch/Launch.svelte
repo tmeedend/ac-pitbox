@@ -48,7 +48,7 @@
   import { OpponentGrid } from "$lib/launch/opponentGrid.svelte";
   import { restoreOpponent } from "$lib/launch/gridRules";
   import { presetFromSetup, readPreset } from "$lib/launch/typePresets";
-  import { loadLaunchState, saveLaunchState, selectionOf, type TypePresets } from "$lib/launch/launchState";
+  import { loadLaunchState, saveLaunchState, selectionOf, type TypePresets } from "$lib/launch/launchState.svelte";
   import { restoreCar, restoreTrack } from "$lib/launch/sessionRestore";
 
   import { errorText } from "$lib/errors";
