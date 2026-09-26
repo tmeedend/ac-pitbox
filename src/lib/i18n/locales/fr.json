@@ -332,10 +332,12 @@
     "unsavedTitle": "Modifications non enregistrées",
     "unsavedPrompt": "Des réglages ont été modifiés (et déjà appliqués en aperçu, ex. zoom/langue) mais pas enregistrés. Enregistrer, ou annuler et revenir en arrière ?",
     "bigpictureView": "Vue de bibliothèque",
-    "bigpictureView.comfortable": "Vignettes espacées",
-    "bigpictureView.dense": "Vignettes denses",
-    "bigpictureView.table": "Tableau",
-    "bigpictureView.keep": "Garder la vue en cours",
+    "bigpictureViewOption": {
+      "comfortable": "Vignettes espacées",
+      "dense": "Vignettes denses",
+      "table": "Tableau",
+      "keep": "Garder la vue en cours"
+    },
     "bigpictureViewHint": "Ce que la bibliothèque affiche en Big Picture. Le réglage habituel est retrouvé en sortant.",
     "tabWiki": "Wikipédia",
     "tabWikiHint": "L'extrait d'article affiché sur la fiche d'une voiture ou d'un circuit."

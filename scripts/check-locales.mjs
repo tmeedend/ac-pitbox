@@ -15,6 +15,13 @@
 //    (« mods importés » au lieu de « 12 mods importés »), et une qui invente
 //    un nom de variable affiche l'accolade brute à l'écran. Ni l'un ni l'autre
 //    ne se voit à la relecture d'une langue qu'on ne parle pas.
+//  - **Point dans un nom de clé** (`"bigpictureView.table": …`) = ERREUR.
+//    `t()` découpe le chemin sur les points (`lookup`, `i18n/index.svelte.ts`) :
+//    une telle clé est inatteignable, et la clé brute s'affiche à l'écran. Les
+//    autres contrôles ne la voient pas, puisqu'ils aplatissent les
+//    dictionnaires avec la même notation — le chemin qu'ils calculent est
+//    exactement celui que `t()` ne sait pas suivre. Bug réel : les quatre
+//    options de « Vue de bibliothèque » (Réglages › Big Picture).
 //  - **Clé manquante dans une locale de traduction** = simple compte affiché.
 //    `t()` retombe sur l'anglais (`i18n/index.svelte.ts`), donc une traduction
 //    partielle s'affiche en anglais là où elle manque — jamais la clé brute.
@@ -37,11 +44,15 @@ function placeholders(text) {
   return new Set([...String(text).matchAll(/\{(\w+)\}/g)].map((m) => m[1]));
 }
 
+/** Noms de clé contenant un point, par locale : inatteignables par `t()`. */
+const dotted = [];
+
 /** Chaînes d'un dictionnaire, indexées par chemin en points. */
-function stringsOf(value, prefix = "", out = new Map()) {
+function stringsOf(value, prefix = "", out = new Map(), code = "") {
   for (const [k, v] of Object.entries(value)) {
     const path = prefix ? `${prefix}.${k}` : k;
-    if (v && typeof v === "object") stringsOf(v, path, out);
+    if (k.includes(".")) dotted.push(`${code}.json : « ${path} »`);
+    if (v && typeof v === "object") stringsOf(v, path, out, code);
     else out.set(path, v);
   }
   return out;
@@ -52,13 +63,13 @@ const codes = readdirSync(DIR)
   .filter((f) => f.endsWith(".json"))
   .map((f) => f.slice(0, -5));
 
-const referenceStrings = stringsOf(load(REFERENCE));
+const referenceStrings = stringsOf(load(REFERENCE), "", new Map(), REFERENCE);
 const reference = new Set(referenceStrings.keys());
 let failed = false;
 
 for (const code of codes) {
   if (code === REFERENCE) continue;
-  const strings = stringsOf(load(code));
+  const strings = stringsOf(load(code), "", new Map(), code);
   const keys = new Set(strings.keys());
 
   for (const [k, en] of referenceStrings) {
@@ -93,6 +104,11 @@ for (const code of codes) {
     const pct = Math.round((done / reference.size) * 100);
     console.log(`[locales] ${code} : ${done}/${reference.size} clés traduites (${pct} %)`);
   }
+}
+
+for (const d of dotted) {
+  console.error(`[locales] ${d} — un point dans un nom de clé la rend inatteignable par t(), qui découpe sur les points`);
+  failed = true;
 }
 
 if (failed) process.exit(1);

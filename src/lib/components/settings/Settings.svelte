@@ -314,7 +314,7 @@
             onchange={(e) => onBigPictureViewChange(e.currentTarget.value)}
           >
             {#each BIGPICTURE_VIEWS as id (id)}
-              <option value={id}>{t(`settings.bigpictureView.${id}`)}</option>
+              <option value={id}>{t(`settings.bigpictureViewOption.${id}`)}</option>
             {/each}
           </select>
         </label>

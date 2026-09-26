@@ -332,10 +332,12 @@
     "unsavedTitle": "Unsaved changes",
     "unsavedPrompt": "Some settings were changed (and already applied as a live preview, e.g. zoom/language) but not saved. Save, or discard and revert?",
     "bigpictureView": "Library view",
-    "bigpictureView.comfortable": "Spacious thumbnails",
-    "bigpictureView.dense": "Dense thumbnails",
-    "bigpictureView.table": "Table",
-    "bigpictureView.keep": "Keep the current view",
+    "bigpictureViewOption": {
+      "comfortable": "Spacious thumbnails",
+      "dense": "Dense thumbnails",
+      "table": "Table",
+      "keep": "Keep the current view"
+    },
     "bigpictureViewHint": "What the library shows in Big Picture. Your usual setting comes back on the way out.",
     "tabWiki": "Wikipedia",
     "tabWikiHint": "The article shown on a car's or a circuit's fiche."
