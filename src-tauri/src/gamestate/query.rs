@@ -193,6 +193,30 @@ pub struct SearchResults {
 /// Fewer characters than this is not a search yet (DOSSIER§7.2).
 const MIN_QUERY: usize = 2;
 
+/// A query, folded: case and accents gone, a backslash read as `/`.
+struct Query {
+    text: String,
+    words: Vec<String>,
+    /// A separator in the query: it searches full paths (DOSSIER§7.2).
+    path_mode: bool,
+}
+
+impl Query {
+    /// The first word: a name starting with it ranks first (DOSSIER§7.3).
+    fn first(&self) -> &str {
+        self.words.first().map(String::as_str).unwrap_or("")
+    }
+}
+
+impl<T> Group<T> {
+    fn empty() -> Self {
+        Group {
+            total: 0,
+            items: Vec::new(),
+        }
+    }
+}
+
 fn iso(t: std::time::SystemTime) -> String {
     chrono::DateTime::<chrono::Local>::from(t).to_rfc3339()
 }
@@ -522,53 +546,50 @@ impl Index {
     /// case- and accent-insensitive, every word required. A query with a
     /// separator searches full paths.
     pub fn search(&self, query: &str, f: &Filters, limits: SearchLimits) -> SearchResults {
-        let empty = || SearchResults {
-            mods: Group {
-                total: 0,
-                items: Vec::new(),
-            },
-            dirs: Group {
-                total: 0,
-                items: Vec::new(),
-            },
-            files: Group {
-                total: 0,
-                items: Vec::new(),
-            },
-        };
         let q = crate::rules::fold(query.trim()).replace('\\', "/");
-        if q.chars().count() < MIN_QUERY {
-            return empty();
+        let q = Query {
+            path_mode: q.contains('/'),
+            words: q.split_whitespace().map(str::to_string).collect(),
+            text: q,
+        };
+        if q.text.chars().count() < MIN_QUERY {
+            return SearchResults {
+                mods: Group::empty(),
+                dirs: Group::empty(),
+                files: Group::empty(),
+            };
         }
-        let path_mode = q.contains('/');
-        let words: Vec<&str> = q.split_whitespace().collect();
-        let first = words.first().copied().unwrap_or("");
+        let (dirs, files) = self.search_paths(&q, f, limits);
+        SearchResults {
+            mods: self.search_mods(&q, f, limits.mods),
+            dirs,
+            files,
+        }
+    }
 
-        // Mods: by display name and by id, laid or not (DOSSIER§7.1).
+    /// Mods: by display name and by id, laid or not (DOSSIER§7.1).
+    fn search_mods(&self, q: &Query, f: &Filters, limit: usize) -> Group<ModHit> {
         let owner_filter = f.owner.as_ref().map(|r| self.owner_id(r));
         let mut mods: Vec<&super::LibItem> = self
             .items
             .iter()
-            .filter(|it| match owner_filter {
-                Some(o) => o == Some(it.owner),
-                None => true,
-            })
+            .filter(|it| owner_filter.is_none_or(|o| o == Some(it.owner)))
             .filter(|it| {
-                if path_mode {
-                    it.folded_id.contains(q.as_str())
+                if q.path_mode {
+                    it.folded_id.contains(q.text.as_str())
                 } else {
-                    words
+                    q.words
                         .iter()
-                        .all(|w| it.folded_name.contains(w) || it.folded_id.contains(w))
+                        .all(|w| it.folded_name.contains(w.as_str()) || it.folded_id.contains(w.as_str()))
                 }
             })
             .collect();
-        mods.sort_by_cached_key(|it| (!it.folded_name.starts_with(first), it.folded_name.clone()));
-        let mods = Group {
+        mods.sort_by_cached_key(|it| (!it.folded_name.starts_with(q.first()), it.folded_name.clone()));
+        Group {
             total: mods.len(),
             items: mods
                 .iter()
-                .take(limits.mods)
+                .take(limit)
                 .map(|it| ModHit {
                     owner: self.owner_of(it.owner),
                     presence: it.presence,
@@ -576,34 +597,43 @@ impl Index {
                     drift: it.node.is_some_and(|n| self.counts[n as usize].drift > 0),
                 })
                 .collect(),
-        };
+        }
+    }
 
+    /// Does node `id` answer `q`? A plain query: at least one word in its own
+    /// name - a file is found by its name, not by its folder's -, the others
+    /// anywhere in its path. A path query: the match must end in its own name,
+    /// so that `skins/red` finds the livery folder, not each of its files.
+    fn path_hit(&self, id: NodeId, q: &Query, paths: Option<&[Box<str>]>) -> bool {
+        let name = self.tree.folded_name(id);
+        match paths {
+            Some(paths) => {
+                let p = &paths[id as usize];
+                p.rfind(q.text.as_str())
+                    .is_some_and(|at| at + q.text.len() > p.len() - name.len())
+            }
+            None => {
+                let missing: Vec<&String> = q.words.iter().filter(|w| !name.contains(w.as_str())).collect();
+                if missing.len() == q.words.len() {
+                    return false;
+                }
+                missing.is_empty() || {
+                    let p = self.folded_path_of(id);
+                    missing.iter().all(|w| p.contains(w.as_str()))
+                }
+            }
+        }
+    }
+
+    /// Folders and files of the index answering `q`, under the filters.
+    fn search_paths(&self, q: &Query, f: &Filters, limits: SearchLimits) -> (Group<PathHit>, Group<PathHit>) {
         let counts = self.view(f);
         let owner = f.owner.as_ref().map(|r| self.owner_id(r));
-        let paths = path_mode.then(|| self.folded_paths());
+        let paths = q.path_mode.then(|| self.folded_paths());
         let mut dirs = Vec::new();
         let mut files = Vec::new();
         for id in 1..self.tree.len() as NodeId {
-            let name = self.tree.folded_name(id);
-            let hit = match paths {
-                // The match must end in the node's own name: `skins/red` finds
-                // the livery folder, not each of its files.
-                Some(paths) => {
-                    let p = &paths[id as usize];
-                    p.rfind(q.as_str())
-                        .is_some_and(|at| at + q.len() > p.len() - name.len())
-                }
-                None => {
-                    words.iter().any(|w| name.contains(w)) && {
-                        let missing: Vec<&&str> = words.iter().filter(|w| !name.contains(**w)).collect();
-                        missing.is_empty() || {
-                            let p = self.folded_path_of(id);
-                            missing.iter().all(|w| p.contains(**w))
-                        }
-                    }
-                }
-            };
-            if !hit || !self.shown(id, f, &counts, owner) {
+            if !self.path_hit(id, q, paths) || !self.shown(id, f, &counts, owner) {
                 continue;
             }
             // A junction is a folder to whoever looks for one - a livery, an
@@ -615,34 +645,28 @@ impl Index {
                 files.push(id);
             }
         }
-        let rank = |ids: &mut Vec<NodeId>| {
+        let hits = |mut ids: Vec<NodeId>, limit: usize| {
             ids.sort_by_cached_key(|&id| {
                 let name = self.tree.folded_name(id);
-                (!name.starts_with(first), name.to_string())
-            })
+                (!name.starts_with(q.first()), name.to_string())
+            });
+            Group {
+                total: ids.len(),
+                items: ids
+                    .into_iter()
+                    .take(limit)
+                    .map(|id| PathHit {
+                        row: self.row(id, &counts, !f.is_empty()),
+                        parent: self
+                            .tree
+                            .rel_path(self.tree.node(id).parent)
+                            .to_string_lossy()
+                            .into_owned(),
+                    })
+                    .collect(),
+            }
         };
-        rank(&mut dirs);
-        rank(&mut files);
-        let hits = |ids: Vec<NodeId>, limit: usize| Group {
-            total: ids.len(),
-            items: ids
-                .into_iter()
-                .take(limit)
-                .map(|id| PathHit {
-                    row: self.row(id, &counts, !f.is_empty()),
-                    parent: self
-                        .tree
-                        .rel_path(self.tree.node(id).parent)
-                        .to_string_lossy()
-                        .into_owned(),
-                })
-                .collect(),
-        };
-        SearchResults {
-            mods,
-            dirs: hits(dirs, limits.dirs),
-            files: hits(files, limits.files),
-        }
+        (hits(dirs, limits.dirs), hits(files, limits.files))
     }
 
     /// Folded path of one node, built from its ancestors' folded names.
