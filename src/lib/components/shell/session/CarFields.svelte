@@ -150,7 +150,9 @@
      destination — la distinction est ténue mais constante. -->
 <button
   class="field"
+  class:here={nav.section === "driver"}
   type="button"
+  aria-current={nav.section === "driver" ? "page" : undefined}
   title={driverUntouched ? t("session.driverStockTooltip") : t("session.driverTooltip")}
   onclick={() => requestSection("driver")}
 >

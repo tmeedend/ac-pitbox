@@ -1015,7 +1015,7 @@ L'application compte une douzaine de destinations. Elles se répartissent en tro
 | --- | --- | --- |
 | **Rail** (à gauche, `NavRail.svelte`) | *où je vais* | les destinations — des lieux qu'on parcourt, plus **Ouvrir CM** en pied |
 | **Barre de titre** (en haut, `TitleBar.svelte`) | *quelle forme a la fenêtre* | réduire, agrandir, fermer, Big Picture — **et l'identité de l'app** : logo, nom, sous-titre |
-| **Colonne de session** (`SessionColumn.svelte`) | *ce que je lance* | circuit, voiture, livrée, pilote, performance, type de session, lancement |
+| **Colonne de session** (`SessionColumn.svelte`) | *ce que je lance* | circuit, voiture, livrée, pilote, performance, type de session, lancement — **seulement dans la zone session** |
 
 **La marque est dans la barre de titre, pas dans la colonne.** Elle a occupé un
 bandeau en tête de la colonne de session — tuile, nom, sous-titre empilés — soit
@@ -1032,14 +1032,47 @@ Avant ce découpage, la colonne de session faisait office de navigation en plus 
 
 **Règle d'architecture : le rail porte les lieux, les onglets vivent à l'intérieur d'un lieu, aucun lieu n'a deux niveaux d'onglets.** C'est elle qui décide de tout le reste. Les deux inventaires restants (compléments, apps) portent déjà leurs propres facettes ou onglets : les ranger sous un onglet supplémentaire produirait deux rangées horizontales de forme identique, sans que rien n'indique laquelle commande l'autre. Ils sont donc des entrées de rail à part entière. Les quatre outils de l'Atelier, à l'inverse, n'ont **aucune** sous-rubrique — c'est la seule raison pour laquelle ce regroupement-là est légitime et l'autre non (§7.2quater).
 
-**Sept entrées, deux rangs nommés** : *La session* — Circuits · Voitures ·
-Pilote — puis *Le jeu* — Apps · Compléments — puis Atelier, et en pied
-Réglages · Ouvrir CM · À propos. **Le circuit avant la voiture**, comme dans la
-colonne de session : c'est l'ordre de la décision (SESSION§1), et deux listes qui
-portent les mêmes entités dans deux ordres différents se paient à chaque coup
-d'œil. Les rangs ne classent pas par type de contenu mais par
-**durée de validité** de ce qu'on y règle : ce qui se décide à chaque session,
-et ce qui reste vrai jusqu'à nouvel ordre. Les deux écrans d'add-ons ont
+**Session, seule au-dessus du filet** ; puis Apps · Compléments · Atelier ;
+et en pied Réglages · Ouvrir CM · À propos. Aucun intitulé de rang : avec une
+seule entrée au-dessus, il redirait ce que le filet sépare déjà.
+
+**La colonne de session est une zone, pas du mobilier permanent.** Elle n'est
+affichée que sur les écrans qui choisissent ce qu'on lance — Voitures,
+Circuits, Pilote, et l'écran de réglages de la session — et sa largeur est
+rendue au contenu partout ailleurs (Apps, Compléments, Atelier, Réglages, À
+propos). **Sans glissement** : un panneau de 328 px qui entre et sort à chaque
+clic de rail devient pénible en une soirée, l'apparition est instantanée. Elle
+est masquée et non démontée — revenir à une bibliothèque ne recharge pas le
+détail du duo, et le nom ne clignote pas.
+
+Le rail portait Circuits, Voitures et Pilote sous un intitulé *La session*, à
+côté d'une colonne qui s'appelle elle aussi Session : trois entrées qui
+faisaient exactement ce que fait un clic sur la carte correspondante de la
+colonne, avec une icône générique là où la carte montre ce qui est retenu et
+porte ses sous-choix (layout, livrée, pilote, performance). Elles sont
+remplacées par **une seule entrée `Session`**, qui ramène à la **dernière
+bibliothèque consultée** (Voitures au démarrage, puisque l'app s'ouvre sur
+elle — l'écran Pilote n'est pas une bibliothèque et n'est pas retenu). Pas
+d'écran de tableau de bord derrière : il serait vide, et doublerait la colonne.
+Le bouton Start de la manette, qui amène le curseur sur « Démarrer la
+session », passe par le même chemin quand on est hors de la zone.
+
+**« Vous êtes ici », sur deux niveaux.** L'entrée `Session` du rail reste
+active sur les quatre écrans de la zone ; dans la colonne, la carte de l'écran
+affiché porte le même filet gauche rouge de 2 px qu'une entrée de rail active —
+la carte voiture sur Voitures, la carte circuit sur Circuits, la ligne
+`PILOTE` du bloc voiture sur Pilote, le type de session sur l'écran de
+réglages (SESSION§1.1). Sans ce relais, l'indication de position disparaissait
+des deux écrans les plus visités. C'est le niveau 2 du barème (§7.2ter, « ce
+qui a le focus ») : il remplace l'ancien encadré rouge du bloc voiture, retiré
+parce qu'il ne disait rien — celui-ci dit une chose précise.
+
+**Quitter Big Picture est au pied du rail** quand le mode est actif. Le bouton
+vivait en bas de la colonne de session : masquée hors de la zone, elle ne
+laissait plus que la touche Échap pour sortir depuis Apps ou Réglages. Le rail
+est sur tous les écrans, et son pied porte déjà ce qui n'est pas un lieu.
+
+Les deux écrans d'add-ons ont
 disparu — ils classaient par mécanique d'installation, c'est-à-dire par la
 complexité que l'app existe pour absorber — et leur contenu vit dans
 l'inventaire (§7bis). Apps devient une entrée : une app a un nom, une identité,
@@ -1294,7 +1327,7 @@ L'état d'activation n'est jamais déduit de `SessionPick` (juste id/nom/preview
 
 #### 7.4bis Raccourcis manette
 
-**Raccourcis manette** ( `Action` dans `gamepadProfile.ts`) : cinq boutons au-delà du déplacement du curseur, **tous optionnels** — un profil sans eux reste parfaitement utilisable, un raccourci absent ne fait rien et ne bloque rien. Sur le layout standard ils sont placés là où les interfaces de console les mettent : **gâchettes hautes** LB/RB (boutons 4/5) = onglet précédent/suivant, **gâchettes basses** LT/RT (6/7) = mod précédent/suivant, **Start** (9) = amener le curseur sur « Démarrer la session », **Y** (3) = ouvrir le menu contextuel de l'élément ciblé. Les deux paires sont voisines et ne font pas la même chose : onglets au-dessus, contenu en dessous, c'est cet ordre qui rend le couple mémorisable. Front montant uniquement, jamais de répétition au maintien — changer de mod recharge une fiche entière et reconvertit un modèle 3D, une rafale n'a rien d'un service. Les gâchettes hautes ont un **repli** : quand l'écran affiché n'a pas d'onglets (`cycleTab` répond `false`), elles changent de **zone** — barre latérale, liste, fiche de droite, marquées par `data-gp-region` et prises au niveau le plus interne (la zone de contenu d'`AppShell` en est une pour un écran d'un seul tenant ; la bibliothèque la redécoupe en deux). C'est ce qui manquait à la bibliothèque, seul écran sans onglets : rejoindre les filtres depuis le menu latéral, ou la fiche depuis la liste, demandait de traverser des centaines de cartes à la croix. Le curseur revient dans chaque zone **là où on l'avait laissé**, sinon l'aller-retour coûte le défilement. Le bouton menu synthétise un vrai événement `contextmenu` sur l'élément ciblé plutôt que de passer par un registre par écran : tout ce qui répond déjà à la souris (cartes, lignes, panneau de détail) répond du même coup, sans une ligne de code de sa part. Il est devenu nécessaire le jour où les actions groupées sont passées au clic droit — sans lui, elles auraient été inatteignables au volant. Start **amène le curseur**, il ne lance pas : lancer d'une pression depuis n'importe quel écran, sans avoir vu ce qu'on lance, serait le contraire d'un raccourci utile (la barre latérale étant toujours montée, la cible existe quel que soit l'écran ; elle se repère par l'attribut `data-gp-launch`, pas par sa classe — un nom de classe est du style, il se renomme sans qu'on pense à ce fichier).
+**Raccourcis manette** ( `Action` dans `gamepadProfile.ts`) : cinq boutons au-delà du déplacement du curseur, **tous optionnels** — un profil sans eux reste parfaitement utilisable, un raccourci absent ne fait rien et ne bloque rien. Sur le layout standard ils sont placés là où les interfaces de console les mettent : **gâchettes hautes** LB/RB (boutons 4/5) = onglet précédent/suivant, **gâchettes basses** LT/RT (6/7) = mod précédent/suivant, **Start** (9) = amener le curseur sur « Démarrer la session », **Y** (3) = ouvrir le menu contextuel de l'élément ciblé. Les deux paires sont voisines et ne font pas la même chose : onglets au-dessus, contenu en dessous, c'est cet ordre qui rend le couple mémorisable. Front montant uniquement, jamais de répétition au maintien — changer de mod recharge une fiche entière et reconvertit un modèle 3D, une rafale n'a rien d'un service. Les gâchettes hautes ont un **repli** : quand l'écran affiché n'a pas d'onglets (`cycleTab` répond `false`), elles changent de **zone** — barre latérale, liste, fiche de droite, marquées par `data-gp-region` et prises au niveau le plus interne (la zone de contenu d'`AppShell` en est une pour un écran d'un seul tenant ; la bibliothèque la redécoupe en deux). C'est ce qui manquait à la bibliothèque, seul écran sans onglets : rejoindre les filtres depuis le menu latéral, ou la fiche depuis la liste, demandait de traverser des centaines de cartes à la croix. Le curseur revient dans chaque zone **là où on l'avait laissé**, sinon l'aller-retour coûte le défilement. Le bouton menu synthétise un vrai événement `contextmenu` sur l'élément ciblé plutôt que de passer par un registre par écran : tout ce qui répond déjà à la souris (cartes, lignes, panneau de détail) répond du même coup, sans une ligne de code de sa part. Il est devenu nécessaire le jour où les actions groupées sont passées au clic droit — sans lui, elles auraient été inatteignables au volant. Start **amène le curseur**, il ne lance pas : lancer d'une pression depuis n'importe quel écran, sans avoir vu ce qu'on lance, serait le contraire d'un raccourci utile (hors de la zone session, où la colonne est masquée, Start y mène d'abord, comme l'entrée `Session` du rail ; la cible se repère par l'attribut `data-gp-launch`, pas par sa classe — un nom de classe est du style, il se renomme sans qu'on pense à ce fichier).
 
 **Les panneaux flottants prennent la navigation à eux** (`data-gp-overlay`) : le popover d'un filtre, le menu d'ajout, le menu contextuel. Quand l'un s'ouvre, le curseur y entre ; tant qu'il est ouvert, la croix ne circule **que** dedans (les gâchettes de zone ne répondent plus, le bouton menu non plus) ; Annuler le referme et rend le curseur à l'élément d'où il venait — la puce, la carte. C'est la seule exception au « plus proche voisin géométrique », et elle est nécessaire pour deux raisons distinctes : un panneau flottant n'appartient à aucune zone de mise en page, donc la géométrie y entre et en sort au hasard ; et surtout il est en `position: fixed`, or **`offsetParent` vaut `null` pour tout élément en `fixed`** (spec HTML) — le test de visibilité de la navigation les écartait donc purement et simplement. Le menu contextuel était dans ce cas depuis le début : le bouton menu de la manette l'ouvrait, et rien ne permettait ensuite d'en choisir une ligne, ce qui vidait de son sens le raccourci décrit juste au-dessus. Le repli sur les rectangles de rendu est **réservé à l'intérieur d'un panneau** : l'étendre à toute l'app y ferait entrer d'un coup la barre de titre, les notifications et les modales, avec le bouton « fermer la fenêtre » au passage. La fermeture passe par un **Échap synthétisé** plutôt que par un registre : chaque panneau porte déjà sa propre fermeture sur cette touche, exactement comme le bouton menu synthétise un `contextmenu`. La manette n'entre d'autorité que si elle pilotait déjà (repère visible) — sinon elle volerait le curseur d'une souris qui vient d'ouvrir le panneau — et elle ne le déplace pas quand le panneau a posé le sien (le menu d'ajout démarre dans son champ de recherche, qui est le bon point de départ). Les **modales** (BulkImport, sélection d'adversaire) restent hors périmètre : elles ne piègent toujours pas le focus.
 

@@ -472,13 +472,15 @@ tourne en fond pour toute l'app (glisser-déposer, manette, suivi des lots,
 mises à jour…) se démarre dans `src/lib/shell/shellServices.ts`, pas par un
 `onMount` de plus dans la coquille. Correspondance section → composant :
 
-Le rail a **deux rangs**, et ils ne classent pas par type de contenu mais par
-**durée de validité** de ce qu'on y règle : *La session* (ce qui se décide à
-chaque fois) et *Le jeu* (ce qui reste vrai jusqu'à nouvel ordre).
+Le rail n'a qu'**une entrée pour la session**, seule au-dessus du filet :
+`Session` couvre `cars`, `tracks`, `driver` et `race` (`SESSION_ZONE` de
+`nav.svelte.ts`) et ramène à la dernière bibliothèque consultée. **La colonne de
+session n'est affichée que sur ces quatre écrans** ; c'est sa carte (voiture,
+circuit, ligne pilote) qui dit lequel est ouvert (§7.2).
 
 | Section | Composant | Note |
 | --- | --- | --- |
-| `cars` / `tracks` | `library/Library.svelte` | **rendu deux fois**, prop `kind` — persistance suffixée par type |
+| `cars` / `tracks` | `library/Library.svelte` | **rendu deux fois**, prop `kind` — persistance suffixée par type ; atteint par l'entrée `Session` ou les cartes de la colonne |
 | `driver` | `driver/DriverScreen.svelte` | galerie des mannequins + panneau d'essayage |
 | `apps` | `inventory/Apps.svelte` | écran à part entière depuis la refonte (§3.2) |
 | `others` | `inventory/Inventory.svelte` | **l'inventaire des compléments** — cinq sources en une liste |

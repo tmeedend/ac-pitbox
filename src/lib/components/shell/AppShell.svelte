@@ -15,7 +15,7 @@
   import PendingDialog from "$lib/components/workshop/PendingDialog.svelte";
   import ShellToasts from "$lib/components/toasts/ShellToasts.svelte";
   import ControllerSetup from "$lib/components/settings/ControllerSetup.svelte";
-  import { nav } from "$lib/shell/nav.svelte";
+  import { nav, inSessionZone, rememberLibrary } from "$lib/shell/nav.svelte";
   import { recordScreen } from "$lib/shell/navHistory";
   import { startShellServices } from "$lib/shell/shellServices";
   import { controllers } from "$lib/shell/gamepadDevices.svelte";
@@ -102,6 +102,15 @@
   $effect(() => {
     recordScreen({ section: nav.section, openFull: nav.openFull, openPack: nav.openPack });
   });
+  // Same reasoning for the library the rail's `Session` entry returns to:
+  // observed here, whichever path changed the screen.
+  $effect(() => rememberLibrary(nav.section));
+
+  // The session column is a zone, not permanent furniture (SPEC §7.2): shown
+  // on the screens that choose what will be launched, its width given back to
+  // the screen everywhere else. No slide — a 328 px panel sliding in and out
+  // at every rail click wears thin within an evening.
+  const sessionZone = $derived(inSessionZone(nav.section));
 
   // Ambiance musicale suit l'écran affiché tant que Big Picture est actif
   // (§4 de la spec musique) : GRID sur l'écran de paramétrage de la session
@@ -128,7 +137,7 @@
 {#if !bigPictureState.active}
   <TitleBar />
 {/if}
-<div class="frame" class:bigpicture={bigPictureState.active}>
+<div class="frame" class:bigpicture={bigPictureState.active} class:no-session={!sessionZone}>
   <div class="topbar"></div>
   <div class="shell">
     <!-- Zones parcourues par les gâchettes hautes de la manette (§7.4bis) :
@@ -136,7 +145,7 @@
          bibliothèque redécoupe sa moitié en deux (liste et fiche) — les zones
          imbriquées les plus internes gagnent, voir `regions()`. -->
     <NavRail {alerts} {cmAvailable} />
-    <SessionColumn {pathsBroken} />
+    <SessionColumn {pathsBroken} shown={sessionZone} />
 
     <div class="main-col">
       <main class="content" class:fixed={noPad} data-gp-region="main">
@@ -218,6 +227,11 @@
        ce qu'on y ajoute doit tenir sans allonger la colonne, d'où la largeur
        prise ici (réglée à l'œil avec l'utilisateur). */
     grid-template-columns: 74px 328px 1fr;
+  }
+  /* Outside the session zone the column is `display: none`, so it takes no
+     grid cell and the content moves into the second track. */
+  .frame.no-session .shell {
+    grid-template-columns: 74px 1fr;
   }
 
   .main-col {

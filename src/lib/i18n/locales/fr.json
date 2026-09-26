@@ -3,8 +3,6 @@
     "session": "Session",
     "atelier": "Atelier",
     "others": "Compléments",
-    "groupSession": "La session",
-    "groupGame": "Le jeu",
     "apps": "Apps",
     "rules": "Règles",
     "categories": "Familles",
@@ -14,9 +12,7 @@
     "maintenance": "Maintenance",
     "settings": "Réglages",
     "about": "À propos",
-    "driver": "Pilote",
-    "cars": "Voitures",
-    "tracks": "Circuits",
+    "exitBigPicture": "Quitter Big Picture",
     "railLabel": "Navigation principale",
     "alertLabel": "éléments à vérifier",
     "openCmShort": "Content Manager",
@@ -343,9 +339,6 @@
     "bigpictureViewHint": "Ce que la bibliothèque affiche en Big Picture. Le réglage habituel est retrouvé en sortant.",
     "tabWiki": "Wikipédia",
     "tabWikiHint": "L'extrait d'article affiché sur la fiche d'une voiture ou d'un circuit."
-  },
-  "bigpicture": {
-    "exit": "✕ Quitter Big Picture (Échap)"
   },
   "music": {
     "enable": "Activer la musique dans le mode Big Picture",

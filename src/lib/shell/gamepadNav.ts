@@ -25,7 +25,8 @@
 // Limite connue, toujours là : les **modales** (BulkImport, sélection
 // d'adversaire…) ne piègent pas le focus — hors périmètre demandé.
 
-import { nav } from "./nav.svelte";
+import { tick } from "svelte";
+import { nav, inSessionZone, openSessionZone } from "./nav.svelte";
 import { deviceRecords, gamepadEnabled } from "./gamepadDevices.svelte";
 import { cycleTab, navigateMod } from "./screenActions";
 import { goBackOr } from "./navHistory";
@@ -422,14 +423,19 @@ function closeOverlay(): boolean {
 /** Bouton « Démarrer la session » de la barre latérale (§7.4bis) : le bouton
  * Start y **amène le curseur**, il ne lance pas. Lancer d'une pression depuis
  * n'importe quel écran, sans avoir vu ce qu'on lance, serait le contraire d'un
- * raccourci utile. La barre latérale est toujours montée, donc la cible existe
- * quel que soit l'écran ouvert.
+ * raccourci utile. The column is only shown inside the session zone
+ * (SPEC §7.2): from anywhere else, Start first goes there — the way the rail's
+ * `Session` entry does — so that the button has somewhere to be.
  *
  * Repéré par un attribut dédié plutôt que par sa classe : un nom de classe est
  * du style, il se renomme sans qu'on pense à ce fichier. */
 export const LAUNCH_BUTTON_ATTR = "data-gp-launch";
 
-function focusLaunchButton() {
+async function focusLaunchButton(): Promise<void> {
+  if (!inSessionZone(nav.section)) {
+    if (!(await openSessionZone())) return;
+    await tick();
+  }
   const el = document.querySelector<HTMLElement>(`[${LAUNCH_BUTTON_ATTR}]`);
   if (el) setGamepadFocus(el);
 }
@@ -857,7 +863,7 @@ export function startGamepadNav(): () => void {
         if (cur.tabNext && !last.tabNext && !cycleTab(1)) cycleRegion(1);
         if (cur.modPrev && !last.modPrev) navigateMod(-1);
         if (cur.modNext && !last.modNext) navigateMod(1);
-        if (cur.start && !last.start) focusLaunchButton();
+        if (cur.start && !last.start) void focusLaunchButton();
         if (cur.menu && !last.menu) {
           const el = document.activeElement as HTMLElement | null;
           // Jamais depuis l'intérieur d'un panneau flottant : ses lignes n'ont

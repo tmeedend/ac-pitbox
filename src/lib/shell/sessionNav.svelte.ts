@@ -3,8 +3,9 @@
 //
 // **Why a store, like `gridMods` and `playerHandicap`.** The session type used
 // to be a segmented control inside the settings screen; it is now the
-// navigation of the session column, which is on screen at all times, while the
-// settings screen (`Launch.svelte`) is mounted only while it is open. The list
+// navigation of the session column, which stays mounted on every screen (only
+// hidden outside the session zone, SPEC §7.2), while the settings screen
+// (`Launch.svelte`) is mounted only while it is open. The list
 // has to be able to show — and change — the type from anywhere, so the type
 // cannot live in a component that may not be there.
 //

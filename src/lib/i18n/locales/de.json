@@ -10,8 +10,7 @@
     "maintenance": "Wartung",
     "settings": "Einstellungen",
     "about": "Über",
-    "cars": "Fahrzeuge",
-    "tracks": "Strecken",
+    "exitBigPicture": "Big Picture verlassen",
     "railLabel": "Hauptnavigation",
     "alertLabel": "zu prüfende Einträge"
   },
@@ -238,9 +237,6 @@
     "discard": "Änderungen verwerfen",
     "unsavedTitle": "Nicht gespeicherte Änderungen",
     "unsavedPrompt": "Einige Einstellungen wurden geändert (und bereits als Live-Vorschau angewendet, z. B. Zoom/Sprache), aber nicht gespeichert. Speichern oder verwerfen und zurücksetzen?"
-  },
-  "bigpicture": {
-    "exit": "✕ Big Picture verlassen (Esc)"
   },
   "music": {
     "enable": "Musik im Big-Picture-Modus aktivieren",

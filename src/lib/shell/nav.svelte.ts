@@ -220,6 +220,43 @@ export async function requestSection(id: string): Promise<boolean> {
   return true;
 }
 
+// --- The session zone (SPEC §7.2) ---
+//
+// The session column is not permanent furniture: it is shown only on the
+// screens that choose or tune what will be launched, and its width goes back to
+// the screen everywhere else. The rail has a single `Session` entry for the
+// whole zone — the column's own cards already open each of its screens, and do
+// more than a rail entry could (they show what is picked and carry its
+// sub-choices).
+//
+// `race` belongs to the zone although the rail never named it: it is the
+// session settings screen, reached from the column's session types, and those
+// types are its navigation.
+
+/** Screens on which the session column is shown. */
+export const SESSION_ZONE: readonly string[] = ["cars", "tracks", "driver", "race"];
+
+export function inSessionZone(section: string): boolean {
+  return SESSION_ZONE.includes(section);
+}
+
+/** The library the `Session` rail entry returns to: the last one consulted.
+ * Not persisted: the app always opens on the car library (`nav.section`
+ * above), which makes it the last one consulted at every start — a stored
+ * value would be overwritten before anyone could click. */
+let lastLibrary: "cars" | "tracks" = "cars";
+
+/** Called on every screen change; only a library counts. */
+export function rememberLibrary(section: string): void {
+  if (section === "cars" || section === "tracks") lastLibrary = section;
+}
+
+/** Opens the session zone on the last library consulted (the `Session` rail
+ * entry, and the controller's Start button from outside the zone). */
+export function openSessionZone(): Promise<boolean> {
+  return requestSection(lastLibrary);
+}
+
 /**
  * Change de section **et** ouvre une fiche, d'un seul tenant.
  *

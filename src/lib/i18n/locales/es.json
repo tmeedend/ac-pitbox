@@ -10,8 +10,7 @@
     "maintenance": "Mantenimiento",
     "settings": "Ajustes",
     "about": "Acerca de",
-    "cars": "Coches",
-    "tracks": "Circuitos",
+    "exitBigPicture": "Salir de Big Picture",
     "railLabel": "Navegación principal",
     "alertLabel": "elementos por revisar"
   },
@@ -238,9 +237,6 @@
     "discard": "Descartar los cambios",
     "unsavedTitle": "Cambios sin guardar",
     "unsavedPrompt": "Se han cambiado algunos ajustes (y ya se han aplicado como vista previa en vivo, p. ej. zoom/idioma) pero no se han guardado. ¿Guardar, o descartar y revertir?"
-  },
-  "bigpicture": {
-    "exit": "✕ Salir de Big Picture (Esc)"
   },
   "music": {
     "enable": "Activar la música en modo Big Picture",

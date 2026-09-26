@@ -21,13 +21,23 @@
   import { t } from "$lib/i18n/index.svelte";
   import { zoomFactor } from "$lib/shell/zoom.svelte";
   import { LAUNCH_BUTTON_ATTR } from "$lib/shell/gamepadNav";
-  import { bigPictureState, exitBigPicture } from "$lib/shell/bigpicture.svelte";
 
   interface Props {
     /** Assetto Corsa or its content folder cannot be found (SPEC SESSION§1). */
     pathsBroken: boolean;
+    /** On a screen of the session zone (SPEC §7.2). Hidden rather than
+     * unmounted: the fresh details of the pair would otherwise be fetched
+     * again, name and badge flickering in, at every return to a library. */
+    shown: boolean;
   }
-  let { pathsBroken }: Props = $props();
+  let { pathsBroken, shown }: Props = $props();
+
+  /** "You are here" inside the zone (SPEC §7.2): the card of the screen on
+   * display carries the same left rule as the active rail entry, since the
+   * rail's single `Session` entry no longer tells cars from tracks. The driver
+   * screen marks its own line, in `CarFields`. */
+  const trackHere = $derived(nav.section === "tracks");
+  const carHere = $derived(nav.section === "cars");
 
   const carSlot = $derived<SlotState>(nav.sessionCar ? "picked" : pathsBroken ? "broken" : "empty");
   const trackSlot = $derived<SlotState>(nav.sessionTrack ? "picked" : pathsBroken ? "broken" : "empty");
@@ -58,7 +68,9 @@
     // la mesure, et il ne passe que par le contenu du gabarit caché.
     FIELD_LABELS;
     const el = labelProbe;
-    if (!el) return;
+    // Hidden, the probe has no width to read — and the language is changed in
+    // Settings, precisely where the column is hidden: measure again on return.
+    if (!shown || !el) return;
     // `getBoundingClientRect` rend des pixels RÉELS de fenêtre, déjà
     // multipliés par le zoom d'interface, alors que la valeur repart dans un
     // `style` en pixels CSS que le zoom multipliera à son tour — sans cette
@@ -275,7 +287,7 @@
 
 <!-- Zone parcourue par les gâchettes hautes de la manette (§7.4bis), comme
      l'écran actif de l'autre côté. -->
-<aside class="side" data-gp-region="sidebar">
+<aside class="side" data-gp-region="sidebar" hidden={!shown}>
   <!-- La colonne répond à une seule question — « qu'est-ce que je
        lance ? » — et les deux blocs de mods ont exactement la même
        anatomie : vignette, nom, source, champs. Plus de traitement
@@ -287,7 +299,7 @@
        choix avant de partir. -->
   <div class="session" style="--sess-lblw:{labelWidth}px">
     <div class="nsec">{t("session.trackTag")}</div>
-    <div class="blk">
+    <div class="blk" class:here={trackHere}>
       <SessionSlot
         kind="track"
         slot={trackSlot}
@@ -305,7 +317,7 @@
     </div>
 
     <div class="nsec section">{t("session.carTag")}</div>
-    <div class="blk">
+    <div class="blk" class:here={carHere}>
       <SessionSlot
         kind="car"
         slot={carSlot}
@@ -360,15 +372,6 @@
   <div class="lbl-probe" aria-hidden="true" bind:this={labelProbe}>
     {#each FIELD_LABELS as l}<span>{l}</span>{/each}
   </div>
-
-  {#if bigPictureState.active}
-    <!-- Seule sortie visible du mode Big Picture (plein écran, pas de
-         chrome OS, barre de titre custom masquée) : bouton collant en
-         bas de la barre latérale, position:sticky reste dans le flux
-         normal donc ne peut jamais recouvrir les boutons au-dessus s'il
-         manque de hauteur — il défile avec eux au lieu de les cacher. -->
-    <button class="bigpicture-exit" type="button" onclick={exitBigPicture}>{t("bigpicture.exit")}</button>
-  {/if}
 </aside>
 
 <style>
@@ -434,8 +437,9 @@
     padding-top: 18px;
   }
   /* Un bloc = vignette cliquable + champs. Aucune bordure de SÉLECTION : elle
-     n'aurait de sens que parmi des pairs, or il n'y a qu'une voiture, et
-     l'entrée active se dit dans le rail (SPEC §7.2).
+     n'aurait de sens que parmi des pairs, or il n'y a qu'une voiture. Le seul
+     trait rouge qu'il peut porter dit autre chose — l'écran affiché, voir
+     `.here` plus bas.
      Mais un plan, oui — et le même que la carte de bibliothèque (`--cell` /
      `--cell-line`), puisque les deux montrent désormais la même chose avec le
      même composant. Le `.blk` global posait l'inverse : un fond PLUS SOMBRE
@@ -504,6 +508,17 @@
   }
   .session :global(.field:hover) {
     border-color: var(--faint2);
+  }
+  /* "You are here" (SPEC §7.2): the card of the screen on display, or the
+     driver line on the driver screen, carries the left rule of an active rail
+     entry — level 2 of the accent scale (§7.2ter), "what has the focus".
+     Border colour plus a 1 px inset shadow, not a wider border: the rule is
+     2 px of red, and nothing inside moves when it comes and goes. After the
+     hover rule, which would otherwise grey the rule under the pointer. */
+  .blk.here,
+  .session :global(.field.here) {
+    border-left-color: var(--rosso);
+    box-shadow: inset 1px 0 0 var(--rosso);
   }
   .session :global(.field .k) {
     flex: 0 0 var(--sess-lblw, 60px);
@@ -613,31 +628,5 @@
   .btn-launch:disabled {
     opacity: 0.45;
     cursor: not-allowed;
-  }
-
-  /* Seule sortie visible du mode Big Picture (plein écran, pas de chrome
-     OS, barre de titre custom masquée). Dernier enfant de .side : `sticky`
-     reste dans le flux normal (contrairement à `fixed`), donc ne peut pas
-     recouvrir les boutons de navigation au-dessus s'il manque de hauteur —
-     il défile avec eux au lieu de les cacher. Couleur bleue (secondaire,
-     "info" — le rouge est déjà pris par primaire/destructif partout
-     ailleurs) pour ne pas se confondre avec Lancer/Paramétrage. */
-  .bigpicture-exit {
-    position: sticky;
-    bottom: 0;
-    width: 100%;
-    margin-top: 8px;
-    padding: 12px 13px;
-    background: var(--blue-dim);
-    border-top: 1px solid var(--blue-border);
-    color: var(--blue);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 1px;
-    font-family: var(--mono);
-  }
-  .bigpicture-exit:hover {
-    background: var(--blue-border);
-    color: var(--txt);
   }
 </style>
