@@ -1011,11 +1011,24 @@ Spec détaillée : `SPEC-index-bibliotheque.md` (`INDEX§`). Sans puce active **
 
 L'application compte une douzaine de destinations. Elles se répartissent en trois zones dont la frontière doit rester **étanche** — toute entrée d'interface nouvelle se rattache à l'une des trois :
 
-| Territoire | Question | Contenu |
+| Territoire | Ce qu'il porte | Contenu |
 | --- | --- | --- |
-| **Rail** (à gauche, `NavRail.svelte`) | *où je vais* | les destinations — des lieux qu'on parcourt, plus **Ouvrir CM** en pied |
-| **Barre de titre** (en haut, `TitleBar.svelte`) | *quelle forme a la fenêtre* | réduire, agrandir, fermer, Big Picture — **et l'identité de l'app** : logo, nom, sous-titre |
-| **Colonne de session** (`SessionColumn.svelte`) | *ce que je lance* | circuit, voiture, livrée, pilote, performance, type de session, lancement — **seulement dans la zone session** |
+| **Rail** (à gauche, `NavRail.svelte`) | *ce qui n'appartient pas à la session* | l'entrée `Session`, puis Apps, Compléments, Atelier ; en pied Réglages, **Ouvrir CM**, À propos |
+| **Barre de titre** (en haut, `TitleBar.svelte`) | *la forme de la fenêtre* | réduire, agrandir, fermer, Big Picture — **et l'identité de l'app** : logo, nom, sous-titre |
+| **Colonne de session** (`SessionColumn.svelte`) | *la session elle-même* | circuit, voiture, livrée, pilote, performance, type de session, lancement — **seulement dans la zone session** |
+
+**Le rail porte ce qui n'appartient pas à la session ; la colonne est la
+session, et ses parties sont elles-mêmes des destinations.** C'est la règle qui
+remplace l'ancienne répartition « le rail dit où l'on va, la colonne dit ce
+qu'on lance ». Celle-ci supposait que toute destination vivait dans le rail et
+que la colonne ne faisait qu'afficher un choix ; or la carte circuit ouvre la
+bibliothèque des circuits, la carte voiture celle des voitures, la ligne Pilote
+l'écran Pilote, et un type de session l'écran de réglages de la session. Une
+partie de la session ne se double donc pas d'une entrée de rail : c'est la
+colonne qui y mène, en montrant au passage ce qui est retenu. Le rail n'a
+qu'une entrée pour tout ce territoire — `Session` —, qui ouvre la colonne ; le
+reste du rail est fait de ce qui vaut hors de toute session : ce qu'on
+installe, ce qu'on outille, ce qu'on règle une fois pour toutes.
 
 **La marque est dans la barre de titre, pas dans la colonne.** Elle a occupé un
 bandeau en tête de la colonne de session — tuile, nom, sous-titre empilés — soit
@@ -1030,7 +1043,7 @@ Avant ce découpage, la colonne de session faisait office de navigation en plus 
 
 **Ouvrir CM est depuis revenu dans le rail**, en pied, entre Réglages et À propos — décidé avec l'utilisateur. L'argument ci-dessus reste exact et ne suffisait plus : la colonne de session n'a pas de hauteur à donner à ce qui n'est pas la session, et le pied du rail ne porte déjà plus des lieux qu'on parcourt mais **ce qu'on ouvre à part**. L'entrée n'est donc pas une destination pour autant : elle n'est jamais active, ne porte pas d'`aria-current`, et **disparaît entièrement** quand Content Manager n'est pas détecté au chemin configuré — ni entrée grisée, ni message d'erreur au clic. Son icône est la flèche qui sort du cadre, qui porte le « ouvrir » ; son libellé se réduit donc à `Content Manager`, le rail faisant 74 px et « Ouvrir Content Manager » y tenant sur trois lignes quand toutes les autres entrées en font deux.
 
-**Règle d'architecture : le rail porte les lieux, les onglets vivent à l'intérieur d'un lieu, aucun lieu n'a deux niveaux d'onglets.** C'est elle qui décide de tout le reste. Les deux inventaires restants (compléments, apps) portent déjà leurs propres facettes ou onglets : les ranger sous un onglet supplémentaire produirait deux rangées horizontales de forme identique, sans que rien n'indique laquelle commande l'autre. Ils sont donc des entrées de rail à part entière. Les quatre outils de l'Atelier, à l'inverse, n'ont **aucune** sous-rubrique — c'est la seule raison pour laquelle ce regroupement-là est légitime et l'autre non (§7.2quater).
+**Règle d'architecture : le rail porte les lieux hors session, les onglets vivent à l'intérieur d'un lieu, aucun lieu n'a deux niveaux d'onglets.** C'est elle qui décide de tout le reste. Les deux inventaires restants (compléments, apps) portent déjà leurs propres facettes ou onglets : les ranger sous un onglet supplémentaire produirait deux rangées horizontales de forme identique, sans que rien n'indique laquelle commande l'autre. Ils sont donc des entrées de rail à part entière. Les quatre outils de l'Atelier, à l'inverse, n'ont **aucune** sous-rubrique — c'est la seule raison pour laquelle ce regroupement-là est légitime et l'autre non (§7.2quater).
 
 **Session, seule au-dessus du filet** ; puis Apps · Compléments · Atelier ;
 et en pied Réglages · Ouvrir CM · À propos. Aucun intitulé de rang : avec une

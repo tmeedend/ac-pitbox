@@ -465,8 +465,9 @@ coûtait avant d'exister.
 ### Carte des écrans
 
 `AppShell.svelte` est la coquille : **rail de navigation** (`NavRail.svelte`,
-les lieux) + **colonne de session** (`shell/session/SessionColumn.svelte`, ce
-qu'on lance) + aiguillage sur `nav.section` (`src/lib/shell/nav.svelte.ts`).
+ce qui n'appartient pas à la session) + **colonne de session**
+(`shell/session/SessionColumn.svelte`, la session elle-même, dont chaque partie
+mène à son écran) + aiguillage sur `nav.section` (`src/lib/shell/nav.svelte.ts`).
 Les trois territoires et leur frontière étanche sont au §7.2 du SPEC. Ce qui
 tourne en fond pour toute l'app (glisser-déposer, manette, suivi des lots,
 mises à jour…) se démarre dans `src/lib/shell/shellServices.ts`, pas par un

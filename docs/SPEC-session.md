@@ -19,7 +19,7 @@ que rien ne le dise.
 
 Pas d'écran séparé de sélection : la voiture/le circuit sélectionnés dans la bibliothèque sont ceux de la session. La **colonne de session** montre le duo courant sur tous les écrans de la zone session (§7.2) — bibliothèques, Pilote, réglages de la session. La page « Démarrer une session » ne contient aucune sélection de voiture/circuit — seulement les réglages + Lancer.
 
-**La colonne répond à une seule question : *qu'est-ce que je lance ?*** Tout ce qui n'y répond pas en est sorti — les boutons de navigation dans le rail (§7.2), les trois menus de tenue dans l'écran Pilote (SESSION§5). Restent **le type de session, qui est la navigation** (SESSION§1.1), **deux blocs à l'anatomie strictement identique** — vignette, nom, source, puis les champs — et deux actions :
+**La colonne est la session, et ses parties sont elles-mêmes des destinations** (§7.2) : la carte circuit ouvre la bibliothèque des circuits, la carte voiture celle des voitures, la ligne `PILOTE` l'écran Pilote, un type de session l'écran de réglages. Ce qui n'appartient pas à la session en est sorti — les boutons de navigation vers le reste de l'app dans le rail (§7.2), les trois menus de tenue dans l'écran Pilote (SESSION§5). Restent **le type de session, qui est la navigation** (SESSION§1.1), **deux blocs à l'anatomie strictement identique** — vignette, nom, source, puis les champs — et deux actions :
 
 ```
 CIRCUIT
