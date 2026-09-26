@@ -169,6 +169,46 @@ pub fn store_layer(
     Ok((id, extracted))
 }
 
+/// Gives an existing layer new content (§4.6ter): the same proposed folder,
+/// answered "add to the mod's folder" again, in a newer archive. The layer
+/// keeps its id, its place in the order and its on/off state — only what it
+/// brings changes. Storing it as a new layer instead stacked a second "2K
+/// Skins" on the car at every update, and the order between two variants
+/// (which livery covers which) would depend on the order of the archive.
+///
+/// The caller recomposes afterwards, as after `store_layer`.
+pub fn refill_layer(
+    conn: &Connection,
+    library: &Path,
+    layer: &overlay::LayerRow,
+    src_dir: &Path,
+    diff: &DiffStats,
+    archive_name: &str,
+    mode: ExtractionMode,
+) -> Result<(), String> {
+    let dest =
+        crate::libpath::resolve(Some(library), &layer.library_path).ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
+    // A stored path is a library path: anything else is not ours to empty.
+    if !dest.starts_with(library.join("layers")) {
+        return Err(format!("layer outside the library: {}", dest.display()));
+    }
+    if dest.exists() {
+        std::fs::remove_dir_all(&dest).map_err(|e| e.to_string())?;
+    }
+    let kind = HostKind::parse(&layer.parent_kind);
+    let res_dir = resources::resources_dir_for(library, kind.category(), &[&layer.parent_id]);
+    resources::file_mod(src_dir, &dest, &res_dir, mode, true, resources::Source::ModFolder)?;
+    overlay::update_layer_content(
+        conn,
+        &layer.id,
+        archive_name,
+        diff.added as i64,
+        diff.overwritten as i64,
+        &Local::now().to_rfc3339(),
+    )
+    .map_err(|e| e.to_string())
+}
+
 /// Un fichier apporté par une couche (§4.4).
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct LayerFile {

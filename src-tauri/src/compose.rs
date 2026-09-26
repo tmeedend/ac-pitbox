@@ -303,6 +303,10 @@ pub fn remove_layer(conn: &Connection, cfg: &AppConfig, layer_id: &str) -> Resul
     }
     overlay::delete_layer(conn, layer_id).map_err(|e| e.to_string())?;
     if let Some(layer) = layer {
+        // A layer that came from an answered proposed folder: removing it is
+        // the new answer, so the next version of the mod does not bring it
+        // back (§4.6ter).
+        crate::pending::layer_removed(conn, &layer);
         recompose(conn, cfg, &layer.parent_id)?;
     }
     Ok(())

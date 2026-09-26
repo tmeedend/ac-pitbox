@@ -31,6 +31,13 @@
 //! pas les octets. Un dossier que l'utilisateur a explicitement écarté n'a plus
 //! de décision à recalculer — il laisse une ligne au journal d'import
 //! (`userDiscarded`), donc l'information reste, et la matière part.
+//!
+//! **An answer is given once.** It is remembered per owner and folder name
+//! (`pending_answers`), and the next archive of the same mod delivering the
+//! same folder gets it again without a question — even with different
+//! content: it is the same folder of the author, in a newer edition. Changing
+//! one's mind happens where the answer's result lives (the mod's resources,
+//! its layers), and removing that result becomes the new answer.
 
 use std::path::{Path, PathBuf};
 
@@ -94,6 +101,20 @@ pub struct PendingFolder {
     /// couche » sans propriétaire, ou « installer dans le jeu » sur un dossier
     /// de fonds d'écran, c'est offrir un bouton qui ne peut que décevoir.
     pub actions: Vec<String>,
+    /// The answer given to this folder at a previous import, when it is still
+    /// among `actions` and was not applied again by itself — adding to the game
+    /// a folder that replaces base-game files is always asked again.
+    pub previous: Option<String>,
+}
+
+/// A proposed folder given the answer remembered for it (§4.6ter), as the
+/// import report tells it. Mirrored by `ReappliedFolder` in `library.ts`.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct Reapplied {
+    pub owner_id: String,
+    /// The folder's name, as the author wrote it.
+    pub name: String,
+    pub action: String,
 }
 
 /// Ce que la détection a reconnu, avant rangement.
@@ -470,12 +491,15 @@ fn actions_for(row: &PendingFolderRow, has_game_tree: bool) -> (String, Vec<Stri
     (suggestion, actions)
 }
 
-fn to_card(cfg: &AppConfig, row: PendingFolderRow) -> PendingFolder {
+fn to_card(conn: &Connection, cfg: &AppConfig, row: PendingFolderRow) -> PendingFolder {
     let dir = crate::libpath::resolve(cfg.library_path.as_deref(), &row.library_path);
     let (file_count, size_bytes) = dir.as_deref().map(weigh).unwrap_or((0, 0));
     // Lu sur disque comme le poids (§4.5.5), et non depuis la forme mémorisée :
     // c'est l'arbre réel qui décide de ce qu'on peut faire du dossier.
     let (suggestion, actions) = actions_for(&row, dir.as_deref().is_some_and(holds_game_tree));
+    // An answer the folder can no longer receive (the new edition lost its
+    // game tree) is not an answer to it.
+    let previous = remembered(conn, &row).filter(|a| actions.contains(a));
     PendingFolder {
         id: row.id,
         archive: row.archive,
@@ -492,6 +516,7 @@ fn to_card(cfg: &AppConfig, row: PendingFolderRow) -> PendingFolder {
         size_bytes,
         suggestion,
         actions,
+        previous,
     }
 }
 
@@ -499,8 +524,75 @@ pub fn list(conn: &Connection, cfg: &AppConfig) -> Result<Vec<PendingFolder>, St
     Ok(overlay::list_pending_folders(conn)
         .map_err(|e| e.to_string())?
         .into_iter()
-        .map(|r| to_card(cfg, r))
+        .map(|r| to_card(conn, cfg, r))
         .collect())
+}
+
+// --- Remembered answers -----------------------------------------------------
+
+/// The answer remembered for this folder, if it has an owner and one was given.
+/// Best-effort: an unreadable memory only means the question comes back.
+fn remembered(conn: &Connection, row: &PendingFolderRow) -> Option<String> {
+    let (owner, kind) = (row.owner_id.as_deref()?, row.owner_kind.as_deref()?);
+    overlay::pending_answer(conn, owner, kind, &leaf_name(&row.rel_path))
+        .inspect_err(|e| log::warn!("pending_answer {owner}: {e}"))
+        .ok()
+        .flatten()
+}
+
+/// Remembers `action` for this owner's folder of that name. Only folders with
+/// an owner: without one, a folder becomes an entry of its own ("other mod"),
+/// and there is no mod whose next version would bring it again.
+fn remember(conn: &Connection, owner: &str, kind: &str, name: &str, action: &str) {
+    if let Err(e) = overlay::remember_pending_answer(conn, owner, kind, name, action) {
+        log::warn!("remember_pending_answer {owner}/{name}: {e}");
+    }
+}
+
+/// Gives the folders parked by an import the answer remembered for them, and
+/// says which ones it applied. The others stay pending, and are asked.
+///
+/// One exception, and it is §4.6bis: a folder that **replaces base-game
+/// files** is not added to the game again by itself. The answer changes every
+/// session, and a newer edition may replace other files than the ones the user
+/// accepted — the question comes back, with the previous answer shown.
+pub fn reapply_remembered(conn: &Connection, cfg: &AppConfig, ids: &[String]) -> Vec<Reapplied> {
+    let mut out = Vec::new();
+    for id in ids {
+        let Ok(Some(row)) = overlay::get_pending_folder(conn, id) else {
+            continue;
+        };
+        let card = to_card(conn, cfg, row.clone());
+        let Some(action) = card.previous else {
+            continue;
+        };
+        if action == ACTION_GAME && card.replaced > 0 {
+            continue;
+        }
+        match resolve(conn, cfg, id, &action) {
+            Ok(()) => out.push(Reapplied {
+                owner_id: row.owner_id.unwrap_or_default(),
+                name: leaf_name(&row.rel_path),
+                action,
+            }),
+            Err(e) => log::warn!("reapply {} ({action}): {e}", row.rel_path),
+        }
+    }
+    out
+}
+
+/// A layer was removed from its mod. When it came from a proposed folder
+/// answered "add to the mod's folder", removing it becomes the answer: the
+/// next version of the mod does not stack it again. A layer of another origin
+/// (an extension archive) has no answer to change, and none is written.
+pub fn layer_removed(conn: &Connection, layer: &overlay::LayerRow) {
+    let kind = crate::layers::HostKind::parse(&layer.parent_kind).category();
+    let answered = overlay::pending_answer(conn, &layer.parent_id, kind, &layer.name)
+        .ok()
+        .flatten();
+    if answered.as_deref() == Some(ACTION_LAYER) {
+        remember(conn, &layer.parent_id, kind, &layer.name, ACTION_DISCARD);
+    }
 }
 
 /// Contenu texte de la notice d'un dossier proposé.
@@ -553,6 +645,9 @@ pub fn resolve(conn: &Connection, cfg: &AppConfig, id: &str, action: &str) -> Re
     }
 
     let _ = std::fs::remove_dir_all(&dir);
+    if let (Some(owner), Some(kind)) = (&row.owner_id, &row.owner_kind) {
+        remember(conn, owner, kind, &leaf_name(&row.rel_path), action);
+    }
     overlay::delete_pending_folder(conn, id).map_err(|e| e.to_string())
 }
 
@@ -610,6 +705,81 @@ fn into_resources(row: &PendingFolderRow, library: &Path, dir: &Path) -> Result<
 /// child of it.
 fn is_plain_folder_name(name: &str) -> bool {
     !name.is_empty() && name != "." && name != ".." && !name.contains(['/', '\\', ':'])
+}
+
+// --- Kept folders, seen from the mod's page --------------------------------
+
+/// A folder in a mod's resources, as its page lists it for removal.
+#[derive(Debug, Clone, Serialize)]
+pub struct KeptFolder {
+    pub name: String,
+    pub file_count: usize,
+    pub size_bytes: u64,
+}
+
+/// Library category of the owner whose page shows these resources: `mod` is a
+/// car or a track (read in the overlay), `app` and `pack` are what they say.
+pub fn owner_category(conn: &Connection, id: &str, source: &str) -> Option<&'static str> {
+    match source {
+        "mod" => {
+            let kind = overlay::get_mod(conn, id).ok().flatten()?.kind;
+            Some(OwnerKind::parse(&kind)?.category())
+        }
+        "app" => Some(OwnerKind::App.category()),
+        "pack" => Some(OwnerKind::Pack.category()),
+        _ => None,
+    }
+}
+
+/// The folders directly in an owner's resources — where a proposed folder
+/// answered "keep" lands, under its own name. Read on disk, like the resources
+/// themselves (§4.5.2). Links are not listed: nothing here is ever followed.
+pub fn kept_folders(library: &Path, category: &str, owner: &str) -> Vec<KeptFolder> {
+    let dir = resources::resources_dir_for(library, category, &[owner]);
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+    let mut out: Vec<KeptFolder> = entries
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+        .map(|e| {
+            let (file_count, size_bytes) = weigh(&e.path());
+            KeptFolder {
+                name: e.file_name().to_string_lossy().into_owned(),
+                file_count,
+                size_bytes,
+            }
+        })
+        .collect();
+    out.sort_by_key(|f| f.name.to_lowercase());
+    out
+}
+
+/// Removes a folder from an owner's resources, at the user's request, and
+/// makes it the answer for that folder: if the next version of the mod offers
+/// it again, it is not imported (§4.6ter). This is where one changes one's
+/// mind about "keep" — at import, the answer is applied without a question.
+///
+/// The name comes from the frontend: one plain folder name, a real folder
+/// (not a link) directly in the owner's resources, and nothing else.
+pub fn remove_kept_folder(
+    conn: &Connection,
+    library: &Path,
+    category: &str,
+    owner: &str,
+    name: &str,
+) -> Result<(), String> {
+    if !is_plain_folder_name(name) {
+        return Err(crate::errors::PATH_OUTSIDE_RESOURCES.into());
+    }
+    let dir = resources::resources_dir_for(library, category, &[owner]).join(name);
+    let is_folder = std::fs::symlink_metadata(&dir).is_ok_and(|m| m.file_type().is_dir());
+    if !is_folder {
+        return Err(crate::errors::PATH_OUTSIDE_RESOURCES.into());
+    }
+    std::fs::remove_dir_all(&dir).map_err(|e| e.to_string())?;
+    remember(conn, owner, category, name, ACTION_DISCARD);
+    Ok(())
 }
 
 /// Sort les documents d'information posés **à la racine** du dossier proposé
@@ -794,19 +964,43 @@ fn into_layer(
         .filter(|p| p.is_dir())
         .map(|base| crate::identity::diff_content(dir, &base))
         .unwrap_or_default();
-    let mode = ExtractionMode::parse(&cfg.prefs.resource_extraction_mode);
-    crate::layers::store_layer(
-        conn,
-        library,
-        owner,
-        kind.into(),
-        &leaf_name(&row.rel_path),
-        dir,
-        false,
-        &diff,
-        &row.archive,
-        mode,
-    )?;
+    let name = leaf_name(&row.rel_path);
+    // The same folder answered "layer" before: its layer gets the new content
+    // rather than a second layer of the same name beside it. Only when the
+    // remembered answer says the layer came from this folder — a layer of the
+    // same name brought by an extension archive is someone else's, and
+    // refilling it would delete its files. And only a layer stored in the
+    // library, the one place `refill_layer` empties.
+    let from_this_folder = remembered(conn, row).as_deref() == Some(ACTION_LAYER);
+    let existing = if from_this_folder {
+        overlay::list_layers(conn, owner, kind.into())
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .find(|l| {
+                l.name.eq_ignore_ascii_case(&name)
+                    && crate::libpath::resolve(Some(library), &l.library_path)
+                        .is_some_and(|p| p.starts_with(library.join("layers")))
+            })
+    } else {
+        None
+    };
+    match existing {
+        Some(layer) => crate::layers::refill_layer(conn, library, &layer, dir, &diff, &row.archive, mode)?,
+        None => {
+            crate::layers::store_layer(
+                conn,
+                library,
+                owner,
+                kind.into(),
+                &name,
+                dir,
+                false,
+                &diff,
+                &row.archive,
+                mode,
+            )?;
+        }
+    }
     crate::compose::recompose(conn, cfg, owner)
 }
 
@@ -1206,6 +1400,33 @@ mod tests {
             !res.join("Wallpapers").join("01.jpg").exists(),
             "the previous edition is not merged into it"
         );
+    }
+
+    /// Rule (§4.6bis within §4.6ter): "add to the game" is never applied again
+    /// by itself to a folder that replaces base-game files — a newer edition
+    /// may replace other files than the ones accepted. The question comes
+    /// back, showing the previous answer.
+    #[test]
+    fn adding_to_the_game_over_base_files_is_asked_again() {
+        let base = crate::testutil::temp_dir("pending-reapply-game");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        overlay::remember_pending_answer(&conn, "la_canyons", "tracks", "Hide Pit Crew", ACTION_GAME).unwrap();
+
+        let tree = base.join("src").join("Hide Pit Crew");
+        write(&tree.join("content").join("objects3D").join("pitcrew.kn5"), b"x");
+        let c = card(&conn, &cfg, &library, "MODS/Hide Pit Crew", &tree, SHAPE_JSGME, 2);
+        assert_eq!(c.previous.as_deref(), Some(ACTION_GAME), "the previous answer is shown");
+        assert!(
+            reapply_remembered(&conn, &cfg, std::slice::from_ref(&c.id)).is_empty(),
+            "but not applied by itself"
+        );
+        assert_eq!(list(&conn, &cfg).unwrap().len(), 1, "the question is asked again");
     }
 
     #[test]

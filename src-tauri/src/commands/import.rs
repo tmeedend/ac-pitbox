@@ -176,6 +176,39 @@ pub fn resolve_conflict(
     crate::importer::resolve_conflict(&conn, &cfg, &new_id, &old_id, &action)
 }
 
+/// Folders in the resources of a mod, app or pack (§4.6ter): where a proposed
+/// folder answered "keep" lands, and where the user can take it back.
+#[tauri::command]
+pub fn list_resource_folders(
+    app: AppHandle,
+    db: State<Db>,
+    id: String,
+    source: String,
+) -> Result<Vec<crate::pending::KeptFolder>, String> {
+    let cfg = crate::config::load(&app);
+    let library = cfg.library_path.ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    Ok(crate::pending::owner_category(&conn, &id, &source)
+        .map(|category| crate::pending::kept_folders(&library, category, &id))
+        .unwrap_or_default())
+}
+
+/// Removes one of those folders; the next import does not bring it back.
+#[tauri::command]
+pub fn remove_resource_folder(
+    app: AppHandle,
+    db: State<Db>,
+    id: String,
+    source: String,
+    name: String,
+) -> Result<(), String> {
+    let cfg = crate::config::load(&app);
+    let library = cfg.library_path.ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let category = crate::pending::owner_category(&conn, &id, &source).ok_or(crate::errors::PATH_OUTSIDE_RESOURCES)?;
+    crate::pending::remove_kept_folder(&conn, &library, category, &id, &name)
+}
+
 /// Dossiers proposés par l'auteur et en attente d'une décision (§4.6ter).
 /// Lus en base, pas dans le rapport en mémoire : ne rien décider est une
 /// réponse valable, donc ce qui attend doit survivre à une fermeture de l'app.

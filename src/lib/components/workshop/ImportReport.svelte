@@ -9,6 +9,7 @@
   import { activateOther } from "$lib/inventory/others";
   import { errorText } from "$lib/errors";
   import type { ArchiveResult, OtherImported, SubImported } from "$lib/library/library";
+  import { PENDING_ACTION_LABEL, type PendingAction } from "$lib/workshop/pending";
 
   interface Props {
     report: ArchiveResult[];
@@ -89,6 +90,21 @@
     void refreshPendingCount();
   });
 
+  /** Folders given the answer from a previous import instead of a question,
+   * one line per folder name and answer across the batch: twenty cars
+   * keeping their `Wallpapers/` is one line, not twenty. Applied without
+   * asking, so it has to be read somewhere (§4.6). */
+  const reapplied = $derived.by(() => {
+    const lines = new Map<string, { name: string; action: PendingAction; count: number }>();
+    for (const r of report.flatMap((a) => a.reapplied ?? [])) {
+      const key = `${r.name.toLowerCase()}|${r.action}`;
+      const line = lines.get(key) ?? { name: r.name, action: r.action, count: 0 };
+      line.count++;
+      lines.set(key, line);
+    }
+    return [...lines.values()];
+  });
+
   /** Skins et sons regroupés par contenu parent : un pack de quarante livrées
    * ferait déborder le rapport à raison d'une ligne chacune, alors qu'il n'y a
    * qu'une seule fiche à ouvrir au bout. */
@@ -127,6 +143,12 @@
     <span class="pend-bar-a">{t("importOverlay.pendingOpen")}</span>
   </button>
 {/if}
+
+{#each reapplied as r (`${r.name}|${r.action}`)}
+  <div class="r-line shared">
+    {t("importOverlay.reappliedLine", { name: r.name, count: r.count, action: t(PENDING_ACTION_LABEL[r.action]) })}
+  </div>
+{/each}
 
 {#if optionals.length}
   <!-- En tête du rapport : c'est la seule chose qui attend une réponse. -->

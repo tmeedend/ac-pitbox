@@ -388,6 +388,22 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
             found_at     TEXT NOT NULL DEFAULT ''
         );
 
+        -- Answers given to proposed folders (§4.6ter), per owner and folder
+        -- name: a mod updated with the same `Wallpapers/` gets the same answer
+        -- again instead of the same question. Keyed by the name the author gave
+        -- the folder (lower-case), not by the archive path, whose wrapping
+        -- folder changes with every version. Written by `pending::resolve`, and
+        -- by removing what an answer produced (a kept folder, a layer), which
+        -- becomes "do not import".
+        CREATE TABLE IF NOT EXISTS pending_answers (
+            owner_id    TEXT NOT NULL,
+            owner_kind  TEXT NOT NULL,
+            name        TEXT NOT NULL,
+            action      TEXT NOT NULL,
+            answered_at TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY (owner_id, owner_kind, name)
+        );
+
         CREATE TABLE IF NOT EXISTS import_decisions (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
             mod_id     TEXT,
@@ -1744,6 +1760,24 @@ pub fn get_layer(conn: &Connection, id: &str) -> rusqlite::Result<Option<LayerRo
     }
 }
 
+/// New content for an existing layer, which keeps its id, place in the order
+/// and on/off state (§4.6ter: a proposed folder answered "layer" again).
+pub fn update_layer_content(
+    conn: &Connection,
+    id: &str,
+    source_archive: &str,
+    added: i64,
+    overwritten: i64,
+    imported_at: &str,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE layers SET source_archive = ?2, added_count = ?3, overwritten_count = ?4, imported_at = ?5
+         WHERE id = ?1",
+        params![id, source_archive, added, overwritten, imported_at],
+    )?;
+    Ok(())
+}
+
 pub fn set_layer_active(conn: &Connection, id: &str, active: bool) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE layers SET is_active = ?2 WHERE id = ?1",
@@ -2249,6 +2283,45 @@ pub fn delete_pending_folder(conn: &Connection, id: &str) -> rusqlite::Result<()
     Ok(())
 }
 
+/// Remembers the answer given to a proposed folder (§4.6ter). `owner_kind` is
+/// the category (`cars`, `tracks`…); the name is stored lower-case, like the
+/// folder names Windows compares.
+pub fn remember_pending_answer(
+    conn: &Connection,
+    owner_id: &str,
+    owner_kind: &str,
+    name: &str,
+    action: &str,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT OR REPLACE INTO pending_answers (owner_id, owner_kind, name, action, answered_at)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![
+            owner_id,
+            owner_kind,
+            name.to_lowercase(),
+            action,
+            chrono::Local::now().to_rfc3339()
+        ],
+    )?;
+    Ok(())
+}
+
+pub fn pending_answer(
+    conn: &Connection,
+    owner_id: &str,
+    owner_kind: &str,
+    name: &str,
+) -> rusqlite::Result<Option<String>> {
+    use rusqlite::OptionalExtension;
+    conn.query_row(
+        "SELECT action FROM pending_answers WHERE owner_id = ?1 AND owner_kind = ?2 AND name = ?3",
+        params![owner_id, owner_kind, name.to_lowercase()],
+        |r| r.get(0),
+    )
+    .optional()
+}
+
 // --- Suivi d'usage (§6) ---------------------------------------------------
 
 /// Pose/incrémente le marqueur « essayé » d'un mod au lancement d'une session.
@@ -2310,7 +2383,40 @@ mod tests {
         list_apps(&conn).expect("apps");
         list_subs_by_type(&conn, "SKIN").expect("sub_mods");
         list_layers(&conn, "x", HostKind::Track).expect("layers");
+        pending_answer(&conn, "x", "cars", "Wallpapers").expect("pending_answers");
         drop(base);
+    }
+
+    /// Rule (§4.6ter): a database written before answers were remembered
+    /// opens, gains the table, and reads "no answer" for every folder.
+    #[test]
+    fn a_database_without_remembered_answers_gains_them_on_open() {
+        let base = crate::testutil::temp_dir("pending-answers-migrate");
+        let path = base.join("overlay.sqlite");
+        {
+            let conn = open(&path).unwrap();
+            // The previous format: everything but this table.
+            conn.execute("DROP TABLE pending_answers", []).unwrap();
+        }
+        let conn = open(&path).expect("an older database still opens");
+        assert_eq!(
+            pending_answer(&conn, "vrc_car", "cars", "Wallpapers").unwrap(),
+            None,
+            "nothing remembered yet"
+        );
+        remember_pending_answer(&conn, "vrc_car", "cars", "Wallpapers", "resources").unwrap();
+        assert_eq!(
+            pending_answer(&conn, "vrc_car", "cars", "wallpapers")
+                .unwrap()
+                .as_deref(),
+            Some("resources"),
+            "found again whatever the case of the folder name"
+        );
+        assert_eq!(
+            pending_answer(&conn, "vrc_car", "tracks", "Wallpapers").unwrap(),
+            None,
+            "a track and a car sharing an id do not share answers"
+        );
     }
 
     /// Règle (§4.4) : les couches d'une app et celles d'un mod ne se mélangent

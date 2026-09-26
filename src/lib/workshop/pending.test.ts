@@ -18,6 +18,7 @@ function folder(id: string, relPath: string, over: Partial<PendingFolder> = {}):
     size_bytes: 1000,
     suggestion: "",
     actions: ["resources", "discard"],
+    previous: null,
     ...over,
   };
 }

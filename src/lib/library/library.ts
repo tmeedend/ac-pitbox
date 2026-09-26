@@ -1,6 +1,7 @@
 // Pont typé vers les commandes L1 (bibliothèque & import).
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { bumpLibraryVersion } from "./libraryVersion.svelte";
+import type { PendingAction } from "$lib/workshop/pending";
 
 export type ModKind = "Car" | "Track";
 
@@ -307,6 +308,16 @@ export interface ArchiveResult {
    * (§4.6ter). La liste elle-même se lit en base (`listPendingFolders`) — ce
    * compte sert au résumé de fin de lot. */
   pending?: number;
+  /** Proposed folders given the answer given at a previous import (§4.6ter),
+   * not counted in `pending`. */
+  reapplied?: ReappliedFolder[];
+}
+
+/** Mirrors `pending::Reapplied`. */
+export interface ReappliedFolder {
+  owner_id: string;
+  name: string;
+  action: PendingAction;
 }
 
 /** Miroir de `import_progress::Progress` (§4.2bis) — les deux changent ensemble. */

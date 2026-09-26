@@ -47,6 +47,7 @@
   import { t } from "$lib/i18n/index.svelte";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import ResourcePdf from "./ResourcePdf.svelte";
+  import ResourceFolders from "./ResourceFolders.svelte";
 
   type Source = "mod" | "app" | "pack" | "sound" | "other";
 
@@ -149,6 +150,8 @@
   const pathOf = (f: Row) => BACKENDS[f.owner.source].path(f.owner.id, f.rel_path, f.origin);
 
   let files = $state<Row[]>([]);
+  /** Bumped when a folder is removed: the list is read again from disk. */
+  let reloads = $state(0);
   /** Ressource ouverte en prévisualisation, `null` quand la liste seule est affichée. */
   let selected = $state<Row | null>(null);
   let loading = $state(false);
@@ -230,6 +233,7 @@
     // reste : une garde placée avant elles tronquerait la liste des
     // dépendances, et l'ajout d'une notice ne redéclencherait rien.
     const also = extras.map((e) => ({ ...e }));
+    void reloads;
     files = [];
     selected = null;
     (async () => {
@@ -332,6 +336,11 @@
   <div class="blk-b">
     {#if files.length}
       <p class="note">{t("detail.resourcesNote")}</p>
+      {#if source === "mod" || source === "app" || source === "pack"}
+        <!-- The folders kept from what the author offered beside the mod
+             (§4.6ter), each removable: this is where one takes back a "keep". -->
+        <ResourceFolders modId={modId} {source} onremoved={() => reloads++} {onerror} />
+      {/if}
       {#if images.length}
         <!-- Les images passent en grille : quatorze lignes « 01.jpg » ne
              disent rien, quatorze vignettes se parcourent d'un regard. Même

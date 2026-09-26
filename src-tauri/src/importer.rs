@@ -131,6 +131,10 @@ pub struct ArchiveResult {
     /// de lot puisse annoncer qu'il y a une question à trancher.
     #[serde(default)]
     pub pending: usize,
+    /// Proposed folders given the answer the user gave them at a previous
+    /// import (§4.6ter) instead of being asked again. Not counted in `pending`.
+    #[serde(default)]
+    pub reapplied: Vec<crate::pending::Reapplied>,
     /// Couches posées sur une app (§8.4). À part des ajouts au jeu : ce
     /// n'est pas la même chose, et les compter avec eux faisait annoncer au
     /// rapport « N fichiers ajoutés au jeu » pour des fichiers qui vont en
@@ -449,6 +453,7 @@ fn failed_result(label: &str, error: String) -> ArchiveResult {
         others: Vec::new(),
         extras: 0,
         pending: 0,
+        reapplied: Vec::new(),
         app_layers: Vec::new(),
     }
 }
@@ -937,6 +942,9 @@ fn sweep_leftovers(
     // caméras à CamTool doit produire UNE couche, pas neuf. Vidés après la
     // boucle, groupés par app.
     let mut app_layer_parts: Vec<AppLayerPart> = Vec::new();
+    // Proposed folders parked by this archive, to be given a remembered
+    // answer once the sweep is done (§4.6ter).
+    let mut parked_ids: Vec<String> = Vec::new();
 
     // Les archives imbriquées passent AVANT leurs voisins : ce qui en sort peut
     // devenir le propriétaire de ce qui les entoure. Cas réel : une archive qui
@@ -999,8 +1007,9 @@ fn sweep_leftovers(
                 copy,
                 replaced,
             );
-            if parked.is_some() {
+            if let Some(id) = parked {
                 result.pending += 1;
+                parked_ids.push(id);
                 continue;
             }
             // Rangement en attente impossible : on retombe sur le classement
@@ -1207,6 +1216,13 @@ fn sweep_leftovers(
             log::warn!("deploy_extras {id}: {e}");
         }
     }
+
+    // Last, once the owners are in place and their extras deployed: an answer
+    // given at a previous import is applied the way the user would apply it
+    // from the dialog, after the batch.
+    let reapplied = crate::pending::reapply_remembered(conn, cfg, &parked_ids);
+    result.pending -= reapplied.len();
+    result.reapplied.extend(reapplied);
 }
 
 /// Ce qu'un reste vise à l'intérieur d'apps, et s'il n'y a que ça dedans.
@@ -1747,6 +1763,7 @@ fn file_extracted(
         others: Vec::new(),
         extras: 0,
         pending: 0,
+        reapplied: Vec::new(),
         app_layers: Vec::new(),
     };
 
@@ -2010,6 +2027,7 @@ fn import_one_folder(
         others: Vec::new(),
         extras: 0,
         pending: 0,
+        reapplied: Vec::new(),
         app_layers: Vec::new(),
     };
 
@@ -2454,6 +2472,7 @@ fn exec_one(
         others: Vec::new(),
         extras: 0,
         pending: 0,
+        reapplied: Vec::new(),
         app_layers: Vec::new(),
     };
 
@@ -4730,6 +4749,130 @@ mod tests {
             crate::pending::list(&conn, &cfg).unwrap().is_empty(),
             "la question ne se repose pas"
         );
+    }
+
+    /// Rule (§4.6ter): a proposed folder answered once gets the same answer
+    /// at the next import of the mod, even with different content, and the
+    /// question is not asked again. Changing one's mind happens on the mod's
+    /// page, and removing what the answer produced becomes the new answer.
+    /// Real case: a car reimported asked again about its `Wallpapers/`, and
+    /// "do not import" left the copy kept the first time in place.
+    #[test]
+    fn a_kept_folder_is_not_asked_about_twice() {
+        let base = crate::testutil::temp_dir("import-kept-twice");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+        let edition = |name: &str, wallpaper: &str| {
+            let src = base.join(name);
+            make_fake_car(&src.join("content").join("cars"), "vrc_car");
+            let w = src.join("Wallpapers");
+            std::fs::create_dir_all(&w).unwrap();
+            std::fs::write(w.join(wallpaper), b"img").unwrap();
+            src
+        };
+        let kept = crate::resources::resources_dir(&library, ModKind::Car, "vrc_car").join("Wallpapers");
+
+        let r = import_folder_for_test(&conn, &cfg, &rules, &edition("VRC Car v1.0", "01.jpg"), true, &[]);
+        assert_eq!(r.pending, 1, "asked the first time");
+        let waiting = crate::pending::list(&conn, &cfg).unwrap();
+        crate::pending::resolve(&conn, &cfg, &waiting[0].id, crate::pending::ACTION_RESOURCES).unwrap();
+
+        let r = import_folder_for_test(&conn, &cfg, &rules, &edition("VRC Car v1.1", "02.jpg"), true, &[]);
+        assert_eq!(r.pending, 0, "not asked again");
+        assert_eq!(
+            r.reapplied,
+            vec![crate::pending::Reapplied {
+                owner_id: "vrc_car".into(),
+                name: "Wallpapers".into(),
+                action: crate::pending::ACTION_RESOURCES.into(),
+            }],
+            "and the report says what was done"
+        );
+        assert!(crate::pending::list(&conn, &cfg).unwrap().is_empty());
+        assert!(kept.join("02.jpg").is_file(), "the new edition is kept");
+        assert!(!kept.join("01.jpg").exists(), "in place of the previous one");
+
+        crate::pending::remove_kept_folder(&conn, &library, "cars", "vrc_car", "Wallpapers").unwrap();
+        assert!(!kept.exists(), "removed from the mod's page");
+
+        let r = import_folder_for_test(&conn, &cfg, &rules, &edition("VRC Car v1.2", "03.jpg"), true, &[]);
+        assert_eq!(r.pending, 0, "still not asked");
+        assert_eq!(
+            r.reapplied[0].action,
+            crate::pending::ACTION_DISCARD,
+            "removing it was the answer"
+        );
+        assert!(!kept.exists(), "and it does not come back");
+    }
+
+    /// Rule (§4.6ter): a folder answered "add to the mod's folder" refills its
+    /// layer at the next import instead of stacking a second one, and the
+    /// layer keeps its on/off state. Removing the layer is the new answer.
+    #[test]
+    fn an_offered_variant_refills_its_layer_at_the_next_import() {
+        let base = crate::testutil::temp_dir("import-variant-twice");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(ac.join("content").join("cars")).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ac_install_path: Some(ac.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+        let edition = |name: &str, hd: &[u8]| {
+            let src = base.join(name);
+            let car = src.join("content").join("cars");
+            make_fake_car(&car, "ferrari_f2002");
+            let livery = car.join("ferrari_f2002").join("skins").join("a_2002_michael");
+            std::fs::create_dir_all(&livery).unwrap();
+            std::fs::write(livery.join("skin.dds"), b"BASE").unwrap();
+            let offered = src.join("2K Skins").join("skins").join("a_2002_michael");
+            std::fs::create_dir_all(&offered).unwrap();
+            std::fs::write(offered.join("skin.dds"), hd).unwrap();
+            src
+        };
+        let layers = || crate::overlay::list_layers(&conn, "ferrari_f2002", crate::layers::HostKind::Car).unwrap();
+
+        import_folder_for_test(&conn, &cfg, &rules, &edition("F2002 V1.4", b"HD1"), true, &[]);
+        let waiting = crate::pending::list(&conn, &cfg).unwrap();
+        crate::pending::resolve(&conn, &cfg, &waiting[0].id, crate::pending::ACTION_LAYER).unwrap();
+        let first = layers();
+        assert_eq!(first.len(), 1);
+        crate::compose::set_layer_active(&conn, &cfg, &first[0].id, false).unwrap();
+
+        let r = import_folder_for_test(&conn, &cfg, &rules, &edition("F2002 V1.5", b"HD2"), true, &[]);
+        assert_eq!(r.pending, 0, "not asked again");
+        let now = layers();
+        assert_eq!(now.len(), 1, "one layer, not two");
+        assert_eq!(now[0].id, first[0].id, "the same layer");
+        assert!(!now[0].is_active, "still switched off, as the user left it");
+        let dir = crate::libpath::resolve(Some(&library), &now[0].library_path).unwrap();
+        assert_eq!(
+            std::fs::read(dir.join("skins").join("a_2002_michael").join("skin.dds")).unwrap(),
+            b"HD2",
+            "with the new edition's content"
+        );
+
+        crate::compose::remove_layer(&conn, &cfg, &now[0].id).unwrap();
+        let r = import_folder_for_test(&conn, &cfg, &rules, &edition("F2002 V1.6", b"HD3"), true, &[]);
+        assert_eq!(
+            r.reapplied[0].action,
+            crate::pending::ACTION_DISCARD,
+            "removing it was the answer"
+        );
+        assert!(layers().is_empty(), "and it does not come back");
     }
 
     #[test]

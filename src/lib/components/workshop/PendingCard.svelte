@@ -12,7 +12,13 @@
   // notice of the first — and totals the rest.
   import { errorText } from "$lib/errors";
   import { fmtSize } from "$lib/format";
-  import { folderName, readPendingDocument, type PendingAction, type PendingFolder } from "$lib/workshop/pending";
+  import {
+    folderName,
+    readPendingDocument,
+    PENDING_ACTION_LABEL,
+    type PendingAction,
+    type PendingFolder,
+  } from "$lib/workshop/pending";
   import { t } from "$lib/i18n/index.svelte";
 
   let {
@@ -63,13 +69,6 @@
     }
   }
 
-  const ACTION_LABEL: Record<PendingAction, string> = {
-    game: "importOverlay.pendingActionGame",
-    layer: "importOverlay.pendingActionLayer",
-    resources: "importOverlay.pendingActionResources",
-    other: "importOverlay.pendingActionOther",
-    discard: "importOverlay.pendingActionDiscard",
-  };
   const ACTION_HINT: Record<PendingAction, string> = {
     game: "importOverlay.pendingActionGameHint",
     layer: "importOverlay.pendingActionLayerHint",
@@ -175,8 +174,12 @@
         onclick={() => onsettle(a)}
       >
         <span class="c-act-l">
-          {t(ACTION_LABEL[a])}
+          {t(PENDING_ACTION_LABEL[a])}
           {#if a === f.suggestion && !done}<em class="c-act-s">{t("importOverlay.pendingSuggested")}</em>{/if}
+          <!-- The user's own answer from a previous import: a fact about the
+               past, not the app's opinion — hence its own mention, beside a
+               suggestion or where there is none (§4.6bis). -->
+          {#if a === f.previous && !done}<em class="c-act-s">{t("importOverlay.pendingPrevious")}</em>{/if}
         </span>
         <span class="c-act-h">{t(ACTION_HINT[a])}</span>
       </button>

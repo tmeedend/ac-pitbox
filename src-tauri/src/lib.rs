@@ -328,6 +328,8 @@ pub fn run() {
             commands::bulk_ops::cancel_bulk,
             commands::import::split_dropped_paths,
             commands::import::list_pending_folders,
+            commands::import::list_resource_folders,
+            commands::import::remove_resource_folder,
             commands::import::resolve_pending_folder,
             commands::import::read_pending_document,
             commands::layers::list_layers,

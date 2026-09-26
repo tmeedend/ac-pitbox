@@ -39,7 +39,20 @@ export interface PendingFolder {
   suggestion: PendingAction | "";
   /** Actions qui ont un sens pour ce dossier-ci, la proposition en tête. */
   actions: PendingAction[];
+  /** The answer given to this folder at a previous import, when it was not
+   * applied again by itself (§4.6ter) — shown, never pre-selected. */
+  previous: PendingAction | null;
 }
+
+/** i18n key of each answer's label — shared by the question and the import
+ * report, which tells which answers were given again. */
+export const PENDING_ACTION_LABEL: Record<PendingAction, string> = {
+  game: "importOverlay.pendingActionGame",
+  layer: "importOverlay.pendingActionLayer",
+  resources: "importOverlay.pendingActionResources",
+  other: "importOverlay.pendingActionOther",
+  discard: "importOverlay.pendingActionDiscard",
+};
 
 export function listPendingFolders(): Promise<PendingFolder[]> {
   return invoke<PendingFolder[]>("list_pending_folders");
@@ -80,7 +93,14 @@ export function folderName(relPath: string): string {
  */
 export function groupKey(f: PendingFolder): string | null {
   if (f.replaced > 0) return null;
-  return [folderName(f.rel_path).toLowerCase(), f.title ?? "", f.shape, f.actions.join(","), f.suggestion].join("|");
+  return [
+    folderName(f.rel_path).toLowerCase(),
+    f.title ?? "",
+    f.shape,
+    f.actions.join(","),
+    f.suggestion,
+    f.previous ?? "",
+  ].join("|");
 }
 
 /** Pending folders as questions, in the order of their first folder. Groups
