@@ -15,7 +15,7 @@
   import PendingDialog from "$lib/components/workshop/PendingDialog.svelte";
   import ShellToasts from "$lib/components/toasts/ShellToasts.svelte";
   import ControllerSetup from "$lib/components/settings/ControllerSetup.svelte";
-  import { nav, inSessionZone, rememberLibrary } from "$lib/shell/nav.svelte";
+  import { nav, inSessionZone, rememberLibrary, tabGroupOf } from "$lib/shell/nav.svelte";
   import { recordScreen } from "$lib/shell/navHistory";
   import { startShellServices } from "$lib/shell/shellServices";
   import { controllers } from "$lib/shell/gamepadDevices.svelte";
@@ -156,7 +156,7 @@
           <Library kind="Car" />
         {:else if nav.section === "tracks"}
           <Library kind="Track" />
-        {:else if nav.section === "rules" || nav.section === "brands" || nav.section === "categories" || nav.section === "countries" || nav.section === "import" || nav.section === "profiles" || nav.section === "maintenance"}
+        {:else if tabGroupOf(nav.section)}
           <Workshop />
         {:else if nav.section === "driver"}
           <DriverScreen />

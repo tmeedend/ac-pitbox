@@ -407,7 +407,8 @@ src/lib/                Modules : un dossier par domaine, comme le backend
   gridthumbs/           Les vignettes de la grille (GRILLE§5), éteintes
   driver/               Le pilote : corps, tenues, surcharges
   inventory/            Les compléments : apps, autres mods, sous-éléments
-  workshop/             L'Atelier : règles, import, profils, maintenance
+  workshop/             Classement et Fichiers, l'ancien Atelier : règles,
+                        taxonomies, import, profils, maintenance
   *.ts                  Ce qui ne relève d'aucun domaine : `config`, `errors`,
                         `features`, `format`, `invokeSafe`, `storage`,
                         `uiPrefs`, `preferred`
@@ -486,7 +487,8 @@ circuit, ligne pilote) qui dit lequel est ouvert (§7.2).
 | `apps` | `inventory/Apps.svelte` | écran à part entière depuis la refonte (§3.2) |
 | `others` | `inventory/Inventory.svelte` | **l'inventaire des compléments** — cinq sources en une liste |
 | `race` | `launch/Launch.svelte` | |
-| `rules` / `brands` / `categories` / `countries` / `import` / `profiles` / `maintenance` | `workshop/Workshop.svelte` | **un écran, sept onglets** (la limite, TAXO§6) — l'onglet EST la section, pas un état local |
+| `rules` / `brands` / `categories` / `countries` | `workshop/Workshop.svelte` | entrée **Classement**, quatre onglets — l'onglet EST la section, pas un état local |
+| `import` / `profiles` / `maintenance` | `workshop/Workshop.svelte` | entrée **Fichiers**, même écran, mêmes règles (`tabGroupOf` de `nav.svelte.ts`) |
 | `settings` / `about` | `settings/Settings` / `settings/About` | |
 
 **Les trois écrans transversaux ont disparu** (Add-ons voiture, Add-ons
@@ -495,10 +497,10 @@ et leur contenu est dans l'inventaire. `Transversal.svelte`, `OtherMods.svelte`
 et `LayersSection.svelte` sont supprimés — la fiche d'un mod « autre »
 (`OtherModDetail`) vit désormais par-dessus l'inventaire.
 
-Deux pièges de ce regroupement : l'onglet de l'Atelier étant `nav.section`, un
+Deux pièges de ce regroupement : l'onglet de Classement ou de Fichiers étant `nav.section`, un
 `requestSection("import")` posé ailleurs (glisser-déposer global, rapport
 d'import) continue d'atterrir au bon endroit — ne pas le remplacer par un état
-local ; et `RulesEditor` reste le seul des sept à gérer son propre
+local ; et `RulesEditor` reste le seul onglet à gérer son propre
 défilement (`noPad`), d'où le mode `full` de `Workshop`.
 
 **Les fiches s'empilent**, et l'empilement est plat : `DetailPage` rend
@@ -668,7 +670,7 @@ Svelte. Les deux sont documentées comme écartées, en tête du script.
   l'utilisateur, indexées par la clé naturelle de l'entrée, une suppression
   étant une pierre tombale. La fusion des deux ne se calcule qu'à un endroit,
   la crate `pitbox-catalog`. **Pour faire évoluer ce catalogue, on ne
-  l'édite pas à la main** : on cure dans l'app (Atelier › Règles, Marques, Familles,
+  l'édite pas à la main** : on cure dans l'app (Classement › Règles, Marques, Familles,
   Pays), puis `npm run rules:diff` / `npm run rules:promote`.
 - **`Prefs` (`config.rs`) est en `#[serde(default)]`** : un champ retiré est
   simplement ignoré dans les `config.json` existants, pas de migration à

@@ -10,9 +10,9 @@
   // Apps and Extras are entries of their own, not tabs of an "Add-ons" screen:
   // they ALREADY have their own facets or tabs, and grouping them would stack
   // two identical rows of horizontal tabs with nothing to say which one drives
-  // the other. The Workshop, on the contrary, gathers tools that have no
-  // sub-section — the only reason that grouping is legitimate.
-  import { nav, requestSection, openSessionZone, SESSION_ZONE } from "$lib/shell/nav.svelte";
+  // the other. Sorting and Files, on the contrary, gather tools that have no
+  // sub-section — the only reason those groupings are legitimate.
+  import { nav, requestSection, openSessionZone, SESSION_ZONE, SORTING_TABS, FILES_TABS } from "$lib/shell/nav.svelte";
   import { openContentManager } from "$lib/launch/launch";
   import { bigPictureState, exitBigPicture } from "$lib/shell/bigpicture.svelte";
   import { t } from "$lib/i18n/index.svelte";
@@ -21,8 +21,8 @@
     /** Section ouverte par un clic. */
     target: string;
     labelKey: string;
-    /** Sections that make the entry active — the session covers four, the
-     * Workshop seven. */
+    /** Sections that make the entry active — the session covers four, Sorting
+     * and Files one per tab. */
     sections?: readonly string[];
     /** Filet de séparation AVANT cette entrée. */
     sep?: boolean;
@@ -61,7 +61,10 @@
     // pose, et leur contenu est dans l'inventaire (REFONTE§3.1).
     { target: "apps", labelKey: "nav.apps", sep: true },
     { target: "others", labelKey: "nav.others" },
-    { target: "rules", labelKey: "nav.atelier", sections: ["rules", "brands", "categories", "countries", "import", "profiles", "maintenance"] },
+    // The former Workshop, split in two (DOSSIER§3.1): how the library is
+    // sorted, and what is on the disk. Each opens on its first tab.
+    { target: SORTING_TABS[0], labelKey: "nav.sorting", sections: SORTING_TABS },
+    { target: FILES_TABS[0], labelKey: "nav.files", sections: FILES_TABS },
     // Second filet : détache le pied.
     { target: "settings", labelKey: "nav.settings", sep: true, foot: true },
     // **Ouvrir Content Manager vit ici**, entre les deux entrées du pied. Ce
@@ -157,8 +160,13 @@
             <path d="M2.6 6.4 10 3.1l7.4 3.3-7.4 3.3z" />
             <path d="M2.6 6.4v7.2l7.4 3.3 7.4-3.3V6.4" />
             <path d="M10 9.7v7.2" />
-          {:else if e.target === "rules"}
-            <path d="M12.4 2.9a4.2 4.2 0 0 0-4 5.5l-5.1 5.1a1.6 1.6 0 0 0 2.2 2.2l5.1-5.1a4.2 4.2 0 0 0 5.5-4l-2.4 2.4-2.4-.7-.7-2.4z" />
+          {:else if e.target === SORTING_TABS[0]}
+            <!-- A label: what sorts the library is what it is tagged with. -->
+            <path d="M3 4.2v5.1l7.9 7.9a1.2 1.2 0 0 0 1.7 0l4.6-4.6a1.2 1.2 0 0 0 0-1.7L9.3 3H4.2A1.2 1.2 0 0 0 3 4.2z" />
+            <path d="M6.9 6.9v.1" />
+          {:else if e.target === FILES_TABS[0]}
+            <!-- A folder: what is on the disk. -->
+            <path d="M2.8 5.2a1 1 0 0 1 1-1h4l1.8 2h6.6a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H3.8a1 1 0 0 1-1-1z" />
           {:else if e.target === "cm"}
             <!-- La flèche qui sort du cadre : on quitte l'application. -->
             <path d="M10.6 3.5h5.9v5.9" />

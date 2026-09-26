@@ -1,19 +1,21 @@
 <script lang="ts">
-  // Atelier (SPEC §7.2quater) : Règles, Importer, Profils et Maintenance en
-  // quatre onglets d'un même écran.
+  // The two tabbed screens of the rail (SPEC §7.2quater, DOSSIER§3.1):
+  // **Sorting** (rules, brands, families, countries) and **Files** (import,
+  // profiles, maintenance). They split the former Workshop, and share this
+  // container because they have exactly the same mechanics - only their tabs
+  // and their title differ (`tabGroupOf`).
   //
-  // Le regroupement n'est possible QUE parce qu'aucun des quatre n'a de
-  // sous-rubrique — c'est ce qui distingue ce cas de celui des inventaires,
-  // qui ont déjà leurs propres onglets et produiraient donc deux rangées
-  // horizontales de forme identique, sans que rien n'indique laquelle
-  // commande l'autre.
+  // Grouping tools as tabs is legitimate ONLY because none of them has a
+  // sub-section of its own - which is what sets them apart from the
+  // inventories, whose own tabs would stack two identical horizontal rows with
+  // nothing to say which one drives the other.
   //
-  // L'onglet reste porté par `nav.section` plutôt que par un état local : la
-  // douzaine d'endroits qui appellent déjà `requestSection("import")` (le
-  // glisser-déposer global, un rapport d'import, un renvoi depuis la
-  // bibliothèque) continuent d'atterrir sur le bon onglet sans rien savoir de
-  // cet écran, la garde de navigation et l'historique restent en place, et
-  // l'entrée du rail — qui vise `rules` — repart forcément du premier onglet.
+  // The tab is carried by `nav.section` rather than by local state: the dozen
+  // places that already call `requestSection("import")` (global drag and drop,
+  // an import report, a link from the library) keep landing on the right tab
+  // without knowing anything of this screen, the navigation guard and the
+  // history stay in place, and the rail entry - which targets the first tab -
+  // always starts from it.
   import Tabs from "$lib/components/ui/Tabs.svelte";
   import RulesEditor from "./RulesEditor.svelte";
   import Categories from "./Categories.svelte";
@@ -23,30 +25,29 @@
   import Import from "./Import.svelte";
   import Profiles from "./Profiles.svelte";
   import Maintenance from "./Maintenance.svelte";
-  import { nav, requestSection } from "$lib/shell/nav.svelte";
+  import { nav, requestSection, tabGroupOf, SORTING_TABS } from "$lib/shell/nav.svelte";
   import { t } from "$lib/i18n/index.svelte";
 
-  // Seven tabs: the limit TAXO§6 sets - the next tool calls for a side list
-  // in the screen, not an eighth tab.
-  const TAB_IDS = ["rules", "brands", "categories", "countries", "import", "profiles", "maintenance"] as const;
-  // Recalculés à chaque changement de langue (`t` est réactif) : un tableau
-  // `const` de libellés figés resterait dans l'ancienne langue.
-  const tabs = $derived(TAB_IDS.map((id) => ({ id, label: t(`nav.${id}`) })));
+  const group = $derived(tabGroupOf(nav.section) ?? SORTING_TABS);
+  const sorting = $derived(group === SORTING_TABS);
+  // Recomputed on every language change (`t` is reactive): a `const` array of
+  // frozen labels would stay in the previous language.
+  const tabs = $derived(group.map((id) => ({ id, label: t(`nav.${id}`) })));
 
-  /** L'éditeur de règles gère son propre défilement et porte une barre d'action
-   * en pied (`noPad` dans AppShell) : l'écran doit alors être une colonne
-   * pleine hauteur, pas un contenu posé dans une zone qui défile. Les trois
-   * autres onglets sont du contenu ordinaire. */
+  /** The rules editor handles its own scrolling and carries an action bar at
+   * its foot (`noPad` in AppShell): the screen must then be a full-height
+   * column, not content laid in a scrolling area. The other tabs are ordinary
+   * content. */
   const full = $derived(nav.section === "rules");
 </script>
 
 <div class="workshop" class:full>
   <div class="head">
-    <h2 class="lbl-screen">{t("nav.atelier")}</h2>
+    <h2 class="lbl-screen">{t(sorting ? "nav.sorting" : "nav.files")}</h2>
     <Tabs {tabs} active={nav.section} onselect={(id) => requestSection(id)} />
-    <!-- The last catalogue update (REGLES§6.2), on the three tabs whose
-         content it changes. -->
-    {#if nav.section === "rules" || nav.section === "brands" || nav.section === "categories" || nav.section === "countries"}
+    <!-- The last catalogue update (REGLES§6.2), on every tab whose content it
+         changes - which is all of Sorting. -->
+    {#if sorting}
       <CatalogBanner />
     {/if}
   </div>

@@ -1,7 +1,8 @@
 {
   "nav": {
     "session": "Sessão",
-    "atelier": "Oficina",
+    "sorting": "Classificação",
+    "files": "Arquivos",
     "others": "Extras",
     "apps": "Apps",
     "rules": "Regras",

@@ -257,6 +257,27 @@ export function openSessionZone(): Promise<boolean> {
   return requestSection(lastLibrary);
 }
 
+// --- The two tabbed rail entries (SPEC §7.2quater, DOSSIER§3.1) ---
+//
+// The former Workshop gathered two trades with nothing in common: sorting the
+// library (rules, no write to the disk) and handling files (import, profiles,
+// repair). It is split into two entries of the same shape, each tab being a
+// section of its own - so the `requestSection("import")` calls spread across
+// the app keep landing on the right tab without knowing which screen holds it.
+
+/** How the library is sorted: rules, and the three taxonomy tabs (TAXO§6). */
+export const SORTING_TABS: readonly string[] = ["rules", "brands", "categories", "countries"];
+/** What is on the disk: mods coming in, bulk activation, repair. */
+export const FILES_TABS: readonly string[] = ["import", "profiles", "maintenance"];
+
+/** The tabs of the tabbed screen `section` belongs to, or `null` when it is
+ * not one of them. The first tab is the one the rail entry opens. */
+export function tabGroupOf(section: string): readonly string[] | null {
+  if (SORTING_TABS.includes(section)) return SORTING_TABS;
+  if (FILES_TABS.includes(section)) return FILES_TABS;
+  return null;
+}
+
 /**
  * Change de section **et** ouvre une fiche, d'un seul tenant.
  *
