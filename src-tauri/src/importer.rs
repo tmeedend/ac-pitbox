@@ -3282,7 +3282,7 @@ mod tests {
     /// pas rangé au hasard — et un dossier passe sans être touché.
     ///
     /// Le cas positif se mesure sur de vrais mods (voir
-    /// `driver::tests::what_the_detector_says_about_real_mods`) : un mannequin
+    /// `driver::bodies::tests::what_the_detector_says_about_real_mods`) : un mannequin
     /// synthétique n'existe pas, `is_driver_model` lit un vrai KN5.
     #[test]
     fn a_loose_model_is_boxed_only_when_it_is_a_driver() {
@@ -3313,7 +3313,7 @@ mod tests {
     /// C'est la moitié qui protège — sans elle, tout `.kn5` traînant à la
     /// racine d'une archive partirait dans `content/driver/`. Le pendant
     /// positif se mesure sur de vrais mods, hors tests unitaires : voir
-    /// `driver::tests::what_the_detector_says_about_real_mods`.
+    /// `driver::bodies::tests::what_the_detector_says_about_real_mods`.
     #[test]
     fn a_loose_kn5_that_is_not_a_driver_keeps_its_path() {
         let base = crate::testutil::temp_dir("import-loose-kn5");

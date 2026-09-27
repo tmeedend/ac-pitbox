@@ -24,7 +24,7 @@
 //!   the section to read first.
 //!
 //! It is driven by the ignored test at the bottom — the project's convention
-//! for anything that needs the real library (`acd.rs`, `driver.rs`), and the
+//! for anything that needs the real library (`acd.rs`, `driver/`), and the
 //! only way to run this without an interface. Exposing it as a Tauri command
 //! later costs one façade.
 

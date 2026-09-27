@@ -434,7 +434,7 @@ pilote de 25 cm à cinq mètres, dont `1,1,1` sur quatre d'entre elles. Mesures
 dans `kn5-format.md`.
 
 **Ce qui est implémenté** (`crates/kn5-gltf/src/driver.rs` pour la greffe,
-`src/driver.rs` pour la résolution) : le mannequin est lu, habillé, puis greffé
+`src/driver/` pour la résolution) : le mannequin est lu, habillé, puis greffé
 dans le modèle de la voiture **après** la passe CSP (§4.5ter), par la même
 mécanique de fusion d'assets — donc avec le même arbitrage sur les collisions
 de nom de texture. La voiture reçoit une racine neuve : les coordonnées du
