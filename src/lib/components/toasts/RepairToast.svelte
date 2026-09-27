@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Progression et rapport de la réparation générale (SESSION§3), dans la pile de
+  // Progression et rapport de la réparation générale (§10), dans la pile de
   // notifications.
   //
   // La réparation était une commande synchrone : la fenêtre gelait pendant

@@ -211,7 +211,7 @@
     return hideBrandPref ? withoutBrand(name, carDetail?.brand ?? null) : name;
   });
 
-  // --- Garde d'activation (SESSION§3) ---
+  // --- Garde d'activation (§7.4) ---
   //
   // La bibliothèque montre les mods désactivés, Assetto Corsa ne les voit pas :
   // lancer une session qui en contient échoue, et c'est un trou propre à Pit

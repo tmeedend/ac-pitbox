@@ -1,4 +1,4 @@
-//! Commandes du duo de session persisté (SESSION§1) — voir `session_state.rs`.
+//! Commandes du duo de session persisté (§7.4) — voir `session_state.rs`.
 
 use super::prelude::*;
 use crate::session_state::{LaunchState, SessionPicks};

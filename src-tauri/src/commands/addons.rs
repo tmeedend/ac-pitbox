@@ -6,7 +6,7 @@ use super::prelude::*;
 /// Indexe le contenu de base Kunos présent dans content/ (§8.1).
 ///
 /// `reset_user_edits` : efface aussi ce que l'utilisateur a saisi sur ce
-/// contenu (SESSION§3.1). Absent = préserver, le seul défaut acceptable — c'est le
+/// contenu (§5bis.3). Absent = préserver, le seul défaut acceptable — c'est le
 /// contraire qui était fait, et il perdait un renommage sans prévenir.
 #[tauri::command]
 pub fn index_stock_content(app: AppHandle, db: State<Db>, reset_user_edits: Option<bool>) -> Result<usize, String> {

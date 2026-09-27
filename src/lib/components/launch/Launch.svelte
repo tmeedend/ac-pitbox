@@ -510,7 +510,7 @@
     // d'un geste pour repasser en `Auto`.
     if (saved.opponents?.length) setup.opponents = saved.opponents.map(restoreOpponent);
 
-    // La bibliothèque EST le sélecteur (SESSION§3) : voiture/circuit viennent du duo
+    // La bibliothèque EST le sélecteur (SESSION§1) : voiture/circuit viennent du duo
     // de session choisi dans les bibliothèques — rien à choisir ici.
     syncFromSession();
     const first = weathers.find((w) => w.available);
@@ -524,13 +524,13 @@
     if (!state.fromFile) persistLaunchState();
   });
 
-  // Applique le duo de session (SESSION§3) au setup : voiture, skin piloté, circuit,
+  // Applique le duo de session (SESSION§1) au setup : voiture, skin piloté, circuit,
   // layout. Repli sur le 1er installé si aucune sélection.
   function syncFromSession() {
     const c = nav.sessionCar;
     const tr = nav.sessionTrack;
     setup.car_id = c?.id ?? carPool[0]?.id_interne ?? "";
-    // Skin de session choisi sur la fiche (SESSION§3), repli sur mémorisé.
+    // Skin de session choisi sur la fiche (SESSION§1), repli sur mémorisé.
     setup.car_skin = c?.skin ?? (c ? getPreferredSkin(c.id)?.id ?? null : null);
     setup.track_id = tr?.id ?? "";
     setup.track_layout = tr?.layout ?? null;
@@ -674,7 +674,7 @@
   // --- Sessions sauvegardées nommées (SESSION§3.5) : instantané complet des
   // réglages (adversaires, météo, options…), rappelable par nom — distinct
   // des presets automatiques par type. Ne touche pas au duo voiture/circuit
-  // courant (géré par la bibliothèque, SESSION§3) : seuls les réglages sont repris.
+  // courant (géré par la bibliothèque, SESSION§1) : seuls les réglages sont repris.
   // La liste (carte « Sessions enregistrées ») est filtrée par type — un
   // effet la recharge à chaque changement d'onglet, et le save/delete la
   // rafraîchissent en plus puisqu'ils ne changent pas le type. ---

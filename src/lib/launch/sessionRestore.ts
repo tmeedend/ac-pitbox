@@ -5,7 +5,7 @@
 // partiel est le cas normal, pas l'exception.
 //
 // Tout passe par le duo de session (`pickSession`) et non par `setup` : le duo
-// est la source de vérité (SESSION§3), l'effet de resynchronisation de l'écran
+// est la source de vérité (SESSION§1), l'effet de resynchronisation de l'écran
 // réécrirait sinon `setup` avec ce qui est resté dans la barre latérale.
 import { errorText } from "$lib/errors";
 import { t } from "$lib/i18n/index.svelte";

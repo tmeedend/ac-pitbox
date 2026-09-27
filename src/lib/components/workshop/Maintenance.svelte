@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Écran Maintenance (SESSION§3) : détection assistée des mods cassés et des
+  // Écran Maintenance (§10) : détection assistée des mods cassés et des
   // junctions orphelines, suppression sur confirmation.
   import {
     maintenanceScan,
@@ -53,7 +53,7 @@
   }
 
   /** Réinitialiser aussi les saisies de l'utilisateur sur le contenu de base
-   * (SESSION§3.1). Décoché par défaut : un réindex ordinaire ne doit jamais faire
+   * (§5bis.3). Décoché par défaut : un réindex ordinaire ne doit jamais faire
    * perdre un renommage — c'était le cas, sans le dire. */
   let resetStockEdits = $state(false);
 
@@ -96,7 +96,7 @@
     }
   }
 
-  // Nettoyage des sous-éléments sans parent (SESSION§3) : jamais automatique — ils
+  // Nettoyage des sous-éléments sans parent (§10) : jamais automatique — ils
   // sont conservés à la suppression d'un mod pour qu'un réimport du même id les
   // retrouve, ce qui n'a plus d'intérêt une fois le parent définitivement parti.
   async function doPurgeOrphanSubs() {

@@ -8,7 +8,7 @@
 // potentiellement construit à la main (mode « libre »), qu'avait l'utilisateur.
 //
 // Persisté côté Rust (`launch_state.json`, écriture synchrone), pas en
-// `localStorage` : même bug que le duo voiture/circuit (SESSION§3, voir
+// `localStorage` : même bug que le duo voiture/circuit (§7.4, voir
 // `nav.svelte.ts`/`session_state.rs`) — `localStorage` n'est pas garanti
 // synchrone sur disque côté WebView2, ce qui perdait les réglages de
 // session à la fermeture de l'app plutôt qu'au prochain changement d'onglet.

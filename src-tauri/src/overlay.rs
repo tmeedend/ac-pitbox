@@ -80,7 +80,7 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     }
     // Date de publication estimée depuis les dates de fichiers (§6.2).
     let _ = conn.execute("ALTER TABLE versions ADD COLUMN published_at TEXT", []);
-    // Taille sur disque de la version, octets (SESSION§4).
+    // Taille sur disque de la version, octets (§10).
     let _ = conn.execute("ALTER TABLE versions ADD COLUMN size_bytes INTEGER", []);
     // Archive/dossier source conservé (§10/§11), si le réglage était activé à
     // l'import de cette version. Rend possible « Réinstaller depuis l'archive
@@ -102,7 +102,7 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     // une notice serait une devinette sur du texte libre.
     let _ = conn.execute("ALTER TABLE sub_mods ADD COLUMN author TEXT", []);
 
-    // --- Saisie utilisateur, toutes entités (REFONTE§6.1 et SESSION§4) ---
+    // --- Saisie utilisateur, toutes entités (REFONTE§6.1 et REFONTE§9.4) ---
     //
     // La note et le nom d'affichage cessent d'être un privilège des mods :
     // une couche s'appelle `spa2022-release_V1-03.rar` et c'est exactement
@@ -221,7 +221,7 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
             layouts           TEXT NOT NULL DEFAULT '[]',
             tags_from_mod     TEXT NOT NULL DEFAULT '[]',
             published_at      TEXT,                   -- date de publication estimée (§6.2)
-            size_bytes        INTEGER                 -- taille sur disque, octets (SESSION§4)
+            size_bytes        INTEGER                 -- taille sur disque, octets (§10)
         );
 
         CREATE TABLE IF NOT EXISTS history (
@@ -559,7 +559,7 @@ pub struct ModRow {
     pub notes_user: Option<String>,
     /// Date de publication estimée de la version active (§6.2).
     pub published_at: Option<String>,
-    /// Taille sur disque cumulée de toutes les versions, octets (SESSION§4).
+    /// Taille sur disque cumulée de toutes les versions, octets (§10).
     /// `None` tant qu'aucune n'a été calculée (mod importé avant cette
     /// fonctionnalité, à rattraper via « Réindexer » + recalcul de taille).
     pub size_bytes: Option<i64>,
@@ -581,7 +581,7 @@ pub struct VersionRow {
     pub tags_from_mod: Vec<String>,
     /// Date de publication estimée depuis les dates de fichiers (§6.2).
     pub published_at: Option<String>,
-    /// Taille sur disque de cette version, octets (SESSION§4).
+    /// Taille sur disque de cette version, octets (§10).
     pub size_bytes: Option<i64>,
     /// Archive/dossier source conservé en bibliothèque (§10/§11), si le
     /// réglage était activé à l'import. `None` = non conservé.
@@ -669,7 +669,7 @@ pub fn insert_version(
     Ok(())
 }
 
-/// Renseigne la taille sur disque d'une version, octets (SESSION§4). Séparé de
+/// Renseigne la taille sur disque d'une version, octets (§10). Séparé de
 /// `insert_version` : calculée à l'import juste après la copie/le déplacement
 /// en bibliothèque (le dossier final n'existe qu'à cet instant), et sur
 /// demande explicite en réindexation (potentiellement coûteux à grande échelle,
@@ -1609,7 +1609,7 @@ fn delete_all_stock(conn: &Connection) -> rusqlite::Result<usize> {
 ///
 /// **Détruit aussi ce que l'utilisateur a saisi** sur ce contenu (nom,
 /// description, tags manuels, favori) : réservé à la réinitialisation
-/// explicitement demandée, jamais au réindex ordinaire (SESSION§3.1).
+/// explicitement demandée, jamais au réindex ordinaire (§5bis.3).
 pub fn clear_stock(conn: &Connection) -> rusqlite::Result<usize> {
     conn.execute(
         "DELETE FROM history WHERE mod_id IN (SELECT id_interne FROM mods WHERE is_stock = 1)",
@@ -1914,7 +1914,7 @@ const SUB_SELECT: &str =
     "SELECT id, sub_type, parent_id, name, library_path, source_archive, is_active, removable, imported_at, author, display_name_user, notes_user FROM sub_mods";
 
 /// Sous-éléments rattachés à une entité (fiche détail, §8.3).
-/// Sous-éléments (skins, sons) dont le parent n'existe plus (SESSION§3). Conservés
+/// Sous-éléments (skins, sons) dont le parent n'existe plus (§10). Conservés
 /// **délibérément** à la suppression du mod — voir `delete_mod` — mais devenus
 /// inutiles dès qu'on ne compte plus réimporter le parent. Listés ici pour être
 /// nettoyés sur décision de l'utilisateur, jamais automatiquement.

@@ -57,7 +57,7 @@ interface SessionPicks {
   track: SessionPick | null;
 }
 
-/** Persistance durable (SESSION§1) : fichier écrit côté Rust (`session_state.rs`,
+/** Persistance durable (§7.4) : fichier écrit côté Rust (`session_state.rs`,
  * `std::fs::write` synchrone) plutôt que `localStorage` — voir `loadLegacy`
  * pour le pourquoi du changement. */
 function loadPicks(): Promise<SessionPicks> {

@@ -427,7 +427,7 @@
     );
   });
 
-  // Restauration au montage (§6.2/SESSION§1) : colonnes (fichier dédié,
+  // Restauration au montage (§7.4) : colonnes (fichier dédié,
   // `columns.ts`) et le reste des petits réglages d'écran (`uiPrefs.ts`) en
   // parallèle, un seul aller-retour chacun. `prefsReady` n'est levé qu'une
   // fois tout appliqué, pour que l'effet de persistance des filtres plus haut
@@ -1054,7 +1054,7 @@
               {:else}<div class="noprev">{isCar ? t("library.typeCar") : t("library.typeTrack")}</div>{/if}
               {#if !isCar && ol}<img class="outline" src={ol} alt="" loading="lazy" />{/if}
               {#if sessionId === c.id_interne}<span class="sessbadge">{t("library.sessionBadge")}</span>{/if}
-              <!-- Marqueur de note (SESSION§5) : sans lui, une note est en écriture
+              <!-- Marqueur de note (REFONTE§9.5) : sans lui, une note est en écriture
                    seule — on ne saurait plus sur quel mod on en a laissé une.
                    Posé en bas à gauche, en face du cœur : les deux disent la
                    même sorte de chose, « j'ai touché à ce mod ». -->
