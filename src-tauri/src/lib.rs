@@ -8,6 +8,7 @@ mod attach;
 mod backup;
 mod brands;
 mod bulk;
+mod cardata;
 mod catalog_update;
 mod cm_stats;
 mod cmimport;

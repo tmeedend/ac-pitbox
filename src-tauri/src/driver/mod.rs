@@ -47,7 +47,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use crate::acd;
+use crate::cardata::ini_value;
 
 mod bodies;
 mod choices;
@@ -94,7 +94,7 @@ const GLOVES_DIR: &str = "driver_gloves";
 const HELMET_DIR: &str = "driver_helmet";
 
 /// Section every `driver3d.ini` carries — the known plaintext that says a
-/// `data.acd` key is the right one (see [`acd::read_text`]).
+/// `data.acd` key is the right one (see [`crate::acd::read_text`]).
 const MODEL_SECTION: &str = "[MODEL]";
 /// Section naming the steering animation and the travel it spans.
 const STEER_SECTION: &str = "[STEER_ANIMATION]";
@@ -386,21 +386,9 @@ fn car_ini(car_dir: &Path, car_id: &str) -> Option<String> {
     data_file(car_dir, car_id, "car.ini", GRAPHICS_SECTION)
 }
 
-/// One of a car's physics files, from the unpacked `data/` folder or from
-/// `data.acd`.
-///
-/// Unpacked first: a mod that ships both has edited the loose one, and it is
-/// what AC itself reads.
+/// One of a car's physics files, unpacked folder first (see `cardata`).
 fn data_file(car_dir: &Path, car_id: &str, name: &str, marker: &str) -> Option<String> {
-    let loose = car_dir.join("data").join(name);
-    match std::fs::read_to_string(&loose) {
-        Ok(text) => return Some(text),
-        Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
-            log::warn!("driver: {} unreadable — {e}", loose.display());
-        }
-        Err(_) => {}
-    }
-    acd::read_text(car_dir, car_id, name, marker)
+    crate::cardata::read(car_dir, car_id, name, marker)
 }
 
 /// Reads one wardrobe key, `None` when it is absent or empty.
@@ -408,28 +396,6 @@ fn wardrobe_path(text: &str, section: &str, key: &str) -> Option<String> {
     ini_value(text, section, key)
         .map(|v| v.trim_matches(['\\', '/']).to_string())
         .filter(|v| !v.is_empty())
-}
-
-/// `KEY=value` inside a named section, comments stripped. Section names are
-/// compared case-insensitively — `[DRIVER_80]` and `[driver_80]` both occur.
-fn ini_value<'a>(text: &'a str, section: &str, key: &str) -> Option<&'a str> {
-    let mut inside = false;
-    for line in text.lines() {
-        let line = line.split(';').next().unwrap_or("").trim();
-        if line.starts_with('[') {
-            inside = line.eq_ignore_ascii_case(section);
-            continue;
-        }
-        if !inside {
-            continue;
-        }
-        if let Some((name, value)) = line.split_once('=') {
-            if name.trim().eq_ignore_ascii_case(key) {
-                return Some(value.trim());
-            }
-        }
-    }
-    None
 }
 
 /// `POSITION=x,y,z`, in metres. A malformed one is dropped rather than

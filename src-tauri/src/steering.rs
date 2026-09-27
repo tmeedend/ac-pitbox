@@ -12,14 +12,12 @@
 //! lock.
 //!
 //! Same two-source rule as the rest of the physics files: the unpacked `data/`
-//! folder first, `data.acd` after (see `driver::data_file`).
+//! folder first, `data.acd` after (see `cardata`).
 
 use std::path::Path;
 
-use crate::acd;
-
 /// Section `car.ini` carries the two values, and the marker that says a
-/// `data.acd` entry decrypted into the right file (see [`acd::read_text`]).
+/// `data.acd` entry decrypted into the right file (see [`crate::acd::read_text`]).
 const CONTROLS_SECTION: &str = "[CONTROLS]";
 
 /// Steering travel and ratio, or what to assume when a car is silent.
@@ -62,18 +60,9 @@ pub fn read(car_dir: &Path, car_id: &str) -> Steering {
     steering
 }
 
-/// `car.ini`, unpacked folder first — a mod that ships both has edited the
-/// loose one, and it is what AC itself reads.
+/// `car.ini`, unpacked folder first (see `cardata`).
 fn data_file(car_dir: &Path, car_id: &str) -> Option<String> {
-    let loose = car_dir.join("data").join("car.ini");
-    match std::fs::read_to_string(&loose) {
-        Ok(text) => return Some(text),
-        Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
-            log::warn!("steering: {} unreadable — {e}", loose.display());
-        }
-        Err(_) => {}
-    }
-    acd::read_text(car_dir, car_id, "car.ini", CONTROLS_SECTION)
+    crate::cardata::read(car_dir, car_id, "car.ini", CONTROLS_SECTION)
 }
 
 /// `KEY=value` anywhere in the file, comments stripped.

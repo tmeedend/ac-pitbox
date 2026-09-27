@@ -33,14 +33,12 @@
 //! does not say gets no line, never a hedged one.
 //!
 //! Same two-source rule as the rest of the physics files: the unpacked `data/`
-//! folder first, `data.acd` after (see `steering.rs`, same shape).
+//! folder first, `data.acd` after (see `cardata`).
 
 use std::path::Path;
 
-use crate::acd;
-
 /// The section that says a `data.acd` entry decrypted into the right file
-/// (see [`acd::read_text`]) — and the first of the two this module reads.
+/// (see [`crate::acd::read_text`]) — and the first of the two this module reads.
 const ABS_SECTION: &str = "[ABS]";
 const TC_SECTION: &str = "[TRACTION_CONTROL]";
 
@@ -76,18 +74,9 @@ fn parse(text: &str) -> Option<FactoryAssists> {
     })
 }
 
-/// `electronics.ini`, unpacked folder first — a mod that ships both has edited
-/// the loose one, and it is what AC itself reads.
+/// `electronics.ini`, unpacked folder first (see `cardata`).
 fn data_file(car_dir: &Path, car_id: &str) -> Option<String> {
-    let loose = car_dir.join("data").join("electronics.ini");
-    match std::fs::read_to_string(&loose) {
-        Ok(text) => return Some(text),
-        Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
-            log::warn!("electronics: {} unreadable — {e}", loose.display());
-        }
-        Err(_) => {}
-    }
-    acd::read_text(car_dir, car_id, "electronics.ini", ABS_SECTION)
+    crate::cardata::read(car_dir, car_id, "electronics.ini", ABS_SECTION)
 }
 
 /// `PRESENT` **inside one section**, comments stripped.

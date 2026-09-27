@@ -414,32 +414,63 @@ fn ini_number(text: &str, key: &str) -> Option<f32> {
 /// and it rejects a file that decrypted into noise. Without it there would be
 /// no way to tell a wrong key from an unexpected file — both produce bytes.
 pub fn read_text(car_dir: &Path, car_id: &str, entry: &str, marker: &str) -> Option<String> {
-    let bytes = std::fs::read(car_dir.join("data.acd")).ok()?;
+    Container::open(car_dir, car_id, entry, marker)?.text(entry)
+}
 
-    let mut all = entries(&bytes);
-    let ciphered = all
-        .iter()
-        .find(|(name, _)| name.eq_ignore_ascii_case(entry))
-        .map(|(_, data)| data.clone())?;
+/// A car's `data.acd`, opened once: its entries listed and its key found.
+///
+/// What a reader of **several** files of one car wants (the tech sheet reads
+/// seven, FICHE§9.1): the container is read and parsed once, and the key —
+/// the costly part when the folder was renamed — is established once, on one
+/// entry and its marker, then trusted for every other entry. That trust is
+/// sound: the key belongs to the container, not to an entry.
+pub struct Container {
+    entries: Vec<(String, Vec<u8>)>,
+    key: Vec<u8>,
+}
 
-    let opened = |key: &[u8]| -> Option<String> {
-        let text = decrypt(&ciphered, key);
-        text.contains(marker).then_some(text)
-    };
-
-    // The folder name first: instant, and right on every car of the reference
-    // install.
-    opened(&key_for(car_id)).or_else(|| {
-        // Renamed since it was packed, then. Work from the ciphertext instead —
-        // and note this route must ignore the folder name entirely, since a
-        // wrong name is the whole reason for being here.
-        all.sort_by_key(|(_, data)| std::cmp::Reverse(data.len()));
+impl Container {
+    /// Opens `data.acd` and finds its key by decrypting `proof` until it
+    /// contains `marker` (see [`read_text`] for why a marker is needed).
+    ///
+    /// `None` when the file is absent, `proof` is not in it, or no key opens it.
+    pub fn open(car_dir: &Path, car_id: &str, proof: &str, marker: &str) -> Option<Self> {
+        let bytes = std::fs::read(car_dir.join("data.acd")).ok()?;
+        let entries = entries(&bytes);
+        let ciphered = entries
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case(proof))
+            .map(|(_, data)| data.clone())?;
         let works = |key: &[u8]| decrypt(&ciphered, key).contains(marker);
-        all.iter()
-            .take(LONGEST_TRIED)
-            .find_map(|(_, data)| recover_key(data, &works))
-            .and_then(|key| opened(&key))
-    })
+
+        // The folder name first: instant, and right on every car of the
+        // reference install.
+        let derived = key_for(car_id);
+        let key = if works(&derived) {
+            derived
+        } else {
+            // Renamed since it was packed, then. Work from the ciphertext
+            // instead — and note this route must ignore the folder name
+            // entirely, since a wrong name is the whole reason for being here.
+            let mut longest: Vec<&(String, Vec<u8>)> = entries.iter().collect();
+            longest.sort_by_key(|(_, data)| std::cmp::Reverse(data.len()));
+            longest
+                .iter()
+                .take(LONGEST_TRIED)
+                .find_map(|(_, data)| recover_key(data, &works))?
+        };
+        Some(Self { entries, key })
+    }
+
+    /// One entry, decrypted with the container's key. An entry that is empty
+    /// in the source decrypts to an empty string, which is an answer (a
+    /// `drs.ini` with nothing in it, FICHE§2.2), not a failure.
+    pub fn text(&self, entry: &str) -> Option<String> {
+        self.entries
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case(entry))
+            .map(|(_, data)| decrypt(data, &self.key))
+    }
 }
 
 /// Idle speed and rev limit for a car, straight from its own physics.
