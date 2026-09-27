@@ -9,9 +9,8 @@ vi.mock("$lib/i18n/index.svelte", () => ({
 }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
-const { aidChips, draftOf, keyFigures, mechanicsRows, nextAidState, parseInput, signsUsed } = await import(
-  "./techSheet"
-);
+const { aidChips, draftOf, keyFigures, mechanicsRows, nextAidState, parseInput, reportLines, signsUsed } =
+  await import("./techSheet");
 import type { TechSheet } from "./techSheet";
 
 function sheet(values: TechSheet["values"]): TechSheet {
@@ -115,5 +114,21 @@ describe("edit mode inputs", () => {
     expect(parseInput("  ")).toBe(null);
     expect(parseInput("abc")).toBe(undefined);
     expect(parseInput("-3")).toBe(undefined);
+  });
+});
+
+describe("reading report", () => {
+  it("lists the columns that moved, in column order, zero counts left out", () => {
+    const lines = reportLines({
+      cars: 397,
+      fields: {
+        gearbox: { gained: 61, changed: 1, lost: 0 },
+        aspiration: { gained: 287, changed: 105, lost: 0 },
+      },
+    });
+    expect(lines).toEqual([
+      { field: "aspiration", counts: [["gained", 287], ["changed", 105]] },
+      { field: "gearbox", counts: [["gained", 61], ["changed", 1]] },
+    ]);
   });
 });

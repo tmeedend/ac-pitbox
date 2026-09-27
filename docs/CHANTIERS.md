@@ -835,22 +835,21 @@ de reprendre. En cas d'écart, la spec fait foi.
       (les deux RUF RT12R, `1,495kg`, restaient à 1,5 kg). Toute correction
       de `techsheet/physics.rs` ou `ui.rs` **incrémente `READER_VERSION`** : le
       démarrage suivant relit alors toutes les voitures.
+      **Écart assumé** : FICHE§9.3 voulait que le rapport de mise à jour des
+      règles dise ce que le premier démarrage change. Il a sa propre
+      notification (`techsheet-report.json`, `TechSheetToast`) : aucune règle
+      n'a changé, et une relecture après une correction de lecteur
+      (`READER_VERSION`) n'a rien à voir avec le catalogue.
       **Ce qui reste :**
       - *Les couches* : la fiche lit le dossier de la version, pas la pile
         des couches actives. Aucune couche voiture sur l'install de dev ; une
         couche de physique ne se verrait donc pas sur la fiche.
-      - *Le rapport de mise à jour des règles* (REGLES§) ne dit pas, en nombre,
-        ce que le premier démarrage change (FICHE§9.3) : c'est seulement
-        journalisé (« techsheet backfill: N car(s) read »).
       - *Changer de version active* ne relit pas les règles de la nouvelle :
         leurs faits sont ceux de la dernière harmonisation (comme les colonnes
         avant la fiche).
       - *Vitrine et export* : les tests de survie de FICHE§9.4 attendent
         `ESPACE§` et `EXPORT§`, pas encore construits. La fiche, elle, ne lit
         déjà plus aucun fichier.
-      - *Colonnes de bibliothèque* : elles affichent les codes (`RWD`,
-        `PADDLES`), la fiche les mots. Écart antérieur, élargi par deux
-        codes neufs (`TWIN_TURBO`, `PADDLES`).
       - *Traductions* it/de/es/pt de l'espace `techsheet`.
 
 - [ ] **Corrections par mod — à faire, chantier à part.** Aujourd'hui on

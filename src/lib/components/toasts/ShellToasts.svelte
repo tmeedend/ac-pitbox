@@ -10,6 +10,7 @@
   import RepairToast from "./RepairToast.svelte";
   import SurveyToast from "./SurveyToast.svelte";
   import CatalogToast from "./CatalogToast.svelte";
+  import TechSheetToast from "./TechSheetToast.svelte";
   import ImportToasts from "./ImportToasts.svelte";
   import MusicToast from "./MusicToast.svelte";
   import GridThumbToast from "./GridThumbToast.svelte";
@@ -26,6 +27,7 @@
   <RepairToast />
   <SurveyToast />
   <CatalogToast />
+  <TechSheetToast />
   <ImportToasts />
   <MusicToast />
   <!-- La génération des vignettes en dernier, donc au plus près du coin : elle

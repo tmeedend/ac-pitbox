@@ -2174,6 +2174,16 @@
         "AUTO": "automatique",
         "PADDLES": "à palettes"
       }
+    },
+    "report": {
+      "title": "Fiches techniques relues",
+      "cars": "{count} voitures lues dans leur physique",
+      "gained": "{count} renseignées",
+      "changed": "{count} modifiées",
+      "lost": "{count} vidées",
+      "gainedOne": "1 renseignée",
+      "changedOne": "1 modifiée",
+      "lostOne": "1 vidée"
     }
   }
 }

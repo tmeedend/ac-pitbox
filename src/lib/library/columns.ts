@@ -7,6 +7,7 @@ import { fmtSize } from "$lib/format";
 import { StorageKey, kindKey } from "$lib/storage";
 import { peekUiPref } from "$lib/uiPrefs.svelte";
 import { withoutBrand } from "./displayName";
+import { choiceLabel } from "$lib/detail/techSheet";
 
 // `kindKey` a déménagé dans storage.ts (il ne servait qu'à bâtir des clés) ;
 // ré-exporté ici pour les appelants existants.
@@ -59,21 +60,29 @@ function fmtDate(iso: string | null): string {
 
 type SpecField = "drivetrain" | "gearbox" | "engine_config" | "engine_pos" | "aspiration";
 
-/** A spec column: the tech sheet's value, with the sign the sheet puts before
- * a value deduced from the tags (FICHE R5) — a deduced value reads the same
- * everywhere. Sorted on the value alone, so the sign does not group rows. */
+/** A spec column: the tech sheet's value in the sheet's own words
+ * ("propulsion", not `RWD`), with the sign the sheet puts before a value
+ * deduced from the tags (FICHE R5) — a value reads the same everywhere.
+ * Capitalised: a cell stands alone, where the sheet runs it into a sentence. */
 function specColumn(field: SpecField, labelKey: string): ColumnDef {
+  const word = (c: ModCard): string | null => {
+    const code = c[field];
+    if (!code) return null;
+    const label = choiceLabel(field, code);
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  };
   return {
     key: field,
     labelKey,
     sortable: true,
     defaultVisible: false,
     value: (c) => {
-      const v = c[field];
-      if (!v) return DASH;
-      return c.tech_marks?.[field] === "rules" ? `≈ ${v}` : v;
+      const w = word(c);
+      if (!w) return DASH;
+      return c.tech_marks?.[field] === "rules" ? `≈ ${w}` : w;
     },
-    sortValue: (c) => (c[field] ?? DASH).toLowerCase(),
+    // On the word shown, never the sign: it would group rows by provenance.
+    sortValue: (c) => (word(c) ?? DASH).toLowerCase(),
   };
 }
 

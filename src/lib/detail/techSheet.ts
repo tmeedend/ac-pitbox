@@ -278,3 +278,41 @@ export type AidState = true | false | null;
 export function nextAidState(s: AidState): AidState {
   return s === true ? false : s === false ? null : true;
 }
+
+// --- The report of a reading (FICHE§9.3) -------------------------------------
+
+export interface FieldChanges {
+  gained: number;
+  changed: number;
+  lost: number;
+}
+
+export interface TechSheetReport {
+  cars: number;
+  /** Per spec column: `drivetrain`, `aspiration`, `gearbox`, `engine_config`,
+   * `engine_pos`. Only the columns that moved. */
+  fields: Record<string, FieldChanges>;
+}
+
+/** The library column each field is shown under — the report speaks of the
+ * columns, which is where the change is seen. */
+export const COLUMN_LABEL: Record<string, string> = {
+  drivetrain: "columns.drivetrain",
+  aspiration: "columns.aspiration",
+  gearbox: "columns.gearbox",
+  engine_config: "columns.engineConfig",
+  engine_pos: "columns.enginePos",
+};
+
+/** One line per column that moved, its non-zero counts only, in the order
+ * of the library's columns. */
+export function reportLines(r: TechSheetReport): { field: string; counts: [keyof FieldChanges, number][] }[] {
+  return Object.keys(COLUMN_LABEL)
+    .filter((f) => r.fields[f])
+    .map((f) => ({
+      field: f,
+      counts: (["gained", "changed", "lost"] as const)
+        .map((k) => [k, r.fields[f][k]] as [keyof FieldChanges, number])
+        .filter(([, n]) => n > 0),
+    }));
+}

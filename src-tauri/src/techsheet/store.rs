@@ -168,6 +168,16 @@ pub(super) fn has_file_facts(conn: &Connection, mod_id: &str, version: &str) -> 
     )
 }
 
+/// The five cached columns as they are now, in the order of `super::CACHED` —
+/// what the backfill compares before and after reading a car (FICHE§9.3).
+pub(super) fn cached_columns(conn: &Connection, mod_id: &str) -> rusqlite::Result<Vec<Option<String>>> {
+    conn.query_row(
+        "SELECT drivetrain, aspiration, gearbox, engine_config, engine_pos FROM mods WHERE id_interne = ?1",
+        [mod_id],
+        |r| (0..5).map(|i| r.get(i)).collect(),
+    )
+}
+
 /// The five cached columns, in the order of `super::CACHED`.
 pub(super) fn write_cache(
     conn: &Connection,

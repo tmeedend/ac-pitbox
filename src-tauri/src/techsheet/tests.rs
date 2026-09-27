@@ -477,7 +477,14 @@ fn the_backfill_is_idempotent() {
     let pending = pending_cars(&conn, &cfg).unwrap();
     assert_eq!(pending.len(), 1, "a car imported before the sheet existed");
     let p = &pending[0];
-    store_files(&conn, &p.mod_id, &p.version, &read_files(&p.dir, &p.mod_id, p.stock)).unwrap();
+    let mut report = report::Report::default();
+    store_pending(&conn, p, &read_files(&p.dir, &p.mod_id, p.stock), &mut report).unwrap();
+    assert_eq!(report.cars, 1, "counted");
+    assert_eq!(
+        report.fields.get("gearbox").map(|c| c.gained),
+        None,
+        "no physics in this car: no column moved"
+    );
     assert!(
         pending_cars(&conn, &cfg).unwrap().is_empty(),
         "nothing left the second time"

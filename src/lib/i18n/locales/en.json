@@ -2174,6 +2174,16 @@
         "AUTO": "automatic",
         "PADDLES": "paddle-shift"
       }
+    },
+    "report": {
+      "title": "Tech sheets read again",
+      "cars": "{count} cars read in their physics",
+      "gained": "{count} filled in",
+      "changed": "{count} changed",
+      "lost": "{count} emptied",
+      "gainedOne": "1 filled in",
+      "changedOne": "1 changed",
+      "lostOne": "1 emptied"
     }
   }
 }

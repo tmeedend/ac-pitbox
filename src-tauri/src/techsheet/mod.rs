@@ -16,6 +16,7 @@
 //! exactly what the sheet shows.
 
 pub mod physics;
+pub mod report;
 mod store;
 mod ui;
 
@@ -29,7 +30,7 @@ use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-pub use store::pending_cars;
+pub use store::{pending_cars, Pending};
 
 /// Where a value comes from (R2, R5).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -320,6 +321,20 @@ pub fn version_key(stock: bool, active_version: Option<&str>) -> String {
 pub fn record(conn: &Connection, mod_id: &str, version: &str, dir: &Path, stock: bool) -> rusqlite::Result<()> {
     let facts = read_files(dir, mod_id, stock);
     store_files(conn, mod_id, version, &facts)
+}
+
+/// The backfill's writing half (FICHE§9.3): stores what a pending car's files
+/// said, and counts in `report` how its spec columns moved.
+pub fn store_pending(
+    conn: &Connection,
+    p: &Pending,
+    facts: &[Fact],
+    report: &mut report::Report,
+) -> rusqlite::Result<()> {
+    let before = store::cached_columns(conn, &p.mod_id)?;
+    store_files(conn, &p.mod_id, &p.version, facts)?;
+    report.count(&before, &store::cached_columns(conn, &p.mod_id)?);
+    Ok(())
 }
 
 /// The writing half of [`record`], for a caller that read without the lock.

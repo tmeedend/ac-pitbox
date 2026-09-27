@@ -541,6 +541,8 @@ pub fn run() {
             commands::library::set_manual_tags,
             commands::library::set_mod_field,
             commands::techsheet::save_tech_sheet,
+            commands::techsheet::get_techsheet_report,
+            commands::techsheet::dismiss_techsheet_report,
             commands::music::get_music_config,
             commands::music::save_music_config,
             commands::music::get_default_music_folders,
