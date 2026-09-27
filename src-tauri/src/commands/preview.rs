@@ -199,7 +199,7 @@ async fn convert_graft(
     .map_err(|e| format!("driver task interrupted: {e}"))?
 }
 
-/// Les mannequins installés, pour la galerie des corps (SESSION§1).
+/// Les mannequins installés, pour la galerie des corps (SESSION§5).
 ///
 /// Liste vide — jamais une erreur — quand Assetto Corsa n'est pas configuré :
 /// l'écran Pilote reste ouvrable, il n'a simplement rien à proposer.
