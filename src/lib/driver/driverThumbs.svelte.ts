@@ -36,6 +36,12 @@
 // `.glb` ne sert qu'une fois dans la vie d'un corps, et peut être évincé sans
 // conséquence. Son identité est celle de l'entrée de cache du mannequin, donc
 // elle se périme quand le mod change, sans invalidation à écrire.
+//
+// **A thumbnail depends on the body alone** (`driver::thumbnail_body`): seated
+// by a reference car, in its own textures. It used to be posed by the session
+// car and dressed by its livery, which made every car picked a new set of
+// thumbnails — the whole gallery re-rendered, one conversion per body, at
+// each car change, for a difference of a few centimetres of hand spacing.
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { bodyThumbnail, prepareBodyPreview, saveBodyThumbnail, type DriverRig } from "$lib/preview3d/preview";
 import type * as ThreeModule from "three";
@@ -48,27 +54,14 @@ type Entry = { url: string } | { pending: true } | { failed: true };
 
 const cache = $state<Record<string, Entry>>({});
 
-/** Ce qu'on a pour ce corps, ou `null` s'il n'a pas encore été demandé.
- * Lecture réactive : la case se peint dès que le rendu tombe. */
-export function bodyThumb(key: string): string | null {
-  const entry = cache[key];
+/** What we have for this body, or `null` when it has not been asked for yet.
+ * Reactive read: the cell paints as soon as the rendering lands. */
+export function bodyThumb(body: string): string | null {
+  const entry = cache[body];
   return entry && "url" in entry ? entry.url : null;
 }
 
-/** La clé mêle la voiture : c'est elle qui pose le mannequin, donc deux
- * voitures ne donnent pas la même vignette du même corps. */
-function keyOf(carId: string, bodyId: string): string {
-  return carId + "|" + bodyId;
-}
-
-interface Job {
-  carId: string;
-  skinId: string | null;
-  bodyId: string;
-  key: string;
-}
-
-const queue: Job[] = [];
+const queue: string[] = [];
 let running = false;
 
 /**
@@ -77,11 +70,10 @@ let running = false;
  * Appelée quand une case entre dans le champ de vision, jamais au chargement
  * de la liste.
  */
-export function requestBodyThumb(carId: string, skinId: string | null, bodyId: string): void {
-  const key = keyOf(carId, bodyId);
-  if (cache[key]) return;
-  cache[key] = { pending: true };
-  queue.push({ carId, skinId, bodyId, key });
+export function requestBodyThumb(body: string): void {
+  if (cache[body]) return;
+  cache[body] = { pending: true };
+  queue.push(body);
   void drain();
 }
 
@@ -89,21 +81,21 @@ async function drain(): Promise<void> {
   if (running) return;
   running = true;
   try {
-    let job = queue.shift();
-    while (job) {
+    let body = queue.shift();
+    while (body) {
       try {
         // Le disque d'abord, toujours : c'est un aller-retour de quelques
         // millisecondes contre une conversion.
-        const stored = await bodyThumbnail(job.carId, job.skinId, job.bodyId);
-        const url = stored ? convertFileSrc(stored) : await render(job);
-        cache[job.key] = url ? { url } : { failed: true };
+        const stored = await bodyThumbnail(body);
+        const url = stored ? convertFileSrc(stored) : await render(body);
+        cache[body] = url ? { url } : { failed: true };
       } catch (e) {
         // Une vignette manquante n'est pas une panne : la case garde son nom,
         // et le corps reste parfaitement choisissable.
-        console.error("driver: vignette de corps", job.bodyId, e);
-        cache[job.key] = { failed: true };
+        console.error("driver: vignette de corps", body, e);
+        cache[body] = { failed: true };
       }
-      job = queue.shift();
+      body = queue.shift();
     }
   } finally {
     running = false;
@@ -163,8 +155,8 @@ function ensureEngine(): Promise<Engine> {
   return engine;
 }
 
-async function render(job: Job): Promise<string | null> {
-  const preview = await prepareBodyPreview(job.carId, job.skinId, job.bodyId);
+async function render(body: string): Promise<string | null> {
+  const preview = await prepareBodyPreview(body);
   if (!preview) return null;
 
   const { THREE, renderer, scene, camera, load } = await ensureEngine();
@@ -185,9 +177,7 @@ async function render(job: Job): Promise<string | null> {
   // mémoire : attendre l'écriture disque pour peindre une case déjà rendue
   // serait un aller-retour pour rien.
   const bytes = new Uint8Array(await png.arrayBuffer());
-  void saveBodyThumbnail(job.carId, job.skinId, job.bodyId, bytes).catch((e) =>
-    console.error("driver: vignette non rangée", job.bodyId, e),
-  );
+  void saveBodyThumbnail(body, bytes).catch((e) => console.error("driver: vignette non rangée", body, e));
   return URL.createObjectURL(png);
 }
 

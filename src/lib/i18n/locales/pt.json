@@ -801,8 +801,7 @@
       "other": "Outros"
     },
     "driverTitle": "Manequim",
-    "driverInactive": "Ative o mod para ver o manequim: o que é renderizado é o ficheiro instalado no jogo.",
-    "driverNeedsCar": "Escolha um carro de sessão: é o carro que dá a pose ao manequim."
+    "driverInactive": "Ative o mod para ver o manequim: o que é renderizado é o ficheiro instalado no jogo."
   },
   "import": {
     "subtitlePrefix": "Adiciona mods à biblioteca. Um mod importado (ou atualizado) é ",

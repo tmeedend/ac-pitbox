@@ -15,7 +15,6 @@
   import FicheHeader from "$lib/components/detail/FicheHeader.svelte";
   import NoteBlock from "$lib/components/detail/NoteBlock.svelte";
   import { bodyThumb, requestBodyThumb } from "$lib/driver/driverThumbs.svelte";
-  import { nav } from "$lib/shell/nav.svelte";
   import { splitProvenance } from "$lib/detail/provenance";
 
   interface Props {
@@ -75,13 +74,8 @@
     row.junctions.map((path) => DRIVER_KN5.exec(path)?.[1]).filter((id): id is string => !!id),
   );
   const isDriverMod = $derived(row.categories.includes("driver"));
-  /** **C'est la voiture qui pose le mannequin** (`prepare_body_preview`) : sans
-   * duo de session, il n'y a pas de pose, donc pas de vignette. */
-  const carId = $derived(nav.sessionCar?.id ?? null);
   $effect(() => {
-    if (!carId) return;
-    const skin = nav.sessionCar?.skin ?? null;
-    for (const body of bodies) requestBodyThumb(carId, skin, body);
+    for (const body of bodies) requestBodyThumb(body);
   });
 </script>
 
@@ -121,12 +115,10 @@
       <div class="blk-b">
         {#if !bodies.length}
           <p class="hint">{t("others.driverInactive")}</p>
-        {:else if !carId}
-          <p class="hint">{t("others.driverNeedsCar")}</p>
         {:else}
           <div class="dolls">
             {#each bodies as body (body)}
-              {@const thumb = bodyThumb(carId + "|" + body)}
+              {@const thumb = bodyThumb(body)}
               <figure>
                 {#if thumb}
                   <img src={thumb} alt="" />

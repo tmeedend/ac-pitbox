@@ -1230,8 +1230,7 @@
       "other": "Other"
     },
     "driverTitle": "Driver model",
-    "driverInactive": "Activate the mod to see its driver model: what gets rendered is the file deployed into the game.",
-    "driverNeedsCar": "Pick a session car: the car is what poses the driver model."
+    "driverInactive": "Activate the mod to see its driver model: what gets rendered is the file deployed into the game."
   },
   "import": {
     "subtitlePrefix": "Adds mods to the library. An imported (or updated) mod is ",

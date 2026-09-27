@@ -149,40 +149,30 @@ export function prepareDriverPreview(
 }
 
 /**
- * Le même mannequin, pour la **vignette** d'un corps dans la galerie (SESSION§1).
- *
- * Deux différences avec le plateau, une seule raison derrière : il y en a
- * quarante-cinq à produire. Aucune n'en périme une autre ni ne périme le
- * plateau, et toutes montrent le corps dans la tenue de la livrée, pour se
- * comparer entre elles.
+ * The mannequin for a body's **thumbnail** in the gallery (SESSION§5): the
+ * body alone, seated by a reference car and in its own textures. Nothing
+ * about the session goes in, so a body is converted once in its life, not
+ * once per car picked.
  */
-export function prepareBodyPreview(
-  carId: string,
-  skinId: string | null,
-  body: string,
-): Promise<DriverPreview | null> {
-  return invoke<DriverPreview | null>("prepare_body_preview", { carId, skinId, body });
+export function prepareBodyPreview(body: string): Promise<DriverPreview | null> {
+  return invoke<DriverPreview | null>("prepare_body_preview", { body });
 }
 
 /**
- * La vignette déjà rendue pour ce corps, ou `null` s'il faut la produire.
+ * The thumbnail already rendered for this body, or `null` when it has to be
+ * produced.
  *
- * Ne convertit rien : le backend recalcule le nom d'entrée du mannequin —
- * quelques `stat` — et regarde si le PNG est là. C'est ce qui permet de la
- * demander pour chaque case sans rien payer quand la réponse est oui.
+ * Converts nothing: the backend recomputes the mannequin's entry name — a few
+ * `stat`s — and looks for the PNG. That is what lets every cell ask without
+ * paying anything when the answer is yes.
  */
-export function bodyThumbnail(carId: string, skinId: string | null, body: string): Promise<string | null> {
-  return invoke<string | null>("body_thumbnail", { carId, skinId, body });
+export function bodyThumbnail(body: string): Promise<string | null> {
+  return invoke<string | null>("body_thumbnail", { body });
 }
 
-/** Range la vignette qu'on vient de rendre. Le nom sous lequel elle atterrit
- * appartient au backend : c'est celui de l'entrée de cache du mannequin, donc
- * elle se périme exactement quand celle-ci se périmerait. */
-export function saveBodyThumbnail(
-  carId: string,
-  skinId: string | null,
-  body: string,
-  png: Uint8Array,
-): Promise<string | null> {
-  return invoke<string | null>("save_body_thumbnail", { carId, skinId, body, png: Array.from(png) });
+/** Stores the thumbnail just rendered. The name it lands under belongs to the
+ * backend: it is the mannequin's cache entry, so it goes stale exactly when
+ * that entry would — the body's KN5 changing. */
+export function saveBodyThumbnail(body: string, png: Uint8Array): Promise<string | null> {
+  return invoke<string | null>("save_body_thumbnail", { body, png: Array.from(png) });
 }

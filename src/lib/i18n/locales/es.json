@@ -801,8 +801,7 @@
       "other": "Otros"
     },
     "driverTitle": "Maniquí",
-    "driverInactive": "Activa el mod para ver su maniquí: se renderiza el archivo instalado en el juego.",
-    "driverNeedsCar": "Elige un coche de sesión: es el coche el que da la pose al maniquí."
+    "driverInactive": "Activa el mod para ver su maniquí: se renderiza el archivo instalado en el juego."
   },
   "import": {
     "subtitlePrefix": "Añade mods a la biblioteca. Un mod importado (o actualizado) se ",

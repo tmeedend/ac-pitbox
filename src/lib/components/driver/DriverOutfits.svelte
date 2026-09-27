@@ -27,14 +27,10 @@
   let {
     carId,
     kind,
-    skinId = null,
     choices = null,
   }: {
     carId: string;
     kind: CarClass;
-    /** Livrée en place : elle habille le mannequin du rendu de vignette, donc
-     * deux livrées ne donnent pas la même image du même corps. */
-    skinId?: string | null;
     /** Les garde-robes de cette voiture — c'est là que vivent les vignettes
      * qu'Assetto Corsa range à côté de ses `.dds`. */
     choices?: DriverChoices | null;
@@ -140,8 +136,9 @@
    * textures. La combinaison puis les gants ensuite, même raisonnement.
    *
    * **Le corps en dernier**, et seulement faute de mieux : son image est un
-   * rendu 3D du mannequin habillé par la LIVRÉE, pas par la tenue enregistrée
-   * — deux tenues qui ne diffèrent que par le casque y seraient identiques.
+   * rendu 3D du mannequin dans ses propres textures, pas dans la tenue
+   * enregistrée — deux tenues qui ne diffèrent que par le casque y seraient
+   * identiques.
    * Elle ne dit donc juste que pour une tenue qui n'est qu'une substitution de
    * mannequin, ce qui est exactement le cas où les trois autres manquent.
    *
@@ -153,7 +150,7 @@
       pieceThumb(choices?.helmets, o.helmet) ??
       pieceThumb(choices?.suits, o.suit) ??
       pieceThumb(choices?.gloves, o.gloves) ??
-      (o.body ? bodyThumb(carId + "|" + o.body) : null)
+      (o.body ? bodyThumb(o.body) : null)
     );
   }
 
@@ -164,11 +161,8 @@
   // Toutes les dépendances se lisent avant la première sortie : une garde en
   // tête tronquerait la liste des abonnements dès le montage.
   $effect(() => {
-    const car = carId;
-    const skin = skinId;
     const list = outfits;
     const wardrobe = choices;
-    if (!car) return;
     // `untrack` : `requestBodyThumb` LIT le cache des vignettes pour savoir si
     // la demande est déjà faite. Sans lui, cet effet s'abonnerait à ce cache
     // et se redéclencherait à chaque vignette qui tombe, y compris celles des
@@ -180,7 +174,7 @@
           pieceThumb(wardrobe?.helmets, o.helmet) ??
           pieceThumb(wardrobe?.suits, o.suit) ??
           pieceThumb(wardrobe?.gloves, o.gloves);
-        if (!dressed) requestBodyThumb(car, skin, o.body);
+        if (!dressed) requestBodyThumb(o.body);
       }
     });
   });

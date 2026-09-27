@@ -801,8 +801,7 @@
       "other": "Andere"
     },
     "driverTitle": "Fahrermodell",
-    "driverInactive": "Aktiviere den Mod, um das Fahrermodell zu sehen: gerendert wird die im Spiel abgelegte Datei.",
-    "driverNeedsCar": "Wähle ein Fahrzeug für die Session: das Fahrzeug gibt dem Fahrermodell seine Pose."
+    "driverInactive": "Aktiviere den Mod, um das Fahrermodell zu sehen: gerendert wird die im Spiel abgelegte Datei."
   },
   "import": {
     "subtitlePrefix": "Fügt der Bibliothek Mods hinzu. Eine importierte (oder aktualisierte) Mod wird ",

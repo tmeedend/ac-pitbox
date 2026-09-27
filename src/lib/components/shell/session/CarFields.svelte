@@ -123,16 +123,13 @@
    * est alors celui que la voiture embarque, dont on ne connaît pas
    * l'identifiant côté interface. La case reste, la colonne tient.
    */
-  const driverBodyThumb = $derived(
-    nav.sessionCar && driverPrefs.body ? bodyThumb(nav.sessionCar.id + "|" + driverPrefs.body) : null,
-  );
+  const driverBodyThumb = $derived(driverPrefs.body ? bodyThumb(driverPrefs.body) : null);
   $effect(() => {
-    const car = nav.sessionCar;
     const body = driverPrefs.body;
     // `requestBodyThumb` est idempotent (il sort tout de suite si la vignette
     // est faite ou en cours) : cet effet, abonné à toutes les préférences par
     // `driverPrefs`, peut donc se redéclencher sans rien coûter.
-    if (car && body) requestBodyThumb(car.id, car.skin ?? null, body);
+    if (body) requestBodyThumb(body);
   });
 </script>
 

@@ -1230,8 +1230,7 @@
       "other": "Autres"
     },
     "driverTitle": "Mannequin",
-    "driverInactive": "Activez le mod pour voir son mannequin : c'est le fichier posé dans le jeu qui est rendu.",
-    "driverNeedsCar": "Choisissez une voiture de session : c'est elle qui pose le mannequin."
+    "driverInactive": "Activez le mod pour voir son mannequin : c'est le fichier posé dans le jeu qui est rendu."
   },
   "import": {
     "subtitlePrefix": "Ajoute des mods à la bibliothèque. Un mod importé (ou mis à jour) est ",

@@ -116,109 +116,6 @@ pub async fn prepare_driver_preview(
     // obsolète la conversion en cours, sinon parcourir la galerie vite
     // laisserait une file de conversions orphelines.
     let token = Some(state.next_generation());
-    driver_glb(app, db, car_id, skin_id, outfit, token).await
-}
-
-/// Le même mannequin, pour la **vignette** d'un corps dans la galerie (SESSION§1).
-///
-/// Deux différences avec le plateau, et une seule raison derrière les deux :
-/// il y en a quarante-cinq à produire. Pas de jeton de génération, donc — une
-/// vignette ne périme pas le plateau et ne se périme pas elle-même — et une
-/// tenue vide, pour que toutes les vignettes d'une même voiture montrent les
-/// corps dans la même tenue et se comparent.
-#[tauri::command]
-pub async fn prepare_body_preview(
-    app: AppHandle,
-    db: State<'_, Db>,
-    car_id: String,
-    skin_id: Option<String>,
-    body: String,
-) -> Result<Option<crate::preview::DriverPreview>, String> {
-    let outfit = crate::driver::OutfitOverride {
-        model: Some(body),
-        ..Default::default()
-    };
-    driver_glb(app, db, car_id, skin_id, outfit, None).await
-}
-
-/// La vignette déjà rendue pour ce corps, ou `None` s'il faut la produire
-/// (SESSION§1).
-///
-/// **Ne convertit rien** : elle ne fait que recalculer le nom d'entrée du
-/// mannequin — quelques `stat` sur des fichiers — et regarder si le PNG est
-/// là. C'est ce qui permet de le demander pour chaque case sans payer quoi que
-/// ce soit quand la réponse est oui.
-#[tauri::command]
-pub async fn body_thumbnail(
-    app: AppHandle,
-    db: State<'_, Db>,
-    car_id: String,
-    skin_id: Option<String>,
-    body: String,
-) -> Result<Option<String>, String> {
-    let stem = body_entry_stem(&app, &db, &car_id, skin_id.as_deref(), &body)?;
-    Ok(stem
-        .and_then(|stem| crate::preview::body_thumb(&app, &stem))
-        .map(|path| path.to_string_lossy().into_owned()))
-}
-
-/// Range la vignette que le frontend vient de rendre, et renvoie son chemin.
-///
-/// Le rendu se fait côté frontend — c'est là que vit three.js — mais il ne
-/// choisit pas où le fichier atterrit ni sous quel nom : l'identité d'une
-/// vignette est celle de l'entrée de cache du mannequin, donc elle se calcule
-/// ici, avec le reste.
-#[tauri::command]
-pub async fn save_body_thumbnail(
-    app: AppHandle,
-    db: State<'_, Db>,
-    car_id: String,
-    skin_id: Option<String>,
-    body: String,
-    png: Vec<u8>,
-) -> Result<Option<String>, String> {
-    let Some(stem) = body_entry_stem(&app, &db, &car_id, skin_id.as_deref(), &body)? else {
-        return Ok(None);
-    };
-    crate::preview::write_body_thumb(&app, &stem, &png).map(|path| Some(path.to_string_lossy().into_owned()))
-}
-
-/// Le nom d'entrée du mannequin d'un corps, sans conversion.
-fn body_entry_stem(
-    app: &AppHandle,
-    db: &State<'_, Db>,
-    car_id: &str,
-    skin_id: Option<&str>,
-    body: &str,
-) -> Result<Option<String>, String> {
-    let cfg = crate::config::load(app);
-    let Some(ac_root) = cfg.ac_install_path.clone() else {
-        return Ok(None);
-    };
-    let car_dir = {
-        let conn = db.0.lock().map_err(|e| e.to_string())?;
-        crate::preview::car_dir(&conn, &cfg, car_id).ok_or(crate::errors::PREVIEW_MODEL_NOT_FOUND)?
-    };
-    let skin_dir = kn5_gltf::resolve_skin(&car_dir, skin_id);
-    let outfit = crate::driver::OutfitOverride {
-        model: Some(body.to_string()),
-        ..Default::default()
-    };
-    Ok(
-        crate::driver::standalone(&ac_root, &car_dir, car_id, skin_dir.as_deref(), &outfit)
-            .map(|graft| crate::preview::driver_entry_stem(&graft)),
-    )
-}
-
-/// Le tronc commun des deux : résoudre la voiture, greffer, convertir.
-async fn driver_glb(
-    app: AppHandle,
-    db: State<'_, Db>,
-    car_id: String,
-    skin_id: Option<String>,
-    outfit: crate::driver::OutfitOverride,
-    token: Option<u64>,
-) -> Result<Option<crate::preview::DriverPreview>, String> {
     let cfg = crate::config::load(&app);
     let Some(ac_root) = cfg.ac_install_path.clone() else {
         return Ok(None);
@@ -227,18 +124,79 @@ async fn driver_glb(
         let conn = db.0.lock().map_err(|e| e.to_string())?;
         crate::preview::car_dir(&conn, &cfg, &car_id).ok_or(crate::errors::PREVIEW_MODEL_NOT_FOUND)?
     };
-
-    let app_for_task = app.clone();
-    tauri::async_runtime::spawn_blocking(move || {
+    convert_graft(app, token, move || {
         let skin_dir = kn5_gltf::resolve_skin(&car_dir, skin_id.as_deref());
-        let Some(graft) = crate::driver::standalone(&ac_root, &car_dir, &car_id, skin_dir.as_deref(), &outfit) else {
-            return Ok(None);
-        };
-        let state = app_for_task.state::<crate::preview::PreviewState>();
-        crate::preview::prepare_driver(&app_for_task, &state, &graft, token).map(Some)
+        crate::driver::standalone(&ac_root, &car_dir, &car_id, skin_dir.as_deref(), &outfit)
     })
     .await
-    .map_err(|e| format!("tâche de pilote interrompue : {e}"))?
+}
+
+/// The mannequin for a body's **thumbnail** in the gallery (SESSION§5).
+///
+/// The body alone, seated by the reference car and in its own textures
+/// ([`crate::driver::thumbnail_body`]): nothing about the session, so one
+/// conversion in a body's life rather than one per car picked. No generation
+/// token either — a thumbnail neither supersedes the fitting stage nor another
+/// thumbnail.
+#[tauri::command]
+pub async fn prepare_body_preview(
+    app: AppHandle,
+    body: String,
+) -> Result<Option<crate::preview::DriverPreview>, String> {
+    let Some(ac_root) = crate::config::load(&app).ac_install_path else {
+        return Ok(None);
+    };
+    convert_graft(app, None, move || crate::driver::thumbnail_body(&ac_root, &body)).await
+}
+
+/// The thumbnail already rendered for this body, or `None` when it has to be
+/// produced (SESSION§5).
+///
+/// **Converts nothing**: it only recomputes the mannequin's entry name — a few
+/// `stat`s — and looks for the PNG. That is what lets every cell ask without
+/// paying anything when the answer is yes.
+#[tauri::command]
+pub async fn body_thumbnail(app: AppHandle, body: String) -> Result<Option<String>, String> {
+    Ok(body_entry_stem(&app, &body)
+        .and_then(|stem| crate::preview::body_thumb(&app, &stem))
+        .map(|path| path.to_string_lossy().into_owned()))
+}
+
+/// Stores the thumbnail the frontend has just rendered, and returns its path.
+///
+/// The rendering happens in the frontend — three.js lives there — but it does
+/// not choose where the file lands nor its name: a thumbnail's identity is
+/// the mannequin's cache entry, so it is computed here with the rest.
+#[tauri::command]
+pub async fn save_body_thumbnail(app: AppHandle, body: String, png: Vec<u8>) -> Result<Option<String>, String> {
+    let Some(stem) = body_entry_stem(&app, &body) else {
+        return Ok(None);
+    };
+    crate::preview::write_body_thumb(&app, &stem, &png).map(|path| Some(path.to_string_lossy().into_owned()))
+}
+
+/// A body thumbnail's entry name, without converting anything.
+fn body_entry_stem(app: &AppHandle, body: &str) -> Option<String> {
+    let ac_root = crate::config::load(app).ac_install_path?;
+    crate::driver::thumbnail_body(&ac_root, body).map(|graft| crate::preview::driver_entry_stem(&graft))
+}
+
+/// Grafts, then converts, off the async thread: building the graft reads a
+/// `data.acd` and the conversion reads KN5s.
+async fn convert_graft(
+    app: AppHandle,
+    token: Option<u64>,
+    make_graft: impl FnOnce() -> Option<kn5_gltf::DriverGraft> + Send + 'static,
+) -> Result<Option<crate::preview::DriverPreview>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(graft) = make_graft() else {
+            return Ok(None);
+        };
+        let state = app.state::<crate::preview::PreviewState>();
+        crate::preview::prepare_driver(&app, &state, &graft, token).map(Some)
+    })
+    .await
+    .map_err(|e| format!("driver task interrupted: {e}"))?
 }
 
 /// Les mannequins installés, pour la galerie des corps (SESSION§1).

@@ -801,8 +801,7 @@
       "other": "Altre"
     },
     "driverTitle": "Manichino",
-    "driverInactive": "Attiva il mod per vedere il manichino: viene reso il file installato nel gioco.",
-    "driverNeedsCar": "Scegli un'auto per la sessione: è l'auto a dare la posa al manichino."
+    "driverInactive": "Attiva il mod per vedere il manichino: viene reso il file installato nel gioco."
   },
   "import": {
     "subtitlePrefix": "Aggiunge mod alla libreria. Una mod importata (o aggiornata) viene ",

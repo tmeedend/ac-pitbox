@@ -197,7 +197,7 @@
       ? // La vignette d'un corps est un rendu 3D produit à la demande
         // (`driverThumbs`) : `null` tant qu'il n'est pas tombé, et la case
         // affiche son nom en attendant.
-        bodies.map((b) => ({ id: b.id, label: b.id, thumb: bodyThumb(carId + "|" + b.id) }))
+        bodies.map((b) => ({ id: b.id, label: b.id, thumb: bodyThumb(b.id) }))
       : (choices?.[plural(lane)] ?? []).map((o) => ({
           id: o.id,
           label: readable(o.id),
@@ -602,7 +602,7 @@
             {substituted ? t("driver.reset.body") : t("driver.reset.livery")}
           </button>
 
-          <DriverOutfits {carId} kind={carKind} skinId={nav.sessionCar?.skin ?? null} {choices} />
+          <DriverOutfits {carId} kind={carKind} {choices} />
         </div>
       </section>
 
@@ -680,7 +680,7 @@
                   class:sel={kept === cell.id}
                   type="button"
                   use:whenVisible={() =>
-                    lane === "body" && requestBodyThumb(carId, nav.sessionCar?.skin ?? null, cell.id)}
+                    lane === "body" && requestBodyThumb(cell.id)}
                   onmouseenter={() => (trying = cell.id)}
                   onmouseleave={() => (trying = null)}
                   onfocus={() => (trying = cell.id)}

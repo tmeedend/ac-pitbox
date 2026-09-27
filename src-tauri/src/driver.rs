@@ -311,6 +311,47 @@ pub fn standalone(
     Some(graft)
 }
 
+/// The car that seats every body in the gallery thumbnails: a base-game car,
+/// so present on every install that has not deleted it by hand.
+const THUMBNAIL_CAR: &str = "abarth500";
+
+/// A body alone, as its gallery thumbnail shows it (SESSION§5): in its own
+/// textures, and seated by one reference car rather than by the session's.
+///
+/// **Nothing here depends on the session**, and that is the point. The
+/// thumbnail's identity is the key of this graft, so a thumbnail posed by the
+/// session car was a new thumbnail for every car picked: the whole gallery,
+/// one conversion per body, again at each car change — for a pose that differs
+/// by a few centimetres of hand spacing at 104 px. The livery's wardrobe went
+/// the same way; the fitting stage shows it, the thumbnail only has to tell
+/// one body's geometry from another's.
+///
+/// Without the reference car the body keeps its modelling pose, arms wide:
+/// still a thumbnail, and the one place where an unusual install shows.
+pub fn thumbnail_body(ac_root: &Path, body: &str) -> Option<kn5_gltf::DriverGraft> {
+    let car_dir = ac_root.join("content").join("cars").join(THUMBNAIL_CAR);
+    let seat = outfit_of(&car_dir, THUMBNAIL_CAR, None).unwrap_or_else(|| {
+        log::debug!("driver: {THUMBNAIL_CAR} missing, thumbnails keep the modelling pose");
+        DriverOutfit {
+            model: String::new(),
+            eyes: None,
+            position: [0.0; 3],
+            lock: DEFAULT_LOCK,
+            animation: DEFAULT_STEER_ANIMATION.to_string(),
+            suit: None,
+            gloves: None,
+            helmet: None,
+        }
+    });
+    let outfit = DriverOutfit {
+        model: body.to_string(),
+        ..seat
+    };
+    let mut graft = graft_for(ac_root, &car_dir, &outfit, 0.0)?;
+    graft.anchor = None;
+    Some(graft)
+}
+
 /// Joins a `skin.ini` wardrobe path onto its kind's folder, refusing anything
 /// that would leave it.
 ///
@@ -922,6 +963,73 @@ SUIT=\\type1\\black_black
         .apply(&mut outfit);
 
         assert_eq!(outfit, before, "rien ne bouge quand on redemande le corps déclaré");
+    }
+
+    /// An AC root with one installed body, and the reference car when asked.
+    fn fake_thumbnail_root(base: &Path, with_reference_car: bool) -> PathBuf {
+        let root = base.join("ac");
+        let drivers = root.join("content").join("driver");
+        std::fs::create_dir_all(&drivers).expect("content/driver");
+        std::fs::write(drivers.join("gt.kn5"), b"kn5").expect("body file");
+        if with_reference_car {
+            let car = root.join("content").join("cars").join(THUMBNAIL_CAR);
+            std::fs::create_dir_all(car.join("data")).expect("reference car data");
+            std::fs::create_dir_all(car.join("animations")).expect("reference car animations");
+            std::fs::write(car.join("data").join("driver3d.ini"), DRIVER3D).expect("driver3d.ini");
+            std::fs::write(car.join(BASE_POSE), b"knh").expect("base pose");
+            std::fs::write(car.join("animations").join("steer.ksanim"), b"ksanim").expect("steer animation");
+        }
+        root
+    }
+
+    // Rule (SESSION§5): a body thumbnail depends on the body alone — seated by
+    // the reference car, in its own textures — so picking another session car
+    // never re-renders the gallery.
+    #[test]
+    fn a_body_thumbnail_is_seated_by_the_reference_car_in_its_own_textures() {
+        let base = crate::testutil::temp_dir("driver-thumb-body");
+        let root = fake_thumbnail_root(&base, true);
+        let car = root.join("content").join("cars").join(THUMBNAIL_CAR);
+
+        let graft = thumbnail_body(&root, "gt").expect("a graft for an installed body");
+
+        assert_eq!(
+            graft.model,
+            root.join("content").join("driver").join("gt.kn5"),
+            "the body asked for"
+        );
+        assert_eq!(
+            graft.base_pose,
+            Some(car.join(BASE_POSE)),
+            "seated by the reference car"
+        );
+        assert_eq!(
+            graft.animation,
+            Some(car.join("animations").join("steer.ksanim")),
+            "hands on the reference car's wheel"
+        );
+        assert!(
+            graft.texture_dirs.is_empty(),
+            "no livery wardrobe: the body's own textures"
+        );
+        assert_eq!(graft.anchor, None, "no cockpit around a thumbnail");
+    }
+
+    // Rule: a missing reference car costs the pose, never the thumbnail.
+    #[test]
+    fn a_body_thumbnail_survives_a_missing_reference_car() {
+        let base = crate::testutil::temp_dir("driver-thumb-nocar");
+        let root = fake_thumbnail_root(&base, false);
+
+        let graft = thumbnail_body(&root, "gt").expect("still a graft without the reference car");
+
+        assert_eq!(graft.base_pose, None, "modelling pose");
+        assert_eq!(graft.animation, None, "no steering animation either");
+        assert_eq!(graft.lock_degrees, DEFAULT_LOCK, "default lock");
+        assert!(
+            thumbnail_body(&root, "not_installed").is_none(),
+            "an absent body has no thumbnail"
+        );
     }
 
     /// Règle PILOTE§6.2 : l'époque se lit sur la texture de casque que le mannequin
