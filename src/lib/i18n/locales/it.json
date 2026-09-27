@@ -305,7 +305,8 @@
     "viewList": "Elenco",
     "displayMenu": "Opzioni di visualizzazione",
     "density": "Densità",
-    "hideBrand": "Nascondi la marca nel nome"
+    "hideBrand": "Nascondi la marca nel nome",
+    "filterModel": "Modello"
   },
   "bulk": {
     "runningActivate": "Attivazione di {count} mod",

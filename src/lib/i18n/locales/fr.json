@@ -424,6 +424,7 @@
     "unmanagedTooltip": "Installé dans le jeu hors Pit Box. Pour le gérer ici, supprimez-le du jeu vous-même, puis importez-le dans Pit Box.",
     "search": "Recherche",
     "filterBrand": "Marque",
+    "filterModel": "Modèle",
     "filterDescription": "Description",
     "filterDescriptionPlaceholder": "Contient…",
     "filterNote": "Note",

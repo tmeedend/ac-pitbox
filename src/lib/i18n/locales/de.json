@@ -305,7 +305,8 @@
     "viewList": "Liste",
     "displayMenu": "Anzeigeoptionen",
     "density": "Dichte",
-    "hideBrand": "Marke im Namen ausblenden"
+    "hideBrand": "Marke im Namen ausblenden",
+    "filterModel": "Modell"
   },
   "bulk": {
     "runningActivate": "{count} Mods werden aktiviert",
