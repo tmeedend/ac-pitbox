@@ -15,6 +15,7 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "gen:licenses": "node scripts/gen-licenses.mjs",
     "tauri": "tauri",
+    "bundle": "tauri build && node scripts/zip-installer.mjs",
     "check:locales": "node scripts/check-locales.mjs",
     "check:version": "node scripts/check-version.mjs",
     "test": "vitest run",

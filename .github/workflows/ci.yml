@@ -99,9 +99,11 @@ jobs:
 
       - run: npm ci
 
-      # `tauri build` enchaîne lui-même `beforeBuildCommand` (npm run build).
+      # `tauri build` enchaîne lui-même `beforeBuildCommand` (npm run build),
+      # puis `bundle` zippe l'installateur comme le fera release.yml : le zip
+      # d'OverTake est ainsi éprouvé avant qu'un tag ne dépende de lui.
       - name: Build installateur (non signé)
-        run: npm run tauri build
+        run: npm run bundle
 
       # v7 : la v4 ciblait Node 20, que les runners forcent désormais sur
       # Node 24 avec un avertissement de dépréciation. La v5 ne suffisait pas —
@@ -112,6 +114,8 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: pitbox-installers-unsigned
-          path: src-tauri/target/release/bundle/nsis/*.exe
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/*.zip
           if-no-files-found: error
           retention-days: 7
