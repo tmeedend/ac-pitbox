@@ -28,6 +28,9 @@ désigne `SPEC.md`** et les autres documents portent une étiquette :
 | `TAXO§` | `SPEC-taxonomies.md` |
 | `REGLES§` | `SPEC-regles.md` |
 | `DOSSIER§` | `SPEC-etat-dossier.md` |
+| `ESPACE§` | `SPEC-sans-fichiers.md` |
+| `EXPORT§` | `SPEC-export-bibliotheque.md` |
+| `FICHE§` | `SPEC-fiche-technique.md` |
 | `SETUP§` | `LOT-session-setup.md` |
 | `CIBLE§` | `CIBLE-reglages-session.md` |
 | `L1§` | `LOT1-forme-ecran-session.md` |
@@ -120,8 +123,26 @@ fait — en cas d'écart, la spec fait foi.
   une recherche qui couvre aussi la bibliothèque. **Lecture seule** au lot 1 ;
   les tailles sont collectées dès le lot 1 et affichées au lot 2. Porte la
   règle qui tient le reste : **un seul arbre, la provenance est un filtre**.
-  Maquette : `maquettes/pitbox-etat-dossier.html`. Lot 1 livré ; le lot 2
-  (les tailles) reste à faire.
+  Maquette : `maquettes/pitbox-etat-dossier.html`. À construire.
+- **`SPEC-sans-fichiers.md`** (`ESPACE§`) — **supprimer sans tout perdre** :
+  « Supprimer » propose par défaut de garder le mod **en vitrine** (fichiers
+  lourds supprimés, squelette de quelques dizaines de Ko, saisies et fiche
+  technique gardées), et la suppression complète en second choix. Un mod en
+  vitrine ne va plus dans le jeu et se **récupère en réimportant son archive**
+  (l'import le réhydrate au lieu de le ranger en doublon). Note aussi l'origine
+  des archives (`Zone.Identifier`). À construire.
+- **`SPEC-export-bibliotheque.md`** (`EXPORT§`) — **exporter et importer une
+  bibliothèque** dans un fichier `.pitbox` de quelques Mo : base, squelettes,
+  classement, sessions, profils, préférences ; aucun fichier jouable, aucun
+  chemin de la machine d'origine. Import dans une installation vide seulement,
+  tous les mods en vitrine. Repose sur `ESPACE§`. À construire.
+- **`SPEC-fiche-technique.md`** (`FICHE§`) — la **fiche technique** d'une
+  voiture passe en base, une source par valeur (modifié par vous › physique du
+  mod › `ui_car.json` › tags), lit la physique déchiffrée au lieu de deviner
+  (transmission, turbo, rapports, réservoir), affiche l'**électronique**
+  (ABS, antipatinage, EDL, DRS, KERS, ERS) et devient **éditable**. Mesures
+  sur 104 voitures. Maquette : `maquettes/pitbox-fiche-technique.html`. À
+  construire.
 - **`SPEC-taxonomies.md`** (`TAXO§`) — marques, pays et familles de catégorie
   deviennent des **termes** (nom canonique, alias, emblème), curés dans trois
   onglets de l'Atelier. **Seule la table des familles est livrée** (pour

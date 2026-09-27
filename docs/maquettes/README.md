@@ -19,6 +19,7 @@ En cas d'écart entre une maquette et sa spec, **la spec fait foi**.
 
 | Maquette | Date | Ce qu'elle a servi à décider |
 | --- | --- | --- |
+| `pitbox-fiche-technique.html` | 2026-09-27 | La fiche technique d'une voiture, à droite de l'aperçu comme avant (courbe sous l'aperçu, description et Wikipédia en article dessous) : chiffres clés, mécanique en phrases, électronique en puces, provenance visible (◇ déduit, ✎ modifié), mode édition avec la source de chaque champ, bascule vitrine. Trois voitures d'origine aux données réelles. Spec : `SPEC-fiche-technique.md`. |
 | `pitbox-etat-dossier.html` | 2026-09-26 | L'écran Dossier du jeu, en lecture seule : un seul arbre élagué par les puces État et Provenance, l'« à personne » replié en une ligne par dossier, la recherche qui répond aussi pour les mods désactivés, le panneau de détail qui suit la sélection. Montre aussi le rail sans Atelier, partagé en Classement et Fichiers. Spec : `SPEC-etat-dossier.md`. |
 | `pitbox-index-pays.html` | 2026-09-23 | L'index par pays de l'écran Circuits : la tuile pose une puce, la croix ramène à l'index. Sa bascule vers des voitures « groupées par marque » est une piste **non retenue** — c'est un index de marques qui a été construit. Spec : `SPEC-index-bibliotheque.md`. |
 | `pitbox-index-voitures.html` | 2026-09-23 | L'index des voitures, familles puis marques, et le croisement ET d'une seconde famille. **Sa section « Parcourir par pays » est à ne pas construire** (INDEX§6.3) : elle n'existe que pour juger de l'effet de mur. Spec : `SPEC-index-bibliotheque.md`. |

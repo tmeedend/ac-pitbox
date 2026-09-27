@@ -54,6 +54,12 @@ const DOCS = {
   REGLES: "SPEC-regles.md",
   // L'écran Dossier du jeu : l'état réel du dossier AC, en lecture seule.
   DOSSIER: "SPEC-etat-dossier.md",
+  // Libérer l'espace d'un mod sans le retirer de la bibliothèque.
+  ESPACE: "SPEC-sans-fichiers.md",
+  // Exporter et importer une bibliothèque entière, mods en vitrine.
+  EXPORT: "SPEC-export-bibliotheque.md",
+  // La fiche technique d'une voiture : sources, physique, électronique, édition.
+  FICHE: "SPEC-fiche-technique.md",
   // Les instructions par lot de la refonte de l'écran de session. Livrées,
   // gardées pour leurs arguments — et parce que le code y renvoie.
   L5: "LOT5-refonte-ecran-session.md",
