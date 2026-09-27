@@ -127,7 +127,9 @@ pub mod field {
 ///
 /// 1 — first release (stored as `true`).
 /// 2 — a thousands separator is no decimal point (`1,495kg`).
-pub const READER_VERSION: u32 = 2;
+/// 3 — two `[TURBO_n]` sections or more are a twin turbo, whatever the name
+///     says (FICHE§10).
+pub const READER_VERSION: u32 = 3;
 
 /// The key figures, their fixed unit when the user types them (FICHE§8).
 const KEY_FIGURES: [(&str, &str); 6] = [
@@ -178,17 +180,8 @@ const TAGGED_GEARBOXES: [&str; 4] = ["SEQUENTIAL", "DCT", "SEMIAUTO", "AUTO"];
 
 // --- The files ----------------------------------------------------------------
 
-/// A name or a tag that says twin turbo (FICHE§10): two `[TURBO_n]` sections
-/// are not enough on their own, an author may model one turbo in two stages.
-fn says_twin_turbo(text: &str) -> bool {
-    let t = text.to_lowercase();
-    ["twin turbo", "twin-turbo", "twinturbo", "biturbo", "bi-turbo"]
-        .iter()
-        .any(|k| t.contains(k))
-}
-
 /// What the physics says, as sheet facts.
-fn physics_facts(p: &physics::Physics, twin_hint: bool) -> Vec<Fact> {
+fn physics_facts(p: &physics::Physics) -> Vec<Fact> {
     use Source::Physics as P;
     let mut out = Vec::new();
     // The electric front axle makes a four-wheel drive of a rear-drive hybrid
@@ -209,11 +202,16 @@ fn physics_facts(p: &physics::Physics, twin_hint: bool) -> Vec<Fact> {
     if let Some(h) = p.h_shifter {
         out.push(fact(field::GEARBOX, P, json!(if h { "MANUAL" } else { "PADDLES" })));
     }
+    // Two sections or more are a twin turbo (FICHE§10). The spec first asked
+    // for a confirming tag or name; measured on 397 cars, 105 have two
+    // sections or more and nearly all are real twin turbos (F40, GT-R, M4,
+    // 488, McLaren V8…), while no tag and only two names ever say so. The
+    // rare author who models one turbo in two stages is the accepted cost.
     if let Some(n) = p.turbos {
         let v = match n {
             0 => "NA",
-            n if n >= 2 && twin_hint => "TWIN_TURBO",
-            _ => "TURBO",
+            1 => "TURBO",
+            _ => "TWIN_TURBO",
         };
         out.push(fact(field::ASPIRATION, P, json!(v)));
     }
@@ -290,11 +288,9 @@ fn ui_facts(specs: &crate::uijson::NativeSpecs) -> Vec<Fact> {
 /// Everything the files of the car in `dir` say. No base involved: the
 /// backfill reads without holding the lock.
 pub fn read_files(dir: &Path, car_id: &str, stock: bool) -> Vec<Fact> {
-    let info = crate::uijson::read_car(dir).unwrap_or_default();
-    let twin_hint = info.tags.iter().any(|t| says_twin_turbo(t)) || info.name.as_deref().is_some_and(says_twin_turbo);
     let mut facts = Vec::new();
     if let Some(p) = physics::read(dir, car_id) {
-        facts.extend(physics_facts(&p, twin_hint));
+        facts.extend(physics_facts(&p));
     }
     if let Some(specs) = crate::uijson::read_car_specs(dir) {
         facts.extend(ui_facts(&specs));

@@ -819,10 +819,10 @@ de reprendre. En cas d'écart, la spec fait foi.
         est atmosphérique) perd.
       - *Biturbo* : 105 voitures ont au moins deux `[TURBO_n]` — et à la
         lecture des noms, presque toutes sont de vrais biturbos (F40, GT-R,
-        M4, 488, McLaren V8, RX-7 FD à turbos séquentiels…). Mais **aucun tag
-        ne dit « twin turbo »**, et seuls deux noms le disent : suivant FICHE§10,
-        elles affichent « turbo ». Si ça gêne, la décision est de dire
-        « biturbo » dès deux sections, en acceptant les turbos à deux étages.
+        M4, 488, McLaren V8, RX-7 FD à turbos séquentiels…). **Aucun tag ne
+        dit « twin turbo »** et seuls deux noms le disent : la prudence de la
+        première spec (un signal confirmant) aurait écrit « turbo » partout.
+        Décidé avec l'utilisateur : deux sections ou plus = biturbo (FICHE§10).
       - *Transmission* : 18 désaccords physique/tags, **tous du côté de la
         physique** à la vérification (TA2 VRC en propulsion taggées AWD, 22B
         en intégrale taggée RWD…) ; les hybrides à moteurs avant sont lus

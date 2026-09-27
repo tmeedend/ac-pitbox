@@ -266,25 +266,30 @@ fn a_car_reads_into_a_sheet() {
     assert!(!sheet.values.contains_key("_recorded"), "the marker is not a field");
 }
 
-/// FICHE§9.4 — two `[TURBO_n]` without another signal are a turbo, not a
-/// biturbo; the name saying "twin turbo" confirms it.
+/// FICHE§10 — the number of `[TURBO_n]` sections says it: none is naturally
+/// aspirated, one a turbo, two or more a twin turbo, with no need for a tag or
+/// a name to confirm it (measured: none ever does).
 #[test]
-fn two_turbo_sections_make_a_biturbo_only_when_the_name_says_so() {
+fn the_turbo_sections_count_the_turbos() {
     let base = crate::testutil::temp_dir("techsheet-twin");
-    let (conn, _) = managed_car(&base, "plain", &gt2_ui(), &[("engine.ini", ENGINE_2_TURBOS)]);
+    let (conn, _) = managed_car(&base, "twin", &gt2_ui(), &[("engine.ini", ENGINE_2_TURBOS)]);
     assert_eq!(
-        value(&effective(&conn, "plain").unwrap(), "aspiration").unwrap().0,
-        json!("TURBO")
+        value(&effective(&conn, "twin").unwrap(), "aspiration"),
+        Some((json!("TWIN_TURBO"), Source::Physics)),
+        "two sections, nothing in the name"
     );
 
-    let mut ui = gt2_ui();
-    ui["name"] = json!("Mitsubishi GTO Twin Turbo");
-    let dir = base.join("lib").join("cars").join("gto").join("v1");
-    write_car(&dir, &ui, &[("engine.ini", ENGINE_2_TURBOS)]);
-    add_version(&conn, "gto", "gto_v1", &dir);
+    let single = "[ENGINE_DATA]
+LIMITER=7000
+[TURBO_0]
+MAX_BOOST=1
+";
+    let dir = base.join("lib").join("cars").join("single").join("v1");
+    write_car(&dir, &gt2_ui(), &[("engine.ini", single)]);
+    add_version(&conn, "single", "single_v1", &dir);
     assert_eq!(
-        value(&effective(&conn, "gto").unwrap(), "aspiration").unwrap().0,
-        json!("TWIN_TURBO")
+        value(&effective(&conn, "single").unwrap(), "aspiration").unwrap().0,
+        json!("TURBO")
     );
 }
 

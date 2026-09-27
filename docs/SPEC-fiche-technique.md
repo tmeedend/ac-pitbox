@@ -122,7 +122,7 @@ Une valeur modifiée par l'utilisateur vit dans une table à elle (§6), que rie
 | | Vitesse max | vous · `ui` `specs.topspeed` | `270+ km/h` (le `+` de l'auteur est gardé) |
 | | 0-100 | vous · `ui` `specs.acceleration` | `2,8 s` |
 | Moteur | Architecture | vous · tags (`engine_config`) | `V8`, `6 à plat`, `rotatif`, `électrique` |
-| | Suralimentation | vous · physique (0 turbo : atmosphérique ; 1 : turbo ; 2 : biturbo, **à confirmer**, §10) · tags (`aspiration`, et « twin turbo » / « biturbo ») | `biturbo` |
+| | Suralimentation | vous · physique (0 section `[TURBO_n]` : atmosphérique ; 1 : turbo ; 2 ou plus : biturbo, §10) · tags (`aspiration` ; « compresseur » passe devant une physique sans turbo) | `biturbo` |
 | | Position | vous · tags (`engine_pos`) | `central` |
 | | Régime maximal | vous · physique `LIMITER` | `8 300 tr/min` |
 | Transmission | Roues motrices | vous · physique (`TYPE`, plus `ers.ini [FRONT_MOTORS]` qui rend intégrale une propulsion) · tags | `propulsion`, `traction`, `intégrale` |
@@ -291,7 +291,7 @@ Au démarrage, en fond : pour chaque version et chaque voiture d'origine sans li
 - **Survie** : une saisie survit à une mise à jour du mod, à une réharmonisation, à une mise en vitrine et à un export suivi d'un import.
 - **Cache** : après une saisie « intégrale », le filtre transmission de la bibliothèque la trouve.
 - **Pays** : un pays saisi survit à une réharmonisation et à un changement d'alias ; l'index par pays range la voiture sous lui.
-- **Biturbo** : deux sections `[TURBO_n]` sans autre signal donnent « turbo », pas « biturbo » (§10).
+- **Biturbo** : deux sections `[TURBO_n]` donnent « biturbo » sans autre signal, une seule « turbo » (§10).
 - **Vitrine** : un mod en vitrine rend exactement la même fiche, courbe comprise, sans lire aucun fichier.
 
 ---
@@ -304,7 +304,7 @@ Au démarrage, en fond : pour chaque version et chaque voiture d'origine sans li
 - **Le poids** tiré de `TOTALMASS` (§2.3).
 - **L'unité de l'autonomie** (§4).
 - **Un compresseur** apparaît-il comme un `[TURBO_n]` dans la physique ? Si oui, la physique dira « suralimenté » et les tags préciseront « compresseur ».
-- **Les « twin turbo ».** Deux sections `[TURBO_n]` ne veulent pas forcément dire deux turbos en parallèle : un auteur peut modéliser ainsi un turbo séquentiel ou deux étages. À identifier sur la mesure : croiser le nombre de sections avec les tags (`twin turbo`, `twin-turbo`, `biturbo`, `bi-turbo`), le nom de la voiture, et ce que les sections contiennent (paramètres identiques ou non). Ne dire « biturbo » que quand l'un de ces signaux le confirme ; sinon « turbo ».
+- **Les « twin turbo ».** Deux sections `[TURBO_n]` ne veulent pas forcément dire deux turbos en parallèle : un auteur peut modéliser ainsi un turbo séquentiel ou deux étages. **Tranché par la mesure (2026-09-27, 397 voitures)** : 105 voitures ont deux sections ou plus, et presque toutes sont de vrais biturbos (F40, GT-R, M4, 488, McLaren V8, RX-7 FD à turbos séquentiels…) ; aucun tag ne dit « twin turbo » et seuls deux noms le disent, si bien qu'exiger un signal confirmant aurait écrit « turbo » sur toutes. **Deux sections ou plus donnent donc « biturbo »**, l'auteur qui modélise un turbo à deux étages étant le coût accepté.
 
 ---
 
