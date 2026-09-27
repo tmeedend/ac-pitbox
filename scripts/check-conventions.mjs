@@ -193,6 +193,42 @@ for (const f of front.filter((f) => f.endsWith(".svelte"))) {
   for (const k of dead) {
     report("i18n-unused-key", "src/lib/i18n/locales/en.json", 1, `\`${k}\` n'est plus atteignable`);
   }
+
+  // --- 6 bis. clé i18n utilisée mais absente --------------------------------
+  // Le symétrique de la règle ci-dessus, et le cas qui se voit à l'écran :
+  // `t()` rend la clé elle-même quand elle manque, donc un oubli ne casse rien
+  // et s'affiche tel quel — `library.filterModel` est resté des semaines en
+  // libellé du filtre « Modèle ». `check-locales` n'y voyait rien : il vérifie
+  // que les langues sont d'accord entre elles, pas qu'elles contiennent ce que
+  // le code demande.
+  //
+  // Seules les clés **écrites en toutes lettres** sont vérifiables : `t("a.b")`,
+  // une propriété `…Key: "a.b"` (`labelKey`, `unsetLabelKey`, `tooltipKey`…),
+  // et côté Rust les constantes `"errors.…"` d'`errors.rs`. Une clé construite
+  // (`t(\`history.${k}\`)`) échappe au contrôle, et un début de clé complété par
+  // concaténation (`t("settings.gridThumb_" + id)`, finissant par `_` ou `.`)
+  // n'en est pas une. Mesuré en l'écrivant : 1 811 clés en toutes lettres, zéro
+  // fausse alerte une fois ces débuts écartés.
+  const known = new Set(keys);
+  const KEY = String.raw`([a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+)+)`;
+  const literal = [
+    new RegExp(String.raw`\bt\(\s*["']` + KEY + `["']`, "g"),
+    new RegExp(String.raw`\b[a-z][A-Za-z]*Key\s*[:=]\s*["']` + KEY + `["']`, "g"),
+  ];
+  const missing = (file, text, patterns) => {
+    const lines = text.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      for (const re of patterns) {
+        for (const m of lines[i].matchAll(re)) {
+          const key = m[1];
+          if (/[._]$/.test(key) || known.has(key) || allowed(lines, i, "i18n-missing-key")) continue;
+          report("i18n-missing-key", file, i + 1, `\`${key}\` n'existe pas dans en.json — elle s'afficherait telle quelle`);
+        }
+      }
+    }
+  };
+  for (const f of front.filter((f) => !f.includes("i18n/locales"))) missing(f, read(f), literal);
+  for (const f of rust) missing(f, read(f), [/"(errors\.[a-zA-Z0-9_]+)"/g]);
 }
 
 // --- 7. renvoi de spec dans une chaîne visible -------------------------------

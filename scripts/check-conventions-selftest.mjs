@@ -68,6 +68,19 @@ const cases = [
     inject: (s) => `${JSON.stringify({ ...JSON.parse(s), zzSelfTestDeadKey: "never used" }, null, 2)}\n`,
   },
   {
+    // La forme exacte du bug qui a fait naître la règle : un `labelKey` de
+    // filtre sans clé dans aucune langue.
+    rule: "i18n-missing-key",
+    file: "src/lib/format.ts",
+    inject: (s) => `${s}\nconst _probe = { labelKey: "library.zzSelfTestMissing" };\n`,
+  },
+  {
+    // Et côté Rust : une erreur destinée à l'utilisateur dont la clé manque.
+    rule: "i18n-missing-key",
+    file: "src-tauri/src/errors.rs",
+    inject: (s) => `${s}\npub const ZZ_PROBE: &str = "errors.zzSelfTestMissing";\n`,
+  },
+  {
     // La clé est aussi citée nulle part, donc elle déclencherait `i18n-unused-key` :
     // ce qu'on vérifie ici est que `no-spec-ref-in-locale` sort **aussi**.
     rule: "no-spec-ref-in-locale",

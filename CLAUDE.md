@@ -542,11 +542,12 @@ partagent `commands::prelude`.
 
 Elles ne cassent rien quand on les ignore — elles produisent un bug silencieux.
 
-**Neuf d'entre elles sont désormais vérifiées** par `scripts/check-conventions.mjs`,
+**Dix d'entre elles sont désormais vérifiées** par `scripts/check-conventions.mjs`,
 dans `npm run check` : `scrollIntoView`, écriture dans `localStorage`, mesure de
 fenêtre écrite dans un style sans `zoomFactor()`, composant `.svelte` importé
 nulle part, `#[tauri::command]` absente d'`invoke_handler`, clé i18n devenue
-inatteignable, **renvoi de spec dans une chaîne visible** — « non activable
+inatteignable, **clé i18n utilisée mais absente d'`en.json`** — `library.filterModel`
+s'est affichée des semaines en libellé de filtre —, **renvoi de spec dans une chaîne visible** — « non activable
 (§12bis.1) » s'affichait tel quel à l'utilisateur, en pointant vers une section
 disparue —, **secret sur le point d'être versionné**, et **fichier de `docs/`
 absent de l'index**. Une exception légitime se déclare sur la ligne ou juste
@@ -622,8 +623,11 @@ Svelte. Les deux sont documentées comme écartées, en tête du script.
   dans deux autres, ce qui est précisément la raison d'être de la porte.
 - **`t("clé")` renvoie la clé elle-même si elle manque** en anglais aussi.
   Une clé oubliée n'explose donc pas : elle s'affiche telle quelle à l'écran
-  (`detail.showroom`). C'est ce qui rend `errorText()` sûr, et c'est aussi
-  pourquoi une relecture visuelle attrape ces oublis mieux que le typage.
+  (`detail.showroom`). C'est ce qui rend `errorText()` sûr. Une clé écrite en
+  toutes lettres (`t("a.b")`, `labelKey: "a.b"`, une constante d'`errors.rs`)
+  est vérifiée par `check-conventions.mjs` (`i18n-missing-key`) ; une clé
+  construite (`` t(`history.${k}`) ``) ne l'est pas, et seule une relecture
+  visuelle l'attrape.
 - **Le CSS des composants est scopé** (voir l'en-tête de `global.css`) : seules
   `.btn`, `.input`, `.mono`, `.pill`, `.gp-focus`, `.warnbox`/`.errbox`, et les
   quatre niveaux de libellé `.lbl-screen`/`.lbl-sub`/`.lbl`/`.lbl-key`
