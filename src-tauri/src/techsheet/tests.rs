@@ -140,6 +140,11 @@ fn the_user_beats_the_physics_which_beats_the_file_which_beats_the_tags() {
         "the user over all"
     );
     assert_eq!(value(&sheet, "aid.abs"), None, "a user NULL forces unknown");
+    assert_eq!(
+        sheet.fallback.get("drivetrain").map(|r| (r.value.clone(), r.source)),
+        Some((json!("AWD"), Source::Physics)),
+        "what reverting would show"
+    );
     assert_eq!(sheet.edited, vec!["aid.abs".to_string(), "drivetrain".to_string()]);
 }
 
@@ -386,6 +391,14 @@ fn a_corrected_year_reaches_the_library() {
     let (conn, _) = managed_car(&base, "car", &gt2_ui(), &[]);
     save_user(&conn, "car", vec![edit("year", json!(1998))]).unwrap();
     assert_eq!(row(&conn, "car").year, Some(1998));
+    // An emptied year is a decision too: the list follows the sheet.
+    save_user(&conn, "car", vec![edit("year", json!(null))]).unwrap();
+    assert_eq!(
+        row(&conn, "car").year,
+        None,
+        "forced unknown, in the list as on the sheet"
+    );
+    save_user(&conn, "car", vec![revert("year")]).unwrap();
 }
 
 /// FICHE§8 — the history tells which fields changed, never the values.

@@ -594,9 +594,6 @@
     "reinstallConfirm": "Replace \"{name}\"'s current files with a fresh extraction of the kept source archive? Any change made since import will be lost.",
     "reinstalling": "Reinstalling…",
     "reinstallSuccess": "✓ Mod reinstalled from its source archive.",
-    "posFront": "FRT",
-    "posMid": "MID",
-    "posRear": "REAR",
     "techSheet": "Tech sheet",
     "curve": "Curve",
     "trackInfo": "Track info",
@@ -792,14 +789,16 @@
       "IMPORT": "Import",
       "UPDATE_REPLACE": "Update",
       "UPDATE_KEPT_BOTH": "Kept both",
-      "EXTENSION_ADDED": "Extension"
+      "EXTENSION_ADDED": "Extension",
+      "TECH_EDITED": "Tech sheet"
     },
     "imported": "from {archive}",
     "updated": "new version {version}",
     "updatedNoVersion": "new version",
     "replaced": "replaced {old}",
     "keptBoth": "kept separately from {old}",
-    "extensionAdded": "layer from {archive} ({added} added, {overwritten} overwritten)"
+    "extensionAdded": "layer from {archive} ({added} added, {overwritten} overwritten)",
+    "techEdited": "edited ({fields})"
   },
   "modpanel": {
     "ctxOpenDetail": "Open detail page",
@@ -812,7 +811,6 @@
     "ctxAddOpponentN": "Add the {count} as opponents",
     "exportFullN": "Export the {count} mods…",
     "exportFull": "⤓ Export (standalone archive)",
-    "derivedTooltip": "Derived from a rule",
     "specPower": "Power",
     "specTorque": "Torque",
     "specTopSpeed": "Top speed",
@@ -2072,5 +2070,110 @@
     "openSheet": "Open the sheet",
     "filterOn": "Filter on this mod",
     "showInExplorer": "Show in Explorer"
+  },
+  "techsheet": {
+    "edit": "Edit the tech sheet",
+    "editing": "Editing",
+    "mechanics": "Mechanics",
+    "electronics": "Electronics",
+    "empty": "No technical data",
+    "legendDerived": "deduced from tags",
+    "legendEdited": "edited by you",
+    "aidPresent": "present",
+    "aidAbsent": "absent",
+    "aidUnknown": "unknown",
+    "unknown": "unknown",
+    "revert": "revert",
+    "cancel": "Cancel",
+    "save": "Save",
+    "invalid": "{field}: invalid value",
+    "rpm": "{n} rpm",
+    "gears": "{count} gears",
+    "gearsOne": "1 gear",
+    "tank": "{n} L tank",
+    "range": "{n} km range",
+    "unit": {
+      "rpm": "rpm"
+    },
+    "row": {
+      "engine": "Engine",
+      "transmission": "Transmission",
+      "fuel": "Fuel",
+      "origin": "Origin"
+    },
+    "source": {
+      "user": "edited by you",
+      "physics": "read in the mod's physics",
+      "ui": "read in ui_car.json",
+      "table": "from the table of the game's own content",
+      "rules": "deduced from tags",
+      "computed": "worked out from weight and power",
+      "absent": "not in the mod's files"
+    },
+    "field": {
+      "power": "Power",
+      "torque": "Torque",
+      "weight": "Weight",
+      "pwratio": "Power/weight",
+      "topspeed": "Top speed",
+      "acceleration": "0-100",
+      "engine_config": "Layout",
+      "aspiration": "Aspiration",
+      "engine_pos": "Position",
+      "rpm_limit": "Rev limit",
+      "drivetrain": "Driven wheels",
+      "gearbox": "Gearbox",
+      "gears": "Gears",
+      "fuel_tank": "Tank",
+      "range": "Range",
+      "country": "Country",
+      "year": "Year",
+      "aid": {
+        "abs": "ABS",
+        "tc": "Traction control",
+        "edl": "Electronic diff lock (EDL)",
+        "drs": "DRS",
+        "kers": "KERS",
+        "ers": "ERS",
+        "4ws": "Rear-wheel steering",
+        "active_arb": "Active anti-roll bars",
+        "ebb": "Electronic brake balance"
+      }
+    },
+    "value": {
+      "engine_config": {
+        "I4": "inline-4",
+        "I6": "inline-6",
+        "FLAT": "flat engine",
+        "ROTARY": "rotary",
+        "ELECTRIC": "electric",
+        "HYBRID": "hybrid",
+        "DIESEL": "diesel"
+      },
+      "aspiration": {
+        "NA": "naturally aspirated",
+        "TURBO": "turbo",
+        "TWIN_TURBO": "twin-turbo",
+        "SUPERCHARGED": "supercharged"
+      },
+      "engine_pos": {
+        "FRONT": "front-engined",
+        "MID": "mid-engined",
+        "REAR": "rear-engined"
+      },
+      "drivetrain": {
+        "RWD": "rear-wheel drive",
+        "FWD": "front-wheel drive",
+        "AWD": "all-wheel drive"
+      },
+      "gearbox": {
+        "MANUAL": "manual",
+        "SEQUENTIAL": "sequential",
+        "SEMIAUTO": "semi-automatic",
+        "DCT": "dual-clutch",
+        "AUTO": "automatic",
+        "PADDLES": "paddle-shift"
+      }
+    }
   }
 }

@@ -594,9 +594,6 @@
     "reinstallConfirm": "Remplacer les fichiers actuels de « {name} » par une réextraction de l'archive source conservée ? Toute modification faite depuis l'import sera perdue.",
     "reinstalling": "Réinstallation…",
     "reinstallSuccess": "✓ Mod réinstallé depuis l'archive source.",
-    "posFront": "AV",
-    "posMid": "CEN",
-    "posRear": "ARR",
     "techSheet": "Fiche technique",
     "curve": "Courbe",
     "trackInfo": "Infos circuit",
@@ -792,14 +789,16 @@
       "IMPORT": "Import",
       "UPDATE_REPLACE": "Mise à jour",
       "UPDATE_KEPT_BOTH": "Gardés",
-      "EXTENSION_ADDED": "Extension"
+      "EXTENSION_ADDED": "Extension",
+      "TECH_EDITED": "Fiche technique"
     },
     "imported": "depuis {archive}",
     "updated": "nouvelle version {version}",
     "updatedNoVersion": "nouvelle version",
     "replaced": "a remplacé {old}",
     "keptBoth": "conservé séparément de {old}",
-    "extensionAdded": "couche depuis {archive} ({added} ajoutés, {overwritten} écrasés)"
+    "extensionAdded": "couche depuis {archive} ({added} ajoutés, {overwritten} écrasés)",
+    "techEdited": "modifiée ({fields})"
   },
   "modpanel": {
     "ctxOpenDetail": "Ouvrir la page de détails",
@@ -812,7 +811,6 @@
     "ctxAddOpponentN": "Ajouter les {count} comme adversaires",
     "exportFullN": "Exporter les {count} mods…",
     "exportFull": "⤓ Exporter (archive autonome)",
-    "derivedTooltip": "Déduit par règle",
     "specPower": "Puissance",
     "specTorque": "Couple",
     "specTopSpeed": "Vitesse max",
@@ -2072,5 +2070,110 @@
     "openSheet": "Ouvrir la fiche",
     "filterOn": "Filtrer sur ce mod",
     "showInExplorer": "Afficher dans l'Explorateur"
+  },
+  "techsheet": {
+    "edit": "Modifier la fiche technique",
+    "editing": "Mode édition",
+    "mechanics": "Mécanique",
+    "electronics": "Électronique",
+    "empty": "Aucune donnée technique",
+    "legendDerived": "déduit des tags",
+    "legendEdited": "modifié par vous",
+    "aidPresent": "présent",
+    "aidAbsent": "absent",
+    "aidUnknown": "inconnu",
+    "unknown": "inconnu",
+    "revert": "revenir",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "invalid": "{field} : valeur invalide",
+    "rpm": "{n} tr/min",
+    "gears": "{count} rapports",
+    "gearsOne": "1 rapport",
+    "tank": "réservoir {n} L",
+    "range": "autonomie {n} km",
+    "unit": {
+      "rpm": "tr/min"
+    },
+    "row": {
+      "engine": "Moteur",
+      "transmission": "Transmission",
+      "fuel": "Carburant",
+      "origin": "Origine"
+    },
+    "source": {
+      "user": "modifié par vous",
+      "physics": "lu dans la physique du mod",
+      "ui": "lu dans ui_car.json",
+      "table": "d'après la table du contenu d'origine",
+      "rules": "déduit des tags",
+      "computed": "calculé à partir du poids et de la puissance",
+      "absent": "absent des fichiers du mod"
+    },
+    "field": {
+      "power": "Puissance",
+      "torque": "Couple",
+      "weight": "Poids",
+      "pwratio": "Rapport P/P",
+      "topspeed": "Vitesse max",
+      "acceleration": "0-100",
+      "engine_config": "Architecture",
+      "aspiration": "Suralimentation",
+      "engine_pos": "Position",
+      "rpm_limit": "Régime max",
+      "drivetrain": "Roues motrices",
+      "gearbox": "Boîte",
+      "gears": "Rapports",
+      "fuel_tank": "Réservoir",
+      "range": "Autonomie",
+      "country": "Pays",
+      "year": "Année",
+      "aid": {
+        "abs": "ABS",
+        "tc": "Antipatinage",
+        "edl": "Blocage électronique (EDL)",
+        "drs": "DRS",
+        "kers": "KERS",
+        "ers": "ERS",
+        "4ws": "Roues arrière directrices",
+        "active_arb": "Anti-roulis actif",
+        "ebb": "Répartiteur de freinage électronique"
+      }
+    },
+    "value": {
+      "engine_config": {
+        "I4": "4 cylindres en ligne",
+        "I6": "6 cylindres en ligne",
+        "FLAT": "moteur à plat",
+        "ROTARY": "rotatif",
+        "ELECTRIC": "électrique",
+        "HYBRID": "hybride",
+        "DIESEL": "diesel"
+      },
+      "aspiration": {
+        "NA": "atmosphérique",
+        "TURBO": "turbo",
+        "TWIN_TURBO": "biturbo",
+        "SUPERCHARGED": "compresseur"
+      },
+      "engine_pos": {
+        "FRONT": "moteur avant",
+        "MID": "moteur central",
+        "REAR": "moteur arrière"
+      },
+      "drivetrain": {
+        "RWD": "propulsion",
+        "FWD": "traction",
+        "AWD": "intégrale"
+      },
+      "gearbox": {
+        "MANUAL": "manuelle",
+        "SEQUENTIAL": "séquentielle",
+        "SEMIAUTO": "semi-automatique",
+        "DCT": "à double embrayage",
+        "AUTO": "automatique",
+        "PADDLES": "à palettes"
+      }
+    }
   }
 }

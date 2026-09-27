@@ -69,6 +69,9 @@
     name: string;
     /** Sous-titre lisible : marque · année · par auteur. */
     subtitle?: string;
+    /** A second line under the subtitle: the user's use of the object — the
+     * odometer of a car (FICHE§7.1). */
+    usage?: string;
     /** Seul tag qui fait un travail — la composition de plateau (REFONTE§7.5). */
     category?: string | null;
     rename?: FicheRename;
@@ -97,6 +100,7 @@
     imagePlaque = false,
     name,
     subtitle,
+    usage,
     category,
     rename,
     deployment,
@@ -149,6 +153,7 @@
       {#if category}<span class="cat">{category}</span>{/if}
     </div>
     {#if subtitle}<div class="t-meta mono">{subtitle}</div>{/if}
+    {#if usage}<div class="t-meta">{usage}</div>{/if}
   </div>
   <div class="actions">
     {#if control}{@render control()}{/if}

@@ -21,6 +21,8 @@ import { bigPictureState, exitBigPicture } from "$lib/shell/bigpicture.svelte";
 import { getConfig } from "$lib/config";
 import { setLocale } from "$lib/i18n/index.svelte";
 import { setZoom } from "$lib/shell/zoom.svelte";
+import { listen } from "@tauri-apps/api/event";
+import { bumpLibraryVersion } from "$lib/library/libraryVersion.svelte";
 
 /** Starts every shell-wide service; the returned function stops them all. */
 export function startShellServices(): () => void {
@@ -50,6 +52,7 @@ export function startShellServices(): () => void {
   void loadPlayerHandicap();
 
   stops.push(pauseGridThumbsWhileRacing());
+  stops.push(reloadLibraryAfterTechBackfill());
 
   // Navigation manette dans toute l'app (croix/stick = déplace le focus,
   // A/Croix = valide, B/Rond = ferme la fiche pleine page). Un seul scrutin
@@ -98,6 +101,18 @@ function pauseGridThumbsWhileRacing(): () => void {
     else resumeGridThumbs(PAUSE_SESSION);
   }).then((off) => (stop = off));
   return () => stop?.();
+}
+
+/**
+ * The first start of a version with the tech sheet reads every car's physics
+ * in the background (FICHE§9.3), and rewrites the library's spec columns as it
+ * goes: the library, loaded before it ends, reloads once it has.
+ */
+function reloadLibraryAfterTechBackfill(): () => void {
+  const unlisten = listen<number>("techsheet://filled", () => bumpLibraryVersion());
+  return () => {
+    void unlisten.then((f) => f());
+  };
 }
 
 /**

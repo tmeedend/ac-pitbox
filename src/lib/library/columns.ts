@@ -57,6 +57,26 @@ function fmtDate(iso: string | null): string {
   return Number.isNaN(d.getTime()) ? DASH : d.toLocaleDateString();
 }
 
+type SpecField = "drivetrain" | "gearbox" | "engine_config" | "engine_pos" | "aspiration";
+
+/** A spec column: the tech sheet's value, with the sign the sheet puts before
+ * a value deduced from the tags (FICHE R5) — a deduced value reads the same
+ * everywhere. Sorted on the value alone, so the sign does not group rows. */
+function specColumn(field: SpecField, labelKey: string): ColumnDef {
+  return {
+    key: field,
+    labelKey,
+    sortable: true,
+    defaultVisible: false,
+    value: (c) => {
+      const v = c[field];
+      if (!v) return DASH;
+      return c.tech_marks?.[field] === "rules" ? `≈ ${v}` : v;
+    },
+    sortValue: (c) => (c[field] ?? DASH).toLowerCase(),
+  };
+}
+
 function allTags(c: ModCard): string[] {
   return [...c.tags_from_mod, ...c.tags_from_rule, ...c.tags_manual];
 }
@@ -163,11 +183,11 @@ const CAR_COLUMNS: ColumnDef[] = [
   { key: "car_class", labelKey: "columns.carClass", sortable: true, defaultVisible: false, value: (c) => c.car_class ?? DASH },
   { key: "year", labelKey: "columns.year", sortable: true, defaultVisible: true, mono: true, value: (c) => c.year?.toString() ?? DASH, sortValue: (c) => c.year ?? 0 },
   { key: "weight", labelKey: "columns.weight", sortable: true, defaultVisible: false, mono: true, value: (c) => c.weight ?? DASH },
-  { key: "drivetrain", labelKey: "columns.drivetrain", sortable: true, defaultVisible: false, value: (c) => c.drivetrain ?? DASH },
-  { key: "gearbox", labelKey: "columns.gearbox", sortable: true, defaultVisible: false, value: (c) => c.gearbox ?? DASH },
-  { key: "engine_config", labelKey: "columns.engineConfig", sortable: true, defaultVisible: false, value: (c) => c.engine_config ?? DASH },
-  { key: "engine_pos", labelKey: "columns.enginePos", sortable: true, defaultVisible: false, value: (c) => c.engine_pos ?? DASH },
-  { key: "aspiration", labelKey: "columns.aspiration", sortable: true, defaultVisible: false, value: (c) => c.aspiration ?? DASH },
+  specColumn("drivetrain", "columns.drivetrain"),
+  specColumn("gearbox", "columns.gearbox"),
+  specColumn("engine_config", "columns.engineConfig"),
+  specColumn("engine_pos", "columns.enginePos"),
+  specColumn("aspiration", "columns.aspiration"),
   ...commonTail(),
 ];
 

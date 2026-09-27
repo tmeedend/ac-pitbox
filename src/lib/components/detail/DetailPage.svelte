@@ -36,6 +36,7 @@
   import Tabs from "$lib/components/ui/Tabs.svelte";
   import { getWikiPanel, setWikiLang, wikiLang, type WikiPanel } from "$lib/wiki/wiki";
   import FicheHeader from "./FicheHeader.svelte";
+  import { usageLine } from "$lib/detail/odometer";
   import { setEntityNote } from "$lib/detail/userMeta";
   import LayerDetail from "./LayerDetail.svelte";
   import { listAttached, type InventoryRow } from "$lib/inventory/inventory";
@@ -391,6 +392,13 @@
     } catch (e) {
       actionError = errorText(e);
     }
+  }
+
+  /** The tech sheet was corrected (FICHE§8): the page reloads, and so does the
+   * library — its spec columns, year and country follow the sheet. */
+  async function techSaved() {
+    await refreshEntity();
+    onchange?.();
   }
 
   /** Note libre (§9). Passe par la commande commune à tous les types plutôt
@@ -1034,6 +1042,7 @@
       imagePlaque={isCar && isPlaque(d.badge)}
       name={d.display_name ?? d.id_interne}
       {subtitle}
+      usage={isCar ? usageLine(d) : undefined}
       category={d.category}
       rename={{
         original: d.display_name_file,
@@ -1086,7 +1095,9 @@
 
       <div class="data">
         {#if isCar}
-          <CarSpecsBlock detail={d} />
+          <!-- Keyed on the car: another car opened under an open edit form
+               closes it, rather than carrying one car's draft onto the next. -->
+          {#key d.id_interne}<CarSpecsBlock detail={d} onchanged={techSaved} />{/key}
           <EngineSoundBlock modId={d.id_interne} {sounds} busy={soundBusy} onpick={pickSound} onlisten={listenSound} />
           <PickerCard
             title={t("detail.skinsLabel")}

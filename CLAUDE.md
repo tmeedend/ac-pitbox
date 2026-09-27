@@ -391,6 +391,9 @@ src-tauri/src/          Backend Rust — un module par domaine
   gamestate/            L'écran Dossier du jeu : scan du disque croisé avec la
                         base, en lecture seule (DOSSIER§9)
   uijson.rs inspect.rs identity.rs     Lecture des fichiers AC
+  cardata.rs acd.rs     La physique d'une voiture : `data/` puis `data.acd`
+  techsheet/            La fiche technique : faits par source, saisies,
+                        valeur effective et cache des colonnes (FICHE§)
 src-tauri/crates/       Crates du workspace (aperçu 3D, docs/SPEC-preview-3d-kn5.md)
   kn5/                  Parsing du format KN5 — pur, sans I/O ni Tauri
   kn5-gltf/             Textures et export glTF (touche au disque : skins)
@@ -843,7 +846,8 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Refonte navigation et fiches** | livrée et fusionnée ; restent trois questions ouvertes, dont le markdown dans les notes | `docs/PLAN-refonte-navigation.md` |
 | **Taxonomies** | livré (familles lues aussi dans la classe, onglets Familles, Pays et Marques : fusions, logos, règles sur le nom, « pas une marque ») ; reste une liste livrée de marques connues, si la recherche dans le nom manque de vocabulaire | `docs/SPEC-taxonomies.md`, `docs/CHANTIERS.md` |
 | **Catalogue de règles** | livré, et enrichi par deux relevés réels promus (2026-09-25) ; restent les relevés de contributeurs, quand il y en aura | `docs/SPEC-regles.md`, `docs/CHANTIERS.md` |
-| **Corrections par mod** | à faire : marque, pays, classe, fiche technique d'un mod précis | `docs/CHANTIERS.md` |
+| **Fiche technique** | livrée ; restent les couches de physique, le biturbo, et ce qui attend la vitrine | `docs/SPEC-fiche-technique.md`, `docs/CHANTIERS.md` |
+| **Corrections par mod** | à faire : marque et classe d'un mod précis (pays et fiche technique : livrés avec la fiche) | `docs/CHANTIERS.md` |
 | **Règles de tags divergentes** | deux fichiers décrivent la même ontologie, un seul est chargé | `docs/CHANTIERS.md` |
 | **Dossier du jeu** | lot 1 livré (lecture seule) ; reste le lot 2, les tailles | `docs/SPEC-etat-dossier.md`, `docs/CHANTIERS.md` |
 | **Refactorings reportés** | quatre repérés et chiffrés (actions de la fiche, aperçu 3D, `importer.rs`, curseur de régime) | `docs/CHANTIERS.md` |

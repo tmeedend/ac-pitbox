@@ -372,6 +372,9 @@ pub struct Resolved {
 pub struct TechSheet {
     pub values: BTreeMap<String, Resolved>,
     pub edited: Vec<String>,
+    /// For each field the user decided, what the mod itself says — where
+    /// "↺ revenir" goes back to (FICHE§8). Absent when the mod says nothing.
+    pub fallback: BTreeMap<String, Resolved>,
 }
 
 /// The order of R2, user aside. Fields a source does not know simply have no
@@ -448,6 +451,11 @@ fn resolve(facts: &Facts, user: &BTreeMap<String, Option<Value>>) -> TechSheet {
         }
     }
     sheet.edited = user.keys().cloned().collect();
+    for f in user.keys() {
+        if let Some(r) = resolve_field(facts, f) {
+            sheet.fallback.insert(f.clone(), r);
+        }
+    }
     if !sheet.values.contains_key(field::PWRATIO) && !user.contains_key(field::PWRATIO) {
         if let Some(r) = computed_ratio(&sheet) {
             sheet.values.insert(field::PWRATIO.to_string(), r);

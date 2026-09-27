@@ -16,7 +16,11 @@ export function historyDetails(details: string): string {
   try {
     const p = JSON.parse(details) as { key?: string } & Record<string, unknown>;
     if (p && typeof p === "object" && typeof p.key === "string") {
-      return t(`history.${p.key}`, p as Record<string, string | number>);
+      // A list of tech sheet fields (FICHE§8): stored as keys, read as words.
+      const params = Array.isArray(p.fields)
+        ? { ...p, fields: p.fields.map((f) => t(`techsheet.field.${String(f)}`)).join(", ") }
+        : p;
+      return t(`history.${p.key}`, params as Record<string, string | number>);
     }
   } catch {
     /* ligne héritée : texte brut, affiché tel quel */

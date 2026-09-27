@@ -91,6 +91,22 @@ fn number(s: &str) -> Option<f64> {
     s.replace(',', ".").parse().ok()
 }
 
+/// A number as an author writes it for this kind of spec. A comma or a point
+/// followed by exactly three digits after one to three is a **thousands
+/// separator** for a power, a torque, a weight or a speed — `1,495kg` is Kunos'
+/// own spelling on both RUF RT12R, and read as a decimal it made a 1.5 kg car.
+/// A power-to-weight ratio is the one spec where `2.650` means 2.65.
+fn number_of(kind: Kind, s: &str) -> Option<f64> {
+    let grouped = kind != Kind::PwRatio
+        && s.find([',', '.']).is_some_and(|at| {
+            (1..=3).contains(&at) && s.len() - at == 4 && s[at + 1..].bytes().all(|b| b.is_ascii_digit())
+        });
+    if grouped {
+        return s.replace([',', '.'], "").parse().ok();
+    }
+    number(s)
+}
+
 /// The author's "unknown": nothing, dashes, `N/A`, no digit at all.
 fn says_nothing(raw: &str) -> bool {
     raw.is_empty() || raw.contains("--") || !raw.bytes().any(|b| b.is_ascii_digit())
@@ -115,7 +131,7 @@ pub fn parse(kind: Kind, raw: Option<&str>) -> Option<Spec> {
         // `~3s`, `<5s`, `(544+120)Bhp`: a qualifier the sheet has no place for.
         return text();
     }
-    let Some(n) = number(&rest[..digits]) else {
+    let Some(n) = number_of(kind, &rest[..digits]) else {
         return text();
     };
     if n == 0.0 {
@@ -235,6 +251,23 @@ mod tests {
             q(2.65, Some("kg/hp"), false),
             "decimal comma"
         );
+    }
+
+    /// A thousands separator is not a decimal point — except in a ratio.
+    #[test]
+    fn a_thousands_separator_is_not_a_decimal_point() {
+        assert_eq!(
+            parse(Kind::Weight, Some("1,495kg")),
+            q(1495.0, Some("kg"), false),
+            "ks_ruf_rt12r"
+        );
+        assert_eq!(parse(Kind::Power, Some("1.000 hp")), q(1000.0, Some("hp"), false));
+        assert_eq!(
+            parse(Kind::Weight, Some("1245,5 kg")),
+            q(1245.5, Some("kg"), false),
+            "a real decimal"
+        );
+        assert_eq!(parse(Kind::PwRatio, Some("2.650kg/hp")), q(2.65, Some("kg/hp"), false));
     }
 
     /// FICHE§9.4 — `range` is a bare number.

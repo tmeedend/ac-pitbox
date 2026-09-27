@@ -2,6 +2,7 @@
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { bumpLibraryVersion } from "./libraryVersion.svelte";
 import type { PendingAction } from "$lib/workshop/pending";
+import type { TechSheet } from "$lib/detail/techSheet";
 
 export type ModKind = "Car" | "Track";
 
@@ -105,6 +106,10 @@ export interface ModCard {
   /** Mod cassé (fichiers de la version active manquants/invalides, §6.4) —
    * même détection que l'écran Maintenance, signalée ici sur la carte. */
   broken: boolean;
+  /** Where the five spec fields come from when it is worth a sign (FICHE R5):
+   * `"rules"` deduced from the tags, `"user"` corrected by hand. Absent: read
+   * in the mod's own files. */
+  tech_marks: Record<string, "rules" | "user">;
 }
 
 export interface VersionRow {
@@ -168,6 +173,8 @@ export interface ModDetail extends ModCard {
   versions: VersionRow[];
   history: HistoryRow[];
   specs: NativeSpecs | null;
+  /** The tech sheet as shown (FICHE§6.3), cars only. */
+  tech: TechSheet | null;
   track: TrackDetail | null;
   /** Nom du DLC Kunos d'origine (contenu de base uniquement) — `null` pour le
    * jeu de base ou un mod importé. */

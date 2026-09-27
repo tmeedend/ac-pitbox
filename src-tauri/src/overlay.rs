@@ -892,14 +892,18 @@ const MOD_SELECT: &str = r#"
            -- Year and country as the user corrected them on the tech sheet
            -- (FICHE§8): resolved here, like the name, so the index, the
            -- filters and the columns follow the correction without a cache.
-           COALESCE((SELECT json_extract(u.value, '$') FROM tech_user u
-                     WHERE u.mod_id = m.id_interne AND u.field = 'year' AND u.value IS NOT NULL),
-                    m.year) AS year,
+           -- A decision is taken whole, a forced "unknown" (NULL) included:
+           -- the list must not show a year the sheet no longer does.
+           CASE WHEN EXISTS (SELECT 1 FROM tech_user u WHERE u.mod_id = m.id_interne AND u.field = 'year')
+                THEN (SELECT json_extract(u.value, '$') FROM tech_user u
+                      WHERE u.mod_id = m.id_interne AND u.field = 'year')
+                ELSE m.year END AS year,
            m.car_class,
            m.category,
-           COALESCE((SELECT json_extract(u.value, '$') FROM tech_user u
-                     WHERE u.mod_id = m.id_interne AND u.field = 'country' AND u.value IS NOT NULL),
-                    m.country) AS country,
+           CASE WHEN EXISTS (SELECT 1 FROM tech_user u WHERE u.mod_id = m.id_interne AND u.field = 'country')
+                THEN (SELECT json_extract(u.value, '$') FROM tech_user u
+                      WHERE u.mod_id = m.id_interne AND u.field = 'country')
+                ELSE m.country END AS country,
            m.is_favorite, m.active_version_id,
            -- Pas de date d'ajout pour le contenu de base : voir ModRow.created_at.
            CASE WHEN m.is_stock THEN NULL ELSE m.created_at END AS created_at,

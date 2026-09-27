@@ -799,10 +799,62 @@ de reprendre. En cas d'écart, la spec fait foi.
       « Benetton B191 » reste sous son pack faute de Benetton connu. Une liste
       livrée de marques connues lèverait la limite — à faire si ça gêne.
 
+- [ ] **Fiche technique — livrée (2026-09-27) ; restent des bords.**
+      Livré (`SPEC-fiche-technique.md`, SPEC.md §6) : les faits en base par
+      source (`techsheet/`), la physique lue à l'import, à la réindexation et
+      par un rattrapage au premier démarrage, l'électronique, l'édition, les
+      colonnes de la bibliothèque devenues le cache de la valeur affichée.
+      **La mesure du §10, refaite sur 397 voitures** (217 mods, 180 d'origine,
+      `techsheet::measure`, tests ignorés, rejouable) :
+      - *Physique lisible* sur 395 (les deux autres : dossier sans physique).
+      - *Poids* : `TOTALMASS − 75` ne vaut le poids du `ui_car.json` que sur
+        162 voitures sur 390 (0 sur 53, 80 sur 30, le reste épars) : **pas de
+        repli** sur la physique pour le poids.
+      - *Autonomie* : 1,3 à 2,9 par litre de réservoir, moins sur la version
+        plus puissante d'une même voiture (1M : 80, 1M Stage 3 : 69) — des km
+        à l'allure de course. Écrite en km.
+      - *Compresseur* : les 16 voitures que les tags disent à compresseur n'ont
+        **aucun** `[TURBO_n]` → les tags gagnent quand la physique dit « pas
+        de turbo ». Un tag « turbo » que la physique dément (Cayman GT4, qui
+        est atmosphérique) perd.
+      - *Biturbo* : 105 voitures ont au moins deux `[TURBO_n]` — et à la
+        lecture des noms, presque toutes sont de vrais biturbos (F40, GT-R,
+        M4, 488, McLaren V8, RX-7 FD à turbos séquentiels…). Mais **aucun tag
+        ne dit « twin turbo »**, et seuls deux noms le disent : suivant FICHE§10,
+        elles affichent « turbo ». Si ça gêne, la décision est de dire
+        « biturbo » dès deux sections, en acceptant les turbos à deux étages.
+      - *Transmission* : 18 désaccords physique/tags, **tous du côté de la
+        physique** à la vérification (TA2 VRC en propulsion taggées AWD, 22B
+        en intégrale taggée RWD…) ; les hybrides à moteurs avant sont lus
+        intégrales.
+      - *Premier démarrage* sur la base de dev : 111 voitures gagnent
+        « turbo », 176 « atmosphérique », 19 changent de transmission,
+        61 gagnent « manuelle » et 38 « à palettes » — 8 s en fond (debug).
+      **Ce qui reste :**
+      - *Les couches* : la fiche lit le dossier de la version, pas la pile
+        des couches actives. Aucune couche voiture sur l'install de dev ; une
+        couche de physique ne se verrait donc pas sur la fiche.
+      - *Le rapport de mise à jour des règles* (REGLES§) ne dit pas, en nombre,
+        ce que le premier démarrage change (FICHE§9.3) : c'est seulement
+        journalisé (« techsheet backfill: N car(s) read »).
+      - *Changer de version active* ne relit pas les règles de la nouvelle :
+        leurs faits sont ceux de la dernière harmonisation (comme les colonnes
+        avant la fiche).
+      - *Vitrine et export* : les tests de survie de FICHE§9.4 attendent
+        `ESPACE§` et `EXPORT§`, pas encore construits. La fiche, elle, ne lit
+        déjà plus aucun fichier.
+      - *Colonnes de bibliothèque* : elles affichent les codes (`RWD`,
+        `PADDLES`), la fiche les mots. Écart antérieur, élargi par deux
+        codes neufs (`TWIN_TURBO`, `PADDLES`).
+      - *Traductions* it/de/es/pt de l'espace `techsheet`.
+
 - [ ] **Corrections par mod — à faire, chantier à part.** Aujourd'hui on
-      corrige d'un mod son nom, sa description et ses tags (couche 4 de
-      REGLES§14), mais **ni sa marque, ni son pays, ni sa classe, ni sa fiche
-      technique**. Demandé par l'utilisateur (2026-09-24) en discutant des
+      corrige d'un mod son nom, sa description, ses tags (couche 4 de
+      REGLES§14), et depuis la fiche technique (FICHE§8) son **pays** et sa
+      **fiche technique** — mais **ni sa marque, ni sa classe**. Le modèle à
+      suivre est celui de la fiche : une table de décisions sans clé
+      étrangère, lue devant tout le reste (`tech_user`, et
+      `overlay::MOD_SELECT` pour ce que la liste doit voir). Demandé par l'utilisateur (2026-09-24) en discutant des
       fausses marques : pour deux ou trois voitures, une correction directe
       est plus simple qu'une règle. À concevoir comme la couche la plus
       prioritaire de la cascade (REGLES§3), par mod, jamais exportée ni

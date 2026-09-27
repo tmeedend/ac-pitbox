@@ -54,41 +54,9 @@
   }
 
   const entries = $derived.by(() => {
-    // Contenu de base Kunos (§4/§8.1) : pas de vraie notion de version ni
-    // d'import à raconter ici — une seule ligne informative, pas la frise
-    // habituelle avec « (sans n°) », badge « installée » et une date qui ne
-    // correspond à rien de réel (juste l'indexation locale).
-    if (detail.is_stock) {
-      return [
-        {
-          key: "stock",
-          when: "",
-          label: "",
-          installed: false,
-          event: detail.is_unmanaged ? t("detail.unmanagedContentLabel") : t("detail.baseContentLabel"),
-          detail: "",
-          size: null,
-        },
-      ];
-    }
-
     // Une version et son événement d'import partagent la même seconde : sans
     // ce dédoublonnage, la frise afficherait deux fois la même chose.
     const versionStamps = new Set(detail.versions.map((v) => v.imported_at));
-
-    const fromVersions: Entry[] = detail.versions.map((v) => ({
-      key: v.id,
-      when: v.imported_at,
-      versionId: v.id,
-      label: v.version_label ?? t("detail.noVersionNumber"),
-      installed: v.id === detail.active_version_id,
-      event:
-        historyEventLabel(
-          detail.history.find((h) => h.timestamp === v.imported_at)?.event ?? "IMPORT",
-        ),
-      detail: v.source_archive ?? "",
-      size: v.size_bytes,
-    }));
 
     // Activer/désactiver n'est pas un événement de cycle de vie : ces lignes
     // pollueraient la frise sans rien apprendre (WIKI§3.2).
@@ -105,7 +73,43 @@
         event: historyEventLabel(h.event),
         detail: historyDetails(h.details),
         size: null,
-      }));
+      }))
+      .sort((a, b) => b.when.localeCompare(a.when));
+
+    // Contenu de base Kunos (§4/§8.1) : pas de vraie notion de version ni
+    // d'import à raconter ici — une ligne informative, pas la frise
+    // habituelle avec « (sans n°) », badge « installée » et une date qui ne
+    // correspond à rien de réel (juste l'indexation locale). Ce que
+    // l'utilisateur y a fait se raconte quand même dessous : une correction
+    // de la fiche technique (FICHE§8) vaut pour une voiture d'origine aussi.
+    if (detail.is_stock) {
+      return [
+        {
+          key: "stock",
+          when: "",
+          label: "",
+          installed: false,
+          event: detail.is_unmanaged ? t("detail.unmanagedContentLabel") : t("detail.baseContentLabel"),
+          detail: "",
+          size: null,
+        },
+        ...fromHistory,
+      ];
+    }
+
+    const fromVersions: Entry[] = detail.versions.map((v) => ({
+      key: v.id,
+      when: v.imported_at,
+      versionId: v.id,
+      label: v.version_label ?? t("detail.noVersionNumber"),
+      installed: v.id === detail.active_version_id,
+      event:
+        historyEventLabel(
+          detail.history.find((h) => h.timestamp === v.imported_at)?.event ?? "IMPORT",
+        ),
+      detail: v.source_archive ?? "",
+      size: v.size_bytes,
+    }));
 
     // Version installée en tête (c'est ce qu'on vient vérifier en premier),
     // le reste du plus récent au plus ancien.

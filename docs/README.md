@@ -141,8 +141,9 @@ fait — en cas d'écart, la spec fait foi.
   mod › `ui_car.json` › tags), lit la physique déchiffrée au lieu de deviner
   (transmission, turbo, rapports, réservoir), affiche l'**électronique**
   (ABS, antipatinage, EDL, DRS, KERS, ERS) et devient **éditable**. Mesures
-  sur 104 voitures. Maquette : `maquettes/pitbox-fiche-technique.html`. À
-  construire.
+  sur 104 voitures, refaites sur 397. Maquette :
+  `maquettes/pitbox-fiche-technique.html`. **Livrée** ; ce qui reste est dans
+  `CHANTIERS.md`.
 - **`SPEC-taxonomies.md`** (`TAXO§`) — marques, pays et familles de catégorie
   deviennent des **termes** (nom canonique, alias, emblème), curés dans trois
   onglets de l'Atelier. **Seule la table des familles est livrée** (pour
