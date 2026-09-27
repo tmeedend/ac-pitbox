@@ -21,12 +21,18 @@ pub fn read(car_dir: &Path, car_id: &str, name: &str, marker: &str) -> Option<St
 
 /// Several physics files of one car, the container opened at most once.
 ///
+/// Read through a **stack** of folders, the most important first: the active
+/// layers of the car by priority, then its base (§4.3, as `compose` lays
+/// them into the game). The folder the game would see is what is read: a
+/// loose `data/<file>` from the highest folder that has one, else the entry
+/// of the highest `data.acd` — the one composition leaves in place.
+///
 /// The key of a `data.acd` is established on `engine.ini`, which every car
 /// has, and then trusted for every entry — so an entry that is legitimately
 /// empty (`drs.ini` on most road cars) still reads, as an empty string,
 /// instead of failing the marker check [`read`] would put it through.
 pub struct CarData<'a> {
-    dir: &'a Path,
+    dirs: &'a [std::path::PathBuf],
     car_id: &'a str,
     container: std::cell::OnceCell<Option<acd::Container>>,
 }
@@ -35,9 +41,9 @@ pub struct CarData<'a> {
 const KEY_PROOF: (&str, &str) = ("engine.ini", "[ENGINE_DATA]");
 
 impl<'a> CarData<'a> {
-    pub fn new(dir: &'a Path, car_id: &'a str) -> Self {
+    pub fn new(dirs: &'a [std::path::PathBuf], car_id: &'a str) -> Self {
         Self {
-            dir,
+            dirs,
             car_id,
             container: std::cell::OnceCell::new(),
         }
@@ -45,18 +51,24 @@ impl<'a> CarData<'a> {
 
     fn container(&self) -> Option<&acd::Container> {
         self.container
-            .get_or_init(|| acd::Container::open(self.dir, self.car_id, KEY_PROOF.0, KEY_PROOF.1))
+            .get_or_init(|| {
+                let top = self.dirs.iter().find(|d| d.join("data.acd").is_file())?;
+                acd::Container::open(top, self.car_id, KEY_PROOF.0, KEY_PROOF.1)
+            })
             .as_ref()
     }
 
     /// One file as text, loose first.
     pub fn text(&self, name: &str) -> Option<String> {
-        loose(self.dir, name).or_else(|| self.container()?.text(name))
+        self.dirs
+            .iter()
+            .find_map(|d| loose(d, name))
+            .or_else(|| self.container()?.text(name))
     }
 
     /// Whether the car ships this file at all.
     pub fn has(&self, name: &str) -> bool {
-        self.dir.join("data").join(name).is_file() || self.container().is_some_and(|c| c.has(name))
+        self.dirs.iter().any(|d| d.join("data").join(name).is_file()) || self.container().is_some_and(|c| c.has(name))
     }
 }
 

@@ -5,7 +5,7 @@
 //! a mod's physics is less regular than Kunos', and a file that does not say
 //! is a reason to fall back on the next source, never to guess.
 
-use std::path::Path;
+use std::path::PathBuf;
 
 use crate::cardata::{ini_value, CarData};
 
@@ -56,12 +56,13 @@ pub struct Physics {
     pub ebb: bool,
 }
 
-/// Reads the physics of the car in `car_dir`, packed under `car_id`.
+/// Reads the physics of a car packed under `car_id`, through the stack of
+/// its folders, the most important first (see `CarData`).
 ///
 /// `None` when neither `data/` nor a `data.acd` that opens is there — the
 /// sheet then falls back entirely on `ui_car.json` and the rules.
-pub fn read(car_dir: &Path, car_id: &str) -> Option<Physics> {
-    let data = CarData::new(car_dir, car_id);
+pub fn read(dirs: &[PathBuf], car_id: &str) -> Option<Physics> {
+    let data = CarData::new(dirs, car_id);
     let engine = data.text("engine.ini");
     let drivetrain = data.text("drivetrain.ini");
     let car = data.text("car.ini");
@@ -185,7 +186,7 @@ mod tests {
             ("drivetrain.ini", DRIVETRAIN_RWD),
             ("ers.ini", "[KINETIC]\nMAX_KJ=4000\n[FRONT_MOTORS]\nMAX_TORQUE=300\n"),
         ]);
-        let p = read(&dir, "hybrid").expect("physics read");
+        let p = read(&[dir.to_path_buf()], "hybrid").expect("physics read");
         assert_eq!(p.traction.as_deref(), Some("RWD"), "the engine drives the rear");
         assert!(p.front_motors, "the front axle is electric");
         assert!(p.ers && !p.ers_heat, "MGU-K only");
@@ -196,9 +197,15 @@ mod tests {
     #[test]
     fn an_empty_drs_file_is_no_drs() {
         let empty = car(&[("engine.ini", ENGINE_NA), ("drs.ini", "")]);
-        assert!(!read(&empty, "c").unwrap().drs, "an empty drs.ini is not DRS");
+        assert!(
+            !read(&[empty.to_path_buf()], "c").unwrap().drs,
+            "an empty drs.ini is not DRS"
+        );
         let wing = car(&[("engine.ini", ENGINE_NA), ("drs.ini", "[WING_3]\nDRS_ANGLE=0\n")]);
-        assert!(read(&wing, "c").unwrap().drs, "a [WING_3] section is DRS");
+        assert!(
+            read(&[wing.to_path_buf()], "c").unwrap().drs,
+            "a [WING_3] section is DRS"
+        );
     }
 
     /// FICHE§5 — `PRESENT=2` exists on traction control and means equipped;
@@ -212,7 +219,7 @@ mod tests {
                 "[ABS]\nPRESENT=0\n[TRACTION_CONTROL]\nPRESENT=2\n[EDL]\nPRESENT=1\n",
             ),
         ]);
-        let p = read(&dir, "c").unwrap();
+        let p = read(&[dir.to_path_buf()], "c").unwrap();
         assert_eq!(p.abs, Some(false), "no ABS");
         assert_eq!(p.traction_control, Some(true), "PRESENT=2 is a yes");
         assert_eq!(p.edl, Some(true), "EDL");
@@ -280,7 +287,7 @@ MAX_SPIN_POWER=0.8
             ("drivetrain.ini", DRIVETRAIN_RWD),
             ("car.ini", "[BASIC]\nTOTALMASS=1320\n[FUEL]\nMAX_FUEL=110 ; litres\n"),
         ]);
-        let p = read(&dir, "c").unwrap();
+        let p = read(&[dir.to_path_buf()], "c").unwrap();
         assert_eq!(p.gears, Some(6));
         assert_eq!(p.h_shifter, Some(false), "no H-pattern");
         assert_eq!(p.limiter, Some(8300.0));
@@ -293,6 +300,6 @@ MAX_SPIN_POWER=0.8
     #[test]
     fn a_car_without_physics_reads_as_none() {
         let dir = crate::testutil::temp_dir("techsheet-nophysics");
-        assert!(read(&dir, "c").is_none());
+        assert!(read(&[dir.to_path_buf()], "c").is_none());
     }
 }

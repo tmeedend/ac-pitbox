@@ -24,7 +24,7 @@ mod ui;
 mod measure;
 
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
@@ -117,7 +117,8 @@ pub mod field {
     pub const EBB: &str = "aid.ebb";
     /// Marks a version as read, whatever the files said: what makes the
     /// backfill idempotent for a car whose files yield nothing (FICHE§9.3).
-    /// Its value is the [`super::READER_VERSION`] that read it.
+    /// Its value says what read it, and through what: `{"reader": N,
+    /// "stack": [layer ids]}` — see [`super::Stack`].
     pub const RECORDED: &str = "_recorded";
 }
 
@@ -130,7 +131,9 @@ pub mod field {
 /// 2 — a thousands separator is no decimal point (`1,495kg`).
 /// 3 — two `[TURBO_n]` sections or more are a twin turbo, whatever the name
 ///     says (FICHE§10).
-pub const READER_VERSION: u32 = 3;
+/// 4 — the files are read through the car's active layers, as the game
+///     sees them (§4.3).
+pub const READER_VERSION: u32 = 4;
 
 /// The key figures, their fixed unit when the user types them (FICHE§8).
 const KEY_FIGURES: [(&str, &str); 6] = [
@@ -286,14 +289,17 @@ fn ui_facts(specs: &crate::uijson::NativeSpecs) -> Vec<Fact> {
     out
 }
 
-/// Everything the files of the car in `dir` say. No base involved: the
-/// backfill reads without holding the lock.
-pub fn read_files(dir: &Path, car_id: &str, stock: bool) -> Vec<Fact> {
+/// Everything the files of a car say, read through the stack of its folders,
+/// the most important first (`Stack::dirs`). No base involved: the backfill
+/// reads without holding the lock.
+pub fn read_files(dirs: &[PathBuf], car_id: &str, stock: bool) -> Vec<Fact> {
     let mut facts = Vec::new();
-    if let Some(p) = physics::read(dir, car_id) {
+    if let Some(p) = physics::read(dirs, car_id) {
         facts.extend(physics_facts(&p));
     }
-    if let Some(specs) = crate::uijson::read_car_specs(dir) {
+    // Whole file from the highest folder that has one, as the library reads
+    // it (`library::layered`): a layer's `ui_car.json` replaces the base's.
+    if let Some(specs) = dirs.iter().find_map(|d| crate::uijson::read_car_specs(d)) {
         facts.extend(ui_facts(&specs));
     }
     // The game's own content has a year even when its file does not say.
@@ -302,8 +308,104 @@ pub fn read_files(dir: &Path, car_id: &str, stock: bool) -> Vec<Fact> {
             facts.push(fact(field::YEAR, Source::Table, json!(y)));
         }
     }
-    facts.push(fact(field::RECORDED, Source::Physics, json!(READER_VERSION)));
     facts
+}
+
+/// What a car's active files are read through: its folders, the most
+/// important first — active layers by priority, then the base — and the ids
+/// of those layers with their import date (`id@date`),
+/// which is what says whether facts already stored came from
+/// the same stack (§4.3).
+///
+/// The ids and not the folders go into the marker: they name the stack on any
+/// machine, where a path would carry this one's disk into the base.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Stack {
+    pub dirs: Vec<PathBuf>,
+    pub layers: Vec<String>,
+}
+
+impl Stack {
+    /// A single folder, no layer: a version read on its own.
+    pub fn base(dir: &Path) -> Self {
+        Self {
+            dirs: vec![dir.to_path_buf()],
+            layers: Vec::new(),
+        }
+    }
+
+    fn marker(&self) -> Value {
+        json!({ "reader": READER_VERSION, "stack": self.layers })
+    }
+}
+
+/// The stack of a car's active version, as `compose` deploys it
+/// (`planned_sources`): `None` when its base cannot be found — a library not
+/// mounted, a version gone —, which is a reason to read nothing, never to
+/// wipe what was read.
+pub fn active_stack(conn: &Connection, cfg: &crate::config::AppConfig, m: &crate::overlay::ModRow) -> Option<Stack> {
+    let layers = crate::overlay::active_layers(conn, &m.id_interne, crate::modscan::ModKind::Car.into()).ok()?;
+    let base = match crate::compose::planned_sources(conn, cfg, &m.id_interne) {
+        Some((base, _)) => base,
+        // Stock content without a layer is the game's own folder, which is
+        // also what its synthetic version points at.
+        None => {
+            let stored = crate::overlay::get_version_path(conn, m.active_version_id.as_deref()?).ok()??;
+            crate::libpath::resolve(cfg.library_path.as_deref(), &stored)?
+        }
+    };
+    if !base.is_dir() {
+        return None;
+    }
+    let library = cfg.library_path.as_deref();
+    let mut dirs: Vec<PathBuf> = layers
+        .iter()
+        .rev()
+        .filter_map(|l| crate::libpath::resolve(library, &l.library_path))
+        .filter(|d| d.is_dir())
+        .collect();
+    dirs.push(base);
+    Some(Stack {
+        dirs,
+        // The id AND the import date: `layers::refill_layer` replaces a layer's
+        // files under the same id (§4.6ter), and only its date says so.
+        layers: layers
+            .into_iter()
+            .map(|l| format!("{}@{}", l.id, l.imported_at))
+            .collect(),
+    })
+}
+
+/// Reads a car's active files again when the stack they are read through
+/// changed since the last reading — a layer switched on or off, reordered,
+/// added, another version made active — or always when `force`. Returns
+/// whether it read.
+///
+/// Called by `compose::recompose`, the one path every change of a car's
+/// stack goes through; the marker keeps it from reading the physics again at
+/// every plain activation.
+pub fn refresh_active(
+    conn: &Connection,
+    cfg: &crate::config::AppConfig,
+    mod_id: &str,
+    force: bool,
+) -> rusqlite::Result<bool> {
+    let Some(m) = crate::overlay::get_mod(conn, mod_id)? else {
+        return Ok(false);
+    };
+    if m.kind != "Car" {
+        return Ok(false);
+    }
+    let version = version_key(m.is_stock, m.active_version_id.as_deref());
+    let Some(stack) = active_stack(conn, cfg, &m) else {
+        return Ok(false);
+    };
+    if !force && store::is_current(conn, mod_id, &version, &stack.layers)? {
+        return Ok(false);
+    }
+    let facts = read_files(&stack.dirs, mod_id, m.is_stock);
+    store_files(conn, mod_id, &version, &facts, &stack)?;
+    Ok(true)
 }
 
 /// The facts key a mod's files are stored under: the active version, or `''`
@@ -317,10 +419,13 @@ pub fn version_key(stock: bool, active_version: Option<&str>) -> String {
     }
 }
 
-/// Writes what the files of one version say, then refreshes the cache.
+/// Writes what the files of one version say, read on their own, then
+/// refreshes the cache. A car with active layers is read again through them
+/// by the next `recompose` or start: the marker says the stack differs.
 pub fn record(conn: &Connection, mod_id: &str, version: &str, dir: &Path, stock: bool) -> rusqlite::Result<()> {
-    let facts = read_files(dir, mod_id, stock);
-    store_files(conn, mod_id, version, &facts)
+    let stack = Stack::base(dir);
+    let facts = read_files(&stack.dirs, mod_id, stock);
+    store_files(conn, mod_id, version, &facts, &stack)
 }
 
 /// The backfill's writing half (FICHE§9.3): stores what a pending car's files
@@ -332,14 +437,23 @@ pub fn store_pending(
     report: &mut report::Report,
 ) -> rusqlite::Result<()> {
     let before = store::cached_columns(conn, &p.mod_id)?;
-    store_files(conn, &p.mod_id, &p.version, facts)?;
+    store_files(conn, &p.mod_id, &p.version, facts, &p.stack)?;
     report.count(&before, &store::cached_columns(conn, &p.mod_id)?);
     Ok(())
 }
 
-/// The writing half of [`record`], for a caller that read without the lock.
-pub fn store_files(conn: &Connection, mod_id: &str, version: &str, facts: &[Fact]) -> rusqlite::Result<()> {
-    store::replace_file_facts(conn, mod_id, version, facts)?;
+/// The writing half of [`record`], for a caller that read without the lock:
+/// the facts, and the marker that says what read them through what.
+pub fn store_files(
+    conn: &Connection,
+    mod_id: &str,
+    version: &str,
+    facts: &[Fact],
+    stack: &Stack,
+) -> rusqlite::Result<()> {
+    let mut all = facts.to_vec();
+    all.push(fact(field::RECORDED, Source::Physics, stack.marker()));
+    store::replace_file_facts(conn, mod_id, version, &all)?;
     refresh_cache(conn, mod_id)
 }
 

@@ -106,6 +106,21 @@ pub fn final_country(rules: &Rules, h: &Harmonized, native_country: Option<&str>
         .and_then(|c| rules::canonical_country(&c, &rules.country_aliases))
 }
 
+/// Re-applies the rules to one mod, from its active version's files — after
+/// another version was made active, whose tags may say something else (a
+/// car's tech sheet takes what they deduce, FICHE§6.2). `false` when the mod
+/// or its files cannot be found: nothing is changed then.
+pub fn harmonize_mod(conn: &Connection, cfg: &AppConfig, rules: &Rules, id: &str) -> rusqlite::Result<bool> {
+    let Some(m) = overlay::get_mod(conn, id)? else {
+        return Ok(false);
+    };
+    let Some((h, native_country)) = recompute_for(conn, cfg, rules, &m) else {
+        return Ok(false);
+    };
+    store(conn, id, &h, native_country.as_deref(), rules)?;
+    Ok(true)
+}
+
 /// Réapplique l'ontologie à tous les mods (après édition des règles).
 /// Renvoie le nombre de mods retraités.
 pub fn harmonize_all(conn: &Connection, cfg: &AppConfig, rules: &Rules) -> rusqlite::Result<usize> {

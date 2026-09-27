@@ -63,7 +63,20 @@ fn clear_link(link: &Path) -> Result<(), String> {
 /// une couche d'app y passe exactement comme une couche de circuit.
 pub fn recompose(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), String> {
     match overlay::get_mod(conn, id).map_err(|e| e.to_string())? {
-        Some(m) => recompose_mod(conn, cfg, &m, id),
+        Some(m) => {
+            let result = recompose_mod(conn, cfg, &m, id);
+            // A car's tech sheet is read through the same stack (§4.3): a
+            // layer switched, reordered or removed, another version made
+            // active, and the sheet reads the files again. Best-effort, and
+            // cheap when the stack did not change — a plain activation reads
+            // nothing (`techsheet::refresh_active`).
+            if m.kind == "Car" {
+                if let Err(e) = crate::techsheet::refresh_active(conn, cfg, id, false) {
+                    log::warn!("tech sheet of {id} not read again: {e}");
+                }
+            }
+            result
+        }
         // Les mods d'abord : un id d'app ne collisionne pas avec un id de
         // contenu (espaces de noms disjoints côté AC), mais l'ordre fixe le
         // comportement si cela arrivait un jour.

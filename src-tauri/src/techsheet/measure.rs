@@ -46,7 +46,7 @@ fn real_install_physics_dump() {
                 .and_then(|p| crate::libpath::resolve(cfg.library_path.as_deref(), &p))
         };
         let Some(dir) = dir else { continue };
-        let physics = super::physics::read(&dir, &m.id_interne);
+        let physics = super::physics::read(std::slice::from_ref(&dir), &m.id_interne);
         let ui = crate::uijson::read_car_specs(&dir);
         lines.push(
             serde_json::json!({
@@ -118,13 +118,8 @@ fn real_install_backfill_report() {
     crate::harmonize::harmonize_all(&conn, &cfg, &rules).unwrap();
     let pending = super::pending_cars(&conn, &cfg).unwrap();
     for p in &pending {
-        super::store_files(
-            &conn,
-            &p.mod_id,
-            &p.version,
-            &super::read_files(&p.dir, &p.mod_id, p.stock),
-        )
-        .unwrap();
+        let facts = super::read_files(&p.stack.dirs, &p.mod_id, p.stock);
+        super::store_files(&conn, &p.mod_id, &p.version, &facts, &p.stack).unwrap();
     }
     println!("{} cars read in {:?}", pending.len(), t.elapsed());
 

@@ -2,7 +2,6 @@
 //! schema in `overlay::init`. Only this module writes them.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::Value;
@@ -157,14 +156,23 @@ pub(super) fn has_anything(conn: &Connection, mod_id: &str) -> rusqlite::Result<
     )
 }
 
-/// Whether the files of this version were read (FICHE§9.3), by the current
-/// readers: a car read by an older one is to be read again.
-pub(super) fn has_file_facts(conn: &Connection, mod_id: &str, version: &str) -> rusqlite::Result<bool> {
-    conn.query_row(
-        "SELECT EXISTS(SELECT 1 FROM tech_facts
-             WHERE mod_id = ?1 AND version_id = ?2 AND field = ?3 AND value = ?4)",
-        params![mod_id, version, field::RECORDED, super::READER_VERSION.to_string()],
-        |r| r.get(0),
+/// Whether the files of this version were read by the current readers
+/// through this stack of layers (FICHE§9.3, §4.3): a car read by an older
+/// reader, or through other layers, is to be read again.
+pub(super) fn is_current(conn: &Connection, mod_id: &str, version: &str, layers: &[String]) -> rusqlite::Result<bool> {
+    let marker: Option<String> = conn
+        .query_row(
+            "SELECT value FROM tech_facts WHERE mod_id = ?1 AND version_id = ?2 AND field = ?3",
+            params![mod_id, version, field::RECORDED],
+            |r| r.get(0),
+        )
+        .optional()?;
+    let Some(marker) = marker.and_then(|m| serde_json::from_str::<Value>(&m).ok()) else {
+        return Ok(false);
+    };
+    Ok(
+        marker.get("reader").and_then(Value::as_u64) == Some(u64::from(super::READER_VERSION))
+            && marker.get("stack") == Some(&serde_json::json!(layers)),
     )
 }
 
@@ -199,7 +207,7 @@ pub(super) fn write_cache(
 pub struct Pending {
     pub mod_id: String,
     pub version: String,
-    pub dir: PathBuf,
+    pub stack: super::Stack,
     pub stock: bool,
 }
 
@@ -213,21 +221,16 @@ pub fn pending_cars(conn: &Connection, cfg: &crate::config::AppConfig) -> rusqli
             continue;
         }
         let version = super::version_key(m.is_stock, m.active_version_id.as_deref());
-        if has_file_facts(conn, &m.id_interne, &version)? {
-            continue;
-        }
-        let dir = m
-            .active_version_id
-            .as_deref()
-            .and_then(|v| crate::overlay::get_version_path(conn, v).ok().flatten())
-            .and_then(|p| crate::libpath::resolve(cfg.library_path.as_deref(), &p));
-        let Some(dir) = dir.filter(|d| d.is_dir()) else {
+        let Some(stack) = super::active_stack(conn, cfg, &m) else {
             continue;
         };
+        if is_current(conn, &m.id_interne, &version, &stack.layers)? {
+            continue;
+        }
         out.push(Pending {
             mod_id: m.id_interne,
             version,
-            dir,
+            stack,
             stock: m.is_stock,
         });
     }

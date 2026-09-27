@@ -844,6 +844,12 @@ pub fn reindex_mod(conn: &Connection, cfg: &AppConfig, id: &str, recalc_size: bo
             .map_err(|e| e.to_string())?;
     }
 
+    // Each version was read on its own above; the active one is what the game
+    // sees through the car's layers, so it is read again through them (§4.3).
+    if kind == ModKind::Car {
+        crate::techsheet::refresh_active(conn, cfg, id, true).map_err(|e| e.to_string())?;
+    }
+
     Ok(())
 }
 

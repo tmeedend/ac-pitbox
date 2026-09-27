@@ -478,7 +478,7 @@ fn the_backfill_is_idempotent() {
     assert_eq!(pending.len(), 1, "a car imported before the sheet existed");
     let p = &pending[0];
     let mut report = report::Report::default();
-    store_pending(&conn, p, &read_files(&p.dir, &p.mod_id, p.stock), &mut report).unwrap();
+    store_pending(&conn, p, &read_files(&p.stack.dirs, &p.mod_id, p.stock), &mut report).unwrap();
     assert_eq!(report.cars, 1, "counted");
     assert_eq!(
         report.fields.get("gearbox").map(|c| c.gained),
@@ -561,5 +561,159 @@ fn the_session_screen_reads_the_aids_from_the_sheet() {
     assert!(
         crate::electronics::read(&conn, "nothing").is_none(),
         "a car that does not say"
+    );
+}
+
+// --- Layers and versions (§4.3) ------------------------------------------------------
+
+const ENGINE_1_TURBO: &str = "[ENGINE_DATA]\nLIMITER=7000\n[TURBO_0]\nMAX_BOOST=1\n";
+
+fn lib_cfg(base: &Path) -> crate::config::AppConfig {
+    crate::config::AppConfig {
+        library_path: Some(base.join("lib")),
+        ..Default::default()
+    }
+}
+
+/// A physics layer is read as the game sees it: its loose file over the
+/// base's, and the base's again once the layer is switched off.
+#[test]
+fn a_physics_layer_is_read_through_and_its_removal_too() {
+    let base = crate::testutil::temp_dir("techsheet-layer");
+    let (conn, _) = managed_car(&base, "car", &gt2_ui(), &[("engine.ini", ENGINE_1_TURBO)]);
+    let cfg = lib_cfg(&base);
+    let layer = base.join("lib").join("layers").join("physics_update");
+    std::fs::create_dir_all(layer.join("data")).unwrap();
+    std::fs::write(layer.join("data").join("engine.ini"), ENGINE_2_TURBOS).unwrap();
+    let now = chrono::Local::now().to_rfc3339();
+    overlay::insert_layer(
+        &conn,
+        "L1",
+        "car",
+        "Car",
+        "Physics update",
+        &layer.to_string_lossy(),
+        None,
+        1,
+        1,
+        0,
+        &now,
+    )
+    .unwrap();
+
+    assert!(
+        refresh_active(&conn, &cfg, "car", false).unwrap(),
+        "a new layer: read again"
+    );
+    let aspiration = |conn: &Connection| value(&effective(conn, "car").unwrap(), "aspiration").unwrap().0;
+    assert_eq!(aspiration(&conn), json!("TWIN_TURBO"), "the layer's engine.ini");
+    assert_eq!(
+        row(&conn, "car").aspiration.as_deref(),
+        Some("TWIN_TURBO"),
+        "and the library's column"
+    );
+
+    overlay::set_layer_active(&conn, "L1", false).unwrap();
+    assert!(
+        refresh_active(&conn, &cfg, "car", false).unwrap(),
+        "the stack changed again"
+    );
+    assert_eq!(
+        aspiration(&conn),
+        json!("TURBO"),
+        "the base's engine.ini once the layer is off"
+    );
+
+    // Refilled in place (`layers::refill_layer`, §4.6ter): same id, new files,
+    // new date — which is what makes it a new stack.
+    overlay::set_layer_active(&conn, "L1", true).unwrap();
+    refresh_active(&conn, &cfg, "car", false).unwrap();
+    std::fs::write(layer.join("data").join("engine.ini"), ENGINE_1_TURBO).unwrap();
+    overlay::update_layer_content(&conn, "L1", "physics-v2.zip", 1, 1, "2026-09-28T10:00:00+02:00").unwrap();
+    assert!(
+        refresh_active(&conn, &cfg, "car", false).unwrap(),
+        "a refilled layer is read again"
+    );
+    assert_eq!(aspiration(&conn), json!("TURBO"), "the refilled layer's engine.ini");
+}
+
+/// The physics is read again only when the stack changed — a plain activation
+/// reads nothing — or when asked (a reindex).
+#[test]
+fn the_same_stack_is_not_read_twice_unless_asked() {
+    let base = crate::testutil::temp_dir("techsheet-same-stack");
+    let (conn, dir) = managed_car(&base, "car", &gt2_ui(), &[("engine.ini", ENGINE_1_TURBO)]);
+    let cfg = lib_cfg(&base);
+    assert!(
+        !refresh_active(&conn, &cfg, "car", false).unwrap(),
+        "read at import: nothing to do"
+    );
+
+    // A fix made on disk behind the app's back is caught by a reindex only.
+    std::fs::write(dir.join("data").join("engine.ini"), ENGINE_2_TURBOS).unwrap();
+    assert!(
+        !refresh_active(&conn, &cfg, "car", false).unwrap(),
+        "same stack, not read"
+    );
+    assert!(refresh_active(&conn, &cfg, "car", true).unwrap(), "forced");
+    assert_eq!(
+        value(&effective(&conn, "car").unwrap(), "aspiration").unwrap().0,
+        json!("TWIN_TURBO")
+    );
+}
+
+/// Another version made active: its physics, never read before, is read, and
+/// the rules re-read its tags (FICHE§6.2).
+#[test]
+fn a_version_switch_reads_the_new_version_physics_and_tags() {
+    let base = crate::testutil::temp_dir("techsheet-switch");
+    let mut ui = gt2_ui();
+    ui["tags"] = json!(["rwd"]);
+    let (conn, _) = managed_car(&base, "car", &ui, &[("engine.ini", ENGINE_1_TURBO)]);
+    let cfg = lib_cfg(&base);
+    let rules = crate::rules::default_rules();
+    crate::harmonize::harmonize_mod(&conn, &cfg, &rules, "car").unwrap();
+
+    // A second version, imported before the sheet existed: never read.
+    let v2 = base.join("lib").join("cars").join("car").join("v2");
+    let mut ui2 = gt2_ui();
+    ui2["tags"] = json!(["awd"]);
+    write_car(&v2, &ui2, &[("engine.ini", ENGINE_2_TURBOS)]);
+    let now = chrono::Local::now().to_rfc3339();
+    overlay::insert_version(
+        &conn,
+        "v2",
+        "car",
+        None,
+        None,
+        &now,
+        &v2.to_string_lossy(),
+        None,
+        "sig2",
+        &[],
+        &[],
+        &[],
+        &["awd".to_string()],
+        None,
+    )
+    .unwrap();
+    overlay::set_active_version(&conn, "car", "v2").unwrap();
+
+    // What `activate` then does: recompose (the physics), and the command the
+    // rules (`commands::activation::activate_mod`).
+    assert!(refresh_active(&conn, &cfg, "car", false).unwrap(), "v2 never read");
+    crate::harmonize::harmonize_mod(&conn, &cfg, &rules, "car").unwrap();
+    let sheet = effective(&conn, "car").unwrap();
+    assert_eq!(
+        value(&sheet, "aspiration").unwrap().0,
+        json!("TWIN_TURBO"),
+        "v2's physics"
+    );
+    assert_eq!(sheet.fallback.len(), 0);
+    let facts = store::facts(&conn, "car", "v2").unwrap();
+    assert_eq!(
+        facts.get(&("drivetrain".to_string(), Source::Rules)),
+        Some(&json!("AWD")),
+        "v2's tags, read by the rules"
     );
 }

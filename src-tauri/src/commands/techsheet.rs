@@ -50,7 +50,7 @@ pub fn spawn_backfill(app: &AppHandle) {
         };
         let mut report = crate::techsheet::report::Report::default();
         for p in &pending {
-            let facts = crate::techsheet::read_files(&p.dir, &p.mod_id, p.stock);
+            let facts = crate::techsheet::read_files(&p.stack.dirs, &p.mod_id, p.stock);
             let Ok(conn) = db.0.lock() else { return };
             if let Err(e) = crate::techsheet::store_pending(&conn, p, &facts, &mut report) {
                 log::warn!("techsheet backfill: {} not stored — {e}", p.mod_id);

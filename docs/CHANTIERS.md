@@ -830,6 +830,14 @@ de reprendre. En cas d'écart, la spec fait foi.
       - *Premier démarrage* sur la base de dev : 111 voitures gagnent
         « turbo », 176 « atmosphérique », 19 changent de transmission,
         61 gagnent « manuelle » et 38 « à palettes » — 8 s en fond (debug).
+      **Couches et versions** : la fiche lit la même pile que `compose` pose
+      dans le jeu (couches actives par priorité, puis la base), et
+      `recompose` — que traversent tout changement de couche et tout
+      changement de version — la relit. Le marqueur de lecture retient la pile
+      lue (identifiant et date d'import de chaque couche, jamais de
+      chemins — une couche regarnie en place change de date) : une simple
+      activation ne relit rien. Aucune couche voiture sur l'install de dev :
+      vérifié par les tests seulement.
       **Piège déjà payé** : le rattrapage ne relit que ce qui n'a pas été lu,
       donc une correction d'un lecteur n'atteignait que les imports suivants
       (les deux RUF RT12R, `1,495kg`, restaient à 1,5 kg). Toute correction
@@ -841,16 +849,9 @@ de reprendre. En cas d'écart, la spec fait foi.
       n'a changé, et une relecture après une correction de lecteur
       (`READER_VERSION`) n'a rien à voir avec le catalogue.
       **Ce qui reste :**
-      - *Les couches* : la fiche lit le dossier de la version, pas la pile
-        des couches actives. Aucune couche voiture sur l'install de dev ; une
-        couche de physique ne se verrait donc pas sur la fiche.
-      - *Changer de version active* ne relit pas les règles de la nouvelle :
-        leurs faits sont ceux de la dernière harmonisation (comme les colonnes
-        avant la fiche).
       - *Vitrine et export* : les tests de survie de FICHE§9.4 attendent
         `ESPACE§` et `EXPORT§`, pas encore construits. La fiche, elle, ne lit
         déjà plus aucun fichier.
-      - *Traductions* it/de/es/pt de l'espace `techsheet`.
 
 - [ ] **Corrections par mod — à faire, chantier à part.** Aujourd'hui on
       corrige d'un mod son nom, sa description, ses tags (couche 4 de
