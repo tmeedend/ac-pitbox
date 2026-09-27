@@ -533,14 +533,16 @@
       "IMPORT": "Importazione",
       "UPDATE_REPLACE": "Aggiornamento",
       "UPDATE_KEPT_BOTH": "Conservati entrambi",
-      "EXTENSION_ADDED": "Estensione"
+      "EXTENSION_ADDED": "Estensione",
+      "TECH_EDITED": "Scheda tecnica"
     },
     "imported": "da {archive}",
     "updated": "nuova versione {version}",
     "updatedNoVersion": "nuova versione",
     "replaced": "ha sostituito {old}",
     "keptBoth": "conservata separatamente da {old}",
-    "extensionAdded": "livello da {archive} ({added} aggiunti, {overwritten} sovrascritti)"
+    "extensionAdded": "livello da {archive} ({added} aggiunti, {overwritten} sovrascritti)",
+    "techEdited": "modificata ({fields})"
   },
   "modpanel": {
     "ctxOpenDetail": "Apri la scheda dettagli",
@@ -1101,5 +1103,120 @@
     "upToDate": "Tutte le mod sono aggiornate.",
     "foundCount": "{n} aggiornamento/i disponibile/i.",
     "downloadPhase": "download"
+  },
+  "techsheet": {
+    "edit": "Modifica la scheda tecnica",
+    "editing": "Modifica",
+    "mechanics": "Meccanica",
+    "electronics": "Elettronica",
+    "empty": "Nessun dato tecnico",
+    "legendDerived": "dedotto dai tag",
+    "legendEdited": "modificato da te",
+    "aidPresent": "presente",
+    "aidAbsent": "assente",
+    "aidUnknown": "sconosciuto",
+    "unknown": "sconosciuto",
+    "revert": "ripristina",
+    "cancel": "Annulla",
+    "save": "Salva",
+    "invalid": "{field}: valore non valido",
+    "rpm": "{n} giri/min",
+    "gears": "{count} marce",
+    "gearsOne": "1 marcia",
+    "tank": "serbatoio {n} L",
+    "range": "autonomia {n} km",
+    "unit": {
+      "rpm": "giri/min"
+    },
+    "row": {
+      "engine": "Motore",
+      "transmission": "Trasmissione",
+      "fuel": "Carburante",
+      "origin": "Origine"
+    },
+    "source": {
+      "user": "modificato da te",
+      "physics": "letto nella fisica del mod",
+      "ui": "letto in ui_car.json",
+      "table": "dalla tabella dei contenuti originali del gioco",
+      "rules": "dedotto dai tag",
+      "computed": "calcolato da peso e potenza",
+      "absent": "assente dai file del mod"
+    },
+    "field": {
+      "power": "Potenza",
+      "torque": "Coppia",
+      "weight": "Peso",
+      "pwratio": "Rapporto peso/potenza",
+      "topspeed": "Velocità max",
+      "acceleration": "0-100",
+      "engine_config": "Architettura",
+      "aspiration": "Sovralimentazione",
+      "engine_pos": "Posizione",
+      "rpm_limit": "Regime max",
+      "drivetrain": "Ruote motrici",
+      "gearbox": "Cambio",
+      "gears": "Marce",
+      "fuel_tank": "Serbatoio",
+      "range": "Autonomia",
+      "country": "Paese",
+      "year": "Anno",
+      "aid": {
+        "abs": "ABS",
+        "tc": "Controllo di trazione",
+        "edl": "Bloccaggio elettronico (EDL)",
+        "drs": "DRS",
+        "kers": "KERS",
+        "ers": "ERS",
+        "4ws": "Ruote posteriori sterzanti",
+        "active_arb": "Barre antirollio attive",
+        "ebb": "Ripartitore di frenata elettronico"
+      }
+    },
+    "value": {
+      "engine_config": {
+        "I4": "4 cilindri in linea",
+        "I6": "6 cilindri in linea",
+        "FLAT": "motore boxer",
+        "ROTARY": "rotativo",
+        "ELECTRIC": "elettrico",
+        "HYBRID": "ibrido",
+        "DIESEL": "diesel"
+      },
+      "aspiration": {
+        "NA": "aspirato",
+        "TURBO": "turbo",
+        "TWIN_TURBO": "biturbo",
+        "SUPERCHARGED": "compressore"
+      },
+      "engine_pos": {
+        "FRONT": "motore anteriore",
+        "MID": "motore centrale",
+        "REAR": "motore posteriore"
+      },
+      "drivetrain": {
+        "RWD": "trazione posteriore",
+        "FWD": "trazione anteriore",
+        "AWD": "trazione integrale"
+      },
+      "gearbox": {
+        "MANUAL": "manuale",
+        "SEQUENTIAL": "sequenziale",
+        "SEMIAUTO": "semiautomatico",
+        "DCT": "a doppia frizione",
+        "AUTO": "automatico",
+        "PADDLES": "con paddle"
+      }
+    },
+    "report": {
+      "title": "Schede tecniche rilette",
+      "cars": "{count} auto lette nella loro fisica",
+      "gained": "{count} compilate",
+      "changed": "{count} modificate",
+      "lost": "{count} svuotate",
+      "gainedOne": "1 compilata",
+      "changedOne": "1 modificata",
+      "lostOne": "1 svuotata"
+    }
   }
 }
