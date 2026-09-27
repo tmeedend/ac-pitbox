@@ -253,6 +253,7 @@ Un test liste les tables de la base (`sqlite_master`) et **échoue** si l'une d'
 ## 8.4 Tests
 
 - **Aller-retour** : une bibliothèque de fixture (mods complets et en vitrine, contenu d'origine annoté, un mod non géré, couches, profils, grilles, règles de l'utilisateur) ; export ; import dans une installation vide ; toutes les saisies et décisions sont identiques, tous les mods sont en vitrine, aucun `.kn5` ni `.acd` n'est dans le zip.
+- **Fiche technique** : après l'import, `techsheet::effective` rend pour chaque voiture exactement la même fiche qu'avant l'export, courbe, électronique et corrections comprises, sans lire aucun fichier (`FICHE§9.4`).
 - **Rien de la machine** : le zip ne contient aucune chaîne égale à un chemin absolu de la configuration d'origine.
 - **Refus** : installation non vide ; export d'une version plus récente de Pit Box ; zip sans manifeste.
 - **Export ancien** : une base de fixture privée des colonnes récentes s'importe, et les migrations les ajoutent.

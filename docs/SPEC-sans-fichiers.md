@@ -435,7 +435,7 @@ Trois points qui auraient fait échouer le concept sans bruit :
 
 - **Liste blanche** : dossiers de voiture et de circuit de fixture ; après la mise en vitrine, exactement les fichiers attendus restent (**aucun** `.acd`, **aucun** aperçu de livrée), l'image de vitrine fait moins de 100 Ko, et le manifeste liste exactement le reste avec les tailles.
 - **Rien ne se perd** : un mod avec nom repris, note, tags manuels, favori, lien Wikipédia et rattachement de média ; après mise en vitrine, chaque valeur est identique. Après suppression complète, aucune ne reste, sauf `usage`, `sub_mods` et `wiki_link`.
-- **Fiche technique** : après la mise en vitrine, `techsheet::effective` rend exactement la même fiche qu'avant, courbe et électronique comprises.
+- **Fiche technique** : après la mise en vitrine, `techsheet::effective` rend exactement la même fiche qu'avant, courbe, électronique et corrections de l'utilisateur (`tech_user`) comprises (`FICHE§9.4`).
 - **Image de carte** : une voiture avec vignette régénérée garde **cette** image en vitrine.
 - **Aller-retour** : importer, mettre en vitrine, réimporter la même archive → `rehydrate`, même `version_id`, fichiers identiques octet pour octet, saisies intactes.
 - **Version différente** : réimporter une autre version → `update`, l'ancienne reste en vitrine.

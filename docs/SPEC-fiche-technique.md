@@ -7,6 +7,8 @@
 > **Étiquette de renvoi : `FICHE§`.** Une maquette accompagne cette spec : `maquettes/pitbox-fiche-technique.html` (trois voitures d'origine, bascule vitrine, mode édition). Elle juge la disposition et les gestes, pas l'UI : couleurs et composants viennent de l'app. En cas d'écart, la spec gagne.
 >
 > **Mesures du 2026-09-27** sur l'install de référence : `overlay.sqlite` (324 voitures dont 178 d'origine), et la physique déchiffrée de **104 voitures** (100 d'origine, 4 mods). Les autres mods n'ont pas pu être lus par l'outil de mesure (fichiers en hardlink), **pas** par Pit Box : la mesure est à rejouer sur eux à l'implémentation (§10).
+>
+> **Livrée le 2026-09-27** (`src-tauri/src/techsheet/`). La mesure de §10 a été refaite sur 397 voitures et ses résultats y sont consignés. Les tests de §9.4 qui supposent la vitrine et l'export sont portés par ces chantiers-là (`ESPACE§9.4`, `EXPORT§8.4`), qui ne sont pas encore construits.
 
 ---
 
@@ -268,6 +270,12 @@ Un module **`techsheet.rs`** :
 
 **La courbe de puissance et de couple** entre aussi en base (`field = 'power_curve'`, `'torque_curve'`, source `ui`) : c'est ce qui la garde pour un mod en vitrine et dans un export, où le `ui_car.json` n'est plus lu (R1).
 
+**Les couches** (`SPEC.md` §4.3) : les fichiers d'une voiture se lisent à travers la même pile que celle que `compose` pose dans le jeu — couches actives par priorité, puis la base —, fichier par fichier : un `data/<fichier>` du dossier le plus haut qui en a un, sinon l'entrée du `data.acd` le plus haut ; le `ui_car.json` entier du dossier le plus haut. `compose::recompose`, par où passent tout changement de couche et tout changement de version active, relit la fiche (`techsheet::refresh_active`) ; au changement de version, les tags de la nouvelle repassent aux règles (`harmonize::harmonize_mod`).
+
+**Le marqueur de lecture** (`_recorded`) dit ce qui a lu une version et à travers quoi : `{"reader": N, "stack": ["<couche>@<date d'import>", …]}`. Une relecture n'a lieu que si l'un des deux a changé — une simple activation ne relit rien —, et une couche regarnie en place, qui garde son identifiant, change de date. Jamais de chemin : la table part dans un export (`EXPORT§4.1`).
+
+**`READER_VERSION` s'incrémente à chaque correction d'un lecteur** (`physics.rs`, `ui.rs`) : le rattrapage du démarrage ne relit que ce qui n'a pas été lu par les lecteurs du moment. Sans cela, une correction n'atteint que les imports suivants — piège payé une fois : les deux RUF RT12R, `1,495kg`, restaient à 1,5 kg.
+
 **`electronics.rs`** ne lit plus le fichier : il demande `effective`. **`steering.rs`** (braquage, pour l'aperçu 3D) peut garder sa lecture, l'aperçu 3D n'existant que pour un mod complet ; la spec vitrine (`ESPACE§3.4`) n'a donc plus à copier que la fiche, ce que R1 fait déjà.
 
 ## 9.2 Frontend
@@ -281,29 +289,32 @@ Un module **`techsheet.rs`** :
 
 Au démarrage, en fond : pour chaque version et chaque voiture d'origine sans ligne dans `tech_facts`, lire la physique et le `ui_car.json`, écrire les faits, recalculer la valeur effective. Idempotent (plus rien à faire au démarrage suivant). Le déchiffrement d'un `data.acd` coûte quelques millisecondes : quelques secondes pour une bibliothèque de 300 voitures.
 
-**Un changement à surveiller** : la valeur effective remplaçant les colonnes de `mods`, des voitures vont **changer de transmission ou d'aspiration** dans les filtres (les 15 turbos que les règles ne voyaient pas, par exemple). C'est l'objet même de la spec, mais le rapport de mise à jour des règles (`REGLES§`) doit le dire, en nombre : « 15 voitures ont désormais une aspiration, lue dans leur physique ».
+**Un changement à surveiller** : la valeur effective remplaçant les colonnes de `mods`, des voitures vont **changer de transmission ou d'aspiration** dans les filtres (les 15 turbos que les règles ne voyaient pas, par exemple). C'est l'objet même de la spec, et il se dit, en nombre : **une notification à part**, « Fiches techniques relues », donne par colonne de la bibliothèque combien de voitures ont gagné, changé ou perdu une valeur (`techsheet-report.json`, gardé jusqu'à ce qu'on le ferme). Pas dans le rapport de mise à jour des règles (`REGLES§`), comme d'abord prévu : aucune règle n'a changé, et une relecture après une correction de lecteur n'a rien à voir avec le catalogue. Mesuré au premier démarrage sur l'install de dev : 111 voitures gagnent « turbo », 176 « atmosphérique », 19 changent de transmission, 61 gagnent « manuelle » et 38 « à palettes ».
 
 ## 9.4 Tests
 
 - **Physique** : sur des fichiers de fixture reprenant les cas de §2.2 : hybride `RWD` + `[FRONT_MOTORS]` → intégrale ; `drs.ini` vide → pas de DRS ; `drs.ini` avec `[WING_3]` → DRS ; `TRACTION_CONTROL PRESENT=2` → présent ; deux `[TURBO_n]` → biturbo.
 - **`ui_car.json`** : `--s 0-100` → absent ; `500+Nm` → 500 avec « + » ; `range: 195` sans unité ; chaîne illisible gardée telle quelle.
 - **Ordre des sources** : une saisie bat la physique, qui bat le `ui`, qui bat les tags ; `NULL` saisi force l'inconnu.
-- **Survie** : une saisie survit à une mise à jour du mod, à une réharmonisation, à une mise en vitrine et à un export suivi d'un import.
+- **Survie** : une saisie survit à une mise à jour du mod, à une réharmonisation, à une mise en vitrine et à un export suivi d'un import (ces deux derniers : `ESPACE§9.4`, `EXPORT§8.4`).
 - **Cache** : après une saisie « intégrale », le filtre transmission de la bibliothèque la trouve.
 - **Pays** : un pays saisi survit à une réharmonisation et à un changement d'alias ; l'index par pays range la voiture sous lui.
 - **Biturbo** : deux sections `[TURBO_n]` donnent « biturbo » sans autre signal, une seule « turbo » (§10).
-- **Vitrine** : un mod en vitrine rend exactement la même fiche, courbe comprise, sans lire aucun fichier.
+- **Vitrine** : un mod en vitrine rend exactement la même fiche, courbe comprise, sans lire aucun fichier (`ESPACE§9.4`).
+- **Couches** : une couche qui apporte un `engine.ini` est lue devant la base, puis plus du tout une fois éteinte ; une couche regarnie en place est relue ; la même pile n'est pas relue deux fois.
 
 ---
 
-# 10. À mesurer à l'implémentation
+# 10. Mesuré à l'implémentation
 
 **Qui mesure, et où.** La mesure de §2 a été faite de l'extérieur, et l'outil utilisé refuse les fichiers en hardlink : les mods gérés par Pit Box lui étaient illisibles. **Pit Box n'a pas cette limite.** La mesure se refait donc **au début de l'implémentation, sur la machine de développement, par le code** : une commande de développement (ou un test ignoré par défaut) qui parcourt toute la bibliothèque et le contenu d'origine, applique les lecteurs de `techsheet.rs`, et écrit les décomptes de §2.2 et §5 dans un fichier. Elle resservira à chaque règle de lecture ajoutée. Les règles de lecture ne se figent qu'après.
 
-- **Les mods.** L'échantillon ne compte que 4 mods lisibles (RSS Formula 2013, Mach 1 1970, Diablo GTR, Silvia S15). Les mods ont souvent une physique moins régulière que celle de Kunos.
-- **Le poids** tiré de `TOTALMASS` (§2.3).
-- **L'unité de l'autonomie** (§4).
-- **Un compresseur** apparaît-il comme un `[TURBO_n]` dans la physique ? Si oui, la physique dira « suralimenté » et les tags préciseront « compresseur ».
+**Mesuré le 2026-09-27 sur 397 voitures** (217 mods, 180 d'origine) par `techsheet::measure` (tests ignorés par défaut, rejouables) :
+
+- **Les mods.** Physique lisible sur 395 voitures (les deux autres : un dossier sans physique). 18 désaccords de transmission entre physique et tags, **tous du côté de la physique** à la vérification (Trans-Am VRC en propulsion taggées `awd`, Subaru 22B intégrale taggée `rwd`…) ; les hybrides à moteurs avant sont lus intégrales, comme §2.2 le demandait.
+- **Le poids** tiré de `TOTALMASS` (§2.3) : `TOTALMASS − 75` ne vaut le poids du `ui_car.json` que sur 162 voitures sur 390 (0 sur 53, 80 sur 30, le reste épars). **Pas de repli** sur la physique pour le poids.
+- **L'unité de l'autonomie** (§4) : 1,3 à 2,9 par litre de réservoir, moins sur la version plus puissante d'une même voiture (BMW 1M : 80, 1M Stage 3 : 69) — des km à l'allure de course. **Écrite en km.**
+- **Un compresseur** n'apparaît **pas** comme un `[TURBO_n]` : les 16 voitures que les tags disent à compresseur n'en ont aucun. Les tags gagnent donc quand la physique dit « pas de turbo » ; un tag « turbo » que la physique dément (Cayman GT4, atmosphérique) perd.
 - **Les « twin turbo ».** Deux sections `[TURBO_n]` ne veulent pas forcément dire deux turbos en parallèle : un auteur peut modéliser ainsi un turbo séquentiel ou deux étages. **Tranché par la mesure (2026-09-27, 397 voitures)** : 105 voitures ont deux sections ou plus, et presque toutes sont de vrais biturbos (F40, GT-R, M4, 488, McLaren V8, RX-7 FD à turbos séquentiels…) ; aucun tag ne dit « twin turbo » et seuls deux noms le disent, si bien qu'exiger un signal confirmant aurait écrit « turbo » sur toutes. **Deux sections ou plus donnent donc « biturbo »**, l'auteur qui modélise un turbo à deux étages étant le coût accepté.
 
 ---

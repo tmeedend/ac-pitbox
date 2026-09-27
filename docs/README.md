@@ -142,8 +142,8 @@ fait — en cas d'écart, la spec fait foi.
   (transmission, turbo, rapports, réservoir), affiche l'**électronique**
   (ABS, antipatinage, EDL, DRS, KERS, ERS) et devient **éditable**. Mesures
   sur 104 voitures, refaites sur 397. Maquette :
-  `maquettes/pitbox-fiche-technique.html`. **Livrée** ; ce qui reste est dans
-  `CHANTIERS.md`.
+  `maquettes/pitbox-fiche-technique.html`. **Livrée** ; ses tests en vitrine et
+  à l'export attendent `ESPACE§` et `EXPORT§`.
 - **`SPEC-taxonomies.md`** (`TAXO§`) — marques, pays et familles de catégorie
   deviennent des **termes** (nom canonique, alias, emblème), curés dans trois
   onglets de l'Atelier. **Seule la table des familles est livrée** (pour
