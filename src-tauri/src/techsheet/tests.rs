@@ -477,6 +477,16 @@ fn the_backfill_is_idempotent() {
         pending_cars(&conn, &cfg).unwrap().is_empty(),
         "nothing left the second time"
     );
+
+    // A car read by an older reader is read again: a fixed reading reaches
+    // the cars already in the base, not only the next imports.
+    conn.execute("UPDATE tech_facts SET value = 'true' WHERE field = '_recorded'", [])
+        .unwrap();
+    assert_eq!(
+        pending_cars(&conn, &cfg).unwrap().len(),
+        1,
+        "read by version 1, read again"
+    );
 }
 
 /// Deleting a version takes its facts; a complete deletion takes the

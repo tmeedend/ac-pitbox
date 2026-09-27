@@ -157,11 +157,13 @@ pub(super) fn has_anything(conn: &Connection, mod_id: &str) -> rusqlite::Result<
     )
 }
 
-/// Whether the files of this version were read (FICHE§9.3).
+/// Whether the files of this version were read (FICHE§9.3), by the current
+/// readers: a car read by an older one is to be read again.
 pub(super) fn has_file_facts(conn: &Connection, mod_id: &str, version: &str) -> rusqlite::Result<bool> {
     conn.query_row(
-        "SELECT EXISTS(SELECT 1 FROM tech_facts WHERE mod_id = ?1 AND version_id = ?2 AND field = ?3)",
-        params![mod_id, version, field::RECORDED],
+        "SELECT EXISTS(SELECT 1 FROM tech_facts
+             WHERE mod_id = ?1 AND version_id = ?2 AND field = ?3 AND value = ?4)",
+        params![mod_id, version, field::RECORDED, super::READER_VERSION.to_string()],
         |r| r.get(0),
     )
 }
@@ -191,8 +193,8 @@ pub struct Pending {
     pub stock: bool,
 }
 
-/// Every car of the base whose active files have no facts, with where they
-/// are. A car whose folder cannot be found is skipped — and asked about again
+/// Every car of the base whose active files have no facts from the current
+/// readers, with where they are. A car whose folder cannot be found is skipped — and asked about again
 /// at the next start, which is right: its disk may simply not be mounted.
 pub fn pending_cars(conn: &Connection, cfg: &crate::config::AppConfig) -> rusqlite::Result<Vec<Pending>> {
     let mut out = Vec::new();

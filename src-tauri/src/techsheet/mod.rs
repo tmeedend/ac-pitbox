@@ -116,8 +116,18 @@ pub mod field {
     pub const EBB: &str = "aid.ebb";
     /// Marks a version as read, whatever the files said: what makes the
     /// backfill idempotent for a car whose files yield nothing (FICHE§9.3).
+    /// Its value is the [`super::READER_VERSION`] that read it.
     pub const RECORDED: &str = "_recorded";
 }
+
+/// The version of the readers (`physics`, `ui`). **Bump it whenever a
+/// reader changes what it reads**: every car recorded by an older one is read
+/// again by the next start's backfill, so a fixed reading reaches the cars
+/// already in the base, not only the ones imported after.
+///
+/// 1 — first release (stored as `true`).
+/// 2 — a thousands separator is no decimal point (`1,495kg`).
+pub const READER_VERSION: u32 = 2;
 
 /// The key figures, their fixed unit when the user types them (FICHE§8).
 const KEY_FIGURES: [(&str, &str); 6] = [
@@ -295,7 +305,7 @@ pub fn read_files(dir: &Path, car_id: &str, stock: bool) -> Vec<Fact> {
             facts.push(fact(field::YEAR, Source::Table, json!(y)));
         }
     }
-    facts.push(fact(field::RECORDED, Source::Physics, json!(true)));
+    facts.push(fact(field::RECORDED, Source::Physics, json!(READER_VERSION)));
     facts
 }
 

@@ -830,6 +830,11 @@ de reprendre. En cas d'écart, la spec fait foi.
       - *Premier démarrage* sur la base de dev : 111 voitures gagnent
         « turbo », 176 « atmosphérique », 19 changent de transmission,
         61 gagnent « manuelle » et 38 « à palettes » — 8 s en fond (debug).
+      **Piège déjà payé** : le rattrapage ne relit que ce qui n'a pas été lu,
+      donc une correction d'un lecteur n'atteignait que les imports suivants
+      (les deux RUF RT12R, `1,495kg`, restaient à 1,5 kg). Toute correction
+      de `techsheet/physics.rs` ou `ui.rs` **incrémente `READER_VERSION`** : le
+      démarrage suivant relit alors toutes les voitures.
       **Ce qui reste :**
       - *Les couches* : la fiche lit le dossier de la version, pas la pile
         des couches actives. Aucune couche voiture sur l'install de dev ; une
