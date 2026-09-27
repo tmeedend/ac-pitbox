@@ -462,6 +462,12 @@ impl Container {
         Some(Self { entries, key })
     }
 
+    /// Whether the container holds this entry. Some files say what they say
+    /// by existing (`ctrl_ebb.ini`, FICHE§5).
+    pub fn has(&self, entry: &str) -> bool {
+        self.entries.iter().any(|(name, _)| name.eq_ignore_ascii_case(entry))
+    }
+
     /// One entry, decrypted with the container's key. An entry that is empty
     /// in the source decrypts to an empty string, which is an answer (a
     /// `drs.ini` with nothing in it, FICHE§2.2), not a failure.

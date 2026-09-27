@@ -52,23 +52,16 @@ pub fn track_sun(
     )
 }
 
-/// Ce que la voiture avait d'usine comme aides (SESSION§3) : ABS et antipatinage,
-/// lus dans son `electronics.ini`.
+/// What the car had as aids from the factory (SESSION§3): ABS and traction
+/// control, as its tech sheet has them (FICHE§5).
 ///
-/// `None` dès que la voiture ne le dit pas — dossier introuvable, `data.acd`
-/// illisible, sections absentes (dix voitures de l'install de référence). Ce
-/// n'est pas une erreur : l'écran n'affiche alors aucune ligne, plutôt qu'une
-/// ligne au conditionnel.
+/// `None` as soon as the car does not say — sections absent (ten cars of the
+/// reference install), or physics not read. Not an error: the screen then
+/// shows no line, rather than a hedged one.
 #[tauri::command]
-pub fn car_factory_assists(
-    app: AppHandle,
-    db: State<Db>,
-    car_id: String,
-) -> Option<crate::electronics::FactoryAssists> {
-    let cfg = crate::config::load(&app);
+pub fn car_factory_assists(db: State<Db>, car_id: String) -> Option<crate::electronics::FactoryAssists> {
     let conn = db.0.lock().ok()?;
-    let dir = crate::preview::car_dir(&conn, &cfg, &car_id)?;
-    crate::electronics::read(&dir, &car_id)
+    crate::electronics::read(&conn, &car_id)
 }
 
 /// Construit le preset Quick Drive et lance la session via Content Manager (SESSION§2).

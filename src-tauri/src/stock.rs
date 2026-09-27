@@ -212,6 +212,11 @@ pub fn index_stock_content(
             .map_err(|e| e.to_string())?;
             overlay::set_active_version(conn, &id, &vid).map_err(|e| e.to_string())?;
 
+            // The tech sheet (FICHE§6.2), read where the game reads: `source`.
+            if matches!(kind, ModKind::Car) {
+                crate::techsheet::record(conn, &id, "", &source, true).map_err(|e| e.to_string())?;
+            }
+
             // Harmonisation (tags règle, catégorie, classe, specs dérivées, pays).
             let class = ui.class.clone().unwrap_or_default();
             let h = harmonize::compute(

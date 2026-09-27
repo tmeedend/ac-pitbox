@@ -78,11 +78,20 @@ pub fn store(
         &h.categories,
         country.as_deref(),
         &h.tags_from_rule,
-        h.drivetrain.as_deref(),
-        h.engine_pos.as_deref(),
-        h.aspiration.as_deref(),
-        h.engine_config.as_deref(),
-        h.gearbox.as_deref(),
+    )?;
+    // A car's spec fields and country are one source among others on its tech
+    // sheet (FICHE§6.2), which then rewrites the spec columns from all of them.
+    if is_car(conn, id)? {
+        crate::techsheet::store_harmonized(conn, id, h, native_country, rules)?;
+    }
+    Ok(())
+}
+
+fn is_car(conn: &Connection, id: &str) -> rusqlite::Result<bool> {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM mods WHERE id_interne = ?1 AND kind = 'Car')",
+        [id],
+        |r| r.get(0),
     )
 }
 

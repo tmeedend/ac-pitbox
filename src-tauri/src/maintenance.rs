@@ -809,6 +809,13 @@ pub fn reindex_mod(conn: &Connection, cfg: &AppConfig, id: &str, recalc_size: bo
             overlay::update_version_size(conn, &v.id, size_bytes).map_err(|e| e.to_string())?;
         }
 
+        // The tech sheet reads the files again too (FICHE§6.2): a reindex is
+        // what a physics fix made outside the app is caught up by.
+        if kind == ModKind::Car {
+            let key = crate::techsheet::version_key(m.is_stock, Some(&v.id));
+            crate::techsheet::record(conn, id, &key, dir, m.is_stock).map_err(|e| e.to_string())?;
+        }
+
         if m.active_version_id.as_deref() == Some(v.id.as_str()) {
             // Le dossier voyage avec le `UiInfo` : le nom d'un circuit se
             // recalcule sur l'ensemble de ses layouts (§5bis.3), donc sur

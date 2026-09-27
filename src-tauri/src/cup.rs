@@ -537,6 +537,7 @@ mod tests {
             notes_user: None,
             published_at: None,
             size_bytes: None,
+            tech_marks: Default::default(),
         }
     }
 

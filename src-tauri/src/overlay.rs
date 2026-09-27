@@ -73,6 +73,8 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         "description_user TEXT",
         // Mod installé hors Pit Box, trouvé dans content/ à l'indexation (§8.2).
         "is_unmanaged INTEGER NOT NULL DEFAULT 0",
+        // Where the cached spec columns came from, field → source (FICHE§6.3).
+        "tech_marks TEXT NOT NULL DEFAULT '{}'",
     ];
     for col in cols {
         // Ignore l'erreur « duplicate column » si la colonne existe déjà.
@@ -167,6 +169,7 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
             aspiration        TEXT,
             engine_config     TEXT,
             gearbox           TEXT,
+            tech_marks        TEXT NOT NULL DEFAULT '{}', -- source of the five above (FICHE§6.3)
             source_pack       TEXT,                   -- pack d'origine (§4.4)
             source_url        TEXT,                   -- URL d'origine (§4.4)
             is_stock          INTEGER NOT NULL DEFAULT 0, -- indexé depuis content/ (§8.1)
@@ -459,6 +462,32 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
             PRIMARY KEY (entity_id, lang)
         );
 
+        -- The tech sheet (FICHE§6.1). What the sources say, recomputed and
+        -- never edited: per version, since an update may change the physics
+        -- ('' for the game's own content and for what the rules settle).
+        -- Every source is kept, not only the winner, so the edit mode can say
+        -- where a value comes from and "revert" knows where to go back to.
+        CREATE TABLE IF NOT EXISTS tech_facts (
+            mod_id     TEXT NOT NULL REFERENCES mods(id_interne) ON DELETE CASCADE,
+            version_id TEXT NOT NULL DEFAULT '',
+            field      TEXT NOT NULL,
+            source     TEXT NOT NULL,          -- 'physics' | 'ui' | 'table' | 'rules'
+            value      TEXT NOT NULL,          -- JSON
+            PRIMARY KEY (mod_id, version_id, field, source)
+        );
+
+        -- What the user decided, never recomputed (FICHE R6). **No foreign
+        -- key, deliberately**, like `wiki_link`: a decision survives a
+        -- deletion followed by a reimport. A complete deletion removes it
+        -- explicitly (`delete_mod`).
+        CREATE TABLE IF NOT EXISTS tech_user (
+            mod_id    TEXT NOT NULL,
+            field     TEXT NOT NULL,
+            value     TEXT,                    -- JSON; NULL = forced "unknown"
+            edited_at TEXT NOT NULL,
+            PRIMARY KEY (mod_id, field)
+        );
+
         CREATE TABLE IF NOT EXISTS wiki_no_match (
             mod_key      TEXT PRIMARY KEY,
             attempted_at TEXT NOT NULL
@@ -563,6 +592,10 @@ pub struct ModRow {
     /// `None` tant qu'aucune n'a été calculée (mod importé avant cette
     /// fonctionnalité, à rattraper via « Réindexer » + recalcul de taille).
     pub size_bytes: Option<i64>,
+    /// Where the five spec fields above come from, when it is worth a sign
+    /// (R5 of FICHE§3): `"rules"` for a value deduced from the tags, `"user"`
+    /// for a correction. Absent means read in the mod's own files.
+    pub tech_marks: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -746,9 +779,13 @@ pub fn set_active_version(conn: &Connection, mod_id: &str, version_id: &str) -> 
     Ok(())
 }
 
-/// Écrit le résultat d'harmonisation (§5) dans l'overlay. brand/country et les
-/// specs ne sont écrasés que si une valeur est fournie (préserve les complétions
-/// manuelles) ; tags_from_rule/car_class/category reflètent toujours les règles.
+/// Écrit le résultat d'harmonisation (§5) dans l'overlay. brand/country ne sont
+/// écrasés que si une valeur est fournie ; tags_from_rule/car_class/category
+/// reflètent toujours les règles.
+///
+/// The five spec fields (drivetrain, aspiration…) are no longer written here:
+/// for a car they are the cache of the tech sheet (FICHE§6.3), rewritten by
+/// `techsheet::refresh_cache` from every source, the rules being one of them.
 #[allow(clippy::too_many_arguments)]
 pub fn update_harmonization(
     conn: &Connection,
@@ -759,11 +796,6 @@ pub fn update_harmonization(
     categories: &[String],
     country: Option<&str>,
     tags_from_rule: &[String],
-    drivetrain: Option<&str>,
-    engine_pos: Option<&str>,
-    aspiration: Option<&str>,
-    engine_config: Option<&str>,
-    gearbox: Option<&str>,
 ) -> rusqlite::Result<()> {
     conn.execute(
         r#"UPDATE mods SET
@@ -772,12 +804,7 @@ pub fn update_harmonization(
                category = ?4,
                categories = ?5,
                country = COALESCE(?6, country),
-               tags_from_rule = ?7,
-               drivetrain = COALESCE(?8, drivetrain),
-               engine_pos = COALESCE(?9, engine_pos),
-               aspiration = COALESCE(?10, aspiration),
-               engine_config = COALESCE(?11, engine_config),
-               gearbox = COALESCE(?12, gearbox)
+               tags_from_rule = ?7
            WHERE id_interne = ?1"#,
         params![
             id,
@@ -787,11 +814,6 @@ pub fn update_harmonization(
             serde_json::to_string(categories).unwrap_or_else(|_| "[]".into()),
             country,
             serde_json::to_string(tags_from_rule).unwrap_or_else(|_| "[]".into()),
-            drivetrain,
-            engine_pos,
-            aspiration,
-            engine_config,
-            gearbox,
         ],
     )?;
     Ok(())
@@ -833,11 +855,9 @@ pub fn set_mod_field(conn: &Connection, id: &str, field: &str, value: Option<&st
         "category" => "category",
         "car_class" => "car_class",
         "country" => "country",
-        "drivetrain" => "drivetrain",
-        "engine_pos" => "engine_pos",
-        "aspiration" => "aspiration",
-        "engine_config" => "engine_config",
-        "gearbox" => "gearbox",
+        // Not drivetrain, aspiration, gearbox, engine_config, engine_pos: they
+        // are the tech sheet's cache (FICHE§6.3), a write here would be undone
+        // at the next refresh. A correction goes through `techsheet::save_user`.
         // Saisies libres de l'utilisateur (§5bis.3) : jamais écrites dans le
         // `ui_*.json` du mod (règle d'or n°1), donc conservées quand l'auteur
         // publie une mise à jour.
@@ -869,8 +889,18 @@ const MOD_SELECT: &str = r#"
            -- pour que TOUT ce qui affiche un mod en profite d'un coup — liste,
            -- fiche, sélecteur de session, adversaires, export.
            COALESCE(m.display_name_user, m.display_name) AS display_name,
-           m.year, m.car_class,
-           m.category, m.country, m.is_favorite, m.active_version_id,
+           -- Year and country as the user corrected them on the tech sheet
+           -- (FICHE§8): resolved here, like the name, so the index, the
+           -- filters and the columns follow the correction without a cache.
+           COALESCE((SELECT json_extract(u.value, '$') FROM tech_user u
+                     WHERE u.mod_id = m.id_interne AND u.field = 'year' AND u.value IS NOT NULL),
+                    m.year) AS year,
+           m.car_class,
+           m.category,
+           COALESCE((SELECT json_extract(u.value, '$') FROM tech_user u
+                     WHERE u.mod_id = m.id_interne AND u.field = 'country' AND u.value IS NOT NULL),
+                    m.country) AS country,
+           m.is_favorite, m.active_version_id,
            -- Pas de date d'ajout pour le contenu de base : voir ModRow.created_at.
            CASE WHEN m.is_stock THEN NULL ELSE m.created_at END AS created_at,
            m.tags_from_rule, m.tags_manual,
@@ -903,7 +933,8 @@ const MOD_SELECT: &str = r#"
            -- qu'il faut montrer à qui hésite à revenir en arrière.
            m.display_name AS display_name_file,
            m.is_unmanaged,
-           m.notes_user
+           m.notes_user,
+           m.tech_marks
     FROM mods m
 "#;
 
@@ -951,6 +982,7 @@ fn map_mod(row: &rusqlite::Row) -> rusqlite::Result<ModRow> {
         display_name_file: row.get(33)?,
         is_unmanaged: row.get::<_, i64>(34)? != 0,
         notes_user: row.get(35)?,
+        tech_marks: serde_json::from_str(&row.get::<_, String>(36)?).unwrap_or_default(),
     })
 }
 
@@ -1022,6 +1054,8 @@ pub fn get_version(conn: &Connection, version_id: &str) -> rusqlite::Result<Opti
 /// `maintenance::delete_version` — l'overlay ne touche jamais au disque.
 pub fn delete_version(conn: &Connection, version_id: &str) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM versions WHERE id = ?1", params![version_id])?;
+    // What its files said about the car (FICHE§6.1) goes with it.
+    conn.execute("DELETE FROM tech_facts WHERE version_id = ?1", params![version_id])?;
     Ok(())
 }
 
@@ -1166,6 +1200,9 @@ pub fn delete_mod(conn: &Connection, id: &str) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM history WHERE mod_id = ?1", [id])?;
     conn.execute("DELETE FROM extra_links WHERE mod_id = ?1", [id])?;
     clear_forced_extras(conn, id)?;
+    // The tech sheet's corrections have no foreign key, on purpose (FICHE§6.1):
+    // a complete deletion is the one gesture that removes them.
+    conn.execute("DELETE FROM tech_user WHERE mod_id = ?1", [id])?;
     conn.execute("DELETE FROM mods WHERE id_interne = ?1", [id])?;
     Ok(())
 }
@@ -1613,6 +1650,10 @@ fn delete_all_stock(conn: &Connection) -> rusqlite::Result<usize> {
 pub fn clear_stock(conn: &Connection) -> rusqlite::Result<usize> {
     conn.execute(
         "DELETE FROM history WHERE mod_id IN (SELECT id_interne FROM mods WHERE is_stock = 1)",
+        [],
+    )?;
+    conn.execute(
+        "DELETE FROM tech_user WHERE mod_id IN (SELECT id_interne FROM mods WHERE is_stock = 1)",
         [],
     )?;
     let n = conn.execute("DELETE FROM mods WHERE is_stock = 1", [])?;
@@ -2532,8 +2573,9 @@ mod tests {
     /// Columns `migrate` adds, each paired with a listing that reads it. Used
     /// by the migration test below to build an "old" database out of the
     /// current one.
-    const ADDED_LATER: [(&str, &str); 4] = [
+    const ADDED_LATER: [(&str, &str); 5] = [
         ("mods", "is_unmanaged"),
+        ("mods", "tech_marks"),
         ("layers", "notes_user"),
         ("sub_mods", "author"),
         ("other_mods", "attachment_user"),

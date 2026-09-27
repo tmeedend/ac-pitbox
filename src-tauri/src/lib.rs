@@ -76,6 +76,7 @@ mod submods;
 mod sun;
 mod survey;
 mod taxonomy;
+mod techsheet;
 #[cfg(test)]
 mod testutil;
 mod thumbnails;
@@ -262,6 +263,9 @@ pub fn run() {
             }
 
             app.manage(Db(std::sync::Mutex::new(conn)));
+            // The tech sheet of every car never read (FICHE§9.3), once the
+            // base is shared: in the background, the lock taken per car.
+            commands::techsheet::spawn_backfill(app.handle());
             // Drapeau d'annulation d'un import en cours (§4.2bis).
             app.manage(commands::import::ImportControl::default());
             app.manage(commands::bulk_ops::BulkControl::default());
@@ -536,6 +540,7 @@ pub fn run() {
             commands::library::set_favorite,
             commands::library::set_manual_tags,
             commands::library::set_mod_field,
+            commands::techsheet::save_tech_sheet,
             commands::music::get_music_config,
             commands::music::save_music_config,
             commands::music::get_default_music_folders,

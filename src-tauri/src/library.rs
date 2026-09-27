@@ -57,8 +57,12 @@ pub struct ModDetail {
     pub card: ModCard,
     pub versions: Vec<VersionRow>,
     pub history: Vec<HistoryRow>,
-    /// Fiche technique native (voitures uniquement), lue de ui_car.json.
+    /// Fiche technique native (voitures uniquement), lue de ui_car.json. Only
+    /// its description is still read from here; the sheet is `tech`.
     pub specs: Option<NativeSpecs>,
+    /// The tech sheet as shown (FICHE§6.3), cars only — from the base, never
+    /// from the files.
+    pub tech: Option<crate::techsheet::TechSheet>,
     /// Détail circuit (description + layouts illustrés), circuits uniquement.
     pub track: Option<uijson::TrackDetail>,
     /// Nom du DLC Kunos d'origine (contenu de base uniquement, §11) —
@@ -489,6 +493,11 @@ pub fn detail(conn: &Connection, cfg: &AppConfig, id: &str) -> rusqlite::Result<
     } else {
         None
     };
+    let tech = if m.kind == "Car" {
+        Some(crate::techsheet::effective(conn, id)?)
+    } else {
+        None
+    };
     let mut card = to_card(conn, cfg, m);
     fill_usage(&mut card, &cm_stats::read(), &overlay::launched_ids(conn)?);
     let stock_pack = card
@@ -501,6 +510,7 @@ pub fn detail(conn: &Connection, cfg: &AppConfig, id: &str) -> rusqlite::Result<
         versions,
         history,
         specs,
+        tech,
         track,
         stock_pack,
     }))

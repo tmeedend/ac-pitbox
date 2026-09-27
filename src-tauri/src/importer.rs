@@ -3158,6 +3158,12 @@ fn process_found(
 
     crate::overlay::set_active_version(conn, &id_interne, &version_id).map_err(|e| e.to_string())?;
 
+    // What the files of this version say, for the tech sheet (FICHE§6.2) —
+    // before the harmonisation, which refreshes the sheet's cache.
+    if fm.kind == ModKind::Car {
+        crate::techsheet::record(conn, &id_interne, &version_id, &dest, false).map_err(|e| e.to_string())?;
+    }
+
     // Harmonisation des tags + extraction specs/pays (§5), stockée en overlay.
     let class = ui.class.clone().unwrap_or_default();
     let h = harmonize::compute(

@@ -38,7 +38,9 @@ pub const DEFAULT_RULES: &str = include_str!("../rules/default-tag-rules.json");
 ///     (TAXO§7.1).
 /// 6 — brands too: the user's merges, then case, spaces and accents onto the
 ///     library's most used spelling (TAXO§7, `brands.rs`).
-pub const ENGINE_VERSION: u32 = 6;
+/// 7 — the rules become one source of a car's tech sheet (FICHE§6.2): the
+///     re-harmonisation files what they deduce, and the country, as facts.
+pub const ENGINE_VERSION: u32 = 7;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Rules {

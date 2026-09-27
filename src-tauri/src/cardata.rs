@@ -19,6 +19,47 @@ pub fn read(car_dir: &Path, car_id: &str, name: &str, marker: &str) -> Option<St
     loose(car_dir, name).or_else(|| acd::read_text(car_dir, car_id, name, marker))
 }
 
+/// Several physics files of one car, the container opened at most once.
+///
+/// The key of a `data.acd` is established on `engine.ini`, which every car
+/// has, and then trusted for every entry — so an entry that is legitimately
+/// empty (`drs.ini` on most road cars) still reads, as an empty string,
+/// instead of failing the marker check [`read`] would put it through.
+pub struct CarData<'a> {
+    dir: &'a Path,
+    car_id: &'a str,
+    container: std::cell::OnceCell<Option<acd::Container>>,
+}
+
+/// The entry and section that prove a container's key.
+const KEY_PROOF: (&str, &str) = ("engine.ini", "[ENGINE_DATA]");
+
+impl<'a> CarData<'a> {
+    pub fn new(dir: &'a Path, car_id: &'a str) -> Self {
+        Self {
+            dir,
+            car_id,
+            container: std::cell::OnceCell::new(),
+        }
+    }
+
+    fn container(&self) -> Option<&acd::Container> {
+        self.container
+            .get_or_init(|| acd::Container::open(self.dir, self.car_id, KEY_PROOF.0, KEY_PROOF.1))
+            .as_ref()
+    }
+
+    /// One file as text, loose first.
+    pub fn text(&self, name: &str) -> Option<String> {
+        loose(self.dir, name).or_else(|| self.container()?.text(name))
+    }
+
+    /// Whether the car ships this file at all.
+    pub fn has(&self, name: &str) -> bool {
+        self.dir.join("data").join(name).is_file() || self.container().is_some_and(|c| c.has(name))
+    }
+}
+
 /// `data/<name>`, when the car ships its physics unpacked. Absent is silence;
 /// present but unreadable is logged, since the caller then falls back on the
 /// container and would otherwise read a file the author did not mean.
