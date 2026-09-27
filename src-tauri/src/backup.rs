@@ -35,6 +35,10 @@ const BACKED_UP_FILES: &[&str] = &[
     // mise à jour — c'est justement le fichier qu'on n'aimerait pas perdre
     // juste avant sa migration.
     "saved_sessions.json",
+    // The saved grids (`saved_grids.rs`): composed by hand like the sessions,
+    // and left out of the backup until 2026-09 - a bad write would have lost
+    // them with nothing to fall back on.
+    "saved_grids.json",
     "music.json",
     // The user's decisions on the rules catalogue (REGLES§2): since the
     // catalogue is no longer copied, these two files ARE everything he did in
@@ -278,6 +282,23 @@ mod tests {
         assert!(
             !snapshot.join("ui_prefs.json").exists(),
             "fichier absent non recréé de toutes pièces"
+        );
+    }
+
+    /// Protected rule (§6.2): the saved grids are the user's own work, like the
+    /// saved sessions, and are in the backup with them.
+    #[test]
+    fn saved_grids_are_backed_up() {
+        let dir = crate::testutil::temp_dir("backup-grids");
+        std::fs::write(dir.join("saved_grids.json"), br#"{"grids":[]}"#).unwrap();
+        backup_now(&dir, None).unwrap();
+
+        let root = backups_root(&dir);
+        let stamp = std::fs::read_dir(&root).unwrap().next().unwrap().unwrap().path();
+        assert_eq!(
+            std::fs::read(stamp.join("saved_grids.json")).unwrap(),
+            br#"{"grids":[]}"#,
+            "the saved grids are copied as they are"
         );
     }
 
