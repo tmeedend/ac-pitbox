@@ -236,13 +236,6 @@
      (`.hero` et son padding pour l'un, `.hero` sans aucun pour l'autre), d'où
      le décalage constaté entre les deux vues. Pour un circuit, simple
      passe-plat en flux normal : `.hero` garde son padding, rien ne change. */
-  .hero-freed {
-    position: absolute;
-    left: 10px;
-    bottom: 8px;
-    color: var(--muted);
-    font-size: 11px;
-  }
   .hero-inner {
     position: relative;
     width: 100%;
@@ -282,6 +275,20 @@
   }
   /* Bascule photo / 3D, en bas à droite pour ne pas gêner le badge d'état de
      l'aperçu ni la pastille de lancement du showroom, tous deux en haut. */
+  /* The showcase's sentence (ESPACE§6): on the media, like the preview's
+     controls and for the same reason — posed on the frame's border band it
+     straddled the photo's edge. Same translucent black as `.hero-btn`. */
+  .hero-freed {
+    position: absolute;
+    left: calc(var(--hero-pad) + 10px);
+    bottom: calc(var(--hero-pad) + 10px);
+    z-index: 4;
+    padding: 4px 8px;
+    background: rgba(6, 6, 9, 0.82);
+    border: 1px solid var(--muted2);
+    color: var(--txt2);
+    font-size: 11px;
+  }
   .hero-tools {
     position: absolute;
     /* **Sur le média**, à dix pixels de son bord : leur fond est un noir

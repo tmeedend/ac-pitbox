@@ -97,8 +97,10 @@
   }
 
   /** What to search for: the archive's own name is the best key there is
-   * (ESPACE§8.2), the mod's name otherwise. */
-  const query = $derived(sources?.file_name ? `"${sources.file_name}"` : `"${name}"`);
+   * (ESPACE§8.2), the mod's name otherwise. Without quotes: an exact-phrase
+   * search on a file name found nothing on the real case, the same words
+   * without them found the page. */
+  const query = $derived(sources?.file_name ?? name);
 
   function host(site: string): string {
     try {
