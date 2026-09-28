@@ -93,7 +93,19 @@ fn is_active(cfg: &AppConfig, m: &ModRow) -> bool {
     crate::activation::is_mod_active(cfg, kind_of(&m.kind), &m.id_interne)
 }
 
-fn preview_for(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<String> {
+/// The card image of a mod in the showcase: the one frozen when its files
+/// went (ESPACE§3.3). The skin previews it was chosen from are gone, and a
+/// regenerated grid thumbnail could no longer be found without the `.kn5` it
+/// is keyed on.
+fn showcase_image(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<String> {
+    entity_dir(conn, cfg, m)
+        .and_then(|dir| crate::skeleton::image_of(&dir))
+        .map(|p| p.to_string_lossy().into_owned())
+}
+
+/// The image a mod's card shows, as the backend picks it — also what the
+/// showcase freezes when the screen did not name one (ESPACE§3.3).
+pub(crate) fn preview_for(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<String> {
     // Version active en bibliothèque, sinon content/ (contenu de base Kunos) —
     // c'est ce qui fait apparaître la vignette du stock, comme l'écran de session.
     // Couches actives d'abord (§4.3) : ce que l'app montre doit être ce que le
@@ -166,7 +178,11 @@ pub fn car_badges(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<(S
 }
 
 fn to_card(conn: &Connection, cfg: &AppConfig, m: ModRow) -> ModCard {
-    let preview = preview_for(conn, cfg, &m);
+    let preview = if m.showcase {
+        showcase_image(conn, cfg, &m)
+    } else {
+        preview_for(conn, cfg, &m)
+    };
     let outline = outline_for(conn, cfg, &m);
     let active = is_active(cfg, &m);
     let native = car_specs_for(conn, cfg, &m);

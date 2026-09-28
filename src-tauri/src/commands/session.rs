@@ -97,7 +97,14 @@ pub fn launch_replay(app: AppHandle, replay_path: std::path::PathBuf) -> Result<
 /// par-dessus l'app avec les réglages vidéo du jeu : l'utilisateur le ferme
 /// lui-même pour revenir à Pit Box.
 #[tauri::command]
-pub fn open_native_showroom(app: AppHandle, car_id: String, skin_id: Option<String>) -> Result<(), String> {
+pub fn open_native_showroom(
+    app: AppHandle,
+    db: State<Db>,
+    car_id: String,
+    skin_id: Option<String>,
+) -> Result<(), String> {
+    // A car in the showcase has no model for the showroom to load (ESPACE§6).
+    crate::skeleton::guard_mod(&*db.0.lock().map_err(|e| e.to_string())?, &car_id)?;
     crate::showroom::open_native_showroom(&crate::config::load(&app), &car_id, skin_id.as_deref())
 }
 

@@ -134,6 +134,10 @@ pub struct BulkFailure {
 pub struct BulkReport {
     pub ok: Vec<String>,
     pub failed: Vec<BulkFailure>,
+    /// Mods in the showcase a lot could not lay in the game (ESPACE§6):
+    /// skipped and counted apart, never reported as a failure — nothing went
+    /// wrong, their files are simply not there.
+    pub skipped: Vec<String>,
     /// Lot interrompu : ce qui reste après le dernier `ok`/`failed` n'a pas
     /// été traité du tout. Un rapport qui ne le dirait pas se lirait comme un
     /// lot complet dont la moitié aurait échoué en silence.
@@ -144,6 +148,7 @@ impl BulkReport {
     fn push(&mut self, id: &str, result: Result<(), String>) {
         match result {
             Ok(()) => self.ok.push(id.to_string()),
+            Err(error) if error == crate::errors::CONTENT_FREED => self.skipped.push(id.to_string()),
             Err(error) => self.failed.push(BulkFailure {
                 id: id.to_string(),
                 error,
@@ -232,6 +237,45 @@ pub fn deactivate(ctx: &BulkCtx, conn: &Connection, cfg: &AppConfig, ids: &[Stri
 
 pub fn delete(ctx: &BulkCtx, conn: &Connection, cfg: &AppConfig, ids: &[String]) -> BulkReport {
     run_each(ctx, ids, |id| maintenance::delete_broken(conn, cfg, id))
+}
+
+/// What a showcase lot did (ESPACE§5.2): what each mod freed, and whether
+/// the recycle bin took it — said after the fact, as ESPACE R8 asks.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct ShowcaseReport {
+    pub done: Vec<crate::showcase::ShowcaseOutcome>,
+    pub failed: Vec<BulkFailure>,
+    pub cancelled: bool,
+}
+
+/// Puts each mod in the showcase (ESPACE§5.5). `card_images` maps a mod to
+/// the image its card shows right now; a mod absent from it falls back on
+/// the backend's choice.
+pub fn showcase(
+    ctx: &BulkCtx,
+    conn: &Connection,
+    cfg: &AppConfig,
+    ids: &[String],
+    card_images: &std::collections::HashMap<String, String>,
+    keep_archive: bool,
+) -> ShowcaseReport {
+    let mut report = ShowcaseReport::default();
+    for (i, id) in ids.iter().enumerate() {
+        if ctx.cancelled() {
+            report.cancelled = true;
+            break;
+        }
+        ctx.tick(i + 1, ids.len(), id);
+        let image = card_images.get(id).map(Path::new);
+        match crate::showcase::to_showcase(conn, cfg, id, image, keep_archive) {
+            Ok(outcome) => report.done.push(outcome),
+            Err(error) => {
+                log::warn!("showcase {id}: {error}");
+                report.failed.push(BulkFailure { id: id.clone(), error });
+            }
+        }
+    }
+    report
 }
 
 pub fn export(

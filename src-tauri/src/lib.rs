@@ -69,7 +69,9 @@ mod saved_sessions;
 mod session_state;
 mod sessionpreset;
 mod shadowdir;
+mod showcase;
 mod showroom;
+mod skeleton;
 mod steering;
 mod stock;
 mod submods;
@@ -177,6 +179,13 @@ pub fn run() {
             // sauvegarde laissée par l'ancien aperçu 3D intégré traîne encore
             // (il forçait le mode fenêtré ; Pit Box n'y touche plus).
             showroom::restore_orphaned_video_ini();
+
+            // Safety net (ESPACE§5.5): a showcase removal stopped between its
+            // manifest and the base is finished, from the manifest.
+            match showcase::resume_interrupted(&conn, &config::load(app.handle())) {
+                0 => {}
+                n => log::warn!("finished {n} interrupted showcase removal(s)"),
+            }
 
             // Contenu de base Kunos jamais indexé : scan auto, pour que les
             // skins/sons puissent s'y rattacher tout de suite (§8.1).
@@ -454,6 +463,7 @@ pub fn run() {
             commands::bulk_ops::bulk_activate,
             commands::bulk_ops::bulk_deactivate,
             commands::bulk_ops::bulk_delete,
+            commands::bulk_ops::bulk_showcase,
             commands::bulk_ops::bulk_export,
             commands::addons::index_stock_content,
             commands::addons::list_sub_mods,

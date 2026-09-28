@@ -66,6 +66,8 @@ pub fn export_mod(conn: &Connection, cfg: &AppConfig, mod_id: &str, dest_dir: &P
         .active_version_id
         .clone()
         .ok_or(crate::errors::NO_ACTIVE_VERSION_TO_EXPORT)?;
+    // An archive of a skeleton would be a mod without its files (ESPACE§6).
+    crate::skeleton::guard(conn, &vid)?;
     let stored = overlay::get_version_path(conn, &vid)
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::VERSION_NOT_FOUND)?;

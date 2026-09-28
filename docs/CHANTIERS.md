@@ -25,6 +25,67 @@ de reprendre. En cas d'écart, la spec fait foi.
 
 ---
 
+- [ ] **Mods en vitrine — le moteur est livré, l'interface reste.**
+      Livré (`SPEC-sans-fichiers.md`, 2026-09-27) : `skeleton.rs` (liste
+      blanche, manifeste, image figée, garde-fou), `showcase.rs` (le déroulé
+      ESPACE§5.5, sa reprise au démarrage, la réhydratation), les colonnes de
+      `versions`, le garde-fou sur les dix points d'entrée d'ESPACE§9.1, la
+      classe `rehydrate` de l'import. Commande `bulk_showcase`, appelée par
+      personne encore.
+      **Ce qui reste, dans l'ordre utile** :
+      - l'interface (ESPACE§4.3, ESPACE§5.2, ESPACE§6, ESPACE§7.1) :
+        confirmation à deux choix,
+        pastille, filtre, bandeau, panneau de récupération, `isPlayable` pour
+        la colonne de session et les adversaires, libellés d'historique
+        (`history.event.SHOWCASE`/`REHYDRATED`, `history.showcased` avec
+        `bytes` à formater, `history.rehydrated`), rapport d'import
+        « Fichiers récupérés » et case « Activer après récupération ». Le
+        rapport de lot porte déjà `skipped` (profils, activation en masse) ;
+      - `SPEC.md` à mettre à jour **avec** l'interface — tant qu'aucun écran
+        ne met en vitrine, l'app ne se comporte pas autrement ;
+      - ESPACE§5.4 : couches, livrées et sons rattachés, ajouts au jeu,
+        ressources. Les garder pleins aujourd'hui est **sûr** (aucun ne va en
+        jeu sans son hôte), seulement moins de place libérée. Colonnes
+        `content_state`/`freed_at` déjà posées sur `layers` et `sub_mods` ;
+      - ESPACE§5.3 : **contradiction à trancher** avant de l'écrire. La spec
+        veut effacer `import_decisions` à la suppression complète ; le schéma
+        (`overlay.rs`) dit l'inverse, exprès : « pour que la suppression d'un
+        mod n'efface pas l'explication de ce qu'il a laissé derrière lui » ;
+      - ESPACE§8 : le lecteur `Zone.Identifier` (colonnes `source_*` déjà là,
+        vides) ;
+      - ESPACE§7.2 (récupération en masse), ESPACE§7.5 (couches réhydratées).
+      **Pièges payés** :
+      - la réindexation et la relecture de la fiche technique relisent le
+        disque et **remplacent** ce qui est en base : sur un squelette, elles
+        auraient effacé livrées, fonctionnalités CSP et physique. Coupées
+        dans `maintenance::reindex_mod` et `techsheet::active_stack` ;
+      - `compose::recompose` réindexe à chaque activation : une fixture qui
+        annonce en base une fonctionnalité CSP que ses fichiers ne portent
+        pas la perd dès l'activation — ce n'est pas un bug de la vitrine ;
+      - les livrées projetées sont des **junctions dans le dossier de la
+        version** : `removable_files` ne les voit pas (WalkDir ne suit pas
+        les liens), elles sont retirées à part, lien seul ;
+      - un manifeste n'est cru au démarrage que s'il porte l'id du mod et la
+        signature de la version : un dossier importé qui en contiendrait un
+        ne doit jamais être vidé sur sa foi ;
+      - la réhydratation échange les dossiers **avant** de marquer la base
+        complète, jamais l'inverse (voir `showcase::rehydrate`) ;
+      - un retour arrière ne supprime jamais un fichier : il remet **tout**
+        ce que contient le dossier d'attente, y compris ce qu'une exécution
+        interrompue y avait déjà déplacé. S'il ne peut pas tout remettre, il
+        garde manifeste et dossier d'attente, et le démarrage suivant finit
+        la mise en vitrine (trouvé en revue, `roll_back`).
+      **Décisions prises sans la spec**, à contester : la taille d'une
+      version en vitrine est ce qui reste sur le disque (`freed_bytes` garde
+      le reste) ; le dossier envoyé à la corbeille contient aussi une copie
+      du `ui/`, pour être un dossier de mod complet qu'on peut réimporter ;
+      les tests ne passent jamais par la corbeille (`trash_or_delete`) ; la
+      version active décide seule — une ancienne version qui résiste reste
+      complète dans la frise (`left_complete`) sans faire échouer le mod ;
+      un adversaire en vitrine est écarté de la grille au lancement, la
+      voiture ou le circuit du joueur refusent la session (ESPACE§6 et
+      ESPACE§9.1 se contredisaient là-dessus).
+
 - [ ] **Dossier du jeu — lot 1 livré, le lot 2 (les tailles) reste.**
       Livré (`SPEC-etat-dossier.md`) : l'onglet Fichiers › Dossier du jeu,
       son scan (`src-tauri/src/gamestate/`), le partage de l'Atelier en

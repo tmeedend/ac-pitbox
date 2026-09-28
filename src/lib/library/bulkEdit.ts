@@ -12,6 +12,9 @@ export interface BulkFailure {
 export interface BulkReport {
   ok: string[];
   failed: BulkFailure[];
+  /** Mods in the showcase the lot could not lay in the game (ESPACE§6):
+   * counted apart, never a failure. */
+  skipped: string[];
   /** Lot interrompu : ce qui n'apparaît ni en succès ni en échec n'a pas été
    * traité du tout (miroir de `BulkReport` dans `src-tauri/src/bulk.rs`). */
   cancelled: boolean;

@@ -370,6 +370,12 @@ fn project_skin(
             Some("cible absente de la bibliothèque : skin non projeté".into()),
         );
     }
+    // A host in the showcase kept only its `ui/` (ESPACE§3.1): a projection
+    // would put a skin folder back into its skeleton, and nothing would ever
+    // see it — the host cannot go into the game.
+    if crate::skeleton::is_showcase(conn, parent_id).unwrap_or(false) {
+        return (false, Some("host in the showcase: skin not projected".into()));
+    }
     let Some(skins_dir) = parent_skins_dir(conn, cfg, parent_id) else {
         return (false, Some("cible inconnue : skin non projeté".into()));
     };
@@ -591,6 +597,11 @@ pub fn repair_projections(conn: &Connection, cfg: &AppConfig, on_step: &dyn Fn(u
             if !store.is_dir() {
                 // Stockage lui-même absent : hors de portée ici, ce n'est pas
                 // une junction cassée mais une perte de données réelle.
+                continue;
+            }
+            // Nothing to repair on a host in the showcase, and not a failure
+            // either (ESPACE§6): its skins come back with its files.
+            if crate::skeleton::is_showcase(conn, &s.parent_id).unwrap_or(false) {
                 continue;
             }
             let (projected, warning) = project_skin(conn, cfg, &s.parent_id, &s.name, &store, track);
@@ -1230,6 +1241,9 @@ pub fn activate_sound(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Resul
     if sub.sub_type != "SOUND" {
         return Err(crate::errors::NOT_A_SOUND_MOD.into());
     }
+    // The car's own `sfx/` is gone with its files (ESPACE R5): nothing to
+    // back up, nothing to switch.
+    crate::skeleton::guard_mod(conn, &sub.parent_id)?;
     let sfx = parent_subdir(conn, cfg, &sub.parent_id, "sfx").ok_or(crate::errors::TARGET_CAR_UNKNOWN)?;
     let backup = sound_backup_dir(cfg, &sub.parent_id)?;
 

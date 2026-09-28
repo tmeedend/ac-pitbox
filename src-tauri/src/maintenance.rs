@@ -83,6 +83,11 @@ pub fn broken_reason(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<S
     if m.is_stock {
         return None;
     }
+    // A skeleton is not broken (ESPACE§6): it lacks its files on purpose, and
+    // is read before anything else, or the missing model would say otherwise.
+    if m.showcase {
+        return None;
+    }
     let kind = kind_of(&m.kind);
     let path = m.active_version_id.as_ref().and_then(|vid| {
         let stored = overlay::get_version_path(conn, vid).ok().flatten()?;
@@ -305,12 +310,20 @@ pub struct DeleteVersionOutcome {
 /// exactement ce qui arrive ici : une version de mod pèse couramment plusieurs
 /// Go, au-delà du quota de corbeille du volume. D'où le repli explicite, dont
 /// l'issue remonte jusqu'à l'écran (`recycled`) au lieu de se deviner.
-fn trash_or_delete(dir: &Path) -> Result<bool, String> {
+pub(crate) fn trash_or_delete(dir: &Path) -> Result<bool, String> {
     if !dir.exists() {
         // Rien à effacer n'est pas un échec : la ligne overlay doit partir
         // quand même, sinon une version dont les fichiers ont disparu (disque
         // nettoyé à la main) resterait indéboulonnable de la fiche.
         return Ok(true);
+    }
+    // The test suite never fills the developer's recycle bin: the showcase
+    // tests (ESPACE§5.5) remove real trees, and would leave one entry per
+    // run. Permanent deletion is the other branch of this very function, so
+    // the tests still cover a path the app takes.
+    if cfg!(test) {
+        std::fs::remove_dir_all(dir).map_err(|e| e.to_string())?;
+        return Ok(false);
     }
     match trash::delete(dir) {
         Ok(()) => Ok(true),
@@ -452,6 +465,14 @@ pub fn reinstall_from_archive(conn: &Connection, cfg: &AppConfig, id: &str) -> R
 
     if kept_path.is_file() {
         let _ = std::fs::remove_dir_all(&workdir);
+    }
+    // The first way back from the showcase (ESPACE§7.1): the skeleton and its
+    // manifest went with `dest` above, so the version is complete again —
+    // and must say so before the reindex, which reads a skeleton's files as
+    // having nothing to say.
+    if version.is_skeleton() {
+        let size = inspect::dir_size_bytes(&dest) as i64;
+        overlay::mark_version_full(conn, &version.id, size).map_err(|e| e.to_string())?;
     }
 
     reindex_mod(conn, cfg, id, true)?;
@@ -775,22 +796,32 @@ pub fn reindex_mod(conn: &Connection, cfg: &AppConfig, id: &str, recalc_size: bo
             ModKind::Track => uijson::read_track(dir),
         }
         .unwrap_or_default();
-        // Config CSP propre au mod + config "chargée" séparément par CSP
-        // (hors du mod, §6) — sans cette seconde source, le contenu de
-        // base Kunos ne remonte quasiment jamais de features CSP.
-        let mut csp = inspect::csp_features(dir);
-        if let Some(ac) = &cfg.ac_install_path {
-            csp.extend(inspect::csp_features_loaded(ac, kind, id));
-        }
-        csp.sort();
-        csp.dedup();
-        let skins = match kind {
-            ModKind::Car => inspect::car_skins(dir),
-            ModKind::Track => Vec::new(),
-        };
-        let layouts = match kind {
-            ModKind::Track => inspect::track_layouts(dir),
-            ModKind::Car => Vec::new(),
+        // A skeleton kept its `ui/` and nothing else (ESPACE§3.1): its CSP
+        // features, skin names and layouts were read before its files went,
+        // and reading what is left would wipe them. Only the `ui/` fields
+        // are read again.
+        let skeleton = v.is_skeleton();
+        let (csp, skins, layouts) = if skeleton {
+            (v.csp_features.clone(), v.skins.clone(), v.layouts.clone())
+        } else {
+            // Config CSP propre au mod + config "chargée" séparément par CSP
+            // (hors du mod, §6) — sans cette seconde source, le contenu de
+            // base Kunos ne remonte quasiment jamais de features CSP.
+            let mut csp = inspect::csp_features(dir);
+            if let Some(ac) = &cfg.ac_install_path {
+                csp.extend(inspect::csp_features_loaded(ac, kind, id));
+            }
+            csp.sort();
+            csp.dedup();
+            let skins = match kind {
+                ModKind::Car => inspect::car_skins(dir),
+                ModKind::Track => Vec::new(),
+            };
+            let layouts = match kind {
+                ModKind::Track => inspect::track_layouts(dir),
+                ModKind::Car => Vec::new(),
+            };
+            (csp, skins, layouts)
         };
         overlay::update_version_reindexed_fields(
             conn,
@@ -811,7 +842,7 @@ pub fn reindex_mod(conn: &Connection, cfg: &AppConfig, id: &str, recalc_size: bo
 
         // The tech sheet reads the files again too (FICHE§6.2): a reindex is
         // what a physics fix made outside the app is caught up by.
-        if kind == ModKind::Car {
+        if kind == ModKind::Car && !skeleton {
             let key = crate::techsheet::version_key(m.is_stock, Some(&v.id));
             crate::techsheet::record(conn, id, &key, dir, m.is_stock).map_err(|e| e.to_string())?;
         }

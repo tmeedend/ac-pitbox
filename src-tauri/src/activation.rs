@@ -221,6 +221,9 @@ pub fn activate(conn: &Connection, cfg: &AppConfig, mod_id: &str, version_id: Op
         .map(str::to_string)
         .or(m.active_version_id)
         .ok_or(crate::errors::NO_VERSION_TO_ACTIVATE)?;
+    // A skeleton never enters the game (ESPACE R5): checked before anything
+    // in `content/` is touched, so a refusal leaves the current state as is.
+    crate::skeleton::guard(conn, &vid)?;
     let stored = overlay::get_version_path(conn, &vid)
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::VERSION_NOT_FOUND)?;

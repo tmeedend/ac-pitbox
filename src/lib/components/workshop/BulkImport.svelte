@@ -30,7 +30,7 @@
   const parentName = $derived(parent.split(/[\\/]/).filter(Boolean).pop() ?? parent);
 
   const counts = $derived.by(() => {
-    const c = { new: 0, update: 0, duplicate: 0, ambiguous: 0, ignored: 0 };
+    const c = { new: 0, update: 0, duplicate: 0, ambiguous: 0, rehydrate: 0, ignored: 0 };
     for (const e of entries) {
       if (e.ignored) c.ignored++;
       for (const m of e.mods) c[m.status]++;
@@ -97,6 +97,7 @@
       case "update": return t("bulkImport.statusUpdate");
       case "duplicate": return t("bulkImport.statusDuplicate");
       case "ambiguous": return t("bulkImport.statusAmbiguous");
+      case "rehydrate": return t("bulkImport.statusRehydrate");
       default: return status;
     }
   }
@@ -123,6 +124,7 @@
         <span class="ct upd">{t("bulkImport.countUpdate", { count: counts.update })}</span>
         <span class="ct dup">{t("bulkImport.countDuplicate", { count: counts.duplicate })}</span>
         <span class="ct amb">{t("bulkImport.countAmbiguous", { count: counts.ambiguous })}</span>
+        {#if counts.rehydrate > 0}<span class="ct upd">{t("bulkImport.countRehydrate", { count: counts.rehydrate })}</span>{/if}
         <span class="ct ign">{t("bulkImport.countIgnored", { count: counts.ignored })}</span>
       </div>
 

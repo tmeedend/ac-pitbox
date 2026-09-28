@@ -344,6 +344,11 @@ impl Stack {
 /// mounted, a version gone —, which is a reason to read nothing, never to
 /// wipe what was read.
 pub fn active_stack(conn: &Connection, cfg: &crate::config::AppConfig, m: &crate::overlay::ModRow) -> Option<Stack> {
+    // A skeleton has lost its physics (ESPACE§3.4): what the sheet read before
+    // is all there is, and reading what is left would replace it with less.
+    if m.showcase {
+        return None;
+    }
     let layers = crate::overlay::active_layers(conn, &m.id_interne, crate::modscan::ModKind::Car.into()).ok()?;
     let base = match crate::compose::planned_sources(conn, cfg, &m.id_interne) {
         Some((base, _)) => base,

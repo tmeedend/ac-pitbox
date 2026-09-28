@@ -77,6 +77,7 @@ export function exportToReport(items: BulkExportItem[], asked: number): BulkRepo
   return {
     ok: items.filter((i) => !i.error).map((i) => i.id),
     failed: items.filter((i) => i.error).map((i) => ({ id: i.id, error: i.error! })),
+    skipped: [],
     // Moins d'items que de mods demandés = le lot s'est arrêté en chemin.
     cancelled: items.length < asked,
   };

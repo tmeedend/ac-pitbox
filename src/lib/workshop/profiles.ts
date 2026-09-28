@@ -11,6 +11,8 @@ export interface ApplyReport {
   activated: number;
   deactivated: number;
   errors: string[];
+  /** Mods of the profile in the showcase (ESPACE§6), left out without error. */
+  skipped: string[];
 }
 
 export function listProfiles(): Promise<ProfileRow[]> {

@@ -430,6 +430,25 @@ pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(
         .as_ref()
         .ok_or(crate::errors::CM_NOT_CONFIGURED)?;
 
+    // Nothing in the showcase goes on track (ESPACE R5). The session column
+    // and the opponent picker already leave such mods out; this is the net,
+    // checked before anything is activated or written. The player's car and
+    // track refuse the session; an opponent is left out of the grid and the
+    // session starts without it (ESPACE§6) — the same fate as an opponent
+    // that could not be installed, below.
+    for id in [&setup.car_id, &setup.track_id] {
+        crate::skeleton::guard_mod(conn, id)?;
+    }
+    let mut setup = setup.clone();
+    setup.opponents.retain(|o| {
+        let showcase = crate::skeleton::is_showcase(conn, &o.car_id).unwrap_or(false);
+        if showcase {
+            log::warn!("launch: opponent {} is in the showcase, left out", o.car_id);
+        }
+        !showcase
+    });
+    let setup = &setup;
+
     ensure_available(conn, cfg, ModKind::Car, &setup.car_id)?;
     ensure_available(conn, cfg, ModKind::Track, &setup.track_id)?;
     // Adversaires : best-effort — un adversaire manquant ne doit pas bloquer

@@ -35,6 +35,10 @@ pub struct ApplyReport {
     pub activated: usize,
     pub deactivated: usize,
     pub errors: Vec<String>,
+    /// Mods of the profile that are in the showcase (ESPACE§6): left out and
+    /// named apart, never an error — the profile keeps them for when their
+    /// files come back.
+    pub skipped: Vec<String>,
 }
 
 /// Crée un profil à partir de l'état actif courant : mods (voiture/circuit),
@@ -90,6 +94,7 @@ pub fn apply(conn: &Connection, cfg: &AppConfig, profile_id: &str) -> Result<App
         activated: 0,
         deactivated: 0,
         errors: Vec::new(),
+        skipped: Vec::new(),
     };
 
     // --- Mods (voiture/circuit) ---
@@ -105,6 +110,7 @@ pub fn apply(conn: &Connection, cfg: &AppConfig, profile_id: &str) -> Result<App
     for (mod_id, version_id) in &target {
         match activation::activate(conn, cfg, mod_id, Some(version_id)) {
             Ok(()) => report.activated += 1,
+            Err(e) if e == crate::errors::CONTENT_FREED => report.skipped.push(mod_id.clone()),
             Err(e) => report.errors.push(format!("{mod_id} : {e}")),
         }
     }

@@ -385,6 +385,12 @@ fn sync(conn: &Connection, cfg: &AppConfig, ac_path: &Path) {
 /// — c'est cette liste, et elle seule, qui sera retirée à la désactivation.
 /// Best-effort : un fichier qui ne peut pas être posé est signalé, jamais forcé.
 pub fn deploy(conn: &Connection, cfg: &AppConfig, owner: OwnerKind, mod_id: &str) -> Result<usize, String> {
+    // Additions of a mod in the showcase stay out of the game with it
+    // (ESPACE R5). Only a car or a track has versions — an app or a pack
+    // could share its id with one without sharing its fate.
+    if matches!(owner, OwnerKind::Car | OwnerKind::Track) {
+        crate::skeleton::guard_mod(conn, mod_id)?;
+    }
     let (Some(library), Some(ac)) = (cfg.library_path.as_ref(), cfg.ac_install_path.as_ref()) else {
         return Ok(0);
     };
@@ -846,7 +852,7 @@ fn migrate_one_owner(conn: &Connection, cfg: &AppConfig, library: &Path, owner: 
 }
 
 /// Retire récursivement les dossiers devenus vides sous `root`, `root` compris.
-fn prune_empty_dirs(root: &Path) {
+pub(crate) fn prune_empty_dirs(root: &Path) {
     if !root.is_dir() {
         return;
     }

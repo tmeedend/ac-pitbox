@@ -88,6 +88,27 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     // l'import de cette version. Rend possible « Réinstaller depuis l'archive
     // source ». `NULL` = non conservé (comportement par défaut).
     let _ = conn.execute("ALTER TABLE versions ADD COLUMN kept_archive_path TEXT", []);
+    // Showcase (ESPACE§4.1): whether the version still has its files. Every
+    // version written before is complete, hence the default; `freed_*` say
+    // when it lost them and what that gave back. `source_*` is where its
+    // archive came from (ESPACE§8.2), when Windows kept it.
+    let _ = conn.execute(
+        "ALTER TABLE versions ADD COLUMN content_state TEXT NOT NULL DEFAULT 'full'",
+        [],
+    );
+    let _ = conn.execute("ALTER TABLE versions ADD COLUMN freed_at TEXT", []);
+    let _ = conn.execute("ALTER TABLE versions ADD COLUMN freed_bytes INTEGER", []);
+    let _ = conn.execute("ALTER TABLE versions ADD COLUMN source_site TEXT", []);
+    let _ = conn.execute("ALTER TABLE versions ADD COLUMN source_file_name TEXT", []);
+    // A layer or an attached skin/sound follows its mod into the showcase
+    // (ESPACE§5.4): its row stays, its files go.
+    for table in ["layers", "sub_mods"] {
+        let _ = conn.execute(
+            &format!("ALTER TABLE {table} ADD COLUMN content_state TEXT NOT NULL DEFAULT 'full'"),
+            [],
+        );
+        let _ = conn.execute(&format!("ALTER TABLE {table} ADD COLUMN freed_at TEXT"), []);
+    }
     // Couches/extensions (§4.4) : état actif (par défaut) + ordre de priorité.
     let _ = conn.execute("ALTER TABLE layers ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1", []);
     let _ = conn.execute("ALTER TABLE layers ADD COLUMN priority INTEGER NOT NULL DEFAULT 0", []);
@@ -596,6 +617,10 @@ pub struct ModRow {
     /// (R5 of FICHE§3): `"rules"` for a value deduced from the tags, `"user"`
     /// for a correction. Absent means read in the mod's own files.
     pub tech_marks: std::collections::BTreeMap<String, String>,
+    /// In the showcase (ESPACE§4.1): its active version is a skeleton.
+    /// Resolved in `MOD_SELECT` like the other active-version columns, so a
+    /// list of cards does not ask the base twice per card.
+    pub showcase: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -619,6 +644,26 @@ pub struct VersionRow {
     /// Archive/dossier source conservé en bibliothèque (§10/§11), si le
     /// réglage était activé à l'import. `None` = non conservé.
     pub kept_archive_path: Option<String>,
+    /// `"full"` or `"skeleton"` (ESPACE§4.1): a skeleton kept only what the
+    /// lists need, and never goes into the game.
+    pub content_state: String,
+    /// When the version went into the showcase, and what that freed.
+    pub freed_at: Option<String>,
+    pub freed_bytes: Option<i64>,
+    /// Where the archive came from (ESPACE§8.2): the site, never a signed link.
+    pub source_site: Option<String>,
+    pub source_file_name: Option<String>,
+}
+
+/// [`VersionRow::content_state`] of a version that kept its files.
+pub const CONTENT_FULL: &str = "full";
+/// [`VersionRow::content_state`] of a version in the showcase (ESPACE§4.1).
+pub const CONTENT_SKELETON: &str = "skeleton";
+
+impl VersionRow {
+    pub fn is_skeleton(&self) -> bool {
+        self.content_state == CONTENT_SKELETON
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -938,7 +983,9 @@ const MOD_SELECT: &str = r#"
            m.display_name AS display_name_file,
            m.is_unmanaged,
            m.notes_user,
-           m.tech_marks
+           m.tech_marks,
+           COALESCE((SELECT v.content_state = 'skeleton' FROM versions v
+                     WHERE v.id = m.active_version_id), 0) AS showcase
     FROM mods m
 "#;
 
@@ -987,6 +1034,7 @@ fn map_mod(row: &rusqlite::Row) -> rusqlite::Result<ModRow> {
         is_unmanaged: row.get::<_, i64>(34)? != 0,
         notes_user: row.get(35)?,
         tech_marks: serde_json::from_str(&row.get::<_, String>(36)?).unwrap_or_default(),
+        showcase: row.get::<_, i64>(37)? != 0,
     })
 }
 
@@ -1012,7 +1060,8 @@ pub fn get_mod(conn: &Connection, id: &str) -> rusqlite::Result<Option<ModRow>> 
 /// Colonnes de `versions`, dans l'ordre attendu par [`version_row`].
 const VERSION_COLUMNS: &str = r#"id, mod_id, version_label, author, imported_at, library_path,
        source_archive, content_signature, csp_features, skins, layouts, tags_from_mod,
-       published_at, size_bytes, kept_archive_path"#;
+       published_at, size_bytes, kept_archive_path,
+       content_state, freed_at, freed_bytes, source_site, source_file_name"#;
 
 fn version_row(row: &rusqlite::Row) -> rusqlite::Result<VersionRow> {
     let csp: String = row.get(8)?;
@@ -1035,6 +1084,11 @@ fn version_row(row: &rusqlite::Row) -> rusqlite::Result<VersionRow> {
         published_at: row.get(12)?,
         size_bytes: row.get(13)?,
         kept_archive_path: row.get(14)?,
+        content_state: row.get(15)?,
+        freed_at: row.get(16)?,
+        freed_bytes: row.get(17)?,
+        source_site: row.get(18)?,
+        source_file_name: row.get(19)?,
     })
 }
 
@@ -1099,6 +1153,16 @@ pub fn set_kept_archive(conn: &Connection, version_id: &str, path: &str) -> rusq
     Ok(())
 }
 
+/// Forgets the kept source of a version, whose files were just removed
+/// (ESPACE§5.2: the showcase was asked not to keep it).
+pub fn clear_kept_archive(conn: &Connection, version_id: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE versions SET kept_archive_path = NULL WHERE id = ?1",
+        params![version_id],
+    )?;
+    Ok(())
+}
+
 /// Vrai si une version réclame encore cette source conservée (§10/§11).
 ///
 /// Fait autorité pour décider si une copie fraîchement posée dans
@@ -1159,6 +1223,18 @@ pub fn active_signature(conn: &Connection, mod_id: &str) -> rusqlite::Result<Opt
     }
 }
 
+/// The version of a mod whose content signature is `signature`, a skeleton
+/// first (ESPACE§7.3): the comparison runs over **all** versions, since an
+/// older one can be the one in the showcase.
+pub fn version_by_signature(conn: &Connection, mod_id: &str, signature: &str) -> rusqlite::Result<Option<VersionRow>> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {VERSION_COLUMNS} FROM versions WHERE mod_id = ?1 AND content_signature = ?2
+         ORDER BY content_state = ?3 DESC, imported_at DESC LIMIT 1"
+    ))?;
+    let mut rows = stmt.query_map(params![mod_id, signature, CONTENT_SKELETON], version_row)?;
+    rows.next().transpose()
+}
+
 /// Chemin bibliothèque de la version **active** d'un mod (dossier à comparer à
 /// l'entrant pour la détection update/extension, §4.4). `None` si aucune version
 /// active (ex. contenu de base sans version bibliothèque).
@@ -1172,6 +1248,55 @@ pub fn active_library_path(conn: &Connection, mod_id: &str) -> rusqlite::Result<
         Some(r) => Ok(Some(r?)),
         None => Ok(None),
     }
+}
+
+/// The active version of a mod, `None` for a mod without one.
+pub fn active_version_id(conn: &Connection, mod_id: &str) -> rusqlite::Result<Option<String>> {
+    use rusqlite::OptionalExtension;
+    Ok(conn
+        .query_row(
+            "SELECT active_version_id FROM mods WHERE id_interne = ?1",
+            [mod_id],
+            |r| r.get::<_, Option<String>>(0),
+        )
+        .optional()?
+        .flatten())
+}
+
+/// `content_state` of a version (ESPACE§4.1), `None` for an unknown one.
+pub fn version_content_state(conn: &Connection, version_id: &str) -> rusqlite::Result<Option<String>> {
+    use rusqlite::OptionalExtension;
+    conn.query_row("SELECT content_state FROM versions WHERE id = ?1", [version_id], |r| {
+        r.get(0)
+    })
+    .optional()
+}
+
+/// Marks a version as a skeleton (ESPACE§5.5, step 5). `size_bytes` becomes
+/// what is left on disk — it is a disk size (§10), and the library's size
+/// column must not keep counting what was freed; `freed_bytes` keeps that.
+pub fn mark_version_freed(
+    conn: &Connection,
+    version_id: &str,
+    freed_at: &str,
+    freed_bytes: i64,
+    size_bytes: i64,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE versions SET content_state = ?2, freed_at = ?3, freed_bytes = ?4, size_bytes = ?5 WHERE id = ?1",
+        params![version_id, CONTENT_SKELETON, freed_at, freed_bytes, size_bytes],
+    )?;
+    Ok(())
+}
+
+/// A rehydrated version has its files again (ESPACE§7.3). `freed_*` are
+/// cleared with the state: they described a showcase that no longer is.
+pub fn mark_version_full(conn: &Connection, version_id: &str, size_bytes: i64) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE versions SET content_state = ?2, freed_at = NULL, freed_bytes = NULL, size_bytes = ?3 WHERE id = ?1",
+        params![version_id, CONTENT_FULL, size_bytes],
+    )?;
+    Ok(())
 }
 
 /// Chemin bibliothèque d'une version donnée (pour calculer la preview).
@@ -2577,12 +2702,15 @@ mod tests {
     /// Columns `migrate` adds, each paired with a listing that reads it. Used
     /// by the migration test below to build an "old" database out of the
     /// current one.
-    const ADDED_LATER: [(&str, &str); 5] = [
+    const ADDED_LATER: [(&str, &str); 8] = [
         ("mods", "is_unmanaged"),
         ("mods", "tech_marks"),
         ("layers", "notes_user"),
         ("sub_mods", "author"),
         ("other_mods", "attachment_user"),
+        ("versions", "content_state"),
+        ("layers", "content_state"),
+        ("sub_mods", "content_state"),
     ];
 
     /// Rule: `open` is safe to call on a database it has already migrated.
@@ -2683,5 +2811,54 @@ mod tests {
         list_other_mods(&conn).expect("other_mods");
         list_subs_by_type(&conn, "SKIN").expect("sub_mods");
         list_layers(&conn, "x", HostKind::Track).expect("layers");
+    }
+
+    /// Rule (ESPACE§4.1): every version an older base holds is complete. The
+    /// showcase columns arrive with their default, never a guess, and a
+    /// version read back is neither freed nor from a known site.
+    #[test]
+    fn a_version_written_before_the_showcase_reads_as_complete() {
+        let base = crate::testutil::temp_dir("db-showcase");
+        let path = base.join("overlay.sqlite");
+        let now = chrono::Local::now().to_rfc3339();
+        {
+            let conn = open(&path).unwrap();
+            upsert_mod(&conn, "car", "Car", None, Some("Car"), "h", None, &now).unwrap();
+            insert_version(
+                &conn,
+                "v1",
+                "car",
+                Some("1.0"),
+                None,
+                &now,
+                "cars/car/v1",
+                None,
+                "sig",
+                &[],
+                &[],
+                &[],
+                &[],
+                None,
+            )
+            .unwrap();
+            for col in [
+                "content_state",
+                "freed_at",
+                "freed_bytes",
+                "source_site",
+                "source_file_name",
+            ] {
+                conn.execute(&format!("ALTER TABLE versions DROP COLUMN {col}"), [])
+                    .unwrap_or_else(|e| panic!("versions.{col} should be droppable: {e}"));
+            }
+        }
+        let conn = open(&path).expect("an older database still opens");
+        let v = get_version(&conn, "v1").unwrap().expect("the version is still there");
+        assert_eq!(v.content_state, CONTENT_FULL, "an existing version keeps its files");
+        assert!(!v.is_skeleton());
+        assert_eq!(v.freed_at, None, "never freed");
+        assert_eq!(v.freed_bytes, None);
+        assert_eq!(v.source_site, None, "no origin invented");
+        assert_eq!(v.source_file_name, None);
     }
 }

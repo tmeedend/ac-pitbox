@@ -58,6 +58,12 @@ pub const VERSION_FILES_MISSING: &str = "errors.versionFilesMissing";
 // Suppression d'une version (§10) : la version en place n'est pas
 // supprimable — en activer une autre d'abord est une décision, pas un détail.
 pub const VERSION_IS_ACTIVE: &str = "errors.versionIsActive";
+// A version in the showcase (ESPACE R5): its heavy files are gone, and a
+// skeleton laid in `content/` would crash AC and Content Manager on loading.
+pub const CONTENT_FREED: &str = "errors.contentFreed";
+// Kunos content, or a mod installed outside Pit Box: no library copy to free,
+// its only files are the game's.
+pub const STOCK_NOT_FREEABLE: &str = "errors.stockNotFreeable";
 pub const LAYER_NOT_FOUND: &str = "errors.layerNotFound";
 pub const PENDING_NOT_FOUND: &str = "errors.pendingNotFound";
 pub const PENDING_UNKNOWN_ACTION: &str = "errors.pendingUnknownAction";

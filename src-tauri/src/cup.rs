@@ -538,6 +538,7 @@ mod tests {
             published_at: None,
             size_bytes: None,
             tech_marks: Default::default(),
+            showcase: false,
         }
     }
 

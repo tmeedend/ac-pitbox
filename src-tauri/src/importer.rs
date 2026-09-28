@@ -24,13 +24,18 @@ pub struct FuzzyConflict {
     pub existing_name: Option<String>,
 }
 
+fn is_zero(n: &usize) -> bool {
+    *n == 0
+}
+
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct ImportedMod {
     pub id_interne: String,
     pub kind: String,
     pub display_name: Option<String>,
     /// "IMPORT" | "UPDATE_REPLACE" | "DUPLICATE" | "EXTENSION" | "AMBIGUOUS" (§4.4)
-    /// | "PARKED" | "HOST_MISSING" | "HOST_UNKNOWN" (§4.3bis).
+    /// | "PARKED" | "HOST_MISSING" | "HOST_UNKNOWN" (§4.3bis)
+    /// | "REHYDRATED" (ESPACE§7.3): the files of a version in the showcase are back.
     /// - EXTENSION : rangé comme couche à part, la base n'est jamais touchée.
     /// - AMBIGUOUS : rien écrit, on attend le choix de l'utilisateur.
     /// - PARKED : fragment rangé en couche d'un hôte absent, en attente de lui.
@@ -50,6 +55,10 @@ pub struct ImportedMod {
     /// Fichiers annexes redirigés vers le dossier ressources du mod (§4.5.2),
     /// selon le réglage global. 0 si rien n'a été filé (doublon, ambigu bloqué).
     pub resources_extracted: usize,
+    /// REHYDRATED only: files the showcase manifest expected and the archive
+    /// did not bring back (ESPACE§7.4), for the report to say so.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub missing_files: usize,
     /// Dossier entrant dépourvu de géométrie (§4.3bis) : une couche déguisée en
     /// mod, jamais jouable seule. Ce que l'app en a fait se lit dans `outcome`.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -2256,7 +2265,7 @@ pub struct BulkMod {
     pub id: String,
     pub kind: String,
     pub name: Option<String>,
-    /// "new" | "update" | "duplicate" | "ambiguous"
+    /// "new" | "update" | "duplicate" | "ambiguous" | "rehydrate" (ESPACE§7.3)
     pub status: String,
     pub existing_id: Option<String>,
     pub existing_name: Option<String>,
@@ -2283,7 +2292,13 @@ fn classify(
     if crate::overlay::mod_exists(conn, id).map_err(|e| e.to_string())? {
         let sig = identity::content_signature(dir);
         let existing = crate::overlay::active_signature(conn, id).map_err(|e| e.to_string())?;
-        if existing.as_deref() == Some(sig.as_str()) {
+        let skeleton = crate::overlay::version_by_signature(conn, id, &sig)
+            .map_err(|e| e.to_string())?
+            .is_some_and(|v| v.is_skeleton());
+        if skeleton {
+            // Same classification as the import itself (ESPACE§7.3).
+            Ok(("rehydrate".into(), None, None))
+        } else if existing.as_deref() == Some(sig.as_str()) {
             Ok(("duplicate".into(), None, None))
         } else {
             Ok(("update".into(), None, None))
@@ -2840,6 +2855,38 @@ fn process_found(
     // Contenu ciblant un id déjà connu : décider mise à jour vs couche/extension
     // AVANT d'agir (§4.4), pour ne jamais détruire du contenu par un faux « MAJ ».
     if let Some(existing) = &existing {
+        // The archive of a version in the showcase (ESPACE§7.3): its files
+        // come back into that very version, instead of the duplicate the
+        // signature would otherwise make of it — a skeleton keeps the
+        // signature of its complete files, precisely for this.
+        if let Some(v) = crate::overlay::version_by_signature(conn, &id_interne, &signature)
+            .map_err(|e| e.to_string())?
+            .filter(|v| v.is_skeleton())
+        {
+            let back = crate::showcase::rehydrate(
+                conn,
+                cfg,
+                library,
+                fm.kind,
+                &v,
+                &fm.dir,
+                !copy,
+                res_mode,
+                kept_archive,
+                on_progress,
+            )?;
+            return Ok(ImportedMod {
+                id_interne,
+                kind: kind_str,
+                display_name: Some(name),
+                outcome: "REHYDRATED".into(),
+                version_label: v.version_label,
+                resources_extracted: back.resources_extracted,
+                missing_files: back.missing.len(),
+                ..Default::default()
+            });
+        }
+
         // Ré-import à l'identique : même id ET même signature → ni version ni
         // couche (évite le faux « MAJ » quand on réimporte la même archive).
         let active_sig = crate::overlay::active_signature(conn, &id_interne).map_err(|e| e.to_string())?;
@@ -2899,6 +2946,12 @@ fn process_found(
                 base.is_dir().then(|| identity::diff_content(&fm.dir, &base))
             });
             (ImportClass::Extension, diff)
+        } else if crate::skeleton::is_showcase(conn, &id_interne).map_err(|e| e.to_string())? {
+            // Another version of a mod in the showcase (ESPACE§7.3): an update,
+            // the skeleton staying in the timeline. Compared with a skeleton,
+            // almost everything would look new, and the archive would be
+            // filed as a layer on top of a car without a model.
+            (ImportClass::Update, None)
         } else {
             let active_path = crate::overlay::active_library_path(conn, &id_interne)
                 .map_err(|e| e.to_string())?

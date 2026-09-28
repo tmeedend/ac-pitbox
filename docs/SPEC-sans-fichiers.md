@@ -67,8 +67,8 @@ Ce qui **reste** dans le dossier d'une version en vitrine. Tout le reste part. *
 | Type | Chemin, relatif au dossier de la version | Pourquoi |
 |---|---|---|
 | Voiture | `ui/ui_car.json`, `ui/badge.png`, et les autres `ui/*.json` | nom, marque, specs, courbes de puissance et de couple, tags, badge : la fiche technique et le rangement |
-| Circuit | `ui/**/ui_track.json`, `ui/**/outline.png`, `ui/**/logo.png`, et `ui/**/preview.png` **réduit** (§3.3) | chaque tracé garde son nom, son contour et son image |
-| Voiture, circuit | `.pitbox-vitrine.png` : **l'image de vitrine** (§3.3) | l'image de la carte |
+| Circuit | `ui/**/ui_track.json`, `ui/**/outline.png`, `ui/**/logo.png`, et `ui/**/preview.png` **réduit** (§3.3) ; aussi `outline.jpg`, `logo.jpg`, `preview.jpg` et un `map.png` **rangé dans `ui/`**, que la carte lit en repli | chaque tracé garde son nom, son contour et son image |
+| Voiture, circuit | `.pitbox-vitrine.png` ou `.pitbox-vitrine.jpg` : **l'image de vitrine** (§3.3), l'extension disant le format réel | l'image de la carte |
 | Voiture, circuit | `.pitbox-vitrine.json` : le manifeste (§4.2) | ce qui manque |
 
 **Ce qui part, et pourquoi :**
@@ -102,7 +102,7 @@ Les logos et contours de tracé ne sont pas réduits : ce sont déjà de petits 
 - **Format** : 480 px de large. PNG si elle a de la transparence (vignette régénérée), JPEG qualité 80 sinon. Quelques dizaines de Ko.
 - **Circuit** : l'image de vitrine est l'aperçu du tracé par défaut, réduit de la même façon ; les `preview.png` de chaque tracé sont réduits en place.
 
-À la réhydratation, `.pitbox-vitrine.png` est supprimé : la carte revient à son chemin normal.
+À la réhydratation, l'image de vitrine est supprimée : la carte revient à son chemin normal.
 
 ## 3.4 Ce qui reste, et ne coûte rien
 
@@ -411,7 +411,7 @@ La suppression complète garde son chemin (`overlay::delete_mod`), complété de
 
 **`launch::launch`** refuse un `RaceSetup` qui contient un mod en vitrine, joueur ou adversaire. Le frontend doit l'avoir déjà empêché ; c'est le filet.
 
-**`library.rs`** : pour une version `skeleton`, l'image de carte est `.pitbox-vitrine.png`, sans passer par le magasin des vignettes.
+**`library.rs`** : pour une version `skeleton`, l'image de carte est l'image de vitrine, sans passer par le magasin des vignettes.
 
 **Le lecteur `Zone.Identifier`** (§8), dans `archive.rs` : ouverture du flux par son nom, analyse de `[ZoneTransfer]`, extraction du `filename` de `response-content-disposition` (décodage URL, guillemets, forme `filename*=UTF-8''…`).
 

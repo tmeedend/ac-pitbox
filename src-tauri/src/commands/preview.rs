@@ -36,6 +36,9 @@ pub async fn prepare_car_preview(
     let cfg = crate::config::load(&app);
     let car_dir = {
         let conn = db.0.lock().map_err(|e| e.to_string())?;
+        // The model left with the files (ESPACE§6): the detail page does not
+        // ask, this is the net behind it.
+        crate::skeleton::guard_mod(&conn, &car_id)?;
         crate::preview::car_dir(&conn, &cfg, &car_id).ok_or(crate::errors::PREVIEW_MODEL_NOT_FOUND)?
     };
 
@@ -84,6 +87,9 @@ pub async fn list_driver_choices(
     };
     let car_dir = {
         let conn = db.0.lock().map_err(|e| e.to_string())?;
+        // The model left with the files (ESPACE§6): the detail page does not
+        // ask, this is the net behind it.
+        crate::skeleton::guard_mod(&conn, &car_id)?;
         crate::preview::car_dir(&conn, &cfg, &car_id).ok_or(crate::errors::PREVIEW_MODEL_NOT_FOUND)?
     };
     tauri::async_runtime::spawn_blocking(move || crate::driver::choices(&ac_root, &car_dir, &car_id, body.as_deref()))
@@ -122,6 +128,9 @@ pub async fn prepare_driver_preview(
     };
     let car_dir = {
         let conn = db.0.lock().map_err(|e| e.to_string())?;
+        // The model left with the files (ESPACE§6): the detail page does not
+        // ask, this is the net behind it.
+        crate::skeleton::guard_mod(&conn, &car_id)?;
         crate::preview::car_dir(&conn, &cfg, &car_id).ok_or(crate::errors::PREVIEW_MODEL_NOT_FOUND)?
     };
     convert_graft(app, token, move || {

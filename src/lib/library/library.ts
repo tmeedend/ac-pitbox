@@ -106,6 +106,9 @@ export interface ModCard {
   /** Mod cassé (fichiers de la version active manquants/invalides, §6.4) —
    * même détection que l'écran Maintenance, signalée ici sur la carte. */
   broken: boolean;
+  /** In the showcase (ESPACE§4.1): its heavy files are gone, `preview` is the
+   * image frozen when they went. */
+  showcase: boolean;
   /** Where the five spec fields come from when it is worth a sign (FICHE R5):
    * `"rules"` deduced from the tags, `"user"` corrected by hand. Absent: read
    * in the mod's own files. */
@@ -132,6 +135,13 @@ export interface VersionRow {
   /** Archive/dossier source conservé en bibliothèque (§10/§11), si le réglage
    * était activé à l'import. `null` = non conservé, pas de réinstallation possible. */
   kept_archive_path: string | null;
+  /** `"skeleton"`: in the showcase (ESPACE§4.1), its heavy files are gone. */
+  content_state: "full" | "skeleton";
+  freed_at: string | null;
+  freed_bytes: number | null;
+  /** Where the archive came from (ESPACE§8.2), when Windows kept it. */
+  source_site: string | null;
+  source_file_name: string | null;
 }
 
 export interface HistoryRow {
@@ -203,7 +213,8 @@ export interface ImportedMod {
     | "UNMANAGED"
     | "PARKED"
     | "HOST_MISSING"
-    | "HOST_UNKNOWN";
+    | "HOST_UNKNOWN"
+    | "REHYDRATED";
   version_label: string | null;
   conflict: FuzzyConflict | null;
   /** Décompte de comparaison (§4.4), présent pour EXTENSION/AMBIGUOUS. */
@@ -219,6 +230,9 @@ export interface ImportedMod {
   source_name?: string;
   /** Hôte visé par un fragment, quand il a pu être nommé (§4.3bis). */
   host_id?: string;
+  /** REHYDRATED: files the showcase manifest expected and the archive did
+   * not bring back (ESPACE§7.4). Absent when none. */
+  missing_files?: number;
 }
 
 /** Décision de reprise pour un import ambigu (§4.4) ou un fragment (§4.3bis). */
@@ -439,7 +453,7 @@ export function openLayerFolder(id: string): Promise<void> {
 }
 
 // --- Import en masse (§4.2) ---
-export type BulkStatus = "new" | "update" | "duplicate" | "ambiguous";
+export type BulkStatus = "new" | "update" | "duplicate" | "ambiguous" | "rehydrate";
 
 export interface BulkMod {
   id: string;

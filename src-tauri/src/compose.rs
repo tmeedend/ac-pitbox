@@ -64,6 +64,14 @@ fn clear_link(link: &Path) -> Result<(), String> {
 pub fn recompose(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), String> {
     match overlay::get_mod(conn, id).map_err(|e| e.to_string())? {
         Some(m) => {
+            // A mod in the showcase is never in the game (ESPACE R5): there
+            // is nothing to compose, and a layer switched, reordered or
+            // removed meanwhile is simply taken into account when its files
+            // come back. Not an error — the layer action itself succeeded,
+            // and reporting a failure would contradict what the screen shows.
+            if m.showcase {
+                return Ok(());
+            }
             let result = recompose_mod(conn, cfg, &m, id);
             // A car's tech sheet is read through the same stack (§4.3): a
             // layer switched, reordered or removed, another version made

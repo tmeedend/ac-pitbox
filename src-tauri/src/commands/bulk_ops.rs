@@ -115,6 +115,35 @@ pub async fn bulk_delete(app: AppHandle, ids: Vec<String>) -> Result<crate::bulk
     .map_err(|e| e.to_string())?
 }
 
+/// Puts mods in the showcase (ESPACE§5): heavy files to the recycle bin, the
+/// row and everything added to it kept. One mod or a selection, same lot.
+#[tauri::command]
+pub async fn bulk_showcase(
+    app: AppHandle,
+    ids: Vec<String>,
+    card_images: std::collections::HashMap<String, String>,
+    keep_archive: bool,
+) -> Result<crate::bulk::ShowcaseReport, String> {
+    let _game_write = crate::gamestate::GameWrite::begin();
+    tauri::async_runtime::spawn_blocking(move || {
+        let (cancel, emit) = begin(&app);
+        let ctx = BulkCtx::new(&emit, "showcase", cancel);
+        let cfg = crate::config::load(&app);
+        let db = app.state::<Db>();
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        Ok(crate::bulk::showcase(
+            &ctx,
+            &conn,
+            &cfg,
+            &ids,
+            &card_images,
+            keep_archive,
+        ))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 pub async fn bulk_export(
     app: AppHandle,
