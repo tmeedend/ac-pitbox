@@ -3,17 +3,18 @@
   // junctions orphelines, suppression sur confirmation.
   import {
     maintenanceScan,
-    deleteBrokenMod,
     removeOrphanJunction,
     reindexLibrary,
     repairAll,
     purgeOrphanSubs,
+    type BrokenMod,
     type MaintenanceReport,
     type WaitingLayer,
   } from "$lib/workshop/maintenance";
   import { runRepair, repairState } from "$lib/workshop/repairState.svelte";
   import { showGameFolderDrifts } from "$lib/gamestate/gameFolder.svelte";
   import { deleteLayer } from "$lib/library/library";
+  import { deleteMods } from "$lib/library/showcase.svelte";
   import { indexStockContent } from "$lib/inventory/submods";
   import { confirm, open as openDialog, save } from "@tauri-apps/plugin-dialog";
   import { exportFolderSurvey, exportSurvey } from "$lib/workshop/rules";
@@ -196,11 +197,16 @@
     }
   }
 
-  async function removeBroken(id: string) {
-    busy = id;
+  // Same gesture as anywhere else (ESPACE§5.1): the confirmation offers the
+  // showcase, which keeps what the user entered on a mod whose files are
+  // damaged — the showcase works on a folder that vanished too —, or the
+  // complete deletion. It used to delete at the first click, unasked.
+  async function removeBroken(b: BrokenMod) {
+    busy = b.id;
     error = "";
     try {
-      await deleteBrokenMod(id);
+      const kind = b.kind === "Track" ? "Track" : "Car";
+      await deleteMods([{ id_interne: b.id, kind, preview: null, showcase: false }]);
       await scan();
     } catch (e) {
       error = errorText(e);
@@ -352,7 +358,7 @@
                 <span class="l-kind mono">{b.kind === "Track" ? t("library.typeTrack") : t("library.typeCar")}</span>
                 <span class="l-reason">{t(b.reason)}</span>
               </div>
-              <button class="btn danger" type="button" onclick={() => removeBroken(b.id)} disabled={busy === b.id}>
+              <button class="btn danger" type="button" onclick={() => removeBroken(b)} disabled={busy === b.id}>
                 {busy === b.id ? t("common.working") : t("common.delete")}
               </button>
             </li>

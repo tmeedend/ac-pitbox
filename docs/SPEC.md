@@ -1587,7 +1587,7 @@ conditions (`SESSION§3`), l'aperçu 3D (`SESSION§4`) et l'écran Pilote
 
 **Export d'archive autonome** : repackager un mod complet avec ses dépendances éparpillées (pilotes 3D, polices). Seule fonction qui justifie de lire le `data.acd` chiffré (extraction acd.bms, isolée dans le module d'export, jamais sur le chemin d'import/activation).
 
-**Nettoyage** : détection assistée des mods cassés (voitures sans `ui/`, circuits sans contenu valide, hardlinks orphelins pointant vers un mod supprimé).
+**Nettoyage** : détection assistée des mods cassés (voitures sans `ui/`, circuits sans contenu valide, hardlinks orphelins pointant vers un mod supprimé). Supprimer un mod cassé passe par la même confirmation que partout ailleurs : le garder en vitrine sauve ce qu'on y avait saisi, même quand son dossier a disparu. Un mod en vitrine n'est jamais listé comme cassé.
 
 **Taille sur disque** : chaque version d'un mod porte sa taille, somme de la taille réelle de ses fichiers (pas la place allouée), calculée à l'import une fois son dossier posé en bibliothèque. La colonne « Taille » de la bibliothèque cumule toutes les versions d'un mod, l'historique de la fiche montre celle de chaque version, la fiche d'un pack la somme de ses membres ; « — » tant qu'elle n'est pas connue, pour un mod importé avant qu'elle ne soit calculée. Un mod en vitrine garde la taille qu'il avait avant : c'est ce que coûtera sa récupération. La réindexation de l'écran Maintenance la recalcule sur demande, par une case **décochée par défaut** : parcourir tous les fichiers de la bibliothèque est lent, et la taille ne change que si les fichiers d'un mod ont été touchés hors de l'app.
 

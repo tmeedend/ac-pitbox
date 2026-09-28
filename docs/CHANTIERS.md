@@ -56,7 +56,6 @@ de reprendre. En cas d'écart, la spec fait foi.
         la vignette de grille régénérée n'est pas figée (fonction éteinte,
         `FEATURE_GRID_THUMBS`) — c'est l'aperçu préféré qui l'est ; la
         recherche du panneau passe par DuckDuckGo ;
-        l'écran Maintenance supprime toujours complètement un mod cassé ;
       - ESPACE§5.4 : couches, livrées et sons rattachés, ajouts au jeu,
         ressources. Les garder pleins aujourd'hui est **sûr** (aucun ne va en
         jeu sans son hôte), seulement moins de place libérée. Colonnes

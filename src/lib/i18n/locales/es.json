@@ -703,7 +703,7 @@
     "recalcSize": "Recalcular también el tamaño en disco de cada mod (puede ser lento)",
     "clean": "Ningún problema detectado. La biblioteca y las uniones son coherentes.",
     "brokenTitle": "Mods rotos",
-    "brokenHint": "Archivos de la versión activa no encontrados o estructura no válida. Eliminar quita el mod de la superposición y sus archivos de la biblioteca.",
+    "brokenHint": "Archivos de la versión activa no encontrados o estructura no válida.",
     "orphansTitle": "Uniones huérfanas",
     "orphanSubsTitle": "Skins y sonidos sin mod",
     "orphanSubsHint": "Su coche o circuito se eliminó. Se conservan por si lo reinstalas: al reimportar el mismo mod los recuperas tal cual estaban.",

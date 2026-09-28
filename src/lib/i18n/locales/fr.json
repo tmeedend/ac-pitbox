@@ -1071,7 +1071,7 @@
     "recalcSize": "Recalculer la taille sur disque de chaque mod (peut être long)",
     "clean": "Aucun problème détecté. Bibliothèque et junctions cohérentes.",
     "brokenTitle": "Mods cassés",
-    "brokenHint": "Fichiers de la version active introuvables ou structure invalide. Supprimer retire le mod de l'overlay et ses fichiers de bibliothèque.",
+    "brokenHint": "Fichiers de la version active introuvables ou structure invalide.",
     "orphansTitle": "Junctions orphelines",
     "orphanSubsTitle": "Skins et sons sans mod",
     "orphanSubsHint": "Leur voiture ou circuit a été supprimé. Ils sont gardés au cas où vous le réinstalleriez : réimporter le même mod les retrouve tels quels.",

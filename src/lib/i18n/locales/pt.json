@@ -703,7 +703,7 @@
     "recalcSize": "Recalcular também o tamanho em disco de cada mod (pode ser lento)",
     "clean": "Nenhum problema detectado. A biblioteca e as junções estão coerentes.",
     "brokenTitle": "Mods quebrados",
-    "brokenHint": "Arquivos da versão ativa não encontrados ou estrutura inválida. Excluir remove o mod da sobreposição e os seus arquivos da biblioteca.",
+    "brokenHint": "Arquivos da versão ativa não encontrados ou estrutura inválida.",
     "orphansTitle": "Junções órfãs",
     "orphanSubsTitle": "Skins e sons sem mod",
     "orphanSubsHint": "O carro ou a pista deles foi excluído. Eles são mantidos caso você reinstale: reimportar o mesmo mod os encontra do jeito que estavam.",

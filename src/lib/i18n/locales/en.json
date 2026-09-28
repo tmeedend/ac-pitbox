@@ -1071,7 +1071,7 @@
     "recalcSize": "Recalculate each mod's disk size (can be slow)",
     "clean": "No issue detected. Library and junctions are consistent.",
     "brokenTitle": "Broken mods",
-    "brokenHint": "Active version files not found or invalid structure. Deleting removes the mod from the overlay and its library files.",
+    "brokenHint": "Active version files not found or invalid structure.",
     "orphansTitle": "Orphan junctions",
     "orphanSubsTitle": "Skins and sounds without a mod",
     "orphanSubsHint": "Their car or track was deleted. They are kept in case you reinstall it: reimporting the same mod finds them again as they were.",

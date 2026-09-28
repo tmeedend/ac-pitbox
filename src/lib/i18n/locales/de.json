@@ -703,7 +703,7 @@
     "recalcSize": "Auch den Speicherbedarf jeder Mod neu berechnen (kann langsam sein)",
     "clean": "Kein Problem erkannt. Bibliothek und Junctions sind stimmig.",
     "brokenTitle": "Defekte Mods",
-    "brokenHint": "Dateien der aktiven Version nicht gefunden oder ungültige Struktur. Löschen entfernt die Mod aus dem Overlay und ihre Dateien aus der Bibliothek.",
+    "brokenHint": "Dateien der aktiven Version nicht gefunden oder ungültige Struktur.",
     "orphansTitle": "Verwaiste Junctions",
     "orphanSubsTitle": "Skins und Sounds ohne Mod",
     "orphanSubsHint": "Ihr Fahrzeug oder ihre Strecke wurde gelöscht. Sie bleiben erhalten, falls du sie neu installierst: ein erneuter Import derselben Mod findet sie unverändert wieder.",

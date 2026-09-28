@@ -703,7 +703,7 @@
     "recalcSize": "Ricalcola la dimensione su disco di ogni mod (può essere lento)",
     "clean": "Nessun problema rilevato. Libreria e giunzioni sono coerenti.",
     "brokenTitle": "Mod danneggiate",
-    "brokenHint": "File della versione attiva non trovati o struttura non valida. L'eliminazione toglie la mod dall'overlay e i suoi file dalla libreria.",
+    "brokenHint": "File della versione attiva non trovati o struttura non valida.",
     "orphansTitle": "Giunzioni orfane",
     "orphanSubsTitle": "Skin e suoni senza mod",
     "orphanSubsHint": "La loro auto o il loro circuito è stato eliminato. Vengono conservati nel caso tu li reinstalli: reimportando la stessa mod li ritrovi com'erano.",

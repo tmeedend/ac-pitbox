@@ -1334,6 +1334,37 @@ MESHES=light
         );
     }
 
+    /// Rule (ESPACE R3, ESPACE§5.1): a broken mod whose library folder vanished can
+    /// still go into the showcase — that is what keeps its name, notes and
+    /// tags when the Maintenance screen offers to delete it. The folder comes
+    /// back as a skeleton holding its manifest, and the mod is no longer
+    /// listed as broken.
+    #[test]
+    fn a_broken_mod_whose_folder_vanished_goes_into_the_showcase() {
+        let f = fixture("showcase-broken", "lanzo", "Car", car);
+        std::fs::remove_dir_all(&f.dir).unwrap();
+        let m = overlay::get_mod(&f.conn, "lanzo").unwrap().unwrap();
+        assert!(
+            crate::maintenance::broken_reason(&f.conn, &f.cfg, &m).is_some(),
+            "broken to begin with — otherwise this test proves nothing"
+        );
+
+        let out = to_showcase(&f.conn, &f.cfg, "lanzo", None, true).unwrap();
+
+        assert_eq!(out.freed_bytes, 0, "nothing was left to free");
+        assert!(
+            skeleton::read_manifest(&f.dir).is_some(),
+            "the folder is back, with its manifest"
+        );
+        let m = overlay::get_mod(&f.conn, "lanzo").unwrap().unwrap();
+        assert!(m.showcase);
+        assert_eq!(
+            crate::maintenance::broken_reason(&f.conn, &f.cfg, &m),
+            None,
+            "no longer broken"
+        );
+    }
+
     /// Rule (ESPACE§5.2): the kept source archive goes only when asked, and
     /// the base forgets it with it.
     #[test]
