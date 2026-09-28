@@ -39,7 +39,7 @@
   import { moveFocus } from "$lib/shell/gamepadNav";
   import { registerModNav } from "$lib/shell/screenActions";
   import { libraryVersion } from "$lib/library/libraryVersion.svelte";
-  import { getPreferredSkin, getPreferredLayout } from "$lib/preferred";
+  import { cardImage, getPreferredSkin, getPreferredLayout } from "$lib/preferred";
   import { enqueueGridThumbs, gridThumb, requestGridThumb } from "$lib/gridthumbs/gridThumbs.svelte";
   import { gridThumbsOn, presetForDensity, renderTemplate } from "$lib/gridthumbs/gridThumbPrefs.svelte";
   import { buildModContextItems } from "$lib/library/modContextActions";
@@ -657,7 +657,7 @@
       id: c.id_interne,
       name: c.display_name ?? c.id_interne,
       meta,
-      preview: sk?.preview ?? lay?.preview ?? c.preview,
+      preview: cardImage(c),
       layout: lay?.id ?? (!isCar ? c.layouts[0] ?? null : null),
       skin: sk?.id ?? null,
       outline: !isCar ? (lay?.outline ?? c.outline) : null,
@@ -1039,7 +1039,7 @@
         {#each filtered as c (c.id_interne)}
           {@const prefSkin = isCar ? getPreferredSkin(c.id_interne) : null}
           {@const prefLayout = !isCar ? getPreferredLayout(c.id_interne) : null}
-          {@const src = previewSrc(prefSkin?.preview ?? prefLayout?.preview ?? c.preview)}
+          {@const src = previewSrc(cardImage(c))}
           <!-- La vignette régénérée prend le pas sur la `preview.png` du mod
                quand elle existe (GRILLE§5). Quand elle n'existe pas — et
                une voiture chiffrée n'en aura jamais — la carte garde la photo
