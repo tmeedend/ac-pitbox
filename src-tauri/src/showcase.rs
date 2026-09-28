@@ -46,19 +46,6 @@ pub struct ShowcaseOutcome {
     pub recycled: bool,
     /// It was in the game and was taken out first.
     pub was_active: bool,
-    /// Older versions whose files could not be removed: the mod is in the
-    /// showcase all the same — its active version is —, these stay complete
-    /// in its timeline, and the reason is in the log.
-    pub left_complete: Vec<String>,
-}
-
-/// Where a version's removed files wait for the recycle bin: next to the
-/// version folder (same volume, so a move is a rename), named after it so a
-/// resume finds it again. The inner folder is named after the mod — that is
-/// the name the recycle bin shows.
-fn staging_root(dir: &Path) -> Option<PathBuf> {
-    let name = dir.file_name()?.to_string_lossy();
-    Some(dir.parent()?.join(format!(".pitbox-freeing-{name}")))
 }
 
 /// The preview a version shows on its own: its first skin's for a car, its
@@ -115,36 +102,42 @@ pub fn to_showcase(
         .map(Path::to_path_buf)
         .or_else(|| crate::library::preview_for(conn, cfg, &m).map(PathBuf::from));
 
-    // The active version first, and alone decisive: whether the mod is in
-    // the showcase is whether *it* is a skeleton (ESPACE§4.1). If it cannot
-    // be freed, nothing else is touched and the lot says so; once it is, an
-    // older version that resists stays complete in the timeline instead of
-    // turning a done job into a reported failure.
-    let mut versions = overlay::get_versions(conn, mod_id).map_err(|e| e.to_string())?;
-    versions.retain(|v| !v.is_skeleton());
-    versions.sort_by_key(|v| v.id != active);
-
+    // **All versions or none** (ESPACE§5.4): a mod half in the showcase, an
+    // old version complete next to a skeleton, is a state nobody asked for.
+    // Hence two passes. The first puts every version's files aside — a move
+    // on the same volume, undone as easily as it is done — and the first
+    // version that resists puts them all back. Only then does the second send
+    // them away, the one step that cannot be undone.
+    let versions: Vec<VersionRow> = overlay::get_versions(conn, mod_id)
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .filter(|v| !v.is_skeleton())
+        .collect();
     let stamp = now();
-    let mut freed_bytes = 0;
-    let mut recycled = true;
-    let mut left_complete = Vec::new();
+    let mut freeing: Vec<Freeing> = Vec::with_capacity(versions.len());
     for v in &versions {
         let image = (v.id == active).then_some(card_image.as_deref()).flatten();
-        match free_version(conn, cfg, kind, &m, v, image, &stamp) {
-            Ok((freed, bin)) => {
-                freed_bytes += freed;
-                recycled &= bin;
-                // Only the archive of a version actually freed: the others
-                // still recover themselves from it.
-                if !keep_archive {
-                    recycled &= drop_kept_archive(conn, cfg, v)?;
-                }
+        let prepared = prepare(cfg, kind, &m, v, image, &stamp).and_then(|f| {
+            let staged = f.stage();
+            freeing.push(f);
+            staged
+        });
+        if let Err(e) = prepared {
+            for f in &freeing {
+                f.roll_back();
             }
-            Err(e) if v.id == active => return Err(e),
-            Err(e) => {
-                log::warn!("showcase {mod_id}: version {} left complete: {e}", v.id);
-                left_complete.push(v.id.clone());
-            }
+            return Err(e);
+        }
+    }
+
+    let mut freed_bytes = 0;
+    let mut recycled = true;
+    for f in &freeing {
+        let (freed, bin) = f.complete(conn, kind)?;
+        freed_bytes += freed;
+        recycled &= bin;
+        if !keep_archive {
+            recycled &= drop_kept_archive(conn, cfg, f.v)?;
         }
     }
 
@@ -157,21 +150,28 @@ pub fn to_showcase(
         freed_bytes,
         recycled,
         was_active,
-        left_complete,
     })
 }
 
-/// Steps 2 to 5 for one version. Returns what it freed and whether the
-/// recycle bin took it.
-fn free_version(
-    conn: &Connection,
+/// One version on its way into the showcase: its folder, and the manifest
+/// that lists — and alone decides — what leaves it.
+struct Freeing<'a> {
+    v: &'a VersionRow,
+    mod_id: &'a str,
+    dir: PathBuf,
+    manifest: Manifest,
+}
+
+/// Steps 2 and 3 for one version: frozen image, projections out, manifest
+/// written. Nothing has left the folder yet.
+fn prepare<'a>(
     cfg: &AppConfig,
     kind: ModKind,
-    m: &ModRow,
-    v: &VersionRow,
+    m: &'a ModRow,
+    v: &'a VersionRow,
     card_image: Option<&Path>,
     stamp: &str,
-) -> Result<(u64, bool), String> {
+) -> Result<Freeing<'a>, String> {
     let dir = crate::libpath::resolve(cfg.library_path.as_deref(), &v.library_path)
         .ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
     // A version whose folder vanished still becomes a skeleton: R3 wants the
@@ -201,47 +201,155 @@ fn free_version(
     manifest.source_archive = v.source_archive.clone();
     manifest.source_site = v.source_site.clone();
     manifest.source_file_name = v.source_file_name.clone();
-    skeleton::write_manifest(&dir, &manifest)?;
-
-    // 4 and 5.
-    finish(conn, kind, &m.id_interne, v, &dir, &manifest)
+    let freeing = Freeing {
+        v,
+        mod_id: &m.id_interne,
+        dir,
+        manifest,
+    };
+    if let Err(e) = skeleton::write_manifest(&freeing.dir, &freeing.manifest) {
+        freeing.roll_back();
+        return Err(e);
+    }
+    Ok(freeing)
 }
 
-/// Steps 4 and 5, from a manifest already written — shared by the removal
-/// and by its resumption, so that both remove **exactly what the manifest
-/// lists** and nothing it does not.
-fn finish(
-    conn: &Connection,
-    kind: ModKind,
-    mod_id: &str,
-    v: &VersionRow,
-    dir: &Path,
-    manifest: &Manifest,
-) -> Result<(u64, bool), String> {
-    let recycled = remove_listed(dir, mod_id, manifest)?;
-    let mut reduced = 0;
-    for entry in walkdir::WalkDir::new(dir).into_iter().flatten() {
-        let Ok(rel) = entry.path().strip_prefix(dir) else {
-            continue;
-        };
-        if entry.file_type().is_file() && skeleton::is_reduced(kind, rel) {
-            match skeleton::reduce_in_place(entry.path()) {
-                Ok(gain) => reduced += gain,
-                Err(e) => log::warn!("showcase {mod_id}: {} not reduced: {e}", entry.path().display()),
+impl Freeing<'_> {
+    /// Where this version's files wait for the recycle bin: next to its
+    /// folder (same volume, so a move is a rename), named after it so a
+    /// resume finds it again.
+    fn root(&self) -> PathBuf {
+        let name = self.dir.file_name().unwrap_or_default().to_string_lossy();
+        self.dir
+            .parent()
+            .unwrap_or(&self.dir)
+            .join(format!(".pitbox-freeing-{name}"))
+    }
+
+    /// The folder the recycle bin receives, named after the mod: that is the
+    /// name the bin shows.
+    fn staging(&self) -> PathBuf {
+        self.root().join(self.mod_id)
+    }
+
+    /// Step 4, first half: moves every listed file into the staging folder.
+    /// A file already there was moved by the interrupted run this one
+    /// resumes. Undone by [`Freeing::roll_back`] — the caller decides, since
+    /// a failure elsewhere must put this version back too.
+    fn stage(&self) -> Result<(), String> {
+        let staging = self.staging();
+        std::fs::create_dir_all(&staging).map_err(|e| format!("{}: {e}", staging.display()))?;
+        for f in &self.manifest.removed {
+            let src = self.dir.join(&f.path);
+            if !src.exists() {
+                continue;
+            }
+            let dst = staging.join(&f.path);
+            dst.parent()
+                .map_or(Ok(()), std::fs::create_dir_all)
+                .and_then(|()| std::fs::rename(&src, &dst))
+                .map_err(|e| {
+                    log::warn!("showcase {}: {} not moved ({e})", self.mod_id, src.display());
+                    format!("{}: {e}", src.display())
+                })?;
+        }
+        Ok(())
+    }
+
+    /// Puts back **everything** the staging folder holds — this run's moves
+    /// and, on a resume, those of the run that was interrupted — so that a
+    /// rollback never deletes a file.
+    ///
+    /// Only when all of it is back does the version read as complete again:
+    /// manifest and frozen image removed, staging folder with them, and no
+    /// resume will try to free it behind the user's back. If anything could
+    /// not be put back, the manifest **and** the staging folder stay: the
+    /// version is then in the state "stopped between 3 and 5", which the next
+    /// start finishes — the one way out of it that loses nothing.
+    fn roll_back(&self) {
+        let (root, staging, mod_id) = (self.root(), self.staging(), self.mod_id);
+        let mut all_back = true;
+        for entry in walkdir::WalkDir::new(&staging).into_iter().flatten() {
+            if !entry.file_type().is_file() {
+                continue;
+            }
+            let Ok(rel) = entry.path().strip_prefix(&staging) else {
+                continue;
+            };
+            let back = self.dir.join(rel);
+            let res = back
+                .parent()
+                .map_or(Ok(()), std::fs::create_dir_all)
+                .and_then(|()| std::fs::rename(entry.path(), &back));
+            if let Err(e) = res {
+                log::warn!("showcase {mod_id}: {} not put back: {e}", back.display());
+                all_back = false;
             }
         }
-    }
-    // Emptied folders go, the version's own stays (ESPACE R3): everything
-    // that resolves the mod's folder must keep finding it.
-    for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
-        if entry.path().is_dir() {
-            crate::extras::prune_empty_dirs(&entry.path());
+        if !all_back {
+            log::warn!(
+                "showcase {mod_id}: rollback incomplete, {} kept for the next start to finish",
+                root.display()
+            );
+            return;
+        }
+        let own = [self.dir.join(skeleton::MANIFEST_NAME)]
+            .into_iter()
+            .chain(skeleton::image_of(&self.dir))
+            .filter(|p| p.exists());
+        for file in own {
+            let _ = std::fs::remove_file(&file)
+                .inspect_err(|e| log::warn!("showcase {mod_id}: {} not removed: {e}", file.display()));
+        }
+        if root.exists() {
+            let _ = std::fs::remove_dir_all(&root)
+                .inspect_err(|e| log::warn!("showcase {mod_id}: {} not removed: {e}", root.display()));
         }
     }
-    let freed = manifest.removed_bytes + reduced;
-    let left = crate::inspect::dir_size_bytes(dir) as i64;
-    overlay::mark_version_freed(conn, &v.id, &manifest.freed_at, freed as i64, left).map_err(|e| e.to_string())?;
-    Ok((freed, recycled))
+
+    /// Step 4, second half, and step 5: the staging folder goes to the
+    /// recycle bin in one piece — one entry named after the mod rather than
+    /// thousands of loose files —, the kept track previews are reduced, the
+    /// emptied folders pruned, and the base marked. Returns what was freed
+    /// and whether the bin took it.
+    ///
+    /// The kept `ui/` files are **copied** into the staging folder first, so
+    /// that what lands in the recycle bin is a complete mod folder: restored
+    /// and dropped into Pit Box, it rehydrates the mod like its archive would.
+    fn complete(&self, conn: &Connection, kind: ModKind) -> Result<(u64, bool), String> {
+        let (dir, mod_id) = (&self.dir, self.mod_id);
+        let staging = self.staging();
+        copy_kept(dir, &staging);
+        let recycled = crate::maintenance::trash_or_delete(&staging)?;
+        let root = self.root();
+        if root.exists() {
+            std::fs::remove_dir_all(&root).map_err(|e| format!("{}: {e}", root.display()))?;
+        }
+
+        let mut reduced = 0;
+        for entry in walkdir::WalkDir::new(dir).into_iter().flatten() {
+            let Ok(rel) = entry.path().strip_prefix(dir) else {
+                continue;
+            };
+            if entry.file_type().is_file() && skeleton::is_reduced(kind, rel) {
+                match skeleton::reduce_in_place(entry.path()) {
+                    Ok(gain) => reduced += gain,
+                    Err(e) => log::warn!("showcase {mod_id}: {} not reduced: {e}", entry.path().display()),
+                }
+            }
+        }
+        // Emptied folders go, the version's own stays (ESPACE R3): everything
+        // that resolves the mod's folder must keep finding it.
+        for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            if entry.path().is_dir() {
+                crate::extras::prune_empty_dirs(&entry.path());
+            }
+        }
+        let freed = self.manifest.removed_bytes + reduced;
+        overlay::mark_version_freed(conn, &self.v.id, &self.manifest.freed_at, freed as i64)
+            .map_err(|e| e.to_string())?;
+        Ok((freed, recycled))
+    }
 }
 
 /// Skin projections inside a version folder are junctions onto skins stored
@@ -255,92 +363,6 @@ fn remove_projections(dir: &Path) {
             }
         }
     }
-}
-
-/// Moves every listed file into the staging folder, then sends the whole
-/// folder to the recycle bin at once — one entry named after the mod rather
-/// than thousands of loose files, and one bin operation instead of one per
-/// file. A file that cannot be moved stops the removal: see [`roll_back`].
-///
-/// The kept `ui/` files are **copied** into the staging folder too, so that
-/// what lands in the recycle bin is a complete mod folder: restored and
-/// dropped into Pit Box, it rehydrates the mod like its archive would.
-fn remove_listed(dir: &Path, mod_id: &str, manifest: &Manifest) -> Result<bool, String> {
-    let root = staging_root(dir).ok_or_else(|| format!("{}: no parent folder", dir.display()))?;
-    let staging = root.join(mod_id);
-    std::fs::create_dir_all(&staging).map_err(|e| format!("{}: {e}", staging.display()))?;
-
-    for f in &manifest.removed {
-        let src = dir.join(&f.path);
-        if !src.exists() {
-            // Already moved by the interrupted run this one resumes.
-            continue;
-        }
-        let dst = staging.join(&f.path);
-        let res = dst
-            .parent()
-            .map_or(Ok(()), std::fs::create_dir_all)
-            .and_then(|()| std::fs::rename(&src, &dst));
-        if let Err(e) = res {
-            log::warn!("showcase {mod_id}: {} not moved ({e}), putting back", src.display());
-            roll_back(dir, &root, &staging, mod_id);
-            return Err(format!("{}: {e}", src.display()));
-        }
-    }
-    copy_kept(dir, &staging);
-
-    let recycled = crate::maintenance::trash_or_delete(&staging)?;
-    if root.exists() {
-        std::fs::remove_dir_all(&root).map_err(|e| format!("{}: {e}", root.display()))?;
-    }
-    Ok(recycled)
-}
-
-/// Puts back **everything** the staging folder holds — this run's moves and,
-/// on a resume, those of the run that was interrupted — so that a rollback
-/// never deletes a file.
-///
-/// Only when all of it is back does the version read as complete again:
-/// manifest and frozen image removed, staging folder with them, and no resume
-/// will try to free it behind the user's back. If anything could not be put
-/// back, the manifest **and** the staging folder stay: the version is then
-/// in the state "stopped between 3 and 5", which the next start finishes —
-/// the one way out of it that loses nothing.
-fn roll_back(dir: &Path, root: &Path, staging: &Path, mod_id: &str) {
-    let mut all_back = true;
-    for entry in walkdir::WalkDir::new(staging).into_iter().flatten() {
-        if !entry.file_type().is_file() {
-            continue;
-        }
-        let Ok(rel) = entry.path().strip_prefix(staging) else {
-            continue;
-        };
-        let back = dir.join(rel);
-        let res = back
-            .parent()
-            .map_or(Ok(()), std::fs::create_dir_all)
-            .and_then(|()| std::fs::rename(entry.path(), &back));
-        if let Err(e) = res {
-            log::warn!("showcase {mod_id}: {} not put back: {e}", back.display());
-            all_back = false;
-        }
-    }
-    if !all_back {
-        log::warn!(
-            "showcase {mod_id}: rollback incomplete, {} kept for the next start to finish",
-            root.display()
-        );
-        return;
-    }
-    let own = [dir.join(skeleton::MANIFEST_NAME)]
-        .into_iter()
-        .chain(skeleton::image_of(dir));
-    for file in own {
-        let _ = std::fs::remove_file(&file)
-            .inspect_err(|e| log::warn!("showcase {mod_id}: {} not removed: {e}", file.display()));
-    }
-    let _ = std::fs::remove_dir_all(root)
-        .inspect_err(|e| log::warn!("showcase {mod_id}: {} not removed: {e}", root.display()));
 }
 
 /// Copies what the skeleton keeps into the staging folder, the showcase's own
@@ -423,10 +445,24 @@ pub fn resume_interrupted(conn: &Connection, cfg: &AppConfig) -> usize {
                     continue;
                 }
             }
-            match finish(conn, kind, &m.id_interne, &v, &dir, &manifest) {
+            let freeing = Freeing {
+                v: &v,
+                mod_id: &m.id_interne,
+                dir,
+                manifest,
+            };
+            let finished = match freeing.stage() {
+                Ok(()) => freeing.complete(conn, kind),
+                Err(e) => {
+                    freeing.roll_back();
+                    Err(e)
+                }
+            };
+            match finished {
                 Ok((freed, _)) => {
                     let details = serde_json::json!({ "key": "showcased", "bytes": freed }).to_string();
-                    if let Err(e) = overlay::add_history(conn, &m.id_interne, &manifest.freed_at, "SHOWCASE", &details)
+                    if let Err(e) =
+                        overlay::add_history(conn, &m.id_interne, &freeing.manifest.freed_at, "SHOWCASE", &details)
                     {
                         log::warn!("showcase resume {}: history not written: {e}", m.id_interne);
                     }
@@ -645,6 +681,12 @@ MESHES=light
         );
     }
 
+    /// Where a version's files wait for the recycle bin, as `Freeing` names it.
+    fn staging_root(dir: &Path) -> PathBuf {
+        let name = dir.file_name().unwrap().to_string_lossy();
+        dir.parent().unwrap().join(format!(".pitbox-freeing-{name}"))
+    }
+
     fn files_of(dir: &Path) -> Vec<String> {
         let mut out: Vec<String> = walkdir::WalkDir::new(dir)
             .into_iter()
@@ -664,7 +706,8 @@ MESHES=light
         let f = fixture("showcase-car", "lanzo", "Car", car);
         crate::activation::activate(&f.conn, &f.cfg, "lanzo", None).unwrap();
         assert!(crate::activation::is_mod_active(&f.cfg, ModKind::Car, "lanzo"));
-        let before = crate::inspect::dir_size_bytes(&f.dir);
+        let before = crate::inspect::dir_size_bytes(&f.dir) as i64;
+        overlay::update_version_size(&f.conn, "v1", before).unwrap();
 
         let out = to_showcase(&f.conn, &f.cfg, "lanzo", None, true).unwrap();
 
@@ -716,10 +759,9 @@ MESHES=light
         assert_eq!(v.freed_bytes, Some(out.freed_bytes as i64));
         assert_eq!(
             v.size_bytes,
-            Some(crate::inspect::dir_size_bytes(&f.dir) as i64),
-            "the size is what is left on disk"
+            Some(before),
+            "the size is the mod's own, from before its files went"
         );
-        assert!(before > v.size_bytes.unwrap() as u64);
         assert_eq!(v.skins, vec!["red".to_string()], "the skin names stay in the base");
         assert_eq!(v.csp_features, vec!["lightingfx".to_string()]);
         assert!(
@@ -799,6 +841,21 @@ MESHES=light
         overlay::set_mod_field(c, "lanzo", "display_name_user", Some("My Lanzo")).unwrap();
         overlay::set_mod_field(c, "lanzo", "description_user", Some("Notes")).unwrap();
         crate::techsheet::record(c, "lanzo", "v1", &f.dir, false).unwrap();
+        overlay::update_version_size(c, "v1", 551_000_000).unwrap();
+        overlay::record_decision(c, Some("lanzo"), "mod_v1.4.7z", "extra", "extension/", None);
+        c.execute(
+            "INSERT INTO media_links (file_path, entity_id, kind) VALUES ('shot.jpg', 'lanzo', 'SCREENSHOT')",
+            [],
+        )
+        .unwrap();
+        let rows = |table: &str, column: &str| -> i64 {
+            c.query_row(
+                &format!("SELECT COUNT(*) FROM {table} WHERE {column} = 'lanzo'"),
+                [],
+                |r| r.get(0),
+            )
+            .unwrap()
+        };
         let mod_before = serde_json::to_value(overlay::get_mod(c, "lanzo").unwrap()).unwrap();
         let sheet_before = serde_json::to_value(crate::techsheet::effective(c, "lanzo").unwrap()).unwrap();
         assert!(
@@ -810,17 +867,18 @@ MESHES=light
         crate::maintenance::reindex_all(c, &f.cfg, true).unwrap();
 
         let mut mod_after = serde_json::to_value(overlay::get_mod(c, "lanzo").unwrap()).unwrap();
-        // The only fields allowed to move: the state itself, and the size,
-        // which is what is left on disk (§10).
+        // The only field allowed to move: the state itself. The size stays
+        // the mod's own — a reindex that measures it included.
         assert_eq!(mod_after["showcase"], serde_json::json!(true));
         mod_after["showcase"] = mod_before["showcase"].clone();
-        mod_after["size_bytes"] = mod_before["size_bytes"].clone();
         assert_eq!(mod_after, mod_before, "every entry of the mod is intact");
         assert_eq!(
             serde_json::to_value(crate::techsheet::effective(c, "lanzo").unwrap()).unwrap(),
             sheet_before,
             "the tech sheet is the same, reindex included"
         );
+        assert_eq!(rows("import_decisions", "mod_id"), 1, "the import journal is kept");
+        assert_eq!(rows("media_links", "entity_id"), 1, "and the media attached by hand");
         let v = overlay::get_version(c, "v1").unwrap().unwrap();
         assert_eq!(v.skins, vec!["red".to_string()], "the reindex kept the skin names");
         assert_eq!(v.csp_features, vec!["lightingfx".to_string()], "and the CSP features");
@@ -927,7 +985,7 @@ MESHES=light
         );
         manifest.content_signature = Some("sig-full".into());
         skeleton::write_manifest(&f.dir, &manifest).unwrap();
-        let staging = staging_root(&f.dir).unwrap().join("lanzo");
+        let staging = staging_root(&f.dir).join("lanzo");
         std::fs::create_dir_all(&staging).unwrap();
         std::fs::rename(f.dir.join("lanzo.kn5"), staging.join("lanzo.kn5")).unwrap();
 
@@ -942,7 +1000,7 @@ MESHES=light
         let mut after = files_of(&f.dir);
         after.retain(|p| !p.starts_with(".pitbox-vitrine."));
         assert_eq!(after, before, "the model moved by the first run is back as well");
-        assert!(!staging_root(&f.dir).unwrap().exists(), "nothing left in staging");
+        assert!(!staging_root(&f.dir).exists(), "nothing left in staging");
         assert!(!overlay::get_version(&f.conn, "v1").unwrap().unwrap().is_skeleton());
     }
 
@@ -973,23 +1031,17 @@ MESHES=light
         );
     }
 
-    /// Rule (ESPACE§4.1): the active version decides. An older version that
-    /// cannot be freed stays complete in the timeline; the mod is in the
-    /// showcase all the same, and the outcome names what was left.
-    #[test]
-    fn an_older_version_that_resists_does_not_fail_the_mod() {
-        use std::os::windows::fs::OpenOptionsExt;
-        let f = fixture("showcase-older", "lanzo", "Car", car);
+    /// A mod with an older version next to the active one, both complete.
+    fn with_older_version(f: &Fixture) -> PathBuf {
         let old = f.base.join("lib/cars/lanzo/v0");
         car(&old);
-        let now = "2020-01-01T00:00:00+00:00";
         overlay::insert_version(
             &f.conn,
             "v0",
             "lanzo",
             Some("1.0"),
             None,
-            now,
+            "2020-01-01T00:00:00+00:00",
             &old.to_string_lossy(),
             None,
             "sig-old",
@@ -1000,19 +1052,60 @@ MESHES=light
             None,
         )
         .unwrap();
+        old
+    }
+
+    /// Rule (ESPACE§5.4): every version of the mod goes into the showcase,
+    /// not only the active one.
+    #[test]
+    fn every_version_goes_into_the_showcase() {
+        let f = fixture("showcase-versions", "lanzo", "Car", car);
+        let old = with_older_version(&f);
+        to_showcase(&f.conn, &f.cfg, "lanzo", None, true).unwrap();
+        for id in ["v0", "v1"] {
+            assert!(
+                overlay::get_version(&f.conn, id).unwrap().unwrap().is_skeleton(),
+                "{id} is a skeleton"
+            );
+        }
+        assert!(!old.join("lanzo.kn5").exists(), "the old version lost its files too");
+    }
+
+    /// Rule (ESPACE§5.4): all versions or none. One version that resists —
+    /// here the older one, handled after the active one — puts every version
+    /// back as it was: no mod half in the showcase, no journal entry.
+    #[test]
+    fn one_version_that_resists_leaves_every_version_complete() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let f = fixture("showcase-older", "lanzo", "Car", car);
+        let old = with_older_version(&f);
+        let (active_before, old_before) = (files_of(&f.dir), files_of(&old));
         let lock = std::fs::OpenOptions::new()
             .read(true)
             .share_mode(0)
             .open(old.join("sfx/lanzo.bank"))
             .unwrap();
-        let out = to_showcase(&f.conn, &f.cfg, "lanzo", None, true).expect("the mod is in the showcase");
+        assert!(
+            to_showcase(&f.conn, &f.cfg, "lanzo", None, true).is_err(),
+            "the lot reports the mod as failed"
+        );
         drop(lock);
 
-        assert_eq!(out.left_complete, vec!["v0".to_string()]);
-        assert!(skeleton::is_showcase(&f.conn, "lanzo").unwrap());
-        assert!(!overlay::get_version(&f.conn, "v0").unwrap().unwrap().is_skeleton());
-        assert!(old.join("lanzo.kn5").is_file(), "the old version kept its files");
-        assert_eq!(overlay::get_history(&f.conn, "lanzo").unwrap()[0].event, "SHOWCASE");
+        assert_eq!(
+            files_of(&f.dir),
+            active_before,
+            "the active version got every file back"
+        );
+        assert_eq!(files_of(&old), old_before, "the older one too");
+        assert!(!skeleton::is_showcase(&f.conn, "lanzo").unwrap(), "not in the showcase");
+        for id in ["v0", "v1"] {
+            assert!(!overlay::get_version(&f.conn, id).unwrap().unwrap().is_skeleton());
+        }
+        assert!(
+            overlay::get_history(&f.conn, "lanzo").unwrap().is_empty(),
+            "nothing journaled"
+        );
+        assert_eq!(resume_interrupted(&f.conn, &f.cfg), 0, "and nothing left for a resume");
     }
 
     /// Rule (ESPACE§5.5): a manifest written, half the files moved, the base
@@ -1038,7 +1131,7 @@ MESHES=light
         manifest.content_signature = Some("sig-full".into());
         skeleton::write_manifest(&f.dir, &manifest).unwrap();
         // Half done: the model is already in the staging folder.
-        let staging = staging_root(&f.dir).unwrap().join("lanzo");
+        let staging = staging_root(&f.dir).join("lanzo");
         std::fs::create_dir_all(&staging).unwrap();
         std::fs::rename(f.dir.join("lanzo.kn5"), staging.join("lanzo.kn5")).unwrap();
 
@@ -1048,7 +1141,7 @@ MESHES=light
             vec![".pitbox-vitrine.json", "ui/badge.png", "ui/ui_car.json"],
             "the rest went too"
         );
-        assert!(!staging_root(&f.dir).unwrap().exists(), "the staging folder too");
+        assert!(!staging_root(&f.dir).exists(), "the staging folder too");
         assert!(overlay::get_version(&f.conn, "v1").unwrap().unwrap().is_skeleton());
         assert_eq!(resume_interrupted(&f.conn, &f.cfg), 0, "idempotent");
     }

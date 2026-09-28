@@ -36,6 +36,8 @@ La vitrine **ne supprime aucune ligne en base**. Seuls des fichiers partent. Tou
 
 La version garde son `library_path`, son dossier existe toujours, et on y laisse le strict nécessaire aux **listes** (§3.1). Tout ce qui résout le dossier d'un mod (`library::entity_dir`, `overlay::get_version_path`) continue de répondre, et ce qui lit `ui/` continue de lire.
 
+Le squelette vit dans la **bibliothèque de Pit Box**, jamais dans `content/` : le mod est désactivé avant (§5.5), et rien ne le repose (R5). Content Manager et Assetto Corsa ne lisent que `content/` : ils ne voient pas un mod en vitrine, ni cassé ni autrement. Le choix de garder ces quelques dizaines de Ko sur disque plutôt que tout copier en base a été reconfirmé le 2026-09-28 : une dizaine d'endroits lisent `ui/`, et l'export (`EXPORT§`) réutilise le squelette tel quel.
+
 ## R4 — La fiche d'un mod en vitrine est dégradée, et le dit
 
 Galerie de livrées, aperçu 3D, écoute du moteur, cartes de tracé : ce qui n'est pas dans le squelette disparaît de la fiche, **remplacé par une phrase qui dit pourquoi**, jamais par un vide ou une erreur. Ce qui est en base reste affiché.
@@ -138,6 +140,8 @@ Sur la table `versions` :
 | `freed_bytes` | entier | ce que ça a libéré |
 | `source_site`, `source_file_name` | texte | l'origine de l'archive (§8) |
 
+`size_bytes` **n'est pas réécrit** : il garde la taille du mod avant la mise en vitrine. C'est ce qu'on veut savoir d'un mod en vitrine (ce que coûtera sa récupération), et c'est sur elle que trie la colonne Taille ; les quelques Ko du squelette ne méritent pas de colonne. Une réindexation qui recalcule les tailles saute les squelettes.
+
 Migration par ajout de colonnes, défaut `'full'` : toutes les versions existantes restent complètes, sans rien réécrire. Le nom technique reste `skeleton` dans le code ; « vitrine » est le mot de l'interface.
 
 **Le statut d'un mod se déduit, il ne se stocke pas.** Un mod est **en vitrine** quand sa version active est `skeleton`. Une ancienne version peut être en vitrine alors que l'active ne l'est pas.
@@ -235,7 +239,7 @@ La corbeille d'une **ancienne version**, dans la frise de la fiche, reste ce qu'
 - **Deux choix côte à côte, pas une case « purger ».** Une case ressemble à une option avancée, et on la saute ; deux choix obligent à lire les deux conséquences, et c'est là que l'utilisateur apprend ce qu'est la vitrine.
 - **Le choix par défaut est toujours la vitrine**, et il n'est pas mémorisé. Se tromper vers la vitrine se rattrape en un clic ; se tromper vers la suppression complète fait perdre des notes.
 - **La deuxième ligne de chaque choix** dit ce qui reste et ce qui part, en toutes lettres.
-- **Lignes conditionnelles** : « Il sera désactivé » si le mod est actif ; une ligne par couche, avec son poids et le rappel qu'elle a sa propre archive (réimporter la base ne ramène pas les couches, §7.5) ; la source, quand on la connaît (§8), sinon « Aucune source connue : gardez l'archive quelque part. » La ligne de source ne s'affiche que pour le choix vitrine.
+- **Lignes conditionnelles** : « Il sera désactivé » si le mod est actif ; « Ses 3 versions perdent leurs fichiers » s'il en a plusieurs (§5.4) ; une ligne par couche, avec son poids et le rappel qu'elle a sa propre archive (réimporter la base ne ramène pas les couches, §7.5) ; la source, quand on la connaît (§8), sinon « Aucune source connue : gardez l'archive quelque part. » La ligne de source ne s'affiche que pour le choix vitrine.
 - **Si l'archive source est conservée** : une case « Garder aussi l'archive conservée », cochée, qui permet de récupérer en un clic et hors ligne.
 
 **En masse**, la confirmation résume : « 12 mods, 18,4 Go. 3 sont actifs et seront désactivés. 2 ont des couches. 4 n'ont aucune source connue. » Les 4 sont nommés sous la phrase.
@@ -255,13 +259,13 @@ Sur un mod en vitrine, elle supprime le squelette et la ligne.
 
 | Élément | Traitement | Pourquoi |
 |---|---|---|
-| Toutes ses versions | vitrine | une ancienne version sans la nouvelle n'a pas de sens pour le jeu |
+| Toutes ses versions | vitrine, **toutes ou aucune** | une ancienne version sans la nouvelle n'a pas de sens pour le jeu ; si une seule résiste (fichier verrouillé), aucune ne perd ses fichiers et la suppression échoue en le disant. La confirmation annonce le nombre de versions (§5.2) |
 | Ses couches | vitrine, sans squelette : fichiers supprimés, ligne et manifeste gardés | elles ne composent rien sans leur base |
 | Ses ajouts au jeu (`extras/`) | supprimés, listés dans le manifeste | retirés du jeu à la désactivation |
 | Ses livrées et sons rattachés (`sub_mods`) | vitrine, sans squelette | inutilisables sans la voiture ; leurs noms restent |
 | Ses ressources | supprimées, sauf les fichiers texte de moins de 64 Ko (`.txt`, `.md`, `.nfo`, `.url`) | une notice dit souvent **où télécharger** le mod, et pèse quelques Ko |
 
-**Hors lot 1** : mettre en vitrine une app, un « autre mod », un mannequin de pilote, ou une livrée d'une voiture d'origine. Leur suppression garde son comportement actuel. Ce sont des entités autonomes avec leurs propres écrans ; la mécanique sera la même, et c'est l'objet d'un lot 2 que l'export attend (`EXPORT§`).
+**Pas de vitrine pour les autres types** (décidé le 2026-09-28) : une app, un « autre mod », un mannequin de pilote, une livrée d'une voiture d'origine se suppriment comme aujourd'hui. On ne les range ni ne les annote comme les voitures et les circuits : les supprimer ne fait presque rien perdre, et la vitrine n'a d'intérêt que là où il y a quelque chose à garder. Le lot 2 que prévoyait cette spec est abandonné ; l'export en tire la conséquence (`EXPORT§4.1`).
 
 ## 5.5 Le déroulé
 
@@ -270,7 +274,7 @@ En fond (`spawn_blocking`, progression dans la pile de notifications, comme la r
 1. **Désactiver** si actif, par le chemin normal (`activation::deactivate`), qui retire aussi les ajouts au jeu et restaure les originaux remplacés. Si la désactivation échoue, **on s'arrête** : ne jamais supprimer la source d'un mod encore posé dans le jeu.
 2. **Vérifier que la fiche technique est en base** (`FICHE§`), la remplir sinon, et **figer l'image de vitrine** (§3.3).
 3. **Écrire le manifeste** de chaque version, couche et sous-élément, **avant** toute suppression. Une app tuée au milieu laisse un manifeste qui décrit plus que ce qui manque, jamais moins.
-4. **Supprimer** tout ce qui n'est pas dans la liste blanche, **réduire** les aperçus de tracé gardés : corbeille d'abord, définitif sinon (R8). Élaguer les dossiers devenus vides, **sauf** la racine de la version.
+4. **Supprimer** tout ce qui n'est pas dans la liste blanche, **réduire** les aperçus de tracé gardés : corbeille d'abord, définitif sinon (R8). Élaguer les dossiers devenus vides, **sauf** la racine de la version. En deux temps, pour que ce soit **toutes les versions ou aucune** (§5.4) : les fichiers de chaque version sont d'abord mis de côté à côté d'elle (un déplacement sur le même disque, qui se défait) ; la première version qui résiste remet tout en place ; alors seulement l'ensemble part à la corbeille.
 5. **Marquer** en base (`content_state`, `freed_at`, `freed_bytes`), dans une transaction.
 6. **Journaliser** : « Mis en vitrine, 550 Mo libérés ». C'est un événement de cycle de vie, il a sa place dans la frise.
 

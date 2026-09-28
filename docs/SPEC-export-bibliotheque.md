@@ -4,7 +4,7 @@
 
 *Refaire une installation de Pit Box à l'identique sur une autre machine, ou après une réinstallation : les mods (en vitrine), le classement, les sessions, les profils et les préférences, dans un fichier de quelques Mo.*
 
-> **Étiquette de renvoi : `EXPORT§`.** Repose entièrement sur la vitrine (`ESPACE§`) : **un export est une bibliothèque dont tous les mods sont en vitrine.** Rien ici ne se construit avant ESPACE lot 1 ; les types autres que voitures et circuits attendent ESPACE lot 2 (§9).
+> **Étiquette de renvoi : `EXPORT§`.** Repose entièrement sur la vitrine (`ESPACE§`) : **un export est une bibliothèque dont tous les mods sont en vitrine.** Rien ici ne se construit avant ESPACE lot 1 ; les types autres que voitures et circuits n'ont pas de vitrine (ESPACE§5.4) et ne sont pas exportés (§9).
 >
 > Relevés de code du 2026-09-27 (`overlay.rs`, `backup.rs`, `config.rs`, `saved_grids.rs`, `ui_prefs.rs`).
 
@@ -80,7 +80,7 @@ L'export produit une copie de `overlay.sqlite` (`VACUUM INTO`, lecture seule, co
 | `mods` | oui | toutes les lignes, contenu d'origine compris (§4.2) ; `active_version_id` gardé |
 | `versions` | oui | `content_state` forcé à `skeleton`, `freed_at` à la date d'export ; `library_path` relatif gardé ; signature, archive et origine gardées |
 | `layers`, `sub_mods` | oui | `content_state` forcé à `skeleton` ; `is_active` à 0 |
-| `apps`, `other_mods` | oui, **avec ESPACE lot 2** | d'ici là, non exportées ; le rapport d'export les liste par nom (§9) |
+| `apps`, `other_mods` | non | pas de vitrine pour ces types (ESPACE§5.4) ; le rapport d'export les liste par nom (§9) |
 | `usage` | oui | « déjà essayé », nombre de lancements |
 | `tech_facts`, `tech_user` | oui | la fiche technique (`FICHE§`) : c'est elle qui garde, sans aucun fichier, les chiffres, la mécanique lue dans la physique et l'électronique ; et les corrections de l'utilisateur |
 | `history` | oui | plus une ligne « Exporté depuis une autre installation » à l'import |
@@ -197,7 +197,7 @@ Repris de la liste de la sauvegarde de démarrage (`backup.rs`), fichier par fic
 
 1. **Les parties**, cochables, avec pour chacune ce qu'elle contient en une ligne et un décompte (« 152 mods, 11 couches, 17 voitures d'origine annotées »).
 2. **La taille estimée**, calculée avant d'écrire : « environ 4 Mo ».
-3. **Ce qui ne partira pas**, en clair : « Le contenu des mods ne part pas : ils arriveront en vitrine. 2 apps et 1 autre mod ne sont pas encore exportables. »
+3. **Ce qui ne partira pas**, en clair : « Le contenu des mods ne part pas : ils arriveront en vitrine. 2 apps et 1 autre mod ne sont pas exportés. »
 4. **Le fichier** : boîte d'enregistrement, nom proposé `Pit Box - <date>.pitbox`.
 5. **En fond**, progression dans la pile de notifications, comme le relevé anonyme. Rapport à la fin, avec « Ouvrir le dossier ».
 
@@ -269,9 +269,9 @@ Un test liste les tables de la base (`sqlite_master`) et **échoue** si l'une d'
 | Lot | Contenu | Dépend de |
 |---|---|---|
 | ESPACE lot 1 | vitrine des voitures et circuits, suppression à deux choix, réhydratation, origine des archives | — |
-| ESPACE lot 2 | vitrine des apps, autres mods, mannequins, livrées et sons autonomes | lot 1 |
 | **EXPORT lot 1** | ce document, voitures et circuits ; apps et autres mods listés dans `not_exported` | ESPACE lot 1 |
-| EXPORT lot 2 | apps, autres mods, mannequins | ESPACE lot 2 |
+
+ESPACE lot 2 (la vitrine des apps, autres mods, mannequins, livrées et sons autonomes) et l'EXPORT lot 2 qui en dépendait sont **abandonnés** (2026-09-28, ESPACE§5.4) : ces types ne se rangent pas, les perdre coûte peu. À rouvrir si un besoin réel d'exporter les apps se présente.
 
 **Hors périmètre, à rediscuter** :
 

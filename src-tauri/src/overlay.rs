@@ -369,10 +369,10 @@ fn init(conn: &Connection) -> rusqlite::Result<()> {
         -- aille lire le disque à la main. Ce journal est la trace lisible de
         -- ces arbitrages, consultable longtemps après l'import.
         --
-        -- `mod_id` est nullable : une décision peut concerner un reste qu'aucun
-        -- mod ne réclame. Pas de clé étrangère pour la même raison, et pour que
-        -- la suppression d'un mod n'efface pas l'explication de ce qu'il a
-        -- laissé derrière lui.
+        -- `mod_id` is nullable: a decision can be about a leftover no mod
+        -- claims. No foreign key for that reason, and because a mod in the
+        -- showcase (ESPACE R2) keeps its journal: only a **complete**
+        -- deletion removes it, explicitly (`delete_mod`, ESPACE§5.3).
         -- Chemins d'AC que l'utilisateur a **explicitement** demande d'installer
         -- (§4.6ter). L'arbitrage par date (§4.5.4) protege les poses
         -- automatiques : il empeche un exemplaire plus ancien de deloger ce qui
@@ -639,7 +639,8 @@ pub struct VersionRow {
     pub tags_from_mod: Vec<String>,
     /// Date de publication estimée depuis les dates de fichiers (§6.2).
     pub published_at: Option<String>,
-    /// Taille sur disque de cette version, octets (§10).
+    /// Taille sur disque de cette version, octets (§10). For a version in the
+    /// showcase, its size before its files went (ESPACE§4.1).
     pub size_bytes: Option<i64>,
     /// Archive/dossier source conservé en bibliothèque (§10/§11), si le
     /// réglage était activé à l'import. `None` = non conservé.
@@ -1272,19 +1273,19 @@ pub fn version_content_state(conn: &Connection, version_id: &str) -> rusqlite::R
     .optional()
 }
 
-/// Marks a version as a skeleton (ESPACE§5.5, step 5). `size_bytes` becomes
-/// what is left on disk — it is a disk size (§10), and the library's size
-/// column must not keep counting what was freed; `freed_bytes` keeps that.
+/// Marks a version as a skeleton (ESPACE§5.5, step 5). `size_bytes` is left
+/// alone on purpose: it keeps saying how big the mod is — what recovering it
+/// will cost, and what the library's size column sorts on —, while the few
+/// dozen KB of its skeleton are not worth a column.
 pub fn mark_version_freed(
     conn: &Connection,
     version_id: &str,
     freed_at: &str,
     freed_bytes: i64,
-    size_bytes: i64,
 ) -> rusqlite::Result<()> {
     conn.execute(
-        "UPDATE versions SET content_state = ?2, freed_at = ?3, freed_bytes = ?4, size_bytes = ?5 WHERE id = ?1",
-        params![version_id, CONTENT_SKELETON, freed_at, freed_bytes, size_bytes],
+        "UPDATE versions SET content_state = ?2, freed_at = ?3, freed_bytes = ?4 WHERE id = ?1",
+        params![version_id, CONTENT_SKELETON, freed_at, freed_bytes],
     )?;
     Ok(())
 }
@@ -1309,9 +1310,15 @@ pub fn get_version_path(conn: &Connection, version_id: &str) -> rusqlite::Result
     }
 }
 
-/// Supprime un mod et ses données overlay (versions cascade + historique).
-/// N'agit que sur l'overlay : les fichiers bibliothèque sont gérés par l'appelant.
-/// Supprime un mod de l'overlay. Ce qui **survit volontairement** :
+/// Deletes a mod from the overlay — the **complete** deletion (ESPACE§5.3);
+/// the showcase removes no row at all. Files are the caller's business.
+///
+/// Goes with it, explicitly since these tables have no foreign key: its
+/// history, its additions to the game, the tech sheet's corrections, the
+/// media the user attached by hand (`media_links`) and the import journal
+/// (`import_decisions`). Versions and tech sheet facts cascade.
+///
+/// Ce qui **survit volontairement** :
 ///
 /// - `usage` (§6) — le marqueur « déjà essayé » et le nombre de lancements.
 ///   Réimporter la même voiture retrouve son historique d'usage plutôt que de
@@ -1323,10 +1330,15 @@ pub fn get_version_path(conn: &Connection, version_id: &str) -> rusqlite::Result
 ///   Ce n'est un déchet que si le parent ne revient jamais : d'où
 ///   `orphan_subs`, listé en maintenance et nettoyé sur décision.
 ///
-/// Les deux tables sont donc absentes de ce `DELETE` **par choix**, pas par
+/// - `wiki_link` — the Wikipedia pairing, without a foreign key for this
+///   very reason (see the schema).
+///
+/// Ces tables sont donc absentes de ce `DELETE` **par choix**, pas par
 /// oubli — c'est ce que ce commentaire est là pour dire au prochain lecteur.
 pub fn delete_mod(conn: &Connection, id: &str) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM history WHERE mod_id = ?1", [id])?;
+    conn.execute("DELETE FROM media_links WHERE entity_id = ?1", [id])?;
+    conn.execute("DELETE FROM import_decisions WHERE mod_id = ?1", [id])?;
     conn.execute("DELETE FROM extra_links WHERE mod_id = ?1", [id])?;
     clear_forced_extras(conn, id)?;
     // The tech sheet's corrections have no foreign key, on purpose (FICHE§6.1):
@@ -2811,6 +2823,49 @@ mod tests {
         list_other_mods(&conn).expect("other_mods");
         list_subs_by_type(&conn, "SKIN").expect("sub_mods");
         list_layers(&conn, "x", HostKind::Track).expect("layers");
+    }
+
+    /// Rule (ESPACE§5.3): the complete deletion takes what belonged to the
+    /// mod — journal, attached media, history —, and keeps its three
+    /// deliberate exceptions, for a reimport under the same id to find them:
+    /// usage, attached skins and sounds, the Wikipedia pairing.
+    #[test]
+    fn a_complete_deletion_takes_the_journal_and_keeps_its_three_exceptions() {
+        let base = crate::testutil::temp_dir("db-delete-mod");
+        let conn = open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        upsert_mod(&conn, "car", "Car", None, Some("Car"), "h", None, &now).unwrap();
+        add_history(&conn, "car", &now, "IMPORT", "").unwrap();
+        record_decision(&conn, Some("car"), "car.7z", "extra", "extension/", None);
+        record_decision(&conn, Some("other"), "other.7z", "extra", "extension/", None);
+        let sql = [
+            "INSERT INTO media_links (file_path, entity_id, kind) VALUES ('a.jpg', 'car', 'SCREENSHOT')",
+            "INSERT INTO usage (mod_id, launched, launch_count) VALUES ('car', 1, 3)",
+            "INSERT INTO wiki_link (mod_key, entity_id, source, resolved_at) VALUES ('car', 'Q1', 'manual', '')",
+            "INSERT INTO sub_mods (id, sub_type, parent_id, name, library_path, imported_at)
+             VALUES ('s1', 'SKIN', 'car', 'red', 'skins/car/red', '')",
+        ];
+        for s in sql {
+            conn.execute(s, []).unwrap();
+        }
+        let count = |table: &str, column: &str, id: &str| -> i64 {
+            conn.query_row(
+                &format!("SELECT COUNT(*) FROM {table} WHERE {column} = ?1"),
+                [id],
+                |r| r.get(0),
+            )
+            .unwrap()
+        };
+
+        delete_mod(&conn, "car").unwrap();
+
+        assert_eq!(count("import_decisions", "mod_id", "car"), 0, "the import journal goes");
+        assert_eq!(count("import_decisions", "mod_id", "other"), 1, "another mod's stays");
+        assert_eq!(count("media_links", "entity_id", "car"), 0, "the attached media go");
+        assert_eq!(count("history", "mod_id", "car"), 0, "the history goes");
+        assert_eq!(count("usage", "mod_id", "car"), 1, "usage stays");
+        assert_eq!(count("wiki_link", "mod_key", "car"), 1, "the Wikipedia pairing stays");
+        assert_eq!(count("sub_mods", "parent_id", "car"), 1, "attached skins stay");
     }
 
     /// Rule (ESPACE§4.1): every version an older base holds is complete. The

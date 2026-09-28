@@ -835,7 +835,10 @@ pub fn reindex_mod(conn: &Connection, cfg: &AppConfig, id: &str, recalc_size: bo
         )
         .map_err(|e| e.to_string())?;
 
-        if recalc_size {
+        // A skeleton keeps the size it had before its files went (ESPACE§4.1):
+        // measuring its few KB would lose the one figure that says what
+        // recovering it will cost.
+        if recalc_size && !skeleton {
             let size_bytes = inspect::dir_size_bytes(dir) as i64;
             overlay::update_version_size(conn, &v.id, size_bytes).map_err(|e| e.to_string())?;
         }

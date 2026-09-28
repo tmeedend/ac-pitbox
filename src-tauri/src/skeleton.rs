@@ -503,7 +503,7 @@ mod tests {
             "an unknown one is its caller's business"
         );
 
-        crate::overlay::mark_version_freed(&conn, "v1", &now, 10, 1).unwrap();
+        crate::overlay::mark_version_freed(&conn, "v1", &now, 10).unwrap();
         assert_eq!(guard(&conn, "v1").err().as_deref(), Some(crate::errors::CONTENT_FREED));
         assert_eq!(
             guard_mod(&conn, "car").err().as_deref(),

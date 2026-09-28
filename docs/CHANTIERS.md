@@ -31,7 +31,13 @@ de reprendre. En cas d'écart, la spec fait foi.
       ESPACE§5.5, sa reprise au démarrage, la réhydratation), les colonnes de
       `versions`, le garde-fou sur les dix points d'entrée d'ESPACE§9.1, la
       classe `rehydrate` de l'import. Commande `bulk_showcase`, appelée par
-      personne encore.
+      personne encore. La suppression complète efface aussi journal d'import
+      et médias rattachés (ESPACE§5.3).
+      **Tranché avec l'utilisateur le 2026-09-28** : le squelette reste dans
+      la bibliothèque, pas tout en base (CM ne voit que `content/`) ; toutes
+      les versions partent ensemble ou aucune ; la taille d'origine est
+      gardée ; pas de vitrine pour les autres types de mods — le lot 2 est
+      abandonné, et l'export ne sort pas les apps ni les autres mods.
       **Ce qui reste, dans l'ordre utile** :
       - l'interface (ESPACE§4.3, ESPACE§5.2, ESPACE§6, ESPACE§7.1) :
         confirmation à deux choix,
@@ -47,10 +53,6 @@ de reprendre. En cas d'écart, la spec fait foi.
         ressources. Les garder pleins aujourd'hui est **sûr** (aucun ne va en
         jeu sans son hôte), seulement moins de place libérée. Colonnes
         `content_state`/`freed_at` déjà posées sur `layers` et `sub_mods` ;
-      - ESPACE§5.3 : **contradiction à trancher** avant de l'écrire. La spec
-        veut effacer `import_decisions` à la suppression complète ; le schéma
-        (`overlay.rs`) dit l'inverse, exprès : « pour que la suppression d'un
-        mod n'efface pas l'explication de ce qu'il a laissé derrière lui » ;
       - ESPACE§8 : le lecteur `Zone.Identifier` (colonnes `source_*` déjà là,
         vides) ;
       - ESPACE§7.2 (récupération en masse), ESPACE§7.5 (couches réhydratées).
@@ -75,13 +77,10 @@ de reprendre. En cas d'écart, la spec fait foi.
         interrompue y avait déjà déplacé. S'il ne peut pas tout remettre, il
         garde manifeste et dossier d'attente, et le démarrage suivant finit
         la mise en vitrine (trouvé en revue, `roll_back`).
-      **Décisions prises sans la spec**, à contester : la taille d'une
-      version en vitrine est ce qui reste sur le disque (`freed_bytes` garde
-      le reste) ; le dossier envoyé à la corbeille contient aussi une copie
-      du `ui/`, pour être un dossier de mod complet qu'on peut réimporter ;
-      les tests ne passent jamais par la corbeille (`trash_or_delete`) ; la
-      version active décide seule — une ancienne version qui résiste reste
-      complète dans la frise (`left_complete`) sans faire échouer le mod ;
+      **Décisions prises sans la spec**, à contester : le dossier envoyé à
+      la corbeille contient aussi une copie du `ui/`, pour être un dossier de
+      mod complet qu'on peut réimporter ; les tests ne passent jamais par la
+      corbeille (`trash_or_delete`) ;
       un adversaire en vitrine est écarté de la grille au lancement, la
       voiture ou le circuit du joueur refusent la session (ESPACE§6 et
       ESPACE§9.1 se contredisaient là-dessus).
