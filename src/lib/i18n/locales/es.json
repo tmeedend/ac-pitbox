@@ -334,8 +334,7 @@
     "tagsSection": "Tags",
     "tagPlaceholder": "tag…",
     "addTagToAll": "+ Añadir a todos",
-    "removeTagFromAll": "− Quitar de todos",
-    "confirmDelete": "¿Eliminar los {count} mods seleccionados? Se quitarán los archivos y las uniones de cada uno."
+    "removeTagFromAll": "− Quitar de todos"
   },
   "columns": {
     "name": "Nombre",
@@ -391,8 +390,6 @@
     "uninstallTitle": "Desinstalar el pack",
     "exportDirTitle": "Carpeta de exportación",
     "deleteFromLibrary": "🗑 Eliminar de la biblioteca",
-    "deleteTitle": "Eliminar de la biblioteca",
-    "deleteConfirm": "¿Eliminar « {name} » de la biblioteca? Se borrarán del disco todos los archivos de todas las versiones. Esto no se puede deshacer.",
     "reinstallFromArchive": "↺ Reinstalar desde el archivo de origen",
     "reinstallConfirmTitle": "Reinstalar desde el archivo de origen",
     "reinstallConfirm": "¿Sustituir los archivos actuales de « {name} » por una nueva extracción del archivo de origen conservado? Se perderá cualquier cambio hecho desde la importación.",

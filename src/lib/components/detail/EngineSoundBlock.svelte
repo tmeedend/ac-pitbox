@@ -27,8 +27,10 @@
     onpick: (subId: string | null) => void;
     /** Listen to a sound without deploying anything. */
     onlisten: (subId: string | null) => void;
+    /** In the showcase (ESPACE§6): no bank to play, nothing to switch. */
+    freed?: boolean;
   }
-  let { modId, sounds, busy, onpick, onlisten }: Props = $props();
+  let { modId, sounds, busy, onpick, onlisten, freed = false }: Props = $props();
 
   const activeSound = $derived(sounds.find((s) => s.is_active) ?? null);
 
@@ -44,6 +46,9 @@
 <section class="blk">
   <header class="blk-h"><span class="blk-t">{t("detail.engineSound")}</span></header>
   <div class="blk-b">
+    {#if freed}
+      <p class="freed">{t("showcase.noSound")}</p>
+    {:else}
     <div class="sounds">
       <!-- Deux boutons par ligne, et c'est délibéré : le premier **active**
            le son (il remplace les fichiers du jeu), la clé ne fait
@@ -98,10 +103,15 @@
     {/if}
     <!-- L'exclusivité et l'absence de mod se lisent sur les boutons radio
          eux-mêmes : « Origine » seule et cochée dit tout. -->
+    {/if}
   </div>
 </section>
 
 <style>
+  .freed {
+    color: var(--muted);
+    font-size: 11.5px;
+  }
   .sounds {
     display: flex;
     flex-direction: column;

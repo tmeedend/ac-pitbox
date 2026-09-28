@@ -21,6 +21,7 @@
   import { setGridCars } from "$lib/launch/gridMods.svelte";
   import { playerHandicap, setPlayerHandicap } from "$lib/launch/playerHandicap.svelte";
   import { getModDetail, listLibrary, previewSrc, type ModCard } from "$lib/library/library";
+  import { isPlayable } from "$lib/library/showcase.svelte";
   import { getSessionBackground } from "$lib/detail/media";
   import { nav, pickSession, type OpponentsAction } from "$lib/shell/nav.svelte";
   import { hasOpponents, openSetupPage, sessionNav, sessionNavReady } from "$lib/shell/sessionNav.svelte";
@@ -197,7 +198,9 @@
   const trackSupportsSeason = $derived(trackCspFeatures.includes("season"));
   const trackSupportsRain = $derived(trackCspFeatures.includes("rainfx"));
 
-  const carPool = $derived(libCards.filter((c) => c.kind === "Car"));
+  // A car in the showcase never joins a grid (ESPACE§6): out of the pool,
+  // and so out of the picker and of every random draw.
+  const carPool = $derived(libCards.filter((c) => c.kind === "Car" && isPlayable(c)));
   /** Carte du circuit choisi — sert à connaître ses catégories (§5). */
   const trackCard = $derived(
     libCards.find((c) => c.kind === "Track" && c.id_interne === setup.track_id) ?? null,

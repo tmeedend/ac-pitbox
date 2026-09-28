@@ -43,8 +43,17 @@ export function setPreferredLayout(trackId: string, layout: PreferredLayout): vo
 
 /** The image a library card shows: the livery last chosen for a car, the
  * layout last chosen for a track, the mod's own preview otherwise. One
- * definition for the card and for what it hands to the session column. */
-export function cardImage(c: { id_interne: string; kind: string; preview: string | null }): string | null {
+ * definition for the card and for what it hands to the session column.
+ *
+ * A mod in the showcase shows the image frozen when its files went
+ * (ESPACE§3.3): the preferred livery's preview is one of those files. */
+export function cardImage(c: {
+  id_interne: string;
+  kind: string;
+  preview: string | null;
+  showcase?: boolean;
+}): string | null {
+  if (c.showcase) return c.preview;
   const preferred =
     c.kind === "Car" ? getPreferredSkin(c.id_interne)?.preview : getPreferredLayout(c.id_interne)?.preview;
   return preferred ?? c.preview;

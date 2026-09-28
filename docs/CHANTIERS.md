@@ -25,30 +25,38 @@ de reprendre. En cas d'écart, la spec fait foi.
 
 ---
 
-- [ ] **Mods en vitrine — le moteur est livré, l'interface reste.**
+- [ ] **Mods en vitrine — livré pour les voitures et circuits ; restent les compléments rattachés et l'origine des archives.**
       Livré (`SPEC-sans-fichiers.md`, 2026-09-27) : `skeleton.rs` (liste
       blanche, manifeste, image figée, garde-fou), `showcase.rs` (le déroulé
       ESPACE§5.5, sa reprise au démarrage, la réhydratation), les colonnes de
       `versions`, le garde-fou sur les dix points d'entrée d'ESPACE§9.1, la
-      classe `rehydrate` de l'import. Commande `bulk_showcase`, appelée par
-      personne encore. La suppression complète efface aussi journal d'import
-      et médias rattachés (ESPACE§5.3).
+      classe `rehydrate` de l'import. La suppression complète efface aussi
+      journal d'import et médias rattachés (ESPACE§5.3).
+      Interface livrée le 2026-09-28 : confirmation à deux choix
+      (`DeleteDialog`, montée dans la coquille, appelée par la fiche et le
+      menu contextuel), notification de fin avec « Supprimer complètement »,
+      pastille « En vitrine » (carte, tableau, fiche), valeur du filtre État,
+      bandeau et panneau « Récupérer les fichiers » (`ShowcaseBanner`),
+      fiche dégradée (pas d'aperçu 3D ni d'écoute, livrées réduites à leurs
+      noms), `isPlayable` pour la colonne de session et le vivier
+      d'adversaires, garde de la colonne de session, historique et rapport
+      d'import.
       **Tranché avec l'utilisateur le 2026-09-28** : le squelette reste dans
       la bibliothèque, pas tout en base (CM ne voit que `content/`) ; toutes
       les versions partent ensemble ou aucune ; la taille d'origine est
       gardée ; pas de vitrine pour les autres types de mods — le lot 2 est
       abandonné, et l'export ne sort pas les apps ni les autres mods.
       **Ce qui reste, dans l'ordre utile** :
-      - l'interface (ESPACE§4.3, ESPACE§5.2, ESPACE§6, ESPACE§7.1) :
-        confirmation à deux choix,
-        pastille, filtre, bandeau, panneau de récupération, `isPlayable` pour
-        la colonne de session et les adversaires, libellés d'historique
-        (`history.event.SHOWCASE`/`REHYDRATED`, `history.showcased` avec
-        `bytes` à formater, `history.rehydrated`), rapport d'import
-        « Fichiers récupérés » et case « Activer après récupération ». Le
-        rapport de lot porte déjà `skipped` (profils, activation en masse) ;
-      - `SPEC.md` à mettre à jour **avec** l'interface — tant qu'aucun écran
-        ne met en vitrine, l'app ne se comporte pas autrement ;
+      - **écarts assumés de l'interface**, à reprendre s'ils gênent : la case
+        « Activer après récupération » (ESPACE§7.3) est un bouton « Activer »
+        sur la ligne du rapport d'import — le rapport arrive après l'import,
+        une case cochée d'avance n'y aurait rien piloté ; une grille
+        enregistrée qui contient un mod en vitrine ne le **signale** pas
+        encore : le vivier l'exclut et le lancement le retire (ESPACE§6) ;
+        la vignette de grille régénérée n'est pas figée (fonction éteinte,
+        `FEATURE_GRID_THUMBS`) — c'est l'aperçu préféré qui l'est ; la
+        recherche du panneau passe par DuckDuckGo ;
+        l'écran Maintenance supprime toujours complètement un mod cassé ;
       - ESPACE§5.4 : couches, livrées et sons rattachés, ajouts au jeu,
         ressources. Les garder pleins aujourd'hui est **sûr** (aucun ne va en
         jeu sans son hôte), seulement moins de place libérée. Colonnes

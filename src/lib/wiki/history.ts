@@ -3,6 +3,7 @@
 // le traduit ici via `history.<key>`. Les anciennes lignes (texte brut FR
 // d'avant la passe i18n) ne sont pas du JSON valide → affichées telles quelles.
 import { t } from "$lib/i18n/index.svelte";
+import { fmtSize } from "$lib/format";
 
 /** Libellé localisé de l'événement (badge). Repli sur le code brut si absent. */
 export function historyEventLabel(event: string): string {
@@ -17,9 +18,11 @@ export function historyDetails(details: string): string {
     const p = JSON.parse(details) as { key?: string } & Record<string, unknown>;
     if (p && typeof p === "object" && typeof p.key === "string") {
       // A list of tech sheet fields (FICHE§8): stored as keys, read as words.
-      const params = Array.isArray(p.fields)
+      let params: Record<string, unknown> = Array.isArray(p.fields)
         ? { ...p, fields: p.fields.map((f) => t(`techsheet.field.${String(f)}`)).join(", ") }
         : p;
+      // A size in bytes (ESPACE§5.5: "550 MB freed"), read as a size.
+      if (typeof p.bytes === "number") params = { ...params, size: fmtSize(p.bytes) };
       return t(`history.${p.key}`, params as Record<string, string | number>);
     }
   } catch {

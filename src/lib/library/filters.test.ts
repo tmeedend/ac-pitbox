@@ -167,3 +167,31 @@ describe("buildPredicate", () => {
     expect(keep({ tag: { type: "val", values: [], op: "and" } }, [])).toBe(true);
   });
 });
+
+describe("the State filter and the showcase", () => {
+  // ESPACE§4.3: "In the showcase" is a value of the State chip, and so is its
+  // contrary (excluding it). A mod in the showcase is not "inactive": it
+  // cannot be activated at all, and filtering on "inactive" to find what to
+  // switch on must not list it.
+  const ctx = { isCar: true, tagsOf: () => [] } as unknown as import("./filters").FilterContext;
+  const card = (over: Record<string, unknown>) =>
+    ({ id_interne: "x", active: false, is_stock: false, is_unmanaged: false, broken: false, showcase: false, ...over }) as unknown as import("./library").ModCard;
+  const state = (value: string, sign: 1 | -1): FilterMap => ({
+    state: { type: "val", values: [{ value, sign }], op: "or" },
+  });
+  const keep = (filters: FilterMap, c: import("./library").ModCard) => buildPredicate(CAR_DEFS, filters, ctx)(c);
+
+  it("finds the mods in the showcase, and only them", () => {
+    expect(keep(state("showcase", 1), card({ showcase: true }))).toBe(true);
+    expect(keep(state("showcase", 1), card({}))).toBe(false);
+  });
+
+  it("does not count them as inactive", () => {
+    expect(keep(state("inactive", 1), card({ showcase: true }))).toBe(false);
+  });
+
+  it("leaves them out when excluded", () => {
+    expect(keep(state("showcase", -1), card({ showcase: true }))).toBe(false);
+    expect(keep(state("showcase", -1), card({ active: true }))).toBe(true);
+  });
+});

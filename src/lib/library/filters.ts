@@ -125,6 +125,9 @@ const STATE_CHOICES: FilterChoice[] = [
   { value: "inactive", labelKey: "common.inactive" },
   { value: "stock", labelKey: "common.stockState" },
   { value: "unmanaged", labelKey: "common.unmanagedState" },
+  // Its own state, not a kind of "inactive": a mod in the showcase cannot be
+  // activated at all (ESPACE§4.3). Excluding it is the filter's contrary.
+  { value: "showcase", labelKey: "showcase.state" },
   { value: "broken", labelKey: "common.brokenState" },
 ];
 
@@ -251,7 +254,9 @@ export interface PerfRef {
 const one = (v: string | null): string[] => (v ? [v] : []);
 
 function stateValues(c: ModCard): string[] {
-  const out = [c.is_unmanaged ? "unmanaged" : c.is_stock ? "stock" : c.active ? "active" : "inactive"];
+  const out = [
+    c.is_unmanaged ? "unmanaged" : c.is_stock ? "stock" : c.showcase ? "showcase" : c.active ? "active" : "inactive",
+  ];
   if (c.broken) out.push("broken");
   return out;
 }

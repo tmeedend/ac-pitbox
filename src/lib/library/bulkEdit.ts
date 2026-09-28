@@ -18,6 +18,9 @@ export interface BulkReport {
   /** Lot interrompu : ce qui n'apparaît ni en succès ni en échec n'a pas été
    * traité du tout (miroir de `BulkReport` dans `src-tauri/src/bulk.rs`). */
   cancelled: boolean;
+  /** A showcase lot only (ESPACE§5.2), added by `showcase.svelte.ts`: the
+   * backend sends a report of its own, turned into this one. */
+  showcase?: import("./showcase.svelte").ShowcaseSummary;
 }
 
 /** Émis sous `bulk:progress` pendant les lots qui touchent au disque. Miroir

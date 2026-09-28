@@ -191,8 +191,18 @@
   // `null` tant que le détail n'est pas encore chargé (juste après une
   // sélection) : pas d'avertissement affiché dans ce court intervalle plutôt
   // que de risquer un faux positif pendant le chargement.
-  const carInactive = $derived(nav.sessionCar != null && carDetail != null && !carDetail.active);
-  const trackInactive = $derived(nav.sessionTrack != null && trackDetail != null && !trackDetail.active);
+  const carInactive = $derived(
+    nav.sessionCar != null && carDetail != null && !carDetail.active && !carDetail.showcase,
+  );
+  const trackInactive = $derived(
+    nav.sessionTrack != null && trackDetail != null && !trackDetail.active && !trackDetail.showcase,
+  );
+  /** A mod chosen for the session that went into the showcase since (ESPACE§6):
+   * activating it would be refused, so the column says it and the launch
+   * waits for its files. */
+  const showcased = $derived(
+    [carDetail, trackDetail].filter((d): d is NonNullable<typeof d> => d != null && d.showcase),
+  );
 
   /**
    * Le nom de la voiture tel que la colonne l'écrit — sans sa marque, qui est
@@ -279,6 +289,11 @@
   // atteint que sur une session lançable. L'activation reste **explicite** —
   // lancer une course ne doit pas modifier la bibliothèque dans le dos de
   // l'utilisateur, même si les liens durs rendent l'opération réversible.
+  /** Opens the fiche of a mod in the showcase, where "Recover the files" is. */
+  function openInSession(d: { id_interne: string; kind: string }) {
+    void openInSection(d.kind === "Track" ? "tracks" : "cars", d.id_interne);
+  }
+
   async function launchNow() {
     nav.autoLaunch = true;
     if (!(await requestSection("race"))) nav.autoLaunch = false;
@@ -340,6 +355,13 @@
     <div class="nsec section">{t("nav.session")}</div>
     <SessionTypes />
 
+    {#each showcased as d (d.id_interne)}
+      <div class="warnbox guard">
+        <span aria-hidden="true">⚠</span>
+        <span class="guard-txt">{t("showcase.sessionBlocked", { name: d.display_name ?? d.id_interne })}</span>
+        <button class="guard-btn" type="button" onclick={() => openInSession(d)}>{t("showcase.recover")}</button>
+      </div>
+    {/each}
     {#if inactiveMods.length}
       <div class="warnbox guard">
         <span aria-hidden="true">⚠</span>
@@ -357,7 +379,7 @@
          curseur depuis n'importe quel écran, il ne lance pas lui-même. -->
     <button
       class="btn-launch"
-      disabled={!sessionReady || inactiveMods.length > 0}
+      disabled={!sessionReady || inactiveMods.length > 0 || showcased.length > 0}
       {...{ [LAUNCH_BUTTON_ATTR]: "" }}
       onclick={launchNow}>{t("session.start")}</button
     >

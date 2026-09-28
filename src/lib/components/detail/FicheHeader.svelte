@@ -44,6 +44,8 @@
     stock?: boolean;
     unmanaged?: boolean;
     pending?: boolean;
+    /** In the showcase (ESPACE§4.3). */
+    showcase?: boolean;
   }
 
   export interface FicheRename {
@@ -163,6 +165,7 @@
         stock={deployment.stock ?? false}
         unmanaged={deployment.unmanaged ?? false}
         pending={deployment.pending ?? false}
+        showcase={deployment.showcase ?? false}
       />
     {/if}
     {#if favorite}

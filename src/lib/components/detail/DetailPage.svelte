@@ -46,7 +46,6 @@
   import {
     exportMod,
     deletePack,
-    deleteBrokenMod,
     reinstallFromArchive,
     deleteModVersion,
     profilesUsingVersion,
@@ -73,6 +72,8 @@
   import ExtrasBlock from "./ExtrasBlock.svelte";
   import HistoryBlock from "./HistoryBlock.svelte";
   import UpdateBanner from "./UpdateBanner.svelte";
+  import ShowcaseBanner from "./ShowcaseBanner.svelte";
+  import { deleteMods } from "$lib/library/showcase.svelte";
   import ProvenanceBlock from "./ProvenanceBlock.svelte";
   import TagsBlock from "./TagsBlock.svelte";
   import MediaScreenshots from "./MediaScreenshots.svelte";
@@ -332,24 +333,22 @@
    * suppression définitive. Un message, pas une erreur. */
   let versionNotice = $state("");
 
-  // Supprimer de la bibliothèque : action distincte de Désactiver (§10) —
-  // efface les fichiers de toutes les versions, jamais réversible sans
-  // réimport (sauf réinstallation depuis une archive source conservée).
+  // Delete (ESPACE§5.1): the confirmation offers the showcase, by default, or
+  // the complete deletion. The fiche stays open on a mod put in the showcase —
+  // it is still there, and its banner says what became of it — and closes on
+  // one deleted.
   async function doDelete() {
     if (!detail || deleteBusy) return;
-    const ok = await confirm(t("detail.deleteConfirm", { name: detail.display_name ?? detail.id_interne }), {
-      title: t("detail.deleteTitle"),
-      kind: "warning",
-    });
-    if (!ok) return;
     deleteBusy = true;
     actionError = "";
     try {
-      await deleteBrokenMod(detail.id_interne);
-      onchange?.();
-      onclose();
+      const done = await deleteMods([detail]);
+      if (done) onchange?.();
+      if (done === "complete") onclose();
+      else if (done === "showcase") await refreshEntity();
     } catch (e) {
       actionError = errorText(e);
+    } finally {
       deleteBusy = false;
     }
   }
@@ -770,6 +769,9 @@
     if (!detail) return;
     const sk = skins[i];
     if (sk) setPreferredSkin(detail.id_interne, sk);
+    // In the showcase, choosing a livery stays a preference (ESPACE§6); the
+    // car itself never goes into the session.
+    if (detail.showcase) return;
     // Marque et année seulement (SPEC SESSION§1) : la livrée a sa propre ligne
     // dans la colonne de session.
     const meta = [detail.brand, detail.year].filter(Boolean).join(" · ");
@@ -806,6 +808,7 @@
     if (!detail?.track) return;
     const l = detail.track.layouts[i];
     if (l) setPreferredLayout(detail.id_interne, l);
+    if (detail.showcase) return;
     // L'auteur seul : le tracé a sa propre ligne, le nom est juste au-dessus.
     const meta = detail.author ?? "";
     pickSession("Track", {
@@ -957,14 +960,17 @@
     const d = detail;
     if (!d) return [];
     const items: { label: string; onclick: () => void; disabled?: boolean; danger?: boolean }[] = [];
-    if (!d.is_stock) {
+    // In the showcase (ESPACE§6): no activation, no showroom, no export —
+    // the banner's "Recover the files" replaces them, and the only deletion
+    // left is the complete one.
+    if (!d.is_stock && !d.showcase) {
       items.push({
         label: d.active ? t("common.deactivate") : t("common.activate"),
         onclick: d.active ? deactivate : () => activate(),
         disabled: busy,
       });
     }
-    if (isCar) {
+    if (isCar && !d.showcase) {
       items.push({
         label: showroomBusy ? t("detail.showroomLaunching") : t("detail.showroom"),
         onclick: openShowroom,
@@ -977,13 +983,15 @@
     }
     items.push({ label: t("detail.openFolder"), onclick: openFolder });
     items.push({ label: t("detail.showInGameFolder"), onclick: showThisInGameFolder });
-    if (!d.is_stock) {
+    if (!d.is_stock && !d.showcase) {
       items.push({
         label: exporting ? t("detail.exporting") : t("detail.export"),
         onclick: doExport,
         disabled: exporting,
       });
-      if (keptArchive(d)) {
+    }
+    if (!d.is_stock) {
+      if (keptArchive(d) && !d.showcase) {
         items.push({
           label: reinstallBusy ? t("detail.reinstalling") : t("detail.reinstallFromArchive"),
           onclick: doReinstall,
@@ -991,7 +999,11 @@
         });
       }
       items.push({
-        label: deleteBusy ? t("common.working") : t("detail.deleteFromLibrary"),
+        label: deleteBusy
+          ? t("common.working")
+          : d.showcase
+            ? t("showcase.deleteCompletelyMenu")
+            : t("detail.deleteFromLibrary"),
         onclick: doDelete,
         disabled: deleteBusy,
         danger: true,
@@ -1049,7 +1061,7 @@
         overridden: !!d.display_name_user,
         onsave: (v) => saveOverride("display_name_user", v),
       }}
-      deployment={{ active: d.active, stock: d.is_stock, unmanaged: d.is_unmanaged }}
+      deployment={{ active: d.active, stock: d.is_stock, unmanaged: d.is_unmanaged, showcase: d.showcase }}
       favorite={{ on: d.is_favorite, ontoggle: toggleFav }}
       actions={menuItems}
     />
@@ -1057,6 +1069,18 @@
     <Tabs flush tabs={tabItems} active={activeTab} onselect={(v) => (activeTab = v as DetailTab)} />
 
     <UpdateBanner kind={isCar ? "Car" : "Track"} id={d.id_interne} />
+    {#if d.showcase}
+      <ShowcaseBanner
+        kind={isCar ? "Car" : "Track"}
+        id={d.id_interne}
+        name={d.display_name ?? d.id_interne}
+        onrecovered={() => {
+          contentRevision += 1;
+          void refreshEntity();
+          onchange?.();
+        }}
+      />
+    {/if}
 
     {#if actionError}<div class="errbox">{actionError}</div>{/if}
     {#if reinstallOk}<div class="export-ok">{t("detail.reinstallSuccess")}</div>{/if}
@@ -1088,6 +1112,7 @@
           carClass={d.car_class}
           revision={contentRevision}
           outline={isCar ? null : previewSrc(d.track?.layouts[previewLayout]?.outline ?? null)}
+          freed={d.showcase}
           {showroomBusy}
           bind:panelOpen={preview3dPanel}
         />
@@ -1098,7 +1123,14 @@
           <!-- Keyed on the car: another car opened under an open edit form
                closes it, rather than carrying one car's draft onto the next. -->
           {#key d.id_interne}<CarSpecsBlock detail={d} onchanged={techSaved} />{/key}
-          <EngineSoundBlock modId={d.id_interne} {sounds} busy={soundBusy} onpick={pickSound} onlisten={listenSound} />
+          <EngineSoundBlock
+            modId={d.id_interne}
+            {sounds}
+            busy={soundBusy}
+            freed={d.showcase}
+            onpick={pickSound}
+            onlisten={listenSound}
+          />
           <PickerCard
             title={t("detail.skinsLabel")}
             items={skins.map((sk) => ({

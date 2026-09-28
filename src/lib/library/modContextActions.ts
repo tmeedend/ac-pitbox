@@ -10,10 +10,11 @@
 // C'est ce qui permet au panneau de sélection groupée de se limiter à ce qu'un
 // menu ne peut pas porter — un champ de saisie (catégorie, tag).
 import { activateMod, deactivateMod, openModFolder } from "./library";
-import { exportMod, deleteBrokenMod } from "$lib/workshop/maintenance";
-import { bulkActivate, bulkDeactivate, bulkDelete, bulkExport } from "./bulkEdit";
+import { exportMod } from "$lib/workshop/maintenance";
+import { bulkActivate, bulkDeactivate, bulkExport } from "./bulkEdit";
 import { exportToReport, runBulkOp } from "./bulkState.svelte";
-import { open, confirm, message } from "@tauri-apps/plugin-dialog";
+import { deleteMods, isPlayable } from "./showcase.svelte";
+import { open, message } from "@tauri-apps/plugin-dialog";
 import { nav, requestSection, queueOpponentsAction } from "$lib/shell/nav.svelte";
 import { t } from "$lib/i18n/index.svelte";
 
@@ -24,6 +25,11 @@ export interface ModContextTarget {
   active: boolean;
   display_name: string | null;
   kind: "Car" | "Track";
+  /** The card's own image — what the showcase freezes when nothing else is
+   * preferred (ESPACE§3.3). */
+  preview: string | null;
+  /** In the showcase (ESPACE§4.1): no activation, no export, no session. */
+  showcase: boolean;
 }
 
 // Même action que le panneau de sélection groupée (§6.3ter) — pose l'action
@@ -68,7 +74,11 @@ export function buildModContextItems(targets: ModContextTarget[], onchange: () =
   const ids = mods.map((m) => m.id_interne);
 
   if (mods.length) {
-    if (single) {
+    if (single?.showcase) {
+      // Its files are gone: what it needs is the way back, on its fiche
+      // (ESPACE§7.1), not an activation that would be refused.
+      items.push({ label: t("showcase.recover"), onclick: () => (nav.openFull = single.id_interne) });
+    } else if (single) {
       items.push({
         label: single.active ? t("common.deactivate") : t("common.activate"),
         onclick: async () => {
@@ -97,8 +107,10 @@ export function buildModContextItems(targets: ModContextTarget[], onchange: () =
     }
   }
 
-  if (targets.every((m) => m.kind === "Car")) {
-    const allIds = targets.map((m) => m.id_interne);
+  // A car in the showcase never joins a grid (ESPACE§6).
+  const racers = targets.filter(isPlayable);
+  if (racers.length && racers.every((m) => m.kind === "Car")) {
+    const allIds = racers.map((m) => m.id_interne);
     items.push(
       {
         label: label("modpanel.ctxSetOpponent", "modpanel.ctxSetOpponentN", allIds.length),
@@ -123,35 +135,39 @@ export function buildModContextItems(targets: ModContextTarget[], onchange: () =
 
   if (!mods.length) return items;
 
-  items.push({
-    label: label("modpanel.exportFull", "modpanel.exportFullN", mods.length),
-    onclick: async () => {
-      try {
-        const dir = await open({ directory: true, multiple: false, title: t("detail.exportDirTitle") });
-        if (!dir || typeof dir !== "string") return;
-        if (ids.length === 1) await exportMod(ids[0], dir);
-        else await runBulkOp("export", ids.length, async () => exportToReport(await bulkExport(ids, dir), ids.length));
-      } catch (e) {
-        await reportError(e);
-      }
-    },
-  });
+  // An archive of a skeleton would be a mod without its files (ESPACE§6).
+  const exportable = mods.filter(isPlayable);
+  const exportIds = exportable.map((m) => m.id_interne);
+  if (exportable.length) {
+    items.push({
+      label: label("modpanel.exportFull", "modpanel.exportFullN", exportable.length),
+      onclick: async () => {
+        try {
+          const dir = await open({ directory: true, multiple: false, title: t("detail.exportDirTitle") });
+          if (!dir || typeof dir !== "string") return;
+          if (exportIds.length === 1) await exportMod(exportIds[0], dir);
+          else
+            await runBulkOp("export", exportIds.length, async () =>
+              exportToReport(await bulkExport(exportIds, dir), exportIds.length),
+            );
+        } catch (e) {
+          await reportError(e);
+        }
+      },
+    });
+  }
 
+  // One gesture, and the confirmation offers the showcase or the complete
+  // deletion (ESPACE§5.1). Mods already in the showcase have only the second.
+  const allShowcase = mods.every((m) => m.showcase);
   items.push({
-    label: label("detail.deleteFromLibrary", "modpanel.ctxDeleteN", mods.length),
+    label: allShowcase
+      ? label("showcase.deleteCompletelyMenu", "showcase.deleteCompletelyMenuN", mods.length)
+      : label("detail.deleteFromLibrary", "modpanel.ctxDeleteN", mods.length),
     danger: true,
     onclick: async () => {
-      const ok = await confirm(
-        mods.length > 1
-          ? t("bulkEdit.confirmDelete", { count: mods.length })
-          : t("detail.deleteConfirm", { name: mods[0].display_name ?? mods[0].id_interne }),
-        { title: t("detail.deleteTitle"), kind: "warning" },
-      );
-      if (!ok) return;
       try {
-        if (ids.length === 1) await deleteBrokenMod(ids[0]);
-        else await runBulkOp("delete", ids.length, () => bulkDelete(ids));
-        onchange();
+        if (await deleteMods(mods)) onchange();
       } catch (e) {
         await reportError(e);
       }

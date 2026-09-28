@@ -38,6 +38,9 @@
     /** Settings panel open over the preview. Owned by the page so that it
      * survives a round trip through another tab, as it always has. */
     panelOpen: boolean;
+    /** In the showcase (ESPACE§6): the model left with the files — the photo
+     * alone, and the sentence that says why. */
+    freed?: boolean;
   }
   let {
     car,
@@ -50,6 +53,7 @@
     outline,
     showroomBusy,
     panelOpen = $bindable(),
+    freed = false,
   }: Props = $props();
 
   const preview3d = $derived(preview3dPrefs().enabled);
@@ -95,18 +99,20 @@
          chargement. Quand l'aperçu 3D tient la zone, il la tient
          entièrement ; c'est lui qui remet la photo, entière, s'il ne peut
          pas aboutir (`fallbackSrc`). -->
-    {#if !(car && preview3d)}
+    {#if !(car && preview3d && !freed)}
       {#if image}
         <img src={image} alt={name} />
       {:else}
         <div class="hero-icon">{car ? "🚗" : "🏁"}</div>
       {/if}
     {/if}
-    {#if car && preview3d}
+    {#if car && preview3d && !freed}
       <CarPreview3D carId={modId} {skinId} fallbackSrc={image} {carClass} {revision} />
     {/if}
   </div>
-  {#if car}
+  {#if car && freed}
+    <div class="hero-freed">{t("showcase.no3d")}</div>
+  {:else if car}
     <!-- Commandes de l'aperçu : révélées au survol de la zone héros, pour
          qu'elles ne mangent pas l'image le reste du temps. Le focus
          clavier les révèle aussi (`:focus-within`), sans quoi elles
@@ -168,7 +174,7 @@
         </button>
       {/if}
     </div>
-    {#if preview3d && panelOpen}
+    {#if preview3d && panelOpen && !freed}
       <!-- Les curseurs vivaient ici, en version compacte. Ils sont
            partis dans Réglages → Aperçu, qui porte désormais son
            propre aperçu 3D : on y règle en voyant le résultat, sur les
@@ -230,6 +236,13 @@
      (`.hero` et son padding pour l'un, `.hero` sans aucun pour l'autre), d'où
      le décalage constaté entre les deux vues. Pour un circuit, simple
      passe-plat en flux normal : `.hero` garde son padding, rien ne change. */
+  .hero-freed {
+    position: absolute;
+    left: 10px;
+    bottom: 8px;
+    color: var(--muted);
+    font-size: 11px;
+  }
   .hero-inner {
     position: relative;
     width: 100%;

@@ -334,8 +334,7 @@
     "tagsSection": "Tag",
     "tagPlaceholder": "tag…",
     "addTagToAll": "+ Aggiungi a tutte",
-    "removeTagFromAll": "− Rimuovi da tutte",
-    "confirmDelete": "Eliminare le {count} mod selezionate? Per ciascuna verranno rimossi i file e le giunzioni."
+    "removeTagFromAll": "− Rimuovi da tutte"
   },
   "columns": {
     "name": "Nome",
@@ -391,8 +390,6 @@
     "uninstallTitle": "Disinstalla il pack",
     "exportDirTitle": "Cartella di esportazione",
     "deleteFromLibrary": "🗑 Elimina dalla libreria",
-    "deleteTitle": "Elimina dalla libreria",
-    "deleteConfirm": "Eliminare « {name} » dalla libreria? Tutti i file di tutte le versioni verranno cancellati dal disco. L'operazione è irreversibile.",
     "reinstallFromArchive": "↺ Reinstalla dall'archivio di origine",
     "reinstallConfirmTitle": "Reinstalla dall'archivio di origine",
     "reinstallConfirm": "Sostituire i file attuali di « {name} » con una nuova estrazione dell'archivio di origine conservato? Ogni modifica fatta dopo l'importazione andrà persa.",

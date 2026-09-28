@@ -92,4 +92,7 @@ export const StorageKey = {
   gameFolderSelected: `${PREFIX}.gamefolder.selected`,
   modUpdatesIgnored: `${PREFIX}.modUpdates.ignored`,
   modUpdatesAnnounced: `${PREFIX}.modUpdates.announced`,
+  /** The delete confirmation's "How it works" panel (ESPACE§4.4), hidden by
+   * "Do not show again". Born in `ui_prefs.json`. */
+  showcaseHowItWorksHidden: `${PREFIX}.showcase.howItWorksHidden`,
 } as const;

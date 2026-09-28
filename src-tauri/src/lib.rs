@@ -464,6 +464,8 @@ pub fn run() {
             commands::bulk_ops::bulk_deactivate,
             commands::bulk_ops::bulk_delete,
             commands::bulk_ops::bulk_showcase,
+            commands::showcase::showcase_plan,
+            commands::showcase::showcase_sources,
             commands::bulk_ops::bulk_export,
             commands::addons::index_stock_content,
             commands::addons::list_sub_mods,

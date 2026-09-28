@@ -9,9 +9,9 @@ import { listen } from "@tauri-apps/api/event";
 import { cancelBulk, type BulkExportItem, type BulkProgress, type BulkReport } from "./bulkEdit";
 import { bumpLibraryVersion } from "./libraryVersion.svelte";
 
-/** Les quatre lots qui touchent au disque. Les autres (favori, catégorie,
- * tags) sont quelques écritures SQLite : ni progression, ni rapport. */
-export type BulkOp = "activate" | "deactivate" | "delete" | "export";
+/** Les lots qui touchent au disque. Les autres (favori, catégorie, tags) sont
+ * quelques écritures SQLite : ni progression, ni rapport. */
+export type BulkOp = "activate" | "deactivate" | "delete" | "export" | "showcase";
 
 export const bulkState = $state<{
   running: boolean;

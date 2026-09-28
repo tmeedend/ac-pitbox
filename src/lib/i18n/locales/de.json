@@ -334,8 +334,7 @@
     "tagsSection": "Tags",
     "tagPlaceholder": "Tag…",
     "addTagToAll": "+ Zu allen hinzufügen",
-    "removeTagFromAll": "− Von allen entfernen",
-    "confirmDelete": "Die {count} ausgewählten Mods löschen? Dateien und Junctions werden für jede entfernt."
+    "removeTagFromAll": "− Von allen entfernen"
   },
   "columns": {
     "name": "Name",
@@ -391,8 +390,6 @@
     "uninstallTitle": "Pack deinstallieren",
     "exportDirTitle": "Exportordner",
     "deleteFromLibrary": "🗑 Aus der Bibliothek löschen",
-    "deleteTitle": "Aus der Bibliothek löschen",
-    "deleteConfirm": "„{name}“ aus der Bibliothek löschen? Alle Dateien sämtlicher Versionen werden von der Festplatte gelöscht. Das lässt sich nicht rückgängig machen.",
     "reinstallFromArchive": "↺ Aus dem Quellarchiv neu installieren",
     "reinstallConfirmTitle": "Aus dem Quellarchiv neu installieren",
     "reinstallConfirm": "Die aktuellen Dateien von „{name}“ durch ein frisches Entpacken des aufbewahrten Quellarchivs ersetzen? Alle Änderungen seit dem Import gehen verloren.",

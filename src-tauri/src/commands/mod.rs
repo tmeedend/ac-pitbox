@@ -34,6 +34,7 @@ pub mod saved_grids;
 pub mod session;
 pub mod session_state;
 pub mod sessionpreset;
+pub mod showcase;
 pub mod techsheet;
 pub mod trackstate;
 pub mod ui_prefs;

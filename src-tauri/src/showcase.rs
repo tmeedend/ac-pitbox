@@ -475,6 +475,120 @@ pub fn resume_interrupted(conn: &Connection, cfg: &AppConfig) -> usize {
     done
 }
 
+// --- What the screens are told ---------------------------------------------------
+
+/// One mod as the delete confirmation presents it (ESPACE§5.2): what it
+/// weighs, what goes with it, and where it could come back from.
+#[derive(Debug, Clone, Serialize)]
+pub struct PlanEntry {
+    pub id: String,
+    pub name: String,
+    /// Already in the showcase: a complete deletion is all there is left.
+    pub showcase: bool,
+    /// In the game now: it will be taken out first.
+    pub active: bool,
+    /// Complete versions, which all lose their files together (ESPACE§5.4).
+    pub versions: usize,
+    /// What those versions weigh — what the showcase gives back.
+    pub size_bytes: u64,
+    /// A source archive kept at import is still there: the mod recovers in
+    /// one click, offline, if it is kept (ESPACE§5.2).
+    pub kept_archive: bool,
+    /// The archive's original name, and the site it came from, when known.
+    pub source_file_name: Option<String>,
+    pub source_site: Option<String>,
+}
+
+fn kept_archive_exists(cfg: &AppConfig, v: &VersionRow) -> bool {
+    v.kept_archive_path
+        .as_deref()
+        .and_then(|p| crate::libpath::resolve(cfg.library_path.as_deref(), p))
+        .is_some_and(|p| p.exists())
+}
+
+/// What the confirmation says about each mod, read before anything is done.
+/// A version whose size was never recorded (imported before sizes were) is
+/// measured now: "550 MB freed" must not read "0 B".
+pub fn plan(conn: &Connection, cfg: &AppConfig, ids: &[String]) -> Result<Vec<PlanEntry>, String> {
+    let mut out = Vec::with_capacity(ids.len());
+    for id in ids {
+        let Some(m) = overlay::get_mod(conn, id).map_err(|e| e.to_string())? else {
+            continue;
+        };
+        let kind = ModKind::from_kind(&m.kind).unwrap_or(ModKind::Car);
+        let versions = overlay::get_versions(conn, id).map_err(|e| e.to_string())?;
+        let full: Vec<&VersionRow> = versions.iter().filter(|v| !v.is_skeleton()).collect();
+        let size_bytes = full
+            .iter()
+            .map(|v| match v.size_bytes {
+                Some(n) => n.max(0) as u64,
+                None => crate::libpath::resolve(cfg.library_path.as_deref(), &v.library_path)
+                    .map_or(0, |d| crate::inspect::dir_size_bytes(&d)),
+            })
+            .sum();
+        let active = versions.iter().find(|v| Some(&v.id) == m.active_version_id.as_ref());
+        out.push(PlanEntry {
+            id: id.clone(),
+            name: m.display_name.clone().unwrap_or_else(|| id.clone()),
+            showcase: m.showcase,
+            active: crate::activation::is_mod_active(cfg, kind, id),
+            versions: full.len(),
+            size_bytes,
+            kept_archive: versions.iter().any(|v| kept_archive_exists(cfg, v)),
+            source_file_name: active.and_then(|v| v.source_file_name.clone().or_else(|| v.source_archive.clone())),
+            source_site: active.and_then(|v| v.source_site.clone()),
+        });
+    }
+    Ok(out)
+}
+
+/// Where the files of a mod in the showcase could come back from (ESPACE§7.1).
+/// The registry of Content Manager is asked by the screen itself, through the
+/// update check it already has.
+#[derive(Debug, Clone, Serialize)]
+pub struct Sources {
+    /// The source archive kept at import is still in the library.
+    pub kept_archive: bool,
+    /// The address of the pack the mod came in (`mods.source_url`).
+    pub page_url: Option<String>,
+    /// The author's page, from the `ui_*.json` the skeleton kept.
+    pub author_url: Option<String>,
+    /// The site the archive was downloaded from (ESPACE§8).
+    pub source_site: Option<String>,
+    /// The archive's original name — the best search key there is.
+    pub file_name: Option<String>,
+}
+
+/// Only an address a browser can open, never a `file:` or a script: the
+/// `url` of a `ui_*.json` is whatever the author typed.
+fn web_address(raw: Option<String>) -> Option<String> {
+    raw.map(|s| s.trim().to_string())
+        .filter(|s| s.starts_with("https://") || s.starts_with("http://"))
+}
+
+pub fn sources(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<Sources, String> {
+    let m = overlay::get_mod(conn, id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::MOD_NOT_FOUND)?;
+    let kind = ModKind::from_kind(&m.kind).unwrap_or(ModKind::Car);
+    let versions = overlay::get_versions(conn, id).map_err(|e| e.to_string())?;
+    let active = versions.iter().find(|v| Some(&v.id) == m.active_version_id.as_ref());
+    let author_url = active
+        .and_then(|v| crate::libpath::resolve(cfg.library_path.as_deref(), &v.library_path))
+        .and_then(|dir| match kind {
+            ModKind::Car => crate::uijson::read_car(&dir),
+            ModKind::Track => crate::uijson::read_track(&dir),
+        })
+        .and_then(|ui| web_address(ui.url));
+    Ok(Sources {
+        kept_archive: active.is_some_and(|v| kept_archive_exists(cfg, v)),
+        page_url: web_address(m.source_url.clone()),
+        author_url,
+        source_site: active.and_then(|v| v.source_site.clone()),
+        file_name: active.and_then(|v| v.source_file_name.clone().or_else(|| v.source_archive.clone())),
+    })
+}
+
 // --- Taking a mod out of the showcase -------------------------------------------
 
 /// What bringing a version's files back did (ESPACE§7.3, ESPACE§7.4).
@@ -1164,6 +1278,60 @@ MESHES=light
         assert!(f.dir.join("lanzo.kn5").is_file(), "the files are back");
         assert!(skeleton::read_manifest(&f.dir).is_none(), "and the manifest gone");
         crate::activation::activate(&f.conn, &f.cfg, "lanzo", None).expect("it can go into the game");
+    }
+
+    /// Rule (ESPACE§5.2): the confirmation is told what the deletion does
+    /// before anything is done — in the game or not, how many versions, what
+    /// they weigh, where the archive came from — and afterwards, that the
+    /// mod is in the showcase.
+    #[test]
+    fn the_plan_says_what_a_deletion_does() {
+        let f = fixture("showcase-plan", "lanzo", "Car", car);
+        crate::activation::activate(&f.conn, &f.cfg, "lanzo", None).unwrap();
+        let size = crate::inspect::dir_size_bytes(&f.dir);
+
+        let p = &plan(&f.conn, &f.cfg, &["lanzo".to_string()]).unwrap()[0];
+        assert!(p.active && !p.showcase);
+        assert_eq!(p.versions, 1);
+        assert_eq!(p.size_bytes, size, "a size never recorded is measured");
+        assert_eq!(
+            p.source_file_name.as_deref(),
+            Some("mod_v1.4.7z"),
+            "the archive name, as a fallback"
+        );
+        assert!(!p.kept_archive);
+
+        to_showcase(&f.conn, &f.cfg, "lanzo", None, true).unwrap();
+        let p = &plan(&f.conn, &f.cfg, &["lanzo".to_string()]).unwrap()[0];
+        assert!(p.showcase && !p.active, "only a complete deletion is left");
+        assert_eq!(p.versions, 0, "nothing left to free");
+    }
+
+    /// Rule (ESPACE§7.1): the author's page is read from the `ui_*.json` the
+    /// skeleton kept — and only an address a browser opens is offered.
+    #[test]
+    fn the_sources_keep_only_web_addresses() {
+        let f = fixture("showcase-sources", "lanzo", "Car", car);
+        write(
+            &f.dir,
+            "ui/ui_car.json",
+            br#"{"name":"Lanzo","url":"https://rss.example/lanzo"}"#,
+        );
+        to_showcase(&f.conn, &f.cfg, "lanzo", None, true).unwrap();
+        let s = sources(&f.conn, &f.cfg, "lanzo").unwrap();
+        assert_eq!(s.author_url.as_deref(), Some("https://rss.example/lanzo"));
+        assert_eq!(s.file_name.as_deref(), Some("mod_v1.4.7z"));
+
+        write(
+            &f.dir,
+            "ui/ui_car.json",
+            br#"{"name":"Lanzo","url":"file:///C:/Windows"}"#,
+        );
+        assert_eq!(
+            sources(&f.conn, &f.cfg, "lanzo").unwrap().author_url,
+            None,
+            "never a local file"
+        );
     }
 
     /// Rule (ESPACE§5.2): the kept source archive goes only when asked, and

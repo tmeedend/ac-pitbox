@@ -7,6 +7,7 @@
   import { t } from "$lib/i18n/index.svelte";
   import { importState, openPendingDialog, refreshPendingCount } from "$lib/workshop/importState.svelte";
   import { activateOther } from "$lib/inventory/others";
+  import { activateMod } from "$lib/library/library";
   import { errorText } from "$lib/errors";
   import type { ArchiveResult, OtherImported, SubImported } from "$lib/library/library";
   import { PENDING_ACTION_LABEL, type PendingAction } from "$lib/workshop/pending";
@@ -25,12 +26,26 @@
   function outcomeChip(o: string): { cls: string; label: string } {
     if (o === "UPDATE_REPLACE") return { cls: "upd", label: t("importOverlay.outcomeUpdate") };
     if (o === "DUPLICATE") return { cls: "dup", label: t("importOverlay.outcomeDuplicate") };
+    if (o === "REHYDRATED") return { cls: "upd", label: t("importOverlay.outcomeRehydrated") };
     if (o === "EXTENSION") return { cls: "ext", label: t("importOverlay.outcomeExtension") };
     if (o === "UNMANAGED") return { cls: "unm", label: t("importOverlay.outcomeUnmanaged") };
     if (o === "PARKED") return { cls: "ext", label: t("importOverlay.outcomeParked") };
     if (o === "HOST_MISSING" || o === "HOST_UNKNOWN")
       return { cls: "unm", label: t("importOverlay.outcomeHostMissing") };
     return { cls: "new", label: t("importOverlay.outcomeNew") };
+  }
+
+  /** Mods back from the showcase activated from this report: `"ok"`, or why
+   * not. */
+  let activation = $state<Record<string, string>>({});
+
+  async function activateBack(id: string): Promise<void> {
+    try {
+      await activateMod(id);
+      activation = { ...activation, [id]: "ok" };
+    } catch (e) {
+      activation = { ...activation, [id]: errorText(e) };
+    }
   }
 
   /** Ouvre la fiche d'un contenu. Pour une couche, `id` est déjà celui du
@@ -215,6 +230,18 @@
         <span class="r-conflict">{t("importOverlay.parkedNote", { host: m.host_id ?? "" })}</span>
       {:else if m.outcome === "HOST_MISSING" || m.outcome === "HOST_UNKNOWN"}
         <span class="r-conflict">{t("importOverlay.hostMissingNote")}</span>
+      {:else if m.outcome === "REHYDRATED"}
+        <!-- Back from the showcase (ESPACE§7.3): not laid in the game on its
+             own — the button does it, in one click. -->
+        {#if m.missing_files}
+          <span class="r-conflict">{t("importOverlay.rehydratedMissing", { count: m.missing_files })}</span>
+        {/if}
+        {#if activation[m.id_interne] === "ok"}
+          <span class="r-conflict">{t("common.active")}</span>
+        {:else}
+          <button class="r-open" type="button" onclick={() => activateBack(m.id_interne)}>{t("common.activate")}</button>
+          {#if activation[m.id_interne]}<span class="r-conflict">{activation[m.id_interne]}</span>{/if}
+        {/if}
       {:else if m.fragment}
         <!-- Importé comme mod alors qu'il n'a pas de géométrie : le seul cas où
              l'entrée créée risque de ne rien donner en jeu. -->

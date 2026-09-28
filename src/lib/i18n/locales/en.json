@@ -462,7 +462,10 @@
     "failedCount": ", {count} failed",
     "cancelledNote": " — stopped",
     "cancel": "Stop",
-    "cancelling": "Stopping…"
+    "cancelling": "Stopping…",
+    "runningShowcase": "Moving {count} mod(s) to the showcase",
+    "doneShowcase": "{count} mod(s) in the showcase",
+    "skippedCount": " · {count} in the showcase, skipped"
   },
   "bulkEdit": {
     "title": "{count} mods selected",
@@ -476,8 +479,7 @@
     "tagsSection": "Tags",
     "tagPlaceholder": "tag…",
     "addTagToAll": "+ Add to all",
-    "removeTagFromAll": "− Remove from all",
-    "confirmDelete": "Delete the {count} selected mods? Files and junctions will be removed for each."
+    "removeTagFromAll": "− Remove from all"
   },
   "columns": {
     "name": "Name",
@@ -587,9 +589,7 @@
     "uninstallConfirm": "Uninstall pack \"{pack}\"? The {count} mods in this pack will be deleted (files + library). This cannot be undone.",
     "uninstallTitle": "Uninstall pack",
     "exportDirTitle": "Export folder",
-    "deleteFromLibrary": "🗑 Delete from library",
-    "deleteTitle": "Delete from library",
-    "deleteConfirm": "Delete \"{name}\" from the library? All files from every version will be erased from disk. This cannot be undone.",
+    "deleteFromLibrary": "🗑 Delete…",
     "reinstallFromArchive": "↺ Reinstall from source archive",
     "reinstallConfirmTitle": "Reinstall from source archive",
     "reinstallConfirm": "Replace \"{name}\"'s current files with a fresh extraction of the kept source archive? Any change made since import will be lost.",
@@ -791,7 +791,9 @@
       "UPDATE_REPLACE": "Update",
       "UPDATE_KEPT_BOTH": "Kept both",
       "EXTENSION_ADDED": "Extension",
-      "TECH_EDITED": "Tech sheet"
+      "TECH_EDITED": "Tech sheet",
+      "SHOWCASE": "In the showcase",
+      "REHYDRATED": "Files recovered"
     },
     "imported": "from {archive}",
     "updated": "new version {version}",
@@ -799,7 +801,9 @@
     "replaced": "replaced {old}",
     "keptBoth": "kept separately from {old}",
     "extensionAdded": "layer from {archive} ({added} added, {overwritten} overwritten)",
-    "techEdited": "edited ({fields})"
+    "techEdited": "edited ({fields})",
+    "showcased": "{size} freed",
+    "rehydrated": "files recovered"
   },
   "modpanel": {
     "ctxOpenDetail": "Open detail page",
@@ -807,7 +811,7 @@
     "ctxAddOpponent": "Add as opponent",
     "ctxActivateN": "Activate the {count} mods",
     "ctxDeactivateN": "Deactivate the {count} mods",
-    "ctxDeleteN": "Delete the {count} mods",
+    "ctxDeleteN": "🗑 Delete the {count} mods…",
     "ctxSetOpponentN": "Set the {count} as opponents",
     "ctxAddOpponentN": "Add the {count} as opponents",
     "exportFullN": "Export the {count} mods…",
@@ -1386,7 +1390,9 @@
     "fragmentStandalone": "Import anyway",
     "fragmentSkip": "Do not import",
     "fragmentRest": "{count} more to decide",
-    "summarySkipped": ", {skipped} skipped"
+    "summarySkipped": ", {skipped} skipped",
+    "outcomeRehydrated": "Files recovered",
+    "rehydratedMissing": "{count} expected file(s) missing"
   },
   "bulkImport": {
     "analyzing": "Analyzing folder…",
@@ -2190,5 +2196,57 @@
       "changedOne": "1 changed",
       "lostOne": "1 emptied"
     }
+  },
+  "showcase": {
+    "state": "In the showcase",
+    "explain": "In the showcase: this mod stays in your library with its image, its tech sheet and your notes, but its files are no longer on disk. Recover them to use it in a session.",
+    "freed": "{size} freed.",
+    "titleOne": "Delete {name}?",
+    "titleMany": "Delete {count} mods?",
+    "titleCompleteOne": "Delete {name} completely?",
+    "titleCompleteMany": "Delete {count} mods completely?",
+    "summaryMany": "{count} mods, {size}.",
+    "keep": "Keep in the showcase",
+    "recommended": "recommended",
+    "complete": "Delete completely",
+    "completeLine": "The mod and what you added to it (name, notes, tags, favorite, history) leave the library.",
+    "willDeactivate": "It will be deactivated.",
+    "activeMany": "{count} are active and will be deactivated.",
+    "versions": "Its {count} versions lose their files.",
+    "sourceFrom": "To recover it: {file}, downloaded from {site}.",
+    "source": "To recover it: {file}.",
+    "noSource": "No known source: keep the archive somewhere.",
+    "noSourceMany": "{count} have no known source:",
+    "keepArchive": "Also keep the source archive kept at import",
+    "bin": "Files go to the Windows recycle bin, or are deleted for good if it refuses them.",
+    "howTitle": "How it works",
+    "how1": "The mod goes into the showcase.",
+    "how2": "It no longer goes into a session.",
+    "how3": "It comes back when its archive is imported again, or downloaded.",
+    "hideHow": "Don't show again",
+    "confirm": "Delete",
+    "recover": "Recover the files",
+    "recoverKept": "The source archive kept at import",
+    "recoverKeptGo": "Reinstall",
+    "recovering": "Recovering…",
+    "recoverCup": "Content Manager's registry",
+    "recoverCupVersion": "version {version}",
+    "recoverCupGo": "Download",
+    "recoverPage": "The page of the pack it came in",
+    "recoverAuthor": "The author's page",
+    "open": "Open",
+    "searchSite": "Search {site}",
+    "searchWeb": "Search the web",
+    "search": "Search",
+    "fileName": "Original file:",
+    "dropHint": "or drop the archive into Pit Box.",
+    "no3d": "The 3D model will come back with the files.",
+    "noSound": "The engine sound will come back with the files.",
+    "deleteCompletelyMenu": "🗑 Delete completely…",
+    "deleteCompletelyMenuN": "🗑 Delete the {count} mods completely…",
+    "sessionBlocked": "{name} is in the showcase: its files are no longer on disk.",
+    "doneOne": "{name} is in the showcase, {size} freed.",
+    "doneMany": "{count} mods in the showcase, {size} freed.",
+    "deletedForGood": "The recycle bin refused them: the files were deleted for good."
   }
 }

@@ -33,12 +33,15 @@
   // et c'est bien « non géré » qu'il faut lire dans ce cas. `pending`, lui,
   // l'emporte sur `active` : les deux sont vrais ensemble par construction —
   // c'est précisément ce que « en attente » veut dire.
+  // `showcase` (ESPACE§4.3) wins over everything: a mod in the showcase is
+  // never in the game, so "inactive" would say less than the truth.
   let {
     active,
     stock,
     unmanaged = false,
     pending = false,
-  }: { active: boolean; stock: boolean; unmanaged?: boolean; pending?: boolean } = $props();
+    showcase = false,
+  }: { active: boolean; stock: boolean; unmanaged?: boolean; pending?: boolean; showcase?: boolean } = $props();
 </script>
 
 <span
@@ -46,10 +49,19 @@
   class:stock={stock && !unmanaged && !pending}
   class:unmanaged
   class:pending={pending && !unmanaged}
-  class:off={!stock && !active && !pending}
-  title={unmanaged ? t("library.unmanagedTooltip") : stock ? t("library.stockTooltip") : undefined}
+  class:off={!stock && !active && !pending && !showcase}
+  class:showcase
+  title={showcase
+    ? t("showcase.explain")
+    : unmanaged
+      ? t("library.unmanagedTooltip")
+      : stock
+        ? t("library.stockTooltip")
+        : undefined}
 >
-  <span class="dot"></span>{unmanaged
+  <span class="dot"></span>{showcase
+    ? t("showcase.state")
+    : unmanaged
     ? t("common.unmanagedState")
     : pending
       ? t("common.pendingState")
@@ -92,5 +104,14 @@
   }
   .off {
     color: var(--muted);
+  }
+  /* A frame, not a dot: the mod is on display, not in the game. */
+  .showcase {
+    color: var(--muted);
+  }
+  .showcase .dot {
+    background: none;
+    border: 1px solid var(--muted);
+    border-radius: 1px;
   }
 </style>

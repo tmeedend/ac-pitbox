@@ -25,6 +25,9 @@ pub struct UiInfo {
     pub country: Option<String>,
     /// Tags bruts lus dans le fichier (origine « fichier mod », lecture seule).
     pub tags: Vec<String>,
+    /// The author's page, when the file gives one — a way back to the mod
+    /// once its files are gone (ESPACE§7.1).
+    pub url: Option<String>,
 }
 
 /// Lit un fichier texte en tolérant les mods dont l'encodage n'est pas de
@@ -91,6 +94,7 @@ fn parse(path: &Path) -> Option<UiInfo> {
         class: v.get("class").and_then(as_string),
         country: v.get("country").and_then(as_string),
         tags,
+        url: v.get("url").and_then(as_string),
     })
 }
 

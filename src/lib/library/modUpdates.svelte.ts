@@ -206,7 +206,9 @@ export function ignoreUpdate(u: ModUpdate): void {
   modUpdates.list = modUpdates.list.filter((x) => updateKey(x) !== updateKey(u));
 }
 
-export function modUpdateDetails(u: ModUpdate): Promise<UpdateDetails> {
+/** Also asked for a mod with no pending update: the recovery panel of a mod
+ * in the showcase checks whether the registry knows it at all (ESPACE§7.1). */
+export function modUpdateDetails(u: Pick<ModUpdate, "kind" | "id">): Promise<UpdateDetails> {
   return invoke<UpdateDetails>("mod_update_details", { kind: u.kind, id: u.id });
 }
 

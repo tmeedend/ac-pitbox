@@ -7,6 +7,20 @@
   import Toast from "./Toast.svelte";
   import { bulkState, dismissBulkResult, requestCancelBulk } from "$lib/library/bulkState.svelte";
   import { t } from "$lib/i18n/index.svelte";
+  import { fmtSize } from "$lib/format";
+  import { errorText } from "$lib/errors";
+  import { message } from "@tauri-apps/plugin-dialog";
+  import { deleteShowcasedCompletely } from "$lib/library/showcase.svelte";
+
+  /** "Delete completely" after a showcase lot: the answer to the likeliest
+   * surprise, "I deleted it and it is still there" (ESPACE§5.2). */
+  function deleteThemCompletely(ids: string[]) {
+    dismissBulkResult();
+    deleteShowcasedCompletely(ids).catch((e) => {
+      console.error("delete completely", e);
+      void message(errorText(e), { title: t("common.error"), kind: "error" });
+    });
+  }
 
   // Clés explicites plutôt que construites à la volée : `t()` renvoyant la clé
   // quand elle manque, une opération non prévue s'afficherait telle quelle.
@@ -15,19 +29,30 @@
     deactivate: "bulk.runningDeactivate",
     delete: "bulk.runningDelete",
     export: "bulk.runningExport",
+    showcase: "bulk.runningShowcase",
   };
   const DONE_KEYS: Record<string, string> = {
     activate: "bulk.doneActivate",
     deactivate: "bulk.doneDeactivate",
     delete: "bulk.doneDelete",
     export: "bulk.doneExport",
+    showcase: "bulk.doneShowcase",
   };
 
   const resultTitle = $derived.by(() => {
     const r = bulkState.result;
     if (!r) return "";
+    // A showcase lot says what it freed (ESPACE§5.2) — "RSS GTM Lanzo V10 is
+    // in the showcase, 550 MB freed" rather than a count.
+    const sc = r.report.showcase;
+    const head = sc
+      ? sc.name
+        ? t("showcase.doneOne", { name: sc.name, size: fmtSize(sc.freedBytes) })
+        : t("showcase.doneMany", { count: r.report.ok.length, size: fmtSize(sc.freedBytes) })
+      : t(DONE_KEYS[r.op] ?? r.op, { count: r.report.ok.length });
     return (
-      t(DONE_KEYS[r.op] ?? r.op, { count: r.report.ok.length }) +
+      head +
+      (r.report.skipped.length ? t("bulk.skippedCount", { count: r.report.skipped.length }) : "") +
       (r.report.failed.length ? t("bulk.failedCount", { count: r.report.failed.length }) : "") +
       (r.report.cancelled ? t("bulk.cancelledNote") : "")
     );
@@ -36,7 +61,19 @@
 
 {#if bulkState.result}
   {@const failed = bulkState.result.report.failed}
+  {@const sc = bulkState.result.report.showcase}
+  {@const done = bulkState.result.report.ok}
   <Toast title={resultTitle} onclose={dismissBulkResult}>
+    {#snippet actions()}
+      {#if sc && done.length}
+        <button class="btn-ghost b-cancel" type="button" onclick={() => deleteThemCompletely(done)}>
+          {t("showcase.complete")}
+        </button>
+      {/if}
+    {/snippet}
+    {#if sc && !sc.recycled && done.length}
+      <div class="fail"><span class="fail-err">{t("showcase.deletedForGood")}</span></div>
+    {/if}
     {#if failed.length}
       {#each failed as f (f.id)}
         <div class="fail">

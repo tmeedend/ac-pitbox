@@ -337,6 +337,29 @@ pub fn list_mod_skins(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Vec<S
     let Some(m) = overlay::get_mod(conn, mod_id).ok().flatten() else {
         return Vec::new();
     };
+    if m.showcase {
+        // The skins folder went with the files (ESPACE§3.1): their names are
+        // in the base, and the fiche still lists them (ESPACE§6) — with no
+        // image, and nothing a skin would declare for the game.
+        let names = m
+            .active_version_id
+            .as_ref()
+            .and_then(|vid| overlay::get_version(conn, vid).ok().flatten())
+            .map(|v| v.skins)
+            .unwrap_or_default();
+        return names
+            .into_iter()
+            .map(|id| SkinItem {
+                name: id.clone(),
+                id,
+                preview: None,
+                livery: None,
+                driver: None,
+                number: None,
+                country: None,
+            })
+            .collect();
+    }
     if !m.is_stock {
         if let Some(lib) = m
             .active_version_id

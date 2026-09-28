@@ -13,6 +13,7 @@
   import Workshop from "$lib/components/workshop/Workshop.svelte";
   import ImportOverlay from "$lib/components/workshop/ImportOverlay.svelte";
   import PendingDialog from "$lib/components/workshop/PendingDialog.svelte";
+  import DeleteDialog from "$lib/components/library/DeleteDialog.svelte";
   import ShellToasts from "$lib/components/toasts/ShellToasts.svelte";
   import ControllerSetup from "$lib/components/settings/ControllerSetup.svelte";
   import { nav, inSessionZone, rememberLibrary, tabGroupOf } from "$lib/shell/nav.svelte";
@@ -179,6 +180,7 @@
 
 <ImportOverlay />
 <PendingDialog />
+<DeleteDialog />
 
 <ShellToasts />
 {#if controllers.setupOpen}

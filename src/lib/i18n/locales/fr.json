@@ -462,7 +462,10 @@
     "failedCount": ", {count} en échec",
     "cancelledNote": " — arrêté",
     "cancel": "Arrêter",
-    "cancelling": "Arrêt…"
+    "cancelling": "Arrêt…",
+    "runningShowcase": "Mise en vitrine de {count} mod(s)",
+    "doneShowcase": "{count} mod(s) en vitrine",
+    "skippedCount": " · {count} en vitrine, ignoré(s)"
   },
   "bulkEdit": {
     "title": "{count} mods sélectionnés",
@@ -476,8 +479,7 @@
     "tagsSection": "Tags",
     "tagPlaceholder": "tag…",
     "addTagToAll": "+ Ajouter à tous",
-    "removeTagFromAll": "− Retirer de tous",
-    "confirmDelete": "Supprimer les {count} mods sélectionnés ? Fichiers et jonctions seront retirés pour chacun."
+    "removeTagFromAll": "− Retirer de tous"
   },
   "columns": {
     "name": "Nom",
@@ -587,9 +589,7 @@
     "uninstallConfirm": "Désinstaller le pack « {pack} » ? Les {count} mods du pack seront supprimés (fichiers + bibliothèque). Irréversible.",
     "uninstallTitle": "Désinstaller le pack",
     "exportDirTitle": "Dossier d'export",
-    "deleteFromLibrary": "🗑 Supprimer de la bibliothèque",
-    "deleteTitle": "Supprimer de la bibliothèque",
-    "deleteConfirm": "Supprimer « {name} » de la bibliothèque ? Tous les fichiers de toutes ses versions seront effacés du disque. Irréversible.",
+    "deleteFromLibrary": "🗑 Supprimer…",
     "reinstallFromArchive": "↺ Réinstaller depuis l'archive source",
     "reinstallConfirmTitle": "Réinstaller depuis l'archive source",
     "reinstallConfirm": "Remplacer les fichiers actuels de « {name} » par une réextraction de l'archive source conservée ? Toute modification faite depuis l'import sera perdue.",
@@ -791,7 +791,9 @@
       "UPDATE_REPLACE": "Mise à jour",
       "UPDATE_KEPT_BOTH": "Gardés",
       "EXTENSION_ADDED": "Extension",
-      "TECH_EDITED": "Fiche technique"
+      "TECH_EDITED": "Fiche technique",
+      "SHOWCASE": "Mise en vitrine",
+      "REHYDRATED": "Fichiers récupérés"
     },
     "imported": "depuis {archive}",
     "updated": "nouvelle version {version}",
@@ -799,7 +801,9 @@
     "replaced": "a remplacé {old}",
     "keptBoth": "conservé séparément de {old}",
     "extensionAdded": "couche depuis {archive} ({added} ajoutés, {overwritten} écrasés)",
-    "techEdited": "modifiée ({fields})"
+    "techEdited": "modifiée ({fields})",
+    "showcased": "{size} libérés",
+    "rehydrated": "fichiers récupérés"
   },
   "modpanel": {
     "ctxOpenDetail": "Ouvrir la page de détails",
@@ -807,7 +811,7 @@
     "ctxAddOpponent": "Ajouter comme adversaire",
     "ctxActivateN": "Activer les {count} mods",
     "ctxDeactivateN": "Désactiver les {count} mods",
-    "ctxDeleteN": "Supprimer les {count} mods",
+    "ctxDeleteN": "🗑 Supprimer les {count} mods…",
     "ctxSetOpponentN": "Définir les {count} comme adversaires",
     "ctxAddOpponentN": "Ajouter les {count} comme adversaires",
     "exportFullN": "Exporter les {count} mods…",
@@ -1386,7 +1390,9 @@
     "fragmentStandalone": "Importer quand même",
     "fragmentSkip": "Ne pas importer",
     "fragmentRest": "{count} autre(s) à trancher",
-    "summarySkipped": ", {skipped} écarté(s)"
+    "summarySkipped": ", {skipped} écarté(s)",
+    "outcomeRehydrated": "Fichiers récupérés",
+    "rehydratedMissing": "{count} fichier(s) attendu(s) manquant(s)"
   },
   "bulkImport": {
     "analyzing": "Analyse du dossier…",
@@ -2190,5 +2196,57 @@
       "changedOne": "1 modifiée",
       "lostOne": "1 vidée"
     }
+  },
+  "showcase": {
+    "state": "En vitrine",
+    "explain": "En vitrine : ce mod reste dans votre bibliothèque avec son image, sa fiche technique et vos notes, mais ses fichiers ne sont plus sur le disque. Récupérez-les pour pouvoir l'utiliser en session.",
+    "freed": "{size} libérés.",
+    "titleOne": "Supprimer {name} ?",
+    "titleMany": "Supprimer {count} mods ?",
+    "titleCompleteOne": "Supprimer complètement {name} ?",
+    "titleCompleteMany": "Supprimer complètement {count} mods ?",
+    "summaryMany": "{count} mods, {size}.",
+    "keep": "Garder en vitrine",
+    "recommended": "recommandé",
+    "complete": "Supprimer complètement",
+    "completeLine": "Le mod et ce que vous y avez ajouté (nom, notes, tags, favori, historique) disparaissent de la bibliothèque.",
+    "willDeactivate": "Il sera désactivé.",
+    "activeMany": "{count} sont actifs et seront désactivés.",
+    "versions": "Ses {count} versions perdent leurs fichiers.",
+    "sourceFrom": "Pour le récupérer : {file}, téléchargé depuis {site}.",
+    "source": "Pour le récupérer : {file}.",
+    "noSource": "Aucune source connue : gardez l'archive quelque part.",
+    "noSourceMany": "{count} n'ont aucune source connue :",
+    "keepArchive": "Garder aussi l'archive conservée",
+    "bin": "Les fichiers partent à la corbeille Windows, ou sont effacés définitivement si elle les refuse.",
+    "howTitle": "Comment ça marche",
+    "how1": "Le mod passe en vitrine.",
+    "how2": "Il ne va plus en session.",
+    "how3": "On le récupère en réimportant son archive ou en le téléchargeant.",
+    "hideHow": "Ne plus afficher",
+    "confirm": "Supprimer",
+    "recover": "Récupérer les fichiers",
+    "recoverKept": "L'archive conservée à l'import",
+    "recoverKeptGo": "Réinstaller",
+    "recovering": "Récupération…",
+    "recoverCup": "Le registre de Content Manager",
+    "recoverCupVersion": "version {version}",
+    "recoverCupGo": "Télécharger",
+    "recoverPage": "La page du pack d'origine",
+    "recoverAuthor": "La page de l'auteur",
+    "open": "Ouvrir",
+    "searchSite": "Chercher sur {site}",
+    "searchWeb": "Chercher sur le web",
+    "search": "Chercher",
+    "fileName": "Fichier d'origine :",
+    "dropHint": "ou glissez l'archive dans Pit Box.",
+    "no3d": "Le modèle 3D reviendra avec les fichiers.",
+    "noSound": "L'écoute du moteur reviendra avec les fichiers.",
+    "deleteCompletelyMenu": "🗑 Supprimer complètement…",
+    "deleteCompletelyMenuN": "🗑 Supprimer complètement les {count} mods…",
+    "sessionBlocked": "{name} est en vitrine : ses fichiers ne sont plus sur le disque.",
+    "doneOne": "{name} est en vitrine, {size} libérés.",
+    "doneMany": "{count} mods en vitrine, {size} libérés.",
+    "deletedForGood": "La corbeille les a refusés : les fichiers ont été effacés définitivement."
   }
 }

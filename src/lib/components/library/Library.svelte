@@ -40,6 +40,7 @@
   import { registerModNav } from "$lib/shell/screenActions";
   import { libraryVersion } from "$lib/library/libraryVersion.svelte";
   import { cardImage, getPreferredSkin, getPreferredLayout } from "$lib/preferred";
+  import { isPlayable } from "$lib/library/showcase.svelte";
   import { enqueueGridThumbs, gridThumb, requestGridThumb } from "$lib/gridthumbs/gridThumbs.svelte";
   import { gridThumbsOn, presetForDensity, renderTemplate } from "$lib/gridthumbs/gridThumbPrefs.svelte";
   import { buildModContextItems } from "$lib/library/modContextActions";
@@ -635,6 +636,9 @@
    * moddée, où il y en a des centaines.
    */
   function unusableReason(c: ModCard): string | null {
+    // A mod in the showcase is not dimmed (ESPACE§4.3): the library must stay
+    // good-looking, that is the whole point — its badge says what it is.
+    if (c.showcase) return null;
     if (c.broken) return "library.brokenTooltip";
     if (!c.active && !c.is_unmanaged) return "library.inactiveTooltip";
     return null;
@@ -642,6 +646,8 @@
 
   function select(c: ModCard) {
     selectedId = c.id_interne;
+    // Never into the session (ESPACE§6): its files are not on disk.
+    if (!isPlayable(c)) return;
     // Restaure les préférences mémorisées de l'entité (skin voiture, layout circuit).
     const sk = isCar ? getPreferredSkin(c.id_interne) : null;
     const lay = !isCar ? getPreferredLayout(c.id_interne) : null;
@@ -732,6 +738,11 @@
 
   // N'expose que les mods du type de cette bibliothèque (§6.1).
   const typed = $derived(cards.filter((c) => c.kind === kind));
+  /** "In the showcase" is posed in the State filter. */
+  const showcaseFiltered = $derived.by(() => {
+    const st = filters.state;
+    return st?.type === "val" && st.values.some((v) => v.value === "showcase" && v.sign > 0);
+  });
 
   // Index de recherche et valeurs proposées : partagés avec la modale
   // d'adversaires, qui pose exactement la même question sur le même vivier
@@ -1025,6 +1036,11 @@
         {#if typed.length === 0}
           <p>{isCar ? t("library.emptyCars") : t("library.emptyTracks")}</p>
           <p class="hint">{t("library.emptyHint")}</p>
+        {:else if showcaseFiltered}
+          <!-- The reference sentence (ESPACE§4.4, third place): an empty
+               "In the showcase" filter is where one wonders what it means. -->
+          <p>{t("library.noResults")}</p>
+          <p class="hint">{t("showcase.explain")}</p>
         {:else}
           <p>{t("library.noResults")}</p>
         {/if}
@@ -1059,6 +1075,14 @@
                    Posé en bas à gauche, en face du cœur : les deux disent la
                    même sorte de chose, « j'ai touché à ce mod ». -->
               {#if c.notes_user}<span class="card-note" title={c.notes_user}>✎</span>{/if}
+              <!-- In the showcase (ESPACE§4.3): a grey badge in the free top
+                   corner, the reference sentence as its tooltip. -->
+              {#if c.showcase}
+                <span class="card-showcase" title={t("showcase.explain")}>
+                  <svg viewBox="0 0 10 10" aria-hidden="true"><rect x="1" y="1.5" width="8" height="7" rx="0.5" /></svg>
+                  {t("showcase.state")}
+                </span>
+              {/if}
               <!-- Nouvelle version au registre (§4.7) : le toast se referme,
                    la carte garde l'information jusqu'à la mise à jour. -->
               {#if updateFor(kind, c.id_interne)}
@@ -1176,7 +1200,7 @@
                     style={columnWidths[col.key] ? `width:${columnWidths[col.key]}px; max-width:${columnWidths[col.key]}px;` : undefined}
                   >
                     {#if col.key === "active"}
-                      <StateBadge active={c.active} stock={c.is_stock} unmanaged={c.is_unmanaged} />
+                      <StateBadge active={c.active} stock={c.is_stock} unmanaged={c.is_unmanaged} showcase={c.showcase} />
                     {:else if col.key === "brand"}
                       {#if c.badge}<span class="brand-badge"
                           ><Emblem src={previewSrc(c.badge) ?? ""} plaque={isPlaque(c.badge)} size={13} /></span
@@ -1501,6 +1525,27 @@
   .broken-flag {
     color: var(--yellow);
     margin-right: 4px;
+  }
+  .card-showcase {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: var(--panel2);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 9px;
+    line-height: 1;
+    padding: 2px 4px;
+    z-index: 1;
+  }
+  .card-showcase svg {
+    width: 8px;
+    height: 8px;
+    fill: none;
+    stroke: currentColor;
   }
   .card-note {
     position: absolute;
