@@ -1219,7 +1219,7 @@
                       {/if}
                       {col.value(c)}
                     {:else}
-                      {col.value(c)}
+                      {#if col.derived?.(c)}<span class="derived-sign" title={t("techsheet.source.rules")}>≈</span>{/if}{col.value(c)}
                     {/if}
                   </td>
                 {/each}
@@ -1575,6 +1575,13 @@
   .upd-flag {
     color: var(--blue);
     margin-right: 4px;
+  }
+  /* Same sign as the tech sheet (FICHE R5): grey, the value keeps its colour. */
+  .derived-sign {
+    color: var(--muted);
+    font-family: var(--mono);
+    margin-right: 4px;
+    cursor: help;
   }
   .card-fav {
     position: absolute;

@@ -7,7 +7,7 @@ import { fmtSize } from "$lib/format";
 import { StorageKey, kindKey } from "$lib/storage";
 import { peekUiPref } from "$lib/uiPrefs.svelte";
 import { withoutBrand } from "./displayName";
-import { choiceLabel } from "$lib/detail/techSheet";
+import { choiceLabel, isDerived } from "$lib/detail/techSheet";
 
 // `kindKey` a déménagé dans storage.ts (il ne servait qu'à bâtir des clés) ;
 // ré-exporté ici pour les appelants existants.
@@ -45,6 +45,10 @@ export interface ColumnDef {
    * colonnes de dates, dont deux propres à l'installation locale et une au
    * mod lui-même, une distinction facile à manquer). */
   tooltipKey?: string;
+  /** The value was deduced from the tags: the table puts the sheet's "≈"
+   * before it, with its meaning on hover (FICHE R5). Kept out of `value` so
+   * the sign can carry that hover. */
+  derived?: (c: ModCard) => boolean;
 }
 
 const DASH = "—";
@@ -61,8 +65,8 @@ function fmtDate(iso: string | null): string {
 type SpecField = "drivetrain" | "gearbox" | "engine_config" | "engine_pos" | "aspiration";
 
 /** A spec column: the tech sheet's value in the sheet's own words
- * ("propulsion", not `RWD`), with the sign the sheet puts before a value
- * deduced from the tags (FICHE R5) — a value reads the same everywhere.
+ * ("propulsion", not `RWD`), flagged `derived` when the tags deduced it, so
+ * it carries the sheet's sign (FICHE R5) — a value reads the same everywhere.
  * Capitalised: a cell stands alone, where the sheet runs it into a sentence. */
 function specColumn(field: SpecField, labelKey: string): ColumnDef {
   const word = (c: ModCard): string | null => {
@@ -76,13 +80,11 @@ function specColumn(field: SpecField, labelKey: string): ColumnDef {
     labelKey,
     sortable: true,
     defaultVisible: false,
-    value: (c) => {
-      const w = word(c);
-      if (!w) return DASH;
-      return c.tech_marks?.[field] === "rules" ? `≈ ${w}` : w;
+    value: (c) => word(c) ?? DASH,
+    derived: (c) => {
+      const mark = c.tech_marks?.[field];
+      return !!mark && !!word(c) && isDerived(mark);
     },
-    // On the word shown, never the sign: it would group rows by provenance.
-    sortValue: (c) => (word(c) ?? DASH).toLowerCase(),
   };
 }
 

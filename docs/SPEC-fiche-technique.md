@@ -105,7 +105,7 @@ Quand le mod le dit dans sa physique, on le lit ; on ne le devine plus. Les tags
 
 **Aucune couleur ne porte la provenance** : les valeurs ont toutes la même couleur. Ce qui vient des fichiers du mod n'a pas de signe. Ce qui est **déduit des tags** est précédé de **« ≈ »**, en gris : le signe dit « à peu près », ce qui est exactement ce qu'est une valeur devinée. Ce que **l'utilisateur a modifié** est suivi de **« ✎ »**, en gris. Chaque signe dit ce qu'il veut dire **au survol** (« déduit des tags », « modifié par vous ») : la légende en pied de bloc qui le disait d'abord coûtait une ligne de hauteur sur chaque fiche qui portait un signe, et a été retirée. Le signe, lui, reste visible sans survol. En mode édition, chaque champ dit sa source en toutes lettres.
 
-La couleur verte des valeurs déduites et son infobulle (`modpanel.derivedTooltip`) disparaissent. Les colonnes de la bibliothèque qui affichent ces mêmes champs prennent le même signe, pour qu'une valeur déduite se reconnaisse partout de la même façon.
+La couleur verte des valeurs déduites et son infobulle (`modpanel.derivedTooltip`) disparaissent. Les colonnes de la bibliothèque qui affichent ces mêmes champs prennent le même signe, avec le même sens au survol, pour qu'une valeur déduite se reconnaisse partout de la même façon.
 
 ## R6 — Une saisie survit à tout
 
