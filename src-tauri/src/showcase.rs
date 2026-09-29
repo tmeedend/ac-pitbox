@@ -624,7 +624,7 @@ pub fn rehydrate(
     incoming: &Path,
     move_source: bool,
     res_mode: crate::resources::ExtractionMode,
-    kept_archive: Option<&str>,
+    source: crate::importer::ArchiveSource<'_>,
     on_progress: &dyn Fn(f64),
 ) -> Result<Rehydrated, String> {
     let dir = crate::libpath::resolve(Some(library), &v.library_path).ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
@@ -691,7 +691,7 @@ pub fn rehydrate(
         .as_deref()
         .and_then(|p| crate::libpath::resolve(Some(library), p))
         .is_some_and(|p| p.exists());
-    if let (Some(kept), false) = (kept_archive, still_kept) {
+    if let (Some(kept), false) = (source.kept, still_kept) {
         overlay::set_kept_archive(conn, &v.id, kept).map_err(|e| e.to_string())?;
     }
     if !missing.is_empty() {

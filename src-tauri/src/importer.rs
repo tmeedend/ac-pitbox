@@ -1593,7 +1593,7 @@ fn import_leftover(
                         None,
                         None,
                         false,
-                        None,
+                        ArchiveSource::default(),
                         // Contenu d'une archive imbriquée : rangé dans la queue
                         // de la barre, qui n'a pas de part réservée par mod.
                         &|_| {},
@@ -1850,7 +1850,9 @@ fn file_extracted(
             pack,
             decision,
             true,
-            kept_archive.as_deref(),
+            ArchiveSource {
+                kept: kept_archive.as_deref(),
+            },
             &mod_progress(ctx, ex.index, i, targets.len()),
         ) {
             Ok(imported) => result.mods.push(imported),
@@ -2111,7 +2113,7 @@ fn import_one_folder(
             pack,
             decision,
             true,
-            kept_archive,
+            ArchiveSource { kept: kept_archive },
             &mod_progress(ctx, index, i, targets.len()),
         ) {
             Ok(imported) => result.mods.push(imported),
@@ -2567,7 +2569,9 @@ fn exec_one(
             pack,
             None,
             false,
-            kept_archive.as_deref(),
+            ArchiveSource {
+                kept: kept_archive.as_deref(),
+            },
             &mod_progress(ctx, index, i, found.len()),
         ) {
             Ok(imported) => {
@@ -2686,6 +2690,15 @@ pub fn resolve_conflict(
     Ok(())
 }
 
+/// Where the content being filed comes from, as the version it creates
+/// records it. Shared by every mod of one archive or folder.
+#[derive(Debug, Default, Clone, Copy)]
+pub(crate) struct ArchiveSource<'a> {
+    /// Archive/dossier source déjà conservé pour cet import (§10/§11). `None`
+    /// si le réglage est désactivé ou la copie a échoué.
+    pub kept: Option<&'a str>,
+}
+
 #[allow(clippy::too_many_arguments)]
 fn process_found(
     conn: &Connection,
@@ -2702,10 +2715,7 @@ fn process_found(
     // Import unitaire (true) : bloque et demande sur cas ambigu. Import en masse
     // (false) : jamais de blocage, un cas ambigu retombe sur le défaut sûr.
     block_ambiguous: bool,
-    // Archive/dossier source déjà conservé pour cet import (§10/§11), partagé
-    // entre tous les mods d'une même archive/dossier. `None` si le réglage est
-    // désactivé ou la copie a échoué.
-    kept_archive: Option<&str>,
+    source: ArchiveSource<'_>,
     // Avancement du rangement de CE mod, dans [0,1] (§4.2bis). Une simple
     // fonction plutôt que le contexte de progression : `process_found` n'a pas
     // à connaître les bandes de la barre ni le rang de l'item dans le lot.
@@ -2872,7 +2882,7 @@ fn process_found(
                 &fm.dir,
                 !copy,
                 res_mode,
-                kept_archive,
+                source,
                 on_progress,
             )?;
             return Ok(ImportedMod {
@@ -3200,7 +3210,7 @@ fn process_found(
     .map_err(|e| e.to_string())?;
 
     // Archive/dossier source conservé (§10/§11), s'il y en a un pour cet import.
-    if let Some(kept) = kept_archive {
+    if let Some(kept) = source.kept {
         crate::overlay::set_kept_archive(conn, &version_id, kept).map_err(|e| e.to_string())?;
     }
 
