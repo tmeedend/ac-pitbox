@@ -241,11 +241,6 @@ export const isDerived = (s: TechSource) => s === "rules";
 /** The sign after a value: corrected by the user. */
 export const isEdited = (s: TechSource) => s === "user";
 
-/** Which signs appear, so the legend says only those. */
-export function signsUsed(sources: TechSource[]): { derived: boolean; edited: boolean } {
-  return { derived: sources.some(isDerived), edited: sources.some(isEdited) };
-}
-
 // --- The edit mode ---------------------------------------------------------------
 
 /** Every field the edit mode offers, by kind — mirrors the backend's checks. */

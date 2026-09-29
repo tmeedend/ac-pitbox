@@ -103,7 +103,7 @@ Quand le mod le dit dans sa physique, on le lit ; on ne le devine plus. Les tags
 
 ## R5 — La provenance se voit sans survol
 
-**Aucune couleur ne porte la provenance** : les valeurs ont toutes la même couleur. Ce qui vient des fichiers du mod n'a pas de signe. Ce qui est **déduit des tags** est précédé de **« ≈ »**, en gris : le signe dit « à peu près », ce qui est exactement ce qu'est une valeur devinée. Ce que **l'utilisateur a modifié** est suivi de **« ✎ »**, en gris. Une **légende** en pied de bloc, affichée seulement si l'un des signes est présent, dit ce qu'ils veulent dire (« ≈ déduit des tags · ✎ modifié par vous »). En mode édition, chaque champ dit sa source en toutes lettres.
+**Aucune couleur ne porte la provenance** : les valeurs ont toutes la même couleur. Ce qui vient des fichiers du mod n'a pas de signe. Ce qui est **déduit des tags** est précédé de **« ≈ »**, en gris : le signe dit « à peu près », ce qui est exactement ce qu'est une valeur devinée. Ce que **l'utilisateur a modifié** est suivi de **« ✎ »**, en gris. Chaque signe dit ce qu'il veut dire **au survol** (« déduit des tags », « modifié par vous ») : la légende en pied de bloc qui le disait d'abord coûtait une ligne de hauteur sur chaque fiche qui portait un signe, et a été retirée. Le signe, lui, reste visible sans survol. En mode édition, chaque champ dit sa source en toutes lettres.
 
 La couleur verte des valeurs déduites et son infobulle (`modpanel.derivedTooltip`) disparaissent. Les colonnes de la bibliothèque qui affichent ces mêmes champs prennent le même signe, pour qu'une valeur déduite se reconnaisse partout de la même façon.
 
@@ -227,8 +227,7 @@ Une seule fonction, `techsheet::effective(mod_id)`, applique R2 et rend la fiche
 2. **À droite de l'aperçu**, la fiche technique, de haut en bas :
    - **les chiffres clés** (puissance, couple, poids, rapport P/P, vitesse max, 0-100), grands chiffres et unités en petit, les absents disparaissant ;
    - **Mécanique** : moteur, transmission, carburant, origine, en phrases courtes (« atmosphérique · 8 300 tr/min », « propulsion · ≈ séquentielle · 6 rapports ») ;
-   - **Électronique** : les puces de §5 ;
-   - la légende de R5, si un signe est présent.
+   - **Électronique** : les puces de §5.
 3. **À droite de la fiche**, la courbe, inchangée.
 4. **Description, puis Wikipédia**, inchangées.
 
@@ -283,7 +282,7 @@ Un module **`techsheet.rs`** :
 - `TechSheet.svelte` et `CarSpecsBlock.svelte` refaits selon §7.1 : bande de chiffres, bloc Mécanique et Électronique, courbe.
 - L'odomètre rejoint l'en-tête avec « déjà essayée » (`odometer.ts` inchangé). Le nombre de lancements n'est pas affiché.
 - Le mode édition (§8), avec les listes fermées des filtres et la liste des pays du jeu.
-- La légende de R5, **une clé de langue par signe**.
+- Le sens des signes de R5 au survol, repris des clés de provenance du mode édition (`techsheet.source.*`).
 
 ## 9.3 Remplissage de l'existant
 

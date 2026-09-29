@@ -9,7 +9,7 @@ vi.mock("$lib/i18n/index.svelte", () => ({
 }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
-const { aidChips, draftOf, keyFigures, mechanicsRows, nextAidState, parseInput, reportLines, signsUsed } =
+const { aidChips, draftOf, isDerived, isEdited, keyFigures, mechanicsRows, nextAidState, parseInput, reportLines } =
   await import("./techSheet");
 import type { TechSheet } from "./techSheet";
 
@@ -95,9 +95,13 @@ describe("electronics", () => {
 
 describe("provenance", () => {
   it("puts a sign only on deduced and corrected values", () => {
-    expect(signsUsed(["physics", "ui", "computed"])).toEqual({ derived: false, edited: false });
-    expect(signsUsed(["rules", "ui"])).toEqual({ derived: true, edited: false });
-    expect(signsUsed(["user"])).toEqual({ derived: false, edited: true });
+    for (const s of ["physics", "ui", "table", "computed"] as const) {
+      expect(isDerived(s) || isEdited(s), `${s} carries no sign`).toBe(false);
+    }
+    expect(isDerived("rules"), "tags → ≈").toBe(true);
+    expect(isEdited("rules")).toBe(false);
+    expect(isEdited("user"), "user → ✎").toBe(true);
+    expect(isDerived("user")).toBe(false);
   });
 });
 

@@ -5,9 +5,10 @@
   // Everything shown comes from the base (`techsheet::effective`), never from a
   // file — which is what keeps the sheet whole for a mod whose files are gone.
   // Two signs, and no colour, say where a value comes from (R5): "≈" before
-  // what the tags deduced, "✎" after what the user corrected; a legend says so
-  // only when one of them is on screen. The green of the former sheet, which
-  // explained itself only on hover, is gone.
+  // what the tags deduced, "✎" after what the user corrected. Each sign names
+  // its meaning on hover rather than in a legend line, which cost a row of
+  // height on every sheet that carried one. A native `title`, not `Tooltip`:
+  // the key figures clip their overflow (ellipsis), which would cut the bubble.
   import { countryLabel, flagFor, loadFlags } from "$lib/flags.svelte";
   import { i18n, t } from "$lib/i18n/index.svelte";
   import {
@@ -17,7 +18,6 @@
     isEdited,
     keyFigures,
     mechanicsRows,
-    signsUsed,
     type TechSheet,
     type TechSource,
   } from "$lib/detail/techSheet";
@@ -35,17 +35,13 @@
   const figures = $derived(keyFigures(sheet, i18n.locale));
   const rows = $derived(mechanicsRows(sheet, { locale: i18n.locale, countryLabel, flagFor }));
   const chips = $derived(aidChips(sheet));
-  const signs = $derived(
-    signsUsed([
-      ...figures.map((f) => f.source),
-      ...rows.flatMap((r) => r.parts.map((p) => p.source)),
-      ...chips.map((c) => c.source),
-    ]),
-  );
 </script>
 
 {#snippet marked(source: TechSource, text: string)}
-  {#if isDerived(source)}<span class="sign">≈</span>{/if}{text}{#if isEdited(source)}<span class="sign after">✎</span>{/if}
+  {#if isDerived(source)}<span class="sign" title={t("techsheet.source.rules")}>≈</span>{/if}{text}{#if isEdited(source)}<span
+      class="sign after"
+      title={t("techsheet.source.user")}>✎</span
+    >{/if}
 {/snippet}
 
 {#if figures.length}
@@ -95,13 +91,6 @@
   <p class="empty">{t("techsheet.empty")}</p>
 {/if}
 
-{#if signs.derived || signs.edited}
-  <div class="legend">
-    {#if signs.derived}<span><span class="sign">≈</span>{t("techsheet.legendDerived")}</span>{/if}
-    {#if signs.edited}<span><span class="sign">✎</span>{t("techsheet.legendEdited")}</span>{/if}
-  </div>
-{/if}
-
 <style>
   .cap {
     text-transform: uppercase;
@@ -131,8 +120,7 @@
   .section {
     padding: 12px 14px 6px;
   }
-  .section + .section,
-  .legend {
+  .section + .section {
     border-top: 1px solid var(--line);
   }
   .parts {
@@ -173,18 +161,11 @@
     color: var(--muted);
     font-family: var(--mono);
     margin-right: 4px;
+    cursor: help;
   }
   .sign.after {
     margin: 0 0 0 4px;
     font-size: 0.8em;
-  }
-  .legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 14px;
-    padding: 8px 14px;
-    font-size: 10.5px;
-    color: var(--muted);
   }
   .empty {
     padding: 14px;

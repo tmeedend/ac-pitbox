@@ -1108,8 +1108,6 @@
     "mechanics": "Meccanica",
     "electronics": "Elettronica",
     "empty": "Nessun dato tecnico",
-    "legendDerived": "dedotto dai tag",
-    "legendEdited": "modificato da te",
     "aidPresent": "presente",
     "aidAbsent": "assente",
     "aidUnknown": "sconosciuto",

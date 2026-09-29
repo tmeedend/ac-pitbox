@@ -2088,8 +2088,6 @@
     "mechanics": "Mécanique",
     "electronics": "Électronique",
     "empty": "Aucune donnée technique",
-    "legendDerived": "déduit des tags",
-    "legendEdited": "modifié par vous",
     "aidPresent": "présent",
     "aidAbsent": "absent",
     "aidUnknown": "inconnu",
