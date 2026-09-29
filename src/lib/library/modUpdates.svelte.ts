@@ -234,16 +234,33 @@ export async function installUpdate(u: ModUpdate): Promise<void> {
   const outcomes = { ...modUpdates.outcome };
   delete outcomes[key];
   modUpdates.outcome = outcomes;
+  try {
+    const done = await downloadAndImport(u);
+    if (done.status === "browser") {
+      modUpdates.outcome = { ...modUpdates.outcome, [key]: { browser: true } };
+      await openUrl(done.url);
+    }
+  } catch (e) {
+    console.error("installUpdate", e);
+    modUpdates.outcome = { ...modUpdates.outcome, [key]: { error: errorText(e) } };
+  }
+}
+
+/**
+ * The two steps of an update, and nothing around them: the registry's
+ * archive is downloaded, then imported like any other. A page instead of an
+ * archive is **returned, not opened** — the caller decides whether to open
+ * it. Throws what the download or the import threw. The caller checks
+ * `canStartUpdate` first.
+ */
+export async function downloadAndImport(
+  u: ModUpdate,
+): Promise<{ status: "imported" } | { status: "browser"; url: string } | { status: "cancelled" }> {
   modUpdates.cancelling = false;
   modUpdates.busy = { kind: u.kind, id: u.id, name: u.name ?? u.id, phase: "download", received: 0, total: null };
   try {
     const outcome = await invoke<DownloadOutcome>("download_mod_update", { kind: u.kind, id: u.id });
-    if (outcome.status === "browser") {
-      modUpdates.outcome = { ...modUpdates.outcome, [key]: { browser: true } };
-      await openUrl(outcome.url);
-      return;
-    }
-    if (outcome.status === "cancelled") return;
+    if (outcome.status !== "archive") return outcome;
     modUpdates.busy.phase = "import";
     const done = await importDownloadedArchive(outcome.path);
     // Kept only while an arbitration still needs it; otherwise gone at once.
@@ -258,9 +275,7 @@ export async function installUpdate(u: ModUpdate): Promise<void> {
     // installed version can say. Awaited here, although the library change
     // triggers it too, so the banner never shows "Update" again in between.
     await recheckModUpdates();
-  } catch (e) {
-    console.error("installUpdate", e);
-    modUpdates.outcome = { ...modUpdates.outcome, [key]: { error: errorText(e) } };
+    return { status: "imported" };
   } finally {
     modUpdates.busy = null;
     modUpdates.cancelling = false;
