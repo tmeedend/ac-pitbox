@@ -875,8 +875,19 @@ fn layers_and_attached_skins_follow_their_mod() {
     let layer_dir = crate::libpath::resolve(cfg.library_path.as_deref(), &layer.library_path).unwrap();
     let skin_dir = crate::libpath::resolve(cfg.library_path.as_deref(), &skin.library_path).unwrap();
 
+    // The confirmation names each of them before they go (ESPACE§5.2).
+    let p = &plan(&conn, &cfg, &["lanzo".to_string()]).unwrap()[0];
+    let named: Vec<(&str, &str)> = p.attached.iter().map(|a| (a.kind, a.name.as_str())).collect();
+    assert_eq!(named.len(), 2, "the layer and the skin pack: {named:?}");
+    assert!(named.contains(&("skin", "gulf")));
+
     let out = to_showcase(&conn, &cfg, "lanzo", None, true).unwrap();
 
+    assert_eq!(
+        sources(&conn, &cfg, "lanzo").unwrap().attached.len(),
+        2,
+        "the recovery panel names them, with their archives"
+    );
     let layer = overlay::get_layer(&conn, &layer.id).unwrap().unwrap();
     assert!(layer.is_skeleton(), "the layer is in the showcase");
     assert_eq!(
@@ -928,7 +939,7 @@ fn each_comes_back_with_its_own_archive() {
     }
 
     // The layer, then the skin pack: into their own rows.
-    assert_eq!(import(&db, &cfg, &base.join("hd"))[0].outcome, "REHYDRATED");
+    assert_eq!(import(&db, &cfg, &base.join("hd"))[0].outcome, "LAYER_REHYDRATED");
     let subs = crate::modscan::scan_subs(&base.join("pack"));
     let conn = db.0.lock().unwrap();
     crate::submods::import_subs(

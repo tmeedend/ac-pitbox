@@ -119,12 +119,23 @@
         {#each ordered as l, i (l.id)}
           <li class="layer-row" class:inactive={!l.is_active}>
             <label class="layer-tog" title={l.is_active ? t("detail.layerActiveOn") : t("detail.layerActiveOff")}>
-              <input type="checkbox" checked={l.is_active} disabled={busy} onchange={() => toggle(l)} />
+              <input
+                type="checkbox"
+                checked={l.is_active}
+                disabled={busy || l.content_state === "skeleton"}
+                onchange={() => toggle(l)}
+              />
             </label>
             <button class="layer-main" type="button" title={t("detail.layerOpenDetail")} onclick={() => onopen(l, layers.length)}>
               <span class="layer-nm">{l.display_name_user ?? layerDisplayName(l.name, hostName)}</span>
               <span class="layer-counts mono">
-                {t("detail.layerCounts", { added: l.added_count, overwritten: l.overwritten_count })}
+                {#if l.content_state === "skeleton"}
+                  <!-- In the showcase (ESPACE§5.4): its files come back with
+                       its own archive, named here. -->
+                  {t("showcase.state")} · {l.source_archive ?? l.name}
+                {:else}
+                  {t("detail.layerCounts", { added: l.added_count, overwritten: l.overwritten_count })}
+                {/if}
               </span>
             </button>
             <button class="layer-icon" type="button" title={t("detail.layerOpenFolder")} onclick={() => openFolder(l)}>🗀</button>

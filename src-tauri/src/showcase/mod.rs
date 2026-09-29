@@ -711,14 +711,54 @@ pub struct PlanEntry {
     pub active: bool,
     /// Complete versions, which all lose their files together (ESPACE§5.4).
     pub versions: usize,
-    /// What those versions weigh — what the showcase gives back.
+    /// What the showcase gives back: its versions, what is attached to it,
+    /// its additions to the game and its resources but for their notes.
     pub size_bytes: u64,
+    /// Layers, skins and sounds that lose their files with it — each named
+    /// in the confirmation, since each comes back only with its own archive.
+    pub attached: Vec<AttachedEntry>,
     /// A source archive kept at import is still there: the mod recovers in
     /// one click, offline, if it is kept (ESPACE§5.2).
     pub kept_archive: bool,
     /// The archive's original name, and the site it came from, when known.
     pub source_file_name: Option<String>,
     pub source_site: Option<String>,
+}
+
+/// A layer, a skin or a sound attached to a mod, as the screens name it.
+#[derive(Debug, Clone, Serialize)]
+pub struct AttachedEntry {
+    /// `"layer"`, `"skin"` or `"sound"`.
+    pub kind: &'static str,
+    /// The name the user gave it, or its own.
+    pub name: String,
+    /// The archive it comes back with.
+    pub archive: Option<String>,
+    pub size_bytes: u64,
+}
+
+impl AttachedEntry {
+    fn layer(cfg: &AppConfig, l: &overlay::LayerRow) -> Self {
+        Self {
+            kind: "layer",
+            name: l.display_name_user.clone().unwrap_or_else(|| l.name.clone()),
+            archive: l.source_archive.clone(),
+            size_bytes: folder_size(cfg, &l.library_path),
+        }
+    }
+
+    fn sub(cfg: &AppConfig, s: &overlay::SubModRow) -> Self {
+        Self {
+            kind: if s.sub_type == "SOUND" { "sound" } else { "skin" },
+            name: s.display_name_user.clone().unwrap_or_else(|| s.name.clone()),
+            archive: s.source_archive.clone(),
+            size_bytes: folder_size(cfg, &s.library_path),
+        }
+    }
+}
+
+fn folder_size(cfg: &AppConfig, library_path: &str) -> u64 {
+    crate::libpath::resolve(cfg.library_path.as_deref(), library_path).map_or(0, |d| crate::inspect::dir_size_bytes(&d))
 }
 
 fn kept_archive_exists(cfg: &AppConfig, v: &VersionRow) -> bool {
@@ -740,14 +780,38 @@ pub fn plan(conn: &Connection, cfg: &AppConfig, ids: &[String]) -> Result<Vec<Pl
         let kind = ModKind::from_kind(&m.kind).unwrap_or(ModKind::Car);
         let versions = overlay::get_versions(conn, id).map_err(|e| e.to_string())?;
         let full: Vec<&VersionRow> = versions.iter().filter(|v| !v.is_skeleton()).collect();
-        let size_bytes = full
+        let versions_size: u64 = full
             .iter()
             .map(|v| match v.size_bytes {
                 Some(n) => n.max(0) as u64,
-                None => crate::libpath::resolve(cfg.library_path.as_deref(), &v.library_path)
-                    .map_or(0, |d| crate::inspect::dir_size_bytes(&d)),
+                None => folder_size(cfg, &v.library_path),
             })
             .sum();
+        // Only what the showcase would free: nothing is left to free of a
+        // mod already in it.
+        let (attached, loose_size) = if m.showcase {
+            (Vec::new(), 0)
+        } else {
+            let a = Attached::of(conn, &m)?;
+            let attached: Vec<AttachedEntry> = a
+                .layers
+                .iter()
+                .map(|l| AttachedEntry::layer(cfg, l))
+                .chain(a.subs.iter().map(|s| AttachedEntry::sub(cfg, s)))
+                .collect();
+            let loose: u64 = loose_dirs(cfg, kind, id)
+                .into_iter()
+                .map(|(owner, dir)| {
+                    let files = match owner {
+                        Owner::Resources => skeleton::resources_to_free(&dir),
+                        _ => skeleton::all_files(&dir),
+                    };
+                    files.iter().map(|f| f.size).sum::<u64>()
+                })
+                .sum();
+            (attached, loose)
+        };
+        let size_bytes = versions_size + attached.iter().map(|a| a.size_bytes).sum::<u64>() + loose_size;
         let active = versions.iter().find(|v| Some(&v.id) == m.active_version_id.as_ref());
         out.push(PlanEntry {
             id: id.clone(),
@@ -756,6 +820,7 @@ pub fn plan(conn: &Connection, cfg: &AppConfig, ids: &[String]) -> Result<Vec<Pl
             active: crate::activation::is_mod_active(cfg, kind, id),
             versions: full.len(),
             size_bytes,
+            attached,
             kept_archive: versions.iter().any(|v| kept_archive_exists(cfg, v)),
             source_file_name: active.and_then(|v| v.source_file_name.clone().or_else(|| v.source_archive.clone())),
             source_site: active.and_then(|v| v.source_site.clone()),
@@ -779,6 +844,9 @@ pub struct Sources {
     pub source_site: Option<String>,
     /// The archive's original name — the best search key there is.
     pub file_name: Option<String>,
+    /// Its layers, skins and sounds in the showcase: each comes back only
+    /// with its own archive (ESPACE§7.5), which the fiche names.
+    pub attached: Vec<AttachedEntry>,
 }
 
 /// Only an address a browser can open, never a `file:` or a script: the
@@ -808,7 +876,25 @@ pub fn sources(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<Sources, 
         author_url,
         source_site: active.and_then(|v| v.source_site.clone()),
         file_name: active.and_then(|v| v.source_file_name.clone().or_else(|| v.source_archive.clone())),
+        attached: freed_attached(conn, cfg, &m)?,
     })
+}
+
+/// The layers, skins and sounds of a mod that are in the showcase.
+fn freed_attached(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Result<Vec<AttachedEntry>, String> {
+    let kind = ModKind::from_kind(&m.kind).unwrap_or(ModKind::Car);
+    let layers = overlay::list_layers(conn, &m.id_interne, kind.into()).map_err(|e| e.to_string())?;
+    let subs = overlay::list_subs_for_parent(conn, &m.id_interne).map_err(|e| e.to_string())?;
+    Ok(layers
+        .iter()
+        .filter(|l| l.is_skeleton())
+        .map(|l| AttachedEntry::layer(cfg, l))
+        .chain(
+            subs.iter()
+                .filter(|s| s.is_skeleton())
+                .map(|s| AttachedEntry::sub(cfg, s)),
+        )
+        .collect())
 }
 
 // --- Taking a mod out of the showcase -------------------------------------------

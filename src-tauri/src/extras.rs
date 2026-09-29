@@ -160,6 +160,9 @@ pub(crate) fn stored_owners(library: &Path) -> Vec<(OwnerKind, String)> {
                 .flatten()
                 .filter(|e| e.path().is_dir())
                 .map(move |e| (owner, e.file_name().to_string_lossy().into_owned()))
+                // A showcase's staging folder, left by an interrupted removal
+                // until the next start sweeps it (ESPACE§5.5): nobody's tree.
+                .filter(|(_, id)| !id.starts_with(".pitbox-freeing-"))
         })
         .collect()
 }

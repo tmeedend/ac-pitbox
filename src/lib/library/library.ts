@@ -214,7 +214,8 @@ export interface ImportedMod {
     | "PARKED"
     | "HOST_MISSING"
     | "HOST_UNKNOWN"
-    | "REHYDRATED";
+    | "REHYDRATED"
+    | "LAYER_REHYDRATED";
   version_label: string | null;
   conflict: FuzzyConflict | null;
   /** Décompte de comparaison (§4.4), présent pour EXTENSION/AMBIGUOUS. */

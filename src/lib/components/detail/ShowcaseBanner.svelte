@@ -174,6 +174,16 @@
           <span class="s-what">{t("showcase.searchWeb")}</span>
           <button class="btn" type="button" onclick={() => search(null)}>{t("showcase.search")}</button>
         </div>
+        {#if sources.attached.length}
+          <!-- ESPACE§7.5: its layers, skins and sounds come back with their
+               own archives, never with the mod's — named here with them. -->
+          <div class="attached">
+            <span>{t("showcase.recoverAttached")}</span>
+            {#each sources.attached as a (a.kind + a.name)}
+              <span class="a-row">{a.name}{#if a.archive} <span class="mono file">{a.archive}</span>{/if}</span>
+            {/each}
+          </div>
+        {/if}
         <div class="foot">
           {#if sources.file_name}
             <span>{t("showcase.fileName")}</span>
@@ -227,6 +237,16 @@
   .ver {
     margin-left: 6px;
     color: var(--muted);
+  }
+  .attached {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 4px;
+    color: var(--muted);
+  }
+  .a-row {
+    color: var(--txt2);
   }
   .foot {
     display: flex;

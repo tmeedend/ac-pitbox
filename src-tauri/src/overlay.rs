@@ -2228,11 +2228,13 @@ pub fn mark_sub_freed(conn: &Connection, id: &str, freed_at: &str) -> rusqlite::
     Ok(())
 }
 
-/// Its files are back (ESPACE§7.5).
-pub fn mark_sub_full(conn: &Connection, id: &str) -> rusqlite::Result<()> {
+/// Its files are back (ESPACE§7.5), stored at `library_path` — the folder
+/// they were laid in, which is its own unless that one was outside the
+/// library.
+pub fn mark_sub_full(conn: &Connection, id: &str, library_path: &str) -> rusqlite::Result<()> {
     conn.execute(
-        "UPDATE sub_mods SET content_state = ?2, freed_at = NULL WHERE id = ?1",
-        params![id, CONTENT_FULL],
+        "UPDATE sub_mods SET content_state = ?2, freed_at = NULL, library_path = ?3 WHERE id = ?1",
+        params![id, CONTENT_FULL, library_path],
     )?;
     Ok(())
 }

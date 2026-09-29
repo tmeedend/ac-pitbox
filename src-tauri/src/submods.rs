@@ -265,7 +265,7 @@ fn record_sub(
     source_name: &str,
 ) {
     let res = match freed {
-        Some(id) => overlay::mark_sub_full(conn, id),
+        Some(id) => overlay::mark_sub_full(conn, id, library_path),
         None => overlay::insert_sub_mod(
             conn,
             &Uuid::new_v4().to_string(),

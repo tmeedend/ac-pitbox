@@ -2247,6 +2247,12 @@
     "sessionBlocked": "{name} is in the showcase: its files are no longer on disk.",
     "doneOne": "{name} is in the showcase, {size} freed.",
     "doneMany": "{count} mods in the showcase, {size} freed.",
-    "deletedForGood": "The recycle bin refused them: the files were deleted for good."
+    "deletedForGood": "The recycle bin refused them: the files were deleted for good.",
+    "attachedLayer": "Its layer “{name}” loses its files too ({size}).",
+    "attachedSkin": "Its skin “{name}” loses its files too ({size}).",
+    "attachedSound": "The sound “{name}” loses its files too ({size}).",
+    "attachedOwnArchive": "Each comes back only with its own archive: importing the mod again does not bring them back.",
+    "attachedMany": "{count} have layers, skins or sounds attached, which lose their files too.",
+    "recoverAttached": "Also to recover, each with its own archive:"
   }
 }

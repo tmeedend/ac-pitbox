@@ -35,7 +35,8 @@ pub struct ImportedMod {
     pub display_name: Option<String>,
     /// "IMPORT" | "UPDATE_REPLACE" | "DUPLICATE" | "EXTENSION" | "AMBIGUOUS" (§4.4)
     /// | "PARKED" | "HOST_MISSING" | "HOST_UNKNOWN" (§4.3bis)
-    /// | "REHYDRATED" (ESPACE§7.3): the files of a version in the showcase are back.
+    /// | "REHYDRATED" (ESPACE§7.3): the files of a version in the showcase are back
+    /// | "LAYER_REHYDRATED" (ESPACE§7.5): those of a layer.
     /// - EXTENSION : rangé comme couche à part, la base n'est jamais touchée.
     /// - AMBIGUOUS : rien écrit, on attend le choix de l'utilisateur.
     /// - PARKED : fragment rangé en couche d'un hôte absent, en attente de lui.
@@ -3063,7 +3064,9 @@ fn process_found(
                         id_interne,
                         kind: kind_str,
                         display_name: Some(name),
-                        outcome: "REHYDRATED".into(),
+                        // Not REHYDRATED: that one offers to activate the mod,
+                        // and a layer's host may well still be in the showcase.
+                        outcome: "LAYER_REHYDRATED".into(),
                         version_label: ui.version,
                         fragment: is_fragment,
                         source_name,

@@ -25,7 +25,7 @@ de reprendre. En cas d'écart, la spec fait foi.
 
 ---
 
-- [ ] **Mods en vitrine — livré pour les voitures et circuits ; restent les compléments rattachés.**
+- [ ] **Mods en vitrine — livré ; reste la récupération en masse.**
       Livré (`SPEC-sans-fichiers.md`, 2026-09-27) : `skeleton.rs` (liste
       blanche, manifeste, image figée, garde-fou), `showcase.rs` (le déroulé
       ESPACE§5.5, sa reprise au démarrage, la réhydratation), les colonnes de
@@ -61,11 +61,16 @@ de reprendre. En cas d'écart, la spec fait foi.
         imbriquée, ni sur un téléchargement du registre CUP, dont l'adresse
         `/cup/<type>/<id>` n'est pas notée : le panneau de récupération
         interroge déjà le registre par l'id du mod ;
-      - ESPACE§5.4 : couches, livrées et sons rattachés, ajouts au jeu,
-        ressources. Les garder pleins aujourd'hui est **sûr** (aucun ne va en
-        jeu sans son hôte), seulement moins de place libérée. Colonnes
-        `content_state`/`freed_at` déjà posées sur `layers` et `sub_mods` ;
-      - ESPACE§7.2 (récupération en masse), ESPACE§7.5 (couches réhydratées).
+      - ESPACE§7.2 : la récupération en masse (sélection « En vitrine »,
+        téléchargement à la suite depuis le registre CUP) ;
+      - écarts assumés des compléments (livrés le 2026-09-29) : les ajouts
+        au jeu ne sont **pas listés** dans le manifeste de la version, et
+        l'onglet Ajouts au jeu d'un mod en vitrine est donc vide au lieu de
+        les montrer en gris (ESPACE§6) ; les livrées **fournies avec** le mod
+        (`removable = false`) partent avec sa version, pas comme compléments
+        — elles vivent dans son dossier ; un son actif est remis à
+        l'original avant la mise en vitrine, pour que la base ne dise pas
+        « ce son est actif » d'une voiture qui reviendra avec le sien.
       **Pièges payés** :
       - la réindexation et la relecture de la fiche technique relisent le
         disque et **remplacent** ce qui est en base : sur un squelette, elles
@@ -82,6 +87,13 @@ de reprendre. En cas d'écart, la spec fait foi.
         ne doit jamais être vidé sur sa foi ;
       - la réhydratation échange les dossiers **avant** de marquer la base
         complète, jamais l'inverse (voir `showcase::rehydrate`) ;
+      - l'import d'une archive visant un mod en vitrine se compare au
+        **manifeste**, pas au squelette : à côté du squelette, une couche
+        (un tracé ajouté) paraissait entièrement neuve et devenait une
+        nouvelle version sans le reste du circuit ;
+      - pas de manifeste dans les dossiers des ajouts au jeu ni des
+        ressources : les ajouts se reposent fichier par fichier à la racine
+        du jeu, et un `.pitbox-vitrine.json` y aurait atterri ;
       - un retour arrière ne supprime jamais un fichier : il remet **tout**
         ce que contient le dossier d'attente, y compris ce qu'une exécution
         interrompue y avait déjà déplacé. S'il ne peut pas tout remettre, il

@@ -28,10 +28,22 @@ export interface PlanEntry {
   showcase: boolean;
   active: boolean;
   versions: number;
+  /** Versions, attached content, additions and resources together. */
   size_bytes: number;
+  /** Layers, skins and sounds that lose their files with it (ESPACE§5.4). */
+  attached: AttachedEntry[];
   kept_archive: boolean;
   source_file_name: string | null;
   source_site: string | null;
+}
+
+/** Mirrors `showcase::AttachedEntry`: a layer, skin or sound of a mod, which
+ * comes back only with its own archive (ESPACE§7.5). */
+export interface AttachedEntry {
+  kind: "layer" | "skin" | "sound";
+  name: string;
+  archive: string | null;
+  size_bytes: number;
 }
 
 /** Mirrors `showcase::Sources`: where the files could come back from. */
@@ -41,6 +53,8 @@ export interface RecoverySources {
   author_url: string | null;
   source_site: string | null;
   file_name: string | null;
+  /** Its layers, skins and sounds in the showcase, with their archives. */
+  attached: AttachedEntry[];
 }
 
 interface ShowcaseOutcome {

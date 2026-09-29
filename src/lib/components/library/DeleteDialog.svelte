@@ -29,6 +29,14 @@
   const active = $derived(entries.filter((e) => e.active));
   const unknownSource = $derived(freeable.filter((e) => !e.source_file_name));
   const anyKept = $derived(freeable.some((e) => e.kept_archive));
+  const withAttached = $derived(freeable.filter((e) => e.attached.length > 0));
+
+  // Spelled out rather than built: `t()` returns the key it does not know.
+  const ATTACHED_KEY: Record<string, string> = {
+    layer: "showcase.attachedLayer",
+    skin: "showcase.attachedSkin",
+    sound: "showcase.attachedSound",
+  };
 
   // Each opening starts from the showcase, whatever was chosen last time.
   $effect(() => {
@@ -147,6 +155,16 @@
         {/if}
         {#if one && one.versions > 1}
           <p class="note">{t("showcase.versions", { count: one.versions })}</p>
+        {/if}
+        {#if one && one.attached.length}
+          <!-- One line each (ESPACE§5.2): each comes back only with its own
+               archive, so each must be named before it goes. -->
+          {#each one.attached as a (a.kind + a.name)}
+            <p class="note">{t(ATTACHED_KEY[a.kind], { name: a.name, size: fmtSize(a.size_bytes) })}</p>
+          {/each}
+          <p class="note muted">{t("showcase.attachedOwnArchive")}</p>
+        {:else if withAttached.length}
+          <p class="note">{t("showcase.attachedMany", { count: withAttached.length })}</p>
         {/if}
         <p class="note muted">{t("showcase.bin")}</p>
       </div>

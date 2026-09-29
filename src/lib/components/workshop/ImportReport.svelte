@@ -26,7 +26,8 @@
   function outcomeChip(o: string): { cls: string; label: string } {
     if (o === "UPDATE_REPLACE") return { cls: "upd", label: t("importOverlay.outcomeUpdate") };
     if (o === "DUPLICATE") return { cls: "dup", label: t("importOverlay.outcomeDuplicate") };
-    if (o === "REHYDRATED") return { cls: "upd", label: t("importOverlay.outcomeRehydrated") };
+    if (o === "REHYDRATED" || o === "LAYER_REHYDRATED")
+      return { cls: "upd", label: t("importOverlay.outcomeRehydrated") };
     if (o === "EXTENSION") return { cls: "ext", label: t("importOverlay.outcomeExtension") };
     if (o === "UNMANAGED") return { cls: "unm", label: t("importOverlay.outcomeUnmanaged") };
     if (o === "PARKED") return { cls: "ext", label: t("importOverlay.outcomeParked") };

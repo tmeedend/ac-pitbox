@@ -2247,6 +2247,12 @@
     "sessionBlocked": "{name} est en vitrine : ses fichiers ne sont plus sur le disque.",
     "doneOne": "{name} est en vitrine, {size} libérés.",
     "doneMany": "{count} mods en vitrine, {size} libérés.",
-    "deletedForGood": "La corbeille les a refusés : les fichiers ont été effacés définitivement."
+    "deletedForGood": "La corbeille les a refusés : les fichiers ont été effacés définitivement.",
+    "attachedLayer": "Sa couche « {name} » perd aussi ses fichiers ({size}).",
+    "attachedSkin": "Sa livrée « {name} » perd aussi ses fichiers ({size}).",
+    "attachedSound": "Le son « {name} » perd aussi ses fichiers ({size}).",
+    "attachedOwnArchive": "Chacun ne revient qu'avec sa propre archive : réimporter le mod ne les ramène pas.",
+    "attachedMany": "{count} ont des couches, livrées ou sons rattachés, qui perdent aussi leurs fichiers.",
+    "recoverAttached": "À récupérer aussi, chacun avec sa propre archive :"
   }
 }

@@ -130,8 +130,8 @@ fait — en cas d'écart, la spec fait foi.
   technique gardées), et la suppression complète en second choix. Un mod en
   vitrine ne va plus dans le jeu et se **récupère en réimportant son archive**
   (l'import le réhydrate au lieu de le ranger en doublon). Note aussi l'origine
-  des archives (`Zone.Identifier`). **Livré pour les voitures et circuits** ;
-  restent les compléments rattachés (`CHANTIERS.md`).
+  des archives (`Zone.Identifier`). **Livré** ; reste la récupération en
+  masse (`CHANTIERS.md`).
 - **`SPEC-export-bibliotheque.md`** (`EXPORT§`) — **exporter et importer une
   bibliothèque** dans un fichier `.pitbox` de quelques Mo : base, squelettes,
   classement, sessions, profils, préférences ; aucun fichier jouable, aucun
