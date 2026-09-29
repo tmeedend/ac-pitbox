@@ -52,7 +52,7 @@ pub fn content_signature(dir: &Path) -> String {
 
 /// Ensemble des chemins de fichiers relatifs (normalisés : minuscules, `/`)
 /// contenus dans `dir`. Sert à comparer deux arborescences fichier par fichier.
-fn rel_files(dir: &Path) -> BTreeSet<String> {
+pub(crate) fn rel_files(dir: &Path) -> BTreeSet<String> {
     let mut set = BTreeSet::new();
     for entry in WalkDir::new(dir).into_iter().flatten() {
         if !entry.file_type().is_file() {
@@ -85,13 +85,20 @@ pub struct DiffStats {
 
 /// Compare l'arborescence entrante à l'existante (chemins relatifs).
 pub fn diff_content(incoming: &Path, existing: &Path) -> DiffStats {
+    diff_against(incoming, &rel_files(existing))
+}
+
+/// Same comparison, against the paths the existing content is known to hold
+/// — `rel_files` form: lower-case, `/`-separated. A version in the showcase
+/// is compared to what it held before its files went (ESPACE§7.5), not to
+/// its skeleton.
+pub fn diff_against(incoming: &Path, existing: &BTreeSet<String>) -> DiffStats {
     let inc = rel_files(incoming);
-    let exi = rel_files(existing);
-    let overwritten = inc.intersection(&exi).count();
+    let overwritten = inc.intersection(existing).count();
     DiffStats {
         added: inc.len() - overwritten,
         overwritten,
-        existing_total: exi.len(),
+        existing_total: existing.len(),
     }
 }
 

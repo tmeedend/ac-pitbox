@@ -785,3 +785,48 @@ fn another_version_updates_and_the_skeleton_stays_in_the_timeline() {
         "no layer on the skeleton"
     );
 }
+
+/// Rule (ESPACE§7.5): a layer imported onto a mod in the showcase stays a
+/// layer. It is compared with what the version held before its files went —
+/// its manifest —, not with its skeleton, next to which everything looks new
+/// and would have made a new version out of a single added layout.
+#[test]
+fn a_layer_onto_a_showcase_track_stays_a_layer() {
+    let base = crate::testutil::temp_dir("showcase-layer-import");
+    std::fs::create_dir_all(base.join("ac/content/tracks")).unwrap();
+    std::fs::create_dir_all(base.join("lib")).unwrap();
+    let db = overlay::Db(std::sync::Mutex::new(
+        overlay::open(&base.join("overlay.sqlite")).unwrap(),
+    ));
+    let cfg = AppConfig {
+        ac_install_path: Some(base.join("ac")),
+        library_path: Some(base.join("lib")),
+        ..Default::default()
+    };
+    let track = base.join("src/shannon");
+    write(&track, "ui/gp/ui_track.json", br#"{"name":"Shannonville GP"}"#);
+    write(&track, "gp/models.ini", b"[MODEL_0]");
+    write(&track, "gp/data/surfaces.ini", b"[SURFACE_0]");
+    write(&track, "shannon.kn5", &[3; 4000]);
+    assert_eq!(import(&db, &cfg, &base.join("src"))[0].outcome, "IMPORT");
+    to_showcase(&db.0.lock().unwrap(), &cfg, "shannon", None, true).unwrap();
+
+    // A new layout: its model, its ini, its ui — nothing the track had.
+    let layer = base.join("layer/shannon");
+    write(&layer, "club/models.ini", b"[MODEL_0]");
+    write(&layer, "club.kn5", &[4; 3000]);
+    write(&layer, "ui/club/ui_track.json", br#"{"name":"Shannonville Club"}"#);
+    let out = import(&db, &cfg, &base.join("layer"));
+
+    assert_eq!(out[0].outcome, "EXTENSION", "a layer, not an update");
+    let conn = db.0.lock().unwrap();
+    assert_eq!(
+        overlay::get_versions(&conn, "shannon").unwrap().len(),
+        1,
+        "no new version"
+    );
+    assert!(
+        skeleton::is_showcase(&conn, "shannon").unwrap(),
+        "still in the showcase"
+    );
+}

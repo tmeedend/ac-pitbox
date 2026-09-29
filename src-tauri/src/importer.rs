@@ -2967,12 +2967,20 @@ fn process_found(
                 base.is_dir().then(|| identity::diff_content(&fm.dir, &base))
             });
             (ImportClass::Extension, diff)
-        } else if crate::skeleton::is_showcase(conn, &id_interne).map_err(|e| e.to_string())? {
-            // Another version of a mod in the showcase (ESPACE§7.3): an update,
-            // the skeleton staying in the timeline. Compared with a skeleton,
-            // almost everything would look new, and the archive would be
-            // filed as a layer on top of a car without a model.
-            (ImportClass::Update, None)
+        } else if existing.showcase {
+            // A mod in the showcase (ESPACE§7.3, ESPACE§7.5): compared with what its
+            // version held before its files went, as its manifest says — not
+            // with its skeleton, next to which almost everything looks new. A
+            // complete archive is then an update, the skeleton staying in the
+            // timeline, and a layer (a new layout, a texture pack) stays a
+            // layer.
+            let original = crate::overlay::active_library_path(conn, &id_interne)
+                .map_err(|e| e.to_string())?
+                .and_then(|p| crate::libpath::resolve(cfg.library_path.as_deref(), &p))
+                .map(|dir| crate::skeleton::original_files(&dir))
+                .unwrap_or_default();
+            let diff = identity::diff_against(&fm.dir, &original);
+            (classify_diff(&diff), Some(diff))
         } else {
             let active_path = crate::overlay::active_library_path(conn, &id_interne)
                 .map_err(|e| e.to_string())?

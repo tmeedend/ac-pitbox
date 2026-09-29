@@ -242,6 +242,26 @@ pub fn verify(dir: &Path, manifest: &Manifest) -> Vec<String> {
         .collect()
 }
 
+/// What a skeleton's folder held before its files went: what it kept, plus
+/// what its manifest says left — in `identity::rel_files` form, so the import
+/// compares an incoming archive to the complete version (ESPACE§7.5). Without
+/// a manifest, only what is left.
+pub fn original_files(dir: &Path) -> std::collections::BTreeSet<String> {
+    let mut files: std::collections::BTreeSet<String> = crate::identity::rel_files(dir)
+        .into_iter()
+        .filter(|rel| !is_own_file(rel))
+        .collect();
+    if let Some(manifest) = read_manifest(dir) {
+        files.extend(
+            manifest
+                .removed
+                .iter()
+                .map(|f| f.path.to_lowercase().replace('\\', "/")),
+        );
+    }
+    files
+}
+
 /// Every file of `dir` the skeleton does not keep, with its size, sorted.
 pub fn removable_files(kind: ModKind, dir: &Path) -> Vec<RemovedFile> {
     let mut out: Vec<RemovedFile> = walkdir::WalkDir::new(dir)
