@@ -1,8 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
   import {
-    launchSession,
-    isSteamRunning,
     getModCspFeatures,
     weatherOptions,
     weatherConditions,
@@ -17,10 +15,9 @@
     type TrackSun,
     type WeatherOption,
   } from "$lib/launch/launch";
-  import { carClassOf, driverFor, isEmpty } from "$lib/driver/driverOverride.svelte";
   import { setGridCars } from "$lib/launch/gridMods.svelte";
   import { playerHandicap, setPlayerHandicap } from "$lib/launch/playerHandicap.svelte";
-  import { getModDetail, listLibrary, previewSrc, type ModCard } from "$lib/library/library";
+  import { listLibrary, previewSrc, type ModCard } from "$lib/library/library";
   import { isPlayable } from "$lib/library/showcase.svelte";
   import { getSessionBackground } from "$lib/detail/media";
   import { nav, pickSession, type OpponentsAction } from "$lib/shell/nav.svelte";
@@ -37,14 +34,10 @@
   import NamedListDialog from "$lib/components/ui/NamedListDialog.svelte";
   import OpponentPicker from "./OpponentPicker.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
-  import {
-    saveSession,
-    listSavedSessions,
-    deleteSavedSession,
-    formatSavedAt,
-    type SavedSession,
-    type SessionPreset,
-  } from "$lib/launch/savedSessions";
+  import SteamPrompt from "./SteamPrompt.svelte";
+  import type { SavedSession } from "$lib/launch/savedSessions";
+  import { SavedSessionList, savedSessionMeta } from "$lib/launch/savedSessionList.svelte";
+  import { LaunchSequence, startSession } from "$lib/launch/launchSequence.svelte";
   import { deleteSavedGrid, listSavedGrids, saveGrid, type SavedGrid } from "$lib/launch/savedGrids";
   import { OpponentGrid } from "$lib/launch/opponentGrid.svelte";
   import { restoreOpponent } from "$lib/launch/gridRules";
@@ -65,7 +58,6 @@
   // libre plutôt que d'offrir un menu vide.
   let nationalityList = $state<Nationality[]>([]);
   let selectedIntent = $state("");
-  let launching = $state(false);
   let error = $state("");
   let info = $state("");
   // Ce qui n'a pas pu être rétabli au chargement d'une session enregistrée
@@ -581,6 +573,27 @@
       });
   });
 
+  // --- Launch (SESSION§2.3): the Steam gate and the sending live in
+  // `launchSequence`; what stays is what the screen owns — the preset saved
+  // first, and the banner that reports the outcome.
+  const sequence = new LaunchSequence({
+    canLaunch: () => !!setup.car_id && !!setup.track_id,
+    run: doLaunch,
+  });
+
+  async function doLaunch() {
+    savePreset();
+    // L'avertissement de chargement porte sur ce qui n'a pas pu être rétabli :
+    // une fois la session lancée telle qu'elle est, il n'a plus d'objet.
+    error = ""; info = ""; warning = "";
+    try {
+      await startSession(setup);
+      info = t("launch.launchSuccess");
+    } catch (e) {
+      error = errorText(e);
+    }
+  }
+
   // Lancement immédiat demandé depuis le bouton rouge « Démarrer la session »
   // de la barre latérale (SESSION§3.3) : réactif plutôt que dans onMount, pour
   // couvrir aussi bien l'arrivée fraîche sur cet écran que le cas où il est
@@ -588,7 +601,7 @@
   $effect(() => {
     if (nav.autoLaunch && ready) {
       nav.autoLaunch = false;
-      launch();
+      void sequence.launch();
     }
   });
 
@@ -603,137 +616,32 @@
     }
   });
 
-  // --- Contrôle Steam (SESSION§2.3) ---
-  // Assetto Corsa est un jeu Steam : sans Steam, le lancement échoue côté
-  // Content Manager, après que Pit Box a rendu la main — aucune erreur ne
-  // remonte jusqu'ici, l'utilisateur voit juste une session qui ne démarre
-  // pas. Le seul moment où on peut encore expliquer, c'est avant de lancer.
-  let steamPromptOpen = $state(false);
-  let steamStillMissing = $state(false);
-  let steamChecking = $state(false);
-
-  // Un échec de la vérification elle-même ne doit pas empêcher de jouer :
-  // dans le doute on laisse passer, l'échec côté CM reste le pire cas.
-  async function steamReady(): Promise<boolean> {
-    try {
-      return await isSteamRunning();
-    } catch {
-      return true;
-    }
-  }
-
-  async function launch() {
-    if (launching || !setup.car_id || !setup.track_id) return;
-    if (!(await steamReady())) {
-      steamStillMissing = false;
-      steamPromptOpen = true;
-      return;
-    }
-    await doLaunch();
-  }
-
-  async function confirmSteamStarted() {
-    if (steamChecking) return;
-    steamChecking = true;
-    const ok = await steamReady();
-    steamChecking = false;
-    if (!ok) {
-      steamStillMissing = true;
-      return;
-    }
-    steamPromptOpen = false;
-    await doLaunch();
-  }
-
-  async function doLaunch() {
-    savePreset();
-    launching = true;
-    // L'avertissement de chargement porte sur ce qui n'a pas pu être rétabli :
-    // une fois la session lancée telle qu'elle est, il n'a plus d'objet.
-    error = ""; info = ""; warning = "";
-    try {
-      // Le pilote est résolu **au moment du lancement**, pas tenu à jour dans
-      // `setup` : sa source est la cascade par voiture (`driverFor`), qui
-      // dépend de la voiture choisie et de la tenue par défaut, deux choses qui
-      // bougent ailleurs dans l'app.
-      // La classe de la voiture décide de laquelle des deux tenues par défaut
-      // s'applique : demandée ici, une fois, au moment où elle sert.
-      const carDetail = setup.car_id ? await getModDetail(setup.car_id).catch(() => null) : null;
-      const outfit = driverFor(setup.car_id || null, carClassOf(carDetail?.car_class));
-      await launchSession({
-        ...$state.snapshot(setup),
-        driver: isEmpty(outfit)
-          ? null
-          : { model: outfit.body, suit: outfit.suit, gloves: outfit.gloves, helmet: outfit.helmet },
-      });
-      info = t("launch.launchSuccess");
-    } catch (e) {
-      error = errorText(e);
-    } finally {
-      launching = false;
-    }
-  }
-
-  // --- Sessions sauvegardées nommées (SESSION§3.5) : instantané complet des
-  // réglages (adversaires, météo, options…), rappelable par nom — distinct
-  // des presets automatiques par type. Ne touche pas au duo voiture/circuit
-  // courant (géré par la bibliothèque, SESSION§1) : seuls les réglages sont repris.
-  // La liste (carte « Sessions enregistrées ») est filtrée par type — un
-  // effet la recharge à chaque changement d'onglet, et le save/delete la
-  // rafraîchissent en plus puisqu'ils ne changent pas le type. ---
-  // Deux boutons et une modale, comme les grilles (SETUP§2.11) : enregistrer et
-  // recharger une configuration nommée est le même geste des deux côtés, il ne
-  // peut pas avoir deux grammaires d'interface.
+  // --- Saved sessions (SESSION§3.5): the list and its dialog live in
+  // `savedSessionList`. Two buttons and a dialog, as for grids (SETUP§2.11):
+  // saving and reloading a named configuration is the same gesture on both
+  // sides, it cannot have two interface grammars.
   //
-  // **Dans la barre de titre**, et pas à côté du type de session : ça
-  // suggérerait que la sauvegarde est rattachée au type, alors qu'elle porte
-  // sur toute la configuration de la page. L'action se place au niveau de ce
-  // qu'elle enregistre — d'où `Save grid…` en bas de la grille et celle-ci en
-  // en-tête d'écran.
-  let sessionDialog = $state<"save" | "load" | null>(null);
-  let savedList = $state<SessionPreset[]>([]);
+  // **In the title bar**, not next to the session type: that would suggest the
+  // save belongs to the type, when it covers the page's whole configuration.
+  // The action sits at the level of what it saves — hence `Save grid…` under
+  // the grid and this one in the screen header.
+  const sessions = new SavedSessionList();
   $effect(() => {
     const type = setup.session_type;
-    // Ouvrir la modale relit le dossier de presets : le scénario réel est
-    // d'aller composer un preset dans Content Manager puis de revenir, et il
-    // doit apparaître sans redémarrer l'app. Lu en tête, avant toute sortie —
-    // une dépendance lue plus bas ne serait jamais enregistrée.
-    void sessionDialog;
-    // Le type ne filtre plus, il TRIE (SETUP§2.11) : la liste les porte toutes, et
-    // celles du type courant viennent en tête. Le type peut changer avant que
-    // la réponse (invoke Rust) n'arrive — n'applique le résultat que s'il
-    // correspond encore, sinon une réponse tardive rendrait un tri périmé.
-    listSavedSessions(type).then((list) => {
-      if (setup.session_type === type) savedList = list;
-    });
+    // Opening the dialog rereads the presets folder: the real scenario is to
+    // compose a preset in Content Manager and come back, and it must show up
+    // without restarting the app. Read first, before any exit — a dependency
+    // read further down would never be recorded.
+    void sessions.dialog;
+    void sessions.refresh(type);
   });
 
-  /** Le décompte du bouton ne compte que ce qui se charge : un preset dont le
-   * mode n'a pas d'équivalent Pit Box est listé pour qu'on sache qu'il existe,
-   * mais l'annoncer dans « Charger (12) » promettrait douze sessions. */
-  const loadableCount = $derived(savedList.filter((e) => e.session).length);
-
-  /** Ce qui distingue deux entrées d'un coup d'œil : son type — devenu une
-   * propriété affichée depuis qu'il ne filtre plus —, son circuit, sa date.
-   * Un preset qu'on n'a pas su convertir affiche sa raison à la place : la
-   * ligne reste, et elle dit pourquoi elle ne se charge pas (SESSION§3.6). */
-  function savedMeta(e: SessionPreset): string {
-    if (!e.session) return errorText(e.reason ?? "");
-    const s = e.session;
-    const track = libCards.find((c) => c.id_interne === s.setup.track_id)?.display_name ?? s.setup.track_id;
-    return [t(`launch.type.${s.setup.session_type}`), track, formatSavedAt(s.savedAt)].filter(Boolean).join(" · ");
-  }
-
   async function removeSavedSession(path: string) {
-    // Par chemin, et seulement pour les nôtres : un preset composé dans
-    // Content Manager est listé ici, jamais supprimé d'ici (SESSION§3.6). Le
-    // backend refuse de toute façon, la croix ne s'affiche simplement pas.
     try {
-      await deleteSavedSession(path);
+      await sessions.remove(path, setup.session_type);
     } catch (e) {
       error = errorText(e);
     }
-    savedList = await listSavedSessions(setup.session_type);
   }
 
   async function doSaveSession(name: string) {
@@ -742,28 +650,25 @@
     // avait quand la session a été enregistrée. Un échec de lecture ne doit
     // pas empêcher la sauvegarde du reste : liste vide plutôt que rien.
     const trackSkins = setup.track_id ? await listActiveTrackSkins(setup.track_id).catch(() => []) : [];
-    // L'échec d'une **écriture** ne s'avale pas (règle d'or n°6) : un dossier
-    // de presets en lecture seule doit se voir, pas laisser croire que la
-    // session est enregistrée. La modale reste ouverte pour qu'on puisse
-    // réessayer sous un autre nom.
     error = "";
     try {
-      await saveSession({
-        name,
-        savedAt: new Date().toISOString(),
-        setup: $state.snapshot(setup),
-        opponentCount: grid.count,
-        gridFilters: grid.serializedPool(),
-        gridPinned: [...grid.pinned],
-        season,
-        intent: selectedIntent,
-        trackSkins,
-      });
-      sessionDialog = null;
+      await sessions.save(
+        {
+          name,
+          savedAt: new Date().toISOString(),
+          setup: $state.snapshot(setup),
+          opponentCount: grid.count,
+          gridFilters: grid.serializedPool(),
+          gridPinned: [...grid.pinned],
+          season,
+          intent: selectedIntent,
+          trackSkins,
+        },
+        setup.session_type,
+      );
     } catch (e) {
       error = errorText(e);
     }
-    savedList = await listSavedSessions(setup.session_type);
   }
 
   /** Charge une session enregistrée (SESSION§3.5) : réglages **et** duo de session
@@ -829,9 +734,9 @@
     <!-- Le décompte passe sur le bouton : il disait « 12 » à côté d'un titre
          qui ne parlait pas de sauvegardes. -->
     <div class="hbtns">
-      <button class="btn" type="button" onclick={() => (sessionDialog = "save")}>{t("launch.saveSession")}</button>
-      <button class="btn" type="button" onclick={() => (sessionDialog = "load")}
-        >{t("launch.loadSession")}{#if loadableCount}&nbsp;({loadableCount}){/if}</button
+      <button class="btn" type="button" onclick={() => (sessions.dialog = "save")}>{t("launch.saveSession")}</button>
+      <button class="btn" type="button" onclick={() => (sessions.dialog = "load")}
+        >{t("launch.loadSession")}{#if sessions.loadableCount}&nbsp;({sessions.loadableCount}){/if}</button
       >
     </div>
   </header>
@@ -938,33 +843,29 @@
   {/if}
 </div>
 
-<!-- Steam manquant (SESSION§2.3) : dialogue bloquant plutôt qu'un message dans le
-     bandeau, parce qu'il y a un geste à faire hors de l'app et qu'il faut
-     revérifier après — un texte passif laisserait l'utilisateur relancer dans
-     le vide. -->
-{#if sessionDialog}
+{#if sessions.dialog}
   <NamedListDialog
-    mode={sessionDialog}
+    mode={sessions.dialog}
     searchable
-    title={t(sessionDialog === "save" ? "launch.saveSessionTitle" : "launch.loadSessionTitle")}
-    placeholder={t(sessionDialog === "save" ? "launch.sessionNamePlaceholder" : "launch.sessionSearchPlaceholder")}
+    title={t(sessions.dialog === "save" ? "launch.saveSessionTitle" : "launch.loadSessionTitle")}
+    placeholder={t(sessions.dialog === "save" ? "launch.sessionNamePlaceholder" : "launch.sessionSearchPlaceholder")}
     emptyText={t("launch.noSavedSessions")}
-    entries={savedList.map((e) => ({
+    entries={sessions.entries.map((e) => ({
       id: e.path,
       name: e.name,
-      meta: savedMeta(e),
+      meta: savedSessionMeta(e, libCards),
       badge: e.origin === "cm" ? t("launch.fromCm") : undefined,
       deletable: e.origin === "pitbox",
       disabled: !e.session,
     }))}
     onsave={(name) => void doSaveSession(name)}
     onpick={(path) => {
-      const e = savedList.find((x) => x.path === path);
-      sessionDialog = null;
+      const e = sessions.entries.find((x) => x.path === path);
+      sessions.dialog = null;
       if (e?.session) void doLoadSession(e.session, e.notes);
     }}
     ondelete={(path) => void removeSavedSession(path)}
-    onclose={() => (sessionDialog = null)}
+    onclose={() => (sessions.dialog = null)}
   />
 {/if}
 
@@ -1005,68 +906,9 @@
   />
 {/if}
 
-{#if steamPromptOpen}
-  <div class="backdrop">
-    <div class="modal">
-      <h2>{t("launch.steamRequiredTitle")}</h2>
-      <p>{t("launch.steamRequiredBody")}</p>
-      {#if steamStillMissing}
-        <p class="steam-missing">{t("launch.steamStillMissing")}</p>
-      {/if}
-      <div class="steam-actions">
-        <button class="btn btn-ghost" type="button" onclick={() => (steamPromptOpen = false)}>
-          {t("common.cancel")}
-        </button>
-        <button class="btn btn-primary" type="button" disabled={steamChecking} onclick={confirmSteamStarted}>
-          {steamChecking ? t("common.working") : t("launch.steamStarted")}
-        </button>
-      </div>
-    </div>
-  </div>
-{/if}
+<SteamPrompt {sequence} />
 
 <style>
-  /* Dialogue Steam — même langage visuel que `NamedListDialog` ; le CSS
-     des composants étant scopé, il se recopie plutôt qu'il ne s'hérite. */
-  .backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-  }
-  .modal {
-    width: 420px;
-    max-width: 92vw;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 16px;
-    background: var(--panel);
-    border: 1px solid var(--rosso);
-  }
-  .modal h2 {
-    font-size: 13px;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    color: var(--txt2);
-  }
-  .modal p {
-    font-size: 12px;
-    line-height: 1.5;
-    color: var(--txt2);
-  }
-  .steam-missing {
-    color: var(--yellow);
-  }
-  .steam-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-  }
-
   /* Écran plein-page (AppShell rend `.content.fixed` pour "race", comme la
      bibliothèque) : .flow gère lui-même son défilement — plus de hack de
      marge négative pour compenser le padding du parent. */

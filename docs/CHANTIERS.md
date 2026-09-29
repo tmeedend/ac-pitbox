@@ -856,9 +856,3 @@ de reprendre. En cas d'écart, la spec fait foi.
          (même `revControls`, même `Slider`, même bouton de démonstration).
          Quelques minutes, sans risque ; à mettre en commun au plus tard à la
          troisième copie.
-      5. **`Launch.svelte` : 815 lignes de script** (revue du 2026-09-29),
-         après deux allègements (plateau, presets). Restent la séquence de
-         lancement — vérification Steam, confirmation, envoi à CM, une
-         centaine de lignes — et les sessions enregistrées, à sortir vers
-         `$lib/launch/`. Une demi-session ; risque moyen : seul un vrai
-         lancement dans CM le vérifie.

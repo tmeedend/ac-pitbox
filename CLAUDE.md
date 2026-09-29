@@ -526,7 +526,8 @@ modales d'arbitrage) et `ShellToasts` (la pile de notifications : une
 notification nouvelle s'ajoute là, pas dans la coquille) — tous dans `AppShell` —,
 `SetupWizard` (dans `routes/+page.svelte`, première configuration),
 `BulkEditPanel` / `ContextMenu` (dans `Library`), `OpponentPicker` /
-`SavedSessionsDialog` (dans `Launch`).
+`NamedListDialog` (sessions et grilles enregistrées) / `SteamPrompt` (dans
+`Launch`).
 
 Ajouter une fonctionnalité backend = 3 endroits : la fonction dans son module
 métier, la façade `pub fn` dans `commands/<domaine>.rs` **et** son inscription
@@ -854,7 +855,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Corrections par mod** | à faire : marque et classe d'un mod précis (pays et fiche technique : livrés avec la fiche) | `docs/CHANTIERS.md` |
 | **Règles de tags divergentes** | deux fichiers décrivent la même ontologie, un seul est chargé | `docs/CHANTIERS.md` |
 | **Dossier du jeu** | lot 1 livré (lecture seule) ; reste le lot 2, les tailles | `docs/SPEC-etat-dossier.md`, `docs/CHANTIERS.md` |
-| **Refactorings reportés** | cinq repérés et chiffrés (actions de la fiche, aperçu 3D, `importer.rs`, curseur de régime, lancement de session) | `docs/CHANTIERS.md` |
+| **Refactorings reportés** | quatre repérés et chiffrés (actions de la fiche, aperçu 3D, `importer.rs`, curseur de régime) | `docs/CHANTIERS.md` |
 
 ## Fin de tâche — dans cet ordre
 
