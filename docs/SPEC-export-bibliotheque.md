@@ -237,7 +237,7 @@ Un module **`transfer.rs`** :
 | `check_importable(conn, cfg, &Manifest) -> Result<(), Refusal>` | R3, R4 |
 | `import(app, conn, cfg, path, parts) -> Report` | §7.3, étape 4, avec retour arrière |
 
-**Réutiliser, ne pas recopier** : `skeleton::is_kept` et `skeleton::freeze_card_image` (`ESPACE§9.1`) pour les squelettes ; `backup.rs` pour la copie de base (`VACUUM INTO` depuis une connexion en lecture seule) et la liste des fichiers de préférences ; l'indexation du contenu d'origine (`stock.rs`) ; les migrations d'`overlay.rs` (`overlay::migrate`).
+**Réutiliser, ne pas recopier** : `skeleton::is_kept` et `skeleton::freeze_card_image` (`ESPACE§9.1`) pour les squelettes ; `backup.rs` pour la copie de base (`VACUUM INTO` depuis une connexion en lecture seule) et la liste des fichiers de préférences ; l'indexation du contenu d'origine (`stock.rs`) ; les migrations d'`overlay/schema.rs` (`overlay::migrate`).
 
 **L'écriture du zip se fait en flux**, fichier par fichier : jamais toute l'archive en mémoire.
 

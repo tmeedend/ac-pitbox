@@ -376,7 +376,8 @@ src-tauri/src/          Backend Rust — un module par domaine
   lib.rs                Point d'entrée : mod, état partagé, setup, invoke_handler
   commands/             Façades #[tauri::command], un fichier par domaine
   errors.rs             Clés i18n des erreurs destinées à l'utilisateur
-  overlay.rs            Base SQLite : schéma, migrations ALTER idempotentes, CRUD
+  overlay/              Base SQLite : un fichier par famille de tables, schéma et
+                        migrations ALTER idempotentes dans `schema.rs`
   importer.rs modscan.rs archive.rs    Import : détection, extraction, classement
   fragment.rs           Mod ou couche déguisée en mod : géométrie, recherche de l'hôte
   activation.rs deploy.rs compose.rs layers.rs   Déploiement dans content/
