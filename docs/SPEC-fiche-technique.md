@@ -8,7 +8,7 @@
 >
 > **Mesures du 2026-09-27** sur l'install de référence : `overlay.sqlite` (324 voitures dont 178 d'origine), et la physique déchiffrée de **104 voitures** (100 d'origine, 4 mods). Les autres mods n'ont pas pu être lus par l'outil de mesure (fichiers en hardlink), **pas** par Pit Box : la mesure est à rejouer sur eux à l'implémentation (§10).
 >
-> **Livrée le 2026-09-27** (`src-tauri/src/techsheet/`). La mesure de §10 a été refaite sur 397 voitures et ses résultats y sont consignés. Les tests de §9.4 qui supposent la vitrine et l'export sont portés par ces chantiers-là (`ESPACE§9.4`, `EXPORT§8.4`), qui ne sont pas encore construits.
+> **Livrée le 2026-09-27** (`src-tauri/src/techsheet/`). La mesure de §10 a été refaite sur 397 voitures et ses résultats y sont consignés. Les tests de §9.4 qui supposent la vitrine et l'export sont portés par ces chantiers-là : la vitrine les a (`ESPACE§9.4`, `showcase::tests::nothing_the_user_or_the_sheet_holds_is_lost`), l'export n'est pas encore construit (`EXPORT§8.4`).
 
 ---
 

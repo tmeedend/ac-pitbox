@@ -2253,6 +2253,12 @@
     "attachedSound": "Le son « {name} » perd aussi ses fichiers ({size}).",
     "attachedOwnArchive": "Chacun ne revient qu'avec sa propre archive : réimporter le mod ne les ramène pas.",
     "attachedMany": "{count} ont des couches, livrées ou sons rattachés, qui perdent aussi leurs fichiers.",
-    "recoverAttached": "À récupérer aussi, chacun avec sa propre archive :"
+    "recoverAttached": "À récupérer aussi, chacun avec sa propre archive :",
+    "recoverN": "Récupérer les fichiers des {count} mods…",
+    "recoverBusy": "Une importation ou une mise à jour est en cours : récupérez les fichiers une fois qu'elle est terminée.",
+    "recoveringMany": "Récupération des fichiers ({index}/{total})",
+    "recoveredMany": "Fichiers récupérés pour {count} mod(s)",
+    "recoverOnPage": "le registre propose une page, pas une archive",
+    "recoverManual": "pas de téléchargement direct"
   }
 }

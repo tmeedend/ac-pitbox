@@ -7,6 +7,7 @@
   import ControllerToast from "./ControllerToast.svelte";
   import UpdateToast from "./UpdateToast.svelte";
   import BulkToasts from "./BulkToasts.svelte";
+  import RecoverToast from "./RecoverToast.svelte";
   import RepairToast from "./RepairToast.svelte";
   import SurveyToast from "./SurveyToast.svelte";
   import CatalogToast from "./CatalogToast.svelte";
@@ -24,6 +25,7 @@
   <ControllerToast />
   <UpdateToast />
   <BulkToasts />
+  <RecoverToast />
   <RepairToast />
   <SurveyToast />
   <CatalogToast />

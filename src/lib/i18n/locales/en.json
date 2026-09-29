@@ -2253,6 +2253,12 @@
     "attachedSound": "The sound “{name}” loses its files too ({size}).",
     "attachedOwnArchive": "Each comes back only with its own archive: importing the mod again does not bring them back.",
     "attachedMany": "{count} have layers, skins or sounds attached, which lose their files too.",
-    "recoverAttached": "Also to recover, each with its own archive:"
+    "recoverAttached": "Also to recover, each with its own archive:",
+    "recoverN": "Recover the files of the {count} mods…",
+    "recoverBusy": "An import or an update is running: recover the files once it is done.",
+    "recoveringMany": "Recovering files ({index}/{total})",
+    "recoveredMany": "Files recovered for {count} mod(s)",
+    "recoverOnPage": "the registry offers a page, not an archive",
+    "recoverManual": "no direct download"
   }
 }

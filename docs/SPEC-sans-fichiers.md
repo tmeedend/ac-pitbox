@@ -7,6 +7,8 @@
 > **Étiquette de renvoi : `ESPACE§`.** Aucune maquette : les écrans touchés existent déjà, et cette spec dit ce qui change sur chacun (§6).
 >
 > **Mesures et relevés de code du 2026-09-26**, sur `D:\AC-Library` et `src-tauri/src`. Chiffres en §3.2, points de code en §9. Le fichier garde son nom d'origine (`sans-fichiers`) ; le vocabulaire a changé depuis (§4.4).
+>
+> **Livrée du 2026-09-27 au 2026-09-29** : `src-tauri/src/skeleton.rs` (ce qu'est un squelette, le garde-fou), `src-tauri/src/showcase/` (la mise en vitrine, sa reprise, la réhydratation), `src/lib/library/showcase.svelte.ts` et `recovery.svelte.ts` (la confirmation, la récupération en masse). Tranché avec l'utilisateur le 2026-09-28 : le squelette reste dans la bibliothèque plutôt que tout en base (R3), toutes les versions partent ensemble ou aucune (§5.4), la taille d'origine est gardée (§4.1), pas de vitrine pour les autres types (§5.4). Ce que l'implémentation a appris, ses écarts assumés et les pièges déjà payés sont au §10.
 
 ---
 
@@ -333,6 +335,8 @@ En pied de panneau, toujours : le **nom exact du fichier d'origine**, sélection
 
 Filtre « En vitrine », sélection multiple, « Récupérer les fichiers… » : Pit Box télécharge à la suite ce que le registre CUP sert en archive directe, et liste le reste avec leur geste. Un téléchargement à la fois, jamais pendant un import.
 
+Pour chaque mod, la source qui ne demande rien à l'utilisateur d'abord : l'**archive conservée** (hors ligne), puis le **registre** quand il sert l'archive elle-même. Un registre qui ne propose qu'une page (hébergeur, Patreon) est **listé, jamais ouvert** : un lot de vingt ouvrirait vingt onglets. Les autres sources (page du pack, de l'auteur, recherches) sont sur la fiche du mod ; le compte rendu, dans la pile de notifications, donne pour chaque mod restant son geste — « Ouvrir » la page, ou « Ouvrir la fiche ». Un mod n'est compté récupéré que s'il est réellement sorti de la vitrine : un import arrêté sur une question n'a encore rien récupéré. Un mod seul n'a pas d'entrée de lot : sa fiche liste toutes ses sources.
+
 ## 7.3 La réhydratation à l'import
 
 **Le point de code qui décide tout.** Aujourd'hui, `importer::classify` compare la signature de contenu entrante à celle de la version active ; égales, le mod est un **doublon** et l'import le saute. Une version en vitrine garde sa signature d'origine (§4.2) : sans changement, réimporter l'archive exacte ne ramènerait rien.
@@ -447,3 +451,38 @@ Trois points qui auraient fait échouer le concept sans bruit :
 - **Interruption** : manifeste écrit, suppression à moitié, base en `full` → `resume_interrupted` termine.
 - **Mod actif** : il est retiré de `content/`, ses ajouts au jeu retirés, les originaux restaurés, avant toute suppression en bibliothèque.
 - **Origine** : le `Zone.Identifier` relevé en §8.1 donne `source_site = https://www.overtake.gg/` et `source_file_name = camtool-v3.0.0-beta.3.zip`, et aucun paramètre signé n'est écrit en base.
+
+---
+
+# 10. Ce que l'implémentation a appris
+
+## 10.1 Écarts assumés
+
+À reprendre s'ils gênent ; aucun ne met en jeu un fichier du jeu.
+
+- **« Activer après récupération »** (§7.3) est un bouton « Activer » sur la ligne du rapport d'import, pas une case cochée d'avance : le rapport arrive après l'import, une case n'y piloterait plus rien. Une couche récupérée (`LAYER_REHYDRATED`) n'a pas ce bouton : son hôte peut être encore en vitrine.
+- **Une grille enregistrée** qui contient un mod en vitrine ne le **signale** pas (§6) : le vivier l'exclut, et le lancement retire l'adversaire de la grille. La voiture ou le circuit du joueur, eux, refusent la session : §6 et §9.1 se contredisaient là-dessus.
+- **La vignette de grille régénérée** n'est pas figée (§3.3) : la fonction est éteinte (`FEATURE_GRID_THUMBS`), c'est l'aperçu préféré de la carte qui l'est.
+- **Les ajouts au jeu** ne sont pas listés dans le manifeste de la version (§5.4), et l'onglet Ajouts au jeu d'un mod en vitrine est vide au lieu de les montrer en gris (§6).
+- **L'origine** (§8) n'est lue que sur un fichier d'archive importé tel quel — ni sur un dossier, ni sur une archive imbriquée, ni sur un téléchargement du registre CUP, dont l'adresse `/cup/<type>/<id>` n'est pas notée : le panneau de récupération interroge déjà le registre par l'id du mod.
+- **Les livrées fournies avec le mod** (`removable = false`) partent avec sa version, pas comme compléments : elles vivent dans son dossier.
+- **Un son actif** est remis à l'original avant la mise en vitrine, pour que la base ne dise pas « ce son est actif » d'une voiture qui reviendra avec le sien.
+- **La recherche** du panneau passe par DuckDuckGo, **sans guillemets** : la recherche exacte d'un nom de fichier ne trouvait rien sur un cas réel, les mêmes mots sans guillemets trouvaient la page.
+
+## 10.2 Pièges payés
+
+- **La réindexation et la relecture de la fiche technique relisent le disque et remplacent ce qui est en base** : sur un squelette, elles auraient effacé livrées, fonctionnalités CSP et physique. Coupées dans `maintenance::reindex_mod` et `techsheet::active_stack`.
+- **`compose::recompose` réindexe à chaque activation** : une fixture de test qui annonce en base une fonctionnalité CSP que ses fichiers ne portent pas la perd dès l'activation — ce n'est pas un bug de la vitrine.
+- **Les livrées projetées sont des junctions dans le dossier de la version** : `removable_files` ne les voit pas (WalkDir ne suit pas les liens). Elles sont retirées à part, lien seul, **après** avoir figé l'image : la carte montre très souvent une livrée d'un pack rattaché, atteinte par l'une d'elles.
+- **Un manifeste n'est cru au démarrage que s'il porte l'id du mod** et ce que la ligne sait du contenu (signature d'une version, archive d'une couche ou d'un sous-élément) : un dossier importé qui en contiendrait un ne doit jamais être vidé sur sa foi.
+- **La réhydratation échange les dossiers avant de marquer la base complète**, jamais l'inverse : une interruption laisse un dossier complet marqué squelette, que la prochaine importation réhydrate, jamais un dossier marqué complet avec un manifeste qu'une reprise viderait.
+- **Un retour arrière ne supprime jamais un fichier** : il remet tout ce que contient le dossier d'attente, y compris ce qu'une exécution interrompue y avait déjà déplacé. S'il ne peut pas tout remettre, il garde manifeste et dossier d'attente, et le démarrage suivant finit la mise en vitrine. Trouvé en revue de code : la première version effaçait le dossier d'attente.
+- **L'import d'une archive visant un mod en vitrine se compare au manifeste**, pas au squelette (`skeleton::original_files`) : à côté du squelette, une couche (un tracé ajouté) paraissait entièrement neuve et devenait une nouvelle version sans le reste du circuit.
+- **Pas de manifeste dans les dossiers des ajouts au jeu ni des ressources** : les ajouts se reposent fichier par fichier à la racine du jeu, et un `.pitbox-vitrine.json` y aurait atterri ; dans les ressources, il se serait montré sur la fiche.
+- **`active_layers` filtre les couches en vitrine** : c'est le seul endroit où toute composition lit ses couches, et une couche réduite à son manifeste l'aurait posé dans `content/` dès le retour de son hôte.
+
+## 10.3 Décisions prises sans la spec
+
+- Le dossier envoyé à la corbeille contient aussi une copie du `ui/` : c'est un dossier de mod complet, qu'on peut restaurer et réimporter.
+- Les tests ne passent jamais par la corbeille (`maintenance::trash_or_delete`), pour ne pas la remplir à chaque exécution ; la suppression définitive qu'ils prennent est l'autre branche de la même fonction.
+- Supprimer un mod cassé depuis l'écran Maintenance passe par la même confirmation : la vitrine fonctionne même quand le dossier du mod a disparu.

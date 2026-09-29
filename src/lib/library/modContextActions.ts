@@ -14,6 +14,8 @@ import { exportMod } from "$lib/workshop/maintenance";
 import { bulkActivate, bulkDeactivate, bulkExport } from "./bulkEdit";
 import { exportToReport, runBulkOp } from "./bulkState.svelte";
 import { deleteMods, isPlayable } from "./showcase.svelte";
+import { recoverMods } from "./recovery.svelte";
+import { canStartUpdate } from "./modUpdates.svelte";
 import { open, message } from "@tauri-apps/plugin-dialog";
 import { nav, requestSection, queueOpponentsAction } from "$lib/shell/nav.svelte";
 import { t } from "$lib/i18n/index.svelte";
@@ -72,6 +74,22 @@ export function buildModContextItems(targets: ModContextTarget[], onchange: () =
   // écarté de ces actions plutôt que de faire échouer le lot ligne par ligne.
   const mods = targets.filter((m) => !m.is_stock);
   const ids = mods.map((m) => m.id_interne);
+
+  // Several mods in the showcase: their files are fetched one after the
+  // other (ESPACE§7.2). One alone has its fiche, where every source is listed.
+  const showcased = targets.filter((m) => m.showcase);
+  if (!single && showcased.length) {
+    items.push({
+      label: t("showcase.recoverN", { count: showcased.length }),
+      onclick: async () => {
+        if (!canStartUpdate()) {
+          await message(t("showcase.recoverBusy"), { title: t("showcase.recover"), kind: "info" });
+          return;
+        }
+        void recoverMods(showcased);
+      },
+    });
+  }
 
   if (mods.length) {
     if (single?.showcase) {
