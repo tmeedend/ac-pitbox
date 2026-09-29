@@ -199,11 +199,7 @@ pub fn read_and_compute(
     rules: &Rules,
     m: &ModRow,
 ) -> Option<(uijson::UiInfo, Harmonized)> {
-    let kind = if m.kind == "Track" {
-        ModKind::Track
-    } else {
-        ModKind::Car
-    };
+    let kind = ModKind::from_column(&m.kind);
     let vid = m.active_version_id.as_ref()?;
     let stored = overlay::get_version_path(conn, vid).ok().flatten()?;
     let lib = crate::libpath::resolve(cfg.library_path.as_deref(), &stored)?;

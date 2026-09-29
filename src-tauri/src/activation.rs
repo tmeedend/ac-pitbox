@@ -38,14 +38,6 @@ use crate::overlay;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-fn kind_of(s: &str) -> ModKind {
-    if s == "Track" {
-        ModKind::Track
-    } else {
-        ModKind::Car
-    }
-}
-
 /// Vrai si le chemin existe et est un point de reparse (junction/symlink).
 /// `symlink_metadata` ne suit pas le lien : un vrai dossier renvoie `false`.
 pub fn is_junction(path: &Path) -> bool {
@@ -215,7 +207,7 @@ pub fn activate(conn: &Connection, cfg: &AppConfig, mod_id: &str, version_id: Op
             crate::errors::STOCK_NOT_ACTIVATABLE.to_string()
         });
     }
-    let kind = kind_of(&m.kind);
+    let kind = ModKind::from_column(&m.kind);
 
     let vid = version_id
         .map(str::to_string)
@@ -273,7 +265,7 @@ pub fn deactivate(conn: &Connection, cfg: &AppConfig, mod_id: &str) -> Result<()
     let m = overlay::get_mod(conn, mod_id)
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::MOD_NOT_FOUND)?;
-    let kind = kind_of(&m.kind);
+    let kind = ModKind::from_column(&m.kind);
     let link = content_link(cfg, kind, mod_id).ok_or(crate::errors::AC_NOT_CONFIGURED)?;
 
     // Une erreur de `symlink_metadata` = rien sur le disque, donc déjà inactif.

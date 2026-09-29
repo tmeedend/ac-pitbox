@@ -2661,11 +2661,7 @@ pub fn resolve_conflict(
         }
         "replace" => {
             if let Some(old) = crate::overlay::get_mod(conn, old_id).map_err(|e| e.to_string())? {
-                let kind = if old.kind == "Track" {
-                    ModKind::Track
-                } else {
-                    ModKind::Car
-                };
+                let kind = ModKind::from_column(&old.kind);
                 // Supprime les fichiers bibliothèque de l'ancien mod.
                 if let Some(lib) = &cfg.library_path {
                     let dir = lib.join(kind.content_folder()).join(old_id);

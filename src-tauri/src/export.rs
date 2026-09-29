@@ -36,14 +36,6 @@ pub struct ExportReport {
     pub warnings: Vec<String>,
 }
 
-fn kind_of(s: &str) -> ModKind {
-    if s == "Track" {
-        ModKind::Track
-    } else {
-        ModKind::Car
-    }
-}
-
 fn sanitize(s: &str) -> String {
     s.chars()
         .map(|c| if r#"\/:*?"<>|"#.contains(c) { '_' } else { c })
@@ -61,7 +53,7 @@ pub fn export_mod(conn: &Connection, cfg: &AppConfig, mod_id: &str, dest_dir: &P
     let m = overlay::get_mod(conn, mod_id)
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::MOD_NOT_FOUND)?;
-    let kind = kind_of(&m.kind);
+    let kind = ModKind::from_column(&m.kind);
     let vid = m
         .active_version_id
         .clone()

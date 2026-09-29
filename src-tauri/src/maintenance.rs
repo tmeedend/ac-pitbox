@@ -13,14 +13,6 @@ use crate::modscan::ModKind;
 use crate::overlay::ModRow;
 use crate::{activation, archive, deploy, inspect, modscan, overlay, submods, uijson};
 
-fn kind_of(s: &str) -> ModKind {
-    if s == "Track" {
-        ModKind::Track
-    } else {
-        ModKind::Car
-    }
-}
-
 #[derive(Debug, Clone, Serialize)]
 pub struct BrokenMod {
     pub id: String,
@@ -88,7 +80,7 @@ pub fn broken_reason(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<S
     if m.showcase {
         return None;
     }
-    let kind = kind_of(&m.kind);
+    let kind = ModKind::from_column(&m.kind);
     let path = m.active_version_id.as_ref().and_then(|vid| {
         let stored = overlay::get_version_path(conn, vid).ok().flatten()?;
         crate::libpath::resolve(cfg.library_path.as_deref(), &stored)
@@ -206,7 +198,7 @@ pub fn delete_broken(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(),
     let m = overlay::get_mod(conn, id)
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::MOD_NOT_FOUND)?;
-    let kind = kind_of(&m.kind);
+    let kind = ModKind::from_column(&m.kind);
 
     // Fichiers : versions individuelles + dossier parent du mod dans la bibliothèque.
     for v in overlay::get_versions(conn, id).map_err(|e| e.to_string())? {
@@ -417,7 +409,7 @@ pub fn reinstall_from_archive(conn: &Connection, cfg: &AppConfig, id: &str) -> R
     let m = overlay::get_mod(conn, id)
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::MOD_NOT_FOUND)?;
-    let kind = kind_of(&m.kind);
+    let kind = ModKind::from_column(&m.kind);
     let versions = overlay::get_versions(conn, id).map_err(|e| e.to_string())?;
     let active_id = m.active_version_id.clone().ok_or(crate::errors::NO_ACTIVE_VERSION)?;
     let version = versions
@@ -692,7 +684,7 @@ pub fn repair_all(
     let active: Vec<(String, u64)> = overlay::list_mods(conn)
         .map_err(|e| e.to_string())?
         .into_iter()
-        .filter(|m| !m.is_stock && activation::is_mod_active(cfg, kind_of(&m.kind), &m.id_interne))
+        .filter(|m| !m.is_stock && activation::is_mod_active(cfg, ModKind::from_column(&m.kind), &m.id_interne))
         .map(|m| {
             let weight = m.size_bytes.filter(|s| *s > 0).map_or(UNKNOWN_MOD_WEIGHT, |s| s as u64);
             (m.id_interne, weight)
@@ -760,7 +752,10 @@ pub fn repair_all(
 /// Retire une junction orpheline. Garde-fou : refuse si ce n'est pas une junction.
 pub fn remove_orphan(cfg: &AppConfig, kind: &str, id: &str) -> Result<(), String> {
     let ac = cfg.ac_install_path.as_ref().ok_or(crate::errors::AC_NOT_CONFIGURED)?;
-    let link = ac.join("content").join(kind_of(kind).content_folder()).join(id);
+    let link = ac
+        .join("content")
+        .join(ModKind::from_column(kind).content_folder())
+        .join(id);
     activation::remove_junction(&link)
 }
 
@@ -779,7 +774,7 @@ pub fn reindex_mod(conn: &Connection, cfg: &AppConfig, id: &str, recalc_size: bo
     let m = overlay::get_mod(conn, id)
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::MOD_NOT_FOUND)?;
-    let kind = kind_of(&m.kind);
+    let kind = ModKind::from_column(&m.kind);
     let versions = overlay::get_versions(conn, id).map_err(|e| e.to_string())?;
 
     let mut fresh_for_mod = None;

@@ -2,6 +2,7 @@
 //! overlay-éditables, ressources et skins.
 
 use super::prelude::*;
+use crate::modscan::ModKind;
 
 #[tauri::command]
 pub fn list_library(app: AppHandle, db: State<Db>) -> Result<Vec<ModCard>, String> {
@@ -57,7 +58,7 @@ fn resource_roots(app: &AppHandle, db: &State<Db>, id: &str) -> Result<ResourceR
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::MOD_NOT_FOUND)?;
     Ok(ResourceRoots {
-        resources: crate::resources::resources_dir(&library, mod_kind(&m.kind), id),
+        resources: crate::resources::resources_dir(&library, ModKind::from_column(&m.kind), id),
         // Ressources du pack (§4.4) : partagées par toutes ses voitures, donc
         // listées sur la fiche de chacune plutôt que dupliquées.
         pack: m
@@ -168,7 +169,12 @@ pub fn list_mod_extras(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<
     let m = crate::overlay::get_mod(&conn, &id)
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::MOD_NOT_FOUND)?;
-    Ok(crate::extras::list(&conn, &cfg, mod_kind(&m.kind).into(), &id))
+    Ok(crate::extras::list(
+        &conn,
+        &cfg,
+        ModKind::from_column(&m.kind).into(),
+        &id,
+    ))
 }
 
 /// Pose quand même un ajout au jeu que l'arbitrage par date refusait (§4.6ter).
@@ -184,7 +190,7 @@ pub fn force_mod_extra(app: AppHandle, db: State<Db>, id: String, rel_path: Stri
     let m = crate::overlay::get_mod(&conn, &id)
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::MOD_NOT_FOUND)?;
-    crate::extras::force_one(&conn, &cfg, mod_kind(&m.kind).into(), &id, &rel_path)
+    crate::extras::force_one(&conn, &cfg, ModKind::from_column(&m.kind).into(), &id, &rel_path)
 }
 
 /// Ouvre un fichier du dossier ressources avec l'application par défaut de

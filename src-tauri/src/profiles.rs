@@ -22,14 +22,6 @@ use crate::modscan::ModKind;
 use crate::others;
 use crate::overlay;
 
-fn kind_of(s: &str) -> ModKind {
-    if s == "Track" {
-        ModKind::Track
-    } else {
-        ModKind::Car
-    }
-}
-
 #[derive(Debug, Clone, Serialize)]
 pub struct ApplyReport {
     pub activated: usize,
@@ -48,7 +40,7 @@ pub fn create_from_active(conn: &Connection, cfg: &AppConfig, name: &str) -> Res
     overlay::create_profile(conn, &id, name, &Local::now().to_rfc3339()).map_err(|e| e.to_string())?;
 
     for m in overlay::list_mods(conn).map_err(|e| e.to_string())? {
-        let kind = kind_of(&m.kind);
+        let kind = ModKind::from_column(&m.kind);
         if let Some(vid) = &m.active_version_id {
             if activation::is_mod_active(cfg, kind, &m.id_interne) {
                 overlay::add_profile_entry(conn, &id, &m.id_interne, vid).map_err(|e| e.to_string())?;
@@ -99,7 +91,7 @@ pub fn apply(conn: &Connection, cfg: &AppConfig, profile_id: &str) -> Result<App
 
     // --- Mods (voiture/circuit) ---
     for m in overlay::list_mods(conn).map_err(|e| e.to_string())? {
-        let kind = kind_of(&m.kind);
+        let kind = ModKind::from_column(&m.kind);
         if activation::is_mod_active(cfg, kind, &m.id_interne) && !target.contains_key(&m.id_interne) {
             match activation::deactivate(conn, cfg, &m.id_interne) {
                 Ok(()) => report.deactivated += 1,

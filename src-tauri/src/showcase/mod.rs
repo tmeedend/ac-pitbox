@@ -84,7 +84,7 @@ pub fn to_showcase(
     }
     let active = m.active_version_id.clone().ok_or(crate::errors::NO_ACTIVE_VERSION)?;
     skeleton::guard(conn, &active)?;
-    let kind = ModKind::from_kind(&m.kind).unwrap_or(ModKind::Car);
+    let kind = ModKind::from_column(&m.kind);
 
     // 1. Out of the game first, by the normal path: it also withdraws the
     //    additions and restores the game files they replaced (§4.5.4).
@@ -183,7 +183,7 @@ struct Attached {
 
 impl Attached {
     fn of(conn: &Connection, m: &ModRow) -> Result<Self, String> {
-        let kind = ModKind::from_kind(&m.kind).unwrap_or(ModKind::Car);
+        let kind = ModKind::from_column(&m.kind);
         let layers = overlay::list_layers(conn, &m.id_interne, kind.into())
             .map_err(|e| e.to_string())?
             .into_iter()
@@ -609,7 +609,7 @@ pub fn resume_interrupted(conn: &Connection, cfg: &AppConfig) -> usize {
         return 0;
     };
     for m in mods.iter().filter(|m| !m.is_stock) {
-        let kind = ModKind::from_kind(&m.kind).unwrap_or(ModKind::Car);
+        let kind = ModKind::from_column(&m.kind);
         let versions: Vec<VersionRow> = overlay::get_versions(conn, &m.id_interne)
             .unwrap_or_default()
             .into_iter()
@@ -777,7 +777,7 @@ pub fn plan(conn: &Connection, cfg: &AppConfig, ids: &[String]) -> Result<Vec<Pl
         let Some(m) = overlay::get_mod(conn, id).map_err(|e| e.to_string())? else {
             continue;
         };
-        let kind = ModKind::from_kind(&m.kind).unwrap_or(ModKind::Car);
+        let kind = ModKind::from_column(&m.kind);
         let versions = overlay::get_versions(conn, id).map_err(|e| e.to_string())?;
         let full: Vec<&VersionRow> = versions.iter().filter(|v| !v.is_skeleton()).collect();
         let versions_size: u64 = full
@@ -860,7 +860,7 @@ pub fn sources(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<Sources, 
     let m = overlay::get_mod(conn, id)
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::MOD_NOT_FOUND)?;
-    let kind = ModKind::from_kind(&m.kind).unwrap_or(ModKind::Car);
+    let kind = ModKind::from_column(&m.kind);
     let versions = overlay::get_versions(conn, id).map_err(|e| e.to_string())?;
     let active = versions.iter().find(|v| Some(&v.id) == m.active_version_id.as_ref());
     let author_url = active
@@ -882,7 +882,7 @@ pub fn sources(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<Sources, 
 
 /// The layers, skins and sounds of a mod that are in the showcase.
 fn freed_attached(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Result<Vec<AttachedEntry>, String> {
-    let kind = ModKind::from_kind(&m.kind).unwrap_or(ModKind::Car);
+    let kind = ModKind::from_column(&m.kind);
     let layers = overlay::list_layers(conn, &m.id_interne, kind.into()).map_err(|e| e.to_string())?;
     let subs = overlay::list_subs_for_parent(conn, &m.id_interne).map_err(|e| e.to_string())?;
     Ok(layers

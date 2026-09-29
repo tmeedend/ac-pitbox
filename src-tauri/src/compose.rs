@@ -25,14 +25,6 @@ use crate::layers::HostKind;
 use crate::modscan::ModKind;
 use crate::overlay::{self, LayerRow};
 
-fn kind_of(s: &str) -> ModKind {
-    if s == "Track" {
-        ModKind::Track
-    } else {
-        ModKind::Car
-    }
-}
-
 /// Dossier de sauvegarde du contenu de base Kunos original (§4.4), avant toute
 /// projection de couche. Aussi utilisé par `stock.rs` : un contenu de base
 /// actuellement composé doit être (ré)indexé depuis cette sauvegarde intacte,
@@ -107,7 +99,7 @@ pub fn recompose(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), Str
 pub(crate) fn planned_sources(conn: &Connection, cfg: &AppConfig, id: &str) -> Option<(PathBuf, Vec<PathBuf>)> {
     let library = cfg.library_path.as_deref();
     if let Some(m) = overlay::get_mod(conn, id).ok().flatten() {
-        let kind = kind_of(&m.kind);
+        let kind = ModKind::from_column(&m.kind);
         let layers = overlay::active_layers(conn, id, kind.into()).ok()?;
         let base = if m.is_stock {
             if layers.is_empty() {
@@ -126,7 +118,7 @@ pub(crate) fn planned_sources(conn: &Connection, cfg: &AppConfig, id: &str) -> O
 }
 
 fn recompose_mod(conn: &Connection, cfg: &AppConfig, m: &overlay::ModRow, mod_id: &str) -> Result<(), String> {
-    let kind = kind_of(&m.kind);
+    let kind = ModKind::from_column(&m.kind);
     let (Some(library), Some(link)) = (cfg.library_path.as_ref(), activation::content_link(cfg, kind, mod_id)) else {
         return Ok(()); // rien à projeter tant que les chemins ne sont pas configurés
     };

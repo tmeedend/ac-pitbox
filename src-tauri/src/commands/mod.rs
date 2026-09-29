@@ -57,17 +57,4 @@ mod prelude {
     pub(crate) use crate::rules::{Rules, RulesOverlay};
     pub(crate) use crate::taxonomy::{FamilyOverlay, MapOverlay, TaxonomyOverlay, TaxonomyTables};
     pub(crate) use tauri_plugin_opener::OpenerExt;
-
-    pub(crate) use super::mod_kind;
-}
-
-/// Convertit le `kind` textuel de l'overlay en `ModKind`. Tout ce qui n'est
-/// pas `"Track"` est traité comme une voiture (le champ ne prend que ces deux
-/// valeurs, écrites par l'app elle-même).
-pub(crate) fn mod_kind(kind: &str) -> crate::modscan::ModKind {
-    if kind == "Track" {
-        crate::modscan::ModKind::Track
-    } else {
-        crate::modscan::ModKind::Car
-    }
 }

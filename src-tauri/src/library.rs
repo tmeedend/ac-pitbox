@@ -71,14 +71,6 @@ pub struct ModDetail {
     pub stock_pack: Option<String>,
 }
 
-fn kind_of(s: &str) -> ModKind {
-    if s == "Track" {
-        ModKind::Track
-    } else {
-        ModKind::Car
-    }
-}
-
 fn is_active(cfg: &AppConfig, m: &ModRow) -> bool {
     // Contenu de base Kunos : toujours un vrai dossier (jamais de déploiement),
     // chargé par AC en permanence — donc toujours « actif ».
@@ -90,7 +82,7 @@ fn is_active(cfg: &AppConfig, m: &ModRow) -> bool {
     }
     // « Actif » = déploiement géré par l'app présent (symlink hérité ou
     // hardlinks, §2) — pas un vrai dossier installé hors app.
-    crate::activation::is_mod_active(cfg, kind_of(&m.kind), &m.id_interne)
+    crate::activation::is_mod_active(cfg, ModKind::from_column(&m.kind), &m.id_interne)
 }
 
 /// The card image of a mod in the showcase: the one frozen when its files
@@ -111,7 +103,7 @@ pub(crate) fn preview_for(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Opt
     // Couches actives d'abord (§4.3) : ce que l'app montre doit être ce que le
     // jeu voit, sinon une couche qui remplace un `preview.png` reste invisible.
     let dirs = entity_dirs(conn, cfg, m);
-    match kind_of(&m.kind) {
+    match ModKind::from_column(&m.kind) {
         ModKind::Car => layered(&dirs, |d| inspect::preview_path(ModKind::Car, d)),
         // Circuit : la photo illustratrice (fond), repli sur le tracé si absente.
         // Le repli se fait **pile épuisée**, pas couche par couche : une couche
@@ -149,7 +141,7 @@ fn description_for(conn: &Connection, cfg: &AppConfig, m: &ModRow, native: Optio
     if let Some(user) = &m.description_user {
         return Some(user.clone());
     }
-    match kind_of(&m.kind) {
+    match ModKind::from_column(&m.kind) {
         ModKind::Car => native.and_then(|s| s.description.clone()),
         ModKind::Track => layered(&entity_dirs(conn, cfg, m), uijson::read_track_description),
     }
@@ -415,7 +407,7 @@ fn entity_dir(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<PathBuf>
     }
     cfg.ac_install_path.as_ref().map(|ac| {
         ac.join("content")
-            .join(kind_of(&m.kind).content_folder())
+            .join(ModKind::from_column(&m.kind).content_folder())
             .join(&m.id_interne)
     })
 }
@@ -432,7 +424,7 @@ fn entity_dir(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<PathBuf>
 /// Une couche **inactive** est exclue, exactement comme à la composition : la
 /// désactiver doit faire réapparaître la base, à l'écran comme dans le jeu.
 fn entity_dirs(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Vec<PathBuf> {
-    let mut dirs: Vec<PathBuf> = overlay::list_layers(conn, &m.id_interne, kind_of(&m.kind).into())
+    let mut dirs: Vec<PathBuf> = overlay::list_layers(conn, &m.id_interne, ModKind::from_column(&m.kind).into())
         .unwrap_or_default()
         .into_iter()
         // A layer in the showcase has only its manifest (ESPACE§5.4).
@@ -474,7 +466,7 @@ pub fn mod_csp_features(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<
     let m = overlay::get_mod(conn, id)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("mod introuvable : {id}"))?;
-    let kind = kind_of(&m.kind);
+    let kind = ModKind::from_column(&m.kind);
     // Union sur la pile de composition, pas premier arrivé : une couche AJOUTE
     // ses extensions CSP à celles de la base (une config météo posée sur un
     // circuit qui n'en avait pas), elle ne les remplace pas.
@@ -543,7 +535,7 @@ pub fn detail(conn: &Connection, cfg: &AppConfig, id: &str) -> rusqlite::Result<
     let stock_pack = card
         .base
         .is_stock
-        .then(|| crate::kunos_dates::pack_name(kind_of(&card.base.kind), id))
+        .then(|| crate::kunos_dates::pack_name(ModKind::from_column(&card.base.kind), id))
         .flatten();
     Ok(Some(ModDetail {
         card,

@@ -25,6 +25,14 @@ impl ModKind {
         }
     }
 
+    /// Reads the `mods.kind` column, a car when the value is not recognised.
+    /// The app only ever writes `"Car"` / `"Track"` there (this enum's `Debug`),
+    /// so the fallback is a formality — but twelve copies of this line had each
+    /// picked their own spelling of it, some tolerant of case, some not.
+    pub fn from_column(s: &str) -> Self {
+        Self::from_kind(s).unwrap_or(ModKind::Car)
+    }
+
     /// Segment de dossier dans `content/` : "cars" | "tracks".
     pub fn content_folder(self) -> &'static str {
         match self {
@@ -399,5 +407,24 @@ pub fn has_geometry(kind: ModKind, dir: &Path) -> bool {
                     .unwrap_or(false)
         }
         ModKind::Car => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // `mods.kind` is written as the `Debug` of `ModKind`: reading it back must
+    // give the same kind, and anything else falls back to a car.
+    #[test]
+    fn from_column_reads_back_what_the_app_writes() {
+        for kind in [ModKind::Car, ModKind::Track] {
+            assert_eq!(
+                ModKind::from_column(&format!("{kind:?}")),
+                kind,
+                "Debug form round-trips"
+            );
+        }
+        assert_eq!(ModKind::from_column(""), ModKind::Car, "unknown value is a car");
     }
 }

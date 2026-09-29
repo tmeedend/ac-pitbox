@@ -258,11 +258,7 @@ pub fn index_stock_content(
 pub fn reclassify_indexed_content(conn: &Connection) -> Result<usize, String> {
     let mut changed = 0;
     for (id, kind_str) in overlay::list_stock_ids(conn).map_err(|e| e.to_string())? {
-        let kind = if kind_str == "Track" {
-            ModKind::Track
-        } else {
-            ModKind::Car
-        };
+        let kind = ModKind::from_column(&kind_str);
         let unmanaged = !kunos_dates::is_official(kind, &id);
         if overlay::set_unmanaged(conn, &id, unmanaged).map_err(|e| e.to_string())? > 0 {
             changed += 1;
