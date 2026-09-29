@@ -849,9 +849,16 @@ de reprendre. En cas d'écart, la spec fait foi.
          classement à l'import, le terrain de la règle d'or n°3. D'abord des
          tests qui figent le comportement, puis un découpage en plusieurs
          passes. Plusieurs sessions ; risque élevé. À ne prendre qu'en même
-         temps qu'un vrai chantier d'import.
+         temps qu'un vrai chantier d'import. **Revue du 2026-09-29 :** ça
+         s'aggrave, `process_found` fait à elle seule 618 lignes.
       4. **Le curseur de régime existe en deux exemplaires** :
          `detail/EngineSoundBlock.svelte` et `inventory/SoundDetail.svelte`
          (même `revControls`, même `Slider`, même bouton de démonstration).
          Quelques minutes, sans risque ; à mettre en commun au plus tard à la
          troisième copie.
+      5. **`Launch.svelte` : 815 lignes de script** (revue du 2026-09-29),
+         après deux allègements (plateau, presets). Restent la séquence de
+         lancement — vérification Steam, confirmation, envoi à CM, une
+         centaine de lignes — et les sessions enregistrées, à sortir vers
+         `$lib/launch/`. Une demi-session ; risque moyen : seul un vrai
+         lancement dans CM le vérifie.
