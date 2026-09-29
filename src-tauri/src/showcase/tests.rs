@@ -830,3 +830,183 @@ fn a_layer_onto_a_showcase_track_stays_a_layer() {
         "still in the showcase"
     );
 }
+
+/// A car imported with a layer (a fragment: a skins folder without a model)
+/// and an attached skin pack, all through the real import.
+fn car_with_attached(tag: &str) -> (crate::testutil::TempDir, overlay::Db, AppConfig) {
+    let (base, db, cfg, src) = round_trip_setup(tag);
+    assert_eq!(import(&db, &cfg, &src)[0].outcome, "IMPORT");
+    // A layer: the car's folder without a model — its `ui/` and a texture
+    // pack (a fragment, §4.3bis).
+    write(&base.join("hd/lanzo"), "ui/ui_car.json", br#"{"name":"Lanzo"}"#);
+    write(&base.join("hd/lanzo"), "texture_hd/body_hd.dds", &[5; 2000]);
+    assert_eq!(import(&db, &cfg, &base.join("hd"))[0].outcome, "EXTENSION");
+    // An attached skin pack: `<car>/skins/<skin>/`, no `ui/`.
+    write(&base.join("pack/lanzo"), "skins/gulf/preview.jpg", &[6; 1500]);
+    let subs = crate::modscan::scan_subs(&base.join("pack"));
+    {
+        let conn = db.0.lock().unwrap();
+        crate::submods::import_subs(
+            &conn,
+            &cfg,
+            &base.join("lib"),
+            "gulf_pack.7z",
+            &subs,
+            true,
+            crate::resources::ExtractionMode::InfoOnly,
+        );
+    }
+    (base, db, cfg)
+}
+
+/// Rule (ESPACE§5.4): a mod's layers and attached skins follow it into the
+/// showcase — their rows and names kept, their files gone, a manifest left.
+/// The skins delivered with the mod are its version's, freed with it.
+#[test]
+fn layers_and_attached_skins_follow_their_mod() {
+    let (_base, db, cfg) = car_with_attached("showcase-attached");
+    let conn = db.0.lock().unwrap();
+    let layer = overlay::list_layers(&conn, "lanzo", crate::layers::HostKind::Car)
+        .unwrap()
+        .remove(0);
+    let skin = overlay::find_sub(&conn, "SKIN", "lanzo", "gulf")
+        .unwrap()
+        .expect("the skin pack");
+    let layer_dir = crate::libpath::resolve(cfg.library_path.as_deref(), &layer.library_path).unwrap();
+    let skin_dir = crate::libpath::resolve(cfg.library_path.as_deref(), &skin.library_path).unwrap();
+
+    let out = to_showcase(&conn, &cfg, "lanzo", None, true).unwrap();
+
+    let layer = overlay::get_layer(&conn, &layer.id).unwrap().unwrap();
+    assert!(layer.is_skeleton(), "the layer is in the showcase");
+    assert_eq!(
+        files_of(&layer_dir),
+        vec![".pitbox-vitrine.json"],
+        "only its manifest is left"
+    );
+    let skin = overlay::get_sub_mod(&conn, &skin.id).unwrap().unwrap();
+    assert!(skin.is_skeleton(), "the attached skin too");
+    assert_eq!(files_of(&skin_dir), vec![".pitbox-vitrine.json"]);
+    assert_eq!(skin.name, "gulf", "its row and name stay");
+    assert!(out.freed_bytes >= 2000 + 1500, "what they weighed is counted");
+    assert!(
+        overlay::active_layers(&conn, "lanzo", crate::layers::HostKind::Car)
+            .unwrap()
+            .is_empty(),
+        "a layer in the showcase is never composed"
+    );
+}
+
+/// Rule (ESPACE§7.3, ESPACE§7.5): each comes back with its own archive, into
+/// its own row — the car, its layer and its skin pack alike —, and once the
+/// car is back and active, nothing of a showcase reaches the game.
+#[test]
+fn each_comes_back_with_its_own_archive() {
+    let (base, db, cfg) = car_with_attached("showcase-attached-back");
+    let (layer_id, skin_id) = {
+        let conn = db.0.lock().unwrap();
+        let layer = overlay::list_layers(&conn, "lanzo", crate::layers::HostKind::Car)
+            .unwrap()
+            .remove(0);
+        let skin = overlay::find_sub(&conn, "SKIN", "lanzo", "gulf").unwrap().unwrap();
+        to_showcase(&conn, &cfg, "lanzo", None, true).unwrap();
+        (layer.id, skin.id)
+    };
+
+    // The car alone: its layer and skin stay in the showcase, and are not laid.
+    assert_eq!(import(&db, &cfg, &base.join("src"))[0].outcome, "REHYDRATED");
+    {
+        let conn = db.0.lock().unwrap();
+        crate::activation::activate(&conn, &cfg, "lanzo", None).unwrap();
+        let deployed = files_of(&base.join("ac/content/cars/lanzo"));
+        assert!(
+            !deployed
+                .iter()
+                .any(|p| p.contains("pitbox-vitrine") || p.contains("body_hd")),
+            "no manifest and no layer file in the game: {deployed:?}"
+        );
+    }
+
+    // The layer, then the skin pack: into their own rows.
+    assert_eq!(import(&db, &cfg, &base.join("hd"))[0].outcome, "REHYDRATED");
+    let subs = crate::modscan::scan_subs(&base.join("pack"));
+    let conn = db.0.lock().unwrap();
+    crate::submods::import_subs(
+        &conn,
+        &cfg,
+        &base.join("lib"),
+        "gulf_pack.7z",
+        &subs,
+        true,
+        crate::resources::ExtractionMode::InfoOnly,
+    );
+    let layers = overlay::list_layers(&conn, "lanzo", crate::layers::HostKind::Car).unwrap();
+    assert_eq!(layers.len(), 1, "no second layer");
+    assert_eq!(layers[0].id, layer_id, "the same layer");
+    assert!(!layers[0].is_skeleton());
+    let skins = overlay::list_subs_for_parent(&conn, "lanzo").unwrap();
+    let gulf: Vec<_> = skins.iter().filter(|s| s.name == "gulf").collect();
+    assert_eq!(gulf.len(), 1, "no second skin");
+    assert_eq!(gulf[0].id, skin_id, "the same skin");
+    assert!(!gulf[0].is_skeleton());
+}
+
+/// A car with additions to the game and resources, as the import files them.
+fn with_extras_and_resources(f: &Fixture) -> (PathBuf, PathBuf) {
+    let lib = f.base.join("lib");
+    let extras = crate::extras::dir(&lib, ModKind::Car.into(), "lanzo");
+    write(&extras, "extension/config/cars/loaded/lanzo.ini", &[1; 800]);
+    let resources = crate::resources::resources_dir(&lib, ModKind::Car, "lanzo");
+    write(&resources, "readme.txt", b"Download: https://example.com/lanzo");
+    write(&resources, "manual.pdf", &[2; 900]);
+    (extras, resources)
+}
+
+/// Rule (ESPACE§5.4): the additions to the game go, the resources too but for
+/// the short notes — and no manifest is left among them: one in the additions
+/// would be laid at the root of the game once the mod is back.
+#[test]
+fn additions_go_and_the_notes_stay() {
+    let f = fixture("showcase-loose", "lanzo", "Car", car);
+    let (extras, resources) = with_extras_and_resources(&f);
+
+    let out = to_showcase(&f.conn, &f.cfg, "lanzo", None, true).unwrap();
+
+    assert!(!extras.exists(), "the additions' folder is gone whole");
+    assert_eq!(
+        files_of(&resources),
+        vec!["readme.txt"],
+        "the notice stays, the manual goes"
+    );
+    let manifest = skeleton::read_manifest(&f.dir).unwrap();
+    assert!(
+        out.freed_bytes >= manifest.removed_bytes + 800 + 900,
+        "what they weighed is counted"
+    );
+}
+
+/// Rule (ESPACE§5.4): all or nothing reaches them too — a locked manual puts
+/// back the version's files, and the additions'.
+#[test]
+fn a_locked_resource_puts_everything_back() {
+    use std::os::windows::fs::OpenOptionsExt;
+    let f = fixture("showcase-loose-locked", "lanzo", "Car", car);
+    let (extras, resources) = with_extras_and_resources(&f);
+    let before = (files_of(&f.dir), files_of(&extras), files_of(&resources));
+    let lock = std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(0)
+        .open(resources.join("manual.pdf"))
+        .unwrap();
+    assert!(to_showcase(&f.conn, &f.cfg, "lanzo", None, true).is_err());
+    drop(lock);
+
+    let mut version = files_of(&f.dir);
+    version.retain(|p| !p.starts_with(".pitbox-vitrine."));
+    assert_eq!(
+        (version, files_of(&extras), files_of(&resources)),
+        before,
+        "every folder got its files back"
+    );
+    assert!(!skeleton::is_showcase(&f.conn, "lanzo").unwrap());
+}

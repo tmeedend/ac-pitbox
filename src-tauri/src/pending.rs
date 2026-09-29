@@ -985,7 +985,7 @@ fn into_layer(
         None
     };
     match existing {
-        Some(layer) => crate::layers::refill_layer(conn, library, &layer, dir, &diff, &row.archive, mode)?,
+        Some(layer) => crate::layers::refill_layer(conn, library, &layer, dir, &diff, &row.archive, mode, true)?,
         None => {
             crate::layers::store_layer(
                 conn,

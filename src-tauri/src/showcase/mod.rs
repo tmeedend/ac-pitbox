@@ -102,31 +102,46 @@ pub fn to_showcase(
         .map(Path::to_path_buf)
         .or_else(|| crate::library::preview_for(conn, cfg, &m).map(PathBuf::from));
 
-    // **All versions or none** (ESPACE§5.4): a mod half in the showcase, an
-    // old version complete next to a skeleton, is a state nobody asked for.
-    // Hence two passes. The first puts every version's files aside — a move
-    // on the same volume, undone as easily as it is done — and the first
-    // version that resists puts them all back. Only then does the second send
-    // them away, the one step that cannot be undone.
+    // An attached sound replaces the car's own `sfx/` (§8.3): put the
+    // original back first, so that the base does not say "this sound is on"
+    // about a car whose files come back with their own.
+    let attached = Attached::of(conn, &m)?;
+    if kind == ModKind::Car && attached.subs.iter().any(|s| s.sub_type == "SOUND" && s.is_active) {
+        crate::submods::restore_sound(conn, cfg, mod_id)?;
+    }
+
+    // **All or nothing** (ESPACE§5.4): every version, and the layers, skins
+    // and sounds that belong to the mod. A mod half in the showcase — an old
+    // version complete next to a skeleton, a layer left with its files — is a
+    // state nobody asked for. Hence two passes. The first puts every folder's
+    // files aside — a move on the same volume, undone as easily as it is done
+    // — and the first that resists puts them all back. Only then does the
+    // second send them away, the one step that cannot be undone.
     let versions: Vec<VersionRow> = overlay::get_versions(conn, mod_id)
         .map_err(|e| e.to_string())?
         .into_iter()
         .filter(|v| !v.is_skeleton())
         .collect();
     let stamp = now();
-    let mut freeing: Vec<Freeing> = Vec::with_capacity(versions.len());
-    for v in &versions {
-        let image = (v.id == active).then_some(card_image.as_deref()).flatten();
-        let prepared = prepare(cfg, kind, &m, v, image, &stamp).and_then(|f| {
-            let staged = f.stage();
-            freeing.push(f);
-            staged
-        });
-        if let Err(e) = prepared {
-            for f in &freeing {
-                f.roll_back();
+    let mut freeing: Vec<Freeing> = Vec::new();
+    let owners = versions
+        .iter()
+        .map(Owner::Version)
+        .chain(attached.layers.iter().map(Owner::Layer))
+        .chain(attached.subs.iter().map(Owner::Sub));
+    for owner in owners {
+        let prepared = match owner {
+            Owner::Version(v) => {
+                let image = (v.id == active).then_some(card_image.as_deref()).flatten();
+                prepare_version(cfg, kind, &m, v, image, &stamp)
             }
-            return Err(e);
+            _ => prepare_attached(cfg, owner, &m.id_interne, &stamp),
+        };
+        push_staged(&mut freeing, prepared)?;
+    }
+    for (owner, dir) in loose_dirs(cfg, kind, &m.id_interne) {
+        if let Some(f) = prepare_loose(owner, &m.id_interne, dir, &stamp) {
+            push_staged(&mut freeing, Ok(f))?;
         }
     }
 
@@ -136,8 +151,8 @@ pub fn to_showcase(
         let (freed, bin) = f.complete(conn, kind)?;
         freed_bytes += freed;
         recycled &= bin;
-        if !keep_archive {
-            recycled &= drop_kept_archive(conn, cfg, f.v)?;
+        if let (Owner::Version(v), false) = (f.owner, keep_archive) {
+            recycled &= drop_kept_archive(conn, cfg, v)?;
         }
     }
 
@@ -153,18 +168,186 @@ pub fn to_showcase(
     })
 }
 
-/// One version on its way into the showcase: its folder, and the manifest
+/// What belongs to a mod and follows it into the showcase (ESPACE§5.4): its
+/// layers and the skins and sounds attached to it, those that still have
+/// their files.
+///
+/// Not the skins **delivered with** the mod (`removable = false`): they live
+/// inside its version folder, which frees them already — taken here too,
+/// they would be freed twice, a manifest written in the middle of the
+/// skeleton.
+struct Attached {
+    layers: Vec<overlay::LayerRow>,
+    subs: Vec<overlay::SubModRow>,
+}
+
+impl Attached {
+    fn of(conn: &Connection, m: &ModRow) -> Result<Self, String> {
+        let kind = ModKind::from_kind(&m.kind).unwrap_or(ModKind::Car);
+        let layers = overlay::list_layers(conn, &m.id_interne, kind.into())
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .filter(|l| !l.is_skeleton())
+            .collect();
+        let subs = overlay::list_subs_for_parent(conn, &m.id_interne)
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .filter(|s| s.removable && !s.is_skeleton())
+            .collect();
+        Ok(Self { layers, subs })
+    }
+}
+
+/// Whose files a [`Freeing`] removes, which decides how it is marked.
+#[derive(Clone, Copy)]
+enum Owner<'a> {
+    Version(&'a VersionRow),
+    Layer(&'a overlay::LayerRow),
+    Sub(&'a overlay::SubModRow),
+    /// The mod's additions to the game, `<lib>/extras/<type>/<id>` (§4.5.3).
+    Extras,
+    /// The mod's resources, `<lib>/resources/<type>/<id>` (§4.5.2).
+    Resources,
+}
+
+impl Owner<'_> {
+    /// The folder of a row; `None` for additions and resources, which have no
+    /// row and are found by the mod's id.
+    fn library_path(&self) -> Option<&str> {
+        match self {
+            Owner::Version(v) => Some(&v.library_path),
+            Owner::Layer(l) => Some(&l.library_path),
+            Owner::Sub(s) => Some(&s.library_path),
+            Owner::Extras | Owner::Resources => None,
+        }
+    }
+
+    /// Whether a manifest found in its folder is its own: it names the mod and
+    /// what the row knows of the content (see [`resume_interrupted`]).
+    fn described_by(&self, mod_id: &str, manifest: &Manifest) -> bool {
+        manifest.mod_id == mod_id
+            && match self {
+                Owner::Version(v) => manifest.content_signature == v.content_signature,
+                Owner::Layer(l) => manifest.source_archive == l.source_archive,
+                Owner::Sub(s) => manifest.source_archive == s.source_archive,
+                Owner::Extras | Owner::Resources => false,
+            }
+    }
+
+    /// The name the recycle bin shows for its files: the mod's for a version,
+    /// the layer's or the skin's own otherwise.
+    fn bin_name(&self, mod_id: &str) -> String {
+        match self {
+            Owner::Version(_) => mod_id.to_string(),
+            Owner::Layer(l) => l.name.clone(),
+            Owner::Sub(s) => s.name.clone(),
+            Owner::Extras => format!("{mod_id} (extras)"),
+            Owner::Resources => format!("{mod_id} (resources)"),
+        }
+    }
+}
+
+/// The folders of a mod that have no row (ESPACE§5.4): its additions to the
+/// game and its resources.
+fn loose_dirs(cfg: &AppConfig, kind: ModKind, mod_id: &str) -> Vec<(Owner<'static>, PathBuf)> {
+    let Some(library) = cfg.library_path.as_deref() else {
+        return Vec::new();
+    };
+    vec![
+        (Owner::Extras, crate::extras::dir(library, kind.into(), mod_id)),
+        (Owner::Resources, crate::resources::resources_dir(library, kind, mod_id)),
+    ]
+}
+
+/// Step 4 for a mod's additions to the game and its resources (ESPACE§5.4).
+/// **No manifest is written in them**: additions are laid in the game file
+/// by file, and a `.pitbox-vitrine.json` left among them would land at the
+/// root of the game once the mod is back; one among the resources would show
+/// on the fiche as one. The resources keep their short notes. `None` when
+/// there is nothing to free.
+fn prepare_loose<'a>(owner: Owner<'a>, mod_id: &'a str, dir: PathBuf, stamp: &str) -> Option<Freeing<'a>> {
+    let removed = match owner {
+        Owner::Resources => skeleton::resources_to_free(&dir),
+        _ => skeleton::all_files(&dir),
+    };
+    (!removed.is_empty()).then(|| Freeing {
+        owner,
+        mod_id,
+        dir,
+        manifest: Manifest::new(stamp.to_string(), mod_id.to_string(), removed),
+    })
+}
+
+/// Puts a prepared folder's files aside; the first that resists puts back
+/// everything set aside so far — all or nothing (ESPACE§5.4).
+fn push_staged<'a>(freeing: &mut Vec<Freeing<'a>>, prepared: Result<Freeing<'a>, String>) -> Result<(), String> {
+    let staged = prepared.and_then(|f| {
+        let staged = f.stage();
+        freeing.push(f);
+        staged
+    });
+    if let Err(e) = staged {
+        for f in freeing.iter() {
+            f.roll_back();
+        }
+        return Err(e);
+    }
+    Ok(())
+}
+
+/// One folder on its way into the showcase: whose it is, and the manifest
 /// that lists — and alone decides — what leaves it.
 struct Freeing<'a> {
-    v: &'a VersionRow,
+    owner: Owner<'a>,
     mod_id: &'a str,
     dir: PathBuf,
     manifest: Manifest,
 }
 
+/// Writes the manifest of a folder about to be freed (step 3) and returns
+/// what will free it. Nothing has left the folder yet; a manifest that
+/// cannot be written leaves nothing behind.
+fn start<'a>(owner: Owner<'a>, mod_id: &'a str, dir: PathBuf, manifest: Manifest) -> Result<Freeing<'a>, String> {
+    let freeing = Freeing {
+        owner,
+        mod_id,
+        dir,
+        manifest,
+    };
+    if let Err(e) = skeleton::write_manifest(&freeing.dir, &freeing.manifest) {
+        freeing.roll_back();
+        return Err(e);
+    }
+    Ok(freeing)
+}
+
+/// Steps 2 and 3 for a layer, a skin or a sound (ESPACE§5.4): **no skeleton**
+/// — nothing of it is read by the lists, its row keeps its name and notes —,
+/// so everything goes but the manifest.
+fn prepare_attached<'a>(
+    cfg: &AppConfig,
+    owner: Owner<'a>,
+    mod_id: &'a str,
+    stamp: &str,
+) -> Result<Freeing<'a>, String> {
+    let dir = owner
+        .library_path()
+        .and_then(|p| crate::libpath::resolve(cfg.library_path.as_deref(), p))
+        .ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let mut manifest = Manifest::new(stamp.to_string(), mod_id.to_string(), skeleton::all_files(&dir));
+    manifest.source_archive = match owner {
+        Owner::Layer(l) => l.source_archive.clone(),
+        Owner::Sub(s) => s.source_archive.clone(),
+        Owner::Version(v) => v.source_archive.clone(),
+        Owner::Extras | Owner::Resources => None,
+    };
+    start(owner, mod_id, dir, manifest)
+}
+
 /// Steps 2 and 3 for one version: frozen image, projections out, manifest
 /// written. Nothing has left the folder yet.
-fn prepare<'a>(
+fn prepare_version<'a>(
     cfg: &AppConfig,
     kind: ModKind,
     m: &'a ModRow,
@@ -201,17 +384,7 @@ fn prepare<'a>(
     manifest.source_archive = v.source_archive.clone();
     manifest.source_site = v.source_site.clone();
     manifest.source_file_name = v.source_file_name.clone();
-    let freeing = Freeing {
-        v,
-        mod_id: &m.id_interne,
-        dir,
-        manifest,
-    };
-    if let Err(e) = skeleton::write_manifest(&freeing.dir, &freeing.manifest) {
-        freeing.roll_back();
-        return Err(e);
-    }
-    Ok(freeing)
+    start(Owner::Version(v), &m.id_interne, dir, manifest)
 }
 
 impl Freeing<'_> {
@@ -226,10 +399,10 @@ impl Freeing<'_> {
             .join(format!(".pitbox-freeing-{name}"))
     }
 
-    /// The folder the recycle bin receives, named after the mod: that is the
-    /// name the bin shows.
+    /// The folder the recycle bin receives, named after what it held: that
+    /// is the name the bin shows.
     fn staging(&self) -> PathBuf {
-        self.root().join(self.mod_id)
+        self.root().join(self.owner.bin_name(self.mod_id))
     }
 
     /// Step 4, first half: moves every listed file into the staging folder.
@@ -319,7 +492,10 @@ impl Freeing<'_> {
     fn complete(&self, conn: &Connection, kind: ModKind) -> Result<(u64, bool), String> {
         let (dir, mod_id) = (&self.dir, self.mod_id);
         let staging = self.staging();
-        copy_kept(dir, &staging);
+        let version = matches!(self.owner, Owner::Version(_));
+        if version {
+            copy_kept(dir, &staging);
+        }
         let recycled = crate::maintenance::trash_or_delete(&staging)?;
         let root = self.root();
         if root.exists() {
@@ -331,23 +507,34 @@ impl Freeing<'_> {
             let Ok(rel) = entry.path().strip_prefix(dir) else {
                 continue;
             };
-            if entry.file_type().is_file() && skeleton::is_reduced(kind, rel) {
+            if version && entry.file_type().is_file() && skeleton::is_reduced(kind, rel) {
                 match skeleton::reduce_in_place(entry.path()) {
                     Ok(gain) => reduced += gain,
                     Err(e) => log::warn!("showcase {mod_id}: {} not reduced: {e}", entry.path().display()),
                 }
             }
         }
-        // Emptied folders go, the version's own stays (ESPACE R3): everything
-        // that resolves the mod's folder must keep finding it.
-        for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
-            if entry.path().is_dir() {
-                crate::extras::prune_empty_dirs(&entry.path());
+        // Emptied folders go. A row's own folder stays (ESPACE R3): it holds
+        // the manifest, and everything that resolves it must keep finding it.
+        // Additions and resources have no row: an emptied folder goes whole.
+        if matches!(self.owner, Owner::Extras | Owner::Resources) {
+            crate::extras::prune_empty_dirs(dir);
+        } else {
+            for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+                if entry.path().is_dir() {
+                    crate::extras::prune_empty_dirs(&entry.path());
+                }
             }
         }
         let freed = self.manifest.removed_bytes + reduced;
-        overlay::mark_version_freed(conn, &self.v.id, &self.manifest.freed_at, freed as i64)
-            .map_err(|e| e.to_string())?;
+        let at = &self.manifest.freed_at;
+        match self.owner {
+            Owner::Version(v) => overlay::mark_version_freed(conn, &v.id, at, freed as i64),
+            Owner::Layer(l) => overlay::mark_layer_freed(conn, &l.id, at),
+            Owner::Sub(s) => overlay::mark_sub_freed(conn, &s.id, at),
+            Owner::Extras | Owner::Resources => Ok(()),
+        }
+        .map_err(|e| e.to_string())?;
         Ok((freed, recycled))
     }
 }
@@ -407,14 +594,15 @@ fn drop_kept_archive(conn: &Connection, cfg: &AppConfig, v: &VersionRow) -> Resu
     Ok(recycled)
 }
 
-/// The startup net of ESPACE§5.5: a version still marked complete whose
-/// folder holds a manifest was stopped between writing it and marking the
-/// base. The removal is finished, from the manifest, and journaled. Returns
-/// how many versions it finished.
+/// The startup net of ESPACE§5.5: a version, a layer or a skin still marked
+/// complete whose folder holds a manifest was stopped between writing it and
+/// marking the base. The removal is finished, from the manifest, and a
+/// version's journaled. Returns how many folders it finished.
 ///
-/// A manifest is only trusted when it names this mod and this version's
-/// signature: a folder imported from an archive that happened to contain a
-/// skeleton's manifest must never be freed on the strength of it.
+/// A manifest is only trusted when it names this mod and what the row knows
+/// of its content — a version's signature, a layer's or a skin's archive: a
+/// folder imported from an archive that happened to contain a skeleton's
+/// manifest must never be freed on the strength of it.
 pub fn resume_interrupted(conn: &Connection, cfg: &AppConfig) -> usize {
     let mut done = 0;
     let Ok(mods) = overlay::list_mods(conn) else {
@@ -422,21 +610,54 @@ pub fn resume_interrupted(conn: &Connection, cfg: &AppConfig) -> usize {
     };
     for m in mods.iter().filter(|m| !m.is_stock) {
         let kind = ModKind::from_kind(&m.kind).unwrap_or(ModKind::Car);
-        for v in overlay::get_versions(conn, &m.id_interne).unwrap_or_default() {
-            if v.is_skeleton() {
-                continue;
+        let versions: Vec<VersionRow> = overlay::get_versions(conn, &m.id_interne)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|v| !v.is_skeleton())
+            .collect();
+        let attached = Attached::of(conn, m).unwrap_or_else(|e| {
+            log::warn!("showcase resume {}: attached content not read: {e}", m.id_interne);
+            Attached {
+                layers: Vec::new(),
+                subs: Vec::new(),
             }
-            let Some(dir) = crate::libpath::resolve(cfg.library_path.as_deref(), &v.library_path) else {
+        });
+        let owners = versions
+            .iter()
+            .map(Owner::Version)
+            .chain(attached.layers.iter().map(Owner::Layer))
+            .chain(attached.subs.iter().map(Owner::Sub));
+        // Additions and resources have no manifest to finish from: a staging
+        // folder left next to theirs holds what was on its way to the bin.
+        if m.showcase {
+            for (owner, dir) in loose_dirs(cfg, kind, &m.id_interne) {
+                let freeing = Freeing {
+                    owner,
+                    mod_id: &m.id_interne,
+                    dir,
+                    manifest: Manifest::new(String::new(), m.id_interne.clone(), Vec::new()),
+                };
+                let root = freeing.root();
+                if root.exists() {
+                    if let Err(e) = crate::maintenance::trash_or_delete(&root) {
+                        log::warn!("showcase resume {}: {} not removed: {e}", m.id_interne, root.display());
+                    }
+                    crate::extras::prune_empty_dirs(&freeing.dir);
+                }
+            }
+        }
+        for owner in owners {
+            let Some(dir) = owner
+                .library_path()
+                .and_then(|p| crate::libpath::resolve(cfg.library_path.as_deref(), p))
+            else {
                 continue;
             };
             let Some(manifest) = skeleton::read_manifest(&dir) else {
                 continue;
             };
-            if manifest.mod_id != m.id_interne || manifest.content_signature != v.content_signature {
-                log::warn!(
-                    "showcase manifest in {} does not describe this version, ignored",
-                    dir.display()
-                );
+            if !owner.described_by(&m.id_interne, &manifest) {
+                log::warn!("showcase manifest in {} does not describe it, ignored", dir.display());
                 continue;
             }
             if crate::activation::is_mod_active(cfg, kind, &m.id_interne) {
@@ -446,7 +667,7 @@ pub fn resume_interrupted(conn: &Connection, cfg: &AppConfig) -> usize {
                 }
             }
             let freeing = Freeing {
-                v: &v,
+                owner,
                 mod_id: &m.id_interne,
                 dir,
                 manifest,
@@ -460,11 +681,12 @@ pub fn resume_interrupted(conn: &Connection, cfg: &AppConfig) -> usize {
             };
             match finished {
                 Ok((freed, _)) => {
-                    let details = serde_json::json!({ "key": "showcased", "bytes": freed }).to_string();
-                    if let Err(e) =
-                        overlay::add_history(conn, &m.id_interne, &freeing.manifest.freed_at, "SHOWCASE", &details)
-                    {
-                        log::warn!("showcase resume {}: history not written: {e}", m.id_interne);
+                    if matches!(owner, Owner::Version(_)) {
+                        let details = serde_json::json!({ "key": "showcased", "bytes": freed }).to_string();
+                        let at = &freeing.manifest.freed_at;
+                        if let Err(e) = overlay::add_history(conn, &m.id_interne, at, "SHOWCASE", &details) {
+                            log::warn!("showcase resume {}: history not written: {e}", m.id_interne);
+                        }
                     }
                     done += 1;
                 }
@@ -707,6 +929,8 @@ pub fn rehydrate(
     // What the files say — skins, CSP, the tech sheet — read again as a
     // reindex does: only the fields read from files, never an entry.
     crate::maintenance::reindex_mod(conn, cfg, &v.mod_id, false)?;
+    // Its attached skins that came back first have a `skins/` to go into again.
+    crate::submods::project_attached(conn, cfg, &v.mod_id);
     Ok(Rehydrated {
         missing,
         resources_extracted,

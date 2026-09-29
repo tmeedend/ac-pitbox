@@ -262,17 +262,47 @@ pub fn original_files(dir: &Path) -> std::collections::BTreeSet<String> {
     files
 }
 
+/// Every file of a layer's, a skin's or a sound's folder, with its size — they
+/// keep no skeleton (ESPACE§5.4). The showcase's own files excepted.
+pub fn all_files(dir: &Path) -> Vec<RemovedFile> {
+    files_but(dir, |rel, _| is_own_file(&normalized(rel)))
+}
+
 /// Every file of `dir` the skeleton does not keep, with its size, sorted.
 pub fn removable_files(kind: ModKind, dir: &Path) -> Vec<RemovedFile> {
+    files_but(dir, |rel, _| is_kept(kind, rel))
+}
+
+/// Largest text file a mod in the showcase keeps among its resources.
+const KEPT_NOTE_BYTES: u64 = 64 * 1024;
+
+/// Whether a file of a mod's resources stays when the mod goes into the
+/// showcase (ESPACE§5.4): a short text — a notice often says **where to
+/// download** the mod, and weighs a few KB.
+pub fn is_kept_resource(rel: &Path, size: u64) -> bool {
+    let ext = rel
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    size < KEPT_NOTE_BYTES && matches!(ext.as_str(), "txt" | "md" | "nfo" | "url")
+}
+
+/// The files of a mod's resources that leave with its files.
+pub fn resources_to_free(dir: &Path) -> Vec<RemovedFile> {
+    files_but(dir, is_kept_resource)
+}
+
+fn files_but(dir: &Path, kept: impl Fn(&Path, u64) -> bool) -> Vec<RemovedFile> {
     let mut out: Vec<RemovedFile> = walkdir::WalkDir::new(dir)
         .into_iter()
         .flatten()
         .filter(|e| e.file_type().is_file())
         .filter_map(|e| {
             let rel = e.path().strip_prefix(dir).ok()?;
-            (!is_kept(kind, rel)).then(|| RemovedFile {
+            let size = e.metadata().map(|m| m.len()).unwrap_or(0);
+            (!kept(rel, size)).then(|| RemovedFile {
                 path: rel.to_string_lossy().replace('\\', "/"),
-                size: e.metadata().map(|m| m.len()).unwrap_or(0),
+                size,
             })
         })
         .collect();

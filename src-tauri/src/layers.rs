@@ -176,7 +176,14 @@ pub fn store_layer(
 /// Skins" on the car at every update, and the order between two variants
 /// (which livery covers which) would depend on the order of the archive.
 ///
+/// Also how a layer in the showcase gets its files back (ESPACE§7.5): same
+/// row, same name and notes — refilling makes it complete again.
+///
+/// `move_files`: the source is moved (a folder the import owns) or copied
+/// (a folder of the user's, imported with "keep the source").
+///
 /// The caller recomposes afterwards, as after `store_layer`.
+#[allow(clippy::too_many_arguments)]
 pub fn refill_layer(
     conn: &Connection,
     library: &Path,
@@ -185,6 +192,7 @@ pub fn refill_layer(
     diff: &DiffStats,
     archive_name: &str,
     mode: ExtractionMode,
+    move_files: bool,
 ) -> Result<(), String> {
     let dest =
         crate::libpath::resolve(Some(library), &layer.library_path).ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
@@ -197,7 +205,7 @@ pub fn refill_layer(
     }
     let kind = HostKind::parse(&layer.parent_kind);
     let res_dir = resources::resources_dir_for(library, kind.category(), &[&layer.parent_id]);
-    resources::file_mod(src_dir, &dest, &res_dir, mode, true, resources::Source::ModFolder)?;
+    resources::file_mod(src_dir, &dest, &res_dir, mode, move_files, resources::Source::ModFolder)?;
     overlay::update_layer_content(
         conn,
         &layer.id,

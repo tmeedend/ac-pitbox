@@ -3033,6 +3033,43 @@ fn process_found(
                 // avoir été mise à jour, et c'est ce que fait déjà un mod
                 // réimporté (§4.3). La priorité de la couche est reprise, sans
                 // quoi elle repasserait en tête de pile à chaque réimport.
+                let empty_diff = crate::identity::DiffStats {
+                    added: 0,
+                    overwritten: 0,
+                    existing_total: 0,
+                };
+                // A layer that followed its host into the showcase comes back
+                // into its own row (ESPACE§7.5): same id, name, notes, place
+                // in the order and switch — never a second one next to it.
+                if let Some(freed) = crate::overlay::list_layers(conn, &id_interne, fm.kind.into())
+                    .unwrap_or_default()
+                    .into_iter()
+                    .find(|l| l.is_skeleton() && l.source_archive.as_deref() == Some(archive_name))
+                {
+                    layers::refill_layer(
+                        conn,
+                        library,
+                        &freed,
+                        &fm.dir,
+                        diff.as_ref().unwrap_or(&empty_diff),
+                        archive_name,
+                        res_mode,
+                        !copy,
+                    )?;
+                    if let Err(e) = crate::compose::recompose(conn, cfg, &id_interne) {
+                        log::warn!("recompose {id_interne} after a layer came back: {e}");
+                    }
+                    return Ok(ImportedMod {
+                        id_interne,
+                        kind: kind_str,
+                        display_name: Some(name),
+                        outcome: "REHYDRATED".into(),
+                        version_label: ui.version,
+                        fragment: is_fragment,
+                        source_name,
+                        ..Default::default()
+                    });
+                }
                 let replaced_priority = crate::overlay::list_layers(conn, &id_interne, fm.kind.into())
                     .unwrap_or_default()
                     .into_iter()

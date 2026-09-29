@@ -435,7 +435,8 @@ fn entity_dirs(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Vec<PathBuf> {
     let mut dirs: Vec<PathBuf> = overlay::list_layers(conn, &m.id_interne, kind_of(&m.kind).into())
         .unwrap_or_default()
         .into_iter()
-        .filter(|l| l.is_active)
+        // A layer in the showcase has only its manifest (ESPACE§5.4).
+        .filter(|l| l.is_active && !l.is_skeleton())
         .filter_map(|l| crate::libpath::resolve(cfg.library_path.as_deref(), &l.library_path))
         .collect();
     // `list_layers` trie par priorité **croissante** et c'est la plus haute qui

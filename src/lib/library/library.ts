@@ -262,6 +262,9 @@ export interface LayerRow {
   display_name_user: string | null;
   /** Note libre (REFONTE§9). */
   notes_user: string | null;
+  /** `"skeleton"`: it followed its host into the showcase (ESPACE§5.4) — row
+   * kept, files gone, never composed until its archive is imported again. */
+  content_state: "full" | "skeleton";
 }
 
 /** Sous-élément rattaché (skin/son) routé à l'import (§8.3). */

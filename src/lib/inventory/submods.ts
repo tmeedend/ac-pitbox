@@ -22,6 +22,8 @@ export interface SubModRow {
   display_name_user: string | null;
   /** Note libre (REFONTE§9). */
   notes_user: string | null;
+  /** `"skeleton"`: it followed its host into the showcase (ESPACE§5.4). */
+  content_state: "full" | "skeleton";
 }
 
 /** Indexe le contenu de base Kunos présent dans content/ (§8.1). Renvoie le nb indexé. */

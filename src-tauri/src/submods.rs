@@ -217,6 +217,71 @@ pub fn import_subs_reported(
     out
 }
 
+/// Where an incoming skin or sound goes. `None` when it is already there,
+/// complete: nothing to import. Its own folder when it is in the showcase
+/// (ESPACE§7.5) — emptied of its manifest, it comes back into its own row,
+/// with its name and notes, and the id to mark complete comes with it. A new
+/// folder otherwise.
+fn destination(
+    conn: &Connection,
+    library: &Path,
+    sub_type: &str,
+    parent: &str,
+    name: &str,
+    new_dest: PathBuf,
+) -> Option<(PathBuf, Option<String>)> {
+    match overlay::find_sub(conn, sub_type, parent, name) {
+        Ok(Some(freed)) if freed.is_skeleton() => {
+            // A stored path is a library path: anything else is not ours to empty.
+            let dir = crate::libpath::resolve(Some(library), &freed.library_path)
+                .filter(|d| d.starts_with(library))
+                .unwrap_or(new_dest);
+            if dir.exists() {
+                if let Err(e) = std::fs::remove_dir_all(&dir) {
+                    log::warn!("sub {} not emptied of its manifest: {e}", dir.display());
+                    return None;
+                }
+            }
+            Some((dir, Some(freed.id)))
+        }
+        Ok(Some(_)) => None,
+        Ok(None) => Some((new_dest, None)),
+        Err(e) => {
+            log::warn!("find_sub {sub_type} {parent}/{name}: {e}");
+            Some((new_dest, None))
+        }
+    }
+}
+
+/// Records an imported skin or sound: a new row, or the row it came back into.
+/// `library_path` is where it is stored, relative to the library.
+fn record_sub(
+    conn: &Connection,
+    freed: Option<&str>,
+    sub_type: &str,
+    parent: &str,
+    name: &str,
+    library_path: &str,
+    source_name: &str,
+) {
+    let res = match freed {
+        Some(id) => overlay::mark_sub_full(conn, id),
+        None => overlay::insert_sub_mod(
+            conn,
+            &Uuid::new_v4().to_string(),
+            sub_type,
+            parent,
+            name,
+            library_path,
+            Some(source_name),
+            &Local::now().to_rfc3339(),
+        ),
+    };
+    if let Err(e) = res {
+        log::warn!("record {sub_type} {parent}/{name}: {e}");
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn import_skin_pack(
     conn: &Connection,
@@ -255,10 +320,12 @@ fn import_skin_pack(
 
         // Idempotence : ne ré-importe pas un skin déjà connu pour ce parent.
         // C'est aussi ce qui rend la reprise après arbitrage sûre — rejouer
-        // l'archive entière ne duplique rien.
-        if overlay::sub_exists(conn, sub_type, parent, &name).unwrap_or(false) {
+        // l'archive entière ne duplique rien. Sauf un skin en vitrine, qui
+        // revient dans sa propre ligne (ESPACE§7.5).
+        let new_dest = library.join(store_root).join(parent).join(&name);
+        let Some((dest, freed)) = destination(conn, library, sub_type, parent, &name, new_dest) else {
             continue;
-        }
+        };
 
         // Voiture absente et pas encore tranché (§4.3bis) : rien n'est écrit,
         // on demande. Le défaut proposé est de ne pas importer, comme pour une
@@ -277,7 +344,6 @@ fn import_skin_pack(
             continue;
         }
 
-        let dest = library.join(store_root).join(parent).join(&name);
         // Fichiers annexes (§4.5.2) redirigés à part : une image à la racine
         // d'un skin est TOUJOURS un vrai aperçu, jamais une annexe (allow_root_images=false).
         let res_dir = resources::resources_dir_for(library, store_root, &[parent, &name]);
@@ -299,17 +365,8 @@ fn import_skin_pack(
                 }
             };
 
-        let id = Uuid::new_v4().to_string();
-        let _ = overlay::insert_sub_mod(
-            conn,
-            &id,
-            sub_type,
-            parent,
-            &name,
-            &crate::libpath::to_relative(Some(library), &dest),
-            Some(source_name),
-            &Local::now().to_rfc3339(),
-        );
+        let stored = crate::libpath::to_relative(Some(library), &dest);
+        record_sub(conn, freed.as_deref(), sub_type, parent, &name, &stored, source_name);
 
         // Projection : junction dans le skins/ de l'entité cible (voiture ou
         // circuit — pour un circuit, sous skins/cm_skins/, convention CM).
@@ -394,6 +451,27 @@ fn project_skin(
     match activation::create_junction(&link, store) {
         Ok(()) => (true, None),
         Err(e) => (false, Some(format!("projection : {e}"))),
+    }
+}
+
+/// Projects again the complete skins attached to a host whose files just came
+/// back (ESPACE§7.3). Its skins came back with their own archives, maybe
+/// before it, while there was no `skins/` to project them into; the ones
+/// already in place are left as they are.
+pub(crate) fn project_attached(conn: &Connection, cfg: &AppConfig, parent_id: &str) {
+    let mut projected_any = false;
+    for s in overlay::list_subs_for_parent(conn, parent_id).unwrap_or_default() {
+        let track = s.sub_type == "TRACK_SKIN";
+        if !(track || s.sub_type == "SKIN") || !s.removable || s.is_skeleton() {
+            continue;
+        }
+        let Some(store) = crate::libpath::resolve(cfg.library_path.as_deref(), &s.library_path) else {
+            continue;
+        };
+        projected_any |= project_skin(conn, cfg, parent_id, &s.name, &store, track).0;
+    }
+    if projected_any {
+        redeploy_host(conn, cfg, parent_id);
     }
 }
 
@@ -601,7 +679,7 @@ pub fn repair_projections(conn: &Connection, cfg: &AppConfig, on_step: &dyn Fn(u
             }
             // Nothing to repair on a host in the showcase, and not a failure
             // either (ESPACE§6): its skins come back with its files.
-            if crate::skeleton::is_showcase(conn, &s.parent_id).unwrap_or(false) {
+            if s.is_skeleton() || crate::skeleton::is_showcase(conn, &s.parent_id).unwrap_or(false) {
                 continue;
             }
             let (projected, warning) = project_skin(conn, cfg, &s.parent_id, &s.name, &store, track);
@@ -717,7 +795,9 @@ pub fn list_active_track_skins(conn: &Connection, track_id: &str) -> Vec<String>
     overlay::list_subs_for_parent(conn, track_id)
         .unwrap_or_default()
         .into_iter()
-        .filter(|s| s.sub_type == "TRACK_SKIN" && s.is_active)
+        // A skin in the showcase keeps its switch (ESPACE§5.4) but has no
+        // files to show: it is not "active" for anything that lays it.
+        .filter(|s| s.sub_type == "TRACK_SKIN" && s.is_active && !s.is_skeleton())
         .map(|s| s.name)
         .collect()
 }
@@ -825,10 +905,12 @@ fn recompose_track_skins(conn: &Connection, cfg: &AppConfig, track_id: &str) -> 
     };
     let default_dir = skins_dir.join("default");
 
+    // Never a skin in the showcase (ESPACE§5.4): its folder holds only its
+    // manifest, which would land in `skins/default/`.
     let mut active: Vec<overlay::SubModRow> = overlay::list_subs_for_parent(conn, track_id)
         .unwrap_or_default()
         .into_iter()
-        .filter(|s| s.sub_type == "TRACK_SKIN" && s.is_active)
+        .filter(|s| s.sub_type == "TRACK_SKIN" && s.is_active && !s.is_skeleton())
         .collect();
     active.sort_by(|a, b| a.name.cmp(&b.name));
     let names: Vec<String> = active.iter().map(|s| s.name.clone()).collect();
@@ -1157,9 +1239,12 @@ fn import_sound(
         dir_name
     };
 
-    if overlay::sub_exists(conn, "SOUND", &parent, &name).unwrap_or(false) {
+    // Déjà là et complet : rien à faire. En vitrine : il revient dans sa
+    // propre ligne (ESPACE§7.5).
+    let new_dest = library.join("sounds").join(&parent).join(&name);
+    let Some((dest, freed)) = destination(conn, library, "SOUND", &parent, &name, new_dest) else {
         return;
-    }
+    };
 
     // Voiture absente et pas encore tranché (§4.3bis) : rien n'est écrit, on
     // demande — même règle que pour une livrée et pour une couche sans sa base.
@@ -1177,7 +1262,6 @@ fn import_sound(
         return;
     }
 
-    let dest = library.join("sounds").join(&parent).join(&name);
     // Fichiers annexes (§4.5.2) redirigés à part (GUIDs.txt reste toujours du
     // contenu, voir resources::classify — jamais confondu avec une annexe).
     let res_dir = resources::resources_dir_for(library, "sounds", &[&parent, &name]);
@@ -1206,17 +1290,8 @@ fn import_sound(
     // donc rien ne peut atterrir dans le jeu par ce chemin.
     let resources_extracted = resources_extracted + sweep_pack_annexes(sub, &res_dir, mode);
 
-    let id = Uuid::new_v4().to_string();
-    let _ = overlay::insert_sub_mod(
-        conn,
-        &id,
-        "SOUND",
-        &parent,
-        &name,
-        &crate::libpath::to_relative(Some(library), &dest),
-        Some(source_name),
-        &Local::now().to_rfc3339(),
-    );
+    let stored = crate::libpath::to_relative(Some(library), &dest);
+    record_sub(conn, freed.as_deref(), "SOUND", &parent, &name, &stored, source_name);
     out.push(SubImported {
         sub_type: "SOUND".into(),
         parent_known: host_exists(conn, &parent),
@@ -1240,6 +1315,10 @@ pub fn activate_sound(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Resul
         .ok_or(crate::errors::SOUND_NOT_FOUND)?;
     if sub.sub_type != "SOUND" {
         return Err(crate::errors::NOT_A_SOUND_MOD.into());
+    }
+    // A sound in the showcase has no bank left to lay (ESPACE§5.4).
+    if sub.is_skeleton() {
+        return Err(crate::errors::CONTENT_FREED.into());
     }
     // The car's own `sfx/` is gone with its files (ESPACE R5): nothing to
     // back up, nothing to switch.

@@ -1865,6 +1865,15 @@ pub struct LayerRow {
     /// Note libre (REFONTE§9). Distincte de la description : elle n'a pas de
     /// valeur d'origine, donc vide veut dire vide.
     pub notes_user: Option<String>,
+    /// [`CONTENT_FULL`] or [`CONTENT_SKELETON`]: a layer follows its host into
+    /// the showcase (ESPACE§5.4), its row kept and its files gone.
+    pub content_state: String,
+}
+
+impl LayerRow {
+    pub fn is_skeleton(&self) -> bool {
+        self.content_state == CONTENT_SKELETON
+    }
 }
 
 /// Fragment SQL isolant les couches d'un hôte : son id **et son espace de noms**.
@@ -1940,10 +1949,11 @@ fn map_layer(row: &rusqlite::Row) -> rusqlite::Result<LayerRow> {
         imported_at: row.get(10)?,
         display_name_user: row.get(11)?,
         notes_user: row.get(12)?,
+        content_state: row.get(13)?,
     })
 }
 
-const LAYER_SELECT: &str = "SELECT id, parent_id, parent_kind, name, library_path, source_archive, added_count, overwritten_count, is_active, priority, imported_at, display_name_user, notes_user FROM layers";
+const LAYER_SELECT: &str = "SELECT id, parent_id, parent_kind, name, library_path, source_archive, added_count, overwritten_count, is_active, priority, imported_at, display_name_user, notes_user, content_state FROM layers";
 
 /// Couches/extensions rattachées à une base (fiche détail, §4.4), par priorité.
 pub fn list_layers(conn: &Connection, parent_id: &str, host: HostKind) -> rusqlite::Result<Vec<LayerRow>> {
@@ -1970,9 +1980,12 @@ pub fn list_layers_by_kind(conn: &Connection, kind: &str) -> rusqlite::Result<Ve
 
 /// Couches **actives** d'une base, dans l'ordre de priorité (la + haute en dernier
 /// → gagne à la superposition). Base de la composition (§4.4).
+/// Active **and complete**: a layer in the showcase (ESPACE§5.4) has only its
+/// manifest left, and composing it would lay that file in `content/`. The one
+/// place every composition reads its layers from.
 pub fn active_layers(conn: &Connection, parent_id: &str, host: HostKind) -> rusqlite::Result<Vec<LayerRow>> {
     let mut stmt = conn.prepare(&format!(
-        "{LAYER_SELECT} WHERE {LAYER_HOST} AND is_active = 1 ORDER BY priority"
+        "{LAYER_SELECT} WHERE {LAYER_HOST} AND is_active = 1 AND content_state = '{CONTENT_FULL}' ORDER BY priority"
     ))?;
     let rows = stmt.query_map(params![parent_id, host == HostKind::App], map_layer)?;
     rows.collect()
@@ -1998,9 +2011,20 @@ pub fn update_layer_content(
     imported_at: &str,
 ) -> rusqlite::Result<()> {
     conn.execute(
-        "UPDATE layers SET source_archive = ?2, added_count = ?3, overwritten_count = ?4, imported_at = ?5
+        "UPDATE layers SET source_archive = ?2, added_count = ?3, overwritten_count = ?4, imported_at = ?5,
+                           content_state = 'full', freed_at = NULL
          WHERE id = ?1",
         params![id, source_archive, added, overwritten, imported_at],
+    )?;
+    Ok(())
+}
+
+/// A layer followed its host into the showcase (ESPACE§5.4). Refilling it
+/// (`update_layer_content`) makes it complete again.
+pub fn mark_layer_freed(conn: &Connection, id: &str, freed_at: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE layers SET content_state = ?2, freed_at = ?3 WHERE id = ?1",
+        params![id, CONTENT_SKELETON, freed_at],
     )?;
     Ok(())
 }
@@ -2050,6 +2074,15 @@ pub struct SubModRow {
     pub display_name_user: Option<String>,
     /// Note libre (REFONTE§9).
     pub notes_user: Option<String>,
+    /// [`CONTENT_FULL`] or [`CONTENT_SKELETON`]: an attached skin or sound
+    /// follows its host into the showcase (ESPACE§5.4).
+    pub content_state: String,
+}
+
+impl SubModRow {
+    pub fn is_skeleton(&self) -> bool {
+        self.content_state == CONTENT_SKELETON
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2106,11 +2139,12 @@ fn map_sub(row: &rusqlite::Row) -> rusqlite::Result<SubModRow> {
         size_bytes: None,
         display_name_user: row.get(10)?,
         notes_user: row.get(11)?,
+        content_state: row.get(12)?,
     })
 }
 
 const SUB_SELECT: &str =
-    "SELECT id, sub_type, parent_id, name, library_path, source_archive, is_active, removable, imported_at, author, display_name_user, notes_user FROM sub_mods";
+    "SELECT id, sub_type, parent_id, name, library_path, source_archive, is_active, removable, imported_at, author, display_name_user, notes_user, content_state FROM sub_mods";
 
 /// Sous-éléments rattachés à une entité (fiche détail, §8.3).
 /// Sous-éléments (skins, sons) dont le parent n'existe plus (§10). Conservés
@@ -2173,6 +2207,36 @@ pub fn set_sub_author(conn: &Connection, id: &str, author: Option<&str>) -> rusq
 }
 
 /// Existe-t-il déjà un sous-élément de ce type/parent/nom ? (idempotence import).
+/// The attached skin or sound of this type, parent and name — the identity
+/// an import recognizes it by (ESPACE§7.5).
+pub fn find_sub(conn: &Connection, sub_type: &str, parent_id: &str, name: &str) -> rusqlite::Result<Option<SubModRow>> {
+    let mut stmt = conn.prepare(&format!(
+        "{SUB_SELECT} WHERE sub_type = ?1 AND parent_id = ?2 AND name = ?3"
+    ))?;
+    let mut rows = stmt.query_map(params![sub_type, parent_id, name], map_sub)?;
+    rows.next().transpose()
+}
+
+/// An attached skin or sound followed its host into the showcase (ESPACE§5.4).
+/// `is_active` is left as the user set it — a track skin switched on comes
+/// back switched on; what is laid in the game filters skeletons out.
+pub fn mark_sub_freed(conn: &Connection, id: &str, freed_at: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE sub_mods SET content_state = ?2, freed_at = ?3 WHERE id = ?1",
+        params![id, CONTENT_SKELETON, freed_at],
+    )?;
+    Ok(())
+}
+
+/// Its files are back (ESPACE§7.5).
+pub fn mark_sub_full(conn: &Connection, id: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE sub_mods SET content_state = ?2, freed_at = NULL WHERE id = ?1",
+        params![id, CONTENT_FULL],
+    )?;
+    Ok(())
+}
+
 pub fn sub_exists(conn: &Connection, sub_type: &str, parent_id: &str, name: &str) -> rusqlite::Result<bool> {
     let n: i64 = conn.query_row(
         "SELECT COUNT(*) FROM sub_mods WHERE sub_type = ?1 AND parent_id = ?2 AND name = ?3",
