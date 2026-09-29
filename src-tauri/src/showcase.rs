@@ -694,6 +694,11 @@ pub fn rehydrate(
     if let (Some(kept), false) = (source.kept, still_kept) {
         overlay::set_kept_archive(conn, &v.id, kept).map_err(|e| e.to_string())?;
     }
+    // Where it came back from, when the version did not know where it came
+    // from in the first place (ESPACE§8); a known origin is never replaced.
+    if let Some(origin) = source.origin {
+        overlay::set_version_origin(conn, &v.id, origin).map_err(|e| e.to_string())?;
+    }
     if !missing.is_empty() {
         log::warn!("rehydrate {}: {} expected file(s) missing", v.mod_id, missing.len());
     }

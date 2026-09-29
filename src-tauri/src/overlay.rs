@@ -1154,6 +1154,23 @@ pub fn set_kept_archive(conn: &Connection, version_id: &str, path: &str) -> rusq
     Ok(())
 }
 
+/// Where a version's archive was downloaded from (ESPACE§8.2). Fills what is
+/// unknown and never replaces what is known: a rehydration from a copy found
+/// elsewhere must not erase the site of the original download.
+pub fn set_version_origin(
+    conn: &Connection,
+    version_id: &str,
+    origin: &crate::archive::Origin,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE versions SET source_site = COALESCE(source_site, ?2),
+                             source_file_name = COALESCE(source_file_name, ?3)
+         WHERE id = ?1",
+        params![version_id, origin.site, origin.file_name],
+    )?;
+    Ok(())
+}
+
 /// Forgets the kept source of a version, whose files were just removed
 /// (ESPACE§5.2: the showcase was asked not to keep it).
 pub fn clear_kept_archive(conn: &Connection, version_id: &str) -> rusqlite::Result<()> {
@@ -2866,6 +2883,55 @@ mod tests {
         assert_eq!(count("usage", "mod_id", "car"), 1, "usage stays");
         assert_eq!(count("wiki_link", "mod_key", "car"), 1, "the Wikipedia pairing stays");
         assert_eq!(count("sub_mods", "parent_id", "car"), 1, "attached skins stay");
+    }
+
+    /// Rule (ESPACE§8.2): the origin of an archive fills what is unknown and
+    /// never replaces what is known — the copy a mod is recovered from later
+    /// must not erase where it was first downloaded.
+    #[test]
+    fn a_known_origin_is_never_replaced() {
+        let base = crate::testutil::temp_dir("db-origin");
+        let conn = open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        upsert_mod(&conn, "car", "Car", None, Some("Car"), "h", None, &now).unwrap();
+        insert_version(
+            &conn,
+            "v1",
+            "car",
+            None,
+            None,
+            &now,
+            "cars/car/v1",
+            None,
+            "sig",
+            &[],
+            &[],
+            &[],
+            &[],
+            None,
+        )
+        .unwrap();
+        let first = crate::archive::Origin {
+            site: Some("https://www.overtake.gg/".into()),
+            file_name: None,
+        };
+        set_version_origin(&conn, "v1", &first).unwrap();
+        let later = crate::archive::Origin {
+            site: Some("https://mirror.example/".into()),
+            file_name: Some("car_v1.7z".into()),
+        };
+        set_version_origin(&conn, "v1", &later).unwrap();
+        let v = get_version(&conn, "v1").unwrap().unwrap();
+        assert_eq!(
+            v.source_site.as_deref(),
+            Some("https://www.overtake.gg/"),
+            "the first site stays"
+        );
+        assert_eq!(
+            v.source_file_name.as_deref(),
+            Some("car_v1.7z"),
+            "what was unknown is filled"
+        );
     }
 
     /// Rule (ESPACE§4.1): every version an older base holds is complete. The

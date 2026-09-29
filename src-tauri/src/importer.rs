@@ -287,6 +287,8 @@ struct Extracted {
     size: u64,
     /// Copie de l'archive source (§10/§11), faite hors verrou elle aussi.
     kept: Option<String>,
+    /// Where Windows says the archive was downloaded from (ESPACE§8).
+    origin: Option<archive::Origin>,
 }
 
 /// Ce que le producteur remet au rangeur : une archive prête, ou l'échec de
@@ -443,6 +445,7 @@ fn extract_stage(ctx: &ImportCtx, cfg: &AppConfig, index: usize, archive_path: &
         // entre tous les mods trouvés dedans, faite ici parce qu'elle peut
         // peser plusieurs Go et n'a rien à faire sous le verrou base.
         kept: keep_source(cfg, archive_path, &label),
+        origin: archive::read_origin(archive_path),
         label,
         workdir,
         size,
@@ -1852,6 +1855,7 @@ fn file_extracted(
             true,
             ArchiveSource {
                 kept: kept_archive.as_deref(),
+                origin: ex.origin.as_ref(),
             },
             &mod_progress(ctx, ex.index, i, targets.len()),
         ) {
@@ -2113,7 +2117,10 @@ fn import_one_folder(
             pack,
             decision,
             true,
-            ArchiveSource { kept: kept_archive },
+            ArchiveSource {
+                kept: kept_archive,
+                origin: None,
+            },
             &mod_progress(ctx, index, i, targets.len()),
         ) {
             Ok(imported) => result.mods.push(imported),
@@ -2571,6 +2578,7 @@ fn exec_one(
             false,
             ArchiveSource {
                 kept: kept_archive.as_deref(),
+                origin: None,
             },
             &mod_progress(ctx, index, i, found.len()),
         ) {
@@ -2697,6 +2705,9 @@ pub(crate) struct ArchiveSource<'a> {
     /// Archive/dossier source déjà conservé pour cet import (§10/§11). `None`
     /// si le réglage est désactivé ou la copie a échoué.
     pub kept: Option<&'a str>,
+    /// Where the archive was downloaded from (ESPACE§8): read on the archive
+    /// file itself, so `None` for a folder or an archive inside another.
+    pub origin: Option<&'a archive::Origin>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -3212,6 +3223,9 @@ fn process_found(
     // Archive/dossier source conservé (§10/§11), s'il y en a un pour cet import.
     if let Some(kept) = source.kept {
         crate::overlay::set_kept_archive(conn, &version_id, kept).map_err(|e| e.to_string())?;
+    }
+    if let Some(origin) = source.origin {
+        crate::overlay::set_version_origin(conn, &version_id, origin).map_err(|e| e.to_string())?;
     }
 
     // Taille sur disque (§10) : calculée maintenant, le dossier final venant

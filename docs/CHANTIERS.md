@@ -25,7 +25,7 @@ de reprendre. En cas d'écart, la spec fait foi.
 
 ---
 
-- [ ] **Mods en vitrine — livré pour les voitures et circuits ; restent les compléments rattachés et l'origine des archives.**
+- [ ] **Mods en vitrine — livré pour les voitures et circuits ; restent les compléments rattachés.**
       Livré (`SPEC-sans-fichiers.md`, 2026-09-27) : `skeleton.rs` (liste
       blanche, manifeste, image figée, garde-fou), `showcase.rs` (le déroulé
       ESPACE§5.5, sa reprise au démarrage, la réhydratation), les colonnes de
@@ -55,13 +55,16 @@ de reprendre. En cas d'écart, la spec fait foi.
         encore : le vivier l'exclut et le lancement le retire (ESPACE§6) ;
         la vignette de grille régénérée n'est pas figée (fonction éteinte,
         `FEATURE_GRID_THUMBS`) — c'est l'aperçu préféré qui l'est ; la
-        recherche du panneau passe par DuckDuckGo ;
+        recherche du panneau passe par DuckDuckGo ; l'origine d'une archive
+        (ESPACE§8, livrée le 2026-09-29) n'est lue que sur un fichier
+        d'archive importé tel quel — ni sur un dossier, ni sur une archive
+        imbriquée, ni sur un téléchargement du registre CUP, dont l'adresse
+        `/cup/<type>/<id>` n'est pas notée : le panneau de récupération
+        interroge déjà le registre par l'id du mod ;
       - ESPACE§5.4 : couches, livrées et sons rattachés, ajouts au jeu,
         ressources. Les garder pleins aujourd'hui est **sûr** (aucun ne va en
         jeu sans son hôte), seulement moins de place libérée. Colonnes
         `content_state`/`freed_at` déjà posées sur `layers` et `sub_mods` ;
-      - ESPACE§8 : le lecteur `Zone.Identifier` (colonnes `source_*` déjà là,
-        vides) ;
       - ESPACE§7.2 (récupération en masse), ESPACE§7.5 (couches réhydratées).
       **Pièges payés** :
       - la réindexation et la relecture de la fiche technique relisent le
