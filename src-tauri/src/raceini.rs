@@ -164,14 +164,20 @@ fn replace_atomically(path: &std::path::Path, patched: &[u8]) -> std::io::Result
 
 /// Watches `race.ini` and injects `skin` into the player's sections as soon as
 /// Content Manager has written it.
+pub fn spawn_player_skin_patcher(car_id: String, skin: String) {
+    spawn_patcher("player skin", car_id, move |ini| set_player_skin(ini, &skin));
+}
+
+/// Watches `race.ini` and applies `patch` to it as soon as Content Manager has
+/// written the session for `car_id`. `what` names the patch in the log.
 ///
 /// Returns immediately; the work happens on its own thread and is best-effort
 /// from end to end (see module docs). Every giving-up path logs a warning: on a
 /// packaged build there is no console, so an unlogged failure is a bug report
 /// nobody can act on.
-pub fn spawn_player_skin_patcher(car_id: String, skin: String) {
+fn spawn_patcher(what: &'static str, car_id: String, patch: impl Fn(&[u8]) -> Vec<u8> + Send + 'static) {
     let Some(path) = race_ini_path() else {
-        log::warn!("player skin: cannot resolve the Documents folder, race.ini left untouched");
+        log::warn!("{what}: cannot resolve the Documents folder, race.ini left untouched");
         return;
     };
     // Baseline taken here, before CM had time to write: the watcher fires on the
@@ -192,21 +198,21 @@ pub fn spawn_player_skin_patcher(car_id: String, skin: String) {
                 continue;
             };
             // Someone else's race.ini (an unrelated CM launch, a leftover):
-            // keep waiting rather than stamping our skin onto another session.
+            // keep waiting rather than stamping our patch onto another session.
             if player_car_model(&ini).as_deref() != Some(car_id.as_str()) {
                 continue;
             }
-            let patched = set_player_skin(&ini, &skin);
+            let patched = patch(&ini);
             if patched == ini {
-                return; // CM already picked that skin — nothing to do.
+                return; // CM already wrote what we wanted — nothing to do.
             }
             match replace_atomically(&path, &patched) {
-                Ok(()) => log::info!("player skin: race.ini patched with « {skin} » for « {car_id} »"),
-                Err(e) => log::warn!("player skin: cannot rewrite race.ini ({e}), CM's skin kept"),
+                Ok(()) => log::info!("{what}: race.ini patched for « {car_id} »"),
+                Err(e) => log::warn!("{what}: cannot rewrite race.ini ({e}), CM's version kept"),
             }
             return;
         }
-        log::warn!("player skin: Content Manager never rewrote race.ini within {WATCH_TIMEOUT:?}, CM's skin kept");
+        log::warn!("{what}: Content Manager never rewrote race.ini within {WATCH_TIMEOUT:?}, CM's version kept");
     });
 }
 

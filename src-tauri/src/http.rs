@@ -133,7 +133,13 @@ pub enum DownloadError {
 /// non-result (WIKI§1), and the caller has nothing to display either way.
 #[cfg(windows)]
 pub fn get(host: &str, path: &str, user_agent: &str, timeout_ms: i32) -> Option<Response> {
-    imp::get(host, path, user_agent, timeout_ms)
+    let url = UrlParts {
+        secure: true,
+        host: host.to_string(),
+        port: 443,
+        path: path.to_string(),
+    };
+    imp::get(&url, user_agent, timeout_ms, MAX_BODY)
 }
 
 /// Streams `url` to `dest`, following redirects.
@@ -188,12 +194,12 @@ mod imp {
     use windows::Win32::Networking::WinHttp::{
         WinHttpCloseHandle, WinHttpConnect, WinHttpOpen, WinHttpOpenRequest, WinHttpQueryDataAvailable,
         WinHttpQueryHeaders, WinHttpReadData, WinHttpReceiveResponse, WinHttpSendRequest, WinHttpSetOption,
-        WinHttpSetTimeouts, INTERNET_DEFAULT_HTTPS_PORT, WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_FLAG_SECURE,
-        WINHTTP_OPEN_REQUEST_FLAGS, WINHTTP_OPTION_DECOMPRESSION, WINHTTP_QUERY_CONTENT_LENGTH,
-        WINHTTP_QUERY_CONTENT_TYPE, WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_QUERY_STATUS_CODE,
+        WinHttpSetTimeouts, WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_FLAG_SECURE, WINHTTP_OPEN_REQUEST_FLAGS,
+        WINHTTP_OPTION_DECOMPRESSION, WINHTTP_QUERY_CONTENT_LENGTH, WINHTTP_QUERY_CONTENT_TYPE,
+        WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_QUERY_STATUS_CODE,
     };
 
-    use super::{DownloadError, Response, UrlParts, MAX_BODY};
+    use super::{DownloadError, Response, UrlParts};
 
     /// gzip + deflate. The `windows` crate exposes the option but not this
     /// flag combination (`WINHTTP_DECOMPRESSION_FLAG_ALL` in `winhttp.h`).
@@ -421,18 +427,12 @@ mod imp {
         }
     }
 
-    pub fn get(host: &str, path: &str, user_agent: &str, timeout_ms: i32) -> Option<Response> {
-        let url = UrlParts {
-            secure: true,
-            host: host.to_string(),
-            port: INTERNET_DEFAULT_HTTPS_PORT,
-            path: path.to_string(),
-        };
-        let opened = open(&url, user_agent, timeout_ms, "application/json", true)?;
+    pub fn get(url: &UrlParts, user_agent: &str, timeout_ms: i32, max_body: usize) -> Option<Response> {
+        let opened = open(url, user_agent, timeout_ms, "application/json", true)?;
         let mut body: Vec<u8> = Vec::new();
         let mut too_big = false;
         read_body(&opened.request, &mut |chunk| {
-            if body.len().saturating_add(chunk.len()) > MAX_BODY {
+            if body.len().saturating_add(chunk.len()) > max_body {
                 too_big = true;
                 return false;
             }
@@ -440,7 +440,7 @@ mod imp {
             true
         })?;
         if too_big {
-            log::warn!("http: response over {MAX_BODY} bytes, dropped");
+            log::warn!("http: response over {max_body} bytes, dropped");
             return None;
         }
         Some(Response {

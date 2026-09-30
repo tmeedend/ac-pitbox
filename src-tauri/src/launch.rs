@@ -7,6 +7,7 @@
 //! CSP automatique (VAO/config manquants) se déclenche. Voir
 //! `docs/L4-cm-launch-research.md`.
 
+use std::ffi::OsStr;
 use std::path::Path;
 use std::process::Command;
 
@@ -356,7 +357,7 @@ fn default_practice_start() -> PracticeStart {
 /// Garantit qu'un contenu est disponible dans `content/` : présent (vrai dossier
 /// ou junction) → OK ; sinon présent dans la bibliothèque → on l'active ; sinon
 /// erreur.
-fn ensure_available(conn: &Connection, cfg: &AppConfig, kind: ModKind, id: &str) -> Result<(), String> {
+pub(crate) fn ensure_available(conn: &Connection, cfg: &AppConfig, kind: ModKind, id: &str) -> Result<(), String> {
     let ac = cfg.ac_install_path.as_ref().ok_or(crate::errors::AC_NOT_CONFIGURED)?;
     let content = ac.join("content").join(kind.content_folder()).join(id);
     if content.exists() {
@@ -391,18 +392,32 @@ pub fn steam_running() -> bool {
         .any(|p| p.name().to_string_lossy().eq_ignore_ascii_case("steam.exe"))
 }
 
+/// The Content Manager executable, or the user-facing error when none is
+/// configured.
+pub(crate) fn cm_exe(cfg: &AppConfig) -> Result<&Path, String> {
+    cfg.content_manager_exe
+        .as_deref()
+        .ok_or_else(|| crate::errors::CM_NOT_CONFIGURED.to_string())
+}
+
+/// Starts Content Manager with at most one argument — an `acmanager://` URI or
+/// a file for it to open. CM is single-instance: when it already runs, the
+/// argument is handed to the running instance, which is why the child process
+/// is never waited on.
+pub(crate) fn spawn_cm(cm: &Path, arg: Option<&OsStr>) -> std::io::Result<()> {
+    let mut cmd = Command::new(cm);
+    if let Some(arg) = arg {
+        cmd.arg(arg);
+    }
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd.spawn().map(|_| ())
+}
+
 /// Ouvre Content Manager sans argument (§7.2) : pratique pour parcourir
 /// son propre menu (réglages CM, contenu…) sans passer par une session Pit Box.
 pub fn open_content_manager(cfg: &AppConfig) -> Result<(), String> {
-    let cm = cfg
-        .content_manager_exe
-        .as_ref()
-        .ok_or(crate::errors::CM_NOT_CONFIGURED)?;
-    let mut cmd = Command::new(cm);
-    #[cfg(windows)]
-    cmd.creation_flags(CREATE_NO_WINDOW);
-    cmd.spawn().map_err(|e| format!("lancement de Content Manager : {e}"))?;
-    Ok(())
+    spawn_cm(cm_exe(cfg)?, None).map_err(|e| format!("lancement de Content Manager : {e}"))
 }
 
 /// Lance un replay dans Content Manager (§6.1, onglet Médias). Même mécanisme
@@ -411,24 +426,12 @@ pub fn open_content_manager(cfg: &AppConfig) -> Result<(), String> {
 /// l'exécutable directement plutôt que de compter sur l'association système,
 /// cohérent avec `launch`/`open_content_manager` qui invoquent déjà CM ainsi.
 pub fn launch_replay(cfg: &AppConfig, replay_path: &Path) -> Result<(), String> {
-    let cm = cfg
-        .content_manager_exe
-        .as_ref()
-        .ok_or(crate::errors::CM_NOT_CONFIGURED)?;
-    let mut cmd = Command::new(cm);
-    cmd.arg(replay_path);
-    #[cfg(windows)]
-    cmd.creation_flags(CREATE_NO_WINDOW);
-    cmd.spawn().map_err(|e| format!("lancement du replay : {e}"))?;
-    Ok(())
+    spawn_cm(cm_exe(cfg)?, Some(replay_path.as_os_str())).map_err(|e| format!("lancement du replay : {e}"))
 }
 
 /// Lance la session : active le contenu au besoin, écrit le race.ini, invoque CM.
 pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(), String> {
-    let cm = cfg
-        .content_manager_exe
-        .as_ref()
-        .ok_or(crate::errors::CM_NOT_CONFIGURED)?;
+    let cm = cm_exe(cfg)?;
 
     // Nothing in the showcase goes on track (ESPACE R5). The session column
     // and the opponent picker already leave such mods out; this is the net,
@@ -499,11 +502,7 @@ pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(
     // (gro-ove/actools) : pas de garde équivalente pour `TrackPropertiesData`
     // (toujours chargé), d'où l'absence du même flag pour l'état de piste.
     let uri = format!("acmanager://race/quick?presetFile={}&loadAssists=true", path.display());
-    let mut cmd = Command::new(cm);
-    cmd.arg(&uri);
-    #[cfg(windows)]
-    cmd.creation_flags(CREATE_NO_WINDOW);
-    cmd.spawn().map_err(|e| format!("lancement de Content Manager : {e}"))?;
+    spawn_cm(cm, Some(OsStr::new(&uri))).map_err(|e| format!("lancement de Content Manager : {e}"))?;
 
     // Skin du joueur (SESSION§2) : absent du schéma Quick Drive, donc réinjecté
     // dans le `race.ini` que CM écrit à l'instant où il lance `acs.exe` — le
