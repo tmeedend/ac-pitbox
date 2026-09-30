@@ -124,6 +124,12 @@ fait — en cas d'écart, la spec fait foi.
   les tailles sont collectées dès le lot 1 et affichées au lot 2. Porte la
   règle qui tient le reste : **un seul arbre, la provenance est un filtre**.
   Maquette : `maquettes/pitbox-etat-dossier.html`. À construire.
+- **`SPEC-play-online.md`** — la page **Online** : rejoindre vite le bon
+  serveur multijoueur, avec la bibliothèque qui juge chaque serveur (prêt,
+  un clic, contenu à télécharger, bloqué). Organisée autour de deux cas —
+  rejoindre un serveur connu, réussir à y entrer — les filtres venant après.
+  Le lancement par CM a été vérifié en jeu avant de construire
+  (`online-join-research.md`). En construction, par lots.
 - **`SPEC-sans-fichiers.md`** (`ESPACE§`) — **supprimer sans tout perdre** :
   « Supprimer » propose par défaut de garder le mod **en vitrine** (fichiers
   lourds supprimés, squelette de quelques dizaines de Ko, saisies et fiche
@@ -220,6 +226,10 @@ dans un commentaire de code.
   source primaire AcTools. Dit pourquoi `race/config`/`PreparedConfig` a été
   abandonné : il ne déclenche pas le téléchargement CSP automatique, bug
   confirmé empiriquement et cause trouvée dans `GameWrapper.StartAsync`.
+- **`online-join-research.md`** — rejoindre un serveur online via CM avec la
+  voiture choisie : `race/online` plutôt que `race/online/join`, la
+  réinjection de `__FEATURES` indispensable sur AssettoServer, le skin imposé
+  par le serveur. Six essais réels, un refus encore inexpliqué.
 - **`controller-onboarding-design.md`** — choix du périphérique de contrôle.
   Part d'un bug réel (des éléments d'interface se déplaçaient seuls, volant
   branché) : `mapping === "standard"` est *déclaré* par le périphérique, pas
