@@ -75,8 +75,8 @@ fn section_name(line: &[u8]) -> Option<&[u8]> {
     }
 }
 
-fn is_player_section(name: &[u8]) -> bool {
-    PLAYER_SECTIONS.iter().any(|section| name.eq_ignore_ascii_case(section))
+fn is_one_of(name: &[u8], sections: &[&[u8]]) -> bool {
+    sections.iter().any(|section| name.eq_ignore_ascii_case(section))
 }
 
 /// The line ending of a line, so a patched line keeps the one it had.
@@ -94,42 +94,51 @@ fn terminator(line: &[u8]) -> &[u8] {
 /// opponents' skins included — exactly as it was. A player section without a
 /// `SKIN=` line gets one appended rather than being silently skipped.
 pub fn set_player_skin(ini: &[u8], skin: &str) -> Vec<u8> {
+    set_key(ini, &PLAYER_SECTIONS, b"SKIN", skin)
+}
+
+/// Sets `key=value` in each of `sections`, and nowhere else: an existing line
+/// is replaced in place, a missing one appended at the end of its section.
+/// Every other byte comes back as it was.
+fn set_key(ini: &[u8], sections: &[&[u8]], key: &[u8], value: &str) -> Vec<u8> {
     let eol: &[u8] = if ini.windows(2).any(|pair| pair == b"\r\n") {
         b"\r\n"
     } else {
         b"\n"
     };
+    let mut prefix = key.to_vec();
+    prefix.push(b'=');
     let mut out = Vec::with_capacity(ini.len() + 64);
-    let mut in_player = false;
-    let mut skin_seen = false;
+    let mut inside = false;
+    let mut key_seen = false;
 
-    let push_skin = |out: &mut Vec<u8>, end: &[u8]| {
-        out.extend_from_slice(b"SKIN=");
-        out.extend_from_slice(skin.as_bytes());
+    let push_line = |out: &mut Vec<u8>, end: &[u8]| {
+        out.extend_from_slice(&prefix);
+        out.extend_from_slice(value.as_bytes());
         out.extend_from_slice(end);
     };
 
     for line in ini.split_inclusive(|&byte| byte == b'\n') {
         if let Some(name) = section_name(line) {
-            // Leaving a player section that never declared a skin: add one now,
-            // while we are still inside it.
-            if in_player && !skin_seen {
-                push_skin(&mut out, eol);
+            // Leaving a target section that never declared the key: add it
+            // now, while we are still inside it.
+            if inside && !key_seen {
+                push_line(&mut out, eol);
             }
-            in_player = is_player_section(name);
-            skin_seen = false;
+            inside = is_one_of(name, sections);
+            key_seen = false;
             out.extend_from_slice(line);
             continue;
         }
-        if in_player && trim(line).starts_with(b"SKIN=") {
-            skin_seen = true;
-            push_skin(&mut out, terminator(line));
+        if inside && trim(line).starts_with(&prefix) {
+            key_seen = true;
+            push_line(&mut out, terminator(line));
             continue;
         }
         out.extend_from_slice(line);
     }
-    if in_player && !skin_seen {
-        push_skin(&mut out, eol);
+    if inside && !key_seen {
+        push_line(&mut out, eol);
     }
     out
 }
