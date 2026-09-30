@@ -286,6 +286,16 @@ pub(crate) fn read_skin_name(skin_dir: &Path) -> Option<String> {
     read_skin_info(skin_dir).name
 }
 
+/// The photo of a livery: `preview.jpg`, else `preview.png`, as an absolute
+/// path for `convertFileSrc`.
+pub(crate) fn skin_preview(skin_dir: &Path) -> Option<String> {
+    ["preview.jpg", "preview.png"]
+        .iter()
+        .map(|n| skin_dir.join(n))
+        .find(|p| p.is_file())
+        .map(|p| p.to_string_lossy().into_owned())
+}
+
 /// Lit les skins d'un dossier `skins/` donné (sous-dossiers + miniature + nom).
 fn read_skins_dir(skins_dir: &Path) -> Vec<SkinItem> {
     let mut out = Vec::new();
@@ -296,11 +306,7 @@ fn read_skins_dir(skins_dir: &Path) -> Vec<SkinItem> {
                 continue;
             }
             let id = e.file_name().to_string_lossy().into_owned();
-            let preview = ["preview.jpg", "preview.png"]
-                .iter()
-                .map(|n| p.join(n))
-                .find(|pp| pp.is_file())
-                .map(|pp| pp.to_string_lossy().into_owned());
+            let preview = skin_preview(&p);
             let livery = p.join("livery.png");
             let livery = livery.is_file().then(|| livery.to_string_lossy().into_owned());
             let info = read_skin_info(&p);
