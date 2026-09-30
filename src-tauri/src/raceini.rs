@@ -1,4 +1,7 @@
-//! Player skin re-injection into the `race.ini` Content Manager writes (SESSION§2).
+//! Re-injection into the `race.ini` Content Manager writes: the player's skin
+//! for an offline session (SESSION§2), and the server's features for an online
+//! one (`docs/online-join-research.md`). The skin is the case this module was
+//! built and measured on:
 //!
 //! The Quick Drive preset carries no skin field for the player's car: CM falls
 //! back on its own per-car memory (`CarObject.SelectedSkin`), so the skin picked
@@ -95,6 +98,26 @@ fn terminator(line: &[u8]) -> &[u8] {
 /// `SKIN=` line gets one appended rather than being silently skipped.
 pub fn set_player_skin(ini: &[u8], skin: &str) -> Vec<u8> {
     set_key(ini, &PLAYER_SECTIONS, b"SKIN", skin)
+}
+
+/// Sets `[REMOTE] __FEATURES=` — the capabilities a multiplayer server declares
+/// in its `/JSON`, comma-separated as Content Manager's own join writes them.
+///
+/// CSP reads this line to decide what to send in the handshake: without
+/// `STEAM_TICKET` in it, no Steam ticket goes out and an AssettoServer refuses
+/// the connection (`ACP_AUTH_FAILED`). CM's native join writes it; the
+/// `race/online` route Pit Box uses does not — measured, see
+/// `docs/online-join-research.md`.
+pub fn set_remote_features(ini: &[u8], features: &[String]) -> Vec<u8> {
+    set_key(ini, &[b"[REMOTE]"], b"__FEATURES", &features.join(","))
+}
+
+/// Watches `race.ini` and injects the server's features into `[REMOTE]` as
+/// soon as Content Manager has written the online session for `car_id`.
+pub fn spawn_remote_features_patcher(car_id: String, features: Vec<String>) {
+    spawn_patcher("server features", car_id, move |ini| {
+        set_remote_features(ini, &features)
+    });
 }
 
 /// Sets `key=value` in each of `sections`, and nowhere else: an existing line
@@ -304,6 +327,41 @@ mod tests {
         );
         assert!(text.contains("[CAR_0]\r\nMODEL=-\r\nSKIN=red\r\n"), "same for [CAR_0]");
         assert!(text.contains("SKIN=other"), "opponent untouched");
+    }
+
+    /// What CM's `race/online` writes, measured on a real join: a `[REMOTE]`
+    /// section with no `__FEATURES` line, which is what gets an AssettoServer to
+    /// refuse us. The line lands inside `[REMOTE]`, before the next section.
+    const ONLINE: &[u8] = b"[CAR_0]\r\nSKIN=05_sunburst_yellow\r\nMODEL=-\r\n\
+[RACE]\r\nMODEL=ks_mazda_miata\r\nTRACK=la_canyons\r\n\
+[REMOTE]\r\nACTIVE=1\r\nREQUESTED_CAR=ks_mazda_miata\r\n__CM_EXTENDED=0\r\nSERVER_PORT=9602\r\n\
+[SESSION_0]\r\nNAME=Nothing\r\n";
+
+    /// Rule (online-join-research.md): the server's features reach CSP through
+    /// `[REMOTE] __FEATURES`, comma-separated, and nothing else moves.
+    #[test]
+    fn remote_features_land_in_the_remote_section() {
+        let features = vec!["STEAM_TICKET".to_string(), "WEATHERFX_V1".to_string()];
+        let text = String::from_utf8(set_remote_features(ONLINE, &features)).unwrap();
+        assert!(
+            text.contains("SERVER_PORT=9602\r\n__FEATURES=STEAM_TICKET,WEATHERFX_V1\r\n[SESSION_0]"),
+            "appended at the end of [REMOTE], before the next section: {text}"
+        );
+        assert_eq!(text.matches("__FEATURES=").count(), 1, "written once, in [REMOTE] only");
+        assert!(
+            text.contains("[CAR_0]\r\nSKIN=05_sunburst_yellow\r\n"),
+            "other sections untouched"
+        );
+    }
+
+    /// A second pass (or a CM that one day writes the line itself) replaces
+    /// the value instead of stacking a duplicate the game would read twice.
+    #[test]
+    fn remote_features_replace_an_existing_line() {
+        let once = set_remote_features(ONLINE, &["EMOJI".to_string()]);
+        let twice = String::from_utf8(set_remote_features(&once, &["STEAM_TICKET".to_string()])).unwrap();
+        assert_eq!(twice.matches("__FEATURES=").count(), 1, "still a single line");
+        assert!(twice.contains("__FEATURES=STEAM_TICKET\r\n"), "with the new value");
     }
 
     /// The guard that keeps us from stamping a skin onto somebody else's

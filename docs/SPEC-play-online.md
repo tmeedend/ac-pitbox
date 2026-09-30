@@ -184,6 +184,26 @@ La v1 se construit autour des onglets Favoris / Récents / Amis, du statut de pr
 - [ ] **Voitures nécessaires** : faut-il avoir toutes les voitures du serveur, ou seulement la sienne plus celles des joueurs connectés ? Ça change le calcul du niveau de préparation. À vérifier en jeu.
 - [x] **Voiture dans le lien CM** : oui pour la voiture (`race/online&car=`, vérifié en jeu). Non pour la livrée : le serveur impose celle du slot libre, quelle que soit celle demandée. Voir `online-join-research.md`.
 - [ ] **Mods son** : échec reproductible ou aléatoire ? Décide s'ils passent en « échec certain ».
-- [ ] **SPEC §7.2** : mettre à jour le tableau des trois territoires et l'ordre du rail (`Session`, `Online`, filet, Apps…).
+- [x] **SPEC §7.2** : tableau des trois territoires et ordre du rail mis à jour (`Session`, `Online`, filet, Apps…).
+
+## Lots
+
+**Lot 1 — lister et rejoindre (livré, à vérifier à l'écran).** L'entrée
+`Online` du rail ; la liste du lobby Kunos (recherche, les quatre bascules,
+mémorisées) triée joignables d'abord puis par joueurs ; un panneau de détail
+interrogé sur le serveur lui-même (`/INFO`, `/JSON`) : voitures avec leurs
+slots libres et le skin imposé, pilotes connectés ; le bouton Rejoindre, qui
+active voiture et circuit au besoin puis passe par `race/online` et la
+réinjection de `__FEATURES` (`online-join-research.md`). Un serveur en booking
+ouvre la fiche de CM, qui seule sait réserver. « Joignable » y veut dire :
+circuit et au moins une voiture jouables ici (installés, ou dans la
+bibliothèque avec leurs fichiers) — les quatre niveaux de préparation viennent
+plus tard.
+
+**Restent**, dans l'ordre où ils servent les cas d'usage : noms et vignettes
+des circuits et voitures (le lot 1 affiche les identifiants) ; Favoris, Récents
+et Amis (cas 1) ; les niveaux de préparation et le bouton qui prépare tout
+(cas 2) ; la frise des sessions, les conditions et les règles du détail ;
+coller un lien de connexion ; ping, pays en drapeaux, tokens de filtre.
 - [x] **Rejoindre sans une couche** : décidé, voir « Couches et versions ».
 - [x] **Amis** : comme CM, par nom affiché.

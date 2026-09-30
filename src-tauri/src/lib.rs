@@ -52,6 +52,7 @@ mod media;
 mod modscan;
 mod music;
 mod nationalities;
+mod online;
 mod others;
 mod overlay;
 mod packs;
@@ -507,6 +508,9 @@ pub fn run() {
             commands::addons::list_app_resources,
             commands::addons::open_app_resource,
             commands::addons::open_app_folder,
+            commands::online::online_servers,
+            commands::online::online_server_detail,
+            commands::online::online_join,
             commands::others::list_other_mods,
             commands::others::list_inventory,
             commands::others::list_attached,

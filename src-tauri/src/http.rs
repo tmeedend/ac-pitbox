@@ -1,7 +1,7 @@
 //! HTTP over WinHTTP: a small GET for JSON APIs, and a streamed download to
-//! disk. Two callers: the Wikipedia enrichment
-//! (`docs/SPEC-wikipedia-fiche-detail.md` WIKI§6) and the mod update check
-//! (`cup.rs`, §4.7).
+//! disk. Three callers: the Wikipedia enrichment
+//! (`docs/SPEC-wikipedia-fiche-detail.md` WIKI§6), the mod update check
+//! (`cup.rs`, §4.7), and the multiplayer server list (`online/`).
 //!
 //! **Why no HTTP crate.** The app had no HTTP client at all, and the two
 //! requests the Wikipedia feature needs (WIKI§6.1 — one to Wikidata, one to a wiki)
@@ -142,6 +142,20 @@ pub fn get(host: &str, path: &str, user_agent: &str, timeout_ms: i32) -> Option<
     imp::get(&url, user_agent, timeout_ms, MAX_BODY)
 }
 
+/// GETs any `http(s)://host[:port]/path` and keeps up to `max_body` bytes.
+///
+/// For the multiplayer servers (`online/`): the Kunos lobby and every game
+/// server answer in plain HTTP on a port of their own, and the lobby list alone
+/// weighs close to 8 MiB — both outside what `get` was made for.
+#[cfg(windows)]
+pub fn get_url(url: &str, user_agent: &str, timeout_ms: i32, max_body: usize) -> Option<Response> {
+    let Some(parts) = split_url(url) else {
+        log::warn!("http: not a URL we can fetch — {url}");
+        return None;
+    };
+    imp::get(&parts, user_agent, timeout_ms, max_body)
+}
+
 /// Streams `url` to `dest`, following redirects.
 ///
 /// `on_progress(received, total)` is called after every chunk — `total` is the
@@ -170,6 +184,11 @@ pub fn download(
 /// dependency, so the implementation below cannot even be named here.
 #[cfg(not(windows))]
 pub fn get(_host: &str, _path: &str, _user_agent: &str, _timeout_ms: i32) -> Option<Response> {
+    None
+}
+
+#[cfg(not(windows))]
+pub fn get_url(_url: &str, _user_agent: &str, _timeout_ms: i32, _max_body: usize) -> Option<Response> {
     None
 }
 

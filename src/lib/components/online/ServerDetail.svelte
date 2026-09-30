@@ -1,0 +1,336 @@
+<script lang="ts">
+  // One server, beside the list (SPEC-play-online.md, "Détail d'un serveur"),
+  // in the order one decides: where, when, with what — then join. Asked from
+  // the server itself, so the car slots are live rather than the lobby's.
+  //
+  // The skin under a car is the one the server will impose (its first free
+  // slot): a skin chosen here would be ignored in game, so none is offered.
+  import { untrack } from "svelte";
+  import { t } from "$lib/i18n/index.svelte";
+  import { errorText } from "$lib/errors";
+  import { joinServer, serverDetail, serverKey, type CarSlots, type ServerDetail, type ServerSummary } from "$lib/online/online";
+
+  interface Props {
+    server: ServerSummary;
+    onclose: () => void;
+  }
+  let { server, onclose }: Props = $props();
+
+  let detail = $state<ServerDetail | null>(null);
+  let loading = $state(false);
+  let error = $state("");
+  let car = $state<string | null>(null);
+  let password = $state("");
+  let joining = $state(false);
+  let joinError = $state("");
+  let joined = $state(false);
+
+  /** The server the panel was last loaded for. A refresh of the list hands a
+   * new object for the same server: that must not wipe the car picked and the
+   * password typed. */
+  let loadedKey = "";
+
+  // Read the key first: the effect must subscribe to the server before any
+  // early exit (CLAUDE.md, "Un $effect ne s'abonne qu'à ce qu'il a lu").
+  $effect(() => {
+    const key = serverKey(server);
+    if (key === loadedKey) return;
+    loadedKey = key;
+    untrack(() => void load(key));
+  });
+
+  async function load(key: string) {
+    const { ip, http_port } = server;
+    detail = null;
+    error = "";
+    joinError = "";
+    joined = false;
+    car = null;
+    password = "";
+    loading = true;
+    try {
+      const d = await serverDetail(ip, http_port);
+      if (key !== serverKey(server)) return; // another server was picked meanwhile
+      detail = d;
+      // A single car that can be taken is the obvious choice; among several,
+      // the pick is the user's.
+      const takeable = d.cars.filter(canTake);
+      if (takeable.length === 1) car = takeable[0].id;
+    } catch (e) {
+      if (key === serverKey(server)) error = errorText(e);
+    } finally {
+      if (key === serverKey(server)) loading = false;
+    }
+  }
+
+  function canTake(c: CarSlots): boolean {
+    return c.available && c.free > 0;
+  }
+
+  const live = $derived(detail?.summary ?? server);
+
+  /** Why the button cannot join yet, or `null` when it can. */
+  const blocker = $derived.by(() => {
+    if (!live.track_available) return t("online.trackMissing");
+    if (live.booking) return null;
+    if (live.clients >= live.max_clients) return t("online.serverFull");
+    if (!car) return t("online.pickCar");
+    return null;
+  });
+
+  async function join() {
+    joining = true;
+    joinError = "";
+    joined = false;
+    try {
+      await joinServer(live, live.booking ? "" : (car ?? ""), password || null);
+      joined = true;
+    } catch (e) {
+      joinError = errorText(e);
+    } finally {
+      joining = false;
+    }
+  }
+</script>
+
+<aside class="panel">
+  <header class="head">
+    <div class="title">
+      <h3 title={server.name}>{server.name}</h3>
+      <p class="where mono">
+        <span class:missing={!live.track_available}>{live.track.id}</span>
+        {#if live.track.layout}<span class="sub">{live.track.layout}</span>{/if}
+      </p>
+    </div>
+    <button class="close" type="button" title={t("common.close")} aria-label={t("common.close")} onclick={onclose}>✕</button>
+  </header>
+
+  <div class="facts mono">
+    <span class="players">{live.clients} / {live.max_clients}</span>
+    {#if live.session}<span>{t(`online.session.${live.session}`)}</span>{/if}
+    {#if live.track.csp_min_build}<span>{t("online.csp", { build: live.track.csp_min_build })}</span>{/if}
+    {#if live.country}<span>{live.country}</span>{/if}
+    <span class="addr">{live.ip}:{live.http_port}</span>
+  </div>
+
+  <div class="body">
+    {#if loading}
+      <p class="muted">{t("common.loading")}</p>
+    {:else if error}
+      <p class="errbox">{error}</p>
+    {:else if detail}
+      {#if !live.booking}
+        <h4 class="lbl">{t("online.cars")}</h4>
+        <ul class="cars">
+          {#each detail.cars as c (c.id)}
+            <li>
+              <button
+                type="button"
+                class="car"
+                class:on={car === c.id}
+                disabled={!canTake(c)}
+                aria-pressed={car === c.id}
+                onclick={() => (car = c.id)}
+              >
+                <span class="car-id mono">{c.id}</span>
+                <span class="skin mono">{c.skin ?? ""}</span>
+                <span class="slots mono" class:none={c.free === 0}>
+                  {t("online.slots", { free: c.free, total: c.total })}
+                </span>
+                {#if !c.available}<span class="tag">{t("online.notInstalled")}</span>{/if}
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+
+      <h4 class="lbl">{t("online.drivers")}</h4>
+      {#if detail.drivers.length}
+        <ul class="drivers">
+          {#each detail.drivers as d, i (i)}
+            <li><span>{d.name}</span><span class="mono sub">{d.car}</span></li>
+          {/each}
+        </ul>
+      {:else}
+        <p class="muted">{t("online.noDrivers")}</p>
+      {/if}
+    {/if}
+  </div>
+
+  <footer class="foot">
+    {#if live.password}
+      <input class="input" type="password" autocomplete="off" placeholder={t("online.passwordPlaceholder")} bind:value={password} />
+    {/if}
+    {#if joinError}<p class="errbox">{joinError}</p>{/if}
+    {#if joined}<p class="ok">{t("online.joined")}</p>{/if}
+    <button class="btn btn-primary join" type="button" disabled={!!blocker || joining || loading} onclick={join}>
+      {joining ? t("online.joining") : (blocker ?? (live.booking ? t("online.openInCm") : t("online.join")))}
+    </button>
+  </footer>
+</aside>
+
+<style>
+  .panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+    border-left: 1px solid var(--line);
+    background: var(--panel2);
+  }
+  .head {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 16px 16px 10px;
+  }
+  .title {
+    flex: 1;
+    min-width: 0;
+  }
+  h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--txt);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .where {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--txt2);
+    display: flex;
+    gap: 8px;
+  }
+  .where .missing {
+    color: var(--muted);
+  }
+  .sub {
+    color: var(--muted);
+  }
+  .close {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 13px;
+    padding: 2px 4px;
+  }
+  .close:hover {
+    color: var(--txt);
+  }
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    padding: 0 16px 12px;
+    font-size: 11px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--line);
+  }
+  .facts .players {
+    color: var(--txt);
+    font-size: 13px;
+  }
+  .body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 12px 16px;
+  }
+  .lbl {
+    margin: 6px 0 8px;
+  }
+  .cars,
+  .drivers {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 14px;
+  }
+  .car {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "id slots"
+      "skin tag";
+    gap: 2px 10px;
+    width: 100%;
+    padding: 7px 10px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    color: var(--txt2);
+    text-align: left;
+  }
+  .car:hover:not(:disabled) {
+    border-color: var(--rosso-border);
+  }
+  .car.on {
+    border-color: var(--rosso);
+    background: var(--rosso-dim);
+  }
+  .car:disabled {
+    opacity: 0.45;
+  }
+  .car-id {
+    grid-area: id;
+    font-size: 12px;
+    color: var(--txt);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .skin {
+    grid-area: skin;
+    font-size: 10.5px;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .slots {
+    grid-area: slots;
+    font-size: 11px;
+    color: var(--green);
+    text-align: right;
+  }
+  .slots.none {
+    color: var(--muted);
+  }
+  .tag {
+    grid-area: tag;
+    font-size: 10px;
+    color: var(--orange);
+    text-align: right;
+  }
+  .drivers li {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--txt2);
+  }
+  .muted {
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .foot {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 16px 16px;
+    border-top: 1px solid var(--line);
+  }
+  .ok {
+    color: var(--green);
+    font-size: 12px;
+  }
+  .join {
+    width: 100%;
+    padding: 10px;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+</style>

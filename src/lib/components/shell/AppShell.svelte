@@ -7,6 +7,7 @@
   import DriverScreen from "$lib/components/driver/DriverScreen.svelte";
   import Inventory from "$lib/components/inventory/Inventory.svelte";
   import Apps from "$lib/components/inventory/Apps.svelte";
+  import Online from "$lib/components/online/Online.svelte";
   import NavRail from "./NavRail.svelte";
   import TitleBar from "./TitleBar.svelte";
   import SessionColumn from "./session/SessionColumn.svelte";
@@ -131,8 +132,15 @@
   // frère de la zone qui défile : en `position: fixed`, elle se plaçait dans
   // le repère de `100vh` (non divisé par le zoom d'interface) et passait donc
   // sous le bord bas de la fenêtre — voir le commentaire de `.r-footer`.
-  // The game folder too: a virtualised tree and its panel fill the height.
-  const noPad = $derived(isLibrary || nav.section === "race" || nav.section === "rules" || nav.section === "gamefolder");
+  // The game folder too: a virtualised tree and its panel fill the height —
+  // and the Online page, for the same reason.
+  const noPad = $derived(
+    isLibrary ||
+      nav.section === "race" ||
+      nav.section === "rules" ||
+      nav.section === "gamefolder" ||
+      nav.section === "online",
+  );
 </script>
 
 {#if !bigPictureState.active}
@@ -164,6 +172,8 @@
           <DriverScreen />
         {:else if nav.section === "race"}
           <Launch />
+        {:else if nav.section === "online"}
+          <Online />
         {:else if nav.section === "apps"}
           <!-- Les apps ont leur écran (REFONTE§3.2) : une app a un nom, une
                identité, on l'installe volontairement — elle n'est la dépendance

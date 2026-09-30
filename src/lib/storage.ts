@@ -95,4 +95,7 @@ export const StorageKey = {
   /** The delete confirmation's "How it works" panel (ESPACE§4.4), hidden by
    * "Do not show again". Born in `ui_prefs.json`. */
   showcaseHowItWorksHidden: `${PREFIX}.showcase.howItWorksHidden`,
+  /** The Online page's toggles (SPEC-play-online.md, "Filtres de base"), as
+   * `online/filters.ts` stores them. Born in `ui_prefs.json`. */
+  onlineFilters: `${PREFIX}.online.filters`,
 } as const;

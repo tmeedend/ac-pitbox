@@ -25,6 +25,25 @@ de reprendre. En cas d'écart, la spec fait foi.
 
 ---
 
+- [ ] **Page Online — lot 1 livré (lister, rejoindre), la suite reste.**
+      Ce qui est fait et ce qui reste : `SPEC-play-online.md`, section Lots.
+      **Pièges déjà payés** (`online-join-research.md`), à relire avant de
+      toucher au lancement :
+      - `race/online/join` ne prend pas la voiture ; `race/online` si.
+      - Sans `[REMOTE] __FEATURES`, CSP n'envoie pas le ticket Steam et un
+        AssettoServer refuse (`ACP_AUTH_FAILED`) : c'est `raceini.rs` qui le
+        réinjecte après CM, comme le skin hors ligne.
+      - Le lobby Kunos exige `User-Agent: Assetto Corsa Launcher` **et** un
+        SteamID réel (sinon 302, ou « UNKNOWN FAILURE » en 200).
+      - `session` est un **type** de session, pas un index ; le lobby écrit
+        ses nombres en chaînes ; `track` porte le build CSP minimal
+        (`csp/3465/../E/../id-layout`).
+      - Le skin est imposé par le serveur : ne pas en proposer un choix.
+      **Pas vérifié** : un serveur à mot de passe et un serveur en booking,
+      faute d'échantillon au moment du lot 1 ; un AssettoServer (BSG, LA
+      Canyons) refuse même avec le ticket, cause inconnue — le Join natif de
+      CM n'a pas pu servir de référence.
+
 - [ ] **Dossier du jeu — lot 1 livré, le lot 2 (les tailles) reste.**
       Livré (`SPEC-etat-dossier.md`) : l'onglet Fichiers › Dossier du jeu,
       son scan (`src-tauri/src/gamestate/`), le partage de l'Atelier en

@@ -57,6 +57,10 @@
     // above the first rule, it needs no group title: the rule carries the
     // split between the session zone and the installation screens.
     { target: "session", labelKey: "nav.session", sections: SESSION_ZONE },
+    // Online sits with the session, above the rule: it is the other way to
+    // drive, not an installation screen (SPEC-play-online.md). It keeps the
+    // session column hidden — its own panel picks the car and joins.
+    { target: "online", labelKey: "nav.online" },
     // Les deux écrans d'add-ons ont disparu : ils classaient par mécanique de
     // pose, et leur contenu est dans l'inventaire (REFONTE§3.1).
     { target: "apps", labelKey: "nav.apps", sep: true },
@@ -153,6 +157,11 @@
             <path d="M4.5 17.5V2.8" />
             <path d="M4.5 3.3h11.5v8.4H4.5" />
             <path d="M8.3 3.3v8.4M12.2 3.3v8.4M4.5 7.5h11.5" />
+          {:else if e.target === "online"}
+            <!-- A globe: the servers of everyone else. -->
+            <circle cx="10" cy="10" r="7.4" />
+            <path d="M2.6 10h14.8" />
+            <path d="M10 2.6c2.1 2.2 3 4.7 3 7.4s-.9 5.2-3 7.4c-2.1-2.2-3-4.7-3-7.4s.9-5.2 3-7.4z" />
           {:else if e.target === "apps"}
             <path d="M3.2 3.2h5.4v5.4H3.2zM11.4 3.2h5.4v5.4h-5.4zM3.2 11.4h5.4v5.4H3.2z" />
             <path d="M14.1 11.4v5.4M11.4 14.1h5.4" />

@@ -18,7 +18,8 @@
     "alertLabel": "items to check",
     "openCmShort": "Content Manager",
     "brands": "Brands",
-    "gamefolder": "Game folder"
+    "gamefolder": "Game folder",
+    "online": "Online"
   },
   "titlebar": {
     "bigPicture": "Big Picture mode (fullscreen)",
@@ -1461,6 +1462,42 @@
     "discord": "Discord",
     "discordSub": "Chat with the community"
   },
+  "online": {
+    "searchPlaceholder": "Server, track, car…",
+    "filterNotFull": "Not full",
+    "filterNoPassword": "No password",
+    "filterNotEmpty": "Not empty",
+    "filterJoinable": "Joinable",
+    "count": "{count} servers",
+    "refresh": "Refresh",
+    "empty": "No server matches these filters.",
+    "ready": "Ready",
+    "missing": "Missing content",
+    "password": "Password",
+    "csp": "CSP {build}",
+    "more": "+{count}",
+    "minutes": "{n} min",
+    "hours": "{n} h",
+    "session": {
+      "booking": "Booking",
+      "practice": "Practice",
+      "qualify": "Qualify",
+      "race": "Race"
+    },
+    "cars": "Cars",
+    "drivers": "Drivers",
+    "noDrivers": "Nobody on the server right now.",
+    "slots": "{free} free / {total}",
+    "notInstalled": "Not installed",
+    "pickCar": "Pick a car",
+    "trackMissing": "Track missing",
+    "serverFull": "Server full",
+    "passwordPlaceholder": "Server password",
+    "join": "Join",
+    "openInCm": "Book in Content Manager",
+    "joining": "Starting…",
+    "joined": "Content Manager is starting the game."
+  },
   "errors": {
     "acNotConfigured": "Assetto Corsa folder is not configured.",
     "gameFolderNotScanned": "The game folder has not been scanned yet.",
@@ -1470,6 +1507,10 @@
     "cmNotConfigured": "Content Manager is not configured.",
     "carNotInstalled": "The chosen car is not installed in Assetto Corsa.",
     "trackNotInstalled": "The chosen track is not installed in Assetto Corsa.",
+    "steamNotRunning": "Steam isn't running. Start Steam and sign in, then try again.",
+    "steamNotSignedIn": "No Steam account is signed in. Start Steam and sign in, then try again.",
+    "lobbyUnavailable": "The server list is unavailable right now. Try again in a moment.",
+    "serverUnreachable": "This server isn't answering. It may be restarting, or gone.",
     "cmUnreadable": "This Content Manager preset could not be read.",
     "cmNotAGrid": "This preset draws its opponents instead of listing them.",
     "cmUnsupportedMode": "Pit Box has no equivalent for this Content Manager mode.",

@@ -1021,7 +1021,7 @@ L'application compte une douzaine de destinations. Elles se répartissent en tro
 
 | Territoire | Ce qu'il porte | Contenu |
 | --- | --- | --- |
-| **Rail** (à gauche, `NavRail.svelte`) | *ce qui n'appartient pas à la session* | l'entrée `Session`, puis Apps, Compléments, Classement, Fichiers ; en pied Réglages, **Ouvrir CM**, À propos |
+| **Rail** (à gauche, `NavRail.svelte`) | *ce qui n'appartient pas à la session* | l'entrée `Session`, puis `Online` ; sous le filet Apps, Compléments, Classement, Fichiers ; en pied Réglages, **Ouvrir CM**, À propos |
 | **Barre de titre** (en haut, `TitleBar.svelte`) | *la forme de la fenêtre* | réduire, agrandir, fermer, Big Picture — **et l'identité de l'app** : logo, nom, sous-titre |
 | **Colonne de session** (`SessionColumn.svelte`) | *la session elle-même* | circuit, voiture, livrée, pilote, performance, type de session, lancement — **seulement dans la zone session** |
 
@@ -1053,14 +1053,22 @@ Avant ce découpage, la colonne de session faisait office de navigation en plus 
 
 **Règle d'architecture : le rail porte les lieux hors session, les onglets vivent à l'intérieur d'un lieu, aucun lieu n'a deux niveaux d'onglets.** C'est elle qui décide de tout le reste. Les deux inventaires restants (compléments, apps) portent déjà leurs propres facettes ou onglets : les ranger sous un onglet supplémentaire produirait deux rangées horizontales de forme identique, sans que rien n'indique laquelle commande l'autre. Ils sont donc des entrées de rail à part entière. Les outils de Classement et de Fichiers, à l'inverse, n'ont **aucune** sous-rubrique — c'est la seule raison pour laquelle ces regroupements-là sont légitimes et l'autre non (§7.2quater).
 
-**Session, seule au-dessus du filet** ; puis Apps · Compléments · Classement · Fichiers ;
-et en pied Réglages · Ouvrir CM · À propos. Aucun intitulé de rang : avec une
-seule entrée au-dessus, il redirait ce que le filet sépare déjà.
+**Session et Online au-dessus du filet** ; puis Apps · Compléments · Classement · Fichiers ;
+et en pied Réglages · Ouvrir CM · À propos. Aucun intitulé de rang : le filet
+sépare déjà ce qui fait rouler de ce qui s'installe et s'outille.
+
+**Online n'est pas dans la zone session, et c'est voulu.** C'est l'autre façon
+de rouler (`SPEC-play-online.md`), d'où sa place au-dessus du filet, à côté de
+Session. Mais la colonne de session y est masquée : on ne compose pas une
+session sur un serveur, on y choisit une voiture parmi celles qu'il propose, et
+c'est le panneau de détail du serveur qui le fait — avec son propre bouton
+Rejoindre. Afficher la colonne y proposerait un circuit et un lancement qui ne
+seraient pas ceux du serveur.
 
 **La colonne de session est une zone, pas du mobilier permanent.** Elle n'est
 affichée que sur les écrans qui choisissent ce qu'on lance — Voitures,
 Circuits, Pilote, et l'écran de réglages de la session — et sa largeur est
-rendue au contenu partout ailleurs (Apps, Compléments, Classement, Fichiers, Réglages, À
+rendue au contenu partout ailleurs (Online, Apps, Compléments, Classement, Fichiers, Réglages, À
 propos). **Sans glissement** : un panneau de 328 px qui entre et sort à chaque
 clic de rail devient pénible en une soirée, l'apparition est instantanée. Elle
 est masquée et non démontée — revenir à une bibliothèque ne recharge pas le

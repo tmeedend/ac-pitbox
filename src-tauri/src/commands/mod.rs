@@ -25,6 +25,7 @@ pub mod maintenance;
 pub mod media;
 pub mod music;
 pub mod nationalities;
+pub mod online;
 pub mod others;
 pub mod packs;
 pub mod preview;

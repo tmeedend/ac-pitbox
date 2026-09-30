@@ -18,7 +18,8 @@
     "alertLabel": "éléments à vérifier",
     "openCmShort": "Content Manager",
     "brands": "Marques",
-    "gamefolder": "Dossier du jeu"
+    "gamefolder": "Dossier du jeu",
+    "online": "Online"
   },
   "titlebar": {
     "bigPicture": "Mode Big Picture (plein écran)",
@@ -1461,6 +1462,42 @@
     "discord": "Discord",
     "discordSub": "Le salon de la communauté"
   },
+  "online": {
+    "searchPlaceholder": "Serveur, circuit, voiture…",
+    "filterNotFull": "Pas plein",
+    "filterNoPassword": "Sans mot de passe",
+    "filterNotEmpty": "Pas vide",
+    "filterJoinable": "Joignable",
+    "count": "{count} serveurs",
+    "refresh": "Actualiser",
+    "empty": "Aucun serveur ne correspond à ces filtres.",
+    "ready": "Prêt",
+    "missing": "Contenu manquant",
+    "password": "Mot de passe",
+    "csp": "CSP {build}",
+    "more": "+{count}",
+    "minutes": "{n} min",
+    "hours": "{n} h",
+    "session": {
+      "booking": "Réservation",
+      "practice": "Essais",
+      "qualify": "Qualif",
+      "race": "Course"
+    },
+    "cars": "Voitures",
+    "drivers": "Pilotes",
+    "noDrivers": "Personne sur le serveur pour l'instant.",
+    "slots": "{free} libres / {total}",
+    "notInstalled": "Non installée",
+    "pickCar": "Choisir une voiture",
+    "trackMissing": "Circuit manquant",
+    "serverFull": "Serveur plein",
+    "passwordPlaceholder": "Mot de passe du serveur",
+    "join": "Rejoindre",
+    "openInCm": "Réserver dans Content Manager",
+    "joining": "Lancement…",
+    "joined": "Content Manager lance le jeu."
+  },
   "errors": {
     "acNotConfigured": "dossier AC non configuré.",
     "gameFolderNotScanned": "Le dossier du jeu n'a pas encore été analysé.",
@@ -1470,6 +1507,10 @@
     "cmNotConfigured": "Content Manager non configuré.",
     "carNotInstalled": "La voiture choisie n'est pas installée dans Assetto Corsa.",
     "trackNotInstalled": "Le circuit choisi n'est pas installé dans Assetto Corsa.",
+    "steamNotRunning": "Steam n'est pas lancé. Lancez Steam et connectez-vous, puis réessayez.",
+    "steamNotSignedIn": "Aucun compte Steam n'est connecté. Lancez Steam et connectez-vous, puis réessayez.",
+    "lobbyUnavailable": "La liste des serveurs est indisponible pour le moment. Réessayez dans un instant.",
+    "serverUnreachable": "Ce serveur ne répond pas. Il redémarre peut-être, ou n'existe plus.",
     "cmUnreadable": "Ce preset Content Manager n'a pas pu être lu.",
     "cmNotAGrid": "Ce preset tire ses adversaires au lieu de les énumérer.",
     "cmUnsupportedMode": "Pit Box n'a pas d'équivalent pour ce mode de Content Manager.",

@@ -387,6 +387,8 @@ src-tauri/src/          Backend Rust — un module par domaine
                         mod se greffe, ce qu'il fait, et ce que l'utilisateur a
                         saisi dessus (note, nom repris à la main)
   launch.rs quickdrive.rs weather.rs   Lancement de session via CM
+  online/               Serveurs multijoueur : lobby Kunos, détail d'un
+                        serveur, rejoindre via CM (SPEC-play-online.md)
   rules.rs harmonize.rs                Moteur de tags
   maintenance.rs export.rs             Outils
   gamestate/            L'écran Dossier du jeu : scan du disque croisé avec la
@@ -410,6 +412,7 @@ src/lib/                Modules : un dossier par domaine, comme le backend
   wiki/                 L'onglet Wikipédia (WIKI§7)
   preview3d/            L'aperçu 3D des voitures (PREVIEW§7)
   launch/               La session : plateau, sessions et grilles enregistrées
+  online/               La page Online : pont, filtres et tri des serveurs
   gridthumbs/           Les vignettes de la grille (GRILLE§5), éteintes
   driver/               Le pilote : corps, tenues, surcharges
   inventory/            Les compléments : apps, autres mods, sous-éléments
@@ -494,6 +497,7 @@ circuit, ligne pilote) qui dit lequel est ouvert (§7.2).
 | `apps` | `inventory/Apps.svelte` | écran à part entière depuis la refonte (§3.2) |
 | `others` | `inventory/Inventory.svelte` | **l'inventaire des compléments** — cinq sources en une liste |
 | `race` | `launch/Launch.svelte` | |
+| `online` | `online/Online.svelte` | hors zone session : la colonne est masquée, le panneau du serveur choisit la voiture et rejoint (§7.2) |
 | `rules` / `brands` / `categories` / `countries` | `workshop/Workshop.svelte` | entrée **Classement**, quatre onglets — l'onglet EST la section, pas un état local |
 | `import` / `profiles` / `maintenance` / `gamefolder` | `workshop/Workshop.svelte` | entrée **Fichiers**, même écran, mêmes règles (`tabGroupOf` de `nav.svelte.ts`) ; l'onglet Dossier du jeu est `gamestate/GameFolder.svelte` |
 | `settings` / `about` | `settings/Settings` / `settings/About` | |
@@ -855,6 +859,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Corrections par mod** | à faire : marque et classe d'un mod précis (pays et fiche technique : livrés avec la fiche) | `docs/CHANTIERS.md` |
 | **Règles de tags divergentes** | deux fichiers décrivent la même ontologie, un seul est chargé | `docs/CHANTIERS.md` |
 | **Dossier du jeu** | lot 1 livré (lecture seule) ; reste le lot 2, les tailles | `docs/SPEC-etat-dossier.md`, `docs/CHANTIERS.md` |
+| **Page Online** | lot 1 livré (lister, rejoindre via `race/online`) ; restent noms et vignettes, favoris/récents/amis, niveaux de préparation | `docs/SPEC-play-online.md`, `docs/online-join-research.md` |
 | **Refactorings reportés** | quatre repérés et chiffrés (actions de la fiche, aperçu 3D, `importer.rs`, curseur de régime) | `docs/CHANTIERS.md` |
 
 ## Fin de tâche — dans cet ordre

@@ -36,6 +36,14 @@ pub const CM_NOT_CONFIGURED: &str = "errors.cmNotConfigured";
 // they did not just pick on screen.
 pub const CAR_NOT_INSTALLED: &str = "errors.carNotInstalled";
 pub const TRACK_NOT_INSTALLED: &str = "errors.trackNotInstalled";
+// Online (docs/SPEC-play-online.md). The lobby and `/JSON` ask for the signed-in
+// Steam account, and the game needs Steam to play online: its absence is said,
+// not worked around. The lobby and a server are told apart because the user's
+// next move differs - retry later, or pick another server.
+pub const STEAM_NOT_RUNNING: &str = "errors.steamNotRunning";
+pub const STEAM_NOT_SIGNED_IN: &str = "errors.steamNotSignedIn";
+pub const LOBBY_UNAVAILABLE: &str = "errors.lobbyUnavailable";
+pub const SERVER_UNREACHABLE: &str = "errors.serverUnreachable";
 // Presets Content Manager lus comme sessions enregistrées (SESSION§3.6). Un
 // preset illisible ou d'un mode sans équivalent Pit Box est **nommé** dans la
 // liste avec sa raison, jamais masqué : qui a dix presets et en voit huit se
