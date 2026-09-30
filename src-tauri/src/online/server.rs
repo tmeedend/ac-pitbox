@@ -153,9 +153,9 @@ pub fn fetch_detail(ip: &str, http_port: u16, steam_id: u64, installed: &Install
     let mut info = get_json(ip, http_port, "/INFO")?;
     // The address we reached wins over the one the server reports about
     // itself: a vanilla server's `/INFO` leaves `ip` empty (measured), and
-    // `parse_server` would drop it as unjoinable.
+    // `parse_info` would drop it as unjoinable.
     info["ip"] = Value::from(ip);
-    let mut summary = lobby::parse_server(&info).ok_or_else(|| {
+    let mut summary = lobby::parse_info(&info).ok_or_else(|| {
         log::warn!("online: {ip}:{http_port}/INFO lacks ports or track");
         crate::errors::SERVER_UNREACHABLE.to_string()
     })?;

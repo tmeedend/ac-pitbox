@@ -109,7 +109,8 @@
     <span class="players">{live.clients} / {live.max_clients}</span>
     {#if live.session}<span>{t(`online.session.${live.session}`)}</span>{/if}
     {#if live.track.csp_min_build}<span>{t("online.csp", { build: live.track.csp_min_build })}</span>{/if}
-    {#if live.country}<span>{live.country}</span>{/if}
+    <!-- The lobby geolocates servers; a server's own /INFO often cannot. -->
+    {#if live.country ?? server.country}<span>{live.country ?? server.country}</span>{/if}
     <span class="addr">{live.ip}:{live.http_port}</span>
   </div>
 

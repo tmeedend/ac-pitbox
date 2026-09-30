@@ -35,9 +35,10 @@ de reprendre. En cas d'écart, la spec fait foi.
         réinjecte après CM, comme le skin hors ligne.
       - Le lobby Kunos exige `User-Agent: Assetto Corsa Launcher` **et** un
         SteamID réel (sinon 302, ou « UNKNOWN FAILURE » en 200).
-      - `session` est un **type** de session, pas un index ; le lobby écrit
-        ses nombres en chaînes ; `track` porte le build CSP minimal
-        (`csp/3465/../E/../id-layout`).
+      - `session` est le **type** de session dans le lobby, mais son
+        **index** dans `sessiontypes` pour `/INFO` (même serveur, même
+        minute : `1` et `0`) ; le lobby écrit ses nombres en chaînes ;
+        `track` porte le build CSP minimal (`csp/3465/../E/../id-layout`).
       - Le skin est imposé par le serveur : ne pas en proposer un choix.
       **Pas vérifié** : un serveur à mot de passe et un serveur en booking,
       faute d'échantillon au moment du lot 1 ; un AssettoServer (BSG, LA

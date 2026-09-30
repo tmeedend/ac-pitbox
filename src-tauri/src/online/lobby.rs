@@ -5,8 +5,11 @@
 //! (`docs/online-join-research.md`), and each has a place below:
 //! - **numbers come as strings in the lobby** (`"sessiontypes":["1","3"]`) and
 //!   as numbers in `/INFO` — hence the lenient readers rather than a derive;
-//! - **`session` is the active session TYPE**, not an index into
-//!   `sessiontypes` (CM: `IsActive = x == information.Session`);
+//! - **`session` does not mean the same thing in both**: the lobby writes the
+//!   active session's TYPE (`1` = practice), `/INFO` its INDEX in
+//!   `sessiontypes` (`0` = the first one). Measured on three servers, vanilla
+//!   and AssettoServer alike, the same minute: lobby `1`, `/INFO` `0`, for a
+//!   weekend of practice only. Hence `parse_server` and `parse_info`;
 //! - **the track id carries the CSP requirement**:
 //!   `csp/3465/../E/../la_canyons-freeroam`.
 
@@ -159,8 +162,18 @@ fn clean_name(name: &str) -> String {
     }
 }
 
-/// Reads one server from a lobby entry or an `/INFO` answer. `None` when it
-/// lacks what a join needs (address, ports, track).
+/// Reads one server's own `/INFO` answer: the lobby's format, but `session`
+/// is an index into `sessiontypes` (module docs).
+pub fn parse_info(info: &Value) -> Option<ServerSummary> {
+    let mut server = parse_server(info)?;
+    server.session = number(&info["session"])
+        .and_then(|i| usize::try_from(i).ok())
+        .and_then(|i| server.sessions.get(i).copied());
+    Some(server)
+}
+
+/// Reads one server from a lobby entry, where `session` is a type. `None`
+/// when it lacks what a join needs (address, ports, track).
 pub fn parse_server(entry: &Value) -> Option<ServerSummary> {
     let ip = text(&entry["ip"]).filter(|ip| !ip.is_empty())?;
     let http_port = port(&entry["cport"])?;
@@ -172,7 +185,12 @@ pub fn parse_server(entry: &Value) -> Option<ServerSummary> {
         port: race_port,
         http_port,
         name: clean_name(entry["name"].as_str().unwrap_or_default()),
-        country: list("country").get(1).and_then(text).filter(|c| !c.is_empty()),
+        // A server's own `/INFO` may say `["na","na"]` where the lobby, which
+        // geolocates it, says `FR`: "na" is no country.
+        country: list("country")
+            .get(1)
+            .and_then(text)
+            .filter(|c| !c.is_empty() && !c.eq_ignore_ascii_case("na")),
         clients: number(&entry["clients"]).unwrap_or(0) as u32,
         max_clients: number(&entry["maxclients"]).unwrap_or(0) as u32,
         password: entry["pass"].as_bool().unwrap_or(false),
@@ -302,18 +320,31 @@ mod tests {
         assert_eq!(server.cars.len(), 2);
     }
 
-    /// Rule: `/INFO` writes the same fields as real numbers — and a race
-    /// weekend's active session is the type it names, whatever its position.
+    /// Rule: `/INFO` writes real numbers, and its `session` is an INDEX — the
+    /// same server answered `0` there and `1` in the lobby, practice both
+    /// times. Read as a type, `0` showed "Booking" in the detail panel.
     #[test]
-    fn an_info_answer_is_read_like_the_lobby() {
+    fn an_info_session_is_an_index() {
         let info = r#"{"ip":"194.35.12.49","port":9600,"cport":8081,"tport":9600,"name":"x","clients":16,
-            "maxclients":75,"track":"csp/2651/../la_canyons-freeroam","cars":[],"session":3,
-            "sessiontypes":[1,2,3],"timeleft":524,"country":["Germany","DE"],"pass":true,"pickup":false}"#;
-        let server = parse_server(&serde_json::from_str(info).unwrap()).expect("complete answer");
-        assert_eq!(server.session, Some(SessionKind::Race), "type 3, third of three");
-        assert_eq!(server.sessions.len(), 3);
+            "maxclients":75,"track":"csp/2651/../la_canyons-freeroam","cars":[],"session":0,
+            "sessiontypes":[1],"timeleft":524,"country":["Germany","DE"],"pass":true,"pickup":false}"#;
+        let server = parse_info(&serde_json::from_str(info).unwrap()).expect("complete answer");
+        assert_eq!(server.session, Some(SessionKind::Practice), "index 0 of [practice]");
         assert!(server.password && server.booking, "flags read");
         assert_eq!(server.track.csp_min_build, Some(2651));
+
+        let weekend = r#"{"ip":"1.2.3.4","cport":8081,"tport":9600,"track":"monza",
+            "session":2,"sessiontypes":[1,2,3]}"#;
+        let server = parse_info(&serde_json::from_str(weekend).unwrap()).unwrap();
+        assert_eq!(server.session, Some(SessionKind::Race), "third of three");
+    }
+
+    /// Rule: "na" is no country — measured in a server's own `/INFO`, where
+    /// the lobby said FR for the same server.
+    #[test]
+    fn na_is_no_country() {
+        let info = r#"{"ip":"1.2.3.4","cport":8001,"tport":9001,"track":"monza","country":["na","na"]}"#;
+        assert_eq!(parse_info(&serde_json::from_str(info).unwrap()).unwrap().country, None);
     }
 
     /// Rule: an entry nobody can join is left out rather than shown broken.
