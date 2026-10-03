@@ -208,8 +208,22 @@ chaque voiture porte la photo du skin que le serveur imposera. Ce que la
 bibliothèque n'a pas garde son identifiant. Les voitures sans aucun slot
 joueur (le trafic IA d'un AssettoServer) ne sont pas proposées.
 
-**Restent**, dans l'ordre où ils servent les cas d'usage : Favoris, Récents
-et Amis (cas 1) ; les niveaux de préparation et le bouton qui prépare tout
+**Lot 3 — Favoris et Récents (livré).** Trois onglets au-dessus de la liste :
+`Tous`, `Favoris`, `Récents`, avec leur décompte ; l'onglet ouvert est
+mémorisé. L'étoile du panneau met un serveur en favori ; chaque Rejoindre
+réussi l'ajoute aux récents avec la voiture utilisée (vingt gardés, un par
+serveur, le plus récent en tête), et rouvrir ce serveur présélectionne cette
+voiture si elle est encore prenable — rejoindre à l'identique est un clic.
+Les deux listes gardent une **copie** du serveur tel qu'il était : elles
+s'affichent tout de suite, sans attendre le lobby, et survivent à sa panne ou
+à un serveur qu'il ne liste plus ; l'entrée fraîche du lobby remplace la copie
+dès qu'elle existe. Les quatre bascules ne s'appliquent qu'à `Tous` : un
+serveur à soi reste listé plein, verrouillé ou vide, puisque c'est justement
+là qu'on le cherche ; la recherche s'applique partout. Stockage :
+`online.json` d'`app_config_dir`, écrit côté Rust et compris dans la
+sauvegarde de démarrage.
+
+**Restent**, dans l'ordre où ils servent les cas d'usage : Amis (cas 1) ; les niveaux de préparation et le bouton qui prépare tout
 (cas 2) ; la frise des sessions, les conditions et les règles du détail ;
 coller un lien de connexion ; ping, pays en drapeaux, tokens de filtre.
 - [x] **Rejoindre sans une couche** : décidé, voir « Couches et versions ».

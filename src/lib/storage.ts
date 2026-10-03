@@ -98,4 +98,6 @@ export const StorageKey = {
   /** The Online page's toggles (SPEC-play-online.md, "Filtres de base"), as
    * `online/filters.ts` stores them. Born in `ui_prefs.json`. */
   onlineFilters: `${PREFIX}.online.filters`,
+  /** The Online page's open tab (all, favourites, recent). Born in `ui_prefs.json`. */
+  onlineTab: `${PREFIX}.online.tab`,
 } as const;

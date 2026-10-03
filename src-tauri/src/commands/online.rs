@@ -54,6 +54,23 @@ pub async fn online_server_detail(
     .map_err(|e| e.to_string())?
 }
 
+fn config_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    app.path().app_config_dir().map_err(|e| e.to_string())
+}
+
+/// Favourites and recent joins (`online/store.rs`); an empty object when
+/// there are none yet.
+#[tauri::command]
+pub fn get_online_store(app: AppHandle) -> Result<serde_json::Value, String> {
+    Ok(online::store::load(&config_dir(&app)?))
+}
+
+/// Writes the whole store, synchronously (golden rule 6).
+#[tauri::command]
+pub fn save_online_store(app: AppHandle, store: serde_json::Value) -> Result<(), String> {
+    online::store::save(&config_dir(&app)?, &store)
+}
+
 /// Joins a server with the chosen car, through Content Manager.
 #[tauri::command]
 pub async fn online_join(app: AppHandle, request: online::join::JoinRequest) -> Result<(), String> {

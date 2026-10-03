@@ -1463,6 +1463,13 @@
     "discordSub": "Le salon de la communauté"
   },
   "online": {
+    "tabAll": "Tous",
+    "tabFavourites": "Favoris",
+    "tabRecent": "Récents",
+    "emptyFavourites": "Aucun serveur favori pour l'instant.",
+    "emptyRecent": "Aucun serveur rejoint pour l'instant.",
+    "favourite": "Ajouter aux favoris",
+    "unfavourite": "Retirer des favoris",
     "searchPlaceholder": "Serveur, circuit, voiture…",
     "filterNotFull": "Pas plein",
     "filterNoPassword": "Sans mot de passe",
@@ -1810,7 +1817,8 @@
   "prefs": {
     "writeFailedTitle": "Vos réglages ne sont pas enregistrés",
     "writeFailedBody": "Pit Box n'arrive pas à écrire ses préférences sur le disque. Ce que vous réglez reste actif jusqu'à la fermeture, puis sera perdu — favoris, tenues de pilote, filtres et vues comprises.",
-    "writeFailedSessionBody": "Pit Box n'arrive pas à écrire les réglages de session sur le disque. Ils restent actifs jusqu'à la fermeture, puis seront perdus — voiture et circuit choisis, réglages de chaque type de session et plateau d'adversaires compris."
+    "writeFailedSessionBody": "Pit Box n'arrive pas à écrire les réglages de session sur le disque. Ils restent actifs jusqu'à la fermeture, puis seront perdus — voiture et circuit choisis, réglages de chaque type de session et plateau d'adversaires compris.",
+    "writeFailedOnlineBody": "Pit Box n'arrive pas à écrire vos serveurs favoris et récents sur le disque. Ils restent jusqu'à la fermeture, puis seront perdus."
   },
   "families": {
     "street": "Route",

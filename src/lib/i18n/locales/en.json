@@ -1463,6 +1463,13 @@
     "discordSub": "Chat with the community"
   },
   "online": {
+    "tabAll": "All",
+    "tabFavourites": "Favourites",
+    "tabRecent": "Recent",
+    "emptyFavourites": "No favourite server yet.",
+    "emptyRecent": "No server joined yet.",
+    "favourite": "Add to favourites",
+    "unfavourite": "Remove from favourites",
     "searchPlaceholder": "Server, track, car…",
     "filterNotFull": "Not full",
     "filterNoPassword": "No password",
@@ -1810,7 +1817,8 @@
   "prefs": {
     "writeFailedTitle": "Your settings are not being saved",
     "writeFailedBody": "Pit Box cannot write its preferences to disk. What you set stays active until you close the app, then it is lost — favourites, driver outfits, filters and views included.",
-    "writeFailedSessionBody": "Pit Box cannot write the session settings to disk. They stay active until you close the app, then they are lost — the chosen car and track, the settings of each session type and the opponents grid included."
+    "writeFailedSessionBody": "Pit Box cannot write the session settings to disk. They stay active until you close the app, then they are lost — the chosen car and track, the settings of each session type and the opponents grid included.",
+    "writeFailedOnlineBody": "Pit Box cannot write your favourite servers and recent joins to disk. They stay until you close the app, then they are lost."
   },
   "families": {
     "street": "Street",

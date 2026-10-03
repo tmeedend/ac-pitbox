@@ -19,6 +19,7 @@ pub mod lobby;
 mod looks;
 pub mod server;
 mod steam;
+pub mod store;
 
 pub use installed::Installed;
 pub use looks::Looks;

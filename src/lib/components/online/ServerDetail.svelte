@@ -10,14 +10,21 @@
   import { errorText } from "$lib/errors";
   import { joinServer, serverDetail, serverKey, type CarSlots, type ServerDetail, type ServerSummary } from "$lib/online/online";
   import { carName, layoutLook, trackTitle, type Looks } from "$lib/online/looks";
+  import { isFavourite } from "$lib/online/lists";
+  import { onlineStore, recordRecentJoin, toggleFavouriteServer } from "$lib/online/store.svelte";
   import { previewSrc } from "$lib/library/library";
 
   interface Props {
     server: ServerSummary;
     looks: Looks;
+    /** The car last joined with on this server: picked again when it can
+     * still be taken — "rejoindre à l'identique est un clic". */
+    preferredCar: string | null;
     onclose: () => void;
   }
-  let { server, looks, onclose }: Props = $props();
+  let { server, looks, preferredCar, onclose }: Props = $props();
+
+  const favourite = $derived(isFavourite(onlineStore(), serverKey(server)));
 
   let detail = $state<ServerDetail | null>(null);
   let loading = $state(false);
@@ -55,10 +62,12 @@
       const d = await serverDetail(ip, http_port);
       if (key !== serverKey(server)) return; // another server was picked meanwhile
       detail = d;
-      // A single car that can be taken is the obvious choice; among several,
-      // the pick is the user's.
+      // The car of the last join comes first; otherwise a single car that can
+      // be taken is the obvious choice; among several, the pick is the user's.
       const takeable = d.cars.filter(canTake);
-      if (takeable.length === 1) car = takeable[0].id;
+      const again = takeable.find((c) => c.id.toLowerCase() === preferredCar?.toLowerCase());
+      if (again) car = again.id;
+      else if (takeable.length === 1) car = takeable[0].id;
     } catch (e) {
       if (key === serverKey(server)) error = errorText(e);
     } finally {
@@ -88,9 +97,13 @@
     joining = true;
     joinError = "";
     joined = false;
+    const chosen = live.booking ? "" : (car ?? "");
     try {
-      await joinServer(live, live.booking ? "" : (car ?? ""), password || null);
+      await joinServer(live, chosen, password || null);
       joined = true;
+      // The list's entry, not `live`: its name is the lobby's cleaned one,
+      // and its country is the lobby's geolocation (`/INFO` often has none).
+      recordRecentJoin(server, chosen);
     } catch (e) {
       joinError = errorText(e);
     } finally {
@@ -115,6 +128,15 @@
         {#if live.track.layout}<span class="sub">{live.track.layout}</span>{/if}
       </p>
     </div>
+    <button
+      class="fav"
+      class:on={favourite}
+      type="button"
+      title={favourite ? t("online.unfavourite") : t("online.favourite")}
+      aria-label={favourite ? t("online.unfavourite") : t("online.favourite")}
+      aria-pressed={favourite}
+      onclick={() => toggleFavouriteServer(server)}>{favourite ? "★" : "☆"}</button
+    >
     <button class="close" type="button" title={t("common.close")} aria-label={t("common.close")} onclick={onclose}>✕</button>
   </header>
 
@@ -267,6 +289,18 @@
   }
   .close:hover {
     color: var(--txt);
+  }
+  .fav {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 16px;
+    line-height: 1;
+    padding: 0 4px;
+  }
+  .fav:hover,
+  .fav.on {
+    color: var(--yellow);
   }
   .facts {
     display: flex;

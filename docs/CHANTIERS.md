@@ -25,8 +25,8 @@ de reprendre. En cas d'écart, la spec fait foi.
 
 ---
 
-- [ ] **Page Online — lots 1 et 2 livrés (lister, rejoindre, noms et
-      vignettes), la suite reste.**
+- [ ] **Page Online — lots 1 à 3 livrés (lister, rejoindre, noms et
+      vignettes, favoris et récents), la suite reste.**
       Ce qui est fait et ce qui reste : `SPEC-play-online.md`, section Lots.
       **Pièges déjà payés** (`online-join-research.md`), à relire avant de
       toucher au lancement :

@@ -49,6 +49,9 @@ const BACKED_UP_FILES: &[&str] = &[
     // Which logo each brand shows (TAXO§4, §9). The files of his it names
     // live in `logos/`, kept as long as they are named.
     "brand_logos.json",
+    // Favourite servers and recent joins (`online/store.rs`): picked by hand,
+    // and nowhere else to find them again.
+    "online.json",
     // The pre-overlay rules file, while it exists (not yet migrated).
     "tag-rules.json",
 ];

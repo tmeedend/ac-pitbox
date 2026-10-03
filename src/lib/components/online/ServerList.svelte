@@ -12,10 +12,16 @@
   interface Props {
     servers: ServerSummary[];
     looks: Looks;
+    favourites: ServerSummary[];
+    /** Per server key, the car last joined with — shown in place of the
+     * server's cars on the Recent tab: it is the one that will be picked. */
+    lastCars: Record<string, string>;
     selected: string | null;
     onselect: (server: ServerSummary) => void;
   }
-  let { servers, looks, selected, onselect }: Props = $props();
+  let { servers, looks, favourites, lastCars, selected, onselect }: Props = $props();
+
+  const favouriteKeys = $derived(new Set(favourites.map(serverKey)));
 
   const ROW_H = 46;
   const OVERSCAN = 8;
@@ -67,7 +73,10 @@
             </span>
             <span class="layout mono">{s.track.layout ? `${s.track.id} · ${s.track.layout}` : s.track.id}</span>
           </span>
-          <span class="name" title={s.name}>{s.name}</span>
+          <span class="name" title={s.name}>
+            {#if favouriteKeys.has(key)}<span class="star" aria-label={t("online.favourite")}>★</span>{/if}
+            {s.name}
+          </span>
           <span class="session">
             {#if s.session}
               <span class="badge" class:race={s.session === "race"}>{t(`online.session.${s.session}`)}</span>
@@ -77,12 +86,18 @@
           <span class="players mono" class:full={s.clients >= s.max_clients} class:empty={s.clients === 0}>
             {s.clients} / {s.max_clients}
           </span>
-          <span class="cars">
-            {cars
-              .slice(0, CARS_SHOWN)
-              .map((c) => carName(looks, c))
-              .join(" · ")}
-            {#if cars.length > CARS_SHOWN}<span class="more">{t("online.more", { count: cars.length - CARS_SHOWN })}</span>{/if}
+          <span class="cars" class:last={!!lastCars[key]}>
+            {#if lastCars[key]}
+              {carName(looks, lastCars[key])}
+            {:else}
+              {cars
+                .slice(0, CARS_SHOWN)
+                .map((c) => carName(looks, c))
+                .join(" · ")}
+              {#if cars.length > CARS_SHOWN}
+                <span class="more">{t("online.more", { count: cars.length - CARS_SHOWN })}</span>
+              {/if}
+            {/if}
           </span>
           <span class="flags">
             {#if s.password}
@@ -218,6 +233,13 @@
   .more {
     color: var(--faint);
     margin-left: 4px;
+  }
+  .cars.last {
+    color: var(--txt2);
+  }
+  .star {
+    color: var(--yellow);
+    margin-right: 4px;
   }
   .flags {
     display: flex;

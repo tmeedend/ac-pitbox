@@ -12,7 +12,8 @@
   // périphérique) : ce n'est pas une information de passage, c'est une perte
   // de données en cours.
   //
-  // Three files can fail this way: `ui_prefs.json`, and the two of the
+  // Four files can fail this way: `ui_prefs.json`, `online.json` (favourite
+  // servers and recent joins), and the two of the
   // session — `session.json` (the chosen car and track) and `launch_state.json`
   // (the session screen's settings). One notification for all — the same loss,
   // the same title — with a sentence for the preferences, one for the session,
@@ -22,11 +23,14 @@
   import { prefsWriteFailure } from "$lib/uiPrefs.svelte";
   import { launchStateWriteFailure } from "$lib/launch/launchState.svelte";
   import { sessionPicksWriteFailure } from "$lib/shell/nav.svelte";
+  import { onlineStoreWriteFailure } from "$lib/online/store.svelte";
 
   let dismissed = $state(false);
   const prefs = $derived(prefsWriteFailure());
   const session = $derived([sessionPicksWriteFailure(), launchStateWriteFailure()].filter((f) => f.since !== null));
-  const visible = $derived((prefs.since !== null || session.length > 0) && !dismissed);
+  // `online.json`: favourite servers and recent joins (SPEC-play-online.md).
+  const online = $derived(onlineStoreWriteFailure());
+  const visible = $derived((prefs.since !== null || session.length > 0 || online.since !== null) && !dismissed);
 </script>
 
 {#if visible}
@@ -38,6 +42,10 @@
     {#if session.length}
       <p class="body">{t("prefs.writeFailedSessionBody")}</p>
       {#each session as f}<p class="why mono">{f.reason}</p>{/each}
+    {/if}
+    {#if online.since !== null}
+      <p class="body">{t("prefs.writeFailedOnlineBody")}</p>
+      <p class="why mono">{online.reason}</p>
     {/if}
   </Toast>
 {/if}
