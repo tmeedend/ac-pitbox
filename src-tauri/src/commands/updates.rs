@@ -82,34 +82,47 @@ pub async fn download_mod_update(
 ) -> Result<crate::cup::DownloadOutcome, String> {
     let _game_write = crate::gamestate::GameWrite::begin();
     tauri::async_runtime::spawn_blocking(move || {
-        let cancel = {
-            let control = app.state::<UpdateDownloadControl>();
-            control.0.store(false, Ordering::Relaxed);
-            control.0.clone()
-        };
-        // At most ten events a second, like the import (§4.2bis): a fast
-        // connection delivers thousands of chunks, and each one would be an
-        // IPC message. The last chunk always goes out, so the bar ends full.
-        let mut last_emit: Option<Instant> = None;
-        let mut on_progress = |received: u64, total: Option<u64>| {
-            let due = last_emit.is_none_or(|t| t.elapsed() >= Duration::from_millis(100));
-            if due || total == Some(received) {
-                last_emit = Some(Instant::now());
-                let progress = UpdateProgress {
-                    id: id.clone(),
-                    received,
-                    total,
-                };
-                if let Err(e) = app.emit("update:progress", progress) {
-                    log::warn!("update:progress not delivered — {e}");
-                }
-            }
-            !cancel.load(Ordering::Relaxed)
-        };
-        crate::cup::download_update(&kind, &id, &std::env::temp_dir(), &mut on_progress)
+        download_reporting(&app, &id, |on_progress| {
+            crate::cup::download_update(&kind, &id, &std::env::temp_dir(), on_progress)
+        })
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// Runs one download, reporting it as `update:progress` for mod `id` and
+/// stoppable by `cancel_mod_update_download` — the progress and the cancel
+/// the update toast shows, whatever the download is for.
+pub(crate) fn download_reporting(
+    app: &AppHandle,
+    id: &str,
+    download: impl FnOnce(&mut dyn FnMut(u64, Option<u64>) -> bool) -> Result<crate::cup::DownloadOutcome, String>,
+) -> Result<crate::cup::DownloadOutcome, String> {
+    let cancel = {
+        let control = app.state::<UpdateDownloadControl>();
+        control.0.store(false, Ordering::Relaxed);
+        control.0.clone()
+    };
+    // At most ten events a second, like the import (§4.2bis): a fast
+    // connection delivers thousands of chunks, and each one would be an
+    // IPC message. The last chunk always goes out, so the bar ends full.
+    let mut last_emit: Option<Instant> = None;
+    let mut on_progress = |received: u64, total: Option<u64>| {
+        let due = last_emit.is_none_or(|t| t.elapsed() >= Duration::from_millis(100));
+        if due || total == Some(received) {
+            last_emit = Some(Instant::now());
+            let progress = UpdateProgress {
+                id: id.to_string(),
+                received,
+                total,
+            };
+            if let Err(e) = app.emit("update:progress", progress) {
+                log::warn!("update:progress not delivered — {e}");
+            }
+        }
+        !cancel.load(Ordering::Relaxed)
+    };
+    download(&mut on_progress)
 }
 
 /// Stops the download in progress; the partial file is removed.

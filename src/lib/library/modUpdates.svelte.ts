@@ -252,14 +252,19 @@ export async function installUpdate(u: ModUpdate): Promise<void> {
  * archive is **returned, not opened** — the caller decides whether to open
  * it. Throws what the download or the import threw. The caller checks
  * `canStartUpdate` first.
+ *
+ * `download` fetches the archive; by default from the registry. Another
+ * source goes through the same progress, cancel and import.
  */
 export async function downloadAndImport(
   u: ModUpdate,
+  download: () => Promise<DownloadOutcome> = () =>
+    invoke<DownloadOutcome>("download_mod_update", { kind: u.kind, id: u.id }),
 ): Promise<{ status: "imported" } | { status: "browser"; url: string } | { status: "cancelled" }> {
   modUpdates.cancelling = false;
   modUpdates.busy = { kind: u.kind, id: u.id, name: u.name ?? u.id, phase: "download", received: 0, total: null };
   try {
-    const outcome = await invoke<DownloadOutcome>("download_mod_update", { kind: u.kind, id: u.id });
+    const outcome = await download();
     if (outcome.status !== "archive") return outcome;
     modUpdates.busy.phase = "import";
     const done = await importDownloadedArchive(outcome.path);

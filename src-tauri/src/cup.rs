@@ -418,6 +418,19 @@ pub fn download_update(
     on_progress: &mut dyn FnMut(u64, Option<u64>) -> bool,
 ) -> Result<DownloadOutcome, String> {
     let url = download_url(kind, id).ok_or(crate::errors::UPDATE_DOWNLOAD_FAILED)?;
+    download_archive(&url, id, temp_root, on_progress)
+}
+
+/// Downloads whatever `url` leads to as the archive of mod `id`, with the same
+/// rule as an update: an archive is kept, named after `id`; anything else is
+/// handed to the browser. Every outcome but `Archive` leaves nothing on disk.
+pub fn download_archive(
+    url: &str,
+    id: &str,
+    temp_root: &Path,
+    on_progress: &mut dyn FnMut(u64, Option<u64>) -> bool,
+) -> Result<DownloadOutcome, String> {
+    let url = url.to_string();
     let dir = temp_root.join(format!("{DOWNLOAD_PREFIX}{}", Uuid::new_v4()));
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let part = dir.join(format!("{id}.part"));

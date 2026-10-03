@@ -306,22 +306,42 @@ mod tests {
         )
         .unwrap();
         crate::compose::recompose(&conn, &cfg, "spa").unwrap();
-        let surfaces = ac.join("content").join("tracks").join("spa").join("data").join("surfaces.ini");
-        assert_eq!(std::fs::read_to_string(&surfaces).unwrap(), "layer", "the layer is in the game");
+        let surfaces = ac
+            .join("content")
+            .join("tracks")
+            .join("spa")
+            .join("data")
+            .join("surfaces.ini");
+        assert_eq!(
+            std::fs::read_to_string(&surfaces).unwrap(),
+            "layer",
+            "the layer is in the game"
+        );
 
         let found = conflicts(&conn, &cfg, ModKind::Track, "spa");
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].risk, Risk::Certain, "surfaces.ini is what the server checks");
 
         set_aside(&conn, &cfg, &config_dir, &["grip".to_string()]).unwrap();
-        assert_eq!(std::fs::read_to_string(&surfaces).unwrap(), "base", "the server sees the base");
+        assert_eq!(
+            std::fs::read_to_string(&surfaces).unwrap(),
+            "base",
+            "the server sees the base"
+        );
         assert!(config_dir.join(FILE).is_file(), "the list to give back is on disk");
 
         let restored = restore(&conn, &cfg, &config_dir);
         assert_eq!(restored, vec!["grip"], "named for the notification");
-        assert_eq!(std::fs::read_to_string(&surfaces).unwrap(), "layer", "the layer is back");
+        assert_eq!(
+            std::fs::read_to_string(&surfaces).unwrap(),
+            "layer",
+            "the layer is back"
+        );
         assert!(!config_dir.join(FILE).exists(), "nothing left to give back");
-        assert!(restore(&conn, &cfg, &config_dir).is_empty(), "a second restore does nothing");
+        assert!(
+            restore(&conn, &cfg, &config_dir).is_empty(),
+            "a second restore does nothing"
+        );
     }
 
     /// Rule: what is set aside is on disk before anything is touched, and the
