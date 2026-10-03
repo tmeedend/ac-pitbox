@@ -1267,8 +1267,9 @@ Deux vues commutables par bibliothèque… **trois positions** en réalité : gr
 
 **Un menu d'affichage** s'ouvre par un chevron accolé à la bascule et porte les préférences de présentation de la grille : la densité (redondante avec les icônes, mais nommée) et le retrait de la marque. Elles vivent **là et non dans les réglages globaux** : il faut en voir l'effet pour les juger, et un écran de réglages les rend invisibles.
 
-En vue tableau, colonnes choisies, **réordonnables par glisser-déposer d'en-tête** (colonne
-« Nom » fixe, jamais déplaçable) et **redimensionnables** par une poignée à la
+En vue tableau, colonnes choisies, **réordonnables par glisser-déposer d'en-tête** (toutes,
+« Nom » compris : il ne se masque pas mais se déplace, pour que la marque puisse
+passer devant — c'est elle qu'on lit d'abord) et **redimensionnables** par une poignée à la
 jonction de deux en-têtes (glissé souris, ou flèches gauche/droite au clavier
 une fois la poignée focus — double-clic/Entrée pour revenir à la largeur
 naturelle). Le **libellé d'une colonne triable est un vrai bouton** : sans lui,
