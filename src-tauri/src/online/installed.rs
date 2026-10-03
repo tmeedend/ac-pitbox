@@ -201,7 +201,17 @@ impl Installed {
             track_level.max(car_level)
         };
         server.blockers = blockers;
+        server.official = is_official_content(server);
     }
+}
+
+/// The track and every car are official content (`kunos_dates`), owned here
+/// or not. A server without a car names nothing to judge, and is not.
+fn is_official_content(server: &ServerSummary) -> bool {
+    let official = |kind, id: &str| crate::kunos_dates::is_official(kind, &id.to_lowercase());
+    official(ModKind::Track, &server.track.id)
+        && !server.cars.is_empty()
+        && server.cars.iter().all(|c| official(ModKind::Car, c))
 }
 
 #[cfg(test)]
@@ -319,6 +329,27 @@ mod tests {
         let mut s = server("csp/3465/../monza", &["ks_mazda_miata"]);
         i.judge(&mut s);
         assert_eq!(s.level, Level::Ready, "a newer CSP passes");
+    }
+
+    /// Rule (SPEC-play-online.md, "Filtres de base", `content: kunos`): a
+    /// server is official when its track and every one of its cars are Kunos
+    /// content — owned or not, a DLC counts — and one mod is enough to make it
+    /// a mod server.
+    #[test]
+    fn official_means_track_and_every_car_are_kunos() {
+        let i = installed();
+        let mut kunos = server("monza", &["KS_Mazda_Miata"]);
+        i.judge(&mut kunos);
+        assert!(kunos.official, "Kunos track and car, whatever their case");
+        let mut dlc = server("ks_barcelona-layout_gp", &["ks_mazda_miata"]);
+        i.judge(&mut dlc);
+        assert!(dlc.official, "a DLC track not owned here is still official");
+        let mut modded = server("monza", &["ks_mazda_miata", "rss_gtm_lanzo_v8"]);
+        i.judge(&mut modded);
+        assert!(!modded.official, "one mod car makes a mod server");
+        let mut mod_track = server("rt_suzuka", &["ks_mazda_miata"]);
+        i.judge(&mut mod_track);
+        assert!(!mod_track.official, "a mod track makes a mod server");
     }
 
     /// Rule: ids compare without case — Windows folders do.

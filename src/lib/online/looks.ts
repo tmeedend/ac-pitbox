@@ -12,6 +12,8 @@ export interface LayoutLook {
 
 export interface TrackLook {
   name: string;
+  /** Its track categories in the library, what the category token reads. */
+  categories: string[];
   /** Keyed by lowercase layout folder, `""` for a single layout. */
   layouts: Record<string, LayoutLook>;
 }

@@ -152,6 +152,9 @@ pub struct ServerSummary {
     pub track_level: Level,
     /// Filled by `Installed::judge`: what blocks, to be named on screen.
     pub blockers: Vec<Blocker>,
+    /// Filled by `Installed::judge`: the track and every car are Kunos
+    /// content, base game or DLC — the list's `content: kunos` token.
+    pub official: bool,
 }
 
 /// A number, whether the server wrote it as one or as a string.
@@ -241,6 +244,7 @@ pub fn parse_server(entry: &Value) -> Option<ServerSummary> {
         level: Level::default(),
         track_level: Level::default(),
         blockers: Vec::new(),
+        official: false,
     })
 }
 

@@ -25,11 +25,22 @@ de reprendre. En cas d'écart, la spec fait foi.
 
 ---
 
-- [ ] **Page Online — lots 1 à 7 livrés : la v1 de la spec est faite
+- [ ] **Page Online — lots 1 à 8 livrés : la v1 de la spec est faite
       (lister, rejoindre, noms et vignettes, favoris, récents et amis,
       niveaux de préparation, couches écartées le temps d'une session,
-      contenu manquant récupéré, détail du panneau, ping, lien collé).
-      Restent les tokens de filtre et la v2.**
+      contenu manquant récupéré, détail du panneau, ping, lien collé,
+      tokens de filtre). Restent les drapeaux sur les lignes et la v2.**
+      - **Tokens (lot 8)** : la barre est le `FilterBar` de la bibliothèque,
+        alimenté par `online/tokens.ts` ; le test d'une valeur
+        (`valTest`) est partagé avec la bibliothèque, pour qu'un token veuille
+        dire la même chose sur les deux écrans. Le token de ping est le seul
+        qui coûte du réseau : il fait mesurer **tous** les serveurs que les
+        autres filtres gardent (des milliers si on le pose seul, 1,5 s par
+        serveur muet, 32 à la fois). Mesuré le 2026-10-03 sur le vrai
+        lobby : 5 300 serveurs en un peu plus d'une minute, la liste se
+        remplissant par le haut. Si c'était trop long un jour, la borner aux
+        N premiers serveurs serait le remède, au prix de serveurs écartés en
+        silence.
       - **Pas vu de bout en bout dans l'app** : un « Préparer et rejoindre »
         qui télécharge réellement (vérifié : les liens réels mènent à des
         archives que la détection reconnaît, et le chemin de téléchargement

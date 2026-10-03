@@ -6,7 +6,8 @@
   // user's own servers — Favourites, Recent, and those a friend is on. The
   // four toggles sort out the 9 000 public servers; they do not apply to
   // one's own, which stay listed full, locked or empty: that is exactly when
-  // one goes looking for them. The search applies everywhere.
+  // one goes looking for them. The search and the tokens apply everywhere:
+  // they are what the user asked for, and the chips say so on every tab.
   //
   // Friends cost a request per busy server (the lobby names nobody), so the
   // scan only runs once someone has been marked, after each list load.
@@ -17,6 +18,9 @@
   import { getUiPref, setUiPref } from "$lib/uiPrefs.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import Tabs from "$lib/components/ui/Tabs.svelte";
+  import FilterBar from "$lib/components/filters/FilterBar.svelte";
+  import type { FilterMap } from "$lib/library/filters";
+  import { gameCountries, withCountryLabels } from "$lib/flags.svelte";
   import {
     listServers,
     serverDetail,
@@ -27,7 +31,20 @@
   } from "$lib/online/online";
   import { parseJoinLink } from "$lib/online/link";
   import { DEFAULT_FILTERS, filterServers, parseFilters, sortServers, type OnlineFilters } from "$lib/online/filters";
-  import { NO_LOOKS, searchText, type Looks } from "$lib/online/looks";
+  import { carName, NO_LOOKS, searchText, type Looks } from "$lib/online/looks";
+  import {
+    asksPing,
+    DEFAULT_PINNED,
+    onlineTokenDefs,
+    parseTokens,
+    splitPing,
+    tokenOptions,
+    tokenPredicate,
+    trackLabel,
+    trackValue,
+    type TokenContext,
+  } from "$lib/online/tokens";
+  import { measureAll, pingOf, pingsLeft, stopMeasuring } from "$lib/online/pings.svelte";
   import { friendsOnline, recentCars, tabServers, type OnlineTab } from "$lib/online/lists";
   import { loadOnlineStore, onlineStore } from "$lib/online/store.svelte";
   import ServerList from "./ServerList.svelte";
@@ -38,9 +55,11 @@
   let loading = $state(true);
   let error = $state("");
   let filters = $state<OnlineFilters>({ ...DEFAULT_FILTERS });
+  let tokens = $state<FilterMap>({});
+  let pinned = $state<string[]>([...DEFAULT_PINNED]);
   let selected = $state<ServerSummary | null>(null);
   let tab = $state<OnlineTab>("all");
-  /** The stored toggles are read before the first save, so that restoring
+  /** The stored filters are read before the first save, so that restoring
    * them is not taken for a change. A `$state`: the effects that save must
    * run again once it flips. */
   let restored = $state(false);
@@ -126,8 +145,10 @@
       getUiPref(StorageKey.onlineTab),
       loadOnlineStore(),
     ]);
-    // The search is a gesture of the moment; only the toggles are remembered.
+    // The search is a gesture of the moment; the toggles, the tokens and the
+    // pinned chips are remembered.
     filters = { ...parseFilters(savedFilters), search: "" };
+    ({ tokens, pinned } = parseTokens(savedFilters));
     tab = TABS.find((x) => x === savedTab) ?? "all";
     restored = true;
     await refresh();
@@ -135,22 +156,80 @@
 
   $effect(() => {
     const { notFull, noPassword, notEmpty, joinable } = filters;
+    const saved = { notFull, noPassword, notEmpty, joinable, tokens, pinned };
     const current = tab;
     if (!restored) return;
-    setUiPref(StorageKey.onlineFilters, JSON.stringify({ notFull, noPassword, notEmpty, joinable }));
+    setUiPref(StorageKey.onlineFilters, JSON.stringify(saved));
     setUiPref(StorageKey.onlineTab, current);
   });
 
   const store = $derived(onlineStore());
   const lastCars = $derived(recentCars(store));
   const friends = $derived(friendsOnline(scan, store));
-  const shown = $derived.by(() => {
+
+  // The tokens (SPEC-play-online.md, "Filtres de base"). Track names are read
+  // off the servers that name them, one's own snapshots included: a token
+  // restored for a server the lobby no longer lists keeps its name.
+  const trackNames = $derived.by(() => {
+    const names: Record<string, string> = {};
+    const own = [...store.favourites, ...store.recents.map((r) => r.server)];
+    for (const s of [...own, ...servers]) names[trackValue(s.track)] = trackLabel(looks, s.track);
+    return names;
+  });
+  /** ISO code → the game's English name, what flags and labels are keyed
+   * on. Fills in once the game's table is loaded (the bar loads it). */
+  const countryNames = $derived(
+    new Map(gameCountries().flatMap((n) => (n.iso2 ? [[n.iso2.toUpperCase(), n.name] as const] : []))),
+  );
+  const defs = $derived(
+    withCountryLabels(
+      onlineTokenDefs({
+        track: (v) => trackNames[v] ?? v,
+        car: (v) => carName(looks, v),
+        ping: (v) => t("online.pingUnder", { ms: v }),
+      }),
+    ),
+  );
+  const ctx: TokenContext = $derived({
+    looks,
+    pingOf: (s) => pingOf(serverKey(s)),
+    countryName: (iso2) => countryNames.get(iso2.toUpperCase()) ?? null,
+  });
+
+  /** Every filter but the ping: the servers a ping token has to measure. */
+  const unpinged = $derived.by(() => {
     const text = (s: ServerSummary) => searchText(looks, s);
-    if (tab === "all") return sortServers(filterServers(servers, filters, text), new Set(Object.keys(friends)));
+    const tokensOk = tokenPredicate(defs, splitPing(tokens).rest, ctx);
+    if (tab === "all") {
+      const kept = filterServers(servers, filters, text).filter(tokensOk);
+      return sortServers(kept, new Set(Object.keys(friends)));
+    }
     // One's own servers: the search only, never the toggles (see above).
     const searchOnly = { ...DEFAULT_FILTERS, notFull: false, noPassword: false, search: filters.search };
-    return filterServers(tabServers(tab, servers, store, friends), searchOnly, text);
+    return filterServers(tabServers(tab, servers, store, friends), searchOnly, text).filter(tokensOk);
   });
+  const wantsPing = $derived(asksPing(tokens));
+  const shown = $derived.by(() => {
+    if (!wantsPing) return unpinged;
+    const pingOk = tokenPredicate(defs, splitPing(tokens).ping, ctx);
+    return unpinged.filter(pingOk);
+  });
+
+  // A ping token cannot keep a server it has not measured: the candidates are
+  // measured, top of the list first, and show as they answer. Waits for the
+  // typing to settle, like the visible rows wait for the scroll.
+  $effect(() => {
+    const list = unpinged;
+    if (!wantsPing) {
+      stopMeasuring();
+      return;
+    }
+    const timer = setTimeout(() => untrack(() => void measureAll(list)), 400);
+    return () => clearTimeout(timer);
+  });
+  // Leaving the page ends the sweep: nobody is reading the list any more.
+  $effect(() => () => stopMeasuring());
+  const measuring = $derived(wantsPing ? pingsLeft() : 0);
   const tabItems = $derived([
     { id: "all", label: t("online.tabAll") },
     { id: "favourites", label: t("online.tabFavourites"), count: store.favourites.length },
@@ -182,18 +261,40 @@
       <h2 class="lbl-screen">{t("nav.online")}</h2>
       <Tabs tabs={tabItems} active={tab} onselect={(id) => (tab = id as OnlineTab)} />
       <div class="bar">
-        <input class="input search" placeholder={t("online.searchPlaceholder")} bind:value={filters.search} />
-        {#if tab === "all"}
-          {#each TOGGLES as toggle (toggle.key)}
-            <label class="tog">
-              <input type="checkbox" bind:checked={filters[toggle.key]} />
-              {t(toggle.label)}
-            </label>
-          {/each}
-        {/if}
-        <span class="count mono">{t("online.count", { count: shown.length })}</span>
-        <button class="btn" type="button" disabled={loading} onclick={refresh}>{t("online.refresh")}</button>
+        <FilterBar
+          {defs}
+          bind:filters={tokens}
+          bind:pinned
+          bind:query={filters.search}
+          optionsFor={(key) => {
+            const def = defs.find((d) => d.key === key);
+            return def ? tokenOptions(def, servers, ctx) : [];
+          }}
+          presets={[]}
+          resultCount={shown.length}
+          countKey="online.count"
+          placeholderKey="online.searchPlaceholder"
+        >
+          {#snippet end()}
+            <button class="btn" type="button" disabled={loading} onclick={refresh}>{t("online.refresh")}</button>
+          {/snippet}
+        </FilterBar>
       </div>
+      {#if tab === "all" || measuring > 0}
+        <div class="toggles">
+          {#if tab === "all"}
+            {#each TOGGLES as toggle (toggle.key)}
+              <label class="tog">
+                <input type="checkbox" bind:checked={filters[toggle.key]} />
+                {t(toggle.label)}
+              </label>
+            {/each}
+          {/if}
+          {#if measuring > 0}
+            <span class="measuring mono">{t("online.pingMeasuring", { count: measuring })}</span>
+          {/if}
+        </div>
+      {/if}
     </header>
 
     {#if error}
@@ -204,6 +305,8 @@
     {#if (tab === "all" || tab === "friends") && loading && servers.length === 0}
       <LoadingState />
     {:else if tab === "friends" && scanning && shown.length === 0}
+      <LoadingState />
+    {:else if measuring > 0 && shown.length === 0}
       <LoadingState />
     {:else if shown.length === 0}
       {#if tab !== "all" || !error}
@@ -261,14 +364,15 @@
     padding: 22px 24px 14px;
   }
   .bar {
+    margin-top: 12px;
+  }
+  /* The bar's own bottom margin stands between it and the toggles. */
+  .toggles {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
     gap: 8px 16px;
-    margin-top: 12px;
-  }
-  .search {
-    width: 260px;
+    margin-top: -6px;
   }
   .tog {
     display: flex;
@@ -281,7 +385,7 @@
   .tog input {
     accent-color: var(--rosso);
   }
-  .count {
+  .measuring {
     margin-left: auto;
     font-size: 11px;
     color: var(--muted);

@@ -7,11 +7,16 @@ const looks: Looks = {
   tracks: {
     ks_nordschleife: {
       name: "Nürburgring Nordschleife",
+      categories: [],
       layouts: {
         touristenfahrten: { name: "Nordschleife - Tourist", preview: null, outline: null },
       },
     },
-    bathurst: { name: "Mount Panorama", layouts: { "": { name: "Mount Panorama", preview: null, outline: null } } },
+    bathurst: {
+      name: "Mount Panorama",
+      categories: [],
+      layouts: { "": { name: "Mount Panorama", preview: null, outline: null } },
+    },
   },
 };
 

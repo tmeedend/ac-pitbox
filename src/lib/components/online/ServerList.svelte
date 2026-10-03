@@ -9,6 +9,7 @@
   import { pingOf, requestPings } from "$lib/online/pings.svelte";
   import { carName, carsOwnedFirst, layoutLook, trackTitle, type Looks } from "$lib/online/looks";
   import { serverKey, type ServerSummary } from "$lib/online/online";
+  import { PING_FAIR_MS, PING_GOOD_MS } from "$lib/online/tokens";
   import { previewSrc } from "$lib/library/library";
 
   interface Props {
@@ -49,7 +50,7 @@
   /** Thresholds of the spec; past them the figure goes quiet rather than
    * red — red is kept for what the session retains (SPEC §7.2ter). */
   function pingClass(ms: number): string {
-    return ms < 60 ? "good" : ms < 120 ? "fair" : "far";
+    return ms < PING_GOOD_MS ? "good" : ms < PING_FAIR_MS ? "fair" : "far";
   }
 </script>
 

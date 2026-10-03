@@ -42,6 +42,9 @@ export interface ServerSummary {
   level?: Level;
   track_level?: Level;
   blockers?: Blocker[];
+  /** The track and every car are Kunos content (`content: kunos`). Absent
+   * from a snapshot saved before servers were judged on it. */
+  official?: boolean;
   /** One per session: seconds, except a race on laps (`timed` false).
    * Absent from a snapshot saved before they were read. */
   durations?: number[];

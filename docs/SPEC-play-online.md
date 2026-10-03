@@ -313,8 +313,28 @@ directs (`.rar` d'une communauté, publications GitHub, Google Drive).
 Le contenu servi par un serveur protégé par mot de passe n'est pas proposé :
 il exige un hachage du mot de passe que Pit Box ne calcule pas.
 
-**Restent** : les tokens de filtre (circuit, voiture, catégorie de circuit,
-ping, pays, session) et les pays en drapeaux ; les niveaux de préparation de la
-liste elle-même, qui ne voient ni les liens ni les versions des serveurs (il
-faudrait `/api/details` serveur par serveur) ; la v2 (regrouper par circuit,
-lien bibliothèque → online, notifications).
+**Lot 8 — les tokens de filtre (livré).** La barre est celle de la
+bibliothèque, puces et popovers compris (`FilterBar`) : la recherche, `+ Filtre`
+et les puces, avec `Circuit`, `Voiture` et `Catégorie de circuit` épinglés en
+fantômes ; les quatre bascules restent des cases, juste dessous, sur `Tous`
+seulement. Sept tokens : **circuit** (le layout, sous son nom ici, et le nombre
+de serveurs qui le font tourner), **voiture** (`ET` / `OU` entre deux),
+**catégorie de circuit** (celles de la bibliothèque — un circuit qu'elle n'a
+pas est inconnu, ni inclus ni exclu ; un circuit qu'elle a sans catégorie, lui,
+n'en a pas), **contenu** (`Kunos` : circuit et toutes les voitures officiels,
+DLC compris, possédés ou non ; `Mods` : au moins un mod), **ping** (moins de
+60, 120 ou 200 ms), **pays** (drapeau et nom dans la langue de l'utilisateur)
+et **session en cours**. Chaque valeur s'inclut ou s'exclut comme à la
+bibliothèque. Les tokens s'appliquent à tous les onglets, comme la recherche :
+ce sont des critères posés, et la puce les montre partout. Un serveur dont le
+ping n'est pas mesuré n'est pas « proche » : poser un token de ping fait
+mesurer les serveurs qui passent tous les autres filtres, le haut de la liste
+d'abord, par lots de 64, et ils apparaissent à mesure qu'ils répondent (« Mesure
+du ping · N serveurs restants ») ; un serveur qui ne répond pas reste écarté.
+Les tokens et les épingles sont mémorisés avec les bascules ; la recherche ne
+l'est toujours pas.
+
+**Restent** : les pays en drapeaux sur les lignes de la liste ; les niveaux de
+préparation de la liste elle-même, qui ne voient ni les liens ni les versions
+des serveurs (il faudrait `/api/details` serveur par serveur) ; la v2
+(regrouper par circuit, lien bibliothèque → online, notifications).

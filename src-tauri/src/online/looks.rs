@@ -28,6 +28,10 @@ pub struct LayoutLook {
 pub struct TrackLook {
     /// The track's name in the library (the user's correction included).
     pub name: String,
+    /// Its track categories in the library (freeroam, drift…), what the
+    /// category token of the list reads (`SPEC-play-online.md`, "Filtres de
+    /// base"). Empty when the library gives it none.
+    pub categories: Vec<String>,
     /// Keyed by layout folder, `""` for a single-layout track.
     pub layouts: HashMap<String, LayoutLook>,
 }
@@ -76,7 +80,15 @@ impl Looks {
                             )
                         })
                         .collect();
-                    looks.tracks.insert(id, TrackLook { name, layouts });
+                    let categories = m.categories.clone();
+                    looks.tracks.insert(
+                        id,
+                        TrackLook {
+                            name,
+                            categories,
+                            layouts,
+                        },
+                    );
                 }
                 _ => {}
             }
