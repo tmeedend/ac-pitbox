@@ -72,8 +72,44 @@ pub fn find_ac() -> Option<PathBuf> {
     None
 }
 
+/// The executable of a Windows shell command such as
+/// `"D:\Games\Content Manager.exe" "%1"`: the quoted first token, or, unquoted,
+/// everything up to the first `.exe` — a path with spaces is often left
+/// unquoted in handlers written by hand.
+fn exe_from_command(command: &str) -> Option<PathBuf> {
+    let command = command.trim();
+    if let Some(rest) = command.strip_prefix('"') {
+        return rest.split('"').next().filter(|s| !s.is_empty()).map(PathBuf::from);
+    }
+    let end = command.to_ascii_lowercase().find(".exe")? + ".exe".len();
+    Some(PathBuf::from(&command[..end]))
+}
+
+/// Where the `acmanager://` protocol opens: Content Manager registers itself
+/// as its handler when it runs. It is the place Windows itself uses for CM's
+/// links, wherever CM was unpacked — measured on a real install in
+/// `D:\Games`, which neither of the two usual folders finds.
+#[cfg(windows)]
+fn cm_from_protocol() -> Option<PathBuf> {
+    use winreg::enums::HKEY_CLASSES_ROOT;
+    use winreg::RegKey;
+
+    let key = RegKey::predef(HKEY_CLASSES_ROOT)
+        .open_subkey(r"acmanager\shell\open\command")
+        .ok()?;
+    let command: String = key.get_value("").ok()?;
+    exe_from_command(&command)
+}
+
+#[cfg(not(windows))]
+fn cm_from_protocol() -> Option<PathBuf> {
+    None
+}
+
 /// Content Manager se trouve le plus souvent dans le dossier AC, sinon dans
-/// `%LOCALAPPDATA%\AcTools Content Manager`.
+/// `%LOCALAPPDATA%\AcTools Content Manager` — et ailleurs, n'importe où : CM
+/// se décompresse où l'on veut. En dernier recours, l'association du protocole
+/// `acmanager://` dit où il est.
 pub fn find_cm(ac: Option<&Path>) -> Option<PathBuf> {
     if let Some(ac) = ac {
         for name in ["Content Manager.exe", "Content Manager Safe.exe"] {
@@ -91,7 +127,7 @@ pub fn find_cm(ac: Option<&Path>) -> Option<PathBuf> {
             return Some(p);
         }
     }
-    None
+    cm_from_protocol().filter(|p| p.is_file())
 }
 
 /// 7-Zip standalone, sinon le `7z.exe` que Content Manager embarque pour son
@@ -128,5 +164,29 @@ pub fn autodetect() -> DetectedPaths {
         content_manager_exe,
         sevenzip_exe,
         library_path,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Rule: the executable of the `acmanager://` handler is read from its
+    /// command line — the shape Content Manager writes (measured on a real
+    /// install), and the unquoted shape a handler written by hand may have.
+    #[test]
+    fn the_handler_command_gives_the_executable() {
+        assert_eq!(
+            exe_from_command(r#""D:\Games\Content Manager.exe" "%1""#),
+            Some(PathBuf::from(r"D:\Games\Content Manager.exe")),
+            "quoted, as CM registers it"
+        );
+        assert_eq!(
+            exe_from_command(r"C:\AC Tools\Content Manager.EXE %1"),
+            Some(PathBuf::from(r"C:\AC Tools\Content Manager.EXE")),
+            "unquoted, spaces in the path"
+        );
+        assert_eq!(exe_from_command(r#""""#), None, "empty");
+        assert_eq!(exe_from_command("rundll32 something"), None, "no executable named");
     }
 }
