@@ -28,12 +28,24 @@ export interface Sighting {
   name: string;
 }
 
+/** The friends on each server that answered, an empty list where none is —
+ * so that "nobody" is not mistaken for "no answer". */
+export function friendsByServer(
+  scan: { ip: string; http_port: number; drivers: string[] }[],
+  isFriend: (name: string) => boolean,
+): Record<string, string[]> {
+  return Object.fromEntries(scan.map((s) => [serverKey(s), s.drivers.filter(isFriend)]));
+}
+
 /** The friends on a server now who were not there at the previous round —
- * per server, so a friend moving from one to another is seen arriving. */
+ * per server, so a friend moving from one to another is seen arriving. Only
+ * on servers that answered both rounds: one that missed the previous round
+ * says nothing of who just arrived. */
 export function newSightings(before: Record<string, string[]>, now: Record<string, string[]>): Sighting[] {
   const out: Sighting[] = [];
   for (const [key, names] of Object.entries(now)) {
-    const was = new Set((before[key] ?? []).map((n) => n.trim().toLowerCase()));
+    if (!(key in before)) continue;
+    const was = new Set(before[key].map((n) => n.trim().toLowerCase()));
     for (const name of names) if (!was.has(name.trim().toLowerCase())) out.push({ key, name });
   }
   return out;

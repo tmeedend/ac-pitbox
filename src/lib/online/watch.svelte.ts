@@ -18,10 +18,10 @@ import { t } from "$lib/i18n/index.svelte";
 import { onAcRunning } from "$lib/launch/launch";
 import { StorageKey } from "$lib/storage";
 import { peekUiPref } from "$lib/uiPrefs.svelte";
-import { friendsOnline } from "./lists";
+import { isFriend } from "./lists";
 import { serverDrivers, serverKey, slotCounts, type ServerSummary } from "./online";
 import { loadOnlineStore, onlineStore } from "./store.svelte";
-import { newSightings, slotFreed, watchedServers } from "./watchRules";
+import { friendsByServer, newSightings, slotFreed, watchedServers } from "./watchRules";
 
 const FRIENDS_EVERY_MS = 2 * 60 * 1000;
 /** The first round only sets what is already there: a friend online when
@@ -44,7 +44,8 @@ interface SlotWatch {
 const state = $state<{ slot: SlotWatch | null; alerts: WatchAlert[] }>({ slot: null, alerts: [] });
 let nextId = 1;
 let running = false;
-/** Friends seen at the last round, per server; `null` before the first. */
+/** Friends seen per server, an empty list where none was, at the last round
+ * each server answered; `null` before the first round. */
 let baseline: Record<string, string[]> | null = null;
 
 /** Whether the background watch is on (Settings › General). On by default. */
@@ -105,14 +106,15 @@ async function checkFriends(): Promise<void> {
     return;
   }
   try {
-    const now = friendsOnline(await serverDrivers(servers), store);
+    const now = friendsByServer(await serverDrivers(servers), (name) => isFriend(store, name));
     if (baseline && !running) {
       for (const seen of newSightings(baseline, now)) {
         const server = servers.find((s) => serverKey(s) === seen.key);
         if (server) void deliver({ id: nextId++, kind: "friend", name: seen.name, server });
       }
     }
-    baseline = now;
+    // A server silent this round keeps what it last said.
+    baseline = { ...(baseline ?? {}), ...now };
   } catch (e) {
     console.warn("online watch: friends round failed", e);
   }
@@ -120,11 +122,14 @@ async function checkFriends(): Promise<void> {
 
 async function checkSlot(): Promise<void> {
   const watch = state.slot;
-  if (!watch || running || !onlineWatchOn()) return;
-  if (Date.now() - watch.since > SLOT_FOR_MS) {
+  if (!watch) return;
+  // Switched off, or past the hour: the watch ends, not just pauses — it
+  // would otherwise show as running forever.
+  if (!onlineWatchOn() || Date.now() - watch.since > SLOT_FOR_MS) {
     stopSlotWatch();
     return;
   }
+  if (running) return;
   try {
     const counts = await slotCounts(watch.server.ip, watch.server.http_port);
     // Stopped, replaced or the game started while the server answered.

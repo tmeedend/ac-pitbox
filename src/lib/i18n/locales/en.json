@@ -1548,7 +1548,7 @@
     "notifyWatching": "Watching for a free slot",
     "notifyStop": "Stop",
     "settingWatch": "Watch friends and awaited slots in the background",
-    "settingWatchHint": "Asks your favourite and recent servers every 2 minutes, and the server where you asked to be notified every 30 seconds. Paused while you drive.",
+    "settingWatchHint": "Tells you when a friend joins one of your favourite or recent servers, or when a slot frees up where you asked to be notified. Paused while you drive.",
     "trackActivity": "{servers} servers · {players} players",
     "colTrack": "Track",
     "colServer": "Server",

@@ -1548,7 +1548,7 @@
     "notifyWatching": "Surveillance d'une place libre",
     "notifyStop": "Arrêter",
     "settingWatch": "Surveiller en fond les amis et les places attendues",
-    "settingWatchHint": "Interroge vos serveurs favoris et récents toutes les 2 minutes, et le serveur où vous avez demandé à être prévenu toutes les 30 secondes. En pause pendant que vous roulez.",
+    "settingWatchHint": "Prévient quand un ami rejoint l'un de vos serveurs favoris ou récents, ou qu'une place se libère là où vous l'avez demandé. En pause pendant que vous roulez.",
     "trackActivity": "{servers} serveurs · {players} joueurs",
     "colTrack": "Circuit",
     "colServer": "Serveur",

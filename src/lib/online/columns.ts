@@ -65,7 +65,10 @@ export const ONLINE_COLUMNS: OnlineColumn[] = [
     sortable: true,
     defaultVisible: true,
     width: 130,
-    sortValue: (s) => (s.session ? SESSION_RANK[s.session] * 1e7 + s.time_left : null),
+    // The kind first, then the time left — clamped under the kind's band:
+    // servers write billions of seconds (seen: 1 193 046 h), which would carry
+    // a practice past the bookings.
+    sortValue: (s) => (s.session ? SESSION_RANK[s.session] * 1e7 + Math.min(s.time_left, 1e7 - 1) : null),
   },
   {
     key: "players",

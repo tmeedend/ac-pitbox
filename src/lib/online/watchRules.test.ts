@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { EMPTY_STORE } from "./lists";
 import type { ServerSummary } from "./online";
-import { newSightings, slotFreed, watchedServers } from "./watchRules";
+import { friendsByServer, newSightings, slotFreed, watchedServers } from "./watchRules";
 
 const server = (ip: string): ServerSummary =>
   ({ ip, http_port: 8081, track: { id: "monza", kunos_id: "monza", layout: null, csp_min_build: null } }) as ServerSummary;
@@ -18,12 +18,26 @@ describe("the background watch (SPEC-play-online, v2)", () => {
   });
 
   it("tells a friend arriving, not one already there, and one moving server", () => {
-    const before = { a: ["Léo"], b: ["Max"] };
+    const before = { a: ["Léo"], b: ["Max"], c: [] };
     const now = { a: ["léo ", "Sam"], c: ["Max"] };
     expect(newSightings(before, now)).toEqual([
       { key: "a", name: "Sam" },
       { key: "c", name: "Max" },
     ]);
+  });
+
+  // Found in review: a server that times out once came back with all its
+  // friends announced as just connected.
+  it("says nothing of a server that did not answer the previous round", () => {
+    expect(newSightings({ a: ["Léo"] }, { a: ["Léo"], b: ["Max"] })).toEqual([]);
+  });
+
+  it("keeps the servers that answered with no friend on them", () => {
+    const scan = [
+      { ip: "1.1.1.1", http_port: 8081, drivers: ["Léo", "someone"] },
+      { ip: "2.2.2.2", http_port: 8081, drivers: [] },
+    ];
+    expect(friendsByServer(scan, (n) => n === "Léo")).toEqual({ "1.1.1.1:8081": ["Léo"], "2.2.2.2:8081": [] });
   });
 
   it("frees a slot for the chosen car, or for any car without one", () => {

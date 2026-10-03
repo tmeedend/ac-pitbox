@@ -83,6 +83,12 @@
     if (live?.key === col.key) return live.width;
     return prefs.widths[col.key] ?? (rowHeight ? (col.width ?? 120) : undefined);
   }
+  /** Virtual layout: the table as wide as its columns. `table-layout: fixed`
+   * only holds with a width that is not automatic; without it the cells of
+   * whichever rows are in view would size their columns, and the columns
+   * would shift while scrolling. */
+  const tableWidth = $derived(rowHeight ? shownColumns.reduce((sum, col) => sum + (widthOf(col) ?? 0), 0) : null);
+
   function widthStyle(col: C): string | undefined {
     const w = widthOf(col);
     return w ? `width:${w}px; max-width:${w}px;` : undefined;
@@ -212,7 +218,7 @@
   bind:clientHeight={viewport}
   onscroll={rowHeight ? (e) => (scrollTop = (e.currentTarget as HTMLElement).scrollTop) : undefined}
 >
-  <table>
+  <table style={tableWidth ? `width:${tableWidth}px` : undefined}>
     <thead>
       <tr>
         {#each shownColumns as col (col.key)}

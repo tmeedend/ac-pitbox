@@ -378,8 +378,11 @@ comme un groupe d'un.
 
 **v2 — « Online : N serveurs » sur la fiche d'un circuit (livré).** La
 liste du lobby est **une seule**, en cache partagé entre la page Online et les
-fiches, gardée trois minutes (`online/lobby.svelte.ts`) ; deux demandes en même
-temps n'en font qu'une, et « Actualiser » passe outre le cache. La fiche d'un
+fiches, gardée trois minutes (`online/lobby.svelte.ts`) — moins si la
+bibliothèque change entre-temps (un import, une activation, du contenu récupéré
+pour rejoindre) : les niveaux de préparation de la liste ne valent que pour la
+bibliothèque contre laquelle ils ont été jugés. Deux demandes en même temps n'en
+font qu'une, et « Actualiser » passe outre le cache. La fiche d'un
 circuit s'affiche sans l'attendre et, quand la liste est là, montre sous ses
 données `Online · N serveurs · M joueurs` — compté en local, sur les seuls
 serveurs qui ont au moins un joueur, tous layouts du circuit confondus, sans une
@@ -396,8 +399,10 @@ une machine qui contacte des milliers d'adresses :
 - **amis** : le `/JSON` des seuls serveurs en favoris et en récents, une requête
   chacun toutes les 2 minutes. Le premier tour, 15 s après le démarrage, ne fait
   que relever qui est déjà là : un ami en ligne au lancement de Pit Box ne vient
-  pas de se connecter. Un ami sur un serveur inconnu n'est pas vu : limite
-  assumée ;
+  pas de se connecter. Un serveur qui ne répond pas à un tour garde ce qu'il
+  disait au précédent : rien n'est annoncé sur lui tant qu'il n'a pas répondu
+  deux fois, sans quoi chaque raté de réseau ramènerait ses amis comme
+  « en ligne ». Un ami sur un serveur inconnu n'est pas vu : limite assumée ;
 - **place libre** : seulement sur le serveur où l'utilisateur a cliqué « Me
   prévenir » — proposé dans le panneau quand le serveur est plein ou que la
   voiture choisie n'a plus de place —, toutes les 30 s, par le seul `/JSON`

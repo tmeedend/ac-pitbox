@@ -27,6 +27,9 @@ pub struct ServerDrivers {
 /// Asks each server for its connected drivers, a few at a time (`fanout.rs`).
 /// A server that does not answer is left out: it is one fewer place to find a
 /// friend, not an error — the lobby is full of servers that just went down.
+/// A server that answers with nobody on it stays, with no driver: the Online
+/// watch must tell "nobody there" from "no answer", or a server that misses
+/// one round would bring back every friend on it as just connected.
 pub fn scan(servers: &[ServerAddr], steam_id: u64) -> Vec<ServerDrivers> {
     scan_with(servers, |s| {
         super::server::fetch_entry_list(&s.ip, s.http_port, steam_id)
@@ -39,7 +42,7 @@ pub fn scan(servers: &[ServerAddr], steam_id: u64) -> Vec<ServerDrivers> {
 /// tested without a network.
 fn scan_with(servers: &[ServerAddr], fetch: impl Fn(&ServerAddr) -> Option<Vec<String>> + Sync) -> Vec<ServerDrivers> {
     fan_out(servers, |server| {
-        let drivers = fetch(server).filter(|d| !d.is_empty())?;
+        let drivers = fetch(server)?;
         Some(ServerDrivers {
             ip: server.ip.clone(),
             http_port: server.http_port,
@@ -76,23 +79,33 @@ mod tests {
         assert_eq!(found.len(), 100, "one entry per answering server");
     }
 
-    /// Rule: a server that does not answer, or has nobody on it, is simply
-    /// absent from the result.
+    /// Rule: a server that does not answer is absent from the result; one that
+    /// answers with nobody on it is there, empty — "nobody" is not "no answer"
+    /// (the Online watch, SPEC-play-online.md v2).
     #[test]
-    fn silent_and_empty_servers_are_left_out() {
+    fn silent_servers_are_left_out_empty_ones_stay() {
         let servers: Vec<ServerAddr> = (0..3).map(addr).collect();
         let found = scan_with(&servers, |s| match s.http_port {
             8000 => None,
             8001 => Some(Vec::new()),
             _ => Some(vec!["Léo".into()]),
         });
+        let mut found = found;
+        found.sort_by_key(|s| s.http_port);
         assert_eq!(
             found,
-            vec![ServerDrivers {
-                ip: "10.0.0.2".into(),
-                http_port: 8002,
-                drivers: vec!["Léo".into()]
-            }]
+            vec![
+                ServerDrivers {
+                    ip: "10.0.0.1".into(),
+                    http_port: 8001,
+                    drivers: Vec::new()
+                },
+                ServerDrivers {
+                    ip: "10.0.0.2".into(),
+                    http_port: 8002,
+                    drivers: vec!["Léo".into()]
+                }
+            ]
         );
     }
 }

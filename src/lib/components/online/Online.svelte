@@ -34,6 +34,7 @@
   import { carName, NO_LOOKS, searchText, type Looks } from "$lib/online/looks";
   import {
     asksPing,
+    BOOL_KEYS,
     TRACK_KEY,
     DEFAULT_PINNED,
     DEFAULT_TOKENS,
@@ -242,6 +243,22 @@
     countryName: (iso2) => gameCountryByIso2(iso2)?.name ?? null,
   });
 
+  /** What the bar holds: on one's own tabs, the tokens without the yes/no
+   * chips it does not offer there. The bar must not see them — its « Clear
+   * all » would show with no chip in view and wipe the All tab's « Not full »
+   * (found in review) — and what it writes back keeps them. */
+  const barTokens = $derived(
+    tab === "all" ? tokens : Object.fromEntries(Object.entries(tokens).filter(([k]) => !BOOL_KEYS.includes(k))),
+  );
+  function setBarTokens(next: FilterMap) {
+    if (tab === "all") {
+      tokens = next;
+      return;
+    }
+    const kept = Object.fromEntries(Object.entries(tokens).filter(([k]) => BOOL_KEYS.includes(k)));
+    tokens = { ...next, ...kept };
+  }
+
   /** Every filter but the ping: the servers a ping token has to measure. */
   const unpinged = $derived.by(() => {
     const text = (s: ServerSummary) => searchText(looks, s);
@@ -301,7 +318,7 @@
       <div class="bar">
         <FilterBar
           {defs}
-          bind:filters={tokens}
+          bind:filters={() => barTokens, setBarTokens}
           bind:pinned
           bind:query={search}
           optionsFor={(key) => {
