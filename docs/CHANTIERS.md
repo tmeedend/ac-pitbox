@@ -32,9 +32,13 @@ de reprendre. En cas d'écart, la spec fait foi.
       tokens de filtre, drapeaux), et la v2 (tableau, puces oui/non,
       regroupement par circuit, ligne Online sur la fiche d'un circuit,
       notifications). Reste à voir à l'écran ce qui ne l'a pas été.**
-      - **Pas vu à l'écran (lot 9 et v2)** : le tableau Online (colonnes,
-        tri, regroupement), la ligne de la fiche circuit, les notifications
-        (ni dans l'app, ni dans Windows) — tests et types seulement.
+      - **Vu à l'écran (2026-10-03)** : le tableau Online, colonnes, tri et
+        regroupement compris.
+      - **Pas vu à l'écran** : la ligne de la fiche circuit, les
+        notifications (ni dans l'app, ni dans Windows), le mot de passe
+        vérifié avant le lancement (recette confirmée sur 255 vrais serveurs,
+        pas essayée avec un vrai mot de passe), le bandeau de la liste de
+        secours (il faut que le lobby tombe) — tests et types seulement.
         Le clic sur une notification **Windows** n'ouvre pas le serveur : le
         plugin n'expose pas de clic sur bureau (sa doc le réserve au mobile,
         pas vérifié sur Windows) ; c'est la notification de la pile, gardée
