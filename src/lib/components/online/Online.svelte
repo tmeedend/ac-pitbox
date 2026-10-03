@@ -24,6 +24,7 @@
   import { loadSavedPrefs, saveTablePrefs } from "$lib/tablePrefs.svelte";
   import { loadOnlineStore, onlineStore } from "$lib/online/store.svelte";
   import { loadLobby } from "$lib/online/lobby.svelte";
+  import { libraryVersion } from "$lib/library/libraryVersion.svelte";
   import { pendingOnlineIntent, takeOnlineIntent, type OnlineIntent } from "$lib/online/intent.svelte";
   import { ServerFilter } from "$lib/online/serverFilter.svelte";
   import { FriendsScan } from "$lib/online/friendsScan.svelte";
@@ -150,6 +151,19 @@
     setUiPref(StorageKey.onlineFilters, saved);
     setUiPref(StorageKey.onlineTab, current);
     setUiPref(StorageKey.onlineGrouped, group ? "1" : "0");
+  });
+
+  // The library changed — an archive dropped after « Prepare & join » sent
+  // the user to a web page, an activation, content fetched: the list's levels
+  // were judged against the old library and must be judged again (reported:
+  // a track installed, the row still said « To download »). The panel reads
+  // its own server again on the same signal (`ServerDetail`).
+  let seenLibrary = -1;
+  $effect(() => {
+    const version = libraryVersion();
+    const ready = restored;
+    if (ready && seenLibrary !== -1 && version !== seenLibrary) untrack(() => void refresh());
+    if (ready) seenLibrary = version;
   });
 
   // A way in from elsewhere (`intent.svelte.ts`): a track sheet's line, a

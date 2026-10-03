@@ -88,6 +88,16 @@
     return items;
   });
 
+  // The page in the browser has done its job once what it was for is here:
+  // the archive dropped, imported, the panel read again — the line asking to
+  // download it goes. It stayed, and read as if nothing had happened
+  // (reported).
+  $effect(() => {
+    const name = browserFor;
+    const stillNeeded = needed.some((n) => n.name === name);
+    if (name && !stillNeeded) browserFor = null;
+  });
+
   /** Why the button cannot join yet, or `null` when it can. */
   const blocker = $derived.by(() => {
     if (!live.booking && live.clients >= live.max_clients) return t("online.serverFull");
