@@ -6,6 +6,7 @@ import {
   DEFAULT_PINNED,
   onlineTokenDefs,
   parseTokens,
+  serializeTokens,
   splitPing,
   tokenOptions,
   tokenPredicate,
@@ -83,7 +84,7 @@ describe("online tokens (SPEC-play-online, Filtres de base)", () => {
       server({ name: "monza again", track: track("MONZA") }),
     ];
     expect(names(list, val("track", "monza"))).toEqual(["monza", "monza again"]);
-    const options = tokenOptions(defs[0], list, context());
+    const options = tokenOptions(defs.find((d) => d.key === "track")!, list, context());
     expect(options.find((o) => o.value === "monza")?.count, "Monza · 2 servers").toBe(2);
   });
 
@@ -159,12 +160,50 @@ describe("online tokens (SPEC-play-online, Filtres de base)", () => {
     expect(trackLabel(looks, track("monza"))).toBe("Monza");
   });
 
-  // Stored beside the toggles, in a value older versions wrote without them.
-  it("reads tokens and pins back, and falls back for an older or damaged value", () => {
-    const older = JSON.stringify({ notFull: true, noPassword: true, notEmpty: false, joinable: false });
-    expect(parseTokens(older)).toEqual({ tokens: {}, pinned: DEFAULT_PINNED });
-    expect(parseTokens("{not json")).toEqual({ tokens: {}, pinned: DEFAULT_PINNED });
-    const saved = JSON.stringify({ tokens: { ...val("track", "monza"), unknown: { type: "val" } }, pinned: ["car", "x"] });
-    expect(parseTokens(saved)).toEqual({ tokens: val("track", "monza"), pinned: ["car"] });
+  it("asks yes or no of a server, and the opposite in the negative", () => {
+    const list = [
+      server({ name: "full", clients: 24 }),
+      server({ name: "locked", password: true, clients: 3 }),
+      server({ name: "empty" }),
+      server({ name: "blocked", level: "blocked", clients: 2 }),
+    ];
+    const bool = (key: string, sign: 1 | -1): FilterMap => ({ [key]: { type: "bool", sign } });
+    expect(names(list, bool("notFull", 1))).toEqual(["locked", "empty", "blocked"]);
+    expect(names(list, bool("noPassword", -1)), "the league's private server").toEqual(["locked"]);
+    expect(names(list, bool("notEmpty", -1))).toEqual(["empty"]);
+    expect(names(list, bool("joinable", -1)), "what one would have to fetch").toEqual(["blocked"]);
+    const ownTabs = onlineTokenDefs({}, false);
+    expect(list.filter(tokenPredicate(ownTabs, bool("notFull", 1), context())).length, "off one's own tabs").toBe(4);
+  });
+
+  it("starts with Not full posed and the four yes/no chips pinned", () => {
+    expect(parseTokens(null)).toEqual({ tokens: { notFull: { type: "bool", sign: 1 } }, pinned: DEFAULT_PINNED });
+    expect(parseTokens("{not json"), "damaged").toEqual(parseTokens(null));
+  });
+
+  // The checkboxes' state must come back as chips, never be lost in silence.
+  it("replays the checkboxes of an older value as chips", () => {
+    const checkboxes = JSON.stringify({ notFull: true, noPassword: true, notEmpty: false, joinable: false });
+    expect(parseTokens(checkboxes)).toEqual({
+      tokens: { notFull: { type: "bool", sign: 1 }, noPassword: { type: "bool", sign: 1 } },
+      pinned: DEFAULT_PINNED,
+    });
+    const withTokens = JSON.stringify({
+      notFull: false,
+      noPassword: false,
+      notEmpty: true,
+      joinable: false,
+      tokens: { ...val("track", "monza"), unknown: { type: "val" } },
+      pinned: ["car", "x"],
+    });
+    expect(parseTokens(withTokens)).toEqual({
+      tokens: { ...val("track", "monza"), notEmpty: { type: "bool", sign: 1 } },
+      pinned: ["notFull", "noPassword", "notEmpty", "joinable", "car"],
+    });
+  });
+
+  it("reads today's value as written, an unpinned or removed chip included", () => {
+    const today = serializeTokens({ noPassword: { type: "bool", sign: -1 } }, ["track"]);
+    expect(parseTokens(today)).toEqual({ tokens: { noPassword: { type: "bool", sign: -1 } }, pinned: ["track"] });
   });
 });

@@ -4,10 +4,11 @@
   //
   // Four tabs over the list (SPEC-play-online.md, case 1): All, and the
   // user's own servers — Favourites, Recent, and those a friend is on. The
-  // four toggles sort out the 9 000 public servers; they do not apply to
-  // one's own, which stay listed full, locked or empty: that is exactly when
-  // one goes looking for them. The search and the tokens apply everywhere:
-  // they are what the user asked for, and the chips say so on every tab.
+  // four yes/no chips (not full, no password…) sort out the 9 000 public
+  // servers; they are not offered on one's own tabs, whose servers stay listed
+  // full, locked or empty: that is exactly when one goes looking for them. The
+  // search and the tokens apply everywhere: they are what the user asked for,
+  // and the chips say so on every tab.
   //
   // Friends cost a request per busy server (the lobby names nobody), so the
   // scan only runs once someone has been marked, after each list load.
@@ -30,13 +31,15 @@
     type ServerSummary,
   } from "$lib/online/online";
   import { parseJoinLink } from "$lib/online/link";
-  import { DEFAULT_FILTERS, filterServers, parseFilters, sortServers, type OnlineFilters } from "$lib/online/filters";
+  import { searchServers, sortServers } from "$lib/online/filters";
   import { carName, NO_LOOKS, searchText, type Looks } from "$lib/online/looks";
   import {
     asksPing,
     DEFAULT_PINNED,
+    DEFAULT_TOKENS,
     onlineTokenDefs,
     parseTokens,
+    serializeTokens,
     splitPing,
     tokenOptions,
     tokenPredicate,
@@ -55,8 +58,8 @@
   let looks = $state<Looks>(NO_LOOKS);
   let loading = $state(true);
   let error = $state("");
-  let filters = $state<OnlineFilters>({ ...DEFAULT_FILTERS });
-  let tokens = $state<FilterMap>({});
+  let search = $state("");
+  let tokens = $state<FilterMap>({ ...DEFAULT_TOKENS });
   let pinned = $state<string[]>([...DEFAULT_PINNED]);
   let selected = $state<ServerSummary | null>(null);
   let tab = $state<OnlineTab>("all");
@@ -151,9 +154,8 @@
       getUiPref(StorageKey.onlineGrouped),
       loadOnlineStore(),
     ]);
-    // The search is a gesture of the moment; the toggles, the tokens and the
-    // pinned chips are remembered.
-    filters = { ...parseFilters(savedFilters), search: "" };
+    // The search is a gesture of the moment; the chips and their pins are
+    // remembered — the checkboxes they replaced included (`parseTokens`).
     ({ tokens, pinned } = parseTokens(savedFilters));
     tab = TABS.find((x) => x === savedTab) ?? "all";
     grouped = savedGrouped === "1";
@@ -162,12 +164,11 @@
   });
 
   $effect(() => {
-    const { notFull, noPassword, notEmpty, joinable } = filters;
-    const saved = { notFull, noPassword, notEmpty, joinable, tokens, pinned };
+    const saved = serializeTokens(tokens, pinned);
     const current = tab;
     const group = grouped;
     if (!restored) return;
-    setUiPref(StorageKey.onlineFilters, JSON.stringify(saved));
+    setUiPref(StorageKey.onlineFilters, saved);
     setUiPref(StorageKey.onlineTab, current);
     setUiPref(StorageKey.onlineGrouped, group ? "1" : "0");
   });
@@ -187,11 +188,14 @@
   });
   const defs = $derived(
     withCountryLabels(
-      onlineTokenDefs({
-        track: (v) => trackNames[v] ?? v,
-        car: (v) => carName(looks, v),
-        ping: (v) => t("online.pingUnder", { ms: v }),
-      }),
+      onlineTokenDefs(
+        {
+          track: (v) => trackNames[v] ?? v,
+          car: (v) => carName(looks, v),
+          ping: (v) => t("online.pingUnder", { ms: v }),
+        },
+        tab === "all",
+      ),
     ),
   );
   const ctx: TokenContext = $derived({
@@ -207,12 +211,11 @@
     const text = (s: ServerSummary) => searchText(looks, s);
     const tokensOk = tokenPredicate(defs, splitPing(tokens).rest, ctx);
     if (tab === "all") {
-      const kept = filterServers(servers, filters, text).filter(tokensOk);
+      const kept = searchServers(servers, search, text).filter(tokensOk);
       return sortServers(kept, new Set(Object.keys(friends)));
     }
-    // One's own servers: the search only, never the toggles (see above).
-    const searchOnly = { ...DEFAULT_FILTERS, notFull: false, noPassword: false, search: filters.search };
-    return filterServers(tabServers(tab, servers, store, friends), searchOnly, text).filter(tokensOk);
+    // One's own servers: their catalogue has no yes/no chips (see above).
+    return searchServers(tabServers(tab, servers, store, friends), search, text).filter(tokensOk);
   });
   const wantsPing = $derived(asksPing(tokens));
   const shown = $derived.by(() => {
@@ -256,13 +259,6 @@
     if (tab === "friends") return store.friends.length ? t("online.emptyFriends") : t("online.emptyNoFriends");
     return t("online.empty");
   });
-
-  const TOGGLES: { key: "notFull" | "noPassword" | "notEmpty" | "joinable"; label: string }[] = [
-    { key: "notFull", label: "online.filterNotFull" },
-    { key: "noPassword", label: "online.filterNoPassword" },
-    { key: "notEmpty", label: "online.filterNotEmpty" },
-    { key: "joinable", label: "online.filterJoinable" },
-  ];
 </script>
 
 <svelte:window onpaste={onPaste} />
@@ -277,7 +273,7 @@
           {defs}
           bind:filters={tokens}
           bind:pinned
-          bind:query={filters.search}
+          bind:query={search}
           optionsFor={(key) => {
             const def = defs.find((d) => d.key === key);
             return def ? tokenOptions(def, servers, ctx) : [];
@@ -295,12 +291,6 @@
       {#if tab === "all" || measuring > 0}
         <div class="toggles">
           {#if tab === "all"}
-            {#each TOGGLES as toggle (toggle.key)}
-              <label class="tog">
-                <input type="checkbox" bind:checked={filters[toggle.key]} />
-                {t(toggle.label)}
-              </label>
-            {/each}
             <label class="tog">
               <input type="checkbox" bind:checked={grouped} />
               {t("online.groupByTrack")}

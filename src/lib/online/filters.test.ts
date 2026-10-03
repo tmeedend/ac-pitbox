@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_FILTERS, filterServers, parseFilters, sortServers } from "./filters";
+import { searchServers, sortServers } from "./filters";
 import type { ServerSummary } from "./online";
 
 function server(over: Partial<ServerSummary>): ServerSummary {
@@ -24,25 +24,17 @@ function server(over: Partial<ServerSummary>): ServerSummary {
   };
 }
 
-describe("online server filters (SPEC-play-online, Filtres de base)", () => {
-  it("hides full and password-protected servers by default, keeps empty ones", () => {
-    const list = [
-      server({ name: "full", clients: 24 }),
-      server({ name: "locked", password: true }),
-      server({ name: "empty", clients: 0 }),
-    ];
-    expect(filterServers(list, DEFAULT_FILTERS).map((s) => s.name)).toEqual(["empty"]);
-  });
-
+describe("online server search and order (SPEC-play-online, Liste des serveurs)", () => {
   it("searches every word in the name, the track and the cars", () => {
     const list = [
       server({ name: "Drift Club", track: { kunos_id: "drift", id: "drift", layout: null, csp_min_build: null } }),
       server({ name: "Nords", cars: ["ks_toyota_celica_st185"] }),
     ];
-    const found = (search: string) => filterServers(list, { ...DEFAULT_FILTERS, search }).map((s) => s.name);
+    const found = (search: string) => searchServers(list, search).map((s) => s.name);
     expect(found("celica")).toEqual(["Nords"]);
     expect(found("DRIFT club")).toEqual(["Drift Club"]);
     expect(found("drift celica")).toEqual([]);
+    expect(found("  ")).toEqual(["Drift Club", "Nords"]);
   });
 
   it("puts ready before one click, then the busiest", () => {
@@ -61,14 +53,5 @@ describe("online server filters (SPEC-play-online, Filtres de base)", () => {
       server({ name: "busy ready", clients: 12 }),
     ];
     expect(sortServers(list).map((s) => s.name)).toEqual(["busy ready", "quiet ready", "busy but missing track"]);
-  });
-
-  it("falls back to the defaults for a missing or damaged stored value", () => {
-    expect(parseFilters(null)).toEqual(DEFAULT_FILTERS);
-    expect(parseFilters("{not json")).toEqual(DEFAULT_FILTERS);
-    expect(parseFilters(JSON.stringify({ notFull: false, joinable: "yes" }))).toEqual({
-      ...DEFAULT_FILTERS,
-      notFull: false,
-    });
   });
 });

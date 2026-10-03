@@ -1,5 +1,7 @@
-// The token filters of the Online page (SPEC-play-online.md, "Filtres de
-// base"): track, car, track category, content, ping, country, session. They
+// The chip filters of the Online page (SPEC-play-online.md, "Filtres de
+// base"): four yes/no chips — not full, no password, not empty, joinable —
+// and the tokens: track, car, track category, content, ping, country,
+// session. They
 // speak the library's chip model (`$lib/library/filters`), so the page reuses
 // its filter bar rather than a copy — as the game folder does — and a token
 // means the same thing on both screens. Pure, for Vitest.
@@ -17,6 +19,7 @@ import {
   type FilterMap,
   type FilterOption,
 } from "$lib/library/filters";
+import { isJoinable } from "./filters";
 import { trackTitle, type Looks } from "./looks";
 import type { ServerSummary, TrackRef } from "./online";
 
@@ -28,6 +31,15 @@ export const PING_KEY = "ping";
 export const COUNTRY_KEY = "country";
 export const SESSION_KEY = "session";
 
+/** The four yes/no chips, once checkboxes. They sort out the 9 000 public
+ * servers and stay off one's own tabs, where a favourite must show full,
+ * locked or empty: that is exactly when one goes looking for it. */
+export const NOT_FULL_KEY = "notFull";
+export const NO_PASSWORD_KEY = "noPassword";
+export const NOT_EMPTY_KEY = "notEmpty";
+export const JOINABLE_KEY = "joinable";
+export const BOOL_KEYS = [NOT_FULL_KEY, NO_PASSWORD_KEY, NOT_EMPTY_KEY, JOINABLE_KEY];
+
 /** The spec's thresholds: green under the first, orange under the second
  * (the list's colours), and a third for "not across the world". A ping token
  * offers each as "under N ms". */
@@ -35,9 +47,13 @@ export const PING_GOOD_MS = 60;
 export const PING_FAIR_MS = 120;
 const PING_LIMITS = [PING_GOOD_MS, PING_FAIR_MS, 200];
 
-/** Ghost chips out of the box: the combos one drives (case 5 of the spec) and
- * the mood of a server (case 3). */
-export const DEFAULT_PINNED = [TRACK_KEY, CAR_KEY, CATEGORY_KEY];
+/** Pinned out of the box: the four yes/no chips, always in reach as the
+ * checkboxes were; the combos one drives (case 5 of the spec) and the mood of
+ * a server (case 3). */
+export const DEFAULT_PINNED = [...BOOL_KEYS, TRACK_KEY, CAR_KEY, CATEGORY_KEY];
+
+/** Posed out of the box: a full server is no place to go, unless one asks. */
+export const DEFAULT_TOKENS: FilterMap = { [NOT_FULL_KEY]: { type: "bool", sign: 1 } };
 
 /** Labels the screen supplies: the names the library knows, and the words of
  * the current language. Absent, a value shows as stored. */
@@ -47,9 +63,17 @@ export interface TokenLabels {
   ping?: (value: string) => string;
 }
 
-/** The catalogue of the page, in the order of the add menu. */
-export function onlineTokenDefs(labels: TokenLabels = {}): FilterDef[] {
+/** The catalogue of the page, in the order of the add menu. Without the
+ * yes/no chips (`bools: false`) on one's own tabs. */
+export function onlineTokenDefs(labels: TokenLabels = {}, bools = true): FilterDef[] {
+  const yesNo: FilterDef[] = [
+    { key: NOT_FULL_KEY, labelKey: "online.filterNotFull", negLabelKey: "online.filterFull", type: "bool" },
+    { key: NO_PASSWORD_KEY, labelKey: "online.filterNoPassword", negLabelKey: "online.filterPassword", type: "bool" },
+    { key: NOT_EMPTY_KEY, labelKey: "online.filterNotEmpty", negLabelKey: "online.filterEmpty", type: "bool" },
+    { key: JOINABLE_KEY, labelKey: "online.filterJoinable", negLabelKey: "online.filterNotJoinable", type: "bool" },
+  ];
   return [
+    ...(bools ? yesNo : []),
     { key: TRACK_KEY, labelKey: "online.filterTrack", type: "val", labelOf: labels.track },
     // A server carries several cars and a track several categories: the
     // operator is offered where an AND can match.
@@ -139,6 +163,22 @@ function valuesOf(key: string, ctx: TokenContext): (s: ServerSummary) => string[
   }
 }
 
+/** What a yes/no chip asks of a server, in its positive sense. */
+function boolOf(key: string): (s: ServerSummary) => boolean {
+  switch (key) {
+    case NOT_FULL_KEY:
+      return (s) => s.clients < s.max_clients;
+    case NO_PASSWORD_KEY:
+      return (s) => !s.password;
+    case NOT_EMPTY_KEY:
+      return (s) => s.clients > 0;
+    case JOINABLE_KEY:
+      return isJoinable;
+    default:
+      return () => true;
+  }
+}
+
 /** Compiles the posed tokens into one predicate. Resolved once per filter,
  * never per server: this runs over the 9 000 servers of the lobby. */
 export function tokenPredicate(
@@ -149,6 +189,12 @@ export function tokenPredicate(
   const tests: ((s: ServerSummary) => boolean)[] = [];
   for (const def of defs) {
     const st = tokens[def.key];
+    if (st?.type === "bool" && def.type === "bool") {
+      const get = boolOf(def.key);
+      const want = st.sign > 0;
+      tests.push((s) => get(s) === want);
+      continue;
+    }
     if (st?.type !== "val") continue;
     const test = valTest(def, st);
     if (!test) continue;
@@ -187,20 +233,43 @@ export interface StoredTokens {
   pinned: string[];
 }
 
-/** Reads the tokens and pinned chips stored beside the toggles
- * (`StorageKey.onlineFilters`). A value written before tokens existed, or
- * damaged, gives none posed and the default pins — never an empty list. */
+/** The shape written today. Version 2 is the one where the four checkboxes
+ * became chips; a value without it was written before. */
+export const TOKENS_VERSION = 2;
+
+export function serializeTokens(tokens: FilterMap, pinned: string[]): string {
+  return JSON.stringify({ v: TOKENS_VERSION, tokens, pinned });
+}
+
+/**
+ * Reads the chips and pins stored under `StorageKey.onlineFilters`. Nothing
+ * saved, or damaged, gives the defaults — never an empty list.
+ *
+ * **A value written before the chips is replayed, never dropped.** It held
+ * four booleans side by side (`notFull: true…`), each a checkbox ticked or
+ * not: a ticked one comes back as its chip, posed positive; an unticked one,
+ * which filtered nothing, as no chip. And the four new chips join its pins,
+ * since they were all on screen as checkboxes.
+ */
 export function parseTokens(raw: string | null): StoredTokens {
   const defs = onlineTokenDefs();
-  const fallback = { tokens: {}, pinned: [...DEFAULT_PINNED] };
+  const fallback = { tokens: { ...DEFAULT_TOKENS }, pinned: [...DEFAULT_PINNED] };
   if (!raw) return fallback;
+  let stored: Record<string, unknown>;
   try {
-    const stored = JSON.parse(raw) as { tokens?: unknown; pinned?: unknown };
-    const pinned = Array.isArray(stored.pinned)
-      ? stored.pinned.filter((k): k is string => typeof k === "string" && defs.some((d) => d.key === k))
-      : fallback.pinned;
-    return { tokens: sanitizeFilterMap(stored.tokens, defs), pinned };
+    stored = JSON.parse(raw) as Record<string, unknown>;
   } catch {
     return fallback;
   }
+  if (!stored || typeof stored !== "object") return fallback;
+  const tokens = sanitizeFilterMap(stored.tokens, defs);
+  const known = (k: unknown): k is string => typeof k === "string" && defs.some((d) => d.key === k);
+  let pinned = Array.isArray(stored.pinned) ? stored.pinned.filter(known) : [...DEFAULT_PINNED];
+  if (stored.v !== TOKENS_VERSION) {
+    for (const key of BOOL_KEYS) {
+      if (stored[key] === true && !tokens[key]) tokens[key] = { type: "bool", sign: 1 };
+    }
+    pinned = [...BOOL_KEYS.filter((k) => !pinned.includes(k)), ...pinned];
+  }
+  return { tokens, pinned };
 }
