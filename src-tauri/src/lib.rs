@@ -512,6 +512,7 @@ pub fn run() {
             commands::online::online_server_detail,
             commands::online::online_join,
             commands::online::online_server_drivers,
+            commands::online::online_ping,
             commands::online::get_online_store,
             commands::online::save_online_store,
             commands::others::list_other_mods,

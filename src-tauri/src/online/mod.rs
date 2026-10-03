@@ -14,11 +14,13 @@ use serde::Serialize;
 use crate::config::AppConfig;
 
 pub mod drivers;
+pub mod extended;
 mod fanout;
 mod installed;
 pub mod join;
 pub mod lobby;
 mod looks;
+pub mod ping;
 pub mod readiness;
 pub mod server;
 mod steam;

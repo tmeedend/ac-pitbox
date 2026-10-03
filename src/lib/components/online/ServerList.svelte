@@ -4,7 +4,9 @@
   // lobby holds some 9 000 servers, so only the visible lines are rendered,
   // like the game folder's tree.
   import { t } from "$lib/i18n/index.svelte";
-  import { blockerText, levelText } from "$lib/online/labels";
+  import { blockerText, durationText, levelText } from "$lib/online/labels";
+  import { fromSeconds } from "$lib/online/sessions";
+  import { pingOf, requestPings } from "$lib/online/pings.svelte";
   import { carName, carsOwnedFirst, layoutLook, trackTitle, type Looks } from "$lib/online/looks";
   import { serverKey, type ServerSummary } from "$lib/online/online";
   import { previewSrc } from "$lib/library/library";
@@ -36,9 +38,18 @@
   const first = $derived(Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN));
   const visible = $derived(servers.slice(first, first + Math.ceil(viewport / ROW_H) + 2 * OVERSCAN));
 
-  function timeLeft(seconds: number): string {
-    const minutes = Math.round(seconds / 60);
-    return minutes >= 120 ? t("online.hours", { n: Math.round(minutes / 60) }) : t("online.minutes", { n: minutes });
+  // Pings for the rows on screen, once the scroll has settled: measuring
+  // every row flown past would ask hundreds of servers for nothing.
+  $effect(() => {
+    const rows = visible;
+    const timer = setTimeout(() => requestPings(rows), 400);
+    return () => clearTimeout(timer);
+  });
+
+  /** Thresholds of the spec; past them the figure goes quiet rather than
+   * red — red is kept for what the session retains (SPEC §7.2ter). */
+  function pingClass(ms: number): string {
+    return ms < 60 ? "good" : ms < 120 ? "fair" : "far";
   }
 </script>
 
@@ -55,6 +66,7 @@
         {@const key = serverKey(s)}
         {@const look = layoutLook(looks, s.track)}
         {@const cars = carsOwnedFirst(looks, s.cars)}
+        {@const ping = pingOf(key)}
         <button
           type="button"
           class="row"
@@ -88,11 +100,14 @@
           <span class="session">
             {#if s.session}
               <span class="badge" class:race={s.session === "race"}>{t(`online.session.${s.session}`)}</span>
-              <span class="left mono">{timeLeft(s.time_left)}</span>
+              <span class="left mono">{durationText(fromSeconds(s.time_left))}</span>
             {/if}
           </span>
           <span class="players mono" class:full={s.clients >= s.max_clients} class:empty={s.clients === 0}>
             {s.clients} / {s.max_clients}
+          </span>
+          <span class="ping mono {ping === undefined ? '' : pingClass(ping)}">
+            {ping === undefined ? "" : t("online.ping", { ms: ping })}
           </span>
           <span class="cars" class:last={!!lastCars[key]}>
             {#if lastCars[key]}
@@ -141,7 +156,7 @@
   }
   .row {
     display: grid;
-    grid-template-columns: 72px minmax(150px, 1.1fr) minmax(160px, 1.6fr) 150px 70px minmax(120px, 1fr) auto 110px;
+    grid-template-columns: 72px minmax(150px, 1.1fr) minmax(160px, 1.6fr) 150px 70px 54px minmax(120px, 1fr) auto 110px;
     align-items: center;
     gap: 14px;
     width: 100%;
@@ -245,6 +260,20 @@
   .more {
     color: var(--faint);
     margin-left: 4px;
+  }
+  .ping {
+    font-size: 11px;
+    text-align: right;
+    color: var(--faint);
+  }
+  .ping.good {
+    color: var(--green);
+  }
+  .ping.fair {
+    color: var(--orange);
+  }
+  .ping.far {
+    color: var(--muted);
   }
   .cars.last {
     color: var(--txt2);

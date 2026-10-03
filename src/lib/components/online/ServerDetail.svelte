@@ -12,6 +12,9 @@
   import { carName, layoutLook, trackTitle, type Looks } from "$lib/online/looks";
   import { isFavourite, isFriend } from "$lib/online/lists";
   import { joinState } from "$lib/online/readiness";
+  import { pingOf } from "$lib/online/pings.svelte";
+  import SessionTimeline from "./SessionTimeline.svelte";
+  import ServerExtras from "./ServerExtras.svelte";
   import { blockerText, levelText } from "$lib/online/labels";
   import { onlineStore, recordRecentJoin, toggleFavouriteServer, toggleFriendName } from "$lib/online/store.svelte";
   import { previewSrc } from "$lib/library/library";
@@ -22,9 +25,11 @@
     /** The car last joined with on this server: picked again when it can
      * still be taken — "rejoindre à l'identique est un clic". */
     preferredCar: string | null;
+    /** A password carried by a pasted connection link, typed in for you. */
+    presetPassword?: string | null;
     onclose: () => void;
   }
-  let { server, looks, preferredCar, onclose }: Props = $props();
+  let { server, looks, preferredCar, presetPassword = null, onclose }: Props = $props();
 
   const favourite = $derived(isFavourite(onlineStore(), serverKey(server)));
 
@@ -51,6 +56,13 @@
     untrack(() => void load(key));
   });
 
+  // A link pasted for the server already open does not reload the panel:
+  // its password still has to land in the field.
+  $effect(() => {
+    const preset = presetPassword;
+    if (preset) password = preset;
+  });
+
   async function load(key: string) {
     const { ip, http_port } = server;
     detail = null;
@@ -58,7 +70,7 @@
     joinError = "";
     joined = false;
     car = null;
-    password = "";
+    password = presetPassword ?? "";
     loading = true;
     try {
       const d = await serverDetail(ip, http_port);
@@ -161,12 +173,14 @@
 
   <div class="facts mono">
     <span class="players">{live.clients} / {live.max_clients}</span>
-    {#if live.session}<span>{t(`online.session.${live.session}`)}</span>{/if}
     {#if live.track.csp_min_build}<span>{t("online.csp", { build: live.track.csp_min_build })}</span>{/if}
     <!-- The lobby geolocates servers; a server's own /INFO often cannot. -->
     {#if live.country ?? server.country}<span>{live.country ?? server.country}</span>{/if}
+    {#if pingOf(serverKey(server)) !== undefined}<span>{t("online.ping", { ms: pingOf(serverKey(server)) ?? 0 })}</span>{/if}
     <span class="addr">{live.ip}:{live.http_port}</span>
   </div>
+
+  <SessionTimeline server={live} />
 
   <div class="body">
     {#if loading}
@@ -231,6 +245,8 @@
       {:else}
         <p class="muted">{t("online.noDrivers")}</p>
       {/if}
+
+      <ServerExtras {detail} />
     {/if}
   </div>
 

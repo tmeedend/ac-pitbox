@@ -65,6 +65,15 @@ pub async fn online_server_drivers(
         .map_err(|e| e.to_string())?
 }
 
+/// The round trip to each of `servers`, in milliseconds (`online/ping.rs`).
+/// Servers that do not answer are absent.
+#[tauri::command]
+pub async fn online_ping(servers: Vec<online::drivers::ServerAddr>) -> Result<Vec<online::ping::Ping>, String> {
+    tauri::async_runtime::spawn_blocking(move || online::ping::ping(&servers))
+        .await
+        .map_err(|e| e.to_string())
+}
+
 fn config_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
     app.path().app_config_dir().map_err(|e| e.to_string())
 }

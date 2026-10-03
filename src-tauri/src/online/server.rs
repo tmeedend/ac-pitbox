@@ -52,6 +52,11 @@ pub struct ServerDetail {
     /// What the server declares it can do (`STEAM_TICKET`, `WEATHERFX_V1`…),
     /// empty on a vanilla server. Written into `race.ini` at join time.
     pub features: Vec<String>,
+    /// Conditions, rules and description, on servers that publish them.
+    pub extended: Option<super::extended::Extended>,
+    /// Web links from the server's name and description (its Discord, most
+    /// often), to open from the panel.
+    pub links: Vec<String>,
 }
 
 /// One slot of `/JSON`.
@@ -202,10 +207,17 @@ pub fn fetch_detail(
     if let Some(cars_dir) = cars_dir {
         fill_previews(&mut cars, cars_dir);
     }
+    let (extended, raw_description) = match super::extended::fetch(ip, http_port, steam_id) {
+        Some((extended, raw)) => (Some(extended), raw),
+        None => (None, None),
+    };
+    let links = super::extended::links(&[&summary.name, raw_description.as_deref().unwrap_or_default()]);
     Ok(ServerDetail {
         cars,
         drivers: drivers(&entries),
         features: entries.features,
+        extended,
+        links,
         summary,
     })
 }

@@ -42,6 +42,33 @@ export interface ServerSummary {
   level?: Level;
   track_level?: Level;
   blockers?: Blocker[];
+  /** One per session: seconds, except a race on laps (`timed` false).
+   * Absent from a snapshot saved before they were read. */
+  durations?: number[];
+  timed?: boolean;
+  extra_lap?: boolean;
+  inverted_grid?: boolean;
+  mandatory_pit?: boolean;
+}
+
+/** A rule departing from an AC server's defaults (`online/extended.rs`). */
+export type Rule =
+  | { kind: "absDenied" | "absForced" | "tcDenied" | "tcForced" }
+  | { kind: "stabilityAllowed" | "autoclutchDenied" | "tyreBlanketsAllowed" | "virtualMirrorForced" }
+  | { kind: "damage" | "fuel" | "tyreWear"; percent: number }
+  | { kind: "tyresOut"; count: number };
+
+export interface Extended {
+  conditions: {
+    weather: string | null;
+    ambient: number | null;
+    road: number | null;
+    wind_speed: number | null;
+    wind_direction: number | null;
+    grip: number | null;
+  };
+  rules: Rule[];
+  description: string | null;
 }
 
 export interface CarSlots {
@@ -68,6 +95,22 @@ export interface ServerDetail {
   cars: CarSlots[];
   drivers: Driver[];
   features: string[];
+  /** On servers that publish `/api/details` only. */
+  extended: Extended | null;
+  /** Web links from the name and the description. */
+  links: string[];
+}
+
+export interface Ping {
+  ip: string;
+  http_port: number;
+  ms: number;
+}
+
+/** The round trip to each server, measured by a TCP connection
+ * (`online/ping.rs`). Servers that do not answer are absent. */
+export function pingServers(servers: ServerSummary[]): Promise<Ping[]> {
+  return invoke<Ping[]>("online_ping", { servers: servers.map(({ ip, http_port }) => ({ ip, http_port })) });
 }
 
 /** A server's identity across the list and the detail panel. */

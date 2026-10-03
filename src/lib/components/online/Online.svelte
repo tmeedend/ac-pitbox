@@ -17,7 +17,15 @@
   import { getUiPref, setUiPref } from "$lib/uiPrefs.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import Tabs from "$lib/components/ui/Tabs.svelte";
-  import { listServers, serverDrivers, serverKey, type ServerDrivers, type ServerSummary } from "$lib/online/online";
+  import {
+    listServers,
+    serverDetail,
+    serverDrivers,
+    serverKey,
+    type ServerDrivers,
+    type ServerSummary,
+  } from "$lib/online/online";
+  import { parseJoinLink } from "$lib/online/link";
   import { DEFAULT_FILTERS, filterServers, parseFilters, sortServers, type OnlineFilters } from "$lib/online/filters";
   import { NO_LOOKS, searchText, type Looks } from "$lib/online/looks";
   import { friendsOnline, recentCars, tabServers, type OnlineTab } from "$lib/online/lists";
@@ -55,6 +63,35 @@
   }
 
   const TABS: OnlineTab[] = ["all", "favourites", "recent", "friends"];
+
+  /** The password a pasted link carried, for the server it opened. */
+  let linkPassword = $state<string | null>(null);
+
+  /** A connection link pasted anywhere on the page opens its server (case 1
+   * of the spec). Anything else pastes as usual — and a password field keeps
+   * what is pasted into it, whatever it looks like. */
+  async function onPaste(e: ClipboardEvent) {
+    const target = e.target as HTMLInputElement | null;
+    if (target?.type === "password") return;
+    const link = parseJoinLink(e.clipboardData?.getData("text") ?? "");
+    if (!link) return;
+    e.preventDefault();
+    error = "";
+    const key = `${link.ip}:${link.httpPort}`;
+    linkPassword = link.password;
+    const listed = servers.find((s) => serverKey(s) === key);
+    if (listed) {
+      selected = listed;
+      return;
+    }
+    // Not in the lobby — a private server, or one the lobby lost: asked
+    // directly, as its panel would.
+    try {
+      selected = (await serverDetail(link.ip, link.httpPort)).summary;
+    } catch (err) {
+      error = errorText(err);
+    }
+  }
 
   /** Who drives where, for the servers that had players at the last load. */
   let scan = $state<ServerDrivers[]>([]);
@@ -137,6 +174,8 @@
   ];
 </script>
 
+<svelte:window onpaste={onPaste} />
+
 <div class="online" class:with-panel={!!selected}>
   <section class="main">
     <header class="head">
@@ -179,7 +218,10 @@
           {friends}
           lastCars={tab === "recent" ? lastCars : {}}
           selected={selected ? serverKey(selected) : null}
-          onselect={(s) => (selected = s)}
+          onselect={(s) => {
+            selected = s;
+            linkPassword = null;
+          }}
         />
       </div>
     {/if}
@@ -190,7 +232,11 @@
       server={selected}
       {looks}
       preferredCar={lastCars[serverKey(selected)] ?? null}
-      onclose={() => (selected = null)}
+      presetPassword={linkPassword}
+      onclose={() => {
+        selected = null;
+        linkPassword = null;
+      }}
     />
   {/if}
 </div>

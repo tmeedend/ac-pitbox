@@ -859,7 +859,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Corrections par mod** | à faire : marque et classe d'un mod précis (pays et fiche technique : livrés avec la fiche) | `docs/CHANTIERS.md` |
 | **Règles de tags divergentes** | deux fichiers décrivent la même ontologie, un seul est chargé | `docs/CHANTIERS.md` |
 | **Dossier du jeu** | lot 1 livré (lecture seule) ; reste le lot 2, les tailles | `docs/SPEC-etat-dossier.md`, `docs/CHANTIERS.md` |
-| **Page Online** | lots 1 à 5 livrés (lister, rejoindre via `race/online`, noms et vignettes, favoris, récents, amis, niveaux de préparation) ; restent téléchargements et couches, puis le détail du panneau | `docs/SPEC-play-online.md`, `docs/online-join-research.md` |
+| **Page Online** | lots 1 à 6 livrés (lister, rejoindre via `race/online`, noms et vignettes, favoris, récents, amis, niveaux de préparation, détail du panneau, ping, lien collé) ; restent téléchargements et couches, puis les tokens de filtre | `docs/SPEC-play-online.md`, `docs/online-join-research.md` |
 | **Refactorings reportés** | quatre repérés et chiffrés (actions de la fiche, aperçu 3D, `importer.rs`, curseur de régime) | `docs/CHANTIERS.md` |
 
 ## Fin de tâche — dans cet ordre

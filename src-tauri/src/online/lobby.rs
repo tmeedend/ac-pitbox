@@ -130,6 +130,15 @@ pub struct ServerSummary {
     pub sessions: Vec<SessionKind>,
     /// Seconds left in the current session.
     pub time_left: u64,
+    /// One per entry of `sessions`. Seconds, except a race that is not
+    /// `timed`, counted in laps — CM's own reading (`Session.DisplayDuration`).
+    pub durations: Vec<u64>,
+    /// The race runs on time rather than laps.
+    pub timed: bool,
+    /// A timed race ends with one more lap after the clock.
+    pub extra_lap: bool,
+    pub inverted_grid: bool,
+    pub mandatory_pit: bool,
     /// Filled by `Installed::judge`: the track can be driven (installed or in
     /// the library).
     pub track_available: bool,
@@ -150,6 +159,12 @@ fn number(value: &Value) -> Option<u64> {
     value
         .as_u64()
         .or_else(|| value.as_str().and_then(|s| s.trim().parse().ok()))
+}
+
+/// A yes/no the lobby writes as a boolean and some `/INFO` as a number
+/// (`"inverted":0`, or the position of the inverted grid).
+fn flag(value: &Value) -> bool {
+    value.as_bool().unwrap_or_else(|| number(value).is_some_and(|n| n != 0))
 }
 
 fn text(value: &Value) -> Option<String> {
@@ -216,6 +231,11 @@ pub fn parse_server(entry: &Value) -> Option<ServerSummary> {
             .filter_map(SessionKind::from_code)
             .collect(),
         time_left: number(&entry["timeleft"]).unwrap_or(0),
+        durations: list("durations").iter().filter_map(number).collect(),
+        timed: flag(&entry["timed"]),
+        extra_lap: flag(&entry["extra"]),
+        inverted_grid: flag(&entry["inverted"]),
+        mandatory_pit: flag(&entry["pit"]),
         track_available: false,
         cars_available: 0,
         level: Level::default(),
@@ -331,6 +351,20 @@ mod tests {
         );
         assert!(!server.booking, "pickup server");
         assert_eq!(server.cars.len(), 2);
+        assert_eq!(server.durations, vec![7200], "string durations read as numbers");
+        assert!(
+            server.timed && !server.inverted_grid && !server.mandatory_pit,
+            "flags read"
+        );
+    }
+
+    /// Rule: a flag may come as a boolean or as a number, whatever the source.
+    #[test]
+    fn flags_read_as_booleans_or_numbers() {
+        assert!(flag(&serde_json::json!(true)));
+        assert!(flag(&serde_json::json!(1)), "inverted grid at position 1");
+        assert!(!flag(&serde_json::json!(0)));
+        assert!(!flag(&Value::Null), "absent");
     }
 
     /// Rule: `/INFO` writes real numbers, and its `session` is an INDEX — the

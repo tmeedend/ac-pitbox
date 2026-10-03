@@ -252,6 +252,30 @@ requis »). Ce que le lot ne fait pas encore : télécharger, et écarter une
 couche le temps d'une session — un serveur qui en aurait besoin se lit
 `À télécharger` ou `Prêt`.
 
+**Lot 6 — le détail du panneau (livré).** La **frise des sessions** sous les
+faits du serveur : chaque session et sa durée lues comme CM les lit (secondes,
+sauf une course aux tours ; « +1 tour » pour une course au temps qui en
+ajoute un ; heures au-delà de deux), la session en cours encadrée avec le temps
+qui reste, et `Arrêt obligatoire` / `Grille inversée` en pastilles. Sur les
+serveurs qui publient `/api/details` (AssettoServer, le wrapper de CM — pas un
+serveur Kunos nu) : une bande de **conditions** (météo telle que CSP la nomme,
+air, piste, grip, vent), les **règles en écarts** à ce qu'un serveur AC fait par
+défaut (ABS ou antipatinage interdit ou imposé, ESC autorisé, embrayage auto
+interdit, couvertures, rétro virtuel, dégâts, consommation et usure s'ils ne
+sont pas à 100 %, roues hors piste tolérées), la **description** repliée,
+débarrassée de son BBCode. Les **liens** du nom et de la description (Discord
+le plus souvent, `discord.gg/…` écrit sans `https` compris, images exclues)
+s'ouvrent dans le navigateur. **Coller un lien de connexion** n'importe où sur
+la page (lien de partage CM `acstuff.club/s/q:race/online/join?…`, forme
+`acmanager://`) ouvre son serveur, même absent du lobby ; un mot de passe en
+clair dans le lien remplit le champ — le mot de passe chiffré de CM ne se lit
+pas ici. Le **ping** est mesuré par Pit Box (une connexion TCP au port HTTP du
+serveur, soit un aller-retour) sur les lignes visibles une fois le défilement
+arrêté, gardé cinq minutes : vert sous 60 ms, orange sous 120, gris au-delà —
+pas rouge, réservé à la session (SPEC §7.2ter).
+
 **Restent**, dans l'ordre où ils servent les cas d'usage : le téléchargement
-du contenu manquant et le retrait des couches pendant la session (cas 2) ; la frise des sessions, les conditions et les règles du détail ;
-coller un lien de connexion ; ping, pays en drapeaux, tokens de filtre.
+du contenu manquant et le retrait des couches pendant la session (cas 2) ;
+pays en drapeaux, tokens de filtre (circuit, voiture, catégorie, ping, pays,
+session) ; la v2 (regrouper par circuit, lien bibliothèque → online,
+notifications).
