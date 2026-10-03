@@ -200,8 +200,15 @@ circuit et au moins une voiture jouables ici (installés, ou dans la
 bibliothèque avec leurs fichiers) — les quatre niveaux de préparation viennent
 plus tard.
 
-**Restent**, dans l'ordre où ils servent les cas d'usage : noms et vignettes
-des circuits et voitures (le lot 1 affiche les identifiants) ; Favoris, Récents
+**Lot 2 — noms et vignettes (livré).** La liste montre la photo du layout, son
+nom et celui des voitures tels que la bibliothèque les connaît (correction de
+l'utilisateur comprise), les voitures possédées en premier ; la recherche lit
+aussi ces noms. Le panneau ouvre sur la bannière du circuit avec son tracé, et
+chaque voiture porte la photo du skin que le serveur imposera. Ce que la
+bibliothèque n'a pas garde son identifiant. Les voitures sans aucun slot
+joueur (le trafic IA d'un AssettoServer) ne sont pas proposées.
+
+**Restent**, dans l'ordre où ils servent les cas d'usage : Favoris, Récents
 et Amis (cas 1) ; les niveaux de préparation et le bouton qui prépare tout
 (cas 2) ; la frise des sessions, les conditions et les règles du détail ;
 coller un lien de connexion ; ping, pays en drapeaux, tokens de filtre.

@@ -444,6 +444,13 @@ fn entity_dirs(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Vec<PathBuf> {
     dirs
 }
 
+/// Layouts of a track with their names and images, read on the same
+/// composition stack as the detail sheet — so the Online page shows the
+/// picture the game will show, active layers included.
+pub(crate) fn track_layouts_detail(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> uijson::TrackDetail {
+    uijson::read_track_detail(&entity_dirs(conn, cfg, m))
+}
+
 /// Applique un lecteur à la pile de composition et retient la première réponse.
 ///
 /// Résolution **fichier par fichier**, jamais dossier par dossier : une couche

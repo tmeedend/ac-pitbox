@@ -20,16 +20,16 @@ fn installed(app: &AppHandle) -> Result<Installed, String> {
     Ok(Installed::scan(&conn, &cfg))
 }
 
-/// The public server list, each judged against what can be driven here.
+/// The public server list, each judged against what can be driven here, with
+/// the names and pictures of what they reference.
 #[tauri::command]
-pub async fn online_servers(app: AppHandle) -> Result<Vec<online::lobby::ServerSummary>, String> {
+pub async fn online_servers(app: AppHandle) -> Result<online::ServerList, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let mut servers = online::lobby::fetch_lobby(steam_id()?)?;
-        let installed = installed(&app)?;
-        for server in &mut servers {
-            installed.judge(server);
-        }
-        Ok(servers)
+        let servers = online::lobby::fetch_lobby(steam_id()?)?;
+        let cfg = crate::config::load(&app);
+        let db = app.state::<Db>();
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        Ok(online::judge_list(&conn, &cfg, servers))
     })
     .await
     .map_err(|e| e.to_string())?
@@ -45,7 +45,10 @@ pub async fn online_server_detail(
     tauri::async_runtime::spawn_blocking(move || {
         let steam_id = steam_id()?;
         let installed = installed(&app)?;
-        online::server::fetch_detail(&ip, http_port, steam_id, &installed)
+        let cars_dir = crate::config::load(&app)
+            .ac_install_path
+            .map(|ac| ac.join("content").join("cars"));
+        online::server::fetch_detail(&ip, http_port, steam_id, &installed, cars_dir.as_deref())
     })
     .await
     .map_err(|e| e.to_string())?

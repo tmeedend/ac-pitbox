@@ -28,13 +28,13 @@ export function isJoinable(s: ServerSummary): boolean {
   return s.track_available && s.cars_available > 0;
 }
 
-function matches(s: ServerSummary, terms: string[]): boolean {
-  if (terms.length === 0) return true;
-  const hay = `${s.name} ${s.track.kunos_id} ${s.cars.join(" ")}`.toLowerCase();
-  return terms.every((term) => hay.includes(term));
-}
-
-export function filterServers(servers: ServerSummary[], f: OnlineFilters): ServerSummary[] {
+/** `text` gives what the search reads for a server (`looks.searchText`, which
+ * adds the names the library knows); by default its name and ids. */
+export function filterServers(
+  servers: ServerSummary[],
+  f: OnlineFilters,
+  text: (s: ServerSummary) => string = (s) => `${s.name} ${s.track.kunos_id} ${s.cars.join(" ")}`.toLowerCase(),
+): ServerSummary[] {
   // One term per word, all required — the same reading as the library search.
   const terms = f.search.toLowerCase().split(/\s+/).filter(Boolean);
   return servers.filter(
@@ -43,7 +43,7 @@ export function filterServers(servers: ServerSummary[], f: OnlineFilters): Serve
       (!f.noPassword || !s.password) &&
       (!f.notEmpty || s.clients > 0) &&
       (!f.joinable || isJoinable(s)) &&
-      matches(s, terms),
+      (terms.length === 0 || terms.every((term) => text(s).includes(term))),
   );
 }
 

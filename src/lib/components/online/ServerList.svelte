@@ -5,14 +5,17 @@
   // like the game folder's tree.
   import { t } from "$lib/i18n/index.svelte";
   import { isJoinable } from "$lib/online/filters";
+  import { carName, carsOwnedFirst, layoutLook, trackTitle, type Looks } from "$lib/online/looks";
   import { serverKey, type ServerSummary } from "$lib/online/online";
+  import { previewSrc } from "$lib/library/library";
 
   interface Props {
     servers: ServerSummary[];
+    looks: Looks;
     selected: string | null;
     onselect: (server: ServerSummary) => void;
   }
-  let { servers, selected, onselect }: Props = $props();
+  let { servers, looks, selected, onselect }: Props = $props();
 
   const ROW_H = 46;
   const OVERSCAN = 8;
@@ -43,6 +46,8 @@
       {#each visible as s (serverKey(s))}
         {@const key = serverKey(s)}
         {@const ready = isJoinable(s)}
+        {@const look = layoutLook(looks, s.track)}
+        {@const cars = carsOwnedFirst(looks, s.cars)}
         <button
           type="button"
           class="row"
@@ -51,9 +56,16 @@
           aria-selected={key === selected}
           onclick={() => onselect(s)}
         >
+          <span class="thumb">
+            {#if look?.preview}
+              <img src={previewSrc(look.preview)} alt="" loading="lazy" decoding="async" />
+            {/if}
+          </span>
           <span class="track">
-            <span class="track-id mono" class:missing={!s.track_available}>{s.track.id}</span>
-            {#if s.track.layout}<span class="layout mono">{s.track.layout}</span>{/if}
+            <span class="track-name" class:missing={!s.track_available} title={trackTitle(looks, s.track)}>
+              {trackTitle(looks, s.track)}
+            </span>
+            <span class="layout mono">{s.track.layout ? `${s.track.id} · ${s.track.layout}` : s.track.id}</span>
           </span>
           <span class="name" title={s.name}>{s.name}</span>
           <span class="session">
@@ -65,9 +77,12 @@
           <span class="players mono" class:full={s.clients >= s.max_clients} class:empty={s.clients === 0}>
             {s.clients} / {s.max_clients}
           </span>
-          <span class="cars mono">
-            {s.cars.slice(0, CARS_SHOWN).join(" · ")}
-            {#if s.cars.length > CARS_SHOWN}<span class="more">{t("online.more", { count: s.cars.length - CARS_SHOWN })}</span>{/if}
+          <span class="cars">
+            {cars
+              .slice(0, CARS_SHOWN)
+              .map((c) => carName(looks, c))
+              .join(" · ")}
+            {#if cars.length > CARS_SHOWN}<span class="more">{t("online.more", { count: cars.length - CARS_SHOWN })}</span>{/if}
           </span>
           <span class="flags">
             {#if s.password}
@@ -99,12 +114,12 @@
   }
   .row {
     display: grid;
-    grid-template-columns: minmax(150px, 1.1fr) minmax(160px, 1.6fr) 150px 70px minmax(120px, 1fr) auto 110px;
+    grid-template-columns: 72px minmax(150px, 1.1fr) minmax(160px, 1.6fr) 150px 70px minmax(120px, 1fr) auto 110px;
     align-items: center;
     gap: 14px;
     width: 100%;
     height: 46px;
-    padding: 0 16px;
+    padding: 0 16px 0 6px;
     background: none;
     border: none;
     border-bottom: 1px solid var(--line);
@@ -124,19 +139,36 @@
     flex-direction: column;
     min-width: 0;
   }
-  .track-id {
+  /* The track's photo: what makes a server recognisable before its name is
+     read. An empty frame keeps the columns aligned when there is none. */
+  .thumb {
+    width: 72px;
+    height: 38px;
+    background: var(--card);
+    overflow: hidden;
+  }
+  .thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .track-name {
     color: var(--txt);
     font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .track-id.missing {
+  .track-name.missing {
     color: var(--muted);
   }
   .layout {
     color: var(--muted);
     font-size: 10.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .name {
     overflow: hidden;
@@ -178,7 +210,7 @@
   }
   .cars {
     color: var(--muted);
-    font-size: 11px;
+    font-size: 11.5px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

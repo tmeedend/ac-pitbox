@@ -89,6 +89,11 @@ impl Installed {
         entry.extend(layouts.into_iter().map(|l| l.to_lowercase()));
     }
 
+    #[cfg(test)]
+    pub(super) fn add_car_for_tests(&mut self, id: &str) {
+        self.cars.insert(id.to_lowercase());
+    }
+
     pub fn has_car(&self, id: &str) -> bool {
         self.cars.contains(&id.to_lowercase())
     }

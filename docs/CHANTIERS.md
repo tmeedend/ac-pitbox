@@ -25,7 +25,8 @@ de reprendre. En cas d'écart, la spec fait foi.
 
 ---
 
-- [ ] **Page Online — lot 1 livré (lister, rejoindre), la suite reste.**
+- [ ] **Page Online — lots 1 et 2 livrés (lister, rejoindre, noms et
+      vignettes), la suite reste.**
       Ce qui est fait et ce qui reste : `SPEC-play-online.md`, section Lots.
       **Pièges déjà payés** (`online-join-research.md`), à relire avant de
       toucher au lancement :
@@ -40,6 +41,13 @@ de reprendre. En cas d'écart, la spec fait foi.
         minute : `1` et `0`) ; le lobby écrit ses nombres en chaînes ;
         `track` porte le build CSP minimal (`csp/3465/../E/../id-layout`).
       - Le skin est imposé par le serveur : ne pas en proposer un choix.
+      - Un AssettoServer liste son **trafic IA** parmi ses voitures
+        (`traffic_jp_…`), sans slot joueur. Le panneau les écarte (il lit
+        `/JSON`) ; la liste ne le peut pas — le lobby ne dit pas qui a des
+        slots — et compte donc une voiture de trafic installée dans
+        `cars_available` : un serveur peut s'afficher « Prêt » sans voiture
+        prenable. À reprendre avec les niveaux de préparation (lot à venir),
+        qui demanderont de toute façon `/JSON` serveur par serveur.
       **Pas vérifié** : un serveur à mot de passe et un serveur en booking,
       faute d'échantillon au moment du lot 1 ; un AssettoServer (BSG, LA
       Canyons) refuse même avec le ticket, cause inconnue — le Join natif de

@@ -13,10 +13,12 @@
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import { listServers, serverKey, type ServerSummary } from "$lib/online/online";
   import { DEFAULT_FILTERS, filterServers, parseFilters, sortServers, type OnlineFilters } from "$lib/online/filters";
+  import { NO_LOOKS, searchText, type Looks } from "$lib/online/looks";
   import ServerList from "./ServerList.svelte";
   import ServerDetail from "./ServerDetail.svelte";
 
   let servers = $state<ServerSummary[]>([]);
+  let looks = $state<Looks>(NO_LOOKS);
   let loading = $state(true);
   let error = $state("");
   let filters = $state<OnlineFilters>({ ...DEFAULT_FILTERS });
@@ -29,7 +31,7 @@
     loading = true;
     error = "";
     try {
-      servers = await listServers();
+      ({ servers, looks } = await listServers());
       // Keep the open server in step with the fresh list, when it is still there.
       if (selected) {
         const key = serverKey(selected);
@@ -56,7 +58,7 @@
     setUiPref(StorageKey.onlineFilters, JSON.stringify({ notFull, noPassword, notEmpty, joinable }));
   });
 
-  const shown = $derived(sortServers(filterServers(servers, filters)));
+  const shown = $derived(sortServers(filterServers(servers, filters, (s) => searchText(looks, s))));
 
   const TOGGLES: { key: "notFull" | "noPassword" | "notEmpty" | "joinable"; label: string }[] = [
     { key: "notFull", label: "online.filterNotFull" },
@@ -92,13 +94,18 @@
       <p class="empty">{t("online.empty")}</p>
     {:else}
       <div class="rows">
-        <ServerList servers={shown} selected={selected ? serverKey(selected) : null} onselect={(s) => (selected = s)} />
+        <ServerList
+          servers={shown}
+          {looks}
+          selected={selected ? serverKey(selected) : null}
+          onselect={(s) => (selected = s)}
+        />
       </div>
     {/if}
   </section>
 
   {#if selected}
-    <ServerDetail server={selected} onclose={() => (selected = null)} />
+    <ServerDetail server={selected} {looks} onclose={() => (selected = null)} />
   {/if}
 </div>
 

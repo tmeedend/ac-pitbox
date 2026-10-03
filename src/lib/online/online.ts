@@ -2,6 +2,7 @@
 // docs/SPEC-play-online.md). Mirrors `ServerSummary`, `ServerDetail` and
 // `JoinRequest` on the Rust side.
 import { invoke } from "@tauri-apps/api/core";
+import type { Looks } from "./looks";
 
 export type SessionKind = "booking" | "practice" | "qualify" | "race";
 
@@ -39,6 +40,8 @@ export interface CarSlots {
   /** The skin the server will impose: its first free slot's. */
   skin: string | null;
   available: boolean;
+  /** Photo of `skin`, when the car is in the game with that livery. */
+  preview: string | null;
 }
 
 export interface Driver {
@@ -58,8 +61,15 @@ export function serverKey(s: Pick<ServerSummary, "ip" | "http_port">): string {
   return `${s.ip}:${s.http_port}`;
 }
 
-export function listServers(): Promise<ServerSummary[]> {
-  return invoke<ServerSummary[]>("online_servers");
+/** The list, and the names and pictures of what it references — sent once
+ * rather than on every row (`online::ServerList`). */
+export interface ServerList {
+  servers: ServerSummary[];
+  looks: Looks;
+}
+
+export function listServers(): Promise<ServerList> {
+  return invoke<ServerList>("online_servers");
 }
 
 export function serverDetail(ip: string, httpPort: number): Promise<ServerDetail> {

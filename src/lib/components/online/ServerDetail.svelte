@@ -9,12 +9,15 @@
   import { t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
   import { joinServer, serverDetail, serverKey, type CarSlots, type ServerDetail, type ServerSummary } from "$lib/online/online";
+  import { carName, layoutLook, trackTitle, type Looks } from "$lib/online/looks";
+  import { previewSrc } from "$lib/library/library";
 
   interface Props {
     server: ServerSummary;
+    looks: Looks;
     onclose: () => void;
   }
-  let { server, onclose }: Props = $props();
+  let { server, looks, onclose }: Props = $props();
 
   let detail = $state<ServerDetail | null>(null);
   let loading = $state(false);
@@ -68,6 +71,9 @@
   }
 
   const live = $derived(detail?.summary ?? server);
+  const banner = $derived(layoutLook(looks, live.track));
+  /** The cars one can drive first, each group in the server's order. */
+  const cars = $derived(detail ? [...detail.cars.filter((c) => c.available), ...detail.cars.filter((c) => !c.available)] : []);
 
   /** Why the button cannot join yet, or `null` when it can. */
   const blocker = $derived.by(() => {
@@ -94,11 +100,18 @@
 </script>
 
 <aside class="panel">
+  <!-- Where first, in large: the track's photo is what one recognises. A
+       track that is not here gets the empty frame, dimmed by `missing`. -->
+  <div class="banner" class:missing={!live.track_available}>
+    {#if banner?.preview}<img src={previewSrc(banner.preview)} alt="" />{/if}
+    {#if banner?.outline}<img class="outline" src={previewSrc(banner.outline)} alt="" />{/if}
+    <span class="banner-name">{trackTitle(looks, live.track)}</span>
+  </div>
   <header class="head">
     <div class="title">
       <h3 title={server.name}>{server.name}</h3>
       <p class="where mono">
-        <span class:missing={!live.track_available}>{live.track.id}</span>
+        <span>{live.track.id}</span>
         {#if live.track.layout}<span class="sub">{live.track.layout}</span>{/if}
       </p>
     </div>
@@ -123,7 +136,7 @@
       {#if !live.booking}
         <h4 class="lbl">{t("online.cars")}</h4>
         <ul class="cars">
-          {#each detail.cars as c (c.id)}
+          {#each cars as c (c.id)}
             <li>
               <button
                 type="button"
@@ -133,7 +146,10 @@
                 aria-pressed={car === c.id}
                 onclick={() => (car = c.id)}
               >
-                <span class="car-id mono">{c.id}</span>
+                <span class="photo">
+                  {#if c.preview}<img src={previewSrc(c.preview)} alt="" loading="lazy" />{/if}
+                </span>
+                <span class="car-name" title={c.id}>{carName(looks, c.id)}</span>
                 <span class="skin mono">{c.skin ?? ""}</span>
                 <span class="slots mono" class:none={c.free === 0}>
                   {t("online.slots", { free: c.free, total: c.total })}
@@ -149,7 +165,7 @@
       {#if detail.drivers.length}
         <ul class="drivers">
           {#each detail.drivers as d, i (i)}
-            <li><span>{d.name}</span><span class="mono sub">{d.car}</span></li>
+            <li><span>{d.name}</span><span class="sub">{carName(looks, d.car)}</span></li>
           {/each}
         </ul>
       {:else}
@@ -179,11 +195,46 @@
     border-left: 1px solid var(--line);
     background: var(--panel2);
   }
+  .banner {
+    position: relative;
+    height: 150px;
+    flex: none;
+    background: var(--card);
+    overflow: hidden;
+  }
+  .banner img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  /* The layout's outline over its photo, as on the session column's track
+     card: lower right, small, never covering the name. */
+  .banner img.outline {
+    inset: auto 10px 10px auto;
+    width: 90px;
+    height: 70px;
+    object-fit: contain;
+  }
+  .banner.missing img {
+    opacity: 0.35;
+  }
+  .banner-name {
+    position: absolute;
+    left: 14px;
+    bottom: 10px;
+    right: 110px;
+    color: var(--txt);
+    font-size: 15px;
+    font-weight: 600;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+  }
   .head {
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    padding: 16px 16px 10px;
+    padding: 12px 16px 10px;
   }
   .title {
     flex: 1;
@@ -203,9 +254,6 @@
     color: var(--txt2);
     display: flex;
     gap: 8px;
-  }
-  .where .missing {
-    color: var(--muted);
   }
   .sub {
     color: var(--muted);
@@ -252,10 +300,11 @@
   }
   .car {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 64px 1fr auto;
     grid-template-areas:
-      "id slots"
-      "skin tag";
+      "photo id slots"
+      "photo skin tag";
+    align-items: center;
     gap: 2px 10px;
     width: 100%;
     padding: 7px 10px;
@@ -274,7 +323,20 @@
   .car:disabled {
     opacity: 0.45;
   }
-  .car-id {
+  .photo {
+    grid-area: photo;
+    width: 64px;
+    height: 36px;
+    background: var(--panel2);
+    overflow: hidden;
+  }
+  .photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .car-name {
     grid-area: id;
     font-size: 12px;
     color: var(--txt);

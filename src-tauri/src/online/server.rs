@@ -6,6 +6,8 @@
 //! taken, each with the skin the server will impose — a requested skin is
 //! ignored online, the slot's is loaded (measured, `online-join-research.md`).
 
+use std::path::Path;
+
 use serde::Serialize;
 use serde_json::Value;
 
@@ -25,6 +27,9 @@ pub struct CarSlots {
     pub skin: Option<String>,
     /// The car can be driven here (installed, or in the library).
     pub available: bool,
+    /// Photo of `skin`, when the car is in the game with that livery. A car
+    /// only in the library has none yet: it is laid in the game at join time.
+    pub preview: Option<String>,
 }
 
 /// Someone on the server now.
@@ -89,6 +94,11 @@ fn parse_entry_list(root: &Value) -> EntryList {
 
 /// Sums the slots per car, in the server's own order of `cars` (the order its
 /// operator chose), then any model the entry list has and `cars` forgot.
+///
+/// A car with no slot at all is left out: an AssettoServer lists its AI
+/// traffic (`traffic_jp_toyota_camry`…) among its cars, and an installed one
+/// came first in the panel as a choice nobody can take (seen on a Shutoko
+/// server). Only when the entry list has slots: an empty one says nothing.
 fn car_slots(cars: &[String], entries: &EntryList, installed: &Installed) -> Vec<CarSlots> {
     let mut order: Vec<String> = cars.to_vec();
     for slot in &entries.slots {
@@ -110,10 +120,22 @@ fn car_slots(cars: &[String], entries: &EntryList, installed: &Installed) -> Vec
                 free: mine.iter().filter(|s| !s.connected).count() as u32,
                 skin: first_free.map(|s| s.skin.clone()).filter(|s| !s.is_empty()),
                 available: installed.has_car(&id),
+                preview: None,
                 id,
             }
         })
+        .filter(|car| car.total > 0 || entries.slots.is_empty())
         .collect()
+}
+
+/// The photo of each car in the skin the server imposes, read in the game's
+/// `content/cars`.
+fn fill_previews(cars: &mut [CarSlots], cars_dir: &Path) {
+    for car in cars.iter_mut().filter(|c| c.available) {
+        if let Some(skin) = &car.skin {
+            car.preview = crate::library::skin_preview(&cars_dir.join(&car.id).join("skins").join(skin));
+        }
+    }
 }
 
 fn drivers(entries: &EntryList) -> Vec<Driver> {
@@ -148,8 +170,15 @@ pub(super) fn fetch_entry_list(ip: &str, http_port: u16, steam_id: u64) -> Resul
     get_json(ip, http_port, &format!("/JSON|{steam_id}")).map(|root| parse_entry_list(&root))
 }
 
-/// Everything the detail panel shows, asked from the server itself.
-pub fn fetch_detail(ip: &str, http_port: u16, steam_id: u64, installed: &Installed) -> Result<ServerDetail, String> {
+/// Everything the detail panel shows, asked from the server itself. `cars_dir`
+/// is the game's `content/cars`, where the imposed skins' photos are looked up.
+pub fn fetch_detail(
+    ip: &str,
+    http_port: u16,
+    steam_id: u64,
+    installed: &Installed,
+    cars_dir: Option<&Path>,
+) -> Result<ServerDetail, String> {
     let mut info = get_json(ip, http_port, "/INFO")?;
     // The address we reached wins over the one the server reports about
     // itself: a vanilla server's `/INFO` leaves `ip` empty (measured), and
@@ -161,8 +190,12 @@ pub fn fetch_detail(ip: &str, http_port: u16, steam_id: u64, installed: &Install
     })?;
     installed.judge(&mut summary);
     let entries = fetch_entry_list(ip, http_port, steam_id)?;
+    let mut cars = car_slots(&summary.cars, &entries, installed);
+    if let Some(cars_dir) = cars_dir {
+        fill_previews(&mut cars, cars_dir);
+    }
     Ok(ServerDetail {
-        cars: car_slots(&summary.cars, &entries, installed),
+        cars,
         drivers: drivers(&entries),
         features: entries.features,
         summary,
@@ -204,6 +237,41 @@ mod tests {
         );
         assert_eq!((slots[0].free, slots[0].total), (1, 2), "one of two free");
         assert!(!slots[0].available, "nothing installed");
+    }
+
+    /// Rule: the photo shown is the one of the skin the server imposes — not
+    /// the first livery of the folder, which the game will not load.
+    #[test]
+    fn the_photo_is_the_imposed_skin() {
+        let base = crate::testutil::temp_dir("online-preview");
+        let skins = base.join("ks_mazda_miata").join("skins");
+        for skin in ["00_classic_red", "05_sunburst_yellow"] {
+            std::fs::create_dir_all(skins.join(skin)).unwrap();
+            std::fs::write(skins.join(skin).join("preview.jpg"), b"IMG").unwrap();
+        }
+        let mut installed = Installed::default();
+        installed.add_car_for_tests("ks_mazda_miata");
+        let mut cars = car_slots(&["ks_mazda_miata".to_string()], &entry_list(), &installed);
+        fill_previews(&mut cars, &base);
+        let preview = cars[0].preview.as_deref().expect("a photo");
+        assert!(
+            preview.contains("05_sunburst_yellow"),
+            "the free slot's livery: {preview}"
+        );
+    }
+
+    /// Rule: a car the server lists without a single slot (AI traffic) is no
+    /// choice — it is not offered, installed or not.
+    #[test]
+    fn a_car_without_slots_is_not_offered() {
+        let cars = vec!["traffic_jp_toyota_camry".to_string(), "ks_mazda_miata".to_string()];
+        let slots = car_slots(&cars, &entry_list(), &Installed::default());
+        assert!(
+            slots.iter().all(|s| s.id != "traffic_jp_toyota_camry"),
+            "traffic car left out: {slots:?}"
+        );
+        let unknown = car_slots(&cars, &EntryList::default(), &Installed::default());
+        assert_eq!(unknown.len(), 2, "an empty entry list hides nothing");
     }
 
     /// Rule: slots outside the entry list are nobody's place (CM filters them).
