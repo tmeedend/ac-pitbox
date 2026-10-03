@@ -418,6 +418,12 @@ au panneau du serveur sur la page Online ; quand la fenêtre n'a pas le focus,
 **Windows la montre aussi** (`tauri-plugin-notification`), et la pile la garde
 pour le retour. Réglages › Général la coupe entière, « Me prévenir » compris.
 
+**Partager un serveur.** Le bouton `⧉` de l'en-tête du panneau copie le lien
+de partage de Content Manager (`https://acstuff.club/s/q:race/online/join?ip=…&httpPort=…`) :
+un ami l'ouvre avec CM depuis un navigateur ou une messagerie, ou le colle
+dans Pit Box. Sans mot de passe : celui de CM est chiffré et ne s'écrit pas
+ici ; il se donne à part.
+
 **Restent** : les niveaux de préparation de la liste elle-même, qui ne
 voient ni les liens ni les versions des serveurs (il faudrait `/api/details`
 serveur par serveur).

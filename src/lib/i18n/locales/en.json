@@ -1541,6 +1541,8 @@
     "filterSession": "Session",
     "pingMeasuring": "Measuring ping · {count} servers left",
     "groupByTrack": "Group by track",
+    "copyLink": "Copy the link to send a friend",
+    "linkCopied": "Link copied",
     "watchFriend": "{name} is online",
     "watchSlot": "A slot is free",
     "watchOpen": "Open",

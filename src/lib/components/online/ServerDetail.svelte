@@ -24,6 +24,7 @@
   import { levelText } from "$lib/online/labels";
   import { onlineStore, toggleFavouriteServer, toggleFriendName } from "$lib/online/store.svelte";
   import { previewSrc } from "$lib/library/library";
+  import { shareLink } from "$lib/online/link";
 
   interface Props {
     server: ServerSummary;
@@ -106,6 +107,18 @@
   }
 
   const live = $derived(detail?.summary ?? server);
+
+  /** The link was just copied: the button says so for a moment. */
+  let copied = $state(false);
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(shareLink(server.ip, server.http_port));
+      copied = true;
+      setTimeout(() => (copied = false), 2000);
+    } catch (e) {
+      console.error("copy the server link", e);
+    }
+  }
   /** The lobby geolocates servers; a server's own /INFO often cannot. */
   const country = $derived(live.country ?? server.country);
   const banner = $derived(layoutLook(looks, live.track));
@@ -161,6 +174,16 @@
       aria-label={favourite ? t("online.unfavourite") : t("online.favourite")}
       aria-pressed={favourite}
       onclick={() => toggleFavouriteServer(server)}>{favourite ? "★" : "☆"}</button
+    >
+    <!-- The link to send a friend (case 1 of the spec): CM's share link,
+         which a friend opens with CM, or pastes into Pit Box. -->
+    <button
+      class="share"
+      class:done={copied}
+      type="button"
+      title={copied ? t("online.linkCopied") : t("online.copyLink")}
+      aria-label={copied ? t("online.linkCopied") : t("online.copyLink")}
+      onclick={copyLink}>{copied ? "✓" : "⧉"}</button
     >
     <button class="close" type="button" title={t("common.close")} aria-label={t("common.close")} onclick={onclose}>✕</button>
   </header>
@@ -349,6 +372,20 @@
   }
   .close:hover {
     color: var(--txt);
+  }
+  .share {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1;
+    padding: 0 4px;
+  }
+  .share:hover {
+    color: var(--txt);
+  }
+  .share.done {
+    color: var(--green);
   }
   .fav {
     background: none;

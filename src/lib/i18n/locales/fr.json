@@ -1541,6 +1541,8 @@
     "filterSession": "Session en cours",
     "pingMeasuring": "Mesure du ping · {count} serveurs restants",
     "groupByTrack": "Regrouper par circuit",
+    "copyLink": "Copier le lien à envoyer à un ami",
+    "linkCopied": "Lien copié",
     "watchFriend": "{name} est en ligne",
     "watchSlot": "Une place s'est libérée",
     "watchOpen": "Ouvrir",
