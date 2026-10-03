@@ -293,7 +293,11 @@
           {#if !st || isBlank(st)}
             <span class="pin" aria-hidden="true">◈</span>{t(def.labelKey)}
           {:else if st.type === "bool"}
-            <span class:neg={st.sign < 0}>{st.sign > 0 ? t(def.labelKey) : t(def.negLabelKey ?? def.labelKey)}</span>
+            <!-- Both senses in the same full text: the negative is a filter as
+                 active as the positive, and its word already says it
+                 (« Vide », « Hors favoris »). Greyed, it read as the ghost
+                 that filters nothing (reported). -->
+            {st.sign > 0 ? t(def.labelKey) : t(def.negLabelKey ?? def.labelKey)}
           {:else if sum}
             <span class="k">{t(def.labelKey)} :</span>
             {#if sum.op}
