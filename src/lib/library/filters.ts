@@ -322,17 +322,6 @@ function boolOf(key: string, ctx: FilterContext): (c: ModCard) => boolean {
   }
 }
 
-/** Every distinct value of a `val` filter, with how many mods carry it.
- *
- * Counted on the current kind, never on the filtered results: a number that
- * moves with each token dropped is useless for deciding on the next one. */
-export function countValues(def: FilterDef, cards: ModCard[], ctx: FilterContext): Map<string, number> {
-  const get = valuesOf(def, ctx);
-  const m = new Map<string, number>();
-  for (const c of cards) for (const v of get(c)) m.set(v, (m.get(v) ?? 0) + 1);
-  return m;
-}
-
 /** One suggestion line of the editor. */
 export interface FilterOption {
   value: string;
@@ -341,7 +330,19 @@ export interface FilterOption {
 }
 
 export function optionsOf(def: FilterDef, cards: ModCard[], ctx: FilterContext): FilterOption[] {
-  const counts = countValues(def, cards, ctx);
+  return optionsFrom(def, cards, valuesOf(def, ctx));
+}
+
+/**
+ * The suggestion lines of a `val` filter over any pool - mods here, servers on
+ * the Online page - given what each item carries.
+ *
+ * Counted on the whole pool, never on the filtered results: a number that
+ * moves with each token dropped is useless for deciding on the next one.
+ */
+export function optionsFrom<T>(def: FilterDef, items: T[], get: (item: T) => string[]): FilterOption[] {
+  const counts = new Map<string, number>();
+  for (const item of items) for (const v of get(item)) counts.set(v, (counts.get(v) ?? 0) + 1);
   // "Not set" goes LAST, and only when some mod is in that case: it is the gap
   // in the data, not a value among the others (INDEX§4.3).
   const unsetCount = counts.get(UNSET_VALUE) ?? 0;
@@ -371,6 +372,33 @@ function terms(text: string): string[] {
 }
 
 /**
+ * The test of one `val` filter over the values an item carries, or `null` when
+ * the filter says nothing. Shared by every pool the bar filters (mods,
+ * servers), so that a token means the same thing on every screen.
+ */
+export function valTest(
+  def: FilterDef,
+  st: Extract<FilterState, { type: "val" }>,
+): ((values: string[]) => boolean) | null {
+  const lc = (s: string) => s.toLowerCase();
+  const inc = st.values.filter((v) => v.sign > 0).map((v) => lc(v.value));
+  const exc = st.values.filter((v) => v.sign < 0).map((v) => lc(v.value));
+  if (!inc.length && !exc.length) return null;
+  // The operator governs the INCLUSIONS only. Exclusions are always
+  // conjunctive - "except A or except B" means nothing, one wants both
+  // gone - and excluding always wins over including, which is what a
+  // "except" is for: "with jdm, without wip" must not let through a mod
+  // carrying both.
+  const all = def.operator && st.op === "and";
+  return (values) => {
+    const mine = values.map(lc);
+    if (exc.some((x) => mine.includes(x))) return false;
+    if (!inc.length) return true;
+    return all ? inc.every((x) => mine.includes(x)) : inc.some((x) => mine.includes(x));
+  };
+}
+
+/**
  * Compiles the active filters into ONE predicate.
  *
  * Everything that can be resolved per filter (splitting signs, lowercasing,
@@ -383,29 +411,16 @@ export function buildPredicate(
   ctx: FilterContext,
 ): (c: ModCard) => boolean {
   const tests: ((c: ModCard) => boolean)[] = [];
-  const lc = (s: string) => s.toLowerCase();
 
   for (const def of defs) {
     const st = filters[def.key];
     if (!st || st.type !== def.type) continue;
 
     if (st.type === "val") {
-      const inc = st.values.filter((v) => v.sign > 0).map((v) => lc(v.value));
-      const exc = st.values.filter((v) => v.sign < 0).map((v) => lc(v.value));
-      if (!inc.length && !exc.length) continue;
+      const test = valTest(def, st);
+      if (!test) continue;
       const get = valuesOf(def, ctx);
-      // The operator governs the INCLUSIONS only. Exclusions are always
-      // conjunctive - "except A or except B" means nothing, one wants both
-      // gone - and excluding always wins over including, which is what a
-      // "except" is for: "with jdm, without wip" must not let through a mod
-      // carrying both.
-      const all = def.operator && st.op === "and";
-      tests.push((c) => {
-        const mine = get(c).map(lc);
-        if (exc.some((x) => mine.includes(x))) return false;
-        if (!inc.length) return true;
-        return all ? inc.every((x) => mine.includes(x)) : inc.some((x) => mine.includes(x));
-      });
+      tests.push((c) => test(get(c)));
     } else if (st.type === "bool") {
       const get = boolOf(def.key, ctx);
       const want = st.sign > 0;
@@ -631,7 +646,7 @@ export function serializeFilters(query: string, filters: FilterMap): string {
 /** Keeps only what the current catalogue knows about, and only if the stored
  * shape still matches the declared type: a filter that changed type between
  * two versions is dropped rather than half-restored. */
-function sanitize(raw: unknown, defs: FilterDef[]): FilterMap {
+export function sanitizeFilterMap(raw: unknown, defs: FilterDef[]): FilterMap {
   const out: FilterMap = {};
   if (!raw || typeof raw !== "object") return out;
   for (const def of defs) {
@@ -680,17 +695,17 @@ export function parseFilters(raw: string | null, defs: FilterDef[]): Snapshot {
   }
   const query = typeof obj.query === "string" ? obj.query : "";
   const stored = obj.filters && typeof obj.filters === "object" ? (obj.filters as FilterMap) : legacyFilters(obj);
-  return { query, filters: sanitize(foldBaseIntoState(stored), defs) };
+  return { query, filters: sanitizeFilterMap(foldBaseIntoState(stored), defs) };
 }
 
 /**
  * Replays a stored "base content" filter as a value of `state`.
  *
  * The checkbox is gone - `state = stock` says exactly the same thing - but a
- * preference that carried it must not evaporate: `sanitize` drops keys the
- * catalogue no longer knows, so without this a saved "everything but the base
- * content" would come back as no filter at all, silently. It folds rather than
- * overwrites, because a preference can legitimately hold BOTH (the old
+ * preference that carried it must not evaporate: `sanitizeFilterMap` drops
+ * keys the catalogue no longer knows, so without this a saved "everything but
+ * the base content" would come back as no filter at all, silently. It folds
+ * rather than overwrites, because a preference can legitimately hold BOTH (the old
  * `<select>` said active/inactive while the checkbox said base content).
  */
 function foldBaseIntoState(stored: FilterMap): FilterMap {
