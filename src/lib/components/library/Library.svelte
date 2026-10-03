@@ -2,7 +2,7 @@
   import { tick, untrack, onMount, onDestroy } from "svelte";
   import DetailPage from "$lib/components/detail/DetailPage.svelte";
   import PackDetail from "$lib/components/detail/PackDetail.svelte";
-  import ColumnsMenu from "./ColumnsMenu.svelte";
+  import ColumnsMenu from "$lib/components/ui/ColumnsMenu.svelte";
   import FilterBar from "$lib/components/filters/FilterBar.svelte";
   import { matchesQuery } from "$lib/library/cardSearch";
   import { hasOwnDriver } from "$lib/driver/driverOverride.svelte";
