@@ -17,7 +17,7 @@
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import StateBadge from "$lib/components/ui/StateBadge.svelte";
   import Seg from "$lib/components/ui/Seg.svelte";
-  import Tooltip from "$lib/components/ui/Tooltip.svelte";
+  import DataTable from "$lib/components/ui/DataTable.svelte";
   import {
     listLibrary,
     previewSrc,
@@ -31,6 +31,7 @@
     saveColumnsPrefs,
     type ColumnDef,
   } from "$lib/library/columns";
+  import { defaultPrefs, toggleVisible, type ColumnsPrefs } from "$lib/tableColumns";
   import { nav, pickSession } from "$lib/shell/nav.svelte";
   import { goBackOr } from "$lib/shell/navHistory";
   import { bigPictureView } from "$lib/shell/bigpicture.svelte";
@@ -173,167 +174,17 @@
     if (prefsReady) setUiPref(KEYS.pinned, list);
   });
 
-  // Colonnes (§6.2) : définitions propres au type + visibilité/ordre persistés
-  // par type. Défauts synchrones à l'affichage initial (évite un vide le
-  // temps du chargement Rust), remplacés par les valeurs sauvegardées dès que
-  // `loadColumnsPrefs` répond (onMount plus bas).
+  // Colonnes (§6.2) : définitions propres au type + visibilité/ordre/largeurs
+  // persistés par type. Défauts synchrones à l'affichage initial (évite un
+  // vide le temps du chargement Rust), remplacés par les valeurs sauvegardées
+  // dès que `loadColumnsPrefs` répond (onMount plus bas). Les gestes du
+  // tableau (déplacer, redimensionner) vivent dans `DataTable`.
   const columns: ColumnDef[] = untrack(() => columnsFor(kind));
-  let visibleKeys = $state<string[]>(untrack(() => columns.filter((c) => c.fixed || c.defaultVisible).map((c) => c.key)));
-  let columnOrder = $state<string[]>(untrack(() => columns.map((c) => c.key)));
-  let columnWidths = $state<Record<string, number>>({});
-  // Colonne en cours de glissement (réordonnancement d'en-tête, §6.2) : pilote
-  // le retour visuel et la cible du drop, jamais persistée telle quelle.
-  let dragKey = $state<string | null>(null);
-  let dropTarget = $state<{ key: string; before: boolean } | null>(null);
-  // Le clic natif qui suit un mousedown+mousemove+mouseup sur un en-tête (que
-  // ce soit un redimensionnement ou un réordonnancement) ne doit jamais
-  // déclencher son tri — bug réel constaté : redimensionner une colonne
-  // changeait l'ordre de tri, parce que le curseur termine souvent au-dessus
-  // d'un `<th>` voisin après un glissé horizontal, et le clic qui suit
-  // toujours un mouseup cible cet en-tête-là. `click` est dispatché par le
-  // navigateur juste après `mouseup`, dans la même séquence synchrone — pas
-  // besoin d'attendre, le drapeau est déjà à jour quand `onclick` s'exécute.
-  let suppressSortClick = false;
-  function markSuppressSortClick() {
-    suppressSortClick = true;
-    setTimeout(() => (suppressSortClick = false), 0);
+  let columnsPrefs = $state<ColumnsPrefs>(untrack(() => defaultPrefs(columns)));
+  function setColumnsPrefs(next: ColumnsPrefs) {
+    columnsPrefs = next;
+    saveColumnsPrefs(kind, next);
   }
-  const visibleColumns = $derived(
-    columnOrder
-      .map((key) => columns.find((c) => c.key === key))
-      .filter((c): c is ColumnDef => !!c && (c.fixed || visibleKeys.includes(c.key))),
-  );
-  function persistColumnsPrefs() {
-    saveColumnsPrefs(kind, { visible: visibleKeys, order: columnOrder, widths: columnWidths });
-  }
-  function toggleColumn(key: string) {
-    visibleKeys = visibleKeys.includes(key)
-      ? visibleKeys.filter((k) => k !== key)
-      : [...visibleKeys, key];
-    persistColumnsPrefs();
-  }
-  /** Réordonnance : déplace `sourceKey` juste avant ou après `targetKey` dans
-   * l'ordre complet (colonnes masquées comprises, pour qu'elles gardent leur
-   * position relative une fois réaffichées).
-   *
-   * **Toutes les colonnes se déplacent, la colonne fixe comprise.** Elle ne
-   * bougeait pas, et rien ne l'exigeait : `fixed` dit qu'on ne peut pas la
-   * masquer, pas qu'elle est clouée en première position. La conséquence était
-   * qu'aucune colonne ne pouvait passer avant le nom — or c'est la marque qu'on
-   * lit d'abord. */
-  function reorderColumn(sourceKey: string, targetKey: string, before: boolean) {
-    if (sourceKey === targetKey) return;
-    const rest = columnOrder.filter((k) => k !== sourceKey);
-    const targetIdx = rest.indexOf(targetKey);
-    const insertAt = before ? targetIdx : targetIdx + 1;
-    columnOrder = [...rest.slice(0, insertAt), sourceKey, ...rest.slice(insertAt)];
-    persistColumnsPrefs();
-  }
-  const HEADER_DRAG_THRESHOLD = 4;
-  /** Réordonnancement au glissé souris (§6.2) — pas le drag HTML5 natif :
-   * abandonné après deux tentatives (curseur « sens interdit » persistant,
-   * jamais résolu malgré `setData`/`effectAllowed`/`-webkit-user-drag`).
-   * Même technique, déjà éprouvée, que le redimensionnement juste en dessous
-   * (`startResize`) : écouteurs `window` le temps du geste, seuil de
-   * quelques pixels avant de considérer que c'est un vrai glissé et pas un
-   * simple clic (sinon `toggleSort` ne se déclencherait plus jamais). */
-  function startHeaderDrag(e: MouseEvent, key: string) {
-    if (e.button !== 0) return;
-    const startX = e.clientX;
-    const startY = e.clientY;
-    let moved = false;
-    function onMove(ev: MouseEvent) {
-      if (!moved) {
-        if (Math.abs(ev.clientX - startX) < HEADER_DRAG_THRESHOLD && Math.abs(ev.clientY - startY) < HEADER_DRAG_THRESHOLD) return;
-        moved = true;
-        dragKey = key;
-      }
-      const target = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)?.closest<HTMLElement>(
-        "th[data-col-key]",
-      );
-      const targetKey = target?.dataset.colKey;
-      if (!targetKey || targetKey === key) {
-        dropTarget = null;
-        return;
-      }
-      const rect = target!.getBoundingClientRect();
-      dropTarget = { key: targetKey, before: ev.clientX - rect.left < rect.width / 2 };
-    }
-    function onUp() {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      if (moved) {
-        if (dropTarget) reorderColumn(key, dropTarget.key, dropTarget.before);
-        markSuppressSortClick();
-      }
-      dragKey = null;
-      dropTarget = null;
-    }
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-  }
-
-  // --- Redimensionnement de colonne (§6.2) : poignée à droite de l'en-tête,
-  // glissé à la souris (pas de drag HTML5 ici — un redimensionnement est un
-  // suivi continu du pointeur, pas un dépôt discret). Écouteurs posés sur
-  // `window` le temps du geste : le curseur sort souvent de la poignée (large
-  // mouvement horizontal), `mousemove`/`mouseup` doivent suivre partout. ---
-  const MIN_COLUMN_WIDTH = 50;
-  let resizingKey = $state<string | null>(null);
-  let resizeStartX = 0;
-  let resizeStartWidth = 0;
-  /** Une largeur **mesurée** (pixels réels de la fenêtre) ramenée en pixels
-   * CSS, seuls acceptés par la feuille de style — voir `zoomFactor`. Sans ça,
-   * saisir une poignée à 110 % élargissait la colonne de 10 % d'un coup, et le
-   * glissé avançait 10 % trop vite. */
-  const measured = (width: number) => width / zoomFactor();
-
-  function startResize(e: MouseEvent, key: string, currentWidth: number) {
-    e.preventDefault();
-    e.stopPropagation();
-    // Idempotent avant tout ajout : si un geste précédent n'avait pas relâché
-    // proprement (mouseup manqué hors fenêtre, par ex.), évite d'empiler des
-    // écouteurs `window` en double qui recalculeraient la largeur en double à
-    // chaque mouvement de souris.
-    stopResizeListeners();
-    resizingKey = key;
-    resizeStartX = e.clientX;
-    resizeStartWidth = measured(currentWidth);
-    window.addEventListener("mousemove", onResizeMove);
-    window.addEventListener("mouseup", onResizeUp);
-  }
-  function onResizeMove(e: MouseEvent) {
-    if (!resizingKey) return;
-    const next = Math.max(MIN_COLUMN_WIDTH, Math.round(resizeStartWidth + measured(e.clientX - resizeStartX)));
-    columnWidths = { ...columnWidths, [resizingKey]: next };
-  }
-  function stopResizeListeners() {
-    window.removeEventListener("mousemove", onResizeMove);
-    window.removeEventListener("mouseup", onResizeUp);
-  }
-  function onResizeUp() {
-    if (!resizingKey) return;
-    resizingKey = null;
-    stopResizeListeners();
-    persistColumnsPrefs();
-    markSuppressSortClick();
-  }
-  /** Redimensionnement au clavier (flèches gauche/droite), poignée focusable
-   * — pas juste une alternative a11y de façade : sans ça, la poignée n'est
-   * accessible qu'à la souris. `currentWidth` = largeur affichée actuelle
-   * (naturelle si jamais redimensionnée), pas de branchement particulier. */
-  function adjustColumnWidth(key: string, currentWidth: number, delta: number) {
-    columnWidths = { ...columnWidths, [key]: Math.max(MIN_COLUMN_WIDTH, Math.round(measured(currentWidth) + delta)) };
-    persistColumnsPrefs();
-  }
-  /** Double-clic (ou Entrée au clavier) sur la poignée = revenir à la largeur
-   * naturelle (au contenu), convention standard des tableaux redimensionnables. */
-  function resetColumnWidth(key: string) {
-    const { [key]: _removed, ...rest } = columnWidths;
-    columnWidths = rest;
-    persistColumnsPrefs();
-  }
-  onDestroy(stopResizeListeners);
 
   // --- Vignettes régénérées : demandées à la visibilité (GRILLE§5.4) ---
   //
@@ -443,9 +294,7 @@
       getUiPrefs([FKEY, KEYS.pinned, KEYS.view, KEYS.sortKey, KEYS.sortDir, KEYS.hideBrand, StorageKey.tableHideBrand]),
       isCar ? loadFamilies() : Promise.resolve(),
     ]);
-    visibleKeys = colPrefs.visible;
-    columnOrder = colPrefs.order;
-    columnWidths = colPrefs.widths;
+    columnsPrefs = colPrefs;
 
     const restored = parseFilters(saved[FKEY], defs);
     query = restored.query;
@@ -946,8 +795,8 @@
         {#if shown === "table"}
           <ColumnsMenu
             items={columns.map((c) => ({ key: c.key, label: t(c.labelKey), fixed: c.fixed }))}
-            visible={visibleKeys}
-            ontoggle={toggleColumn}
+            visible={columnsPrefs.visible}
+            ontoggle={(key) => setColumnsPrefs(toggleVisible(columnsPrefs, key))}
           />
         {/if}
 
@@ -1106,128 +955,53 @@
         {/each}
       </div>
     {:else}
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              {#each visibleColumns as col (col.key)}
-                <th
-                  data-col-key={col.key}
-                  class="draggable"
-                  class:sortable={col.sortable}
-                  class:dragging={dragKey === col.key}
-                  class:resizing={resizingKey === col.key}
-                  class:drop-before={dropTarget?.key === col.key && dropTarget.before}
-                  class:drop-after={dropTarget?.key === col.key && !dropTarget.before}
-                  style={columnWidths[col.key] ? `width:${columnWidths[col.key]}px; max-width:${columnWidths[col.key]}px;` : undefined}
-                  title={t("library.dragColumnTooltip")}
-                  onclick={() => col.sortable && !suppressSortClick && toggleSort(col.key)}
-                  onmousedown={(e) => startHeaderDrag(e, col.key)}
-                >
-                  <span class="th-label">
-                    <!-- Le libellé d'une colonne triable est un vrai bouton :
-                         sans lui, la seule chose focusable de l'entête était
-                         la poignée de redimensionnement, et trier restait
-                         hors de portée de la manette et du clavier. Aucun
-                         gestionnaire dessus — le clic remonte au `<th>`, qui
-                         trie déjà (et applique sa garde anti-glissé). Le
-                         `mousedown` remonte lui aussi : glisser une colonne
-                         par son libellé continue de marcher. -->
-                    {#if col.sortable}
-                      <button class="th-sort" type="button">{t(col.labelKey)}</button>
-                    {:else}
-                      {t(col.labelKey)}
-                    {/if}
-                    {#if col.tooltipKey}
-                      <!-- "published" = avant-dernière colonne par défaut (juste avant
-                           "size"), sa bulle centrée déborderait sur le panneau de droite
-                           (bug réel constaté) — bord droit aligné, la bulle grandit vers
-                           la gauche à la place. -->
-                      <Tooltip text={t(col.tooltipKey)} side="bottom" align={col.key === "published" ? "right" : "center"}>
-                        <button type="button" class="th-info" onclick={(e) => e.stopPropagation()} onmousedown={(e) => e.stopPropagation()}>ⓘ</button>
-                      </Tooltip>
-                    {/if}
-                    {#if sortKey === col.key}<span class="arrow">{sortDir === 1 ? "▲" : "▼"}</span>{/if}
-                  </span>
-                  <!-- Poignée de redimensionnement (§6.2) : `draggable="false"` explicite
-                       coupe l'héritage du glisser-déposer de réordonnancement posé sur le
-                       `<th>` — sans ça, saisir la poignée déclencherait aussi un drag de
-                       colonne. Repère visuel permanent (pas seulement au survol) : sans
-                       indice visible, rien ne suggère qu'on peut redimensionner ici.
-                       `role="separator"` + `tabindex` + flèches clavier = le motif
-                       « separator (focusable) » documenté par le WAI-ARIA APG pour les
-                       poignées de redimensionnement — le linter a11y de Svelte ne le
-                       reconnaît pas comme interactif (liste de rôles trop stricte),
-                       d'où les deux ignores ci-dessous plutôt qu'un vrai souci. -->
-                  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-                  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-                  <span
-                    class="col-resize"
-                    data-gp-skip
-                    draggable="false"
-                    role="separator"
-                    aria-orientation="vertical"
-                    tabindex="0"
-                    title={t("library.resizeColumnTooltip")}
-                    onmousedown={(e) => startResize(e, col.key, (e.currentTarget as HTMLElement).closest("th")!.getBoundingClientRect().width)}
-                    onclick={(e) => e.stopPropagation()}
-                    ondblclick={(e) => { e.stopPropagation(); resetColumnWidth(col.key); }}
-                    onkeydown={(e) => {
-                      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        const width = (e.currentTarget as HTMLElement).closest("th")!.getBoundingClientRect().width;
-                        adjustColumnWidth(col.key, width, e.key === "ArrowRight" ? 10 : -10);
-                      } else if (e.key === "Enter") {
-                        e.stopPropagation();
-                        resetColumnWidth(col.key);
-                      }
-                    }}
-                  ></span>
-                </th>
-              {/each}
-            </tr>
-          </thead>
-          <tbody>
-            {#each sorted as c (c.id_interne)}
-              <tr data-id={c.id_interne} tabindex="0" class:sel={effectiveId === c.id_interne && selectedIds.size === 0} class:multisel={selectedIds.has(c.id_interne)} class:session={sessionId === c.id_interne} onclick={(e) => onCardClick(c, e)} ondblclick={() => (nav.openFull = c.id_interne)} oncontextmenu={(e) => openCardContextMenu(e, c)}>
-                {#each visibleColumns as col}
-                  <td
-                    class:t-name={col.key === "name"}
-                    class:mono={col.mono}
-                    class:t-tags={col.key === "tags"}
-                    class:col-resized={!!columnWidths[col.key]}
-                    style={columnWidths[col.key] ? `width:${columnWidths[col.key]}px; max-width:${columnWidths[col.key]}px;` : undefined}
-                  >
-                    {#if col.key === "active"}
-                      <StateBadge active={c.active} stock={c.is_stock} unmanaged={c.is_unmanaged} showcase={c.showcase} />
-                    {:else if col.key === "brand"}
-                      {#if c.badge}<span class="brand-badge"
-                          ><Emblem src={previewSrc(c.badge) ?? ""} plaque={isPlaque(c.badge)} size={13} /></span
-                        >{/if}
-                      {col.value(c)}
-                    {:else if col.key === "country" && c.country}
-                      <!-- Translated like the chip and the index (TAXO§12); the
-                           sort stays on the stored English name. -->
-                      {@const flag = flagFor(c.country)}
-                      {#if flag}<img class="country-flag" src={flag} alt="" />{/if}{countryLabel(c.country)}
-                    {:else if col.key === "name"}
-                      {#if c.broken}<span class="broken-flag" title={t("library.brokenTooltip")}>⚠</span>{/if}
-                      {#if updateFor(kind, c.id_interne)}
-                        {@const upd = updateFor(kind, c.id_interne)!}
-                        <span class="upd-flag" title={t("modUpdates.cardTooltip", { version: upd.available })}>⬆</span>
-                      {/if}
-                      {col.value(c)}
-                    {:else}
-                      {#if col.derived?.(c)}<span class="derived-sign" title={t("techsheet.source.rules")}>≈</span>{/if}{col.value(c)}
-                    {/if}
-                  </td>
-                {/each}
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        {columns}
+        prefs={columnsPrefs}
+        onprefs={setColumnsPrefs}
+        rows={sorted}
+        rowKey={(c) => c.id_interne}
+        rowId={(c) => c.id_interne}
+        rowState={(c) => ({
+          sel: effectiveId === c.id_interne && selectedIds.size === 0,
+          multisel: selectedIds.has(c.id_interne),
+          session: sessionId === c.id_interne,
+        })}
+        sort={{ key: sortKey, dir: sortDir }}
+        onsort={toggleSort}
+        onrowclick={(c, e) => onCardClick(c, e)}
+        onrowdblclick={(c) => (nav.openFull = c.id_interne)}
+        onrowcontextmenu={(e, c) => openCardContextMenu(e, c)}
+      >
+        {#snippet cell(c, col)}
+          {#if col.key === "active"}
+            <StateBadge active={c.active} stock={c.is_stock} unmanaged={c.is_unmanaged} showcase={c.showcase} />
+          {:else if col.key === "brand"}
+            {#if c.badge}<span class="brand-badge"
+                ><Emblem src={previewSrc(c.badge) ?? ""} plaque={isPlaque(c.badge)} size={13} /></span
+              >{/if}
+            {col.value(c)}
+          {:else if col.key === "country" && c.country}
+            <!-- Translated like the chip and the index (TAXO§12); the
+                 sort stays on the stored English name. -->
+            {@const flag = flagFor(c.country)}
+            {#if flag}<img class="country-flag" src={flag} alt="" />{/if}{countryLabel(c.country)}
+          {:else if col.key === "name"}
+            <span class="t-name">
+              {#if c.broken}<span class="broken-flag" title={t("library.brokenTooltip")}>⚠</span>{/if}
+              {#if updateFor(kind, c.id_interne)}
+                {@const upd = updateFor(kind, c.id_interne)!}
+                <span class="upd-flag" title={t("modUpdates.cardTooltip", { version: upd.available })}>⬆</span>
+              {/if}
+              {col.value(c)}
+            </span>
+          {:else if col.key === "tags"}
+            <span class="t-tags">{col.value(c)}</span>
+          {:else}
+            {#if col.derived?.(c)}<span class="derived-sign" title={t("techsheet.source.rules")}>≈</span>{/if}{col.value(c)}
+          {/if}
+        {/snippet}
+      </DataTable>
     {/if}
     </div>
   </div>
@@ -1476,9 +1250,6 @@
     padding: 1px 5px;
     z-index: 1;
   }
-  tbody tr.session {
-    box-shadow: inset 2px 0 0 var(--rosso);
-  }
   /* **Le mat.** L'image n'est plus à ras du bord : elle est posée sur un
      rectangle neutre un ton au-dessus de la carte. Il ne se voit presque pas
      quand la preview est sombre et remplit son cadre ; il devient le liant dès
@@ -1612,186 +1383,6 @@
     margin-right: 4px;
   }
 
-  .table-wrap {
-    border: 1px solid var(--line);
-    /* Pas d'overflow ici : ce serait un conteneur de scroll imbriqué et les
-       en-têtes sticky se colleraient à lui (invisible) au lieu de `.main`. Le
-       défilement horizontal des tableaux larges est géré par `.main`. */
-  }
-  table {
-    /* `max-content` plutôt que `100%` : avec beaucoup de colonnes visibles
-       (§6.2), un tableau capé à la largeur du conteneur se contente de
-       compresser chaque colonne au lieu de déborder — au point qu'une
-       colonne tout juste cochée peut devenir quasi invisible plutôt que de
-       déclencher le défilement horizontal prévu par `.table-wrap`/`.main`
-       (bug réel constaté). `min-width: 100%` garde un tableau à peu de
-       colonnes étalé sur toute la largeur disponible, comme avant. */
-    width: max-content;
-    min-width: 100%;
-    border-collapse: collapse;
-    font-size: 12px;
-    /* Pas de surlignage de texte lors des clics de sélection (lignes + en-têtes triables). */
-    user-select: none;
-  }
-  th {
-    /* Ancre la poignée de redimensionnement (position absolute). `sticky`
-       (règle suivante) l'établirait déjà, mais autant ne pas en dépendre. */
-    position: relative;
-    text-align: left;
-    padding: 8px 10px;
-    color: var(--muted);
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    border-bottom: 1px solid var(--line);
-    background: var(--panel2);
-    white-space: nowrap;
-  }
-  /* En-têtes collés en haut de `.scroll`, dont le bord haut est déjà sous le
-     bandeau recherche+filtres : `top: 0` suffit, plus rien à mesurer. C'est ce
-     que la barre sortie du scroller a fait gagner. `box-shadow` = ligne de
-     séparation fiable (les bordures collapse ne « suivent » pas le sticky sous
-     Chromium/WebView2). */
-  thead th {
-    position: sticky;
-    top: 0;
-    z-index: 5;
-    box-shadow: inset 0 -1px 0 var(--line);
-  }
-  th.sortable {
-    cursor: pointer;
-    user-select: none;
-  }
-  th.sortable:hover {
-    color: var(--txt2);
-  }
-  th .arrow {
-    margin-left: 4px;
-    /* Le tri relève de la structure du tableau : pas de rouge (§7.2ter). */
-    color: var(--txt2);
-  }
-  .th-label {
-    padding-right: 8px;
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-  }
-  /* Bouton uniquement pour être atteignable (focus manette/clavier) : il ne
-     doit rien changer à l'apparence de l'entête, qui est déjà cliquable sur
-     toute sa surface. */
-  .th-sort {
-    background: none;
-    border: none;
-    padding: 0;
-    margin: 0;
-    font: inherit;
-    color: inherit;
-    letter-spacing: inherit;
-    text-transform: inherit;
-    text-align: left;
-    cursor: inherit;
-  }
-  .th-info {
-    background: transparent;
-    border: none;
-    padding: 0;
-    color: var(--faint);
-    font-size: 10px;
-    line-height: 1;
-    cursor: help;
-  }
-  /* Le focus reste jaune, comme partout (`:focus-visible` de `global.css`) :
-     l'entrée en rouge le dédoublait d'un second signal, et le barème réserve
-     le rouge à la session (§7.2ter). */
-  .th-info:hover {
-    color: var(--muted);
-  }
-  /* Réordonnement au glissé souris, pas le drag HTML5 natif (§6.2, abandonné
-     après deux tentatives infructueuses sous WebView2 — voir `startHeaderDrag`).
-     La colonne fixe (nom) n'a pas `.draggable`, donc jamais ce curseur —
-     cohérent avec le fait qu'elle ne peut être ni déplacée ni servir de cible
-     avant elle-même. */
-  th.draggable {
-    cursor: grab;
-  }
-  th.dragging {
-    opacity: 0.4;
-  }
-  /* Repère de dépôt : ligne verticale du côté où la colonne glissée
-     s'insérerait si on relâchait maintenant. */
-  /* Repère neutre : déplacer une colonne ne concerne ni la session ni ce
-     qu'elle retient — le rouge est réservé à ça (§7.2ter). */
-  th.drop-before::before,
-  th.drop-after::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background: var(--txt2);
-    z-index: 3;
-  }
-  th.drop-before::before {
-    left: 0;
-  }
-  th.drop-after::after {
-    right: 0;
-  }
-  /* Poignée de redimensionnement (§6.2) : bande à la jonction de deux
-     colonnes. Repère visuel permanent (pas seulement au survol) — un simple
-     changement de curseur ne suffit pas à faire découvrir la fonction. */
-  .col-resize {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    right: -4px;
-    width: 8px;
-    cursor: col-resize;
-    z-index: 2;
-  }
-  .col-resize::after {
-    content: "";
-    position: absolute;
-    top: 5px;
-    bottom: 5px;
-    left: 3px;
-    width: 2px;
-    background: var(--line);
-  }
-  /* Au repos la poignée est un filet `--line` : le survol l'éclaircit, il ne
-     la rougit pas (§7.2ter, le survol n'introduit jamais de rouge). */
-  .col-resize:hover::after,
-  .col-resize:focus-visible::after,
-  th.resizing .col-resize::after {
-    background: var(--faint);
-  }
-  .col-resize:focus-visible {
-    outline: none;
-  }
-  td.col-resized {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  td {
-    padding: 7px 10px;
-    border-bottom: 1px solid var(--line);
-    color: var(--txt2);
-    white-space: nowrap;
-  }
-  tbody tr {
-    cursor: pointer;
-  }
-  tbody tr:hover {
-    background: var(--raised);
-  }
-  tbody tr.sel {
-    background: var(--rosso-dim);
-  }
-  tbody tr.multisel {
-    background: var(--blue-dim);
-    box-shadow: inset 2px 0 0 var(--blue);
-  }
   .t-name {
     font-weight: 600;
     color: var(--txt);

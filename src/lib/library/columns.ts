@@ -1,6 +1,6 @@
 // Définitions de colonnes de tableau, propres à chaque type.
 // Visibilité et ordre sont mémorisés indépendamment par type (§6.2).
-import { invokeSafe } from "$lib/invokeSafe";
+import { defaultPrefs, loadSavedPrefs, reconcilePrefs, saveTablePrefs, type ColumnsPrefs, type TableColumn } from "$lib/tableColumns";
 import type { ModCard, ModKind } from "./library";
 import { t } from "$lib/i18n/index.svelte";
 import { fmtSize } from "$lib/format";
@@ -20,31 +20,14 @@ export function tableHidesBrand(): boolean {
   return peekUiPref(StorageKey.tableHideBrand) !== "0";
 }
 
-export interface ColumnDef {
-  key: string;
-  /** Clé i18n du libellé d'en-tête (résolue au rendu, pour rester réactive à la langue). */
-  labelKey: string;
-  /** Triable par clic d'en-tête. */
-  sortable: boolean;
-  /** Affichée par défaut (avant tout choix utilisateur). */
-  defaultVisible: boolean;
-  /** Toujours affichée et absente du sélecteur (colonne essentielle).
-   *
-   * **Ne veut plus dire « immobile ».** Les deux allaient ensemble, sans que
-   * rien ne l'exige : une colonne qu'on ne peut pas masquer peut très bien se
-   * déplacer, et le nom devait pouvoir passer après la marque. */
-  fixed?: boolean;
+export type { ColumnsPrefs };
+
+/** A library column: the header (`TableColumn`), and how a mod fills it. */
+export interface ColumnDef extends TableColumn {
   /** Valeur d'affichage ; « — » si la donnée n'existe pas encore. */
   value: (c: ModCard) => string;
   /** Clé de tri (défaut = value en minuscule). */
   sortValue?: (c: ModCard) => string | number;
-  /** Rendu en police mono (valeurs techniques/dates). */
-  mono?: boolean;
-  /** Clé i18n d'une info-bulle affichée sur l'en-tête (icône ⓘ) — pour une
-   * colonne dont le sens n'est pas évident au premier regard (ex. les trois
-   * colonnes de dates, dont deux propres à l'installation locale et une au
-   * mod lui-même, une distinction facile à manquer). */
-  tooltipKey?: string;
   /** The value was deduced from the tags: the table puts the sheet's "≈"
    * before it, with its meaning on hover (FICHE R5). Kept out of `value` so
    * the sign can carry that hover. */
@@ -151,7 +134,7 @@ function commonTail(): ColumnDef[] {
     },
     { key: "added", labelKey: "columns.added", tooltipKey: "columns.addedTooltip", sortable: true, defaultVisible: false, mono: true, value: (c) => fmtDate(c.created_at), sortValue: (c) => c.created_at ?? "" },
     { key: "updated", labelKey: "columns.updated", tooltipKey: "columns.updatedTooltip", sortable: true, defaultVisible: false, mono: true, value: (c) => fmtDate(c.updated_at), sortValue: (c) => c.updated_at ?? c.created_at ?? "" },
-    { key: "published", labelKey: "columns.published", tooltipKey: "columns.publishedTooltip", sortable: true, defaultVisible: false, mono: true, value: (c) => fmtDate(c.published_at), sortValue: (c) => c.published_at ?? "" },
+    { key: "published", labelKey: "columns.published", tooltipKey: "columns.publishedTooltip", tooltipAlign: "right", sortable: true, defaultVisible: false, mono: true, value: (c) => fmtDate(c.published_at), sortValue: (c) => c.published_at ?? "" },
     {
       key: "size",
       labelKey: "columns.size",
@@ -237,39 +220,6 @@ export function columnsFor(kind: ModKind): ColumnDef[] {
   return kind === "Track" ? TRACK_COLUMNS : CAR_COLUMNS;
 }
 
-export interface ColumnsPrefs {
-  /** Clés visibles (les colonnes `fixed` sont toujours affichées en plus, sans y figurer). */
-  visible: string[];
-  /** Ordre d'affichage — toutes les colonnes du type, visibles ou non, pour
-   * qu'une colonne masquée retrouve sa position relative une fois réaffichée. */
-  order: string[];
-  /** Largeur en pixels des colonnes redimensionnées à la main (glissé sur la
-   * poignée d'en-tête). Absente d'une clé = largeur naturelle (au contenu). */
-  widths: Record<string, number>;
-}
-
-function defaultOrder(kind: ModKind): string[] {
-  return columnsFor(kind).map((d) => d.key);
-}
-
-function defaultVisibleKeys(kind: ModKind): string[] {
-  return columnsFor(kind)
-    .filter((d) => d.fixed || d.defaultVisible)
-    .map((d) => d.key);
-}
-
-/** Répare un ordre persisté face à une évolution du jeu de colonnes (une
- * colonne retirée du code disparaît silencieusement, une colonne ajoutée
- * apparaît en fin de liste) — même esprit que `#[serde(default)]` côté Rust :
- * un format légèrement désynchronisé ne doit jamais planter ni se figer. */
-function reconcileOrder(saved: string[] | undefined, kind: ModKind): string[] {
-  const validKeys = columnsFor(kind).map((d) => d.key);
-  const validSet = new Set(validKeys);
-  const kept = (saved ?? []).filter((k) => validSet.has(k));
-  const missing = validKeys.filter((k) => !kept.includes(k));
-  return [...kept, ...missing];
-}
-
 /** Ancien mécanisme (avant fix) : lu une seule fois pour migrer la visibilité
  * déjà choisie, jamais réécrit. `localStorage` n'est pas garanti synchrone
  * sur disque côté WebView2 — voir `session_state.rs` pour le pourquoi du
@@ -288,50 +238,17 @@ function loadLegacyVisible(kind: ModKind): string[] | null {
   }
 }
 
-interface AllColumnsPrefs {
-  cars?: ColumnsPrefs;
-  tracks?: ColumnsPrefs;
-}
-
-/** Persistance durable (§6.2) : fichier écrit côté Rust
- * (`library_columns.json`, `std::fs::write` synchrone), pas `localStorage` —
- * voir `loadLegacyVisible` pour le pourquoi du changement. Un seul fichier
- * pour les deux types (clé `cars`/`tracks`) : chaque sauvegarde réécrit tout
- * le fichier, donc on recharge-modifie-réécrit l'objet entier à chaque appel,
- * jamais une écriture partielle qui effacerait l'autre type. */
-function loadAllPrefs(): Promise<AllColumnsPrefs> {
-  return invokeSafe<AllColumnsPrefs>("get_library_columns", undefined, {});
-}
-
-function persistAllPrefs(all: AllColumnsPrefs): Promise<void> {
-  return invokeSafe<void>("save_library_columns", { prefs: all }, undefined);
-}
-
-/** Charge visibilité + ordre pour un type, avec repli sur l'ancienne clé
- * `localStorage` (visibilité seule) puis sur les défauts. */
+/** Charge visibilité + ordre pour un type (`tableColumns.ts`), avec repli sur
+ * l'ancienne clé `localStorage` (visibilité seule) puis sur les défauts. */
 export async function loadColumnsPrefs(kind: ModKind): Promise<ColumnsPrefs> {
-  const all = await loadAllPrefs();
-  const saved = kindKey(kind) === "tracks" ? all.tracks : all.cars;
-  if (saved) {
-    const validSet = new Set(columnsFor(kind).map((d) => d.key));
-    return {
-      visible: (saved.visible ?? []).filter((k) => validSet.has(k)),
-      order: reconcileOrder(saved.order, kind),
-      widths: Object.fromEntries(Object.entries(saved.widths ?? {}).filter(([k]) => validSet.has(k))),
-    };
-  }
+  const defs = columnsFor(kind);
+  const saved = await loadSavedPrefs(kindKey(kind));
+  if (saved) return reconcilePrefs(saved, defs);
   const legacy = loadLegacyVisible(kind);
-  const validSet = new Set(columnsFor(kind).map((d) => d.key));
-  return {
-    visible: legacy ? legacy.filter((k) => validSet.has(k)) : defaultVisibleKeys(kind),
-    order: defaultOrder(kind),
-    widths: {},
-  };
+  const prefs = defaultPrefs(defs);
+  return legacy ? reconcilePrefs({ ...prefs, visible: legacy }, defs) : prefs;
 }
 
-export async function saveColumnsPrefs(kind: ModKind, prefs: ColumnsPrefs): Promise<void> {
-  const all = await loadAllPrefs();
-  if (kindKey(kind) === "tracks") all.tracks = prefs;
-  else all.cars = prefs;
-  await persistAllPrefs(all);
+export function saveColumnsPrefs(kind: ModKind, prefs: ColumnsPrefs): Promise<void> {
+  return saveTablePrefs(kindKey(kind), prefs);
 }

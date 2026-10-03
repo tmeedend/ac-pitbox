@@ -22,7 +22,7 @@ import type { ModKind } from "$lib/library/library";
 const PREFIX = "pitbox";
 
 /** Suffixe de clé par type d'entité — la bibliothèque est rendue une fois par type. */
-export function kindKey(kind: ModKind): string {
+export function kindKey(kind: ModKind): "cars" | "tracks" {
   return kind === "Track" ? "tracks" : "cars";
 }
 
