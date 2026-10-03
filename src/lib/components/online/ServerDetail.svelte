@@ -19,6 +19,7 @@
   import SessionTimeline from "./SessionTimeline.svelte";
   import ServerExtras from "./ServerExtras.svelte";
   import JoinFooter from "./JoinFooter.svelte";
+  import ServerCountry from "./ServerCountry.svelte";
   import { levelText } from "$lib/online/labels";
   import { onlineStore, toggleFavouriteServer, toggleFriendName } from "$lib/online/store.svelte";
   import { previewSrc } from "$lib/library/library";
@@ -104,6 +105,8 @@
   }
 
   const live = $derived(detail?.summary ?? server);
+  /** The lobby geolocates servers; a server's own /INFO often cannot. */
+  const country = $derived(live.country ?? server.country);
   const banner = $derived(layoutLook(looks, live.track));
   /** The cars one can drive first, each group in the server's order. */
   const cars = $derived(detail ? [...detail.cars.filter((c) => c.available), ...detail.cars.filter((c) => !c.available)] : []);
@@ -164,8 +167,7 @@
   <div class="facts mono">
     <span class="players">{live.clients} / {live.max_clients}</span>
     {#if live.track.csp_min_build}<span>{t("online.csp", { build: live.track.csp_min_build })}</span>{/if}
-    <!-- The lobby geolocates servers; a server's own /INFO often cannot. -->
-    {#if live.country ?? server.country}<span>{live.country ?? server.country}</span>{/if}
+    {#if country}<ServerCountry code={country} named />{/if}
     {#if pingOf(serverKey(server)) !== undefined}<span>{t("online.ping", { ms: pingOf(serverKey(server)) ?? 0 })}</span>{/if}
     <span class="addr">{live.ip}:{live.http_port}</span>
     {#if detail && versionsDiffer(detail.track_fetch)}

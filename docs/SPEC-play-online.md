@@ -332,9 +332,10 @@ mesurer les serveurs qui passent tous les autres filtres, le haut de la liste
 d'abord, par lots de 64, et ils apparaissent à mesure qu'ils répondent (« Mesure
 du ping · N serveurs restants ») ; un serveur qui ne répond pas reste écarté.
 Les tokens et les épingles sont mémorisés avec les bascules ; la recherche ne
-l'est toujours pas.
+l'est toujours pas. Le pays d'un serveur est un **drapeau** : seul sur la ligne,
+son nom en infobulle ; suivi du nom dans le panneau. Un code que le jeu ne
+connaît pas reste écrit tel quel.
 
-**Restent** : les pays en drapeaux sur les lignes de la liste ; les niveaux de
-préparation de la liste elle-même, qui ne voient ni les liens ni les versions
+**Restent** : les niveaux de préparation de la liste elle-même, qui ne voient ni les liens ni les versions
 des serveurs (il faudrait `/api/details` serveur par serveur) ; la v2
 (regrouper par circuit, lien bibliothèque → online, notifications).

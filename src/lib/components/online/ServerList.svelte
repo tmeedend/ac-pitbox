@@ -11,6 +11,7 @@
   import { serverKey, type ServerSummary } from "$lib/online/online";
   import { PING_FAIR_MS, PING_GOOD_MS } from "$lib/online/tokens";
   import { previewSrc } from "$lib/library/library";
+  import ServerCountry from "./ServerCountry.svelte";
 
   interface Props {
     servers: ServerSummary[];
@@ -133,7 +134,7 @@
             {/if}
             {#if s.booking}<span class="flag mono">{t("online.session.booking")}</span>{/if}
             {#if s.track.csp_min_build}<span class="flag mono">{t("online.csp", { build: s.track.csp_min_build })}</span>{/if}
-            {#if s.country}<span class="flag mono">{s.country}</span>{/if}
+            {#if s.country}<ServerCountry code={s.country} />{/if}
           </span>
           <!-- A snapshot saved before levels existed has none: no badge rather
                than a guess, until the lobby lists the server again. -->
