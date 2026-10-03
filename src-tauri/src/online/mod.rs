@@ -39,6 +39,9 @@ pub use steam::active_steam_id;
 pub struct ServerList {
     pub servers: Vec<lobby::ServerSummary>,
     pub looks: Looks,
+    /// When the lobby did not answer: the date of the list kept from last
+    /// time, in Unix seconds (`lobby_cache.rs`). `None` for a live list.
+    pub saved_at: Option<u64>,
 }
 
 /// Judges freshly fetched servers against what can be driven here, and reads
@@ -50,7 +53,11 @@ pub fn judge_list(conn: &Connection, cfg: &AppConfig, mut servers: Vec<lobby::Se
     }
     let (cars, tracks) = referenced(&servers);
     let looks = Looks::scan(conn, cfg, &cars, &tracks);
-    ServerList { servers, looks }
+    ServerList {
+        servers,
+        looks,
+        saved_at: None,
+    }
 }
 
 /// The car and track ids (lowercase) whose look is worth reading: every car

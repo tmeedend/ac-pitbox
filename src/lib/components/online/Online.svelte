@@ -36,6 +36,8 @@
   let looks = $state<Looks>(NO_LOOKS);
   let loading = $state(true);
   let error = $state("");
+  /** The lobby did not answer: when the list shown was kept (Unix seconds). */
+  let savedAt = $state<number | null>(null);
   let selected = $state<ServerSummary | null>(null);
   /** The password a pasted link carried, for the server it opened. */
   let linkPassword = $state<string | null>(null);
@@ -86,7 +88,7 @@
     loading = true;
     error = "";
     try {
-      ({ servers, looks } = await loadLobby(force));
+      ({ servers, looks, saved_at: savedAt } = await loadLobby(force));
       // Keep the open server in step with the fresh list, when it is still there.
       if (selected) {
         const key = serverKey(selected);
@@ -243,6 +245,11 @@
       onrefresh={() => refresh(true)}
     />
 
+    {#if savedAt !== null}
+      <!-- The lobby is down: the list kept from last time, said as such. Its
+           servers still answer the panel, which asks them directly. -->
+      <p class="warnbox">{t("online.lobbyBackup", { date: new Date(savedAt * 1000).toLocaleString() })}</p>
+    {/if}
     {#if error}
       <p class="errbox">{error}</p>
     {/if}
@@ -320,6 +327,7 @@
     min-width: 0;
     min-height: 0;
   }
+  .warnbox,
   .errbox {
     margin: 0 24px 12px;
   }

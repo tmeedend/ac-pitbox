@@ -13,6 +13,15 @@ fn steam_id() -> Result<u64, String> {
     online::active_steam_id().ok_or_else(|| crate::errors::STEAM_NOT_SIGNED_IN.to_string())
 }
 
+/// The lobby's list, or the one kept from last time when it does not answer
+/// (`lobby_cache.rs`), kept in the cache folder. Without Steam there is no
+/// list at all, and the reason says so — a backup would hide it.
+fn fetch_lobby(app: &AppHandle) -> Result<online::lobby_cache::Lobby, String> {
+    let steam_id = steam_id()?;
+    let dir = app.path().app_cache_dir().ok();
+    online::lobby_cache::live_or_backup(online::lobby::fetch_lobby(steam_id), dir.as_deref())
+}
+
 fn installed(app: &AppHandle) -> Result<Installed, String> {
     let cfg = crate::config::load(app);
     let db = app.state::<Db>();
@@ -27,13 +36,14 @@ fn installed(app: &AppHandle) -> Result<Installed, String> {
 #[tauri::command]
 pub async fn online_servers(app: AppHandle, force: Option<bool>) -> Result<online::ServerList, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let servers =
-            online::lobby_cache::LOBBY.get(force.unwrap_or(false), || online::lobby::fetch_lobby(steam_id()?))?;
-        let servers = servers.as_ref().clone();
+        let lobby = online::lobby_cache::LOBBY.get(force.unwrap_or(false), || fetch_lobby(&app))?;
+        let servers = lobby.servers.clone();
         let cfg = crate::config::load(&app);
         let db = app.state::<Db>();
         let conn = db.0.lock().map_err(|e| e.to_string())?;
-        Ok(online::judge_list(&conn, &cfg, servers))
+        let mut list = online::judge_list(&conn, &cfg, servers);
+        list.saved_at = lobby.saved_at;
+        Ok(list)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -43,12 +53,13 @@ pub async fn online_servers(app: AppHandle, force: Option<bool>) -> Result<onlin
 /// list, without the library, the disk or any server (`lobby_cache.rs`).
 #[tauri::command]
 pub async fn online_track_activity(
+    app: AppHandle,
     track_id: String,
     layouts: Vec<String>,
 ) -> Result<online::lobby_cache::TrackActivity, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let servers = online::lobby_cache::LOBBY.get(false, || online::lobby::fetch_lobby(steam_id()?))?;
-        Ok(online::lobby_cache::track_activity(&servers, &track_id, &layouts))
+        let lobby = online::lobby_cache::LOBBY.get(false, || fetch_lobby(&app))?;
+        Ok(online::lobby_cache::track_activity(&lobby, &track_id, &layouts))
     })
     .await
     .map_err(|e| e.to_string())?

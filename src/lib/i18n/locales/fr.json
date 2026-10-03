@@ -1541,6 +1541,7 @@
     "filterSession": "Session en cours",
     "pingMeasuring": "Mesure du ping · {count} serveurs restants",
     "groupByTrack": "Regrouper par circuit",
+    "lobbyBackup": "Le lobby Kunos ne répond pas : voici la liste du {date}. Les joueurs ont bougé depuis ; le panneau d'un serveur l'affiche en direct.",
     "passwordWrong": "Mot de passe incorrect : le serveur le refuserait.",
     "pickServer": "Sélectionnez un serveur",
     "copyLink": "Copier le lien à envoyer à un ami",

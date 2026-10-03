@@ -274,8 +274,9 @@ pub fn parse_lobby(body: &[u8]) -> Result<Vec<ServerSummary>, String> {
     Ok(servers)
 }
 
-/// Fetches the list of public servers for the signed-in Steam account.
-pub fn fetch_lobby(steam_id: u64) -> Result<Vec<ServerSummary>, String> {
+/// Fetches the list of public servers for the signed-in Steam account, with
+/// the answer as it came — what the backup keeps (`lobby_cache.rs`).
+pub fn fetch_lobby(steam_id: u64) -> Result<(Vec<ServerSummary>, Vec<u8>), String> {
     let url = format!("{LOBBY_URL}?guid={steam_id}");
     let response = http::get_url(&url, LOBBY_AGENT, LOBBY_TIMEOUT_MS, LOBBY_MAX_BODY)
         .ok_or_else(|| crate::errors::LOBBY_UNAVAILABLE.to_string())?;
@@ -283,12 +284,13 @@ pub fn fetch_lobby(steam_id: u64) -> Result<Vec<ServerSummary>, String> {
         log::warn!("online: the lobby answered {}", response.status);
         return Err(crate::errors::LOBBY_UNAVAILABLE.to_string());
     }
-    parse_lobby(&response.body).inspect_err(|_| {
+    let servers = parse_lobby(&response.body).inspect_err(|_| {
         // "UNKNOWN FAILURE" and SQL errors come back as a 200 with a text
         // body: the start of it is what tells them apart in a user's log.
         let head = String::from_utf8_lossy(&response.body[..response.body.len().min(120)]).into_owned();
         log::warn!("online: the lobby answer is not a server list — {head}");
-    })
+    })?;
+    Ok((servers, response.body))
 }
 
 #[cfg(test)]

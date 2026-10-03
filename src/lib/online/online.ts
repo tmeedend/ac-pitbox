@@ -158,6 +158,9 @@ export function serverKey(s: Pick<ServerSummary, "ip" | "http_port">): string {
 export interface ServerList {
   servers: ServerSummary[];
   looks: Looks;
+  /** The lobby did not answer: the date of the list kept from last time, in
+   * Unix seconds (`online/lobby_cache.rs`). `null` for a live list. */
+  saved_at: number | null;
 }
 
 /** `force` asks the lobby again past the backend's cache (Refresh). */

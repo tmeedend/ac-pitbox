@@ -26,7 +26,10 @@ export function cachedLobby(): ServerList | null {
  * anyway (the page's Refresh). Two callers at once share one request. */
 export function loadLobby(force = false): Promise<ServerList> {
   const version = libraryVersion();
-  const fresh = cache.list && Date.now() - cache.at < FRESH_MS && cache.version === version;
+  // A backup list (the lobby down) is not kept here: the backend holds it a
+  // minute and then asks the lobby again, which may be back.
+  const fresh =
+    cache.list && cache.list.saved_at === null && Date.now() - cache.at < FRESH_MS && cache.version === version;
   if (!force && fresh && cache.list) return Promise.resolve(cache.list);
   inflight ??= listServers(force)
     .then((list) => {
