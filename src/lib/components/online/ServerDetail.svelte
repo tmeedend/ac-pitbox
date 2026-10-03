@@ -12,7 +12,7 @@
   import { t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
   import { serverDetail, serverKey, type CarSlots, type Fetch, type ServerDetail, type ServerSummary } from "$lib/online/online";
-  import { carName, layoutLook, trackTitle, type Looks } from "$lib/online/looks";
+  import { carName, layoutLook, layoutName, trackName, trackTitle, type Looks } from "$lib/online/looks";
   import { isFavourite, isFriend } from "$lib/online/lists";
   import { libraryVersion } from "$lib/library/libraryVersion.svelte";
   import { pingOf } from "$lib/online/pings.svelte";
@@ -161,9 +161,10 @@
   <header class="head">
     <div class="title">
       <h3 title={server.name}>{server.name}</h3>
-      <p class="where mono">
-        <span>{live.track.id}</span>
-        {#if live.track.layout}<span class="sub">{live.track.layout}</span>{/if}
+      <!-- The names one reads, as in the table; the ids on hover. -->
+      <p class="where" title={live.track.kunos_id}>
+        <span>{trackName(looks, live.track)}</span>
+        {#if layoutName(looks, live.track)}<span class="sub">{layoutName(looks, live.track)}</span>{/if}
       </p>
     </div>
     <button
@@ -359,6 +360,10 @@
     color: var(--txt2);
     display: flex;
     gap: 8px;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .sub {
     color: var(--muted);
