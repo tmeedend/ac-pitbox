@@ -23,7 +23,6 @@
   import type { FilterMap } from "$lib/library/filters";
   import { gameCountryByIso2, withCountryLabels } from "$lib/flags.svelte";
   import {
-    listServers,
     serverDetail,
     serverDrivers,
     serverKey,
@@ -35,6 +34,7 @@
   import { carName, NO_LOOKS, searchText, type Looks } from "$lib/online/looks";
   import {
     asksPing,
+    TRACK_KEY,
     DEFAULT_PINNED,
     DEFAULT_TOKENS,
     onlineTokenDefs,
@@ -54,6 +54,8 @@
   import ColumnsMenu from "$lib/components/ui/ColumnsMenu.svelte";
   import DisplayMenu from "$lib/components/ui/DisplayMenu.svelte";
   import { loadOnlineStore, onlineStore } from "$lib/online/store.svelte";
+  import { loadLobby } from "$lib/online/lobby.svelte";
+  import { pendingOnlineIntent, takeOnlineIntent, type OnlineIntent } from "$lib/online/intent.svelte";
   import ServerTable from "./ServerTable.svelte";
   import ServerDetail from "./ServerDetail.svelte";
 
@@ -79,11 +81,13 @@
    * run again once it flips. */
   let restored = $state(false);
 
-  async function refresh() {
+  /** The list, from the cache the track sheets share while it is fresh;
+   * `force` (the Refresh button) asks the lobby anyway. */
+  async function refresh(force = false) {
     loading = true;
     error = "";
     try {
-      ({ servers, looks } = await listServers());
+      ({ servers, looks } = await loadLobby(force));
       // Keep the open server in step with the fresh list, when it is still there.
       if (selected) {
         const key = serverKey(selected);
@@ -171,6 +175,28 @@
     restored = true;
     await refresh();
   });
+
+  // A way in from elsewhere (`intent.svelte.ts`): a track sheet's line, a
+  // notification. Taken once the stored filters are restored, so that the
+  // restore does not overwrite it — and at once when the page is already up.
+  $effect(() => {
+    const intent = pendingOnlineIntent();
+    if (!restored || !intent) return;
+    untrack(() => applyIntent(takeOnlineIntent()));
+  });
+
+  function applyIntent(intent: OnlineIntent | null) {
+    if (intent?.kind === "track") {
+      tab = "all";
+      selected = null;
+      const values = intent.layouts.map((value) => ({ value, sign: 1 as const }));
+      tokens = { ...tokens, [TRACK_KEY]: { type: "val", values, op: "or" } };
+    } else if (intent?.kind === "server") {
+      const key = serverKey(intent.server);
+      selected = servers.find((s) => serverKey(s) === key) ?? intent.server;
+      linkPassword = null;
+    }
+  }
 
   $effect(() => {
     const saved = serializeTokens(tokens, pinned);
@@ -304,7 +330,7 @@
                 <span>{t("online.groupByTrack")}</span>
               </label>
             </DisplayMenu>
-            <button class="btn" type="button" disabled={loading} onclick={refresh}>{t("online.refresh")}</button>
+            <button class="btn" type="button" disabled={loading} onclick={() => refresh(true)}>{t("online.refresh")}</button>
           {/snippet}
         </FilterBar>
       </div>

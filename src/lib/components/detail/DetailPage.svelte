@@ -84,6 +84,7 @@
   import EngineSoundBlock from "./EngineSoundBlock.svelte";
   import PickerCard from "./PickerCard.svelte";
   import TrackInfoBlock from "./TrackInfoBlock.svelte";
+  import TrackOnline from "$lib/components/online/TrackOnline.svelte";
   import TrackSkinsBlock from "./TrackSkinsBlock.svelte";
   import DescriptionCard, { type TextTab } from "./DescriptionCard.svelte";
   import AttachedBlock from "./AttachedBlock.svelte";
@@ -1158,6 +1159,7 @@
             layout={d.track?.layouts[previewLayout]}
             addedLayouts={layoutOrigins.length}
           />
+          <TrackOnline trackId={d.id_interne} />
           <TrackSkinsBlock
             skins={trackSkins}
             active={activeTrackSkins}

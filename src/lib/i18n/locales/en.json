@@ -1541,6 +1541,7 @@
     "filterSession": "Session",
     "pingMeasuring": "Measuring ping · {count} servers left",
     "groupByTrack": "Group by track",
+    "trackActivity": "{servers} servers · {players} players",
     "colTrack": "Track",
     "colServer": "Server",
     "colSession": "Session",

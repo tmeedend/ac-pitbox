@@ -1541,6 +1541,7 @@
     "filterSession": "Session en cours",
     "pingMeasuring": "Mesure du ping · {count} serveurs restants",
     "groupByTrack": "Regrouper par circuit",
+    "trackActivity": "{servers} serveurs · {players} joueurs",
     "colTrack": "Circuit",
     "colServer": "Serveur",
     "colSession": "Session",

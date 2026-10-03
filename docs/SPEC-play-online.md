@@ -376,6 +376,17 @@ groupe, ses serveurs dessous, un filet à gauche et la cellule Circuit réduite 
 layout. Un layout tenu par un seul serveur garde sa ligne ordinaire, rangée
 comme un groupe d'un.
 
+**v2 — « Online : N serveurs » sur la fiche d'un circuit (livré).** La
+liste du lobby est **une seule**, en cache partagé entre la page Online et les
+fiches, gardée trois minutes (`online/lobby.svelte.ts`) ; deux demandes en même
+temps n'en font qu'une, et « Actualiser » passe outre le cache. La fiche d'un
+circuit s'affiche sans l'attendre et, quand la liste est là, montre sous ses
+données `Online · N serveurs · M joueurs` — compté en local, sur les seuls
+serveurs qui ont au moins un joueur, tous layouts du circuit confondus, sans une
+requête aux serveurs eux-mêmes. Un clic ouvre Online sur `Tous` avec le jeton
+Circuit posé sur ces layouts. Lobby injoignable ou personne en piste : rien ne
+s'affiche, pas d'erreur.
+
 **Restent** : les niveaux de préparation de la liste elle-même, qui ne
 voient ni les liens ni les versions des serveurs (il faudrait `/api/details`
 serveur par serveur) ; le reste de la v2 (lien bibliothèque → online,
