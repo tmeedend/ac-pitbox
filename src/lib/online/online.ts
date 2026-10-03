@@ -6,6 +6,12 @@ import type { Looks } from "./looks";
 
 export type SessionKind = "booking" | "practice" | "qualify" | "race";
 
+/** How ready something is to be joined, best first (`online/readiness.rs`). */
+export type Level = "ready" | "oneClick" | "download" | "blocked";
+
+/** Why a server is blocked. */
+export type Blocker = { kind: "dlc"; name: string } | { kind: "csp"; required: number; installed: number | null };
+
 export interface TrackRef {
   /** `folder-layout`, what Content Manager resolves itself. */
   kunos_id: string;
@@ -31,6 +37,11 @@ export interface ServerSummary {
   time_left: number;
   track_available: boolean;
   cars_available: number;
+  /** Absent from a favourite or recent saved before readiness existed: such
+   * a snapshot is unknown until the lobby lists the server again. */
+  level?: Level;
+  track_level?: Level;
+  blockers?: Blocker[];
 }
 
 export interface CarSlots {
@@ -40,6 +51,9 @@ export interface CarSlots {
   /** The skin the server will impose: its first free slot's. */
   skin: string | null;
   available: boolean;
+  level: Level;
+  /** The DLC to name when the car is blocked. */
+  dlc: string | null;
   /** Photo of `skin`, when the car is in the game with that livery. */
   preview: string | null;
 }

@@ -1,13 +1,11 @@
-//! What can be driven here, to judge a server against it (the "Contenu
+//! What this machine has, to judge a server against it (the "Contenu
 //! manquant" section of `SPEC-play-online.md`).
 //!
-//! Lot 1 answers a single question per car and per track: can Pit Box put it
-//! in the game? Yes when it is already in `content/`, or when the library holds
-//! it with its files (`launch::ensure_available` activates it at join time). A
-//! mod in the showcase has no files, so it does not count. The finer levels of
-//! the spec (download, other version, DLC) come later.
+//! Each car and each track layout is known with **where** it is — in the game,
+//! only in the library, or in the showcase without its files — because that is
+//! what tells "ready" from "one click" from "to download" (`readiness.rs`).
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::Path;
 
 use rusqlite::Connection;
@@ -16,15 +14,32 @@ use crate::config::AppConfig;
 use crate::modscan::ModKind;
 
 use super::lobby::ServerSummary;
+use super::readiness::{self, Blocker, Level};
 
-/// Every car and every track (with its layouts) that can be driven. Ids are
-/// lowercase: Windows folders ignore case, and a server may write `KS_Audi_R8`.
+/// Where a car or a layout is, best first: the derived order is what keeps the
+/// best of two sightings (a mod both in the game and in the library is in the
+/// game).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Presence {
+    /// In `content/`: the game can load it now.
+    Game,
+    /// In the library with its files: `launch::ensure_available` lays it in
+    /// the game at join time.
+    Library,
+    /// In the showcase (ESPACE§4.1): known, but its files are gone.
+    Showcase,
+}
+
+/// Every car and every track layout this machine knows. Ids are lowercase:
+/// Windows folders ignore case, and a server may write `KS_Audi_R8`.
 #[derive(Debug, Default)]
 pub struct Installed {
-    cars: HashSet<String>,
-    /// Track folder → its layouts, `""` for a single-layout track
+    cars: HashMap<String, Presence>,
+    /// Track folder → layout → presence, `""` for a single-layout track
     /// (`inspect::track_layouts`' convention).
-    tracks: HashMap<String, HashSet<String>>,
+    tracks: HashMap<String, HashMap<String, Presence>>,
+    /// The installed Custom Shaders Patch build, `None` without CSP.
+    csp_build: Option<u32>,
 }
 
 fn subdirs(dir: &Path) -> Vec<String> {
@@ -41,41 +56,42 @@ fn subdirs(dir: &Path) -> Vec<String> {
     }
 }
 
+/// Keeps the best of two sightings.
+fn put(map: &mut HashMap<String, Presence>, key: String, presence: Presence) {
+    map.entry(key)
+        .and_modify(|p| *p = (*p).min(presence))
+        .or_insert(presence);
+}
+
 impl Installed {
-    /// Reads `content/` and the library. A failure on either side leaves that
-    /// side empty and is logged: the list still shows, only less of it looks
-    /// ready.
+    /// Reads `content/`, the library and the CSP version. A failure on either
+    /// side leaves that side empty and is logged: the list still shows, only
+    /// less of it looks ready.
     pub fn scan(conn: &Connection, cfg: &AppConfig) -> Self {
         let mut installed = Self::default();
         if let Some(ac) = cfg.ac_install_path.as_ref() {
             let content = ac.join("content");
             for car in subdirs(&content.join("cars")) {
-                installed.cars.insert(car.to_lowercase());
+                put(&mut installed.cars, car.to_lowercase(), Presence::Game);
             }
             let tracks = content.join("tracks");
             for track in subdirs(&tracks) {
                 let layouts = crate::inspect::track_layouts(&tracks.join(&track));
-                installed.add_track(&track, layouts);
+                installed.add_track(&track, layouts, Presence::Game);
             }
+            installed.csp_build = readiness::csp_build(ac);
         }
         match crate::overlay::list_mods(conn) {
             Ok(mods) => {
                 for m in mods {
-                    let id = m.id_interne.to_lowercase();
-                    let known = match ModKind::from_column(&m.kind) {
-                        ModKind::Car => installed.cars.contains(&id),
-                        ModKind::Track => installed.tracks.contains_key(&id),
+                    let presence = if crate::skeleton::is_showcase(conn, &m.id_interne).unwrap_or(true) {
+                        Presence::Showcase
+                    } else {
+                        Presence::Library
                     };
-                    // Already in the game: nothing more to learn. Otherwise it
-                    // counts only with its files (ESPACE§4.1).
-                    if known || crate::skeleton::is_showcase(conn, &m.id_interne).unwrap_or(true) {
-                        continue;
-                    }
                     match ModKind::from_column(&m.kind) {
-                        ModKind::Car => {
-                            installed.cars.insert(id);
-                        }
-                        ModKind::Track => installed.add_track(&id, m.layouts),
+                        ModKind::Car => put(&mut installed.cars, m.id_interne.to_lowercase(), presence),
+                        ModKind::Track => installed.add_track(&m.id_interne, m.layouts, presence),
                     }
                 }
             }
@@ -84,57 +100,107 @@ impl Installed {
         installed
     }
 
-    fn add_track(&mut self, id: &str, layouts: Vec<String>) {
+    fn add_track(&mut self, id: &str, layouts: Vec<String>, presence: Presence) {
         let entry = self.tracks.entry(id.to_lowercase()).or_default();
-        entry.extend(layouts.into_iter().map(|l| l.to_lowercase()));
+        for layout in layouts {
+            put(entry, layout.to_lowercase(), presence);
+        }
     }
 
     #[cfg(test)]
-    pub(super) fn add_car_for_tests(&mut self, id: &str) {
-        self.cars.insert(id.to_lowercase());
+    pub(super) fn add_car_for_tests(&mut self, id: &str, presence: Presence) {
+        put(&mut self.cars, id.to_lowercase(), presence);
     }
 
-    pub fn has_car(&self, id: &str) -> bool {
-        self.cars.contains(&id.to_lowercase())
+    pub fn car(&self, id: &str) -> Option<Presence> {
+        self.cars.get(&id.to_lowercase()).copied()
     }
 
-    fn has_layout(&self, id: &str, layout: &str) -> bool {
+    fn layout(&self, id: &str, layout: &str) -> Option<Presence> {
         self.tracks
-            .get(&id.to_lowercase())
-            .is_some_and(|layouts| layouts.contains(&layout.to_lowercase()))
+            .get(&id.to_lowercase())?
+            .get(&layout.to_lowercase())
+            .copied()
     }
 
-    /// Splits a `folder-layout` id against what is installed, the way CM's
+    /// Splits a `folder-layout` id against what is known, the way CM's
     /// `GetLayoutByKunosId` does: the whole id as a single-layout track first
     /// (`trento-bondone` is a folder), then every hyphen from the right.
-    /// `None` when nothing installed matches.
-    fn resolve_track(&self, kunos_id: &str) -> Option<(String, Option<String>)> {
-        if self.has_layout(kunos_id, "") {
-            return Some((kunos_id.to_string(), None));
+    /// `None` when nothing known matches.
+    fn resolve_track(&self, kunos_id: &str) -> Option<(String, Option<String>, Presence)> {
+        if let Some(p) = self.layout(kunos_id, "") {
+            return Some((kunos_id.to_string(), None, p));
         }
         let mut end = kunos_id.len();
         while let Some(i) = kunos_id[..end].rfind('-') {
             let (id, layout) = (&kunos_id[..i], &kunos_id[i + 1..]);
-            if !id.is_empty() && self.has_layout(id, layout) {
-                return Some((id.to_string(), Some(layout.to_string())));
+            if !id.is_empty() {
+                if let Some(p) = self.layout(id, layout) {
+                    return Some((id.to_string(), Some(layout.to_string()), p));
+                }
             }
             end = i;
         }
         None
     }
 
-    /// Fills what the lobby cannot know: whether the track and how many of the
-    /// cars can be driven here — and, when the track is installed, the right
-    /// split of its id.
+    /// The level of a car here, with the DLC to name when it blocks.
+    pub fn car_level(&self, id: &str) -> (Level, Option<String>) {
+        readiness::content_level(self.car(id), ModKind::Car, id)
+    }
+
+    /// Fills what the lobby cannot know: how ready the track, the cars and the
+    /// CSP are here — and, when the track is known, the right split of its id.
     pub fn judge(&self, server: &mut ServerSummary) {
-        if let Some((id, layout)) = self.resolve_track(&server.track.kunos_id) {
-            server.track.id = id;
-            server.track.layout = layout;
-            server.track_available = true;
-        } else {
-            server.track_available = false;
+        let mut blockers = Vec::new();
+
+        let track_level = match self.resolve_track(&server.track.kunos_id) {
+            Some((id, layout, presence)) => {
+                server.track.id = id;
+                server.track.layout = layout;
+                readiness::content_level(Some(presence), ModKind::Track, &server.track.id).0
+            }
+            // The folder without this layout: something to fetch, whatever
+            // the pack — official layouts ship together, so it is a mod.
+            None if self.tracks.contains_key(&server.track.id.to_lowercase()) => Level::Download,
+            None => {
+                let (level, dlc) = readiness::content_level(None, ModKind::Track, &server.track.id);
+                blockers.extend(dlc.map(|name| Blocker::Dlc { name }));
+                level
+            }
+        };
+
+        let car_levels: Vec<(Level, Option<String>)> = server.cars.iter().map(|c| self.car_level(c)).collect();
+        // The lobby does not say which car has a free slot: the server is as
+        // ready as its best car. Joined in, the panel asks the server.
+        let best_car = car_levels.iter().min_by_key(|(level, _)| *level).cloned();
+        let car_level = match best_car {
+            Some((Level::Blocked, dlc)) => {
+                blockers.extend(dlc.map(|name| Blocker::Dlc { name }));
+                Level::Blocked
+            }
+            Some((level, _)) => level,
+            None => Level::Download,
+        };
+
+        if let Some(required) = server.track.csp_min_build {
+            if self.csp_build.is_none_or(|installed| installed < required) {
+                blockers.push(Blocker::Csp {
+                    required,
+                    installed: self.csp_build,
+                });
+            }
         }
-        server.cars_available = server.cars.iter().filter(|c| self.has_car(c)).count() as u32;
+
+        server.track_level = track_level;
+        server.track_available = track_level <= Level::OneClick;
+        server.cars_available = car_levels.iter().filter(|(level, _)| *level <= Level::OneClick).count() as u32;
+        server.level = if blockers.iter().any(|b| matches!(b, Blocker::Csp { .. })) {
+            Level::Blocked
+        } else {
+            track_level.max(car_level)
+        };
+        server.blockers = blockers;
     }
 }
 
@@ -145,14 +211,25 @@ mod tests {
 
     fn installed() -> Installed {
         let mut i = Installed::default();
-        i.cars.insert("ks_mazda_miata".into());
+        put(&mut i.cars, "ks_mazda_miata".into(), Presence::Game);
+        put(&mut i.cars, "rss_gtm_lanzo_v8".into(), Presence::Library);
+        put(&mut i.cars, "old_mod".into(), Presence::Showcase);
         i.add_track(
             "ks_nordschleife",
             vec!["nordschleife".into(), "touristenfahrten".into()],
+            Presence::Game,
         );
-        i.add_track("trento-bondone", vec!["".into()]);
-        i.add_track("monza", vec!["".into()]);
+        i.add_track("trento-bondone", vec!["".into()], Presence::Game);
+        i.add_track("monza", vec!["".into()], Presence::Game);
+        i.add_track("rt_suzuka", vec!["".into()], Presence::Library);
         i
+    }
+
+    fn server(track: &str, cars: &[&str]) -> ServerSummary {
+        crate::online::lobby::parse_server(&serde_json::json!({
+            "ip": "1.2.3.4", "cport": 8081, "tport": 9600, "track": track, "cars": cars
+        }))
+        .unwrap()
     }
 
     /// Rule (CM's `GetLayoutByKunosId`): a hyphen may belong to the folder
@@ -161,12 +238,16 @@ mod tests {
     fn a_hyphen_in_a_folder_name_is_not_a_layout() {
         assert_eq!(
             installed().resolve_track("trento-bondone"),
-            Some(("trento-bondone".into(), None)),
+            Some(("trento-bondone".into(), None, Presence::Game)),
             "the folder itself, single layout"
         );
         assert_eq!(
             installed().resolve_track("ks_nordschleife-touristenfahrten"),
-            Some(("ks_nordschleife".into(), Some("touristenfahrten".into()))),
+            Some((
+                "ks_nordschleife".into(),
+                Some("touristenfahrten".into()),
+                Presence::Game
+            )),
             "split on the hyphen that names an installed layout"
         );
     }
@@ -174,25 +255,76 @@ mod tests {
     /// Rule: a track is available only in the layout the server runs.
     #[test]
     fn another_layout_of_an_installed_track_is_not_available() {
-        let mut server = crate::online::lobby::parse_server(&serde_json::json!({
-            "ip": "1.2.3.4", "cport": 8081, "tport": 9600,
-            "track": "ks_nordschleife-endurance", "cars": ["ks_mazda_miata", "rss_gtm_lanzo_v8"]
-        }))
-        .unwrap();
-        installed().judge(&mut server);
-        assert!(!server.track_available, "endurance is not installed");
-        assert_eq!(server.cars_available, 1, "one car of two");
-        assert_eq!(
-            server.track,
-            decode_track("ks_nordschleife-endurance"),
-            "guess kept as is"
+        let mut s = server("ks_nordschleife-endurance", &["ks_mazda_miata", "unknown_car"]);
+        installed().judge(&mut s);
+        assert!(!s.track_available, "endurance is not installed");
+        assert_eq!(s.track_level, Level::Download, "a layout to fetch, not a DLC");
+        assert_eq!(s.cars_available, 1, "one car of two");
+        assert_eq!(s.track, decode_track("ks_nordschleife-endurance"), "guess kept as is");
+    }
+
+    /// Rule (SPEC-play-online, "Contenu manquant"): in the game is ready, in
+    /// the library one click, in the showcase to download — and the server is
+    /// as ready as the worse of its track and its best car.
+    #[test]
+    fn levels_follow_where_the_content_is() {
+        let i = installed();
+        let mut ready = server("monza", &["ks_mazda_miata"]);
+        i.judge(&mut ready);
+        assert_eq!(ready.level, Level::Ready);
+
+        let mut one_click = server("rt_suzuka", &["ks_mazda_miata"]);
+        i.judge(&mut one_click);
+        assert_eq!(one_click.level, Level::OneClick, "the track is only in the library");
+
+        let mut showcase = server("monza", &["old_mod"]);
+        i.judge(&mut showcase);
+        assert_eq!(showcase.level, Level::Download, "a showcase car has no files");
+        assert_eq!(showcase.cars_available, 0);
+    }
+
+    /// Rule: missing Kunos DLC content blocks, and names the DLC.
+    #[test]
+    fn a_missing_dlc_track_blocks_with_its_name() {
+        let mut s = server("ks_barcelona-layout_gp", &["ks_mazda_miata"]);
+        installed().judge(&mut s);
+        assert_eq!(s.level, Level::Blocked);
+        assert!(
+            s.blockers
+                .iter()
+                .any(|b| matches!(b, Blocker::Dlc { name } if !name.is_empty())),
+            "the DLC is named: {:?}",
+            s.blockers
         );
+    }
+
+    /// Rule: a server that requires a newer CSP than the installed one, or CSP
+    /// when there is none, blocks — whatever the content.
+    #[test]
+    fn a_csp_requirement_blocks() {
+        let mut i = installed();
+        i.csp_build = Some(3000);
+        let mut s = server("csp/3465/../monza", &["ks_mazda_miata"]);
+        i.judge(&mut s);
+        assert_eq!(s.level, Level::Blocked);
+        assert_eq!(
+            s.blockers,
+            vec![Blocker::Csp {
+                required: 3465,
+                installed: Some(3000)
+            }]
+        );
+
+        i.csp_build = Some(4157);
+        let mut s = server("csp/3465/../monza", &["ks_mazda_miata"]);
+        i.judge(&mut s);
+        assert_eq!(s.level, Level::Ready, "a newer CSP passes");
     }
 
     /// Rule: ids compare without case — Windows folders do.
     #[test]
     fn case_does_not_matter() {
-        assert!(installed().has_car("KS_Mazda_Miata"));
+        assert_eq!(installed().car("KS_Mazda_Miata"), Some(Presence::Game));
         assert!(installed().resolve_track("MONZA").is_some());
     }
 }

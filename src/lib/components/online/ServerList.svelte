@@ -4,7 +4,7 @@
   // lobby holds some 9 000 servers, so only the visible lines are rendered,
   // like the game folder's tree.
   import { t } from "$lib/i18n/index.svelte";
-  import { isJoinable } from "$lib/online/filters";
+  import { blockerText, levelText } from "$lib/online/labels";
   import { carName, carsOwnedFirst, layoutLook, trackTitle, type Looks } from "$lib/online/looks";
   import { serverKey, type ServerSummary } from "$lib/online/online";
   import { previewSrc } from "$lib/library/library";
@@ -53,7 +53,6 @@
     <div class="slice" style="transform: translateY({first * ROW_H}px)">
       {#each visible as s (serverKey(s))}
         {@const key = serverKey(s)}
-        {@const ready = isJoinable(s)}
         {@const look = layoutLook(looks, s.track)}
         {@const cars = carsOwnedFirst(looks, s.cars)}
         <button
@@ -120,7 +119,11 @@
             {#if s.track.csp_min_build}<span class="flag mono">{t("online.csp", { build: s.track.csp_min_build })}</span>{/if}
             {#if s.country}<span class="flag mono">{s.country}</span>{/if}
           </span>
-          <span class="state" class:ready>{ready ? t("online.ready") : t("online.missing")}</span>
+          <!-- A snapshot saved before levels existed has none: no badge rather
+               than a guess, until the lobby lists the server again. -->
+          <span class="state {s.level ?? ''}" title={(s.blockers ?? []).map(blockerText).join("\n") || undefined}>
+            {s.level ? levelText(s.level) : ""}
+          </span>
         </button>
       {/each}
     </div>
@@ -276,7 +279,15 @@
     color: var(--muted);
     text-align: right;
   }
+  /* Green ready, blue one click, orange something to fetch; blocked stays
+     muted — red is kept for what the session retains (SPEC §7.2ter). */
   .state.ready {
     color: var(--green);
+  }
+  .state.oneClick {
+    color: var(--blue);
+  }
+  .state.download {
+    color: var(--orange);
   }
 </style>

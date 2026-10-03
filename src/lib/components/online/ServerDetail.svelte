@@ -11,6 +11,8 @@
   import { joinServer, serverDetail, serverKey, type CarSlots, type ServerDetail, type ServerSummary } from "$lib/online/online";
   import { carName, layoutLook, trackTitle, type Looks } from "$lib/online/looks";
   import { isFavourite, isFriend } from "$lib/online/lists";
+  import { joinState } from "$lib/online/readiness";
+  import { blockerText, levelText } from "$lib/online/labels";
   import { onlineStore, recordRecentJoin, toggleFavouriteServer, toggleFriendName } from "$lib/online/store.svelte";
   import { previewSrc } from "$lib/library/library";
 
@@ -75,6 +77,9 @@
     }
   }
 
+  /** A car the panel can pick for you: one with a free slot that can be
+   * driven here. Any car with a free slot can still be picked by hand — the
+   * button then says why it cannot join, which is what one wants to know. */
   function canTake(c: CarSlots): boolean {
     return c.available && c.free > 0;
   }
@@ -84,12 +89,26 @@
   /** The cars one can drive first, each group in the server's order. */
   const cars = $derived(detail ? [...detail.cars.filter((c) => c.available), ...detail.cars.filter((c) => !c.available)] : []);
 
+  const chosen = $derived(cars.find((c) => c.id === car) ?? null);
+  /** Joining with the chosen car — on a booking server the car is picked in
+   * CM, so the server's own level (its best car) stands in. */
+  const readiness = $derived(joinState(live, live.booking ? null : chosen));
+
+  /** The button follows the level (SPEC-play-online.md): JOIN when all is in
+   * the game, PREPARE & JOIN when the join first lays something from the
+   * library into it. */
+  const joinLabel = $derived(
+    live.booking ? t("online.openInCm") : readiness.level === "oneClick" ? t("online.prepareJoin") : t("online.join"),
+  );
+
   /** Why the button cannot join yet, or `null` when it can. */
   const blocker = $derived.by(() => {
-    if (!live.track_available) return t("online.trackMissing");
-    if (live.booking) return null;
-    if (live.clients >= live.max_clients) return t("online.serverFull");
-    if (!car) return t("online.pickCar");
+    if (!live.booking && live.clients >= live.max_clients) return t("online.serverFull");
+    if (!live.booking && !chosen) return t("online.pickCar");
+    if (readiness.level === "blocked") return readiness.blockers[0] ? blockerText(readiness.blockers[0]) : levelText("blocked");
+    if (readiness.level === "download") {
+      return (live.track_level ?? "download") === "download" ? t("online.trackMissing") : t("online.carMissing");
+    }
     return null;
   });
 
@@ -164,7 +183,7 @@
                 type="button"
                 class="car"
                 class:on={car === c.id}
-                disabled={!canTake(c)}
+                disabled={c.free === 0}
                 aria-pressed={car === c.id}
                 onclick={() => (car = c.id)}
               >
@@ -176,7 +195,11 @@
                 <span class="slots mono" class:none={c.free === 0}>
                   {t("online.slots", { free: c.free, total: c.total })}
                 </span>
-                {#if !c.available}<span class="tag">{t("online.notInstalled")}</span>{/if}
+                {#if c.level !== "ready"}
+                  <span class="tag {c.level}">
+                    {c.level === "blocked" && c.dlc ? c.dlc : levelText(c.level)}
+                  </span>
+                {/if}
               </button>
             </li>
           {/each}
@@ -215,10 +238,14 @@
     {#if live.password}
       <input class="input" type="password" autocomplete="off" placeholder={t("online.passwordPlaceholder")} bind:value={password} />
     {/if}
+    {#if readiness.level === "blocked" && readiness.blockers.length > 1}
+      <!-- The button names the first reason; the others are here. -->
+      {#each readiness.blockers.slice(1) as b, i (i)}<p class="why">{blockerText(b)}</p>{/each}
+    {/if}
     {#if joinError}<p class="errbox">{joinError}</p>{/if}
     {#if joined}<p class="ok">{t("online.joined")}</p>{/if}
     <button class="btn btn-primary join" type="button" disabled={!!blocker || joining || loading} onclick={join}>
-      {joining ? t("online.joining") : (blocker ?? (live.booking ? t("online.openInCm") : t("online.join")))}
+      {joining ? t("online.joining") : (blocker ?? joinLabel)}
     </button>
   </footer>
 </aside>
@@ -410,11 +437,23 @@
   .slots.none {
     color: var(--muted);
   }
+  /* Same colours as the list's state column: blue one click, orange to
+     fetch, muted blocked. */
   .tag {
     grid-area: tag;
     font-size: 10px;
-    color: var(--orange);
+    color: var(--muted);
     text-align: right;
+  }
+  .tag.oneClick {
+    color: var(--blue);
+  }
+  .tag.download {
+    color: var(--orange);
+  }
+  .why {
+    color: var(--muted);
+    font-size: 11.5px;
   }
   .drivers li {
     display: flex;

@@ -2,6 +2,7 @@
 // base" and "Liste des serveurs"). Pure, for Vitest: the list holds 9 000
 // servers, and the order is what makes it usable at all.
 import { serverKey, type ServerSummary } from "./online";
+import { isJoinableLevel } from "./readiness";
 
 export interface OnlineFilters {
   search: string;
@@ -22,10 +23,17 @@ export const DEFAULT_FILTERS: OnlineFilters = {
   joinable: false,
 };
 
-/** Lot 1's reading of "ready": the track and at least one car can be driven.
- * The spec's four levels (ready, one click, download, blocked) come later. */
+/** Ready or one click away (`readiness.ts`). A snapshot saved before levels
+ * existed falls back on what it does carry: the track and a car drivable. */
 export function isJoinable(s: ServerSummary): boolean {
-  return s.track_available && s.cars_available > 0;
+  return s.level ? isJoinableLevel(s.level) : s.track_available && s.cars_available > 0;
+}
+
+/** Ready first, then one click, then the rest — the spec's order of the
+ * joinable ("READY, puis 1 CLICK"); beyond them the players decide. */
+function joinRank(s: ServerSummary): number {
+  if (!isJoinable(s)) return 2;
+  return s.level === "oneClick" ? 1 : 0;
 }
 
 /** `text` gives what the search reads for a server (`looks.searchText`, which
@@ -47,8 +55,8 @@ export function filterServers(
   );
 }
 
-/** Servers with a friend on them first (keys in `withFriends`), then
- * joinable, then by players: a full-looking list of servers one cannot enter
+/** Servers with a friend on them first (keys in `withFriends`), then ready,
+ * then one click, then by players: a full-looking list of servers one cannot enter
  * is the first thing the spec sets out to avoid. Stable for equal keys, so a
  * refresh does not shuffle rows under the cursor. */
 export function sortServers(servers: ServerSummary[], withFriends: Set<string> = new Set()): ServerSummary[] {
@@ -58,7 +66,7 @@ export function sortServers(servers: ServerSummary[], withFriends: Set<string> =
     .sort(
       (a, b) =>
         friendly(b.s) - friendly(a.s) ||
-        Number(isJoinable(b.s)) - Number(isJoinable(a.s)) ||
+        joinRank(a.s) - joinRank(b.s) ||
         b.s.clients - a.s.clients ||
         a.i - b.i,
     )

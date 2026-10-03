@@ -25,8 +25,9 @@ de reprendre. En cas d'écart, la spec fait foi.
 
 ---
 
-- [ ] **Page Online — lots 1 à 4 livrés (lister, rejoindre, noms et
-      vignettes, favoris, récents et amis), la suite reste.**
+- [ ] **Page Online — lots 1 à 5 livrés (lister, rejoindre, noms et
+      vignettes, favoris, récents et amis, niveaux de préparation sans
+      couches ni téléchargements), la suite reste.**
       Ce qui est fait et ce qui reste : `SPEC-play-online.md`, section Lots.
       **Pièges déjà payés** (`online-join-research.md`), à relire avant de
       toucher au lancement :
@@ -44,10 +45,13 @@ de reprendre. En cas d'écart, la spec fait foi.
       - Un AssettoServer liste son **trafic IA** parmi ses voitures
         (`traffic_jp_…`), sans slot joueur. Le panneau les écarte (il lit
         `/JSON`) ; la liste ne le peut pas — le lobby ne dit pas qui a des
-        slots — et compte donc une voiture de trafic installée dans
-        `cars_available` : un serveur peut s'afficher « Prêt » sans voiture
-        prenable. À reprendre avec les niveaux de préparation (lot à venir),
-        qui demanderont de toute façon `/JSON` serveur par serveur.
+        slots — et juge donc un serveur sur sa meilleure voiture, trafic
+        compris : il peut s'afficher « Prêt » sans voiture prenable. Les
+        niveaux du lot 5 n'y changent rien ; le corriger demanderait `/JSON`
+        sur chaque serveur affiché, comme la recherche d'amis.
+      - Les niveaux « 1 clic » et « Bloqué » n'ont pas été vus à l'écran
+        (aucun mod désactivé ni DLC manquant sur la machine de dev) : seuls
+        les tests les couvrent.
       **Pas vérifié** : un serveur à mot de passe et un serveur en booking,
       faute d'échantillon au moment du lot 1 ; un AssettoServer (BSG, LA
       Canyons) refuse même avec le ticket, cause inconnue — le Join natif de

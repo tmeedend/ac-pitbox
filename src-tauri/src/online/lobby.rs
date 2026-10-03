@@ -18,6 +18,8 @@ use serde_json::Value;
 
 use crate::http;
 
+use super::readiness::{Blocker, Level};
+
 /// The official list every public server registers with, and the one the game
 /// itself asks. It answers only to its own launcher's user agent (anything
 /// else is redirected to the site root) and only for a known Steam account
@@ -133,6 +135,14 @@ pub struct ServerSummary {
     pub track_available: bool,
     /// Filled by `Installed::judge`: how many of `cars` can be driven.
     pub cars_available: u32,
+    /// Filled by `Installed::judge`: how ready the server is, the worse of
+    /// its track, its best car and its CSP requirement (`readiness.rs`).
+    pub level: Level,
+    /// Filled by `Installed::judge`: the track's own level, which the panel
+    /// combines with the chosen car's.
+    pub track_level: Level,
+    /// Filled by `Installed::judge`: what blocks, to be named on screen.
+    pub blockers: Vec<Blocker>,
 }
 
 /// A number, whether the server wrote it as one or as a string.
@@ -208,6 +218,9 @@ pub fn parse_server(entry: &Value) -> Option<ServerSummary> {
         time_left: number(&entry["timeleft"]).unwrap_or(0),
         track_available: false,
         cars_available: 0,
+        level: Level::default(),
+        track_level: Level::default(),
+        blockers: Vec::new(),
     })
 }
 

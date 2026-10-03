@@ -45,6 +45,15 @@ describe("online server filters (SPEC-play-online, Filtres de base)", () => {
     expect(found("drift celica")).toEqual([]);
   });
 
+  it("puts ready before one click, then the busiest", () => {
+    const list = [
+      server({ name: "busy one click", clients: 20, level: "oneClick" }),
+      server({ name: "quiet ready", clients: 1, level: "ready" }),
+      server({ name: "busy blocked", clients: 30, level: "blocked" }),
+    ];
+    expect(sortServers(list).map((s) => s.name)).toEqual(["quiet ready", "busy one click", "busy blocked"]);
+  });
+
   it("puts what can be joined first, then the busiest", () => {
     const list = [
       server({ name: "busy but missing track", clients: 20, track_available: false }),

@@ -15,6 +15,7 @@ use crate::http;
 
 use super::installed::Installed;
 use super::lobby::{self, ServerSummary, SERVER_AGENT, SERVER_MAX_BODY, SERVER_TIMEOUT_MS};
+use super::readiness::Level;
 
 /// One car model of the server, its slots summed up.
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -27,6 +28,10 @@ pub struct CarSlots {
     pub skin: Option<String>,
     /// The car can be driven here (installed, or in the library).
     pub available: bool,
+    /// How ready the car is here (`readiness.rs`).
+    pub level: Level,
+    /// The DLC to name when the car is blocked.
+    pub dlc: Option<String>,
     /// Photo of `skin`, when the car is in the game with that livery. A car
     /// only in the library has none yet: it is laid in the game at join time.
     pub preview: Option<String>,
@@ -115,11 +120,14 @@ fn car_slots(cars: &[String], entries: &EntryList, installed: &Installed) -> Vec
                 .filter(|s| s.model.eq_ignore_ascii_case(&id))
                 .collect();
             let first_free = mine.iter().find(|s| !s.connected);
+            let (level, dlc) = installed.car_level(&id);
             CarSlots {
+                level,
+                dlc,
                 total: mine.len() as u32,
                 free: mine.iter().filter(|s| !s.connected).count() as u32,
                 skin: first_free.map(|s| s.skin.clone()).filter(|s| !s.is_empty()),
-                available: installed.has_car(&id),
+                available: level <= Level::OneClick,
                 preview: None,
                 id,
             }
@@ -250,7 +258,7 @@ mod tests {
             std::fs::write(skins.join(skin).join("preview.jpg"), b"IMG").unwrap();
         }
         let mut installed = Installed::default();
-        installed.add_car_for_tests("ks_mazda_miata");
+        installed.add_car_for_tests("ks_mazda_miata", crate::online::installed::Presence::Game);
         let mut cars = car_slots(&["ks_mazda_miata".to_string()], &entry_list(), &installed);
         fill_previews(&mut cars, &base);
         let preview = cars[0].preview.as_deref().expect("a photo");

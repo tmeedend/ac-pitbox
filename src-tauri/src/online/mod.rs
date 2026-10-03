@@ -18,6 +18,7 @@ mod installed;
 pub mod join;
 pub mod lobby;
 mod looks;
+pub mod readiness;
 pub mod server;
 mod steam;
 pub mod store;

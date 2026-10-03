@@ -235,6 +235,23 @@ occupés sur 9 000, 4,5 s). Un serveur où roule un ami porte une pastille
 `★ Léo` (ou `★ 3`), passe en tête de `Tous`, et forme l'onglet `Amis`. Les
 amis vivent dans `online.json` avec les favoris.
 
-**Restent**, dans l'ordre où ils servent les cas d'usage : les niveaux de préparation et le bouton qui prépare tout
-(cas 2) ; la frise des sessions, les conditions et les règles du détail ;
+**Lot 5 — niveaux de préparation, sans les couches ni les téléchargements
+(livré).** Chaque circuit et chaque voiture est connu avec l'endroit où il est :
+dans le jeu (`Prêt`), seulement en bibliothèque (`1 clic` — Rejoindre le pose
+d'abord), en vitrine ou absent (`À télécharger`), ou contenu Kunos absent
+(`Bloqué`, avec le nom du DLC) ; un serveur qui exige un CSP plus récent que
+celui installé (ou CSP quand il n'y en a pas) est `Bloqué` lui aussi. La liste
+montre le niveau de chaque serveur — le pire de son circuit, de sa meilleure
+voiture et du CSP, puisque le lobby ne dit pas quelle voiture a une place —,
+la cause au survol, et trie `Prêt` avant `1 clic` ; la bascule « Joignable »
+garde ces deux-là. Dans le panneau, chaque voiture porte son propre niveau, on
+peut en choisir une manquante pour savoir pourquoi on ne peut pas entrer, et le
+bouton suit : `Rejoindre`, `Préparer et rejoindre`, ou la raison
+(« Circuit manquant », « DLC requis : Red Pack », « CSP 3465 ou plus récent
+requis »). Ce que le lot ne fait pas encore : télécharger, et écarter une
+couche le temps d'une session — un serveur qui en aurait besoin se lit
+`À télécharger` ou `Prêt`.
+
+**Restent**, dans l'ordre où ils servent les cas d'usage : le téléchargement
+du contenu manquant et le retrait des couches pendant la session (cas 2) ; la frise des sessions, les conditions et les règles du détail ;
 coller un lien de connexion ; ping, pays en drapeaux, tokens de filtre.
