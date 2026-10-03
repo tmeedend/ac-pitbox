@@ -1937,7 +1937,7 @@
     "cars": "{count} voitures",
     "carOne": "{count} voiture",
     "viewIndex": "Index",
-    "viewList": "Liste complète"
+    "viewIndexFiltered": "Index — s'affiche quand aucun filtre n'est posé"
   },
   "categories": {
     "subtitle": "Les familles de voitures : ce qui range une voiture dans l'index et dans le filtre Famille.",

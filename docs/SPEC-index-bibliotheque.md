@@ -51,7 +51,7 @@ Retirer la dernière puce ramène à l'index. « Tout effacer » aussi. Il n'y a
 
 **L'index n'est pas mémorisé et ne se replie pas.** C'est un état, pas une préférence.
 
-**La bascule de vue passe à deux positions sur l'index** — index / liste — puisqu'il n'y a pas de densité à régler sur une grille de tuiles. Elle reprend ses trois positions dès qu'on est dans une liste.
+**La bascule de vue a quatre positions, toujours** : index, puis les trois densités de la liste (dense, aérée, tableau). Elle en changeait — index / liste sans filtre, les trois densités avec — et la densité qu'on avait choisie était un clic plus loin qu'avant l'index (signalé à l'usage, 2026-10-03). Une densité quitte l'index pour la liste entière (« voir tout ») ; l'index ne s'affichant que sans filtre, son bouton reste visible mais grisé quand un filtre est posé, plutôt que d'effacer ce qui l'est.
 
 ---
 

@@ -1937,7 +1937,7 @@
     "cars": "{count} cars",
     "carOne": "{count} car",
     "viewIndex": "Index",
-    "viewList": "Full list"
+    "viewIndexFiltered": "Index — shown when no filter is posed"
   },
   "categories": {
     "subtitle": "Car families: what places a car in the index and in the Family filter.",

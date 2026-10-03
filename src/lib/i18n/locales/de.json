@@ -1069,8 +1069,7 @@
     "trackOne": "{count} Strecke",
     "cars": "{count} Autos",
     "carOne": "{count} Auto",
-    "viewIndex": "Index",
-    "viewList": "Vollständige Liste"
+    "viewIndex": "Index"
   },
   "modUpdates": {
     "toastOne": "Ein Mod hat eine neue Version",

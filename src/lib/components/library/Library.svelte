@@ -804,37 +804,35 @@
              partagent, sinon le menu se lit comme un contrôle de plus au lieu
              du complément de celui-ci. -->
         <div class="view-wrap">
-          <!-- Two positions while nothing is filtered, index / list
-               (INDEX§3): an index has no density to set. The list position
-               is "see all", in the density the user last chose - which the
-               menu next to it still changes. Three positions again as soon
-               as a filter makes it a list. -->
-          {#if !filtering && !bigPictureView.forced}
-            <Seg
-              size="toolbar"
-              tone="neutral"
-              icon
-              value={indexShown ? "index" : "list"}
-              onselect={(v) => (v === "index" ? (browseAll = false) : showAll())}
-              items={[
-                { value: "index", label: "▦", title: t("index.viewIndex") },
-                { value: "list", label: "☰", title: t("index.viewList") },
-              ]}
-            />
-          {:else}
-            <Seg
-              size="toolbar"
-              tone="neutral"
-              icon
-              value={shown}
-              onselect={(v) => setView(v as GridView)}
-              items={[
-                { value: "dense", label: "▦", title: t("library.viewDense") },
-                { value: "comfortable", label: "▤", title: t("library.viewComfortable") },
-                { value: "table", label: "☰", title: t("library.viewList") },
-              ]}
-            />
-          {/if}
+          <!-- Four positions, always (INDEX§3): the index, then the three
+               densities of the list. They used to swap — index / list without
+               a filter, the densities with one — and the density one had
+               chosen was a click further away than before the index existed
+               (reported: "je préférais comme avant"). A density leaves the
+               index for the whole list ("see all"); the index only shows
+               without a filter, so with one its button stays, greyed, rather
+               than clearing what was posed. -->
+          <Seg
+            size="toolbar"
+            tone="neutral"
+            icon
+            value={indexShown ? "index" : shown}
+            onselect={(v) => {
+              if (v === "index") {
+                bigPictureView.forced = null;
+                browseAll = false;
+                return;
+              }
+              setView(v as GridView);
+              showAll();
+            }}
+            items={[
+              { value: "index", label: "⊞", title: filtering ? t("index.viewIndexFiltered") : t("index.viewIndex"), disabled: filtering },
+              { value: "dense", label: "▦", title: t("library.viewDense") },
+              { value: "comfortable", label: "▤", title: t("library.viewComfortable") },
+              { value: "table", label: "☰", title: t("library.viewList") },
+            ]}
+          />
         <!-- Les préférences de présentation vivent **ici** et non dans les
              réglages globaux : il faut en voir l'effet pour les juger, et un
              écran de réglages les rend invisibles. -->

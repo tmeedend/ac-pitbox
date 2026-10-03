@@ -1069,8 +1069,7 @@
     "trackOne": "{count} circuito",
     "cars": "{count} carros",
     "carOne": "{count} carro",
-    "viewIndex": "Índice",
-    "viewList": "Lista completa"
+    "viewIndex": "Índice"
   },
   "modUpdates": {
     "toastOne": "Um mod tem uma nova versão",
