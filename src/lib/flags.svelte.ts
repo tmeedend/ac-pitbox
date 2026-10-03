@@ -18,7 +18,11 @@ import { invokeSafe } from "$lib/invokeSafe";
 import type { Nationality } from "$lib/launch/launch";
 import { previewSrc } from "$lib/library/library";
 
-const table = $state<{ byName: Map<string, Nationality>; list: Nationality[] }>({ byName: new Map(), list: [] });
+const table = $state<{ byName: Map<string, Nationality>; byIso2: Map<string, Nationality>; list: Nationality[] }>({
+  byName: new Map(),
+  byIso2: new Map(),
+  list: [],
+});
 
 /** Une seule lecture par session : la table du jeu ne bouge pas sous l'app. */
 let loading: Promise<void> | null = null;
@@ -35,6 +39,7 @@ let loading: Promise<void> | null = null;
 export function loadFlags(): Promise<void> {
   loading ??= invokeSafe<Nationality[]>("nationalities", undefined, []).then((list) => {
     table.byName = new Map(list.map((n) => [n.name.toLowerCase(), n]));
+    table.byIso2 = new Map(list.flatMap((n) => (n.iso2 ? [[n.iso2.toUpperCase(), n] as const] : [])));
     table.list = list;
   });
   return loading;
@@ -60,6 +65,13 @@ export function gameCountry(name: string | null | undefined): Nationality | unde
   if (!name) return undefined;
   const key = countryKey(name, (k) => table.byName.has(k));
   return key ? table.byName.get(key) : undefined;
+}
+
+/** The game's entry for an ISO 3166-1 alpha-2 code — what a multiplayer
+ * server declares (`DE`) — or `undefined`: table not loaded yet, or a code the
+ * game does not know. */
+export function gameCountryByIso2(code: string | null | undefined): Nationality | undefined {
+  return code ? table.byIso2.get(code.toUpperCase()) : undefined;
 }
 
 /** Every country of the game, in its own order — what one attaches an unknown

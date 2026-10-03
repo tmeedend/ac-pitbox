@@ -20,7 +20,7 @@
   import Tabs from "$lib/components/ui/Tabs.svelte";
   import FilterBar from "$lib/components/filters/FilterBar.svelte";
   import type { FilterMap } from "$lib/library/filters";
-  import { gameCountries, withCountryLabels } from "$lib/flags.svelte";
+  import { gameCountryByIso2, withCountryLabels } from "$lib/flags.svelte";
   import {
     listServers,
     serverDetail,
@@ -176,11 +176,6 @@
     for (const s of [...own, ...servers]) names[trackValue(s.track)] = trackLabel(looks, s.track);
     return names;
   });
-  /** ISO code → the game's English name, what flags and labels are keyed
-   * on. Fills in once the game's table is loaded (the bar loads it). */
-  const countryNames = $derived(
-    new Map(gameCountries().flatMap((n) => (n.iso2 ? [[n.iso2.toUpperCase(), n.name] as const] : []))),
-  );
   const defs = $derived(
     withCountryLabels(
       onlineTokenDefs({
@@ -193,7 +188,9 @@
   const ctx: TokenContext = $derived({
     looks,
     pingOf: (s) => pingOf(serverKey(s)),
-    countryName: (iso2) => countryNames.get(iso2.toUpperCase()) ?? null,
+    // The game's English name is what flags and labels are keyed on. Fills in
+    // once the game's table is loaded (the bar loads it).
+    countryName: (iso2) => gameCountryByIso2(iso2)?.name ?? null,
   });
 
   /** Every filter but the ping: the servers a ping token has to measure. */
