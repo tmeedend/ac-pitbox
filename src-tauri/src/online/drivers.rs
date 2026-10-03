@@ -7,15 +7,9 @@
 //! in 4.5 s. This module returns every connected driver; matching them against
 //! the friends list is the frontend's, which owns that list.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Mutex;
-
 use serde::{Deserialize, Serialize};
 
-/// Requests in flight at once. Enough to scan a busy evening in seconds,
-/// few enough not to look like a flood to any one host (most hosts run a
-/// handful of servers, and the list is not grouped by host).
-const PARALLEL: usize = 32;
+use super::fanout::fan_out;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ServerAddr {
@@ -30,9 +24,9 @@ pub struct ServerDrivers {
     pub drivers: Vec<String>,
 }
 
-/// Asks each server for its connected drivers, `PARALLEL` at a time. A server
-/// that does not answer is left out: it is one fewer place to find a friend,
-/// not an error — the lobby is full of servers that just went down.
+/// Asks each server for its connected drivers, a few at a time (`fanout.rs`).
+/// A server that does not answer is left out: it is one fewer place to find a
+/// friend, not an error — the lobby is full of servers that just went down.
 pub fn scan(servers: &[ServerAddr], steam_id: u64) -> Vec<ServerDrivers> {
     scan_with(servers, |s| {
         super::server::fetch_entry_list(&s.ip, s.http_port, steam_id)
@@ -44,34 +38,20 @@ pub fn scan(servers: &[ServerAddr], steam_id: u64) -> Vec<ServerDrivers> {
 /// The scan itself, the request given as a parameter so the fan-out can be
 /// tested without a network.
 fn scan_with(servers: &[ServerAddr], fetch: impl Fn(&ServerAddr) -> Option<Vec<String>> + Sync) -> Vec<ServerDrivers> {
-    let next = AtomicUsize::new(0);
-    let found = Mutex::new(Vec::new());
-    std::thread::scope(|scope| {
-        for _ in 0..PARALLEL.min(servers.len()) {
-            scope.spawn(|| loop {
-                let i = next.fetch_add(1, Ordering::Relaxed);
-                let Some(server) = servers.get(i) else { break };
-                let Some(drivers) = fetch(server) else { continue };
-                if drivers.is_empty() {
-                    continue;
-                }
-                let entry = ServerDrivers {
-                    ip: server.ip.clone(),
-                    http_port: server.http_port,
-                    drivers,
-                };
-                // A poisoned lock means another worker panicked: keep what it
-                // left, the scan is best-effort anyway.
-                found.lock().unwrap_or_else(|e| e.into_inner()).push(entry);
-            });
-        }
-    });
-    found.into_inner().unwrap_or_else(|e| e.into_inner())
+    fan_out(servers, |server| {
+        let drivers = fetch(server).filter(|d| !d.is_empty())?;
+        Some(ServerDrivers {
+            ip: server.ip.clone(),
+            http_port: server.http_port,
+            drivers,
+        })
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
 
     fn addr(i: u16) -> ServerAddr {
         ServerAddr {

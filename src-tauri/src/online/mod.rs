@@ -14,6 +14,7 @@ use serde::Serialize;
 use crate::config::AppConfig;
 
 pub mod drivers;
+mod fanout;
 mod installed;
 pub mod join;
 pub mod lobby;
