@@ -109,6 +109,7 @@
     if (!link) return;
     e.preventDefault();
     error = "";
+    autoPick = null;
     const key = `${link.ip}:${link.httpPort}`;
     linkPassword = link.password;
     const listed = servers.find((s) => serverKey(s) === key);
@@ -153,6 +154,27 @@
     setUiPref(StorageKey.onlineGrouped, group ? "1" : "0");
   });
 
+  // The panel is always there, so the list does not change width as servers
+  // are opened and closed (reported). Until the user picks one, it opens on
+  // the last server joined — the one most likely wanted again — else on the
+  // first of the list; with nothing at all, it says to pick one. A track
+  // sheet's way in opens on the first server of that track instead.
+  let autoPick = $state<"last" | "first" | null>("last");
+  $effect(() => {
+    const mode = autoPick;
+    const first = filter.shown[0];
+    const last = store.recents[0]?.server;
+    const settled = restored && !loading;
+    if (!mode || !settled || selected) return;
+    const pick =
+      mode === "last" && last ? (servers.find((s) => serverKey(s) === serverKey(last)) ?? last) : first;
+    if (!pick) return;
+    untrack(() => {
+      autoPick = null;
+      selected = pick;
+    });
+  });
+
   // The library changed — an archive dropped after « Prepare & join » sent
   // the user to a web page, an activation, content fetched: the list's levels
   // were judged against the old library and must be judged again (reported:
@@ -179,8 +201,10 @@
     if (intent?.kind === "track") {
       tab = "all";
       selected = null;
+      autoPick = "first";
       filter.showTrack(intent.layouts);
     } else if (intent?.kind === "server") {
+      autoPick = null;
       const key = serverKey(intent.server);
       selected = servers.find((s) => serverKey(s) === key) ?? intent.server;
       linkPassword = null;
@@ -206,7 +230,7 @@
 
 <svelte:window onpaste={onPaste} />
 
-<div class="online" class:with-panel={!!selected}>
+<div class="online">
   <section class="main">
     <OnlineToolbar
       {filter}
@@ -247,6 +271,7 @@
           lastCars={tab === "recent" ? lastCars : {}}
           selected={selected ? serverKey(selected) : null}
           onselect={(s) => {
+            autoPick = null;
             selected = s;
             linkPassword = null;
           }}
@@ -262,22 +287,32 @@
       preferredCar={lastCars[serverKey(selected)] ?? null}
       presetPassword={linkPassword}
       onclose={() => {
+        autoPick = null;
         selected = null;
         linkPassword = null;
       }}
     />
+  {:else}
+    <aside class="no-server"><p>{t("online.pickServer")}</p></aside>
   {/if}
 </div>
 
 <style>
   .online {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 360px;
     height: 100%;
     min-height: 0;
   }
-  .online.with-panel {
-    grid-template-columns: 1fr 360px;
+  /* The panel's place, kept while no server is open. */
+  .no-server {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-left: 1px solid var(--line);
+    background: var(--panel2);
+    color: var(--muted);
+    font-size: 12px;
   }
   .main {
     display: flex;
