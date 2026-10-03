@@ -18,6 +18,7 @@
   import StateBadge from "$lib/components/ui/StateBadge.svelte";
   import Seg from "$lib/components/ui/Seg.svelte";
   import DataTable from "$lib/components/ui/DataTable.svelte";
+  import DisplayMenu from "$lib/components/ui/DisplayMenu.svelte";
   import {
     listLibrary,
     previewSrc,
@@ -150,7 +151,6 @@
   /** Celui des deux que la vue courante commande — une seule case à l'écran,
    * qui agit là où on la voit agir. */
   const hideBrand = $derived(shown === "table" ? hideBrandTable : hideBrandGrid);
-  let showDisplay = $state(false);
   const isGrid = $derived(shown !== "table");
   let sortKey = $state<string>("name");
   let sortDir = $state<1 | -1>(1);
@@ -838,10 +838,7 @@
         <!-- Les préférences de présentation vivent **ici** et non dans les
              réglages globaux : il faut en voir l'effet pour les juger, et un
              écran de réglages les rend invisibles. -->
-        <div class="display-wrap">
-          <button class="disp-toggle" type="button" aria-expanded={showDisplay} title={t("library.displayMenu")} onclick={() => (showDisplay = !showDisplay)}>▾</button>
-          {#if showDisplay}
-            <div class="display-menu">
+        <DisplayMenu title={t("library.displayMenu")} attached>
               <span class="dm-title">{t("library.density")}</span>
               {#each [["dense", "library.viewDense"], ["comfortable", "library.viewComfortable"], ["table", "library.viewList"]] as [id, key] (id)}
                 <label>
@@ -859,9 +856,7 @@
                   <span>{t("library.hideBrand")}</span>
                 </label>
               {/if}
-            </div>
-          {/if}
-        </div>
+        </DisplayMenu>
         </div>
       {/snippet}
     </FilterBar>
@@ -1100,71 +1095,9 @@
     scrollbar-gutter: stable;
     padding: 0 22px 18px;
   }
-  /* Le menu des colonnes est parti dans `ColumnsMenu` ; celui-ci reste, et il
-     empruntait ses styles au précédent. Le CSS étant scopé, l'extraction les
-     lui aurait retirés en silence — d'où cette copie, qui n'en est plus une :
-     c'est désormais le seul menu de cet écran. */
-  .display-menu {
-    position: absolute;
-    top: calc(100% + 4px);
-    right: 0;
-    z-index: 20;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    padding: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 200px;
-    box-shadow: 0 6px 18px rgb(0 0 0 / 40%);
-  }
-  .display-menu label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    color: var(--txt2);
-    padding: 3px 4px;
-    cursor: pointer;
-  }
-  .display-menu label:hover {
-    background: var(--raised);
-  }
   .view-wrap {
     display: flex;
     align-items: stretch;
-  }
-  .display-wrap {
-    position: relative;
-    display: flex;
-  }
-  .disp-toggle {
-    height: 32px;
-    padding: 0 7px;
-    background: var(--panel2);
-    border: 1px solid var(--line);
-    border-left: none;
-    color: var(--muted);
-    font-size: 10px;
-    line-height: 1;
-  }
-  .disp-toggle:hover,
-  .disp-toggle[aria-expanded="true"] {
-    color: var(--txt);
-    border-color: var(--faint2);
-  }
-  .display-menu .dm-title {
-    color: var(--muted);
-    font-family: var(--mono);
-    font-size: 9px;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    padding: 2px 4px 4px;
-  }
-  .display-menu .dm-sep {
-    height: 1px;
-    background: var(--line);
-    margin: 6px 0;
   }
   .empty {
     color: var(--muted);
