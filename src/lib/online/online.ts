@@ -3,6 +3,7 @@
 // `JoinRequest` on the Rust side.
 import { invoke } from "@tauri-apps/api/core";
 import type { Looks } from "./looks";
+import type { PasswordCheck } from "./password";
 
 export type SessionKind = "booking" | "practice" | "qualify" | "race";
 
@@ -72,6 +73,8 @@ export interface Extended {
   };
   rules: Rule[];
   description: string | null;
+  /** On a locked server that publishes it (`password.ts`). */
+  password_check: PasswordCheck | null;
 }
 
 export interface CarSlots {

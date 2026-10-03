@@ -107,3 +107,19 @@ serveur (liste blanche, plugin), à confirmer par un Join natif.
 - Un serveur à mot de passe, un serveur en mode booking.
 - L'effet de `__CM_EXTENDED` et de la météo absents sur un serveur à détails
   étendus : la connexion passe (essai 5), l'effet en jeu n'a pas été regardé.
+
+## Empreinte du mot de passe (2026-10-03)
+
+`/api/details` du wrapper de CM publie `passwordChecksum`, deux SHA-1 en hexa :
+mot de passe joueur, puis admin. Recette lue dans les sources
+(gro-ove/ac-server-wrapper `src/AcServer.js`, `passwordChecksum` ; client CM
+`ServerEntry.Extended.cs`, `CheckPasswordChecksum`) :
+`sha1("apatosaur" + NAME + mot de passe)`, NAME sans le suffixe `ℹport`, en
+UTF-8. Le preset de serveur de CM sale **sans** le nom (`ServerPresetObject`),
+mais il ne passe pas par `/api/details` : rien de tel n'a été vu sur le lobby.
+Vérifié sur le vrai lobby : 837 serveurs verrouillés publient l'empreinte,
+aucun AssettoServer ; pour 255, celle d'un admin sans mot de passe vaut
+`sha1("apatosaur" + name)`. Le même wrapper protège ses fichiers par
+`sha1("tgys3cqpcwpbssphb0j46tak8ykldaub" + mot de passe)` en base64 coupé
+(`EncryptedContentKey`) — pas utilisé à ce jour.
+

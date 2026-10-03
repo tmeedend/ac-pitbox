@@ -49,12 +49,43 @@ pub enum Rule {
     TyresOut { count: i64 },
 }
 
+/// What lets a password be checked before the game is launched
+/// (`SPEC-play-online.md`, "Ce qu'un serveur AC expose": "vérifier le mot de
+/// passe avant de lancer le jeu"). CM's wrapper publishes, for the player's
+/// password and the admin's, `sha1("apatosaur" + name + password)` — the
+/// recipe of its `passwordChecksum` (gro-ove/ac-server-wrapper, `AcServer.js`)
+/// and what CM's own client compares (`ServerEntry.CheckPasswordChecksum`).
+/// The name is the one `/api/details` gives, without the `ℹport` the lobby
+/// shows. Measured 2026-10-03: 837 locked servers publish it, all through the
+/// wrapper; on 255 of them an empty admin password's checksum is exactly
+/// `sha1("apatosaur" + name)`, which is what confirms the recipe.
+#[derive(Debug, Clone, Default, Serialize, PartialEq)]
+pub struct PasswordCheck {
+    pub salt: String,
+    /// Lowercase hex, the player's password and the admin's.
+    pub checksums: Vec<String>,
+}
+
 #[derive(Debug, Clone, Default, Serialize, PartialEq)]
 pub struct Extended {
     pub conditions: Conditions,
     pub rules: Vec<Rule>,
     /// The description as plain text, its BBCode removed.
     pub description: Option<String>,
+    /// On a locked server that publishes it.
+    pub password_check: Option<PasswordCheck>,
+}
+
+fn password_check(root: &Value) -> Option<PasswordCheck> {
+    let checksums: Vec<String> = root["passwordChecksum"]
+        .as_array()?
+        .iter()
+        .filter_map(Value::as_str)
+        .filter(|c| c.len() == 40 && c.chars().all(|ch| ch.is_ascii_hexdigit()))
+        .map(str::to_lowercase)
+        .collect();
+    let salt = root["name"].as_str()?.to_string();
+    (!checksums.is_empty()).then_some(PasswordCheck { salt, checksums })
 }
 
 fn int(v: &Value) -> Option<i64> {
@@ -166,6 +197,7 @@ pub(super) fn parse(root: &Value) -> Extended {
         },
         rules: rules(&root["assists"]),
         description: root["description"].as_str().map(strip_bbcode).filter(|d| !d.is_empty()),
+        password_check: password_check(root),
     }
 }
 
@@ -186,6 +218,37 @@ pub fn fetch(ip: &str, http_port: u16, steam_id: u64) -> Option<(Extended, Value
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Rule: a locked server's checksums are kept with the name that salts
+    /// them — a real answer (CM's wrapper, 2026-10-03), its name in Cyrillic;
+    /// a server that publishes none, or garbage, gives no check.
+    #[test]
+    fn a_locked_server_gives_its_password_check() {
+        let root = serde_json::json!({
+            "name": "GL-Team - Сервер",
+            "passwordChecksum": ["dbe24a8795b95c3559aa8a4caba5ea79da223078", "A6D90D3AFADC8649CA7A6924E70A73992B43ED2F"]
+        });
+        assert_eq!(
+            password_check(&root),
+            Some(PasswordCheck {
+                salt: "GL-Team - Сервер".into(),
+                checksums: vec![
+                    "dbe24a8795b95c3559aa8a4caba5ea79da223078".into(),
+                    "a6d90d3afadc8649ca7a6924e70a73992b43ed2f".into()
+                ],
+            })
+        );
+        assert_eq!(
+            password_check(&serde_json::json!({ "name": "x" })),
+            None,
+            "no checksum published"
+        );
+        assert_eq!(
+            password_check(&serde_json::json!({ "name": "x", "passwordChecksum": ["not a sha1"] })),
+            None,
+            "nothing usable"
+        );
+    }
 
     /// A real answer (an AssettoServer on LA Canyons, 2026-10-03), trimmed.
     fn answer() -> Value {

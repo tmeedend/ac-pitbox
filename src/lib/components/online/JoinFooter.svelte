@@ -18,6 +18,7 @@
   import { fetchNeeded, type Needed } from "$lib/online/prepare";
   import { blockerText, levelText } from "$lib/online/labels";
   import { recordRecentJoin } from "$lib/online/store.svelte";
+  import { passwordMatches } from "$lib/online/password";
   import LayersNotice from "./LayersNotice.svelte";
 
   interface Props {
@@ -149,6 +150,14 @@
     joined = false;
     const carId = live.booking ? "" : (chosen?.id ?? "");
     try {
+      // Checked before anything is fetched or launched, where the server
+      // allows it: a wrong password otherwise costs the game's whole loading
+      // to be refused at the end of it.
+      const check = detail?.extended?.password_check;
+      if (live.password && check && !(await passwordMatches(check, password))) {
+        joinError = t("online.passwordWrong");
+        return;
+      }
       if (!(await prepare())) return;
       await joinServer(live, carId, password || null, setAside);
       joined = true;

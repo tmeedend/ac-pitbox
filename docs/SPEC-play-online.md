@@ -424,6 +424,21 @@ il s'ouvre sur le dernier serveur rejoint, sinon sur le premier de la liste ;
 venu d'une fiche circuit, sur le premier serveur de ce circuit. Fermé, ou sans
 rien à montrer, sa place dit « Sélectionnez un serveur ».
 
+**Le mot de passe vérifié avant le lancement (livré).** Sur un serveur
+verrouillé qui publie `passwordChecksum` dans `/api/details`, « Rejoindre »
+vérifie le mot de passe saisi **avant** de rien télécharger ni lancer :
+faux, le panneau le dit (« Mot de passe incorrect ») au lieu de laisser le jeu
+charger 40 s pour se faire refuser. La recette est celle du wrapper de CM,
+`sha1("apatosaur" + nom + mot de passe)`, le nom étant celui des détails (sans
+le `ℹport` du lobby) ; le serveur publie celle du mot de passe joueur et celle
+du mot de passe admin, et l'un ou l'autre ouvre. Mesuré le 2026-10-03 : 837
+serveurs verrouillés la publient, tous par le wrapper ; sur 255 d'entre eux,
+l'empreinte d'un mot de passe admin vide retombe exactement sur la recette,
+ce qui la confirme. Un mot de passe vide n'est jamais accepté — sans quoi
+l'empreinte d'un admin sans mot de passe le laisserait passer. Un serveur qui
+ne la publie pas (un AssettoServer, un serveur Kunos nu) reste vérifié par le
+jeu lui-même, comme avant.
+
 **Partager un serveur.** Le bouton `⧉` de l'en-tête du panneau copie le lien
 de partage de Content Manager (`https://acstuff.club/s/q:race/online/join?ip=…&httpPort=…`) :
 un ami l'ouvre avec CM depuis un navigateur ou une messagerie, ou le colle
