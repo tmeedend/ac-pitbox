@@ -104,4 +104,7 @@ export const StorageKey = {
   /** Whether the Online page's All tab groups servers by track ("1"/"0").
    * Born in `ui_prefs.json`. */
   onlineGrouped: `${PREFIX}.online.grouped`,
+  /** The Online table's sort, `{ key, dir }` as JSON; empty for the default
+   * order. Born in `ui_prefs.json`. */
+  onlineSort: `${PREFIX}.online.sort`,
 } as const;

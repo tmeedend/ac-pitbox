@@ -124,15 +124,15 @@ PitBox est le seul outil qui sait qu'une voiture ou un circuit n'est pas « tel 
 
 ## Filtres de base
 
-Une barre unique : un champ de recherche + quatre **bascules toujours visibles**, le reste en tokens. Pas de panneau de 20 cases.
+Une barre unique, sur une seule ligne comme celle de la bibliothèque : un champ de recherche, quatre **puces oui/non épinglées**, le reste en tokens. Pas de panneau de 20 cases.
 
 | Filtre | Forme | Défaut |
 | --- | --- | --- |
 | Nom du serveur | Champ texte, recherche instantanée | vide |
-| Not full | Bascule | activée |
-| No password | Bascule | activée |
-| Not empty | Bascule | désactivée |
-| Joinable (`READY` ou `1 CLICK`) | Bascule | désactivée |
+| Not full | Puce oui/non, épinglée | posée |
+| No password | Puce oui/non, épinglée | fantôme |
+| Not empty | Puce oui/non, épinglée | fantôme |
+| Joinable (`READY` ou `1 CLICK`) | Puce oui/non, épinglée | fantôme |
 | Circuit | Token avec autocomplétion sur les circuits en ligne, nombre de serveurs affiché (`Spa · 23 servers`) | aucun |
 | Voiture | Même principe que le circuit | aucun |
 | Catégorie de circuit | Token `track category: Freeroam`, tiré des catégories de circuit de ta bibliothèque | aucun |
@@ -143,7 +143,9 @@ Une barre unique : un champ de recherche + quatre **bascules toujours visibles**
 
 La catégorie de circuit répond au cas 3 (freeroam, drift, touge, circuit) avec un vocabulaire que PitBox tient déjà. Un circuit absent de ta bibliothèque n'a pas de catégorie : il compte comme **inconnu**, ni inclus ni exclu, sinon on masque en silence les serveurs qu'on cherche justement à découvrir.
 
-Les bascules et le tri sont **mémorisés** entre deux ouvertures de la page.
+Une puce oui/non a trois états, comme à la bibliothèque : absente (indifférent), positive, négative. Le négatif sert : « Avec mot de passe » retrouve le serveur privé de sa ligue, « Pas joignable » montre ce qu'il faudrait télécharger.
+
+Les puces et le tri sont **mémorisés** entre deux ouvertures de la page.
 
 ## Au-delà de Content Manager
 
@@ -316,8 +318,7 @@ il exige un hachage du mot de passe que Pit Box ne calcule pas.
 **Lot 8 — les tokens de filtre (livré).** La barre est celle de la
 bibliothèque, puces et popovers compris (`FilterBar`) : la recherche, `+ Filtre`
 et les puces, avec `Circuit`, `Voiture` et `Catégorie de circuit` épinglés en
-fantômes ; les quatre bascules restent des cases, juste dessous, sur `Tous`
-seulement. Sept tokens : **circuit** (le layout, sous son nom ici, et le nombre
+fantômes. Sept tokens : **circuit** (le layout, sous son nom ici, et le nombre
 de serveurs qui le font tourner), **voiture** (`ET` / `OU` entre deux),
 **catégorie de circuit** (celles de la bibliothèque — un circuit qu'elle n'a
 pas est inconnu, ni inclus ni exclu ; un circuit qu'elle a sans catégorie, lui,
@@ -331,21 +332,49 @@ ping n'est pas mesuré n'est pas « proche » : poser un token de ping fait
 mesurer les serveurs qui passent tous les autres filtres, le haut de la liste
 d'abord, par lots de 64, et ils apparaissent à mesure qu'ils répondent (« Mesure
 du ping · N serveurs restants ») ; un serveur qui ne répond pas reste écarté.
-Les tokens et les épingles sont mémorisés avec les bascules ; la recherche ne
-l'est toujours pas. Le pays d'un serveur est un **drapeau** : seul sur la ligne,
+Les tokens et les épingles sont mémorisés ; la recherche ne l'est toujours
+pas. Le pays d'un serveur est un **drapeau** : seul sur la ligne,
 son nom en infobulle ; suivi du nom dans le panneau. Un code que le jeu ne
 connaît pas reste écrit tel quel.
 
-**v2, lot 1 — regrouper par circuit (livré).** Une bascule « Regrouper par
-circuit », sur `Tous`, mémorisée, éteinte par défaut : les serveurs qui font
-tourner le même layout se rangent sous une ligne, placée où se tenait le premier
-d'entre eux — l'ordre de la liste (amis, joignables, joueurs) décide toujours de
-ce qui vient en tête. La ligne du groupe montre le circuit, le nombre de
-serveurs, les joueurs additionnés, le meilleur niveau de préparation et les amis
-présents sur l'un d'eux ; un clic la déplie, ses serveurs s'affichent dessous,
-un filet à gauche. Un layout tenu par un seul serveur garde sa ligne ordinaire.
-Ce qui est déplié ne se mémorise pas. Les onglets à soi ne se regroupent pas :
-leurs listes sont courtes.
+**Lot 9 — les puces oui/non et le tableau (livré).** Les quatre cases
+« Pas plein », « Sans mot de passe », « Pas vide » et « Joignable » sont des
+puces de la barre, épinglées, à trois états ; « Pas plein » est posée d'usine,
+« Sans mot de passe » ne l'est plus. Elles ne s'offrent que sur `Tous` : un
+serveur à soi reste listé plein, verrouillé ou vide. Un état enregistré par les
+anciennes cases se relit comme les puces équivalentes, et les quatre rejoignent
+les épingles.
+
+La liste est un **tableau**, celui de la bibliothèque (SPEC §7.4,
+`components/ui/DataTable.svelte`) : colonnes choisies, déplacées par
+glisser-déposer d'en-tête, redimensionnées, mémorisées côté Rust
+(`library_columns.json`, clé `online`). Colonnes : **Circuit** (fixe, ni
+masquable ni déplaçable), Serveur, Session, Joueurs, Ping, Voitures, CSP, Pays,
+État ; IP:port et Mot de passe en option. Un clic d'en-tête trie croissant, un
+deuxième décroissant, un troisième rend l'ordre par défaut (amis, joignables,
+joueurs) ; ce qui n'a pas de valeur (ping non mesuré, pas de CSP) va toujours en
+dernier. Le tableau est virtuel : seules les lignes visibles sont dessinées.
+
+Sous le nom du circuit, le **nom lisible du layout** (« Main Layout », la
+répétition du nom du circuit ôtée), l'identifiant en infobulle. L'**état** reste
+discret quand tout est prêt ; la couleur va à `1 clic` (bleu), `À télécharger`
+(orange) et `Bloqué` (jaune). La **session** dit le temps restant, et
+« Ouvert » pour des essais de plus de 3 h. « Réservation » ne s'écrit qu'une
+fois. Les voitures tronquées gardent leur `+N` en vue, la liste entière au
+survol.
+
+**Regrouper par circuit** est dans le menu d'affichage (le chevron à côté des
+colonnes), sur `Tous`, mémorisé, éteint d'usine. La ligne d'un groupe est une
+ligne du tableau, une cellule par colonne visible : Circuit (vignette et nom),
+Serveur (le nombre de serveurs, et les amis présents), Joueurs (total / places) ;
+les autres cellules restent vides. Les groupes viennent par total de joueurs,
+le plus fréquenté en tête — le nombre de serveurs ne dit pas ce qui est joué.
+Une colonne peut déclarer un **agrégat** (Circuit, Serveur, Joueurs) : trier
+sur elle ordonne les groupes par l'agrégat et les serveurs de chaque groupe par
+leur valeur ; trier sur une autre n'ordonne que les serveurs. Un clic déplie un
+groupe, ses serveurs dessous, un filet à gauche et la cellule Circuit réduite au
+layout. Un layout tenu par un seul serveur garde sa ligne ordinaire, rangée
+comme un groupe d'un.
 
 **Restent** : les niveaux de préparation de la liste elle-même, qui ne
 voient ni les liens ni les versions des serveurs (il faudrait `/api/details`

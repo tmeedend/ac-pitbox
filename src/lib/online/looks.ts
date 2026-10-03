@@ -37,6 +37,28 @@ export function trackTitle(looks: Looks, track: TrackRef): string {
   return layoutLook(looks, track)?.name ?? looks.tracks[track.id.toLowerCase()]?.name ?? track.id;
 }
 
+/** The track's own name, else its folder. */
+export function trackName(looks: Looks, track: TrackRef): string {
+  return looks.tracks[track.id.toLowerCase()]?.name ?? track.id;
+}
+
+/**
+ * The layout as one reads it under the track's name — "Main Layout", not
+ * `main_layout`. A layout's `ui_track.json` usually repeats the track
+ * ("Shutoko Revival Project 0.9.3 - Main Layout"): the repetition goes. A
+ * single-layout track has none; a layout the library does not know keeps its
+ * folder, the only name there is.
+ */
+export function layoutName(looks: Looks, track: TrackRef): string | null {
+  if (!track.layout) return null;
+  const name = layoutLook(looks, track)?.name;
+  if (!name) return track.layout;
+  const prefix = trackName(looks, track);
+  if (!name.toLowerCase().startsWith(prefix.toLowerCase())) return name;
+  const rest = name.slice(prefix.length).replace(/^[\s\-–—:·|]+/, "");
+  return rest || name;
+}
+
 export function isKnownCar(looks: Looks, id: string): boolean {
   return id.toLowerCase() in looks.cars;
 }

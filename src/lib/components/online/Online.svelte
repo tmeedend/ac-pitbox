@@ -49,9 +49,12 @@
   } from "$lib/online/tokens";
   import { measureAll, pingOf, pingsLeft, stopMeasuring } from "$lib/online/pings.svelte";
   import { friendsOnline, recentCars, tabServers, type OnlineTab } from "$lib/online/lists";
-  import { groupByTrack, serverRows } from "$lib/online/groups";
+  import { ONLINE_COLUMNS } from "$lib/online/columns";
+  import { defaultPrefs, loadSavedPrefs, reconcilePrefs, saveTablePrefs, toggleVisible, type ColumnsPrefs } from "$lib/tableColumns";
+  import ColumnsMenu from "$lib/components/ui/ColumnsMenu.svelte";
+  import DisplayMenu from "$lib/components/ui/DisplayMenu.svelte";
   import { loadOnlineStore, onlineStore } from "$lib/online/store.svelte";
-  import ServerList from "./ServerList.svelte";
+  import ServerTable from "./ServerTable.svelte";
   import ServerDetail from "./ServerDetail.svelte";
 
   let servers = $state<ServerSummary[]>([]);
@@ -65,8 +68,12 @@
   let tab = $state<OnlineTab>("all");
   /** All tab: servers gathered under one row per track (v2 of the spec). */
   let grouped = $state(false);
-  /** The groups unfolded, by track key. Not remembered: a fold is a glance. */
-  let openGroups = $state<string[]>([]);
+  /** The table's columns (SPEC §7.4), kept beside the library's. */
+  let columnsPrefs = $state<ColumnsPrefs>(defaultPrefs(ONLINE_COLUMNS));
+  function setColumnsPrefs(next: ColumnsPrefs) {
+    columnsPrefs = next;
+    void saveTablePrefs("online", next);
+  }
   /** The stored filters are read before the first save, so that restoring
    * them is not taken for a change. A `$state`: the effects that save must
    * run again once it flips. */
@@ -148,12 +155,14 @@
   });
 
   onMount(async () => {
-    const [savedFilters, savedTab, savedGrouped] = await Promise.all([
+    const [savedFilters, savedTab, savedGrouped, savedColumns] = await Promise.all([
       getUiPref(StorageKey.onlineFilters),
       getUiPref(StorageKey.onlineTab),
       getUiPref(StorageKey.onlineGrouped),
+      loadSavedPrefs("online"),
       loadOnlineStore(),
     ]);
+    columnsPrefs = reconcilePrefs(savedColumns, ONLINE_COLUMNS);
     // The search is a gesture of the moment; the chips and their pins are
     // remembered — the checkboxes they replaced included (`parseTokens`).
     ({ tokens, pinned } = parseTokens(savedFilters));
@@ -236,12 +245,6 @@
     const timer = setTimeout(() => untrack(() => void measureAll(list)), 400);
     return () => clearTimeout(timer);
   });
-  /** Grouping is for the 9 000 public servers: one's own lists are short. */
-  const rows = $derived(tab === "all" && grouped ? groupByTrack(shown, new Set(openGroups)) : serverRows(shown));
-  function toggleGroup(key: string) {
-    openGroups = openGroups.includes(key) ? openGroups.filter((k) => k !== key) : [...openGroups, key];
-  }
-
   // Leaving the page ends the sweep: nobody is reading the list any more.
   $effect(() => () => stopMeasuring());
   const measuring = $derived(wantsPing ? pingsLeft() : 0);
@@ -284,23 +287,27 @@
           placeholderKey="online.searchPlaceholder"
         >
           {#snippet end()}
+            {#if measuring > 0}
+              <span class="measuring mono">{t("online.pingMeasuring", { count: measuring })}</span>
+            {/if}
+            <ColumnsMenu
+              items={ONLINE_COLUMNS.map((c) => ({ key: c.key, label: t(c.labelKey), fixed: c.fixed }))}
+              visible={columnsPrefs.visible}
+              ontoggle={(key) => setColumnsPrefs(toggleVisible(columnsPrefs, key))}
+            />
+            <!-- Grouping is a way of showing, not a filter: it lives with
+                 the display, and only for the public servers — one's own
+                 lists are short. -->
+            <DisplayMenu title={t("online.displayMenu")}>
+              <label>
+                <input type="checkbox" bind:checked={grouped} disabled={tab !== "all"} />
+                <span>{t("online.groupByTrack")}</span>
+              </label>
+            </DisplayMenu>
             <button class="btn" type="button" disabled={loading} onclick={refresh}>{t("online.refresh")}</button>
           {/snippet}
         </FilterBar>
       </div>
-      {#if tab === "all" || measuring > 0}
-        <div class="toggles">
-          {#if tab === "all"}
-            <label class="tog">
-              <input type="checkbox" bind:checked={grouped} />
-              {t("online.groupByTrack")}
-            </label>
-          {/if}
-          {#if measuring > 0}
-            <span class="measuring mono">{t("online.pingMeasuring", { count: measuring })}</span>
-          {/if}
-        </div>
-      {/if}
     </header>
 
     {#if error}
@@ -320,9 +327,11 @@
       {/if}
     {:else}
       <div class="rows">
-        <ServerList
-          {rows}
-          ontoggle={toggleGroup}
+        <ServerTable
+          servers={shown}
+          grouped={tab === "all" && grouped}
+          prefs={columnsPrefs}
+          onprefs={setColumnsPrefs}
           {looks}
           favourites={store.favourites}
           {friends}
@@ -368,32 +377,12 @@
     min-height: 0;
   }
   .head {
-    padding: 22px 24px 14px;
+    padding: 22px 24px 0;
   }
   .bar {
     margin-top: 12px;
   }
-  /* The bar's own bottom margin stands between it and the toggles. */
-  .toggles {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 8px 16px;
-    margin-top: -6px;
-  }
-  .tog {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    color: var(--txt2);
-    cursor: pointer;
-  }
-  .tog input {
-    accent-color: var(--rosso);
-  }
   .measuring {
-    margin-left: auto;
     font-size: 11px;
     color: var(--muted);
   }

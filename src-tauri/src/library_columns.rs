@@ -2,8 +2,8 @@
 //! fichier dédié (`library_columns.json`), écriture synchrone. Même raison
 //! que `session_state.rs`/`saved_sessions.rs` : `localStorage` n'est pas
 //! garanti synchrone sur disque côté WebView2. Structure opaque côté Rust :
-//! le schéma (une entrée par type de mod, `{visible, order}`) appartient au
-//! frontend (`columns.ts`).
+//! le schéma (une entrée par écran à tableau — `cars`, `tracks`, `online` —,
+//! `{visible, order, widths}`) appartient au frontend (`tableColumns.ts`).
 
 use std::path::PathBuf;
 

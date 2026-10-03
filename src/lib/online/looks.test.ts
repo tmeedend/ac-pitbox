@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { carName, carsOwnedFirst, searchText, trackTitle, type Looks } from "./looks";
+import { carName, carsOwnedFirst, layoutName, searchText, trackTitle, type Looks } from "./looks";
 import type { ServerSummary } from "./online";
 
 const looks: Looks = {
@@ -42,5 +42,23 @@ describe("online looks (SPEC-play-online, Liste des serveurs)", () => {
     const s = { name: "Aussie", track: track("bathurst", null), cars: ["ks_mazda_miata"] } as ServerSummary;
     expect(searchText(looks, s)).toContain("mount panorama");
     expect(searchText(looks, s)).toContain("mx-5");
+  });
+  it("reads a layout under its track's name, without repeating it", () => {
+    const shuto: Looks = {
+      cars: {},
+      tracks: {
+        shuto: {
+          name: "Shutoko Revival Project 0.9.3",
+          categories: [],
+          layouts: { main_layout: { name: "Shutoko Revival Project 0.9.3 - Main Layout", preview: null, outline: null } },
+        },
+      },
+    };
+    expect(layoutName(shuto, track("shuto", "main_layout"))).toBe("Main Layout");
+    expect(layoutName(looks, track("ks_nordschleife", "touristenfahrten")), "no repetition to drop").toBe(
+      "Nordschleife - Tourist",
+    );
+    expect(layoutName(looks, track("bathurst", null)), "a single layout").toBeNull();
+    expect(layoutName(looks, track("lac", "freeroam")), "unknown here: its folder").toBe("freeroam");
   });
 });
