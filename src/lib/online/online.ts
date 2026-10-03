@@ -72,6 +72,20 @@ export function listServers(): Promise<ServerList> {
   return invoke<ServerList>("online_servers");
 }
 
+export interface ServerDrivers {
+  ip: string;
+  http_port: number;
+  drivers: string[];
+}
+
+/** The connected drivers of each of `servers`, asked from the servers
+ * themselves (`online/drivers.rs`). Servers that do not answer are absent. */
+export function serverDrivers(servers: ServerSummary[]): Promise<ServerDrivers[]> {
+  return invoke<ServerDrivers[]>("online_server_drivers", {
+    servers: servers.map(({ ip, http_port }) => ({ ip, http_port })),
+  });
+}
+
 export function serverDetail(ip: string, httpPort: number): Promise<ServerDetail> {
   return invoke<ServerDetail>("online_server_detail", { ip, httpPort });
 }

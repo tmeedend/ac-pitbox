@@ -8,7 +8,7 @@
 import { sortServers } from "./filters";
 import { serverKey, type ServerSummary } from "./online";
 
-export type OnlineTab = "all" | "favourites" | "recent";
+export type OnlineTab = "all" | "favourites" | "recent" | "friends";
 
 export interface RecentJoin {
   server: ServerSummary;
@@ -22,12 +22,15 @@ export interface RecentJoin {
 export interface OnlineStore {
   favourites: ServerSummary[];
   recents: RecentJoin[];
+  /** Driver names, as servers display them — the way CM's own friends work
+   * (SPEC-play-online.md, "Amis : comme CM, par nom affiché"). */
+  friends: string[];
 }
 
 /** Joins kept: enough for "yesterday's server", short enough to scan. */
 export const RECENTS_KEPT = 20;
 
-export const EMPTY_STORE: OnlineStore = { favourites: [], recents: [] };
+export const EMPTY_STORE: OnlineStore = { favourites: [], recents: [], friends: [] };
 
 function isServer(v: unknown): v is ServerSummary {
   const s = v as ServerSummary | null;
@@ -44,7 +47,40 @@ export function parseStore(raw: unknown): OnlineStore {
         (r): r is RecentJoin => isServer(r?.server) && typeof r.car === "string" && typeof r.at === "string",
       )
     : [];
-  return { favourites, recents };
+  // Absent from a file written before friends existed.
+  const friends = Array.isArray(value.friends)
+    ? value.friends.filter((f): f is string => typeof f === "string" && f.trim() !== "")
+    : [];
+  return { favourites, recents, friends };
+}
+
+/** Names compare trimmed and without case: a server's entry list writes the
+ * name as typed in each driver's own game. */
+function sameName(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+export function isFriend(store: OnlineStore, name: string): boolean {
+  return store.friends.some((f) => sameName(f, name));
+}
+
+export function toggleFriend(store: OnlineStore, name: string): OnlineStore {
+  return isFriend(store, name)
+    ? { ...store, friends: store.friends.filter((f) => !sameName(f, name)) }
+    : { ...store, friends: [...store.friends, name.trim()] };
+}
+
+/** Per server key, the friends connected there, from a drivers scan. */
+export function friendsOnline(
+  scan: { ip: string; http_port: number; drivers: string[] }[],
+  store: OnlineStore,
+): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const s of scan) {
+    const here = s.drivers.filter((d) => isFriend(store, d));
+    if (here.length) out[serverKey(s)] = here;
+  }
+  return out;
 }
 
 export function isFavourite(store: OnlineStore, key: string): boolean {
@@ -72,9 +108,17 @@ function fresh(snapshot: ServerSummary, lobby: Map<string, ServerSummary>): Serv
 }
 
 /** The servers of a tab. Favourites follow the list's order (joinable, then
- * busiest); recents stay in the order they were joined. */
-export function tabServers(tab: OnlineTab, servers: ServerSummary[], store: OnlineStore): ServerSummary[] {
+ * busiest); recents stay in the order they were joined; Friends lists the
+ * lobby's servers where a friend is connected (`friends` comes from
+ * `friendsOnline`). */
+export function tabServers(
+  tab: OnlineTab,
+  servers: ServerSummary[],
+  store: OnlineStore,
+  friends: Record<string, string[]> = {},
+): ServerSummary[] {
   if (tab === "all") return servers;
+  if (tab === "friends") return sortServers(servers.filter((s) => serverKey(s) in friends));
   const lobby = new Map(servers.map((s) => [serverKey(s), s]));
   if (tab === "favourites") return sortServers(store.favourites.map((s) => fresh(s, lobby)));
   return store.recents.map((r) => fresh(r.server, lobby));

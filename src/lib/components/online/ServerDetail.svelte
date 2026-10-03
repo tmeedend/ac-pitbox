@@ -10,8 +10,8 @@
   import { errorText } from "$lib/errors";
   import { joinServer, serverDetail, serverKey, type CarSlots, type ServerDetail, type ServerSummary } from "$lib/online/online";
   import { carName, layoutLook, trackTitle, type Looks } from "$lib/online/looks";
-  import { isFavourite } from "$lib/online/lists";
-  import { onlineStore, recordRecentJoin, toggleFavouriteServer } from "$lib/online/store.svelte";
+  import { isFavourite, isFriend } from "$lib/online/lists";
+  import { onlineStore, recordRecentJoin, toggleFavouriteServer, toggleFriendName } from "$lib/online/store.svelte";
   import { previewSrc } from "$lib/library/library";
 
   interface Props {
@@ -187,7 +187,22 @@
       {#if detail.drivers.length}
         <ul class="drivers">
           {#each detail.drivers as d, i (i)}
-            <li><span>{d.name}</span><span class="sub">{carName(looks, d.car)}</span></li>
+            {@const friend = isFriend(onlineStore(), d.name)}
+            <li>
+              <!-- A click on a name marks a friend (SPEC-play-online.md, "Détail
+                   d'un serveur"); the star says which way the click goes. -->
+              <button
+                class="driver"
+                class:friend
+                type="button"
+                title={friend ? t("online.unfriend") : t("online.befriend")}
+                aria-pressed={friend}
+                onclick={() => toggleFriendName(d.name)}
+              >
+                <span class="mark">{friend ? "★" : "☆"}</span>{d.name}
+              </button>
+              <span class="sub">{carName(looks, d.car)}</span>
+            </li>
           {/each}
         </ul>
       {:else}
@@ -404,9 +419,32 @@
   .drivers li {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     gap: 10px;
     font-size: 12px;
     color: var(--txt2);
+  }
+  .driver {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--txt2);
+    font-size: 12px;
+    text-align: left;
+  }
+  .driver .mark {
+    color: var(--faint);
+  }
+  .driver:hover .mark {
+    color: var(--muted);
+  }
+  .driver.friend,
+  .driver.friend .mark {
+    color: var(--green);
   }
   .muted {
     color: var(--muted);

@@ -185,6 +185,8 @@ La v1 se construit autour des onglets Favoris / Récents / Amis, du statut de pr
 - [x] **Voiture dans le lien CM** : oui pour la voiture (`race/online&car=`, vérifié en jeu). Non pour la livrée : le serveur impose celle du slot libre, quelle que soit celle demandée. Voir `online-join-research.md`.
 - [ ] **Mods son** : échec reproductible ou aléatoire ? Décide s'ils passent en « échec certain ».
 - [x] **SPEC §7.2** : tableau des trois territoires et ordre du rail mis à jour (`Session`, `Online`, filet, Apps…).
+- [x] **Rejoindre sans une couche** : décidé, voir « Couches et versions ».
+- [x] **Amis** : comme CM, par nom affiché.
 
 ## Lots
 
@@ -223,8 +225,16 @@ là qu'on le cherche ; la recherche s'applique partout. Stockage :
 `online.json` d'`app_config_dir`, écrit côté Rust et compris dans la
 sauvegarde de démarrage.
 
-**Restent**, dans l'ordre où ils servent les cas d'usage : Amis (cas 1) ; les niveaux de préparation et le bouton qui prépare tout
+**Lot 4 — Amis (livré).** Dans le panneau, un clic sur un pilote connecté le
+marque comme ami (☆ → ★, en vert), un second clic le retire ; les noms se
+comparent sans casse ni espaces autour, comme les écrit chaque jeu. Le lobby
+ne nomme personne : après chaque chargement de la liste, et seulement si au
+moins un ami est marqué, Pit Box demande leurs pilotes aux serveurs qui ont
+des joueurs (32 requêtes à la fois — mesuré le 2026-10-03 : 341 serveurs
+occupés sur 9 000, 4,5 s). Un serveur où roule un ami porte une pastille
+`★ Léo` (ou `★ 3`), passe en tête de `Tous`, et forme l'onglet `Amis`. Les
+amis vivent dans `online.json` avec les favoris.
+
+**Restent**, dans l'ordre où ils servent les cas d'usage : les niveaux de préparation et le bouton qui prépare tout
 (cas 2) ; la frise des sessions, les conditions et les règles du détail ;
 coller un lien de connexion ; ping, pays en drapeaux, tokens de filtre.
-- [x] **Rejoindre sans une couche** : décidé, voir « Couches et versions ».
-- [x] **Amis** : comme CM, par nom affiché.

@@ -54,6 +54,17 @@ pub async fn online_server_detail(
     .map_err(|e| e.to_string())?
 }
 
+/// The connected drivers of each of `servers`, asked from the servers
+/// themselves — to find friends (`online/drivers.rs`).
+#[tauri::command]
+pub async fn online_server_drivers(
+    servers: Vec<online::drivers::ServerAddr>,
+) -> Result<Vec<online::drivers::ServerDrivers>, String> {
+    tauri::async_runtime::spawn_blocking(move || Ok(online::drivers::scan(&servers, steam_id()?)))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 fn config_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
     app.path().app_config_dir().map_err(|e| e.to_string())
 }

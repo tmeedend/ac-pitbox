@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
   EMPTY_STORE,
+  friendsOnline,
   isFavourite,
+  isFriend,
   parseStore,
   recentCars,
   recordJoin,
   RECENTS_KEPT,
   tabServers,
   toggleFavourite,
+  toggleFriend,
 } from "./lists";
+import { sortServers } from "./filters";
 import type { ServerSummary } from "./online";
 
 function server(ip: string, over: Partial<ServerSummary> = {}): ServerSummary {
@@ -70,5 +74,32 @@ describe("online favourites and recents (SPEC-play-online, case 1)", () => {
     const store = parseStore({ favourites: [server("1.1.1.1"), { ip: 3 }], recents: [{ car: "x" }] });
     expect(store.favourites).toHaveLength(1);
     expect(store.recents).toEqual([]);
+    // A file written before friends existed has none.
+    expect(store.friends).toEqual([]);
+  });
+});
+
+describe("online friends (SPEC-play-online, case 1)", () => {
+  it("marks a friend by name, whatever the case or spaces", () => {
+    const store = toggleFriend(EMPTY_STORE, " Léo ");
+    expect(isFriend(store, "léo")).toBe(true);
+    expect(toggleFriend(store, "LÉO").friends).toEqual([]);
+  });
+
+  it("finds the servers a friend is on, and lists them in the Friends tab", () => {
+    const store = toggleFriend(EMPTY_STORE, "Léo");
+    const scan = [
+      { ip: "1.1.1.1", http_port: 8081, drivers: ["Someone", "léo"] },
+      { ip: "2.2.2.2", http_port: 8081, drivers: ["Nobody"] },
+    ];
+    const friends = friendsOnline(scan, store);
+    expect(friends).toEqual({ "1.1.1.1:8081": ["léo"] });
+    const shown = tabServers("friends", [server("2.2.2.2"), server("1.1.1.1")], store, friends);
+    expect(shown.map((s) => s.ip)).toEqual(["1.1.1.1"]);
+  });
+
+  it("puts a server with a friend first, even a quieter one", () => {
+    const list = [server("1.1.1.1", { clients: 20 }), server("2.2.2.2", { clients: 1 })];
+    expect(sortServers(list, new Set(["2.2.2.2:8081"])).map((s) => s.ip)).toEqual(["2.2.2.2", "1.1.1.1"]);
   });
 });

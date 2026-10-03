@@ -1,7 +1,7 @@
 // Filtering and ordering of the server list (SPEC-play-online.md, "Filtres de
 // base" and "Liste des serveurs"). Pure, for Vitest: the list holds 9 000
 // servers, and the order is what makes it usable at all.
-import type { ServerSummary } from "./online";
+import { serverKey, type ServerSummary } from "./online";
 
 export interface OnlineFilters {
   search: string;
@@ -47,15 +47,20 @@ export function filterServers(
   );
 }
 
-/** Joinable first, then by players: a full-looking list of servers one
- * cannot enter is the first thing the spec sets out to avoid. Stable for
- * equal keys, so a refresh does not shuffle rows under the cursor. */
-export function sortServers(servers: ServerSummary[]): ServerSummary[] {
+/** Servers with a friend on them first (keys in `withFriends`), then
+ * joinable, then by players: a full-looking list of servers one cannot enter
+ * is the first thing the spec sets out to avoid. Stable for equal keys, so a
+ * refresh does not shuffle rows under the cursor. */
+export function sortServers(servers: ServerSummary[], withFriends: Set<string> = new Set()): ServerSummary[] {
+  const friendly = (s: ServerSummary) => Number(withFriends.has(serverKey(s)));
   return servers
     .map((s, i) => ({ s, i }))
     .sort(
       (a, b) =>
-        Number(isJoinable(b.s)) - Number(isJoinable(a.s)) || b.s.clients - a.s.clients || a.i - b.i,
+        friendly(b.s) - friendly(a.s) ||
+        Number(isJoinable(b.s)) - Number(isJoinable(a.s)) ||
+        b.s.clients - a.s.clients ||
+        a.i - b.i,
     )
     .map(({ s }) => s);
 }

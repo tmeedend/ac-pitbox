@@ -2,23 +2,25 @@
   // The Online page (docs/SPEC-play-online.md): the public servers, judged
   // against what can be driven here, and a panel to pick a car and join.
   //
-  // Three tabs over the list (SPEC-play-online.md, case 1): All, and the
-  // user's own servers — Favourites and Recent. The four toggles sort out the
-  // 9 000 public servers; they do not apply to one's own, which stay listed
-  // full, locked or empty: that is exactly when one goes looking for them.
-  // The search applies everywhere. Friends and the finer readiness levels
-  // come in the next lots.
-  import { onMount } from "svelte";
+  // Four tabs over the list (SPEC-play-online.md, case 1): All, and the
+  // user's own servers — Favourites, Recent, and those a friend is on. The
+  // four toggles sort out the 9 000 public servers; they do not apply to
+  // one's own, which stay listed full, locked or empty: that is exactly when
+  // one goes looking for them. The search applies everywhere.
+  //
+  // Friends cost a request per busy server (the lobby names nobody), so the
+  // scan only runs once someone has been marked, after each list load.
+  import { onMount, untrack } from "svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
   import { StorageKey } from "$lib/storage";
   import { getUiPref, setUiPref } from "$lib/uiPrefs.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import Tabs from "$lib/components/ui/Tabs.svelte";
-  import { listServers, serverKey, type ServerSummary } from "$lib/online/online";
+  import { listServers, serverDrivers, serverKey, type ServerDrivers, type ServerSummary } from "$lib/online/online";
   import { DEFAULT_FILTERS, filterServers, parseFilters, sortServers, type OnlineFilters } from "$lib/online/filters";
   import { NO_LOOKS, searchText, type Looks } from "$lib/online/looks";
-  import { recentCars, tabServers, type OnlineTab } from "$lib/online/lists";
+  import { friendsOnline, recentCars, tabServers, type OnlineTab } from "$lib/online/lists";
   import { loadOnlineStore, onlineStore } from "$lib/online/store.svelte";
   import ServerList from "./ServerList.svelte";
   import ServerDetail from "./ServerDetail.svelte";
@@ -52,13 +54,34 @@
     }
   }
 
-  const TABS: OnlineTab[] = ["all", "favourites", "recent"];
-  /** Written out rather than built from the tab, so the locale check sees them. */
-  const EMPTY: Record<OnlineTab, string> = {
-    all: "online.empty",
-    favourites: "online.emptyFavourites",
-    recent: "online.emptyRecent",
-  };
+  const TABS: OnlineTab[] = ["all", "favourites", "recent", "friends"];
+
+  /** Who drives where, for the servers that had players at the last load. */
+  let scan = $state<ServerDrivers[]>([]);
+  let scanning = $state(false);
+  /** The list the last scan was started for: a new load scans again. */
+  let scannedFor: ServerSummary[] | null = null;
+
+  async function scanFriends(list: ServerSummary[]) {
+    scanning = true;
+    try {
+      scan = await serverDrivers(list.filter((s) => s.clients > 0));
+    } catch (e) {
+      console.error("online_server_drivers", e);
+    } finally {
+      scanning = false;
+    }
+  }
+
+  // Every dependency read before the exit (CLAUDE.md): the list, and whether
+  // anyone is marked — marking the first friend starts the scan.
+  $effect(() => {
+    const list = servers;
+    const wanted = onlineStore().friends.length > 0;
+    if (!wanted || list.length === 0 || scannedFor === list) return;
+    scannedFor = list;
+    untrack(() => void scanFriends(list));
+  });
 
   onMount(async () => {
     const [savedFilters, savedTab] = await Promise.all([
@@ -83,18 +106,28 @@
 
   const store = $derived(onlineStore());
   const lastCars = $derived(recentCars(store));
+  const friends = $derived(friendsOnline(scan, store));
   const shown = $derived.by(() => {
     const text = (s: ServerSummary) => searchText(looks, s);
-    if (tab === "all") return sortServers(filterServers(servers, filters, text));
+    if (tab === "all") return sortServers(filterServers(servers, filters, text), new Set(Object.keys(friends)));
     // One's own servers: the search only, never the toggles (see above).
     const searchOnly = { ...DEFAULT_FILTERS, notFull: false, noPassword: false, search: filters.search };
-    return filterServers(tabServers(tab, servers, store), searchOnly, text);
+    return filterServers(tabServers(tab, servers, store, friends), searchOnly, text);
   });
   const tabItems = $derived([
     { id: "all", label: t("online.tabAll") },
     { id: "favourites", label: t("online.tabFavourites"), count: store.favourites.length },
     { id: "recent", label: t("online.tabRecent"), count: store.recents.length },
+    { id: "friends", label: t("online.tabFriends"), count: Object.keys(friends).length },
   ]);
+  /** What an empty tab says. Written out rather than built from the tab, so
+   * the locale check sees every key. */
+  const emptyText = $derived.by(() => {
+    if (tab === "favourites") return t("online.emptyFavourites");
+    if (tab === "recent") return t("online.emptyRecent");
+    if (tab === "friends") return store.friends.length ? t("online.emptyFriends") : t("online.emptyNoFriends");
+    return t("online.empty");
+  });
 
   const TOGGLES: { key: "notFull" | "noPassword" | "notEmpty" | "joinable"; label: string }[] = [
     { key: "notFull", label: "online.filterNotFull" },
@@ -129,11 +162,13 @@
     {/if}
     <!-- One's own servers show at once, from their snapshots: they must not
          wait for the lobby, nor vanish when it is down. -->
-    {#if tab === "all" && loading && servers.length === 0}
+    {#if (tab === "all" || tab === "friends") && loading && servers.length === 0}
+      <LoadingState />
+    {:else if tab === "friends" && scanning && shown.length === 0}
       <LoadingState />
     {:else if shown.length === 0}
       {#if tab !== "all" || !error}
-        <p class="empty">{t(EMPTY[tab])}</p>
+        <p class="empty">{emptyText}</p>
       {/if}
     {:else}
       <div class="rows">
@@ -141,6 +176,7 @@
           servers={shown}
           {looks}
           favourites={store.favourites}
+          {friends}
           lastCars={tab === "recent" ? lastCars : {}}
           selected={selected ? serverKey(selected) : null}
           onselect={(s) => (selected = s)}

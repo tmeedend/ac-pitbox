@@ -13,13 +13,15 @@
     servers: ServerSummary[];
     looks: Looks;
     favourites: ServerSummary[];
+    /** Per server key, the friends connected there. */
+    friends: Record<string, string[]>;
     /** Per server key, the car last joined with — shown in place of the
      * server's cars on the Recent tab: it is the one that will be picked. */
     lastCars: Record<string, string>;
     selected: string | null;
     onselect: (server: ServerSummary) => void;
   }
-  let { servers, looks, favourites, lastCars, selected, onselect }: Props = $props();
+  let { servers, looks, favourites, friends, lastCars, selected, onselect }: Props = $props();
 
   const favouriteKeys = $derived(new Set(favourites.map(serverKey)));
 
@@ -74,7 +76,14 @@
             <span class="layout mono">{s.track.layout ? `${s.track.id} · ${s.track.layout}` : s.track.id}</span>
           </span>
           <span class="name" title={s.name}>
-            {#if favouriteKeys.has(key)}<span class="star" aria-label={t("online.favourite")}>★</span>{/if}
+            {#if friends[key]}
+              <!-- One name reads at a glance; past one, the count does. -->
+              <span class="friends" title={friends[key].join(", ")}>
+                ★ {friends[key].length === 1 ? friends[key][0] : friends[key].length}
+              </span>
+            {:else if favouriteKeys.has(key)}
+              <span class="star" aria-label={t("online.favourite")}>★</span>
+            {/if}
             {s.name}
           </span>
           <span class="session">
@@ -240,6 +249,11 @@
   .star {
     color: var(--yellow);
     margin-right: 4px;
+  }
+  .friends {
+    color: var(--green);
+    font-weight: 600;
+    margin-right: 6px;
   }
   .flags {
     display: flex;

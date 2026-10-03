@@ -1463,6 +1463,11 @@
     "discordSub": "Chat with the community"
   },
   "online": {
+    "tabFriends": "Friends",
+    "emptyFriends": "None of your friends is on a server right now.",
+    "emptyNoFriends": "No friend marked yet.",
+    "befriend": "Mark as a friend",
+    "unfriend": "No longer a friend",
     "tabAll": "All",
     "tabFavourites": "Favourites",
     "tabRecent": "Recent",

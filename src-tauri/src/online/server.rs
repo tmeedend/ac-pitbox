@@ -138,7 +138,7 @@ fn fill_previews(cars: &mut [CarSlots], cars_dir: &Path) {
     }
 }
 
-fn drivers(entries: &EntryList) -> Vec<Driver> {
+pub(super) fn drivers(entries: &EntryList) -> Vec<Driver> {
     entries
         .slots
         .iter()

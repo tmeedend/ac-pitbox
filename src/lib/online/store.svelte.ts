@@ -3,7 +3,7 @@
 // change through `durableWriter`: retried once, then shown by `PrefsToast`.
 import { invoke } from "@tauri-apps/api/core";
 import { durableWriter, type WriteFailure } from "$lib/durableWrite.svelte";
-import { EMPTY_STORE, parseStore, recordJoin, toggleFavourite, type OnlineStore } from "./lists";
+import { EMPTY_STORE, parseStore, recordJoin, toggleFavourite, toggleFriend, type OnlineStore } from "./lists";
 import type { ServerSummary } from "./online";
 
 const state = $state<{ store: OnlineStore }>({ store: EMPTY_STORE });
@@ -47,6 +47,10 @@ export function toggleFavouriteServer(server: ServerSummary): void {
 
 export function recordRecentJoin(server: ServerSummary, car: string): void {
   update(recordJoin(state.store, $state.snapshot(server), car, new Date().toISOString()));
+}
+
+export function toggleFriendName(name: string): void {
+  update(toggleFriend(state.store, name));
 }
 
 export function onlineStoreWriteFailure(): WriteFailure {

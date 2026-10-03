@@ -1463,6 +1463,11 @@
     "discordSub": "Le salon de la communauté"
   },
   "online": {
+    "tabFriends": "Amis",
+    "emptyFriends": "Aucun de vos amis n'est sur un serveur en ce moment.",
+    "emptyNoFriends": "Aucun ami marqué pour l'instant.",
+    "befriend": "Marquer comme ami",
+    "unfriend": "Ne plus marquer comme ami",
     "tabAll": "Tous",
     "tabFavourites": "Favoris",
     "tabRecent": "Récents",
