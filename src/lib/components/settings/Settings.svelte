@@ -34,6 +34,9 @@
     setGamepadEnabled,
   } from "$lib/shell/gamepadDevices.svelte";
   import { checkModUpdates, modUpdates } from "$lib/library/modUpdates.svelte";
+  import { onlineWatchOn } from "$lib/online/watch.svelte";
+  import { setUiPref } from "$lib/uiPrefs.svelte";
+  import { StorageKey } from "$lib/storage";
 
   import { errorText } from "$lib/errors";
 
@@ -368,6 +371,20 @@
             {/if}
           </div>
         {/if}
+      </section>
+
+      <!-- Applied at once, like the gamepad switch below: the watch reads it
+           at every round, there is nothing to save. -->
+      <section class="lang-section">
+        <label class="check">
+          <input
+            type="checkbox"
+            checked={onlineWatchOn()}
+            onchange={(e) => setUiPref(StorageKey.onlineWatch, e.currentTarget.checked ? "1" : "0")}
+          />
+          <span>{t("online.settingWatch")}</span>
+        </label>
+        <p class="hint">{t("online.settingWatchHint")}</p>
       </section>
 
       <section class="lang-section">

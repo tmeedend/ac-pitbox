@@ -203,6 +203,41 @@ fn fill_previews(cars: &mut [CarSlots], cars_dir: &Path) {
     }
 }
 
+/// The player slots of one car on a server: what a "notify me" watch asks
+/// again and again (SPEC-play-online.md, v2), lighter than the whole panel.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct SlotCount {
+    pub car: String,
+    pub free: u32,
+    pub total: u32,
+}
+
+/// Slots per car, in the entry list's order. Only what the entry list holds:
+/// AI traffic outside it is no place anyone can take.
+fn slot_counts(entries: &EntryList) -> Vec<SlotCount> {
+    let mut counts: Vec<SlotCount> = Vec::new();
+    for slot in &entries.slots {
+        let free = u32::from(!slot.connected);
+        match counts.iter_mut().find(|c| c.car.eq_ignore_ascii_case(&slot.model)) {
+            Some(count) => {
+                count.free += free;
+                count.total += 1;
+            }
+            None => counts.push(SlotCount {
+                car: slot.model.clone(),
+                free,
+                total: 1,
+            }),
+        }
+    }
+    counts
+}
+
+/// The free slots of a server, per car, from its `/JSON` alone.
+pub fn fetch_slot_counts(ip: &str, http_port: u16, steam_id: u64) -> Result<Vec<SlotCount>, String> {
+    fetch_entry_list(ip, http_port, steam_id).map(|entries| slot_counts(&entries))
+}
+
 pub(super) fn drivers(entries: &EntryList) -> Vec<Driver> {
     entries
         .slots
@@ -329,6 +364,27 @@ mod tests {
                   "IsEntryList": false, "IsConnected": false }
             ]
         }))
+    }
+
+    /// Rule (SPEC-play-online.md, v2 "place libérée"): a watch counts the free
+    /// slots of each car of the entry list, the traffic outside it excluded.
+    #[test]
+    fn slots_are_counted_per_car_from_the_entry_list() {
+        assert_eq!(
+            slot_counts(&entry_list()),
+            vec![
+                SlotCount {
+                    car: "ks_mazda_miata".into(),
+                    free: 1,
+                    total: 2
+                },
+                SlotCount {
+                    car: "bmw_m3_e30".into(),
+                    free: 1,
+                    total: 1
+                },
+            ]
+        );
     }
 
     /// Rule (online-join-research.md): the skin shown is the first FREE slot's,

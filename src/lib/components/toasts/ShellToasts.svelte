@@ -15,6 +15,7 @@
   import ImportToasts from "./ImportToasts.svelte";
   import MusicToast from "./MusicToast.svelte";
   import OnlineLayersToast from "./OnlineLayersToast.svelte";
+  import OnlineWatchToast from "./OnlineWatchToast.svelte";
   import GridThumbToast from "./GridThumbToast.svelte";
   import { FEATURE_GRID_THUMBS } from "$lib/features";
 </script>
@@ -34,6 +35,7 @@
   <ImportToasts />
   <MusicToast />
   <OnlineLayersToast />
+  <OnlineWatchToast />
   <!-- La génération des vignettes en dernier, donc au plus près du coin : elle
        dure des minutes là où les autres passent, et c'est celle qu'on revient
        consulter. -->

@@ -387,7 +387,32 @@ requête aux serveurs eux-mêmes. Un clic ouvre Online sur `Tous` avec le jeton
 Circuit posé sur ces layouts. Lobby injoignable ou personne en piste : rien ne
 s'affiche, pas d'erreur.
 
+**v2 — prévenir : ami connecté, place libérée (livré).** Une surveillance
+démarrée avec la coquille (`online/watch.svelte.ts`), qui tourne quel que soit
+l'écran ouvert. Elle **ne regarde que ce que l'utilisateur a désigné**, jamais
+les 9 000 serveurs — ce serait abusif pour eux, et certains routeurs bloquent
+une machine qui contacte des milliers d'adresses :
+
+- **amis** : le `/JSON` des seuls serveurs en favoris et en récents, une requête
+  chacun toutes les 2 minutes. Le premier tour, 15 s après le démarrage, ne fait
+  que relever qui est déjà là : un ami en ligne au lancement de Pit Box ne vient
+  pas de se connecter. Un ami sur un serveur inconnu n'est pas vu : limite
+  assumée ;
+- **place libre** : seulement sur le serveur où l'utilisateur a cliqué « Me
+  prévenir » — proposé dans le panneau quand le serveur est plein ou que la
+  voiture choisie n'a plus de place —, toutes les 30 s, par le seul `/JSON`
+  (`online_slot_counts`). La place attendue est celle de la voiture choisie
+  quand c'est elle qui manque de place, sinon n'importe laquelle. La
+  surveillance s'arrête quand la place se libère, au bout d'une heure, ou au
+  lancement du jeu ; un serveur à la fois.
+
+Elle se met en pause pendant une session (`ac://running`) et repart de zéro
+après : ce qu'elle savait avant ne dit rien de qui est arrivé pendant. Une
+alerte entre dans la pile de notifications de l'app, avec « Ouvrir », qui mène
+au panneau du serveur sur la page Online ; quand la fenêtre n'a pas le focus,
+**Windows la montre aussi** (`tauri-plugin-notification`), et la pile la garde
+pour le retour. Réglages › Général la coupe entière, « Me prévenir » compris.
+
 **Restent** : les niveaux de préparation de la liste elle-même, qui ne
 voient ni les liens ni les versions des serveurs (il faudrait `/api/details`
-serveur par serveur) ; le reste de la v2 (lien bibliothèque → online,
-notifications).
+serveur par serveur).

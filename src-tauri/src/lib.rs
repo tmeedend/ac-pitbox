@@ -98,6 +98,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         // Journal fichier (`%APPDATA%\com.pitbox.app\logs\`, §10) : seul moyen
         // de diagnostiquer un échec sur une install packagée (`.exe`, pas de
         // console). Niveau Warn : n'attrape que les échecs réels d'opérations
@@ -516,6 +517,7 @@ pub fn run() {
             commands::online::online_server_detail,
             commands::online::online_join,
             commands::online::online_server_drivers,
+            commands::online::online_slot_counts,
             commands::online::online_ping,
             commands::online::download_online_content,
             commands::online::get_online_store,

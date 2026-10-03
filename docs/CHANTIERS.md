@@ -29,8 +29,16 @@ de reprendre. En cas d'écart, la spec fait foi.
       (lister, rejoindre, noms et vignettes, favoris, récents et amis,
       niveaux de préparation, couches écartées le temps d'une session,
       contenu manquant récupéré, détail du panneau, ping, lien collé,
-      tokens de filtre, drapeaux) ; de la v2, le regroupement par circuit.
-      Restent le lien bibliothèque → online et les notifications.**
+      tokens de filtre, drapeaux), et la v2 (tableau, puces oui/non,
+      regroupement par circuit, ligne Online sur la fiche d'un circuit,
+      notifications). Reste à voir à l'écran ce qui ne l'a pas été.**
+      - **Pas vu à l'écran (lot 9 et v2)** : le tableau Online (colonnes,
+        tri, regroupement), la ligne de la fiche circuit, les notifications
+        (ni dans l'app, ni dans Windows) — tests et types seulement.
+        Le clic sur une notification **Windows** n'ouvre pas le serveur : le
+        plugin n'expose pas de clic sur bureau (sa doc le réserve au mobile,
+        pas vérifié sur Windows) ; c'est la notification de la pile, gardée
+        au retour, qui mène au panneau.
       - **Tokens (lot 8)** : la barre est le `FilterBar` de la bibliothèque,
         alimenté par `online/tokens.ts` ; le test d'une valeur
         (`valTest`) est partagé avec la bibliothèque, pour qu'un token veuille

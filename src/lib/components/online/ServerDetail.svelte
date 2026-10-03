@@ -19,6 +19,7 @@
   import SessionTimeline from "./SessionTimeline.svelte";
   import ServerExtras from "./ServerExtras.svelte";
   import JoinFooter from "./JoinFooter.svelte";
+  import NotifyMe from "./NotifyMe.svelte";
   import ServerCountry from "./ServerCountry.svelte";
   import { levelText } from "$lib/online/labels";
   import { onlineStore, toggleFavouriteServer, toggleFriendName } from "$lib/online/store.svelte";
@@ -261,6 +262,7 @@
     {/if}
   </div>
 
+  <NotifyMe server={live} {chosen} />
   {#key serverKey(server)}
     <JoinFooter {server} {detail} {chosen} {looks} {loading} {refresh} bind:password bind:busy={preparing} />
   {/key}

@@ -24,6 +24,7 @@ import { setZoom } from "$lib/shell/zoom.svelte";
 import { listen } from "@tauri-apps/api/event";
 import { bumpLibraryVersion } from "$lib/library/libraryVersion.svelte";
 import { loadTechSheetReport } from "$lib/detail/techSheetReport.svelte";
+import { startOnlineWatch } from "$lib/online/watch.svelte";
 
 /** Starts every shell-wide service; the returned function stops them all. */
 export function startShellServices(): () => void {
@@ -53,6 +54,9 @@ export function startShellServices(): () => void {
   void loadPlayerHandicap();
 
   stops.push(pauseGridThumbsWhileRacing());
+  // Friends connecting, a slot freed (SPEC-play-online.md, v2): watched
+  // whatever screen is open, so started with the shell.
+  stops.push(startOnlineWatch());
   stops.push(reloadLibraryAfterTechBackfill());
 
   // Navigation manette dans toute l'app (croix/stick = déplace le focus,

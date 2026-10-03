@@ -106,6 +106,10 @@ kn5-gltf = { path = "crates/kn5-gltf" }
 # Catalogue de règles en deux couches (REGLES§2) : types et fusion, partagés
 # avec `rules-tool` pour qu'il n'existe qu'une implémentation de la fusion.
 pitbox-catalog = { path = "crates/catalog" }
+# Windows notification of the Online watch (SPEC-play-online.md, v2: a friend
+# connected, a slot freed) when Pit Box is not the window in front — the
+# app's own notification stack only shows while one looks at it.
+tauri-plugin-notification = "2"
 
 # Lecture registre Windows uniquement (détection du Mode développeur, §12) —
 # déjà présent transitivement via tauri, pas une dépendance de plus en pratique.

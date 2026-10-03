@@ -1646,7 +1646,9 @@ Ce n'est un déchet que si le parent ne revient jamais. Ils sont donc **listés 
 **Préférences persistantes** : affichage des tags du fichier mod (masquables), état du panneau de suivi (global), vue bibliothèque + colonnes (par type), presets de session (par type), preset CM graphique/FFB par défaut, décor de l'aperçu 3D natif (SESSION§4), **aperçu 3D intégré affiché ou non sur la fiche voiture** (défaut affiché — SESSION§4), regroupement des skins (archive/voiture), extraction des fichiers annexes (Aucun / Informations seulement / Tout — §4.5.2), **conservation de l'archive source** (défaut désactivé — §10), **mode de déploiement** (hardlink/symlink, défaut hardlink — §2), **zoom du mode Big Picture** (§16, distinct du zoom normal — `None` reprend ce dernier),
 **enrichissement Wikipédia** (`wiki_online`, défaut activé — §6.3) et sa **langue de
 lecture** (automatique par défaut : la langue de l'app, puis la chaîne de repli),
-**vérification des mises à jour de mods** (`mod_updates_online`, défaut activé — §4.7).
+**vérification des mises à jour de mods** (`mod_updates_online`, défaut activé — §4.7),
+**surveillance Online en fond** (amis connectés, place attendue — `ui_prefs.json`,
+appliquée sans Enregistrer, défaut activée ; `SPEC-play-online.md`, v2).
 
 **Écran Réglages en onglets** (Général / Chemins / Aperçu 3D / Vignettes / Musique / Wikipédia) depuis le mode Big Picture (§16) — Général et Chemins partagent `AppConfig` et sa garde de navigation (§11) ; Aperçu 3D et Musique ont chacun leur propre stockage et **s'appliquent sans bouton Enregistrer** (`ui_prefs.json` pour l'un, `music.json` pour l'autre). L'onglet **Import** n'est plus ici : ses deux préférences vivent au pied de l'écran `Fichiers › Importer` (§7.2quater).
 

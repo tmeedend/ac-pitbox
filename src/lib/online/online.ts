@@ -175,6 +175,19 @@ export function serverDrivers(servers: ServerSummary[]): Promise<ServerDrivers[]
   });
 }
 
+/** The player slots of one car on a server (`online/server.rs`). */
+export interface SlotCount {
+  car: string;
+  free: number;
+  total: number;
+}
+
+/** A server's free slots per car, from its entry list alone — what the
+ * "notify me" watch asks again and again. */
+export function slotCounts(ip: string, httpPort: number): Promise<SlotCount[]> {
+  return invoke<SlotCount[]>("online_slot_counts", { ip, httpPort });
+}
+
 export function serverDetail(ip: string, httpPort: number): Promise<ServerDetail> {
   return invoke<ServerDetail>("online_server_detail", { ip, httpPort });
 }

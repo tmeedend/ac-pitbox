@@ -91,6 +91,15 @@ pub async fn online_server_drivers(
         .map_err(|e| e.to_string())?
 }
 
+/// The free slots of one server, per car, from its `/JSON` alone — what the
+/// "notify me" watch asks every 30 s (SPEC-play-online.md, v2).
+#[tauri::command]
+pub async fn online_slot_counts(ip: String, http_port: u16) -> Result<Vec<online::server::SlotCount>, String> {
+    tauri::async_runtime::spawn_blocking(move || online::server::fetch_slot_counts(&ip, http_port, steam_id()?))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// The round trip to each of `servers`, in milliseconds (`online/ping.rs`).
 /// Servers that do not answer are absent.
 #[tauri::command]

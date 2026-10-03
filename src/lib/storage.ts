@@ -107,4 +107,7 @@ export const StorageKey = {
   /** The Online table's sort, `{ key, dir }` as JSON; empty for the default
    * order. Born in `ui_prefs.json`. */
   onlineSort: `${PREFIX}.online.sort`,
+  /** Whether the Online watch runs in the background — friends, a slot
+   * awaited ("0" = off). Settings › General. Born in `ui_prefs.json`. */
+  onlineWatch: `${PREFIX}.online.watch`,
 } as const;
