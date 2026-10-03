@@ -518,6 +518,7 @@ pub fn run() {
             commands::online::online_join,
             commands::online::online_server_drivers,
             commands::online::online_slot_counts,
+            commands::online::online_track_activity,
             commands::online::online_ping,
             commands::online::download_online_content,
             commands::online::get_online_store,

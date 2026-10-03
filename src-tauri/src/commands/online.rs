@@ -21,15 +21,34 @@ fn installed(app: &AppHandle) -> Result<Installed, String> {
 }
 
 /// The public server list, each judged against what can be driven here, with
-/// the names and pictures of what they reference.
+/// the names and pictures of what they reference. The list itself comes from
+/// the shared cache (`online/lobby_cache.rs`): judging again after a library
+/// change does not download it again; `force` (Refresh) does.
 #[tauri::command]
-pub async fn online_servers(app: AppHandle) -> Result<online::ServerList, String> {
+pub async fn online_servers(app: AppHandle, force: Option<bool>) -> Result<online::ServerList, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let servers = online::lobby::fetch_lobby(steam_id()?)?;
+        let servers =
+            online::lobby_cache::LOBBY.get(force.unwrap_or(false), || online::lobby::fetch_lobby(steam_id()?))?;
+        let servers = servers.as_ref().clone();
         let cfg = crate::config::load(&app);
         let db = app.state::<Db>();
         let conn = db.0.lock().map_err(|e| e.to_string())?;
         Ok(online::judge_list(&conn, &cfg, servers))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// What is driven on a track now, for its sheet: counted on the shared raw
+/// list, without the library, the disk or any server (`lobby_cache.rs`).
+#[tauri::command]
+pub async fn online_track_activity(
+    track_id: String,
+    layouts: Vec<String>,
+) -> Result<online::lobby_cache::TrackActivity, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let servers = online::lobby_cache::LOBBY.get(false, || online::lobby::fetch_lobby(steam_id()?))?;
+        Ok(online::lobby_cache::track_activity(&servers, &track_id, &layouts))
     })
     .await
     .map_err(|e| e.to_string())?

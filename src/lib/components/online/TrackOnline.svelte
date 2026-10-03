@@ -1,8 +1,8 @@
 <script lang="ts">
   // "Online: 4 servers · 37 players" on a track's sheet (SPEC-play-online.md,
   // v2: the library leading to the Online page, case 5 — the tracks one
-  // drives). Counted on the lobby's list the Online page shares
-  // (`lobby.svelte.ts`), never by asking a server. The sheet does not wait for
+  // drives). Counted by the backend on the raw lobby list it shares with the
+  // Online page (`online/lobby_cache.rs`): no library, no disk, no server. The sheet does not wait for
   // it: the line appears when the list is there, and a click opens the Online
   // page on this track.
   //
@@ -10,23 +10,22 @@
   // an error, or a zero, would be noise on a sheet about something else.
   import { onMount } from "svelte";
   import { t } from "$lib/i18n/index.svelte";
-  import { cachedLobby, loadLobby } from "$lib/online/lobby.svelte";
-  import { trackActivity } from "$lib/online/activity";
+  import { trackActivity, type TrackActivity } from "$lib/online/online";
   import { openOnline } from "$lib/online/intent.svelte";
 
   interface Props {
     /** The track's folder. */
     trackId: string;
+    /** Its layout folders, `""` for a single layout. */
+    layouts: string[];
   }
-  let { trackId }: Props = $props();
+  let { trackId, layouts: trackLayouts }: Props = $props();
 
+  let activity = $state<TrackActivity | null>(null);
   onMount(() => {
-    loadLobby().catch((e) => console.warn("online lobby for the track sheet", e));
-  });
-
-  const activity = $derived.by(() => {
-    const list = cachedLobby();
-    return list ? trackActivity(list.servers, trackId) : null;
+    trackActivity(trackId, trackLayouts)
+      .then((a) => (activity = a))
+      .catch((e) => console.warn("online activity for the track sheet", e));
   });
 </script>
 

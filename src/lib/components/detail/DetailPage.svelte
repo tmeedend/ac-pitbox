@@ -1159,7 +1159,7 @@
             layout={d.track?.layouts[previewLayout]}
             addedLayouts={layoutOrigins.length}
           />
-          <TrackOnline trackId={d.id_interne} />
+          <TrackOnline trackId={d.id_interne} layouts={d.track?.layouts.map((l) => l.id) ?? []} />
           <TrackSkinsBlock
             skins={trackSkins}
             active={activeTrackSkins}

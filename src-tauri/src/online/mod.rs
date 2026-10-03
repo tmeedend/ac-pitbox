@@ -20,6 +20,7 @@ mod fanout;
 mod installed;
 pub mod join;
 pub mod lobby;
+pub mod lobby_cache;
 mod looks;
 pub mod ping;
 pub mod readiness;

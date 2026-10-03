@@ -157,8 +157,22 @@ export interface ServerList {
   looks: Looks;
 }
 
-export function listServers(): Promise<ServerList> {
-  return invoke<ServerList>("online_servers");
+/** `force` asks the lobby again past the backend's cache (Refresh). */
+export function listServers(force = false): Promise<ServerList> {
+  return invoke<ServerList>("online_servers", { force });
+}
+
+/** What is driven on a track now (`online/lobby_cache.rs`). */
+export interface TrackActivity {
+  servers: number;
+  players: number;
+  /** Track token values (`trackValue`) of the layouts in use. */
+  layouts: string[];
+}
+
+/** Counted on the backend's raw lobby list: no library, disk nor server. */
+export function trackActivity(trackId: string, layouts: string[]): Promise<TrackActivity> {
+  return invoke<TrackActivity>("online_track_activity", { trackId, layouts });
 }
 
 export interface ServerDrivers {

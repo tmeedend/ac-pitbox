@@ -1,8 +1,7 @@
-// The lobby's list, shared by the Online page and the track sheets
-// (SPEC-play-online.md, v2: "Online : 4 serveurs maintenant" on a track).
-// One list, kept three minutes: a sheet opened after the page — or ten sheets
-// in a row — does not ask the lobby again, and a sheet opened first loads it
-// in the background for the page.
+// The Online page's judged list, kept three minutes so that coming back to
+// the page does not judge it again. The download itself is cached below, on
+// the Rust side (`online/lobby_cache.rs`), and shared with the track sheets:
+// judging again after a library change costs no download.
 import { libraryVersion } from "$lib/library/libraryVersion.svelte";
 import { listServers, type ServerList } from "./online";
 
@@ -29,7 +28,7 @@ export function loadLobby(force = false): Promise<ServerList> {
   const version = libraryVersion();
   const fresh = cache.list && Date.now() - cache.at < FRESH_MS && cache.version === version;
   if (!force && fresh && cache.list) return Promise.resolve(cache.list);
-  inflight ??= listServers()
+  inflight ??= listServers(force)
     .then((list) => {
       cache = { list, at: Date.now(), version };
       return list;
