@@ -1536,6 +1536,7 @@
     "filterCountry": "Pays",
     "filterSession": "Session en cours",
     "pingMeasuring": "Mesure du ping · {count} serveurs restants",
+    "groupByTrack": "Regrouper par circuit",
     "count": "{count} serveurs",
     "refresh": "Actualiser",
     "empty": "Aucun serveur ne correspond à ces filtres.",

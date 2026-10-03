@@ -336,6 +336,18 @@ l'est toujours pas. Le pays d'un serveur est un **drapeau** : seul sur la ligne,
 son nom en infobulle ; suivi du nom dans le panneau. Un code que le jeu ne
 connaît pas reste écrit tel quel.
 
-**Restent** : les niveaux de préparation de la liste elle-même, qui ne voient ni les liens ni les versions
-des serveurs (il faudrait `/api/details` serveur par serveur) ; la v2
-(regrouper par circuit, lien bibliothèque → online, notifications).
+**v2, lot 1 — regrouper par circuit (livré).** Une bascule « Regrouper par
+circuit », sur `Tous`, mémorisée, éteinte par défaut : les serveurs qui font
+tourner le même layout se rangent sous une ligne, placée où se tenait le premier
+d'entre eux — l'ordre de la liste (amis, joignables, joueurs) décide toujours de
+ce qui vient en tête. La ligne du groupe montre le circuit, le nombre de
+serveurs, les joueurs additionnés, le meilleur niveau de préparation et les amis
+présents sur l'un d'eux ; un clic la déplie, ses serveurs s'affichent dessous,
+un filet à gauche. Un layout tenu par un seul serveur garde sa ligne ordinaire.
+Ce qui est déplié ne se mémorise pas. Les onglets à soi ne se regroupent pas :
+leurs listes sont courtes.
+
+**Restent** : les niveaux de préparation de la liste elle-même, qui ne
+voient ni les liens ni les versions des serveurs (il faudrait `/api/details`
+serveur par serveur) ; le reste de la v2 (lien bibliothèque → online,
+notifications).

@@ -29,7 +29,8 @@ de reprendre. En cas d'écart, la spec fait foi.
       (lister, rejoindre, noms et vignettes, favoris, récents et amis,
       niveaux de préparation, couches écartées le temps d'une session,
       contenu manquant récupéré, détail du panneau, ping, lien collé,
-      tokens de filtre, drapeaux). Reste la v2.**
+      tokens de filtre, drapeaux) ; de la v2, le regroupement par circuit.
+      Restent le lien bibliothèque → online et les notifications.**
       - **Tokens (lot 8)** : la barre est le `FilterBar` de la bibliothèque,
         alimenté par `online/tokens.ts` ; le test d'une valeur
         (`valTest`) est partagé avec la bibliothèque, pour qu'un token veuille

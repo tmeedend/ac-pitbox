@@ -1536,6 +1536,7 @@
     "filterCountry": "Country",
     "filterSession": "Session",
     "pingMeasuring": "Measuring ping · {count} servers left",
+    "groupByTrack": "Group by track",
     "count": "{count} servers",
     "refresh": "Refresh",
     "empty": "No server matches these filters.",

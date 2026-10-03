@@ -11,6 +11,11 @@ export function worse(a: Level, b: Level): Level {
   return RANK[a] >= RANK[b] ? a : b;
 }
 
+/** The better of two levels. */
+export function better(a: Level, b: Level): Level {
+  return RANK[a] <= RANK[b] ? a : b;
+}
+
 /** Ready or one click away — what the "Joinable" toggle keeps. */
 export function isJoinableLevel(level: Level | undefined): boolean {
   return level === "ready" || level === "oneClick";

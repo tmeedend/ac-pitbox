@@ -46,6 +46,7 @@
   } from "$lib/online/tokens";
   import { measureAll, pingOf, pingsLeft, stopMeasuring } from "$lib/online/pings.svelte";
   import { friendsOnline, recentCars, tabServers, type OnlineTab } from "$lib/online/lists";
+  import { groupByTrack, serverRows } from "$lib/online/groups";
   import { loadOnlineStore, onlineStore } from "$lib/online/store.svelte";
   import ServerList from "./ServerList.svelte";
   import ServerDetail from "./ServerDetail.svelte";
@@ -59,6 +60,10 @@
   let pinned = $state<string[]>([...DEFAULT_PINNED]);
   let selected = $state<ServerSummary | null>(null);
   let tab = $state<OnlineTab>("all");
+  /** All tab: servers gathered under one row per track (v2 of the spec). */
+  let grouped = $state(false);
+  /** The groups unfolded, by track key. Not remembered: a fold is a glance. */
+  let openGroups = $state<string[]>([]);
   /** The stored filters are read before the first save, so that restoring
    * them is not taken for a change. A `$state`: the effects that save must
    * run again once it flips. */
@@ -140,9 +145,10 @@
   });
 
   onMount(async () => {
-    const [savedFilters, savedTab] = await Promise.all([
+    const [savedFilters, savedTab, savedGrouped] = await Promise.all([
       getUiPref(StorageKey.onlineFilters),
       getUiPref(StorageKey.onlineTab),
+      getUiPref(StorageKey.onlineGrouped),
       loadOnlineStore(),
     ]);
     // The search is a gesture of the moment; the toggles, the tokens and the
@@ -150,6 +156,7 @@
     filters = { ...parseFilters(savedFilters), search: "" };
     ({ tokens, pinned } = parseTokens(savedFilters));
     tab = TABS.find((x) => x === savedTab) ?? "all";
+    grouped = savedGrouped === "1";
     restored = true;
     await refresh();
   });
@@ -158,9 +165,11 @@
     const { notFull, noPassword, notEmpty, joinable } = filters;
     const saved = { notFull, noPassword, notEmpty, joinable, tokens, pinned };
     const current = tab;
+    const group = grouped;
     if (!restored) return;
     setUiPref(StorageKey.onlineFilters, JSON.stringify(saved));
     setUiPref(StorageKey.onlineTab, current);
+    setUiPref(StorageKey.onlineGrouped, group ? "1" : "0");
   });
 
   const store = $derived(onlineStore());
@@ -224,6 +233,12 @@
     const timer = setTimeout(() => untrack(() => void measureAll(list)), 400);
     return () => clearTimeout(timer);
   });
+  /** Grouping is for the 9 000 public servers: one's own lists are short. */
+  const rows = $derived(tab === "all" && grouped ? groupByTrack(shown, new Set(openGroups)) : serverRows(shown));
+  function toggleGroup(key: string) {
+    openGroups = openGroups.includes(key) ? openGroups.filter((k) => k !== key) : [...openGroups, key];
+  }
+
   // Leaving the page ends the sweep: nobody is reading the list any more.
   $effect(() => () => stopMeasuring());
   const measuring = $derived(wantsPing ? pingsLeft() : 0);
@@ -286,6 +301,10 @@
                 {t(toggle.label)}
               </label>
             {/each}
+            <label class="tog">
+              <input type="checkbox" bind:checked={grouped} />
+              {t("online.groupByTrack")}
+            </label>
           {/if}
           {#if measuring > 0}
             <span class="measuring mono">{t("online.pingMeasuring", { count: measuring })}</span>
@@ -312,7 +331,8 @@
     {:else}
       <div class="rows">
         <ServerList
-          servers={shown}
+          {rows}
+          ontoggle={toggleGroup}
           {looks}
           favourites={store.favourites}
           {friends}

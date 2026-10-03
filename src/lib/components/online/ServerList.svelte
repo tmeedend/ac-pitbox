@@ -3,6 +3,10 @@
   // per server, read at a glance — track, session, players, readiness. The
   // lobby holds some 9 000 servers, so only the visible lines are rendered,
   // like the game folder's tree.
+  //
+  // A row is a server, or a track gathering several (`groups.ts`): the group
+  // row unfolds its servers under it, and stands for them until then — the
+  // players summed, the best readiness, the friends on any of them.
   import { t } from "$lib/i18n/index.svelte";
   import { blockerText, durationText, levelText } from "$lib/online/labels";
   import { fromSeconds } from "$lib/online/sessions";
@@ -12,9 +16,12 @@
   import { PING_FAIR_MS, PING_GOOD_MS } from "$lib/online/tokens";
   import { previewSrc } from "$lib/library/library";
   import ServerCountry from "./ServerCountry.svelte";
+  import type { ListRow } from "$lib/online/groups";
 
   interface Props {
-    servers: ServerSummary[];
+    rows: ListRow[];
+    /** Unfolds or folds a group, by its track key. */
+    ontoggle: (key: string) => void;
     looks: Looks;
     favourites: ServerSummary[];
     /** Per server key, the friends connected there. */
@@ -25,7 +32,7 @@
     selected: string | null;
     onselect: (server: ServerSummary) => void;
   }
-  let { servers, looks, favourites, friends, lastCars, selected, onselect }: Props = $props();
+  let { rows, ontoggle, looks, favourites, friends, lastCars, selected, onselect }: Props = $props();
 
   const favouriteKeys = $derived(new Set(favourites.map(serverKey)));
 
@@ -38,15 +45,23 @@
   let viewport = $state(600);
 
   const first = $derived(Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN));
-  const visible = $derived(servers.slice(first, first + Math.ceil(viewport / ROW_H) + 2 * OVERSCAN));
+  const visible = $derived(rows.slice(first, first + Math.ceil(viewport / ROW_H) + 2 * OVERSCAN));
 
-  // Pings for the rows on screen, once the scroll has settled: measuring
-  // every row flown past would ask hundreds of servers for nothing.
+  // Pings for the servers on screen, once the scroll has settled: measuring
+  // every row flown past would ask hundreds of servers for nothing. A folded
+  // group's servers are not on screen.
   $effect(() => {
-    const rows = visible;
-    const timer = setTimeout(() => requestPings(rows), 400);
+    const shown = visible.flatMap((r) => (r.kind === "server" ? [r.server] : []));
+    const timer = setTimeout(() => requestPings(shown), 400);
     return () => clearTimeout(timer);
   });
+
+  const rowKey = (r: ListRow) => (r.kind === "group" ? `group:${r.key}` : serverKey(r.server));
+
+  /** The friends on any server of a group, each named once. */
+  function groupFriends(servers: ServerSummary[]): string[] {
+    return [...new Set(servers.flatMap((m) => friends[serverKey(m)] ?? []))];
+  }
 
   /** Thresholds of the spec; past them the figure goes quiet rather than
    * red — red is kept for what the session retains (SPEC §7.2ter). */
@@ -55,6 +70,27 @@
   }
 </script>
 
+<!-- The track's photo and names: a server row and a group row open alike. -->
+{#snippet trackCells(track: ServerSummary["track"], available: boolean)}
+  {@const look = layoutLook(looks, track)}
+  <span class="thumb">
+    {#if look?.preview}
+      <img src={previewSrc(look.preview)} alt="" loading="lazy" decoding="async" />
+    {/if}
+  </span>
+  <span class="track">
+    <span class="track-name" class:missing={!available} title={trackTitle(looks, track)}>
+      {trackTitle(looks, track)}
+    </span>
+    <span class="layout mono">{track.layout ? `${track.id} · ${track.layout}` : track.id}</span>
+  </span>
+{/snippet}
+
+<!-- One name reads at a glance; past one, the count does. -->
+{#snippet friendsBadge(names: string[])}
+  <span class="friends" title={names.join(", ")}>★ {names.length === 1 ? names[0] : names.length}</span>
+{/snippet}
+
 <div
   class="list"
   role="listbox"
@@ -62,86 +98,100 @@
   bind:clientHeight={viewport}
   onscroll={(e) => (scrollTop = (e.currentTarget as HTMLElement).scrollTop)}
 >
-  <div class="spacer" style="height: {servers.length * ROW_H}px">
+  <div class="spacer" style="height: {rows.length * ROW_H}px">
     <div class="slice" style="transform: translateY({first * ROW_H}px)">
-      {#each visible as s (serverKey(s))}
-        {@const key = serverKey(s)}
-        {@const look = layoutLook(looks, s.track)}
-        {@const cars = carsOwnedFirst(looks, s.cars)}
-        {@const ping = pingOf(key)}
-        <button
-          type="button"
-          class="row"
-          class:sel={key === selected}
-          role="option"
-          aria-selected={key === selected}
-          onclick={() => onselect(s)}
-        >
-          <span class="thumb">
-            {#if look?.preview}
-              <img src={previewSrc(look.preview)} alt="" loading="lazy" decoding="async" />
-            {/if}
-          </span>
-          <span class="track">
-            <span class="track-name" class:missing={!s.track_available} title={trackTitle(looks, s.track)}>
-              {trackTitle(looks, s.track)}
+      {#each visible as row (rowKey(row))}
+        {#if row.kind === "group"}
+          {@const names = groupFriends(row.servers)}
+          {@const holdsSelected = row.servers.some((m) => serverKey(m) === selected)}
+          <button
+            type="button"
+            class="row group"
+            class:sel={holdsSelected}
+            role="option"
+            aria-selected={holdsSelected}
+            onclick={() => ontoggle(row.key)}
+          >
+            {@render trackCells(row.track, row.servers.some((m) => m.track_available))}
+            <span class="name">
+              {#if names.length}{@render friendsBadge(names)}{/if}
+              <span class="fold" aria-hidden="true">{row.open ? "▾" : "▸"}</span>
+              {t("online.count", { count: row.servers.length })}
             </span>
-            <span class="layout mono">{s.track.layout ? `${s.track.id} · ${s.track.layout}` : s.track.id}</span>
-          </span>
-          <span class="name" title={s.name}>
-            {#if friends[key]}
-              <!-- One name reads at a glance; past one, the count does. -->
-              <span class="friends" title={friends[key].join(", ")}>
-                ★ {friends[key].length === 1 ? friends[key][0] : friends[key].length}
-              </span>
-            {:else if favouriteKeys.has(key)}
-              <span class="star" aria-label={t("online.favourite")}>★</span>
-            {/if}
-            {s.name}
-          </span>
-          <span class="session">
-            {#if s.session}
-              <span class="badge" class:race={s.session === "race"}>{t(`online.session.${s.session}`)}</span>
-              <span class="left mono">{durationText(fromSeconds(s.time_left))}</span>
-            {/if}
-          </span>
-          <span class="players mono" class:full={s.clients >= s.max_clients} class:empty={s.clients === 0}>
-            {s.clients} / {s.max_clients}
-          </span>
-          <span class="ping mono {ping === undefined ? '' : pingClass(ping)}">
-            {ping === undefined ? "" : t("online.ping", { ms: ping })}
-          </span>
-          <span class="cars" class:last={!!lastCars[key]}>
-            {#if lastCars[key]}
-              {carName(looks, lastCars[key])}
-            {:else}
-              {cars
-                .slice(0, CARS_SHOWN)
-                .map((c) => carName(looks, c))
-                .join(" · ")}
-              {#if cars.length > CARS_SHOWN}
-                <span class="more">{t("online.more", { count: cars.length - CARS_SHOWN })}</span>
+            <span class="session"></span>
+            <span class="players mono" class:empty={row.clients === 0}>{row.clients} / {row.maxClients}</span>
+            <span class="ping"></span>
+            <span class="cars"></span>
+            <span class="flags"></span>
+            <span class="state {row.level ?? ''}">{row.level ? levelText(row.level) : ""}</span>
+          </button>
+        {:else}
+          {@const s = row.server}
+          {@const key = serverKey(s)}
+          {@const cars = carsOwnedFirst(looks, s.cars)}
+          {@const ping = pingOf(key)}
+          <button
+            type="button"
+            class="row"
+            class:nested={row.nested}
+            class:sel={key === selected}
+            role="option"
+            aria-selected={key === selected}
+            onclick={() => onselect(s)}
+          >
+            {@render trackCells(s.track, s.track_available)}
+            <span class="name" title={s.name}>
+              {#if friends[key]}
+                {@render friendsBadge(friends[key])}
+              {:else if favouriteKeys.has(key)}
+                <span class="star" aria-label={t("online.favourite")}>★</span>
               {/if}
-            {/if}
-          </span>
-          <span class="flags">
-            {#if s.password}
-              <svg class="lock" viewBox="0 0 16 16" role="img" aria-label={t("online.password")}>
-                <title>{t("online.password")}</title>
-                <rect x="3.5" y="7" width="9" height="6.5" rx="1" />
-                <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" />
-              </svg>
-            {/if}
-            {#if s.booking}<span class="flag mono">{t("online.session.booking")}</span>{/if}
-            {#if s.track.csp_min_build}<span class="flag mono">{t("online.csp", { build: s.track.csp_min_build })}</span>{/if}
-            {#if s.country}<ServerCountry code={s.country} />{/if}
-          </span>
-          <!-- A snapshot saved before levels existed has none: no badge rather
-               than a guess, until the lobby lists the server again. -->
-          <span class="state {s.level ?? ''}" title={(s.blockers ?? []).map(blockerText).join("\n") || undefined}>
-            {s.level ? levelText(s.level) : ""}
-          </span>
-        </button>
+              {s.name}
+            </span>
+            <span class="session">
+              {#if s.session}
+                <span class="badge" class:race={s.session === "race"}>{t(`online.session.${s.session}`)}</span>
+                <span class="left mono">{durationText(fromSeconds(s.time_left))}</span>
+              {/if}
+            </span>
+            <span class="players mono" class:full={s.clients >= s.max_clients} class:empty={s.clients === 0}>
+              {s.clients} / {s.max_clients}
+            </span>
+            <span class="ping mono {ping === undefined ? '' : pingClass(ping)}">
+              {ping === undefined ? "" : t("online.ping", { ms: ping })}
+            </span>
+            <span class="cars" class:last={!!lastCars[key]}>
+              {#if lastCars[key]}
+                {carName(looks, lastCars[key])}
+              {:else}
+                {cars
+                  .slice(0, CARS_SHOWN)
+                  .map((c) => carName(looks, c))
+                  .join(" · ")}
+                {#if cars.length > CARS_SHOWN}
+                  <span class="more">{t("online.more", { count: cars.length - CARS_SHOWN })}</span>
+                {/if}
+              {/if}
+            </span>
+            <span class="flags">
+              {#if s.password}
+                <svg class="lock" viewBox="0 0 16 16" role="img" aria-label={t("online.password")}>
+                  <title>{t("online.password")}</title>
+                  <rect x="3.5" y="7" width="9" height="6.5" rx="1" />
+                  <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" />
+                </svg>
+              {/if}
+              {#if s.booking}<span class="flag mono">{t("online.session.booking")}</span>{/if}
+              {#if s.track.csp_min_build}<span class="flag mono">{t("online.csp", { build: s.track.csp_min_build })}</span>{/if}
+              {#if s.country}<ServerCountry code={s.country} />{/if}
+            </span>
+            <!-- A snapshot saved before levels existed has none: no badge rather
+                 than a guess, until the lobby lists the server again. -->
+            <span class="state {s.level ?? ''}" title={(s.blockers ?? []).map(blockerText).join("\n") || undefined}>
+              {s.level ? levelText(s.level) : ""}
+            </span>
+          </button>
+        {/if}
       {/each}
     </div>
   </div>
@@ -173,6 +223,22 @@
   }
   .row:hover {
     background: var(--raised);
+  }
+  /* A group's servers sit under it: their photo is the group's, already
+     shown, and the rule on the left says whose they are. */
+  .row.nested .thumb {
+    visibility: hidden;
+  }
+  .row.nested {
+    box-shadow: inset 2px 0 0 var(--line);
+  }
+  .row.group .name {
+    color: var(--txt);
+  }
+  .fold {
+    display: inline-block;
+    width: 12px;
+    color: var(--muted);
   }
   .row.sel {
     background: var(--rosso-dim);

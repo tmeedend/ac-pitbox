@@ -101,4 +101,7 @@ export const StorageKey = {
   onlineFilters: `${PREFIX}.online.filters`,
   /** The Online page's open tab (all, favourites, recent). Born in `ui_prefs.json`. */
   onlineTab: `${PREFIX}.online.tab`,
+  /** Whether the Online page's All tab groups servers by track ("1"/"0").
+   * Born in `ui_prefs.json`. */
+  onlineGrouped: `${PREFIX}.online.grouped`,
 } as const;
