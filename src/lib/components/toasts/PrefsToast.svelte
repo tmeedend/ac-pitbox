@@ -12,8 +12,9 @@
   // périphérique) : ce n'est pas une information de passage, c'est une perte
   // de données en cours.
   //
-  // Four files can fail this way: `ui_prefs.json`, `online.json` (favourite
-  // servers and recent joins), and the two of the
+  // Five files can fail this way: `ui_prefs.json`, `online.json` (favourite
+  // servers and recent joins), `library_columns.json` (the tables' columns),
+  // and the two of the
   // session — `session.json` (the chosen car and track) and `launch_state.json`
   // (the session screen's settings). One notification for all — the same loss,
   // the same title — with a sentence for the preferences, one for the session,
@@ -24,13 +25,18 @@
   import { launchStateWriteFailure } from "$lib/launch/launchState.svelte";
   import { sessionPicksWriteFailure } from "$lib/shell/nav.svelte";
   import { onlineStoreWriteFailure } from "$lib/online/store.svelte";
+  import { tablePrefsWriteFailure } from "$lib/tablePrefs.svelte";
 
   let dismissed = $state(false);
   const prefs = $derived(prefsWriteFailure());
   const session = $derived([sessionPicksWriteFailure(), launchStateWriteFailure()].filter((f) => f.since !== null));
   // `online.json`: favourite servers and recent joins (SPEC-play-online.md).
   const online = $derived(onlineStoreWriteFailure());
-  const visible = $derived((prefs.since !== null || session.length > 0 || online.since !== null) && !dismissed);
+  // `library_columns.json`: the columns of the table views (SPEC §7.4).
+  const tables = $derived(tablePrefsWriteFailure());
+  const visible = $derived(
+    (prefs.since !== null || session.length > 0 || online.since !== null || tables.since !== null) && !dismissed,
+  );
 </script>
 
 {#if visible}
@@ -46,6 +52,10 @@
     {#if online.since !== null}
       <p class="body">{t("prefs.writeFailedOnlineBody")}</p>
       <p class="why mono">{online.reason}</p>
+    {/if}
+    {#if tables.since !== null}
+      <p class="body">{t("prefs.writeFailedTablesBody")}</p>
+      <p class="why mono">{tables.reason}</p>
     {/if}
   </Toast>
 {/if}

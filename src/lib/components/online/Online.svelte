@@ -50,7 +50,8 @@
   import { measureAll, pingOf, pingsLeft, stopMeasuring } from "$lib/online/pings.svelte";
   import { friendsOnline, recentCars, tabServers, type OnlineTab } from "$lib/online/lists";
   import { ONLINE_COLUMNS } from "$lib/online/columns";
-  import { defaultPrefs, loadSavedPrefs, reconcilePrefs, saveTablePrefs, toggleVisible, type ColumnsPrefs } from "$lib/tableColumns";
+  import { defaultPrefs, reconcilePrefs, toggleVisible, type ColumnsPrefs } from "$lib/tableColumns";
+  import { loadSavedPrefs, saveTablePrefs } from "$lib/tablePrefs.svelte";
   import ColumnsMenu from "$lib/components/ui/ColumnsMenu.svelte";
   import DisplayMenu from "$lib/components/ui/DisplayMenu.svelte";
   import { loadOnlineStore, onlineStore } from "$lib/online/store.svelte";

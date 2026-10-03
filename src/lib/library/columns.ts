@@ -1,6 +1,7 @@
 // Définitions de colonnes de tableau, propres à chaque type.
 // Visibilité et ordre sont mémorisés indépendamment par type (§6.2).
-import { defaultPrefs, loadSavedPrefs, reconcilePrefs, saveTablePrefs, type ColumnsPrefs, type TableColumn } from "$lib/tableColumns";
+import { defaultPrefs, reconcilePrefs, type ColumnsPrefs, type TableColumn } from "$lib/tableColumns";
+import { loadSavedPrefs, saveTablePrefs } from "$lib/tablePrefs.svelte";
 import type { ModCard, ModKind } from "./library";
 import { t } from "$lib/i18n/index.svelte";
 import { fmtSize } from "$lib/format";

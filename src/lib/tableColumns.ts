@@ -1,12 +1,7 @@
 // The columns of a table view, whatever it lists (SPEC §7.4): which ones show,
 // in what order, at what width. Shared by the library (cars, tracks) and the
 // Online page, which render through `components/ui/DataTable.svelte`.
-//
-// Persistence is one file written on the Rust side, `library_columns.json`,
-// one key per screen (`cars`, `tracks`, `online`) — golden rule 6: never
-// `localStorage`. Every save rewrites the whole object: load, change one
-// screen, write back, never a partial write that would erase the others.
-import { invokeSafe } from "$lib/invokeSafe";
+// Pure, for Vitest; where they are kept is `tablePrefs.svelte.ts`.
 
 /** What the header needs to know about a column. */
 export interface TableColumn {
@@ -105,21 +100,4 @@ export function moveColumn(
 export function toggleVisible(prefs: ColumnsPrefs, key: string): ColumnsPrefs {
   const visible = prefs.visible.includes(key) ? prefs.visible.filter((k) => k !== key) : [...prefs.visible, key];
   return { ...prefs, visible };
-}
-
-type AllPrefs = Partial<Record<TableScreen, Partial<ColumnsPrefs>>>;
-
-function loadAll(): Promise<AllPrefs> {
-  return invokeSafe<AllPrefs>("get_library_columns", undefined, {});
-}
-
-/** The saved prefs of a screen, untouched: `undefined` when it has none yet. */
-export async function loadSavedPrefs(screen: TableScreen): Promise<Partial<ColumnsPrefs> | undefined> {
-  return (await loadAll())[screen];
-}
-
-export async function saveTablePrefs(screen: TableScreen, prefs: ColumnsPrefs): Promise<void> {
-  const all = await loadAll();
-  all[screen] = prefs;
-  await invokeSafe<void>("save_library_columns", { prefs: all }, undefined);
 }
