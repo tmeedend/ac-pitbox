@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isJoinableLevel, joinState, worse } from "./readiness";
+import { isJoinableLevel, joinState, layersToSetAside, worse } from "./readiness";
 import type { CarSlots, ServerSummary } from "./online";
 
 const server = (over: Partial<ServerSummary> = {}): ServerSummary =>
@@ -19,6 +19,7 @@ const car = (over: Partial<CarSlots> = {}): CarSlots => ({
   available: true,
   level: "ready",
   dlc: null,
+  layers: [],
   preview: null,
   ...over,
 });
@@ -43,6 +44,16 @@ describe("online readiness (SPEC-play-online, Contenu manquant)", () => {
     expect(dlc.blockers).toEqual([{ kind: "dlc", name: "Red Pack" }]);
     const csp = joinState(server({ blockers: [{ kind: "csp", required: 3465, installed: null }] }), car());
     expect(csp.level).toBe("blocked");
+  });
+
+  it("sets aside the certain layers unless kept, the possible ones only on request", () => {
+    const conflicts = [
+      { layer_id: "physics", name: "Physics", risk: "certain" as const },
+      { layer_id: "sound", name: "Sound", risk: "possible" as const },
+    ];
+    expect(layersToSetAside(conflicts, { keepCertain: false, dropPossible: false })).toEqual(["physics"]);
+    expect(layersToSetAside(conflicts, { keepCertain: true, dropPossible: false })).toEqual([]);
+    expect(layersToSetAside(conflicts, { keepCertain: false, dropPossible: true })).toEqual(["physics", "sound"]);
   });
 
   it("keeps ready and one click as joinable, nothing else", () => {

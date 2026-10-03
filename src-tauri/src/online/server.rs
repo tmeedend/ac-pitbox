@@ -32,6 +32,9 @@ pub struct CarSlots {
     pub level: Level,
     /// The DLC to name when the car is blocked.
     pub dlc: Option<String>,
+    /// The car's active layers and what each risks online
+    /// (`session_layers.rs`), filled by `attach_layers`.
+    pub layers: Vec<super::session_layers::LayerConflict>,
     /// Photo of `skin`, when the car is in the game with that livery. A car
     /// only in the library has none yet: it is laid in the game at join time.
     pub preview: Option<String>,
@@ -57,6 +60,23 @@ pub struct ServerDetail {
     /// Web links from the server's name and description (its Discord, most
     /// often), to open from the panel.
     pub links: Vec<String>,
+    /// The track's active layers, filled by `attach_layers`.
+    pub track_layers: Vec<super::session_layers::LayerConflict>,
+}
+
+impl ServerDetail {
+    /// The active layers of the track and of every car that can be driven,
+    /// read from the library after the network is done — the facade takes the
+    /// SQLite lock for this only.
+    pub fn attach_layers(&mut self, conn: &rusqlite::Connection, cfg: &crate::config::AppConfig) {
+        use crate::modscan::ModKind;
+        if self.summary.track_available {
+            self.track_layers = super::session_layers::conflicts(conn, cfg, ModKind::Track, &self.summary.track.id);
+        }
+        for car in self.cars.iter_mut().filter(|c| c.available) {
+            car.layers = super::session_layers::conflicts(conn, cfg, ModKind::Car, &car.id);
+        }
+    }
 }
 
 /// One slot of `/JSON`.
@@ -129,6 +149,7 @@ fn car_slots(cars: &[String], entries: &EntryList, installed: &Installed) -> Vec
             CarSlots {
                 level,
                 dlc,
+                layers: Vec::new(),
                 total: mine.len() as u32,
                 free: mine.iter().filter(|s| !s.connected).count() as u32,
                 skin: first_free.map(|s| s.skin.clone()).filter(|s| !s.is_empty()),
@@ -218,6 +239,7 @@ pub fn fetch_detail(
         features: entries.features,
         extended,
         links,
+        track_layers: Vec::new(),
         summary,
     })
 }

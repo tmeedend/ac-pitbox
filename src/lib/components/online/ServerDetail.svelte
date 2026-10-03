@@ -11,10 +11,11 @@
   import { joinServer, serverDetail, serverKey, type CarSlots, type ServerDetail, type ServerSummary } from "$lib/online/online";
   import { carName, layoutLook, trackTitle, type Looks } from "$lib/online/looks";
   import { isFavourite, isFriend } from "$lib/online/lists";
-  import { joinState } from "$lib/online/readiness";
+  import { joinState, layersToSetAside } from "$lib/online/readiness";
   import { pingOf } from "$lib/online/pings.svelte";
   import SessionTimeline from "./SessionTimeline.svelte";
   import ServerExtras from "./ServerExtras.svelte";
+  import LayersNotice from "./LayersNotice.svelte";
   import { blockerText, levelText } from "$lib/online/labels";
   import { onlineStore, recordRecentJoin, toggleFavouriteServer, toggleFriendName } from "$lib/online/store.svelte";
   import { previewSrc } from "$lib/library/library";
@@ -69,6 +70,8 @@
     error = "";
     joinError = "";
     joined = false;
+    keepCertain = false;
+    dropPossible = false;
     car = null;
     password = presetPassword ?? "";
     loading = true;
@@ -106,12 +109,24 @@
    * CM, so the server's own level (its best car) stands in. */
   const readiness = $derived(joinState(live, live.booking ? null : chosen));
 
+  /** The layers of the track and of the chosen car (SPEC-play-online.md,
+   * "Couches et versions"), and what the user chose to do with them. */
+  let keepCertain = $state(false);
+  let dropPossible = $state(false);
+  const conflicts = $derived([...(detail?.track_layers ?? []), ...(live.booking ? [] : (chosen?.layers ?? []))]);
+  const setAside = $derived(layersToSetAside(conflicts, { keepCertain, dropPossible }));
+
   /** The button follows the level (SPEC-play-online.md): JOIN when all is in
    * the game, PREPARE & JOIN when the join first lays something from the
    * library into it. */
   const joinLabel = $derived(
-    live.booking ? t("online.openInCm") : readiness.level === "oneClick" ? t("online.prepareJoin") : t("online.join"),
+    live.booking
+      ? t("online.openInCm")
+      : readiness.level === "oneClick" || setAside.length > 0
+        ? t("online.prepareJoin")
+        : t("online.join"),
   );
+
 
   /** Why the button cannot join yet, or `null` when it can. */
   const blocker = $derived.by(() => {
@@ -128,13 +143,13 @@
     joining = true;
     joinError = "";
     joined = false;
-    const chosen = live.booking ? "" : (car ?? "");
+    const carId = live.booking ? "" : (car ?? "");
     try {
-      await joinServer(live, chosen, password || null);
+      await joinServer(live, carId, password || null, setAside);
       joined = true;
       // The list's entry, not `live`: its name is the lobby's cleaned one,
       // and its country is the lobby's geolocation (`/INFO` often has none).
-      recordRecentJoin(server, chosen);
+      recordRecentJoin(server, carId);
     } catch (e) {
       joinError = errorText(e);
     } finally {
@@ -257,6 +272,9 @@
     {#if readiness.level === "blocked" && readiness.blockers.length > 1}
       <!-- The button names the first reason; the others are here. -->
       {#each readiness.blockers.slice(1) as b, i (i)}<p class="why">{blockerText(b)}</p>{/each}
+    {/if}
+    {#if conflicts.length && readiness.level !== "blocked"}
+      <LayersNotice {conflicts} bind:keepCertain bind:dropPossible />
     {/if}
     {#if joinError}<p class="errbox">{joinError}</p>{/if}
     {#if joined}<p class="ok">{t("online.joined")}</p>{/if}

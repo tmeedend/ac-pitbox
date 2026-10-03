@@ -52,6 +52,10 @@ const BACKED_UP_FILES: &[&str] = &[
     // Favourite servers and recent joins (`online/store.rs`): picked by hand,
     // and nowhere else to find them again.
     "online.json",
+    // The layers an online session set aside and the game's end gives back
+    // (`online/session_layers.rs`): without it, a lost file would leave them
+    // deactivated with nothing to say they ever were active.
+    "online_layers.json",
     // The pre-overlay rules file, while it exists (not yet migrated).
     "tag-rules.json",
 ];

@@ -1463,6 +1463,11 @@
     "discordSub": "Chat with the community"
   },
   "online": {
+    "layersSetAside": "Deactivated for the session, then reactivated: {names}.",
+    "layersKeep": "Keep these layers",
+    "layersPossible": "Active layer on this car or track: {names}. The server may refuse it.",
+    "layersDrop": "Join without these layers",
+    "layersRestored": "{count} layer(s) reactivated after the online session",
     "laps": "{n} laps",
     "extraLap": "+1 lap",
     "timeLeft": "{time} left",

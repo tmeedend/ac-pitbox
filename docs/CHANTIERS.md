@@ -50,6 +50,13 @@ de reprendre. En cas d'écart, la spec fait foi.
         compris : il peut s'afficher « Prêt » sans voiture prenable. Les
         niveaux du lot 5 n'y changent rien ; le corriger demanderait `/JSON`
         sur chaque serveur affiché, comme la recherche d'amis.
+      - Les couches écartées reviennent sur la **fin** du jeu (transition du
+        sondage) ou au démarrage suivant. Si CM ne lance finalement pas le jeu
+        (erreur de son côté, fenêtre refermée), aucune fin n'arrive : elles
+        restent écartées jusqu'à la prochaine partie ou au prochain démarrage
+        de Pit Box. Un délai de garde (« pas de jeu après N minutes ») serait
+        le remède ; pas fait, faute de savoir combien CM peut prendre à froid
+        (24 s mesurées, `raceini.rs`).
       - Les niveaux « 1 clic » et « Bloqué » n'ont pas été vus à l'écran
         (aucun mod désactivé ni DLC manquant sur la machine de dev) : seuls
         les tests les couvrent.

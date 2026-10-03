@@ -2,7 +2,7 @@
 // "Contenu manquant"). The backend judges the track, every car and the CSP
 // (`online/readiness.rs`); this module combines that with the car picked in
 // the panel. Pure, for Vitest.
-import type { Blocker, CarSlots, Level, ServerSummary } from "./online";
+import type { Blocker, CarSlots, LayerConflict, Level, ServerSummary } from "./online";
 
 const RANK: Record<Level, number> = { ready: 0, oneClick: 1, download: 2, blocked: 3 };
 
@@ -14,6 +14,17 @@ export function worse(a: Level, b: Level): Level {
 /** Ready or one click away — what the "Joinable" toggle keeps. */
 export function isJoinableLevel(level: Level | undefined): boolean {
   return level === "ready" || level === "oneClick";
+}
+
+/** The layers a join sets aside: those certain to fail it, unless the user
+ * keeps them; those that might, if the user asks to join without them. */
+export function layersToSetAside(
+  conflicts: LayerConflict[],
+  choice: { keepCertain: boolean; dropPossible: boolean },
+): string[] {
+  return conflicts
+    .filter((c) => (c.risk === "certain" ? !choice.keepCertain : choice.dropPossible))
+    .map((c) => c.layer_id);
 }
 
 export interface JoinState {

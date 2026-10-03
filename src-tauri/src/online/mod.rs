@@ -23,6 +23,7 @@ mod looks;
 pub mod ping;
 pub mod readiness;
 pub mod server;
+pub mod session_layers;
 mod steam;
 pub mod store;
 

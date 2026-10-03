@@ -1463,6 +1463,11 @@
     "discordSub": "Le salon de la communauté"
   },
   "online": {
+    "layersSetAside": "Désactivée(s) pendant la session, puis réactivée(s) : {names}.",
+    "layersKeep": "Garder ces couches",
+    "layersPossible": "Couche active sur cette voiture ou ce circuit : {names}. Le serveur peut la refuser.",
+    "layersDrop": "Rejoindre sans ces couches",
+    "layersRestored": "{count} couche(s) réactivée(s) après la session online",
     "laps": "{n} tours",
     "extraLap": "+1 tour",
     "timeLeft": "reste {time}",

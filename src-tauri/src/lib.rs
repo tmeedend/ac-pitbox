@@ -308,9 +308,13 @@ pub fn run() {
             // Un seul sondage de process pour les deux — le redécouvrir ailleurs
             // serait la même question posée deux fois.
             let watch_handle = app.handle().clone();
+            // A third client: the layers an online session set aside come back
+            // when the game closes — and at startup, the watch announcing its
+            // first state (`online/session_layers.rs`).
             music::watch::spawn(music_engine.clone_sender(), move |running| {
                 use tauri::Emitter;
                 let _ = watch_handle.emit("ac://running", running);
+                commands::online::on_game_running(&watch_handle, running);
             });
             app.manage(music_engine);
             app.manage(music::PreviewHandle::default());

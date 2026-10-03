@@ -274,8 +274,24 @@ serveur, soit un aller-retour) sur les lignes visibles une fois le défilement
 arrêté, gardé cinq minutes : vert sous 60 ms, orange sous 120, gris au-delà —
 pas rouge, réservé à la session (SPEC §7.2ter).
 
+**Lot 7a — écarter les couches le temps d'une session (livré).** Le panneau
+lit les couches actives du circuit et de la voiture choisie, et leurs fichiers :
+une couche qui remplace `data.acd` ou un fichier de `data/` d'une voiture, ou
+un `surfaces.ini` d'un circuit (le sien ou celui d'un layout), est un **échec
+certain** ; une couche qui touche autre chose, un **échec possible**. Au-dessus
+du bouton, une ligne annonce celles qui seront désactivées pendant la session
+puis réactivées, avec « Garder ces couches » pour refuser ; un encadré jaune
+nomme les autres, avec « Rejoindre sans ces couches ». Le bouton devient
+`Préparer et rejoindre` dès qu'une couche est écartée. La liste est écrite dans
+`online_layers.json` **avant** la moindre désactivation ; la fin du jeu (le
+sondage du process qui sert déjà la musique) réactive les couches et le dit
+dans une notification, et l'annonce de départ de ce même sondage fait le
+rattrapage au démarrage suivant si Pit Box a été fermé entre-temps. Les couches
+passent par l'interrupteur ordinaire (`compose::set_layer_active`) ; seules
+celles de la voiture et du circuit rejoints sont acceptées.
+
 **Restent**, dans l'ordre où ils servent les cas d'usage : le téléchargement
-du contenu manquant et le retrait des couches pendant la session (cas 2) ;
+du contenu manquant (cas 2) ;
 pays en drapeaux, tokens de filtre (circuit, voiture, catégorie, ping, pays,
 session) ; la v2 (regrouper par circuit, lien bibliothèque → online,
 notifications).

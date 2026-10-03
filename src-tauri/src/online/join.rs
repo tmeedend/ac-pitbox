@@ -11,6 +11,8 @@
 //! A booking server is the exception: `race/online` does not book a slot, so
 //! it goes through CM's page, where booking lives.
 
+use std::path::Path;
+
 use rusqlite::Connection;
 use serde::Deserialize;
 
@@ -31,6 +33,10 @@ pub struct JoinRequest {
     pub track_kunos_id: String,
     pub password: Option<String>,
     pub booking: bool,
+    /// Layers of this car or track to deactivate for the session
+    /// (`session_layers.rs`), as the panel let the user choose.
+    #[serde(default)]
+    pub set_aside: Vec<String>,
 }
 
 /// The URI handed to Content Manager. Every value is percent-encoded: a
@@ -86,9 +92,34 @@ pub fn prepare(request: &JoinRequest) -> Result<Vec<String>, String> {
     )
 }
 
-/// Puts the car and the track in the game if needed, then hands the join to
-/// Content Manager. `features` come from `prepare`.
-pub fn join(conn: &Connection, cfg: &AppConfig, request: &JoinRequest, features: Vec<String>) -> Result<(), String> {
+/// The layers of `set_aside` that belong to the car or the track joined —
+/// the only ones a join may touch. The ids come from the screen: anything
+/// else is refused and logged rather than trusted.
+fn own_layers(conn: &Connection, request: &JoinRequest) -> Vec<String> {
+    request
+        .set_aside
+        .iter()
+        .filter(|id| match crate::overlay::get_layer(conn, id) {
+            Ok(Some(layer)) if layer.parent_id == request.car_id || layer.parent_id == request.track_id => true,
+            other => {
+                log::warn!("online: layer {id} is not on this car or track ({other:?}), left as it is");
+                false
+            }
+        })
+        .cloned()
+        .collect()
+}
+
+/// Puts the car and the track in the game if needed, sets aside the layers
+/// asked for, then hands the join to Content Manager. `features` come from
+/// `prepare`; `config_dir` holds the list of layers to give back.
+pub fn join(
+    conn: &Connection,
+    cfg: &AppConfig,
+    config_dir: &Path,
+    request: &JoinRequest,
+    features: Vec<String>,
+) -> Result<(), String> {
     let cm = crate::launch::cm_exe(cfg)?;
 
     // Same net as an offline session (ESPACE R5), then the same activation:
@@ -101,9 +132,16 @@ pub fn join(conn: &Connection, cfg: &AppConfig, request: &JoinRequest, features:
     crate::skeleton::guard_mod(conn, &request.track_id)?;
     crate::launch::ensure_available(conn, cfg, ModKind::Track, &request.track_id)?;
 
+    // After the activation, which lays the layers in too: set aside now,
+    // they would otherwise come back with it.
+    super::session_layers::set_aside(conn, cfg, config_dir, &own_layers(conn, request))?;
+
     let uri = join_uri(request);
-    crate::launch::spawn_cm(cm, Some(std::ffi::OsStr::new(&uri)))
-        .map_err(|e| format!("starting Content Manager: {e}"))?;
+    if let Err(e) = crate::launch::spawn_cm(cm, Some(std::ffi::OsStr::new(&uri))) {
+        // No game will start, so no game will end to give the layers back.
+        super::session_layers::restore(conn, cfg, config_dir);
+        return Err(format!("starting Content Manager: {e}"));
+    }
     if !features.is_empty() {
         crate::raceini::spawn_remote_features_patcher(request.car_id.clone(), features);
     }
@@ -138,6 +176,7 @@ mod tests {
             track_kunos_id: "ks_nordschleife-touristenfahrten".into(),
             password: None,
             booking: false,
+            set_aside: Vec::new(),
         }
     }
 

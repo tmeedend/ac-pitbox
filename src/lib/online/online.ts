@@ -81,6 +81,8 @@ export interface CarSlots {
   level: Level;
   /** The DLC to name when the car is blocked. */
   dlc: string | null;
+  /** The car's active layers and what each risks online. */
+  layers: LayerConflict[];
   /** Photo of `skin`, when the car is in the game with that livery. */
   preview: string | null;
 }
@@ -99,6 +101,16 @@ export interface ServerDetail {
   extended: Extended | null;
   /** Web links from the name and the description. */
   links: string[];
+  /** The track's active layers and what each risks online. */
+  track_layers: LayerConflict[];
+}
+
+/** An active layer on the car or the track of a join (`session_layers.rs`):
+ * `certain` replaces what the server checks, `possible` something else. */
+export interface LayerConflict {
+  layer_id: string;
+  name: string;
+  risk: "certain" | "possible";
 }
 
 export interface Ping {
@@ -147,7 +159,14 @@ export function serverDetail(ip: string, httpPort: number): Promise<ServerDetail
   return invoke<ServerDetail>("online_server_detail", { ip, httpPort });
 }
 
-export function joinServer(server: ServerSummary, carId: string, password: string | null): Promise<void> {
+/** `setAside`: layers of this car or track to deactivate for the session,
+ * given back when the game closes. */
+export function joinServer(
+  server: ServerSummary,
+  carId: string,
+  password: string | null,
+  setAside: string[] = [],
+): Promise<void> {
   return invoke<void>("online_join", {
     request: {
       ip: server.ip,
@@ -158,6 +177,7 @@ export function joinServer(server: ServerSummary, carId: string, password: strin
       track_kunos_id: server.track.kunos_id,
       password,
       booking: server.booking,
+      set_aside: setAside,
     },
   });
 }

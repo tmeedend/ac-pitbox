@@ -48,7 +48,13 @@ pub async fn online_server_detail(
         let cars_dir = crate::config::load(&app)
             .ac_install_path
             .map(|ac| ac.join("content").join("cars"));
-        online::server::fetch_detail(&ip, http_port, steam_id, &installed, cars_dir.as_deref())
+        let mut detail = online::server::fetch_detail(&ip, http_port, steam_id, &installed, cars_dir.as_deref())?;
+        // The network is done: the lock only for the layers.
+        let cfg = crate::config::load(&app);
+        let db = app.state::<Db>();
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        detail.attach_layers(&conn, &cfg);
+        Ok(detail)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -72,6 +78,37 @@ pub async fn online_ping(servers: Vec<online::drivers::ServerAddr>) -> Result<Ve
     tauri::async_runtime::spawn_blocking(move || online::ping::ping(&servers))
         .await
         .map_err(|e| e.to_string())
+}
+
+/// Hooked on the game watch (`lib.rs`), which calls it on every change and
+/// once at startup: when the game is not running, gives back the layers an
+/// online session set aside (`online/session_layers.rs`), and tells the screen
+/// which. On its own thread — a recomposition must not hold the watch, which
+/// also drives the music.
+pub fn on_game_running(app: &AppHandle, running: bool) {
+    if running {
+        return;
+    }
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let Some(db) = app.try_state::<Db>() else {
+            log::warn!("online: the base is not open yet, set-aside layers wait for the next check");
+            return;
+        };
+        let Ok(dir) = config_dir(&app) else { return };
+        let cfg = crate::config::load(&app);
+        let restored = {
+            let _game_write = crate::gamestate::GameWrite::begin();
+            let Ok(conn) = db.0.lock() else { return };
+            online::session_layers::restore(&conn, &cfg, &dir)
+        };
+        if !restored.is_empty() {
+            use tauri::Emitter;
+            if let Err(e) = app.emit("online://layers-restored", restored) {
+                log::warn!("online://layers-restored not delivered — {e}");
+            }
+        }
+    });
 }
 
 fn config_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
@@ -100,7 +137,7 @@ pub async fn online_join(app: AppHandle, request: online::join::JoinRequest) -> 
         let cfg = crate::config::load(&app);
         let db = app.state::<Db>();
         let conn = db.0.lock().map_err(|e| e.to_string())?;
-        online::join::join(&conn, &cfg, &request, features)
+        online::join::join(&conn, &cfg, &config_dir(&app)?, &request, features)
     })
     .await
     .map_err(|e| e.to_string())?
