@@ -48,7 +48,10 @@ export interface UpdateDetails {
   alternativeIds: string[];
 }
 
-type DownloadOutcome = { status: "archive"; path: string } | { status: "browser"; url: string } | { status: "cancelled" };
+export type DownloadOutcome =
+  | { status: "archive"; path: string }
+  | { status: "browser"; url: string }
+  | { status: "cancelled" };
 
 /** Mirrors `commands::updates::UpdateProgress`. */
 interface UpdateProgress {

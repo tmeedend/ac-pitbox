@@ -8,10 +8,13 @@
   import { untrack } from "svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
-  import { joinServer, serverDetail, serverKey, type CarSlots, type ServerDetail, type ServerSummary } from "$lib/online/online";
+  import { joinServer, serverDetail, serverKey, type CarSlots, type Fetch, type ServerDetail, type ServerSummary } from "$lib/online/online";
   import { carName, layoutLook, trackTitle, type Looks } from "$lib/online/looks";
   import { isFavourite, isFriend } from "$lib/online/lists";
   import { joinState, layersToSetAside } from "$lib/online/readiness";
+  import { fetchNeeded, type Needed } from "$lib/online/prepare";
+  import { libraryVersion } from "$lib/library/libraryVersion.svelte";
+  import { openUrl } from "@tauri-apps/plugin-opener";
   import { pingOf } from "$lib/online/pings.svelte";
   import SessionTimeline from "./SessionTimeline.svelte";
   import ServerExtras from "./ServerExtras.svelte";
@@ -92,6 +95,12 @@
     }
   }
 
+  /** Both versions are known and differ (SPEC-play-online.md, "Versions à
+   * côté du choix") — an integrity check kicks a mismatched car. */
+  function versionsDiffer(f: Fetch): boolean {
+    return !!f.installed_version && !!f.server_version && f.installed_version !== f.server_version;
+  }
+
   /** A car the panel can pick for you: one with a free slot that can be
    * driven here. Any car with a free slot can still be picked by hand — the
    * button then says why it cannot join, which is what one wants to know. */
@@ -127,6 +136,43 @@
         : t("online.join"),
   );
 
+  /** What "Prepare & join" fetches first: the track and the chosen car, when
+   * missing or outdated with a source (`online/content.rs`). */
+  const needed = $derived.by((): Needed[] => {
+    const items: Needed[] = [];
+    if (detail?.track_fetch.needed) {
+      items.push({ kind: "Track", id: live.track.id, name: trackTitle(looks, live.track), fetch: detail.track_fetch });
+    }
+    if (!live.booking && chosen?.fetch.needed) {
+      items.push({ kind: "Car", id: chosen.id, name: carName(looks, chosen.id), fetch: chosen.fetch });
+    }
+    return items;
+  });
+  let preparing = $state(false);
+  /** A source gave a page: what was opened in the browser. */
+  let browserFor = $state<string | null>(null);
+
+  /** Reads the server again without losing what was chosen — after content
+   * arrived, the levels have moved. */
+  async function refresh() {
+    const key = serverKey(server);
+    try {
+      const d = await serverDetail(server.ip, server.http_port);
+      if (key === serverKey(server)) detail = d;
+    } catch (e) {
+      console.error("online_server_detail", e);
+    }
+  }
+
+  // An archive dropped on the window — the way content from a page in the
+  // browser arrives — changes the library: the panel reads its levels again.
+  // The version is read first, so the effect subscribes to it (CLAUDE.md).
+  let seenLibrary = -1;
+  $effect(() => {
+    const version = libraryVersion();
+    if (seenLibrary !== -1 && version !== seenLibrary && detail && !preparing) untrack(() => void refresh());
+    seenLibrary = version;
+  });
 
   /** Why the button cannot join yet, or `null` when it can. */
   const blocker = $derived.by(() => {
@@ -139,12 +185,47 @@
     return null;
   });
 
+  /** Fetches what is needed first; `false` when the join cannot go on —
+   * the reason is then on screen. */
+  async function prepare(): Promise<boolean> {
+    if (!needed.length) return true;
+    preparing = true;
+    browserFor = null;
+    try {
+      const out = await fetchNeeded(needed);
+      if (out.status === "browser") {
+        browserFor = out.name;
+        openUrl(out.url).catch((e) => console.error("openUrl", e));
+        return false;
+      }
+      if (out.status === "busy") joinError = t("online.prepareBusy");
+      if (out.status !== "ready") return false;
+      const fetched = needed.map((n) => n.id.toLowerCase());
+      await refresh();
+      // What was missing must be here now — an import that stopped on a
+      // question has brought nothing in yet. Only that: an update just
+      // fetched may still read as older, authors' version labels rarely
+      // follow the server's, and asking again would download it forever.
+      const missing =
+        (fetched.includes(live.track.id.toLowerCase()) && !live.track_available) ||
+        (!!chosen && fetched.includes(chosen.id.toLowerCase()) && !chosen.available);
+      if (missing) {
+        joinError = t("online.prepareIncomplete");
+        return false;
+      }
+      return true;
+    } finally {
+      preparing = false;
+    }
+  }
+
   async function join() {
     joining = true;
     joinError = "";
     joined = false;
     const carId = live.booking ? "" : (car ?? "");
     try {
+      if (!(await prepare())) return;
       await joinServer(live, carId, password || null, setAside);
       joined = true;
       // The list's entry, not `live`: its name is the lobby's cleaned one,
@@ -193,6 +274,14 @@
     {#if live.country ?? server.country}<span>{live.country ?? server.country}</span>{/if}
     {#if pingOf(serverKey(server)) !== undefined}<span>{t("online.ping", { ms: pingOf(serverKey(server)) ?? 0 })}</span>{/if}
     <span class="addr">{live.ip}:{live.http_port}</span>
+    {#if detail && versionsDiffer(detail.track_fetch)}
+      <span class="version">
+        {t("online.versions", {
+          installed: detail.track_fetch.installed_version ?? "",
+          server: detail.track_fetch.server_version ?? "",
+        })}
+      </span>
+    {/if}
   </div>
 
   <SessionTimeline server={live} />
@@ -220,7 +309,18 @@
                   {#if c.preview}<img src={previewSrc(c.preview)} alt="" loading="lazy" />{/if}
                 </span>
                 <span class="car-name" title={c.id}>{carName(looks, c.id)}</span>
-                <span class="skin mono">{c.skin ?? ""}</span>
+                <span class="skin mono">
+                  {#if versionsDiffer(c.fetch)}
+                    <span class="version">
+                      {t("online.versions", {
+                        installed: c.fetch.installed_version ?? "",
+                        server: c.fetch.server_version ?? "",
+                      })}
+                    </span>
+                  {:else}
+                    {c.skin ?? ""}
+                  {/if}
+                </span>
                 <span class="slots mono" class:none={c.free === 0}>
                   {t("online.slots", { free: c.free, total: c.total })}
                 </span>
@@ -276,10 +376,15 @@
     {#if conflicts.length && readiness.level !== "blocked"}
       <LayersNotice {conflicts} bind:keepCertain bind:dropPossible />
     {/if}
+    {#if browserFor}
+      <!-- The page asks something of a person; the archive, once dropped on
+           the window, is recognised and the panel reads its levels again. -->
+      <p class="warnbox">{t("online.prepareBrowser", { name: browserFor })}</p>
+    {/if}
     {#if joinError}<p class="errbox">{joinError}</p>{/if}
     {#if joined}<p class="ok">{t("online.joined")}</p>{/if}
     <button class="btn btn-primary join" type="button" disabled={!!blocker || joining || loading} onclick={join}>
-      {joining ? t("online.joining") : (blocker ?? joinLabel)}
+      {preparing ? t("online.preparing") : joining ? t("online.joining") : (blocker ?? joinLabel)}
     </button>
   </footer>
 </aside>
@@ -488,6 +593,11 @@
   .why {
     color: var(--muted);
     font-size: 11.5px;
+  }
+  /* A version gap with the server goes orange (SPEC-play-online.md,
+     "Versions à côté du choix"). */
+  .version {
+    color: var(--orange);
   }
   .drivers li {
     display: flex;

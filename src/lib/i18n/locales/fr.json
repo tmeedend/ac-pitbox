@@ -1463,6 +1463,11 @@
     "discordSub": "Le salon de la communauté"
   },
   "online": {
+    "versions": "v{installed} ici · v{server} sur le serveur",
+    "preparing": "Récupération du contenu…",
+    "prepareBrowser": "{name} se télécharge depuis une page web, ouverte dans votre navigateur. Glissez l'archive sur Pit Box, puis rejoignez.",
+    "prepareBusy": "Un téléchargement ou un import est déjà en cours. Rejoignez quand il sera terminé.",
+    "prepareIncomplete": "Le contenu n'est pas encore prêt : terminez l'import en cours, puis rejoignez.",
     "layersSetAside": "Désactivée(s) pendant la session, puis réactivée(s) : {names}.",
     "layersKeep": "Garder ces couches",
     "layersPossible": "Couche active sur cette voiture ou ce circuit : {names}. Le serveur peut la refuser.",

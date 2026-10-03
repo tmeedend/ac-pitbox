@@ -1463,6 +1463,11 @@
     "discordSub": "Chat with the community"
   },
   "online": {
+    "versions": "v{installed} here · v{server} on the server",
+    "preparing": "Getting content…",
+    "prepareBrowser": "{name} downloads from a web page, now open in your browser. Drop the archive on Pit Box, then join.",
+    "prepareBusy": "A download or an import is already running. Join once it is done.",
+    "prepareIncomplete": "The content is not ready yet: finish the import in progress, then join.",
     "layersSetAside": "Deactivated for the session, then reactivated: {names}.",
     "layersKeep": "Keep these layers",
     "layersPossible": "Active layer on this car or track: {names}. The server may refuse it.",

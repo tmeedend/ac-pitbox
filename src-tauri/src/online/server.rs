@@ -13,6 +13,7 @@ use serde_json::Value;
 
 use crate::http;
 
+use super::content::{fetch_for, parse_content, settle, Fetch};
 use super::installed::Installed;
 use super::lobby::{self, ServerSummary, SERVER_AGENT, SERVER_MAX_BODY, SERVER_TIMEOUT_MS};
 use super::readiness::Level;
@@ -33,8 +34,10 @@ pub struct CarSlots {
     /// The DLC to name when the car is blocked.
     pub dlc: Option<String>,
     /// The car's active layers and what each risks online
-    /// (`session_layers.rs`), filled by `attach_layers`.
+    /// (`session_layers.rs`), filled by `attach_library`.
     pub layers: Vec<super::session_layers::LayerConflict>,
+    /// How to get the car, and its versions (`content.rs`).
+    pub fetch: Fetch,
     /// Photo of `skin`, when the car is in the game with that livery. A car
     /// only in the library has none yet: it is laid in the game at join time.
     pub preview: Option<String>,
@@ -60,21 +63,48 @@ pub struct ServerDetail {
     /// Web links from the server's name and description (its Discord, most
     /// often), to open from the panel.
     pub links: Vec<String>,
-    /// The track's active layers, filled by `attach_layers`.
+    /// The track's active layers, filled by `attach_library`.
     pub track_layers: Vec<super::session_layers::LayerConflict>,
+    /// How to get the track, and its versions (`content.rs`).
+    pub track_fetch: Fetch,
+}
+
+/// What the library knows of one car or track for `content.rs`: the version
+/// installed, and an archive kept for a mod in the showcase.
+fn complete_fetch(conn: &rusqlite::Connection, cfg: &crate::config::AppConfig, id: &str, fetch: &mut Fetch) {
+    let Ok(Some(row)) = crate::overlay::get_mod(conn, id) else {
+        return;
+    };
+    fetch.installed_version = row.active_version_label.clone();
+    if crate::skeleton::is_showcase(conn, id).unwrap_or(false) {
+        match crate::showcase::sources(conn, cfg, id) {
+            Ok(sources) => fetch.kept_archive = sources.kept_archive,
+            Err(e) => log::warn!("online: cannot read the sources of {id} — {e}"),
+        }
+    }
 }
 
 impl ServerDetail {
-    /// The active layers of the track and of every car that can be driven,
-    /// read from the library after the network is done — the facade takes the
-    /// SQLite lock for this only.
-    pub fn attach_layers(&mut self, conn: &rusqlite::Connection, cfg: &crate::config::AppConfig) {
+    /// What only the library can say, read after the network is done — the
+    /// facade takes the SQLite lock for this only: the active layers of the
+    /// track and of every car, the versions installed and the archives kept,
+    /// and the levels those settle.
+    pub fn attach_library(&mut self, conn: &rusqlite::Connection, cfg: &crate::config::AppConfig) {
         use crate::modscan::ModKind;
+        let track_id = self.summary.track.id.clone();
+        complete_fetch(conn, cfg, &track_id, &mut self.track_fetch);
+        self.summary.track_level = settle(self.summary.track_level, &mut self.track_fetch);
+        self.summary.track_available = self.summary.track_level <= Level::OneClick;
         if self.summary.track_available {
-            self.track_layers = super::session_layers::conflicts(conn, cfg, ModKind::Track, &self.summary.track.id);
+            self.track_layers = super::session_layers::conflicts(conn, cfg, ModKind::Track, &track_id);
         }
-        for car in self.cars.iter_mut().filter(|c| c.available) {
-            car.layers = super::session_layers::conflicts(conn, cfg, ModKind::Car, &car.id);
+        for car in self.cars.iter_mut() {
+            complete_fetch(conn, cfg, &car.id, &mut car.fetch);
+            car.level = settle(car.level, &mut car.fetch);
+            car.available = car.level <= Level::OneClick;
+            if car.available {
+                car.layers = super::session_layers::conflicts(conn, cfg, ModKind::Car, &car.id);
+            }
         }
     }
 }
@@ -150,6 +180,7 @@ fn car_slots(cars: &[String], entries: &EntryList, installed: &Installed) -> Vec
                 level,
                 dlc,
                 layers: Vec::new(),
+                fetch: Fetch::default(),
                 total: mine.len() as u32,
                 free: mine.iter().filter(|s| !s.connected).count() as u32,
                 skin: first_free.map(|s| s.skin.clone()).filter(|s| !s.is_empty()),
@@ -228,11 +259,44 @@ pub fn fetch_detail(
     if let Some(cars_dir) = cars_dir {
         fill_previews(&mut cars, cars_dir);
     }
-    let (extended, raw_description) = match super::extended::fetch(ip, http_port, steam_id) {
-        Some((extended, raw)) => (Some(extended), raw),
-        None => (None, None),
+    let (extended, details) = match super::extended::fetch(ip, http_port, steam_id) {
+        Some((extended, root)) => (Some(extended), root),
+        None => (None, Value::Null),
     };
-    let links = super::extended::links(&[&summary.name, raw_description.as_deref().unwrap_or_default()]);
+    let links = super::extended::links(&[&summary.name, details["description"].as_str().unwrap_or_default()]);
+
+    // Where to get what is missing, or outdated. The registry is asked only
+    // when something could need it: most servers opened are ready.
+    let server_content = parse_content(&details);
+    let needs_sources = summary.track_level != Level::Ready
+        || cars.iter().any(|c| c.level != Level::Ready)
+        || !server_content.cars.is_empty()
+        || server_content.track.is_some();
+    let registry = if needs_sources {
+        super::content::registry()
+    } else {
+        Default::default()
+    };
+    let base = format!("http://{ip}:{http_port}");
+    for car in cars.iter_mut() {
+        let path = format!("/content/car/{}", car.id);
+        car.fetch = fetch_for(
+            server_content.cars.get(&car.id.to_lowercase()),
+            &server_content,
+            &base,
+            &path,
+            &registry,
+            ("car", &car.id),
+        );
+    }
+    let track_fetch = fetch_for(
+        server_content.track.as_ref(),
+        &server_content,
+        &base,
+        "/content/track",
+        &registry,
+        ("track", &summary.track.id),
+    );
     Ok(ServerDetail {
         cars,
         drivers: drivers(&entries),
@@ -240,6 +304,7 @@ pub fn fetch_detail(
         extended,
         links,
         track_layers: Vec::new(),
+        track_fetch,
         summary,
     })
 }

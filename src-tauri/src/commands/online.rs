@@ -49,12 +49,32 @@ pub async fn online_server_detail(
             .ac_install_path
             .map(|ac| ac.join("content").join("cars"));
         let mut detail = online::server::fetch_detail(&ip, http_port, steam_id, &installed, cars_dir.as_deref())?;
-        // The network is done: the lock only for the layers.
+        // The network is done: the lock only for what the library says.
         let cfg = crate::config::load(&app);
         let db = app.state::<Db>();
         let conn = db.0.lock().map_err(|e| e.to_string())?;
-        detail.attach_layers(&conn, &cfg);
+        detail.attach_library(&conn, &cfg);
         Ok(detail)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Downloads the archive of missing content `id` from where a server says it
+/// is (`online/content.rs`), with the progress and the cancel of a mod update
+/// — the same rule follows: an archive goes to the import, anything else to
+/// the browser. Into the temp folder only; the import that follows is the
+/// ordinary one, as for a file dropped on the window.
+#[tauri::command]
+pub async fn download_online_content(
+    app: AppHandle,
+    url: String,
+    id: String,
+) -> Result<crate::cup::DownloadOutcome, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        super::updates::download_reporting(&app, &id, |on_progress| {
+            crate::cup::download_archive(&url, &id, &std::env::temp_dir(), on_progress)
+        })
     })
     .await
     .map_err(|e| e.to_string())?

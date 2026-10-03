@@ -20,6 +20,14 @@ const car = (over: Partial<CarSlots> = {}): CarSlots => ({
   level: "ready",
   dlc: null,
   layers: [],
+  fetch: {
+    kept_archive: false,
+    server_url: null,
+    cup: false,
+    server_version: null,
+    installed_version: null,
+    needed: false,
+  },
   preview: null,
   ...over,
 });

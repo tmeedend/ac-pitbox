@@ -169,19 +169,18 @@ pub(super) fn parse(root: &Value) -> Extended {
     }
 }
 
-/// `/api/details`, with its description as written (BBCode and all, where its
-/// `[url=…]` links are), or `None` when the server does not offer it —
-/// quietly: most servers do not, and a log line per vanilla server would bury
-/// the lines that matter.
-pub fn fetch(ip: &str, http_port: u16, steam_id: u64) -> Option<(Extended, Option<String>)> {
+/// `/api/details`, read, with the answer itself — where the description as
+/// written (BBCode and all, its `[url=…]` links) and the `content` block are.
+/// `None` when the server does not offer it — quietly: most servers do not,
+/// and a log line per vanilla server would bury the lines that matter.
+pub fn fetch(ip: &str, http_port: u16, steam_id: u64) -> Option<(Extended, Value)> {
     let url = format!("http://{ip}:{http_port}/api/details?guid={steam_id}");
     let response = http::get_url(&url, SERVER_AGENT, SERVER_TIMEOUT_MS, SERVER_MAX_BODY)?;
     if response.status != 200 {
         return None;
     }
     let root: Value = serde_json::from_slice(&response.body).ok()?;
-    let raw = root["description"].as_str().map(str::to_string);
-    root.is_object().then(|| (parse(&root), raw))
+    root.is_object().then(|| (parse(&root), root))
 }
 
 #[cfg(test)]

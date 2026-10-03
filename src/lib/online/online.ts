@@ -83,6 +83,8 @@ export interface CarSlots {
   dlc: string | null;
   /** The car's active layers and what each risks online. */
   layers: LayerConflict[];
+  /** How to get the car, and its versions. */
+  fetch: Fetch;
   /** Photo of `skin`, when the car is in the game with that livery. */
   preview: string | null;
 }
@@ -103,6 +105,21 @@ export interface ServerDetail {
   links: string[];
   /** The track's active layers and what each risks online. */
   track_layers: LayerConflict[];
+  /** How to get the track, and its versions. */
+  track_fetch: Fetch;
+}
+
+/** Where to get a car or a track a server needs (`online/content.rs`), in
+ * the spec's order: the archive kept at import, the server's link, the
+ * registry. */
+export interface Fetch {
+  kept_archive: boolean;
+  server_url: string | null;
+  cup: boolean;
+  server_version: string | null;
+  installed_version: string | null;
+  /** Joining fetches it first: missing here, or outdated, with a source. */
+  needed: boolean;
 }
 
 /** An active layer on the car or the track of a join (`session_layers.rs`):

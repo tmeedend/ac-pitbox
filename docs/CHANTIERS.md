@@ -25,10 +25,17 @@ de reprendre. En cas d'écart, la spec fait foi.
 
 ---
 
-- [ ] **Page Online — lots 1 à 6 livrés (lister, rejoindre, noms et
-      vignettes, favoris, récents et amis, niveaux de préparation sans
-      couches ni téléchargements, détail du panneau, ping, lien collé), la
-      suite reste.**
+- [ ] **Page Online — lots 1 à 7 livrés : la v1 de la spec est faite
+      (lister, rejoindre, noms et vignettes, favoris, récents et amis,
+      niveaux de préparation, couches écartées le temps d'une session,
+      contenu manquant récupéré, détail du panneau, ping, lien collé).
+      Restent les tokens de filtre et la v2.**
+      - **Pas vu de bout en bout dans l'app** : un « Préparer et rejoindre »
+        qui télécharge réellement (vérifié : les liens réels mènent à des
+        archives que la détection reconnaît, et le chemin de téléchargement
+        puis d'import est celui des mises à jour de mods), et une couche
+        écartée puis rendue en jeu (vérifié par un test sur un vrai système
+        de fichiers, pas à l'écran).
       Ce qui est fait et ce qui reste : `SPEC-play-online.md`, section Lots.
       **Pièges déjà payés** (`online-join-research.md`), à relire avant de
       toucher au lancement :

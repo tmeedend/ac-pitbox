@@ -290,8 +290,31 @@ rattrapage au démarrage suivant si Pit Box a été fermé entre-temps. Les couc
 passent par l'interrupteur ordinaire (`compose::set_layer_active`) ; seules
 celles de la voiture et du circuit rejoints sont acceptées.
 
-**Restent**, dans l'ordre où ils servent les cas d'usage : le téléchargement
-du contenu manquant (cas 2) ;
-pays en drapeaux, tokens de filtre (circuit, voiture, catégorie, ping, pays,
-session) ; la v2 (regrouper par circuit, lien bibliothèque → online,
-notifications).
+**Lot 7b — récupérer le contenu manquant (livré).** Pour le circuit et chaque
+voiture d'un serveur, le panneau cherche une source, dans l'ordre de la table
+ci-dessus : l'**archive gardée à l'import** d'un mod en vitrine ; le **lien du
+serveur** — le bloc `content` de `/api/details`, au format du wrapper de CM :
+une `url` par voiture et pour le circuit, ou, sans clé `url`, le fichier servi
+par le serveur lui-même (`/content/car/<id>`, `/content/track`) ; une `url`
+vide ne vaut rien (mesuré : 404), `direct: false` non plus, et `cup: true`
+renvoie au registre — ; enfin le **registre CUP**, quand il liste l'id sans le
+réserver aux humains (`limited`). Une source change « À télécharger » en
+`1 clic` ; une version installée plus ancienne que celle que le serveur déclare
+aussi, quand une source permet la mise à jour — les deux versions s'affichent
+côte à côte, en orange quand elles diffèrent. `Préparer et rejoindre` récupère
+d'abord, une source après l'autre, par les chemins existants : l'archive
+gardée comme la récupération d'un mod en vitrine, un lien ou le registre comme
+une mise à jour de mod (même progression, même annulation, puis l'import
+ordinaire : le contenu arrive **géré**, jamais posé tel quel dans `content/`).
+Une page au lieu d'une archive s'ouvre dans le navigateur, le panneau le dit,
+et l'archive glissée ensuite sur Pit Box fait relire le serveur. Mesuré le
+2026-10-03 : 151 serveurs sur 254 interrogés publient des liens, souvent
+directs (`.rar` d'une communauté, publications GitHub, Google Drive).
+Le contenu servi par un serveur protégé par mot de passe n'est pas proposé :
+il exige un hachage du mot de passe que Pit Box ne calcule pas.
+
+**Restent** : les tokens de filtre (circuit, voiture, catégorie de circuit,
+ping, pays, session) et les pays en drapeaux ; les niveaux de préparation de la
+liste elle-même, qui ne voient ni les liens ni les versions des serveurs (il
+faudrait `/api/details` serveur par serveur) ; la v2 (regrouper par circuit,
+lien bibliothèque → online, notifications).
