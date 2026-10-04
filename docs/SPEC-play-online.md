@@ -96,7 +96,7 @@ C'est le vrai différenciateur. CM ne voit que `content/` ; PitBox sait, pour ch
 | **En vitrine** (sans fichiers) | Le réhydrate : archive conservée, puis lien fourni par le serveur, puis registre CUP | `1 CLICK` si la source est directe, sinon `DOWNLOAD` |
 | Absent, **lien direct** fourni par le serveur | Télécharge, puis passe par l'import PitBox (mod géré, activé) | `1 CLICK` |
 | Absent, lien non direct (Mega, Drive, Discord) | Ouvre le navigateur ; l'archive glissée dans PitBox est reconnue et l'état se met à jour | `DOWNLOAD` |
-| Absent, aucune source | Affiche le lien Discord extrait du nom ou de la description | `DOWNLOAD` |
+| Absent, aucune source | Le panneau le liste sous « Aucune source de téléchargement connue », chaque élément avec « Chercher sur le web » : une recherche générale DuckDuckGo sur son id (« {id} assetto corsa »), dans le navigateur ; l'archive trouvée, glissée sur Pit Box, est importée et reconnue. Jamais de téléchargement depuis un résultat : Pit Box ne saurait pas choisir l'archive. Les liens extraits du nom et de la description restent dans le panneau | `DOWNLOAD` |
 | **Version différente** de celle du serveur (quand il la déclare) | Propose la mise à jour. Sinon, le contrôle d'intégrité échoue et le joueur est expulsé | `1 CLICK` ou `DOWNLOAD` |
 | **Couche PitBox** qui remplace `data.acd` d'une voiture ou `surfaces.ini` du circuit | Rejoint sans elle et la réactive à la fermeture du jeu, annoncé avant le lancement (voir « Couches et versions ») | `1 CLICK` |
 | Contenu d'un DLC Kunos non possédé | Nomme le DLC (table `kunos_content_dates`) | `BLOCKED` |
@@ -446,6 +446,16 @@ ce qui la confirme. Un mot de passe vide n'est jamais accepté — sans quoi
 l'empreinte d'un admin sans mot de passe le laisserait passer. Un serveur qui
 ne la publie pas (un AssettoServer, un serveur Kunos nu) reste vérifié par le
 jeu lui-même, comme avant.
+
+**Les serveurs qui exigent leur lanceur.** Un serveur officiel No Hesi refuse
+(`ACP_AUTH_FAILED`, « handshake failed » à l'écran de chargement) le joueur
+qui n'est pas passé par le lanceur No Hesi — le Join de Content Manager tout
+autant (constaté le 2026-10-04). Le panneau le dit au-dessus du bouton, avec
+un lien vers ce lanceur, sans bloquer : un joueur inscrit chez eux passe
+peut-être. Ces serveurs se reconnaissent au lien vers `nohesi.gg` dans leur
+description — exactement les 31 serveurs officiels du lobby ; pas à leur nom
+(« No Hesi » est aussi un style de jeu, sur des serveurs ouverts à tous) ni à
+leurs voitures (`nohesi_*` roulent sur des centaines d'autres serveurs).
 
 **Partager un serveur.** Le bouton `⧉` de l'en-tête du panneau copie le lien
 de partage de Content Manager (`https://acstuff.club/s/q:race/online/join?ip=…&httpPort=…`) :

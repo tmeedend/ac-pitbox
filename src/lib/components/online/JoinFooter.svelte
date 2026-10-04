@@ -19,6 +19,7 @@
   import { blockerText, levelText } from "$lib/online/labels";
   import { recordRecentJoin } from "$lib/online/store.svelte";
   import { passwordMatches } from "$lib/online/password";
+  import { launcherGate, unsourced, webSearchUrl } from "$lib/online/outside";
   import LayersNotice from "./LayersNotice.svelte";
 
   interface Props {
@@ -103,6 +104,27 @@
     const stillNeeded = needed.some((n) => n.name === name);
     if (name && !stillNeeded) browserFor = null;
   });
+
+  /** Content nobody but the user can find: no archive kept, no link from the
+   * server, nothing in the registry. Searched on the web by its id, the
+   * archive then dropped on Pit Box like any other. */
+  const toSearch = $derived(
+    unsourced([
+      ...(detail
+        ? [{ id: live.track.id, name: trackTitle(looks, live.track), level: live.track_level ?? "download", fetch: detail.track_fetch }]
+        : []),
+      ...allCars.map((c) => ({ id: c.id, name: carName(looks, c.id), level: c.level, fetch: c.fetch })),
+    ]),
+  );
+  /** A few names, then a count: a No Hesi server misses thirty cars. */
+  const SEARCH_SHOWN = 5;
+
+  /** A server that lets in only the players of its community's launcher. */
+  const gate = $derived(launcherGate(detail?.links ?? []));
+
+  function openPage(url: string) {
+    openUrl(url).catch((e) => console.error("openUrl", e));
+  }
 
   /** Why the button cannot join yet, or `null` when it can. */
   const blocker = $derived.by(() => {
@@ -195,6 +217,30 @@
          the window, is recognised and the panel reads its levels again. -->
     <p class="warnbox">{t("online.prepareBrowser", { name: browserFor })}</p>
   {/if}
+  {#if gate}
+    <!-- Not a block: a player registered with them may get in. What CM's own
+         join meets too (measured: « handshake failed »). -->
+    <div class="warnbox gate">
+      <p>{t("online.launcherGate", { name: gate.name })}</p>
+      <button class="btn" type="button" onclick={() => openPage(gate.url)}>{t("online.launcherGateOpen", { name: gate.name })}</button>
+    </div>
+  {/if}
+  {#if toSearch.length}
+    <div class="search">
+      <p class="why">{t("online.noSource")}</p>
+      <ul>
+        {#each toSearch.slice(0, SEARCH_SHOWN) as w (w.id)}
+          <li>
+            <span class="name" title={w.id}>{w.name}</span>
+            <button class="btn" type="button" onclick={() => openPage(webSearchUrl(w.id))}>{t("online.searchWeb")}</button>
+          </li>
+        {/each}
+      </ul>
+      {#if toSearch.length > SEARCH_SHOWN}
+        <p class="why">{t("online.noSourceMore", { count: toSearch.length - SEARCH_SHOWN })}</p>
+      {/if}
+    </div>
+  {/if}
   {#if joinError}<p class="errbox">{joinError}</p>{/if}
   {#if joined}<p class="ok">{t("online.joined")}</p>{/if}
   <button class="btn btn-primary join" type="button" disabled={!!blocker || joining || loading} onclick={join}>
@@ -213,6 +259,32 @@
   .why {
     color: var(--muted);
     font-size: 11.5px;
+  }
+  .gate {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  .search ul {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 4px;
+  }
+  .search li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--txt2);
+  }
+  .search .name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .ok {
     color: var(--green);

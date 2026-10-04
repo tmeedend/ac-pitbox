@@ -91,8 +91,12 @@ de reprendre. En cas d'écart, la spec fait foi.
         les tests les couvrent.
       **Pas vérifié** : un serveur à mot de passe et un serveur en booking,
       faute d'échantillon au moment du lot 1 ; un AssettoServer (BSG, LA
-      Canyons) refuse même avec le ticket, cause inconnue — le Join natif de
-      CM n'a pas pu servir de référence.
+      Canyons) refuse même avec le ticket, cause inconnue. **Trouvé pour
+      No Hesi** (2026-10-04) : `ACP_AUTH_FAILED` dans le log du jeu, et le
+      Join de CM échoue pareil — ces serveurs n'acceptent que les joueurs de
+      leur lanceur ; le panneau le dit. BSG et LA Canyons relèvent peut-être
+      du même cas (une communauté et son propre lanceur) : à vérifier, le
+      journal du jeu (`Documents/Assetto Corsa/logs/log.txt`) donne la raison.
 
 - [ ] **Dossier du jeu — lot 1 livré, le lot 2 (les tailles) reste.**
       Livré (`SPEC-etat-dossier.md`) : l'onglet Fichiers › Dossier du jeu,
