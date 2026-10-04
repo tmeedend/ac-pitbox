@@ -129,7 +129,8 @@ fait — en cas d'écart, la spec fait foi.
   un clic, contenu à télécharger, bloqué). Organisée autour de deux cas —
   rejoindre un serveur connu, réussir à y entrer — les filtres venant après.
   Le lancement par CM a été vérifié en jeu avant de construire
-  (`online-join-research.md`). En construction, par lots.
+  (`online-join-research.md`). Livrée, v1 et v2 ; ce qui reste est
+  en fin de section Lots (« Restent »).
 - **`SPEC-sans-fichiers.md`** (`ESPACE§`) — **supprimer sans tout perdre** :
   « Supprimer » propose par défaut de garder le mod **en vitrine** (fichiers
   lourds supprimés, squelette de quelques dizaines de Ko, saisies et fiche

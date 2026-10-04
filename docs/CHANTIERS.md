@@ -25,19 +25,28 @@ de reprendre. En cas d'écart, la spec fait foi.
 
 ---
 
-- [ ] **Page Online — lots 1 à 8 livrés : la v1 de la spec est faite
-      (lister, rejoindre, noms et vignettes, favoris, récents et amis,
-      niveaux de préparation, couches écartées le temps d'une session,
-      contenu manquant récupéré, détail du panneau, ping, lien collé,
-      tokens de filtre, drapeaux), et la v2 (tableau, puces oui/non,
-      regroupement par circuit, ligne Online sur la fiche d'un circuit,
-      notifications). Reste à voir à l'écran ce qui ne l'a pas été.**
-      - **Vu à l'écran (2026-10-03)** : le tableau Online, colonnes, tri et
-        regroupement compris.
-      - **Pas vu à l'écran** : la ligne de la fiche circuit, les
-        notifications (ni dans l'app, ni dans Windows), le mot de passe
-        vérifié avant le lancement (recette confirmée sur 255 vrais serveurs,
-        pas essayée avec un vrai mot de passe), le bandeau de la liste de
+- [ ] **Page Online — la spec est faite, v1 et v2 (2026-10-04).** Lister,
+      rejoindre, noms et vignettes, favoris, récents et amis, niveaux de
+      préparation (toutes les voitures du serveur comptent), couches
+      écartées le temps d'une session (une couche de son seul n'empêche
+      rien), contenu manquant récupéré en une notification, recherche web
+      pour ce qui n'a pas de source, avertissement No Hesi, détail du
+      panneau, ping, lien collé et copié, tokens de filtre, drapeaux ;
+      puis le tableau, les puces oui/non, le regroupement par circuit, la
+      carte Online de la fiche circuit, les notifications et « Me
+      prévenir », le mot de passe vérifié, la liste de secours. **Ce qui
+      reste est listé à la fin de la section Lots de `SPEC-play-online.md`
+      (« Restent ») : des vérifications à l'écran, deux améliorations
+      possibles, des limites connues.**
+      - **Vu à l'écran** : le tableau Online, colonnes, tri et regroupement
+        (2026-10-03) ; la carte Online de la fiche circuit, « Préparer et
+        rejoindre » qui télécharge et importe pour de vrai, la recherche
+        web, le layout d'origine de Spa retrouvé (2026-10-04).
+      - **Pas vu à l'écran** : la notification unique de « Préparer et
+        rejoindre », refaite après l'essai ; les notifications d'ami et de
+        place (ni dans l'app, ni dans Windows) ; le mot de passe vérifié
+        avant le lancement (recette confirmée sur 255 vrais serveurs, pas
+        essayée avec un vrai mot de passe) ; le bandeau de la liste de
         secours (il faut que le lobby tombe) — tests et types seulement.
         Le clic sur une notification **Windows** n'ouvre pas le serveur : le
         plugin n'expose pas de clic sur bureau (sa doc le réserve au mobile,
@@ -54,12 +63,9 @@ de reprendre. En cas d'écart, la spec fait foi.
         remplissant par le haut. Si c'était trop long un jour, la borner aux
         N premiers serveurs serait le remède, au prix de serveurs écartés en
         silence.
-      - **Pas vu de bout en bout dans l'app** : un « Préparer et rejoindre »
-        qui télécharge réellement (vérifié : les liens réels mènent à des
-        archives que la détection reconnaît, et le chemin de téléchargement
-        puis d'import est celui des mises à jour de mods), et une couche
-        écartée puis rendue en jeu (vérifié par un test sur un vrai système
-        de fichiers, pas à l'écran).
+      - **Pas vu de bout en bout dans l'app** : une couche écartée puis
+        rendue en jeu (vérifié par un test sur un vrai système de fichiers,
+        pas à l'écran ; la couche « spa » de la machine de dev s'y prête).
       Ce qui est fait et ce qui reste : `SPEC-play-online.md`, section Lots.
       **Pièges déjà payés** (`online-join-research.md`), à relire avant de
       toucher au lancement :
@@ -89,9 +95,14 @@ de reprendre. En cas d'écart, la spec fait foi.
       - Les niveaux « 1 clic » et « Bloqué » n'ont pas été vus à l'écran
         (aucun mod désactivé ni DLC manquant sur la machine de dev) : seuls
         les tests les couvrent.
-      **Pas vérifié** : un serveur à mot de passe et un serveur en booking,
-      faute d'échantillon au moment du lot 1 ; un AssettoServer (BSG, LA
-      Canyons) refuse même avec le ticket, cause inconnue. **Trouvé pour
+      - Un **serveur à mot de passe** ne sert pas son contenu sans
+        l'empreinte du mot de passe ; la recette est trouvée
+        (`online-join-research.md`), pas encore câblée.
+      - « Me prévenir » vit en mémoire : un redémarrage l'oublie, sans le
+        dire.
+      **Pas vérifié** : un serveur en booking, faute d'échantillon ; un
+      AssettoServer (BSG, LA Canyons) refuse même avec le ticket, cause
+      inconnue, et le serveur n'a pas été retrouvé pour réessayer. **Trouvé pour
       No Hesi** (2026-10-04) : `ACP_AUTH_FAILED` dans le log du jeu, et le
       Join de CM échoue pareil — ces serveurs n'acceptent que les joueurs de
       leur lanceur ; le panneau le dit. BSG et LA Canyons relèvent peut-être

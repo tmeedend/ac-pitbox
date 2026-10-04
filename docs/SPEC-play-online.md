@@ -319,7 +319,9 @@ et l'archive glissée ensuite sur Pit Box fait relire le serveur. Mesuré le
 2026-10-03 : 151 serveurs sur 254 interrogés publient des liens, souvent
 directs (`.rar` d'une communauté, publications GitHub, Google Drive).
 Le contenu servi par un serveur protégé par mot de passe n'est pas proposé :
-il exige un hachage du mot de passe que Pit Box ne calcule pas.
+il exige un hachage du mot de passe que Pit Box ne calcule pas encore — la
+recette est connue depuis (`online-join-research.md`, « Empreinte du mot de
+passe »).
 
 **Lot 8 — les tokens de filtre (livré).** La barre est celle de la
 bibliothèque, puces et popovers compris (`FilterBar`) : la recherche, `+ Filtre`
@@ -365,7 +367,8 @@ Sous le nom du circuit, le **nom lisible du layout** (« Main Layout », la
 répétition du nom du circuit ôtée), l'identifiant en infobulle. L'**état** reste
 discret quand tout est prêt ; la couleur va à `1 clic` (bleu), `À télécharger`
 (orange) et `Bloqué` (jaune). La **session** dit le temps restant, et
-« Ouvert » pour des essais de plus de 3 h. « Réservation » ne s'écrit qu'une
+« Ouvert » pour des essais de plus de 3 h — la frise du panneau aussi
+(`sessions.ts`, `isOpenPractice`). « Réservation » ne s'écrit qu'une
 fois. Les voitures tronquées gardent leur `+N` en vue, la liste entière au
 survol.
 
@@ -383,18 +386,21 @@ layout. Un layout tenu par un seul serveur garde sa ligne ordinaire, rangée
 comme un groupe d'un.
 
 **v2 — « Online : N serveurs » sur la fiche d'un circuit (livré).** La
-liste du lobby est **une seule**, en cache partagé entre la page Online et les
-fiches, gardée trois minutes (`online/lobby.svelte.ts`) — moins si la
-bibliothèque change entre-temps (un import, une activation, du contenu récupéré
-pour rejoindre) : les niveaux de préparation de la liste ne valent que pour la
-bibliothèque contre laquelle ils ont été jugés. Deux demandes en même temps n'en
-font qu'une, et « Actualiser » passe outre le cache. La fiche d'un
-circuit s'affiche sans l'attendre et, quand le décompte est là, ajoute en bas
-de sa colonne de droite une carte **Online** comme ses voisines (le nombre de
-joueurs en complément du bandeau, le nombre de serveurs et « Voir les
-serveurs ») — compté, sur les seuls
-serveurs qui ont au moins un joueur, tous layouts du circuit confondus, sans une
-requête aux serveurs eux-mêmes. Un clic ouvre Online sur `Tous` avec le jeton
+liste du lobby est **une seule**, sur deux étages. En bas, côté Rust
+(`online/lobby_cache.rs`), la liste brute, téléchargée une fois et gardée trois
+minutes pour tous ses lecteurs ; deux demandes en même temps n'en font qu'une,
+et « Actualiser » passe outre. Au-dessus, la page Online la juge contre la
+bibliothèque (`judge_list` : disque et verrou SQLite) et garde ce jugement
+(`online/lobby.svelte.ts`) trois minutes aussi — moins si la bibliothèque
+change entre-temps (un import, une activation, du contenu récupéré pour
+rejoindre) : elle juge alors à nouveau, **sans retélécharger**. La fiche d'un
+circuit, elle, ne juge rien : une commande légère (`online_track_activity`)
+compte sur la liste brute, sans disque ni base. Elle s'affiche sans
+l'attendre et, quand le décompte est là, ajoute en bas de sa colonne de droite
+une carte **Online** comme ses voisines (le nombre de joueurs en complément du
+bandeau, le nombre de serveurs et « Voir les serveurs ») — compté sur les
+seuls serveurs qui ont au moins un joueur, tous layouts du circuit confondus,
+sans une requête aux serveurs eux-mêmes. Un clic ouvre Online sur `Tous` avec le jeton
 Circuit posé sur ces layouts. Lobby injoignable ou personne en piste : rien ne
 s'affiche, pas d'erreur.
 
@@ -465,6 +471,25 @@ un ami l'ouvre avec CM depuis un navigateur ou une messagerie, ou le colle
 dans Pit Box. Sans mot de passe : celui de CM est chiffré et ne s'écrit pas
 ici ; il se donne à part.
 
-**Restent** : les niveaux de préparation de la liste elle-même, qui ne
-voient ni les liens ni les versions des serveurs (il faudrait `/api/details`
-serveur par serveur).
+**Restent** (2026-10-04) — la spec, v1 et v2, est faite ; ce qui suit est soit
+à voir à l'écran, soit une amélioration possible, soit une limite connue :
+
+- *À voir à l'écran* : la notification unique de « Préparer et rejoindre »
+  (décompte et barre du tout) ; une couche écartée puis rendue en jeu (la
+  couche « spa » de la machine de dev est le cas tout trouvé) ; un serveur en
+  réservation ; le niveau « Bloqué » ; une notification d'ami ou de place
+  libérée, dans l'app et dans Windows ; le bandeau de la liste de secours
+  (il faut que le lobby tombe).
+- *Améliorations possibles* : proposer le contenu servi par un serveur
+  verrouillé (`sha1("tgys3cqpcwpbssphb0j46tak8ykldaub" + mot de passe)` en
+  base64 coupé, `EncryptedContentKey` de CM) ; les niveaux de préparation de la
+  liste elle-même, qui ne voient ni les liens ni les versions des serveurs (il
+  faudrait `/api/details` serveur par serveur — lourd, seulement si ça gêne).
+- *Limites connues* : des couches écartées restent écartées si CM ne lance
+  finalement pas le jeu (un délai de garde à chiffrer) ; le clic sur une
+  notification Windows n'ouvre pas le serveur (c'est celle de la pile qui y
+  mène) ; une surveillance « Me prévenir » ne survit pas à un redémarrage ;
+  BSG et LA Canyons refusaient aussi l'authentification — peut-être une
+  communauté à lanceur comme No Hesi, à vérifier dans
+  `Documents/Assetto Corsa/logs/log.txt` (une ligne `ACP_…`) le jour où l'un
+  d'eux se retrouve.
