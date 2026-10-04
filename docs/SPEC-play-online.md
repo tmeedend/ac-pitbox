@@ -413,7 +413,9 @@ une machine qui contacte des milliers d'adresses :
   « en ligne ». Un ami sur un serveur inconnu n'est pas vu : limite assumée ;
 - **place libre** : seulement sur le serveur où l'utilisateur a cliqué « Me
   prévenir » — proposé dans le panneau quand le serveur est plein ou que la
-  voiture choisie n'a plus de place —, toutes les 30 s, par le seul `/JSON`
+  voiture choisie n'a plus de place : une voiture complète reste grisée mais
+  se choisit, pour attendre l'une de ses places, et le bouton dit alors
+  « Voiture complète » —, toutes les 30 s, par le seul `/JSON`
   (`online_slot_counts`). La place attendue est celle de la voiture choisie
   quand c'est elle qui manque de place, sinon n'importe laquelle. La
   surveillance s'arrête quand la place se libère, au bout d'une heure, ou au

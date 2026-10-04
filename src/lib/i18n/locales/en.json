@@ -1507,6 +1507,7 @@
     "blockedCspMissing": "CSP {build} or newer required",
     "blockedCspOld": "CSP {build} or newer required (installed: {installed})",
     "carMissing": "Car missing",
+    "carFull": "Car full",
     "carsMissing": "{count} of the server's cars are missing",
     "otherCars": "Also needed",
     "prepareJoin": "Prepare & join",

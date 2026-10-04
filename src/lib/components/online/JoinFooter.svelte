@@ -130,6 +130,8 @@
   const blocker = $derived.by(() => {
     if (!live.booking && live.clients >= live.max_clients) return t("online.serverFull");
     if (!live.booking && !chosen) return t("online.pickCar");
+    // Picked to wait for one of its slots (« Notify me »), not to join now.
+    if (!live.booking && chosen && chosen.free === 0) return t("online.carFull");
     if (readiness.level === "blocked") return readiness.blockers[0] ? blockerText(readiness.blockers[0]) : levelText("blocked");
     if (readiness.level === "download") {
       if ((live.track_level ?? "download") === "download") return t("online.trackMissing");

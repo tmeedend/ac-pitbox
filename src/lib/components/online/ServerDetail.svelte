@@ -222,7 +222,7 @@
                 type="button"
                 class="car"
                 class:on={car === c.id}
-                disabled={c.free === 0}
+                class:full={c.free === 0}
                 aria-pressed={car === c.id}
                 onclick={() => (car = c.id)}
               >
@@ -466,15 +466,20 @@
     color: var(--txt2);
     text-align: left;
   }
-  .car:hover:not(:disabled) {
+  .car:hover {
     border-color: var(--rosso-border);
   }
   .car.on {
     border-color: var(--rosso);
     background: var(--rosso-dim);
   }
-  .car:disabled {
+  /* A car without a free slot stays dim, but can be picked: to wait for a
+     slot of it (« Notify me »). The join itself says it is full. */
+  .car.full {
     opacity: 0.45;
+  }
+  .car.full.on {
+    opacity: 0.8;
   }
   .photo {
     grid-area: photo;
