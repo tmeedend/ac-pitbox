@@ -2,9 +2,9 @@
   // "Online: 4 servers · 37 players" on a track's sheet (SPEC-play-online.md,
   // v2: the library leading to the Online page, case 5 — the tracks one
   // drives). Counted by the backend on the raw lobby list it shares with the
-  // Online page (`online/lobby_cache.rs`): no library, no disk, no server. The sheet does not wait for
-  // it: the line appears when the list is there, and a click opens the Online
-  // page on this track.
+  // Online page (`online/lobby_cache.rs`): no library, no disk, no server.
+  // The sheet does not wait for it: the card appears when the count is
+  // there, and its button opens the Online page on this track.
   //
   // Nothing at all when the lobby cannot be reached or nobody drives here:
   // an error, or a zero, would be noise on a sheet about something else.
@@ -29,13 +29,23 @@
   });
 </script>
 
+<!-- A card of the column like its neighbours (reported: as a bare line
+     between two cards it read as dropped there by chance), and the last of
+     them: it speaks of the track elsewhere, not of the track here. -->
 {#if activity && activity.servers > 0}
   {@const layouts = activity.layouts}
-  <button class="online" type="button" onclick={() => openOnline({ kind: "track", layouts })}>
-    <span class="lbl-key">{t("nav.online")}</span>
-    <span class="mono">{t("online.trackActivity", { servers: activity.servers, players: activity.players })}</span>
-    <span class="go" aria-hidden="true">→</span>
-  </button>
+  <section class="blk">
+    <header class="blk-h">
+      <span class="blk-t">{t("nav.online")}</span>
+      <span class="blk-n">{t("online.trackActivityPlayers", { count: activity.players })}</span>
+    </header>
+    <div class="blk-b online">
+      <span>{t("online.trackActivityServers", { count: activity.servers })}</span>
+      <button class="btn" type="button" onclick={() => openOnline({ kind: "track", layouts })}>
+        {t("online.trackActivityOpen")}
+      </button>
+    </div>
+  </section>
 {/if}
 
 <style>
@@ -43,20 +53,10 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    width: 100%;
-    padding: 8px 10px;
-    background: var(--panel2);
-    border: 1px solid var(--line);
-    color: var(--txt2);
     font-size: 12px;
-    text-align: left;
+    color: var(--txt2);
   }
-  .online:hover {
-    background: var(--raised);
-    color: var(--txt);
-  }
-  .go {
+  .online .btn {
     margin-left: auto;
-    color: var(--muted);
   }
 </style>

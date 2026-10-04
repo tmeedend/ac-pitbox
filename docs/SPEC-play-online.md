@@ -113,7 +113,7 @@ PitBox est le seul outil qui sait qu'une voiture ou un circuit n'est pas « tel 
 | Cas | Ce que fait PitBox | Ce que voit l'utilisateur |
 | --- | --- | --- |
 | **Échec certain** : une couche active remplace `data.acd` (ou `data/`) de la voiture choisie, ou un `surfaces.ini` du circuit | Désactive la couche pour la session, la réactive à la fermeture du jeu | Une ligne au-dessus du bouton : « La couche *X* sera désactivée pendant la session, puis réactivée ». Le bouton devient `PREPARE & JOIN`. Une case permet de refuser |
-| **Échec possible** : une couche active touche autre chose sur la voiture ou le circuit (son, textures, extension CSP) | Rien par défaut | Encadré jaune « Couche active sur cette voiture » avec son nom, et l'option « Rejoindre sans les couches » |
+| **Échec possible** : une couche active touche autre chose sur la voiture ou le circuit (textures, extension CSP — le son seul, `sfx/`, passe) | Rien par défaut | Encadré jaune « Couche active sur cette voiture » avec son nom, et l'option « Rejoindre sans les couches » |
 | **Aucune couche** | Rien | Rien |
 
 **La réactivation ne dépend pas d'une fermeture propre.** Le choix « désactivée pour la session » est écrit sur disque avant le lancement. La fermeture du jeu (signal de fin de session déjà utilisé par les replays) réactive la couche et le dit dans une notification. Si PitBox a été fermé entre-temps, la réactivation se fait au démarrage suivant, comme le filet de `gamebackup`.
@@ -383,8 +383,10 @@ bibliothèque change entre-temps (un import, une activation, du contenu récupé
 pour rejoindre) : les niveaux de préparation de la liste ne valent que pour la
 bibliothèque contre laquelle ils ont été jugés. Deux demandes en même temps n'en
 font qu'une, et « Actualiser » passe outre le cache. La fiche d'un
-circuit s'affiche sans l'attendre et, quand la liste est là, montre sous ses
-données `Online · N serveurs · M joueurs` — compté en local, sur les seuls
+circuit s'affiche sans l'attendre et, quand le décompte est là, ajoute en bas
+de sa colonne de droite une carte **Online** comme ses voisines (le nombre de
+joueurs en complément du bandeau, le nombre de serveurs et « Voir les
+serveurs ») — compté, sur les seuls
 serveurs qui ont au moins un joueur, tous layouts du circuit confondus, sans une
 requête aux serveurs eux-mêmes. Un clic ouvre Online sur `Tous` avec le jeton
 Circuit posé sur ces layouts. Lobby injoignable ou personne en piste : rien ne

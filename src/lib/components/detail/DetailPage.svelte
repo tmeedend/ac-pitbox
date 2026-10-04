@@ -1159,7 +1159,6 @@
             layout={d.track?.layouts[previewLayout]}
             addedLayouts={layoutOrigins.length}
           />
-          <TrackOnline trackId={d.id_interne} layouts={d.track?.layouts.map((l) => l.id) ?? []} />
           <TrackSkinsBlock
             skins={trackSkins}
             active={activeTrackSkins}
@@ -1196,6 +1195,7 @@
             cellTitle={t("detail.chooseLayoutTooltip")}
             note={trackLength(d.track?.layouts[previewLayout]?.length) ?? undefined}
           />
+          <TrackOnline trackId={d.id_interne} layouts={d.track?.layouts.map((l) => l.id) ?? []} />
         {/if}
       </div>
     </div>
