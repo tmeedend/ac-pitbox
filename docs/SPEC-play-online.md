@@ -185,7 +185,7 @@ La v1 se construit autour des onglets Favoris / Récents / Amis, du statut de pr
 
 - [ ] **Voitures nécessaires** : faut-il avoir toutes les voitures du serveur, ou seulement la sienne plus celles des joueurs connectés ? Ça change le calcul du niveau de préparation. À vérifier en jeu.
 - [x] **Voiture dans le lien CM** : oui pour la voiture (`race/online&car=`, vérifié en jeu). Non pour la livrée : le serveur impose celle du slot libre, quelle que soit celle demandée. Voir `online-join-research.md`.
-- [ ] **Mods son** : échec reproductible ou aléatoire ? Décide s'ils passent en « échec certain ».
+- [x] **Mods son** : un son seul (`sfx/`) passe, les serveurs ne le contrôlent pas (constaté en jeu, 2026-10-04). Une couche qui ne touche que `sfx/` n'est donc ni écartée ni signalée ; les mods son de Pit Box, sous-éléments d'une voiture qui ne posent que là, ne l'ont jamais été.
 - [x] **SPEC §7.2** : tableau des trois territoires et ordre du rail mis à jour (`Session`, `Online`, filet, Apps…).
 - [x] **Rejoindre sans une couche** : décidé, voir « Couches et versions ».
 - [x] **Amis** : comme CM, par nom affiché.

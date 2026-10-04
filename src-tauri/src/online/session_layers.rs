@@ -3,8 +3,10 @@
 //!
 //! A server checks a car's `data.acd` (or `data/`) and a track's
 //! `surfaces.ini` against its own: a layer that replaces one of them gets the
-//! player kicked — a certain failure. A layer that touches anything else (sound,
-//! textures, a CSP extension) may or may not pass — a possible one. Pit Box
+//! player kicked — a certain failure. A layer that touches anything else
+//! (textures, a CSP extension) may or may not pass — a possible one. Sound
+//! alone (`sfx/`) passes: servers do not check it (the user's experience,
+//! 2026-10-04), and Pit Box's own sound mods only ever lay files there. Pit Box
 //! deactivates the layers the user lets it for the session, and gives them back
 //! when the game closes.
 //!
@@ -56,6 +58,10 @@ pub struct LayerConflict {
 /// the mod's folder, `/`-separated (`layers::list_files`).
 pub fn classify(kind: ModKind, rel_paths: &[String]) -> Option<Risk> {
     if rel_paths.is_empty() {
+        return None;
+    }
+    let sound = |path: &str| path.to_ascii_lowercase().starts_with("sfx/");
+    if kind == ModKind::Car && rel_paths.iter().all(|p| sound(p)) {
         return None;
     }
     let checked = |path: &str| {
@@ -212,9 +218,14 @@ mod tests {
             Some(Risk::Certain)
         );
         assert_eq!(
-            classify(ModKind::Car, &paths(&["sfx/car.bank"])),
+            classify(ModKind::Car, &paths(&["sfx/car.bank", "SFX/GUIDs.txt"])),
+            None,
+            "sound alone passes: servers do not check it"
+        );
+        assert_eq!(
+            classify(ModKind::Car, &paths(&["sfx/car.bank", "skins/x/a.dds"])),
             Some(Risk::Possible),
-            "a sound only may pass"
+            "sound with something else may not"
         );
     }
 
