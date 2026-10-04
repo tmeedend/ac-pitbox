@@ -38,6 +38,23 @@ describe("online readiness (SPEC-play-online, Contenu manquant)", () => {
     expect(worse("blocked", "download")).toBe("blocked");
   });
 
+  // Every car is needed: the game loads the whole entry list (2026-10-04).
+  it("joins at the worst of the track and every car of the server", () => {
+    const all = [car(), car({ id: "traffic", total: 0, free: 0, level: "download" })];
+    const state = joinState(server(), car(), all);
+    expect(state.level, "a traffic car to download keeps the player out").toBe("download");
+    expect(state.missingCars).toEqual(["traffic"]);
+    const lib = joinState(server(), car(), [car(), car({ id: "other", level: "oneClick" })]);
+    expect(lib.level).toBe("oneClick");
+    expect(lib.toActivate, "another car only in the library is laid too").toEqual(["car"]);
+  });
+
+  it("names every DLC a car needs, once", () => {
+    const red = { level: "blocked" as const, dlc: "Red Pack" };
+    const state = joinState(server(), car(), [car(), car({ id: "a", ...red }), car({ id: "b", ...red })]);
+    expect(state.blockers).toEqual([{ kind: "dlc", name: "Red Pack" }]);
+  });
+
   it("joins at the worse of the track and the chosen car", () => {
     expect(joinState(server(), car()).level).toBe("ready");
     const state = joinState(server({ track_level: "oneClick" }), car({ level: "oneClick" }));

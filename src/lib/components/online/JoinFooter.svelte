@@ -54,9 +54,12 @@
   let browserFor = $state<string | null>(null);
 
   const live = $derived(detail?.summary ?? server);
-  /** Joining with the chosen car — on a booking server the car is picked in
-   * CM, so the server's own level (its best car) stands in. */
-  const readiness = $derived(joinState(live, live.booking ? null : chosen));
+  /** Every car the server runs, the ones nobody takes (AI traffic) included:
+   * the game loads them all, so all of them are needed. */
+  const allCars = $derived(detail ? [...detail.cars, ...detail.other_cars] : []);
+  /** Joining with the chosen car and every other one — on a booking server
+   * the car is picked in CM, but the others are needed all the same. */
+  const readiness = $derived(joinState(live, live.booking ? null : chosen, allCars));
 
   /** The layers of the track and of the chosen car (SPEC-play-online.md,
    * "Couches et versions"), and what the user chose to do with them. */
@@ -83,8 +86,10 @@
     if (detail?.track_fetch.needed) {
       items.push({ kind: "Track", id: live.track.id, name: trackTitle(looks, live.track), fetch: detail.track_fetch });
     }
-    if (!live.booking && chosen?.fetch.needed) {
-      items.push({ kind: "Car", id: chosen.id, name: carName(looks, chosen.id), fetch: chosen.fetch });
+    // The chosen car first, then every other one the server needs.
+    const cars = [...(chosen && !live.booking ? [chosen] : []), ...allCars.filter((c) => c.id !== chosen?.id)];
+    for (const c of cars) {
+      if (c.fetch.needed) items.push({ kind: "Car", id: c.id, name: carName(looks, c.id), fetch: c.fetch });
     }
     return items;
   });
@@ -105,7 +110,9 @@
     if (!live.booking && !chosen) return t("online.pickCar");
     if (readiness.level === "blocked") return readiness.blockers[0] ? blockerText(readiness.blockers[0]) : levelText("blocked");
     if (readiness.level === "download") {
-      return (live.track_level ?? "download") === "download" ? t("online.trackMissing") : t("online.carMissing");
+      if ((live.track_level ?? "download") === "download") return t("online.trackMissing");
+      const missing = readiness.missingCars;
+      return missing.length > 1 ? t("online.carsMissing", { count: missing.length }) : t("online.carMissing");
     }
     return null;
   });
@@ -131,9 +138,10 @@
       // question has brought nothing in yet. Only that: an update just
       // fetched may still read as older, authors' version labels rarely
       // follow the server's, and asking again would download it forever.
+      const freshCars = detail ? [...detail.cars, ...detail.other_cars] : [];
       const missing =
         (fetched.includes(live.track.id.toLowerCase()) && !live.track_available) ||
-        (!!chosen && fetched.includes(chosen.id.toLowerCase()) && !chosen.available);
+        freshCars.some((c) => fetched.includes(c.id.toLowerCase()) && !c.available);
       if (missing) {
         joinError = t("online.prepareIncomplete");
         return false;
@@ -159,7 +167,8 @@
         return;
       }
       if (!(await prepare())) return;
-      await joinServer(live, carId, password || null, setAside);
+      const others = allCars.map((c) => c.id).filter((id) => id !== carId);
+      await joinServer(live, carId, password || null, setAside, others);
       joined = true;
       recordRecentJoin(server, carId);
     } catch (e) {

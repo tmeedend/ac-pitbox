@@ -53,7 +53,12 @@ pub struct Driver {
 #[derive(Debug, Clone, Serialize)]
 pub struct ServerDetail {
     pub summary: ServerSummary,
+    /// The cars one can take: those with a player slot.
     pub cars: Vec<CarSlots>,
+    /// The cars the server needs that no player takes — an AssettoServer's
+    /// AI traffic. Not a choice, but needed all the same: the game loads the
+    /// whole list, and joining fetches and lays them too.
+    pub other_cars: Vec<CarSlots>,
     pub drivers: Vec<Driver>,
     /// What the server declares it can do (`STEAM_TICKET`, `WEATHERFX_V1`…),
     /// empty on a vanilla server. Written into `race.ini` at join time.
@@ -105,6 +110,12 @@ impl ServerDetail {
             if car.available {
                 car.layers = super::session_layers::conflicts(conn, cfg, ModKind::Car, &car.id);
             }
+        }
+        // Their layers are not ours to set aside: no one drives them.
+        for car in self.other_cars.iter_mut() {
+            complete_fetch(conn, cfg, &car.id, &mut car.fetch);
+            car.level = settle(car.level, &mut car.fetch);
+            car.available = car.level <= Level::OneClick;
         }
     }
 }
@@ -191,6 +202,18 @@ fn car_slots(cars: &[String], entries: &EntryList, installed: &Installed) -> Vec
         })
         .filter(|car| car.total > 0 || entries.slots.is_empty())
         .collect()
+}
+
+/// The cars of `/INFO` that `offered` left out — no player slot, an
+/// AssettoServer's AI traffic — judged like the others: the game needs them
+/// all the same.
+fn other_cars(all: &[String], offered: &[CarSlots], installed: &Installed) -> Vec<CarSlots> {
+    let rest: Vec<String> = all
+        .iter()
+        .filter(|id| !offered.iter().any(|c| c.id.eq_ignore_ascii_case(id)))
+        .cloned()
+        .collect();
+    car_slots(&rest, &EntryList::default(), installed)
 }
 
 /// The photo of each car in the skin the server imposes, read in the game's
@@ -291,6 +314,7 @@ pub fn fetch_detail(
     installed.judge(&mut summary);
     let entries = fetch_entry_list(ip, http_port, steam_id)?;
     let mut cars = car_slots(&summary.cars, &entries, installed);
+    let mut other_cars = other_cars(&summary.cars, &cars, installed);
     if let Some(cars_dir) = cars_dir {
         fill_previews(&mut cars, cars_dir);
     }
@@ -304,7 +328,7 @@ pub fn fetch_detail(
     // when something could need it: most servers opened are ready.
     let server_content = parse_content(&details);
     let needs_sources = summary.track_level != Level::Ready
-        || cars.iter().any(|c| c.level != Level::Ready)
+        || cars.iter().chain(&other_cars).any(|c| c.level != Level::Ready)
         || !server_content.cars.is_empty()
         || server_content.track.is_some();
     let registry = if needs_sources {
@@ -313,7 +337,7 @@ pub fn fetch_detail(
         Default::default()
     };
     let base = format!("http://{ip}:{http_port}");
-    for car in cars.iter_mut() {
+    for car in cars.iter_mut().chain(other_cars.iter_mut()) {
         let path = format!("/content/car/{}", car.id);
         car.fetch = fetch_for(
             server_content.cars.get(&car.id.to_lowercase()),
@@ -334,6 +358,7 @@ pub fn fetch_detail(
     );
     Ok(ServerDetail {
         cars,
+        other_cars,
         drivers: drivers(&entries),
         features: entries.features,
         extended,
@@ -435,6 +460,20 @@ mod tests {
         );
         let unknown = car_slots(&cars, &EntryList::default(), &Installed::default());
         assert_eq!(unknown.len(), 2, "an empty entry list hides nothing");
+    }
+
+    /// Rule: a car without a slot is still needed — not offered, but kept
+    /// apart to be fetched and laid in the game like the others.
+    #[test]
+    fn a_car_without_slots_is_still_needed() {
+        let cars = vec!["traffic_jp_toyota_camry".to_string(), "ks_mazda_miata".to_string()];
+        let offered = car_slots(&cars, &entry_list(), &Installed::default());
+        let others = other_cars(&cars, &offered, &Installed::default());
+        assert_eq!(
+            others.iter().map(|c| c.id.as_str()).collect::<Vec<_>>(),
+            vec!["traffic_jp_toyota_camry"],
+            "the traffic car is needed"
+        );
     }
 
     /// Rule: slots outside the entry list are nobody's place (CM filters them).

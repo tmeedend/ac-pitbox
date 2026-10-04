@@ -256,6 +256,23 @@
         </ul>
       {/if}
 
+      <!-- The cars no player takes (an AssettoServer's AI traffic): not a
+           choice, but needed all the same — what « N cars missing » counts
+           when the cars above are all here. -->
+      {#if detail.other_cars.length}
+        <h4 class="lbl">{t("online.otherCars")}</h4>
+        <ul class="others">
+          {#each detail.other_cars as c (c.id)}
+            <li>
+              <span class="other-name" title={c.id}>{carName(looks, c.id)}</span>
+              {#if c.level !== "ready"}
+                <span class="tag {c.level}">{c.level === "blocked" && c.dlc ? c.dlc : levelText(c.level)}</span>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      {/if}
+
       <h4 class="lbl">{t("online.drivers")}</h4>
       {#if detail.drivers.length}
         <ul class="drivers">
@@ -515,6 +532,23 @@
      "Versions à côté du choix"). */
   .version {
     color: var(--orange);
+  }
+  .others li {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--txt2);
+    padding: 3px 0;
+  }
+  .other-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .others .tag {
+    grid-area: auto;
+    flex: none;
   }
   .drivers li {
     display: flex;

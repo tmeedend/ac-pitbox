@@ -171,17 +171,26 @@ impl Installed {
         };
 
         let car_levels: Vec<(Level, Option<String>)> = server.cars.iter().map(|c| self.car_level(c)).collect();
-        // The lobby does not say which car has a free slot: the server is as
-        // ready as its best car. Joined in, the panel asks the server.
-        let best_car = car_levels.iter().min_by_key(|(level, _)| *level).cloned();
-        let car_level = match best_car {
-            Some((Level::Blocked, dlc)) => {
-                blockers.extend(dlc.map(|name| Blocker::Dlc { name }));
-                Level::Blocked
+        // Every car of the server is needed, not only the one driven: the
+        // game loads the whole entry list, and one car missing keeps the
+        // player out (the user's experience, 2026-10-04 — CM's own
+        // "missing cars" check reads every car too). So the server is as
+        // ready as its worst car — its AI traffic included.
+        let car_level = car_levels
+            .iter()
+            .map(|(level, _)| *level)
+            .max()
+            .unwrap_or(Level::Download);
+        for (level, dlc) in &car_levels {
+            if let (Level::Blocked, Some(name)) = (level, dlc) {
+                if !blockers
+                    .iter()
+                    .any(|b| matches!(b, Blocker::Dlc { name: n } if n == name))
+                {
+                    blockers.push(Blocker::Dlc { name: name.clone() });
+                }
             }
-            Some((level, _)) => level,
-            None => Level::Download,
-        };
+        }
 
         if let Some(required) = server.track.csp_min_build {
             if self.csp_build.is_none_or(|installed| installed < required) {
@@ -275,7 +284,7 @@ mod tests {
 
     /// Rule (SPEC-play-online, "Contenu manquant"): in the game is ready, in
     /// the library one click, in the showcase to download — and the server is
-    /// as ready as the worse of its track and its best car.
+    /// as ready as the worst of its track and every one of its cars.
     #[test]
     fn levels_follow_where_the_content_is() {
         let i = installed();
@@ -291,6 +300,15 @@ mod tests {
         i.judge(&mut showcase);
         assert_eq!(showcase.level, Level::Download, "a showcase car has no files");
         assert_eq!(showcase.cars_available, 0);
+
+        let mut mixed = server("monza", &["ks_mazda_miata", "rss_gtm_lanzo_v8", "old_mod"]);
+        i.judge(&mut mixed);
+        assert_eq!(
+            mixed.level,
+            Level::Download,
+            "every car is needed: one to download keeps the server out, however ready the others"
+        );
+        assert_eq!(mixed.cars_available, 2);
     }
 
     /// Rule: missing Kunos DLC content blocks, and names the DLC.

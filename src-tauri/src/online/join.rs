@@ -33,6 +33,11 @@ pub struct JoinRequest {
     pub track_kunos_id: String,
     pub password: Option<String>,
     pub booking: bool,
+    /// The server's other cars, laid in the game with the one driven: the
+    /// game loads them all. On a booking server, every car (the one driven is
+    /// picked in CM).
+    #[serde(default)]
+    pub other_cars: Vec<String>,
     /// Layers of this car or track to deactivate for the session
     /// (`session_layers.rs`), as the panel let the user choose.
     #[serde(default)]
@@ -129,6 +134,11 @@ pub fn join(
         crate::skeleton::guard_mod(conn, &request.car_id)?;
         crate::launch::ensure_available(conn, cfg, ModKind::Car, &request.car_id)?;
     }
+    // Every other car of the server too: one missing keeps the player out.
+    for car in &request.other_cars {
+        crate::skeleton::guard_mod(conn, car)?;
+        crate::launch::ensure_available(conn, cfg, ModKind::Car, car)?;
+    }
     crate::skeleton::guard_mod(conn, &request.track_id)?;
     crate::launch::ensure_available(conn, cfg, ModKind::Track, &request.track_id)?;
 
@@ -176,6 +186,7 @@ mod tests {
             track_kunos_id: "ks_nordschleife-touristenfahrten".into(),
             password: None,
             booking: false,
+            other_cars: Vec::new(),
             set_aside: Vec::new(),
         }
     }

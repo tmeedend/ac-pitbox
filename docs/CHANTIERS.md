@@ -75,12 +75,10 @@ de reprendre. En cas d'écart, la spec fait foi.
         `track` porte le build CSP minimal (`csp/3465/../E/../id-layout`).
       - Le skin est imposé par le serveur : ne pas en proposer un choix.
       - Un AssettoServer liste son **trafic IA** parmi ses voitures
-        (`traffic_jp_…`), sans slot joueur. Le panneau les écarte (il lit
-        `/JSON`) ; la liste ne le peut pas — le lobby ne dit pas qui a des
-        slots — et juge donc un serveur sur sa meilleure voiture, trafic
-        compris : il peut s'afficher « Prêt » sans voiture prenable. Les
-        niveaux du lot 5 n'y changent rien ; le corriger demanderait `/JSON`
-        sur chaque serveur affiché, comme la recherche d'amis.
+        (`traffic_jp_…`), sans slot joueur. Ces voitures sont **nécessaires**
+        comme les autres (toutes le sont, constaté en jeu le 2026-10-04) : la
+        liste les compte dans son niveau, le panneau les montre sous « Aussi
+        nécessaires » sans les proposer au choix, et Rejoindre les pose.
       - Les couches écartées reviennent sur la **fin** du jeu (transition du
         sondage) ou au démarrage suivant. Si CM ne lance finalement pas le jeu
         (erreur de son côté, fenêtre refermée), aucune fin n'arrive : elles

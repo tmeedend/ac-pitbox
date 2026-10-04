@@ -102,7 +102,11 @@ export interface Driver {
 
 export interface ServerDetail {
   summary: ServerSummary;
+  /** The cars one can take: those with a player slot. */
   cars: CarSlots[];
+  /** The cars needed that no player takes (an AssettoServer's AI traffic):
+   * fetched and laid in the game with the others. */
+  other_cars: CarSlots[];
   drivers: Driver[];
   features: string[];
   /** On servers that publish `/api/details` only. */
@@ -213,12 +217,14 @@ export function serverDetail(ip: string, httpPort: number): Promise<ServerDetail
 }
 
 /** `setAside`: layers of this car or track to deactivate for the session,
- * given back when the game closes. */
+ * given back when the game closes. `otherCars`: the server's other cars, laid
+ * in the game too — the game loads them all. */
 export function joinServer(
   server: ServerSummary,
   carId: string,
   password: string | null,
   setAside: string[] = [],
+  otherCars: string[] = [],
 ): Promise<void> {
   return invoke<void>("online_join", {
     request: {
@@ -231,6 +237,7 @@ export function joinServer(
       password,
       booking: server.booking,
       set_aside: setAside,
+      other_cars: otherCars,
     },
   });
 }
