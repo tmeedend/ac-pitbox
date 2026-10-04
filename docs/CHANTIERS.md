@@ -916,26 +916,22 @@ de reprendre. En cas d'écart, la spec fait foi.
       par se séparer à nouveau. L'avertissement est écrit dans
       `docs/README.md` et au §14 de `SPEC.md` en attendant.
 
-- [ ] **Refactorings repérés, reportés (2026-09-25).** Relevés en découpant
-      `AppShell` puis `DetailPage`, classés par bénéfice sur risque ; aucun ne
-      change le comportement, aucun ne touche un format persisté.
-      1. **`DetailPage.svelte` : les actions du menu** (supprimer, réinstaller,
-         exporter, versions, activer/désactiver) vers un module `$lib/detail/`.
-         Environ 300 des 1 400 lignes. Une demi-session ; risque moyen — ce
-         sont des gestes qui écrivent sur disque, même si la logique ne fait
-         que se déplacer.
-      2. **`CarPreview3D.svelte` : 1 600 lignes de script** pour 40 de
-         balisage. La scène three.js (chargement, éclairage, caméra, sol) se
-         découperait en modules TS. Une session ; risque moyen, tout est
-         visuel — à faire vérifier à l'écran sur plusieurs voitures.
-      3. **`importer.rs` : 3 200 lignes de code** (plus 2 800 de tests), le
-         plus gros fichier du projet — mais c'est là que se décide le
-         classement à l'import, le terrain de la règle d'or n°3. D'abord des
-         tests qui figent le comportement, puis un découpage en plusieurs
-         passes. Plusieurs sessions ; risque élevé. À ne prendre qu'en même
-         temps qu'un vrai chantier d'import. **Revue du 2026-09-29 :** ça
-         s'aggrave, `process_found` fait à elle seule 618 lignes.
-      4. **Le curseur de régime existe en deux exemplaires** :
+- [ ] **Refactorings repérés, reportés (2026-09-25, revus le 2026-10-04).**
+      Classés par bénéfice sur risque ; aucun ne change le comportement,
+      aucun ne touche un format persisté. Les actions de la fiche
+      (`$lib/detail/actions.svelte.ts`) et la scène de l'aperçu 3D
+      (`$lib/preview3d/scene.ts` et voisins) sont sorties le 2026-10-04.
+      1. **`importer.rs` : la suite du découpage.** Première passe faite le
+         2026-10-04 : `process_found` (618 lignes) est devenue
+         `importer/filing.rs`, une étape par question, sous deux tests de
+         caractérisation ajoutés d'abord. Restent les plus longues :
+         `sweep_leftovers` (353 lignes) et `import_leftover` (225) — **le
+         cœur de la règle d'or n°3**, ce qui est à côté du dossier du mod et
+         jamais dedans —, puis `exec_one`, `file_extracted` et
+         `import_one_folder` (140 à 160 chacune). Même méthode : tests
+         d'abord, puis un module par étape. Une session par fonction ;
+         risque élevé pour les deux premières.
+      2. **Le curseur de régime existe en deux exemplaires** :
          `detail/EngineSoundBlock.svelte` et `inventory/SoundDetail.svelte`
          (même `revControls`, même `Slider`, même bouton de démonstration).
          Quelques minutes, sans risque ; à mettre en commun au plus tard à la
