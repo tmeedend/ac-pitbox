@@ -517,7 +517,7 @@
     color: var(--muted);
   }
   /* Same colours as the list's state column: blue one click, orange to
-     fetch, muted blocked. */
+     fetch, yellow blocked. */
   .tag {
     grid-area: tag;
     font-size: 10px;
@@ -529,6 +529,9 @@
   }
   .tag.download {
     color: var(--orange);
+  }
+  .tag.blocked {
+    color: var(--yellow);
   }
   /* A version gap with the server goes orange (SPEC-play-online.md,
      "Versions à côté du choix"). */
