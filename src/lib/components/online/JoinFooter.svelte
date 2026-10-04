@@ -151,7 +151,7 @@
       const out = await fetchNeeded(needed, live.name);
       if (out.status === "browser") {
         browserFor = out.name;
-        openUrl(out.url).catch((e) => console.error("openUrl", e));
+        openPage(out.url);
         return false;
       }
       if (out.status === "busy") joinError = t("online.prepareBusy");

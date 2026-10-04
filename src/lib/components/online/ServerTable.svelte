@@ -14,7 +14,7 @@
   import { StorageKey } from "$lib/storage";
   import { getUiPref, setUiPref } from "$lib/uiPrefs.svelte";
   import DataTable from "$lib/components/ui/DataTable.svelte";
-  import { blockerText, durationText, levelText } from "$lib/online/labels";
+  import { blockerText, durationText } from "$lib/online/labels";
   import { fromSeconds, isOpenPractice } from "$lib/online/sessions";
   import { pingOf, requestPings } from "$lib/online/pings.svelte";
   import { carName, carsOwnedFirst, layoutLook, layoutName, trackName, type Looks } from "$lib/online/looks";
@@ -25,6 +25,7 @@
   import { previewSrc } from "$lib/library/library";
   import type { ColumnsPrefs } from "$lib/tableColumns";
   import ServerCountry from "./ServerCountry.svelte";
+  import LevelTag from "./LevelTag.svelte";
 
   interface Props {
     /** Filtered, in the default order (friends, joinable, players). */
@@ -207,9 +208,11 @@
         <!-- Quiet when all is ready: colour is for what needs something. A
              snapshot saved before levels existed has none — no badge rather
              than a guess. -->
-        <span class="state {s.level ?? ''}" title={(s.blockers ?? []).map(blockerText).join("\n") || undefined}>
-          {s.level ? levelText(s.level) : ""}
-        </span>
+        {#if s.level}
+          <span class="state">
+            <LevelTag level={s.level} title={(s.blockers ?? []).map(blockerText).join("\n") || undefined} />
+          </span>
+        {/if}
       {:else if col.key === "address"}
         {s.ip}:{s.http_port}
       {:else if col.key === "password"}
@@ -363,21 +366,5 @@
     font-size: 10px;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: var(--muted);
-  }
-  /* Ready is the normal case and stays quiet; colour is for what asks
-     something: blue one click, orange something to fetch, yellow blocked —
-     red is kept for what the session retains (SPEC §7.2ter). */
-  .state.ready {
-    color: var(--faint);
-  }
-  .state.oneClick {
-    color: var(--blue);
-  }
-  .state.download {
-    color: var(--orange);
-  }
-  .state.blocked {
-    color: var(--yellow);
   }
 </style>

@@ -21,7 +21,7 @@
   import JoinFooter from "./JoinFooter.svelte";
   import NotifyMe from "./NotifyMe.svelte";
   import ServerCountry from "./ServerCountry.svelte";
-  import { levelText } from "$lib/online/labels";
+  import LevelTag from "./LevelTag.svelte";
   import { onlineStore, toggleFavouriteServer, toggleFriendName } from "$lib/online/store.svelte";
   import { previewSrc } from "$lib/library/library";
   import { shareLink } from "$lib/online/link";
@@ -243,9 +243,7 @@
                   {t("online.slots", { free: c.free, total: c.total })}
                 </span>
                 {#if c.level !== "ready"}
-                  <span class="tag {c.level}">
-                    {c.level === "blocked" && c.dlc ? c.dlc : levelText(c.level)}
-                  </span>
+                  <span class="tag"><LevelTag level={c.level} dlc={c.dlc} /></span>
                 {/if}
               </button>
             </li>
@@ -263,7 +261,7 @@
             <li>
               <span class="other-name" title={c.id}>{carName(looks, c.id)}</span>
               {#if c.level !== "ready"}
-                <span class="tag {c.level}">{c.level === "blocked" && c.dlc ? c.dlc : levelText(c.level)}</span>
+                <span class="tag"><LevelTag level={c.level} dlc={c.dlc} /></span>
               {/if}
             </li>
           {/each}
@@ -516,22 +514,11 @@
   .slots.none {
     color: var(--muted);
   }
-  /* Same colours as the list's state column: blue one click, orange to
-     fetch, yellow blocked. */
+  /* The colours are `LevelTag`'s, the same as the list's state column. */
   .tag {
     grid-area: tag;
     font-size: 10px;
-    color: var(--muted);
     text-align: right;
-  }
-  .tag.oneClick {
-    color: var(--blue);
-  }
-  .tag.download {
-    color: var(--orange);
-  }
-  .tag.blocked {
-    color: var(--yellow);
   }
   /* A version gap with the server goes orange (SPEC-play-online.md,
      "Versions à côté du choix"). */
