@@ -6209,6 +6209,95 @@ mod tests {
     }
 
     #[test]
+    fn a_fragment_nobody_claims_asks_then_lands_as_a_mod_when_told_to() {
+        // Rule (§4.3bis): a folder without geometry, which neither a known
+        // track nor its own files name a host for, cannot be parked anywhere.
+        // A single import asks and writes nothing; told "standalone", it is
+        // imported as a mod — the old behaviour, chosen this time — and the
+        // report still says it is a fragment, the one outcome where the entry
+        // may not load in game.
+        let base = crate::testutil::temp_dir("import-fragment-unknown");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+
+        let src = base.join("src");
+        make_track_with_layouts(&src, "lonely_reskin", &["a_layout"], false);
+
+        let r = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
+        assert_eq!(r.mods[0].outcome, "HOST_UNKNOWN", "asked before anything is written");
+        assert!(r.mods[0].fragment, "reported as a fragment");
+        assert!(
+            crate::overlay::get_mod(&conn, "lonely_reskin").unwrap().is_none(),
+            "nothing written while the user has not decided"
+        );
+
+        let decisions = vec![ImportDecision {
+            id: "lonely_reskin".into(),
+            decision: "standalone".into(),
+        }];
+        let r2 = import_folder_for_test(&conn, &cfg, &rules, &src, true, &decisions);
+        assert_eq!(r2.mods[0].outcome, "IMPORT", "imported as a mod of its own");
+        assert!(r2.mods[0].fragment, "still flagged: it may not load in game");
+        assert!(
+            crate::overlay::get_mod(&conn, "lonely_reskin").unwrap().is_some(),
+            "the entry exists"
+        );
+    }
+
+    #[test]
+    fn an_update_files_a_new_version_makes_it_active_and_says_so() {
+        // Rule (§4.4, §10): content that overwrites most of an existing mod is
+        // an update — a new version next to the old one, the new one active,
+        // and a history line naming the version it brought. Characterises the
+        // end of `process_found`, which no other test reads past its outcome.
+        let base = crate::testutil::temp_dir("import-update");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+
+        let src = base.join("src");
+        make_fake_car(&src, "upd_car");
+        let r1 = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
+        assert_eq!(r1.mods[0].outcome, "IMPORT");
+        let first = crate::overlay::active_version_id(&conn, "upd_car").unwrap();
+
+        // Every file rewritten, and a new version label: an update by any count.
+        std::fs::write(
+            src.join("upd_car").join("ui").join("ui_car.json"),
+            r#"{"name":"My Test Car","brand":"TestBrand","tags":["gt3"],"class":"race","year":2020,"version":"2.0","author":"Tester"}"#,
+        )
+        .unwrap();
+        std::fs::write(src.join("upd_car").join("model.kn5"), b"A_DIFFERENT_MODEL").unwrap();
+        let r2 = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
+        assert_eq!(r2.mods[0].outcome, "UPDATE_REPLACE");
+        assert_eq!(r2.mods[0].version_label.as_deref(), Some("2.0"));
+
+        let versions = crate::overlay::get_versions(&conn, "upd_car").unwrap();
+        assert_eq!(versions.len(), 2, "the old version is kept next to the new one");
+        let active = crate::overlay::active_version_id(&conn, "upd_car").unwrap();
+        assert_ne!(active, first, "the new version is the active one");
+        let active_row = versions.iter().find(|v| Some(&v.id) == active.as_ref()).unwrap();
+        assert_eq!(active_row.version_label.as_deref(), Some("2.0"), "active = what was just filed");
+
+        let history = crate::overlay::get_history(&conn, "upd_car").unwrap();
+        assert_eq!(history[0].event, "UPDATE_REPLACE", "the latest line is the update");
+        let details: serde_json::Value = serde_json::from_str(&history[0].details).unwrap();
+        assert_eq!(details["key"], "updated", "localised on the front through history.updated");
+        assert_eq!(details["version"], "2.0", "names the version it brought");
+    }
+
+    #[test]
     fn the_extraction_folder_never_becomes_an_identity() {
         // Règle : 7-Zip extrait à plat dans le dossier de travail, donc une
         // archive dont le contenu est à la racine fait de CE dossier le dossier
