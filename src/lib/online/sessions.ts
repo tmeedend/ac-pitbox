@@ -6,10 +6,21 @@ import type { ServerSummary, SessionKind } from "./online";
 
 export type Duration = { unit: "laps"; laps: number } | { unit: "min"; minutes: number } | { unit: "h"; hours: number };
 
+/** Past this, a practice is the server's open time, not a session one waits
+ * out: « Practice 200 h » says nothing — it reads « Open » (reported). */
+const OPEN_PRACTICE_S = 3 * 3600;
+
+/** A practice that is really the server staying open. */
+export function isOpenPractice(kind: SessionKind | null, seconds: number): boolean {
+  return kind === "practice" && seconds > OPEN_PRACTICE_S;
+}
+
 export interface SessionStep {
   kind: SessionKind;
   active: boolean;
   duration: Duration | null;
+  /** An open practice (`isOpenPractice`): no duration worth reading. */
+  open: boolean;
   /** A timed race that ends with one more lap. */
   extraLap: boolean;
 }
@@ -29,6 +40,12 @@ export function sessionTimeline(s: ServerSummary): SessionStep[] {
     if (raw !== undefined && raw > 0) {
       duration = isRace && !s.timed ? { unit: "laps", laps: raw } : fromSeconds(raw);
     }
-    return { kind, active: kind === s.session, duration, extraLap: isRace && !!s.timed && !!s.extra_lap };
+    return {
+      kind,
+      active: kind === s.session,
+      duration,
+      open: raw !== undefined && isOpenPractice(kind, raw),
+      extraLap: isRace && !!s.timed && !!s.extra_lap,
+    };
   });
 }

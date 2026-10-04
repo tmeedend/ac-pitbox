@@ -15,7 +15,7 @@
   import { getUiPref, setUiPref } from "$lib/uiPrefs.svelte";
   import DataTable from "$lib/components/ui/DataTable.svelte";
   import { blockerText, durationText, levelText } from "$lib/online/labels";
-  import { fromSeconds } from "$lib/online/sessions";
+  import { fromSeconds, isOpenPractice } from "$lib/online/sessions";
   import { pingOf, requestPings } from "$lib/online/pings.svelte";
   import { carName, carsOwnedFirst, layoutLook, layoutName, trackName, type Looks } from "$lib/online/looks";
   import { serverKey, type ServerSummary, type TrackRef } from "$lib/online/online";
@@ -47,9 +47,6 @@
   const ROW_H = 46;
   /** Car names shown before "+n". */
   const CARS_SHOWN = 3;
-  /** Past this, a practice is the server's open time, not a session one
-   * waits out: "Practice 200 h" says nothing. */
-  const OPEN_PRACTICE_S = 3 * 3600;
 
   let sort = $state<Sort | null>(null);
   /** The groups unfolded, by track key. Not remembered: a fold is a glance. */
@@ -90,7 +87,7 @@
   /** What is left of the session: the time, or "open" for a practice that
    * runs for hours. */
   function sessionLeft(s: ServerSummary): string {
-    if (s.session === "practice" && s.time_left > OPEN_PRACTICE_S) return t("online.sessionOpen");
+    if (isOpenPractice(s.session, s.time_left)) return t("online.sessionOpen");
     return durationText(fromSeconds(s.time_left));
   }
 </script>

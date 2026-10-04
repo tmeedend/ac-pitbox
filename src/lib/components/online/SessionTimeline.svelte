@@ -5,7 +5,7 @@
   // next session, which is decisive. Mandatory pit and reversed grid as pills.
   import { t } from "$lib/i18n/index.svelte";
   import { durationText } from "$lib/online/labels";
-  import { fromSeconds, sessionTimeline } from "$lib/online/sessions";
+  import { fromSeconds, isOpenPractice, sessionTimeline } from "$lib/online/sessions";
   import type { ServerSummary } from "$lib/online/online";
 
   let { server }: { server: ServerSummary } = $props();
@@ -19,12 +19,16 @@
       {#each steps as step, i (i)}
         <li class:active={step.active}>
           <span class="kind">{t(`online.session.${step.kind}`)}</span>
-          {#if step.duration}
+          <!-- An open practice says so, as the table does, rather than a
+               duration in hundreds of hours. -->
+          {#if step.open}
+            <span class="dur mono">{t("online.sessionOpen")}</span>
+          {:else if step.duration}
             <span class="dur mono">
               {durationText(step.duration)}{#if step.extraLap}&nbsp;{t("online.extraLap")}{/if}
             </span>
           {/if}
-          {#if step.active && server.time_left > 0}
+          {#if step.active && server.time_left > 0 && !isOpenPractice(step.kind, server.time_left)}
             <span class="left mono">{t("online.timeLeft", { time: durationText(fromSeconds(server.time_left)) })}</span>
           {/if}
         </li>
