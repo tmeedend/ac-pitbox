@@ -102,6 +102,14 @@ pub fn car_skins(car_dir: &Path) -> Vec<String> {
 pub fn track_layouts(track_dir: &Path) -> Vec<String> {
     let ui = track_dir.join("ui");
     let mut layouts = Vec::new();
+    // The root layout counts even beside layout folders — what
+    // `uijson::layout_dirs` (the sheet, the session's picker) already reads.
+    // A layer adding a layout to a single-layout track leaves the original at
+    // the root of `ui/`, and the game still drives it. Bug real: a Spa given
+    // a "2022" layout by a layer read as "2022" only, the library's Layouts
+    // column said so, and every server on the original Spa showed « Track
+    // missing » on the Online page.
+    let root = ui.join("ui_track.json").is_file();
     if let Ok(entries) = std::fs::read_dir(&ui) {
         for e in entries.flatten() {
             let p = e.path();
@@ -113,13 +121,14 @@ pub fn track_layouts(track_dir: &Path) -> Vec<String> {
         }
     }
     layouts.sort();
-    if layouts.is_empty() && ui.join("ui_track.json").is_file() {
+    if root {
         // Mono-layout : chaîne vide, PAS "(default)" — cette valeur finit dans
         // le TrackId du preset Quick Drive (voir quickdrive::track_id) ; un
         // texte littéral y casse le lancement (CM cherche un dossier de
         // layout nommé "(default)", qui n'existe pas). Même convention que
-        // l'id vide utilisé par uijson::read_track_detail pour ce cas.
-        layouts.push(String::new());
+        // l'id vide utilisé par uijson::read_track_detail pour ce cas, et
+        // même ordre : la racine d'abord.
+        layouts.insert(0, String::new());
     }
     layouts
 }
@@ -259,6 +268,22 @@ mod tests {
 
         let layouts = track_layouts(&dir);
         assert_eq!(layouts, vec![String::new()]);
+    }
+
+    /// Rule: a root layout beside layout folders is a layout too — the case of
+    /// a layer adding one to a single-layout track (a real Spa given "2022").
+    #[test]
+    fn a_root_layout_beside_layout_folders_is_kept() {
+        let dir = crate::testutil::temp_dir("inspect-root-and-layouts");
+        std::fs::create_dir_all(dir.join("ui").join("2022")).unwrap();
+        std::fs::write(dir.join("ui").join("ui_track.json"), b"{}").unwrap();
+        std::fs::write(dir.join("ui").join("2022").join("ui_track.json"), b"{}").unwrap();
+
+        assert_eq!(
+            track_layouts(&dir),
+            vec![String::new(), "2022".to_string()],
+            "the original first, as the sheet lists them"
+        );
     }
 
     #[test]
