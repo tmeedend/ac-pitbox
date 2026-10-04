@@ -118,7 +118,7 @@ function ensureEngine(): Promise<Engine> {
   engine ??= (async () => {
     const THREE = await import("three");
     const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
-    const { showroomEnvironment } = await import("$lib/components/detail/showroomEnvironment");
+    const { showroomEnvironment } = await import("$lib/preview3d/showroomEnvironment");
 
     // `preserveDrawingBuffer` : sans lui, `toDataURL` rend une image vide dès
     // que le navigateur a eu le temps de vider le tampon entre le rendu et la

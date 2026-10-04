@@ -35,7 +35,7 @@ import {
   type GridTemplate,
 } from "./gridThumbs";
 import { gridThumbsOn, gridThumbsReady } from "./gridThumbPrefs.svelte";
-import { applyFloorMirror } from "$lib/components/detail/floorMirror";
+import { applyFloorMirror } from "$lib/preview3d/floorMirror";
 
 /** Taille de sortie (GRILLE§5.6). 16:9 parce que c'est le rapport des `preview.png`
  * d'Assetto Corsa : la grille restant mixte pour toujours (GRILLE§7), les deux
@@ -518,7 +518,7 @@ async function createRig(width: number, height: number): Promise<Rig> {
   {
     const THREE = await import("three");
     const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
-    const { showroomEnvironment } = await import("$lib/components/detail/showroomEnvironment");
+    const { showroomEnvironment } = await import("$lib/preview3d/showroomEnvironment");
 
     // `preserveDrawingBuffer` : sans lui, la lecture du canevas rend une image
     // vide dès que le navigateur a eu le temps de vider le tampon entre le
@@ -568,7 +568,7 @@ async function createRig(width: number, height: number): Promise<Rig> {
     // Les deux plans du sol, montés une fois et repositionnés à chaque voiture.
     // Leur géométrie est un carré unitaire mis à l'échelle : recréer un
     // `PlaneGeometry` par vignette allouerait trois cents tampons pour rien.
-    const { poolTexture } = await import("$lib/components/detail/studioFloor");
+    const { poolTexture } = await import("$lib/preview3d/studioFloor");
     const plane = new THREE.PlaneGeometry(1, 1);
     const pool = new THREE.Mesh(
       plane,
@@ -634,7 +634,7 @@ const MIRROR_REACH = 75;
 async function ensureMirror(rig: Rig): Promise<MirrorHandle> {
   if (rig.mirror) return rig.mirror;
   const { Reflector } = await import("three/addons/objects/Reflector.js");
-  const { floorMirrorShader } = await import("$lib/components/detail/floorMirror");
+  const { floorMirrorShader } = await import("$lib/preview3d/floorMirror");
   const THREE = rig.THREE;
   const mesh = new Reflector(new THREE.PlaneGeometry(1, 1), {
     textureWidth: rig.width,

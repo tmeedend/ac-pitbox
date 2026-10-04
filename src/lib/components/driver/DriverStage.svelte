@@ -272,7 +272,7 @@
     const THREE = await import("three");
     const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
     const { OrbitControls } = await import("three/examples/jsm/controls/OrbitControls.js");
-    const { showroomEnvironment } = await import("$lib/components/detail/showroomEnvironment");
+    const { showroomEnvironment } = await import("$lib/preview3d/showroomEnvironment");
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));

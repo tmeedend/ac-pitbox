@@ -25,8 +25,8 @@
   import { DRIVER_MESH_PREFIX } from "$lib/preview3d/preview";
   import type * as ThreeModule from "three";
   import type { Reflector } from "three/addons/objects/Reflector.js";
-  import { applyFloorMirror, floorMirrorShader } from "./floorMirror";
-  import { poolTexture } from "./studioFloor";
+  import { applyFloorMirror, floorMirrorShader } from "$lib/preview3d/floorMirror";
+  import { poolTexture } from "$lib/preview3d/studioFloor";
 
   let {
     carId,
@@ -1006,7 +1006,7 @@
     const THREE = await import("three");
     const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
     const { OrbitControls } = await import("three/examples/jsm/controls/OrbitControls.js");
-    const { showroomEnvironment } = await import("./showroomEnvironment");
+    const { showroomEnvironment } = await import("$lib/preview3d/showroomEnvironment");
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     // Suréchantillonner puis réduire est le remède direct au scintillement des

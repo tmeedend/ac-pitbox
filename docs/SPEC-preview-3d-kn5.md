@@ -1151,7 +1151,7 @@ gêne constatée :
    - **Environnement** : la `RoomEnvironment` de three.js est une pièce
      **blanche**, et une peinture peu rugueuse y reflète des murs clairs sur
      toute sa surface. Remplacée par un studio sombre à rampes zénithales
-     (`components/detail/showroomEnvironment.ts`), procédural comme elle et
+     (`src/lib/preview3d/showroomEnvironment.ts`), procédural comme elle et
      sans asset (§8.1).
    - **Sol** : l'ombre de contact seule laissait la voiture posée sur rien.
      Le sol porte maintenant la **flaque de lumière** que renvoie un showroom
@@ -1398,7 +1398,7 @@ gêne constatée :
     posée sur du matériel un peu brillant comme dans un salon »).
 
     `Reflector` de three.js, avec un shader dérivé du sien
-    (`components/detail/floorMirror.ts`). Le miroir brut de three est net et
+    (`src/lib/preview3d/floorMirror.ts`). Le miroir brut de three est net et
     infini, ce qui donne un sol mouillé de jeu vidéo ; trois ajouts en font un
     sol de salon, et les trois sont exposés à l'utilisateur : un **flou** en 25
     prises pondérées, une **extinction radiale** pour que le reflet meure près
