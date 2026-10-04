@@ -4,21 +4,18 @@
   //
   // This component owns the data and the gestures — loading, reloading when
   // the library or the deployed content changes, what gets remembered and
-  // pushed to the session. The cards it lays out (`DetailHero`, `PickerCard`,
+  // pushed to the session. The gestures of the ⋮ menu and of the version
+  // history — activate, delete, reinstall, export — are `DetailActions`'s
+  // (`$lib/detail/actions.svelte.ts`). The cards it lays out (`DetailHero`, `PickerCard`,
   // `EngineSoundBlock`, `TrackSkinsBlock`, `DescriptionCard`…) only draw what
   // they are given: most of them are unmounted on every tab switch, and state
   // kept there would be reloaded, or lost, each time.
-  import { editBrand } from "$lib/workshop/brandFocus.svelte";
-  import { showInGameFolder } from "$lib/gamestate/gameFolder.svelte";
   import { isPlaque } from "$lib/library/brandLogos.svelte";
   import {
-    activateMod,
-    deactivateMod,
     getModDetail,
     listLibrary,
     listModResources,
     listModExtras,
-    openModFolder,
     previewSrc,
     setFavorite,
     setManualTags,
@@ -32,7 +29,7 @@
     type LayoutOrigin,
   } from "$lib/library/library";
   import { listMediaScreenshots, listMediaReplays, listMediaBackgrounds } from "$lib/detail/media";
-  import { listModSkins, openNativeShowroom, type SkinItem } from "$lib/launch/launch";
+  import { listModSkins, type SkinItem } from "$lib/launch/launch";
   import Tabs from "$lib/components/ui/Tabs.svelte";
   import { getWikiPanel, setWikiLang, wikiLang, type WikiPanel } from "$lib/wiki/wiki";
   import FicheHeader from "./FicheHeader.svelte";
@@ -43,14 +40,7 @@
   import { listOtherMods, type OtherModRow } from "$lib/inventory/others";
   import { tick, untrack } from "svelte";
   import { focusGamepadElement, isGamepadDriving } from "$lib/shell/gamepadNav";
-  import {
-    exportMod,
-    deletePack,
-    reinstallFromArchive,
-    deleteModVersion,
-    profilesUsingVersion,
-    type ExportReport,
-  } from "$lib/workshop/maintenance";
+  import { DetailActions } from "$lib/detail/actions.svelte";
   import {
     listSubMods,
     activateSound,
@@ -60,7 +50,6 @@
     setTrackSkinActive,
     type SubModRow,
   } from "$lib/inventory/submods";
-  import { open, confirm } from "@tauri-apps/plugin-dialog";
   import { nav, pickSession, requestSection } from "$lib/shell/nav.svelte";
   import { onLibraryChange } from "$lib/library/libraryVersion.svelte";
   import { getPreferredSkin, setPreferredSkin, getPreferredLayout, setPreferredLayout } from "$lib/preferred";
@@ -73,7 +62,6 @@
   import HistoryBlock from "./HistoryBlock.svelte";
   import UpdateBanner from "./UpdateBanner.svelte";
   import ShowcaseBanner from "./ShowcaseBanner.svelte";
-  import { deleteMods } from "$lib/library/showcase.svelte";
   import ProvenanceBlock from "./ProvenanceBlock.svelte";
   import TagsBlock from "./TagsBlock.svelte";
   import MediaScreenshots from "./MediaScreenshots.svelte";
@@ -243,13 +231,9 @@
   let activeTrackSkins = $state<string[]>([]);
   let trackSkinsLoading = $state(true);
   let trackSkinBusy = $state(false);
-  let busy = $state(false);
   let actionError = $state("");
-  let exporting = $state(false);
-  let exportResult = $state<ExportReport | null>(null);
   // Provenance / pack d'origine (§4.4).
   let siblings = $state<ModCard[]>([]);
-  let packBusy = $state(false);
 
   /** Décompte de l'onglet Médias : la **somme** des quatre blocs qu'il réunit
    * (REFONTE§7.8). `null` tant qu'aucun n'a répondu — afficher « (0) » avant de savoir
@@ -321,61 +305,33 @@
     }
   }
 
-  // Archive/dossier source conservé pour la version active (§10/§11), s'il y
-  // en a un — conditionne l'affichage du bouton « Réinstaller ».
-  function keptArchive(d: ModDetail): string | null {
-    return d.versions.find((v) => v.id === d.active_version_id)?.kept_archive_path ?? null;
-  }
-
-  let deleteBusy = $state(false);
-  let reinstallBusy = $state(false);
-  let reinstallOk = $state(false);
-  /** Ce qu'est devenue la version supprimée (§10) — corbeille ou
-   * suppression définitive. Un message, pas une erreur. */
-  let versionNotice = $state("");
-
-  // Delete (ESPACE§5.1): the confirmation offers the showcase, by default, or
-  // the complete deletion. The fiche stays open on a mod put in the showcase —
-  // it is still there, and its banner says what became of it — and closes on
-  // one deleted.
-  async function doDelete() {
-    if (!detail || deleteBusy) return;
-    deleteBusy = true;
-    actionError = "";
-    try {
-      const done = await deleteMods([detail]);
-      if (done) onchange?.();
-      if (done === "complete") onclose();
-      else if (done === "showcase") await refreshEntity();
-    } catch (e) {
-      actionError = errorText(e);
-    } finally {
-      deleteBusy = false;
-    }
-  }
-
-  async function doReinstall() {
-    if (!detail || reinstallBusy) return;
-    const ok = await confirm(t("detail.reinstallConfirm", { name: detail.display_name ?? detail.id_interne }), {
-      title: t("detail.reinstallConfirmTitle"),
-      kind: "warning",
-    });
-    if (!ok) return;
-    reinstallBusy = true;
-    actionError = "";
-    reinstallOk = false;
-    try {
-      await reinstallFromArchive(detail.id_interne);
-      await reload();
-      onchange?.();
-      reinstallOk = true;
-    } catch (e) {
-      actionError = errorText(e);
-    } finally {
-      reinstallBusy = false;
-    }
-  }
-
+  /** Le menu ⋮ et l'historique des versions (§6.3, §10) : `$lib/detail/actions`. */
+  const actions = new DetailActions({
+    get id() {
+      return id;
+    },
+    get detail() {
+      return detail;
+    },
+    get isCar() {
+      return isCar;
+    },
+    get packSiblings() {
+      return siblings.length;
+    },
+    async showroomSkin() {
+      // Attend que le skin sélectionné soit connu (sinon course possible avec
+      // le chargement de la fiche → showroom ouvert sans skin, voiture blanche).
+      await skinsLoadPromise;
+      return skins[previewSkin]?.id ?? null;
+    },
+    reload,
+    refresh: refreshEntity,
+    changed: () => onchange?.(),
+    close: () => onclose(),
+    setError: (message) => (actionError = message),
+  });
+  const menuItems = $derived(actions.menu());
 
   /** Recharge la fiche + les couches + les ressources (après compositing/
    * import) en préservant le layout sélectionné : activer une couche ajoute
@@ -450,47 +406,6 @@
   }
 
 
-  async function uninstallPack() {
-    if (!detail?.source_pack || packBusy) return;
-    const ok = await confirm(
-      t("detail.uninstallConfirm", { pack: detail.source_pack, count: siblings.length + 1 }),
-      { title: t("detail.uninstallTitle"), kind: "warning" },
-    );
-    if (!ok) return;
-    packBusy = true;
-    actionError = "";
-    try {
-      await deletePack(detail.source_pack);
-      onchange?.();
-      onclose();
-    } catch (e) {
-      actionError = errorText(e);
-      packBusy = false;
-    }
-  }
-
-  async function doExport() {
-    if (!detail || exporting) return;
-    const dir = await open({ directory: true, multiple: false, title: t("detail.exportDirTitle") });
-    if (!dir || typeof dir !== "string") return;
-    exporting = true;
-    actionError = "";
-    exportResult = null;
-    try {
-      exportResult = await exportMod(detail.id_interne, dir);
-    } catch (e) {
-      actionError = errorText(e);
-    } finally {
-      exporting = false;
-    }
-  }
-
-  // Aperçu 3D natif (acShowroom.exe) : lancé en **process indépendant**, par
-  // -dessus l'app, avec les réglages vidéo du jeu. C'est l'utilisateur qui
-  // ferme le showroom pour revenir à Pit Box. L'intégration de la fenêtre
-  // native dans la page a été tentée puis abandonnée (voir showroom.rs).
-  let showroomBusy = $state(false);
-
   // The in-app 3D preview lives in `DetailHero`, next to the photo it replaces.
   /** Panneau de réglages posé sur l'aperçu. Ouvert, il garde la barre d'outils
    * visible même quand la souris s'en va — sinon régler un curseur la ferait
@@ -498,27 +413,11 @@
   let preview3dPanel = $state(false);
 
   // Résolu une fois les skins de la fiche courante chargés (§skin sélectionné) —
-  // `openShowroom` l'attend pour ne jamais ouvrir avant de connaître le skin
+  // le showroom l'attend pour ne jamais ouvrir avant de connaître le skin
   // sélectionné (sinon SKIN= part vide → voiture toute blanche au 1er affichage,
   // course entre le chargement de `detail` et celui de `skins`).
   let skinsLoadResolve: (() => void) | null = null;
   let skinsLoadPromise: Promise<void> = Promise.resolve();
-
-  async function openShowroom() {
-    if (!detail || showroomBusy) return;
-    showroomBusy = true;
-    actionError = "";
-    try {
-      // Attend que le skin sélectionné soit connu (sinon course possible avec
-      // le chargement de la fiche → showroom ouvert sans skin, voiture blanche).
-      await skinsLoadPromise;
-      await openNativeShowroom(detail.id_interne, skins[previewSkin]?.id ?? null);
-    } catch (e) {
-      actionError = errorText(e);
-    } finally {
-      showroomBusy = false;
-    }
-  }
 
   $effect(() => {
     const current = id;
@@ -817,89 +716,6 @@
     });
   }
 
-  // Ouvre le dossier réel du mod dans l'explorateur Windows (voir aussi
-  // ce qu'il y a dedans, en dehors de la fiche). Fonctionne aussi pour le
-  // contenu de base Kunos (lecture seule).
-  async function openFolder() {
-    if (!detail) return;
-    try {
-      await openModFolder(detail.id_interne);
-    } catch (e) {
-      actionError = errorText(e);
-    }
-  }
-
-  async function activate(versionId?: string) {
-    if (!detail || busy) return;
-    busy = true;
-    actionError = "";
-    try {
-      await activateMod(detail.id_interne, versionId);
-      await reload();
-      onchange?.();
-    } catch (e) {
-      actionError = errorText(e);
-    } finally {
-      busy = false;
-    }
-  }
-
-  // Supprimer une version rangée (§10). Deux avertissements à donner
-  // AVANT que ce soit irréversible : les profils qui l'épinglaient (ils
-  // basculeront sur la version en place) et le fait que la corbeille peut
-  // refuser une version volumineuse, auquel cas la suppression est définitive.
-  // Ce qui a réellement eu lieu revient dans le résultat, et s'affiche.
-  async function deleteVersion(versionId: string) {
-    if (!detail || busy) return;
-    const v = detail.versions.find((ver) => ver.id === versionId);
-    const label = v?.version_label ?? t("detail.noVersionNumber");
-    let pinned: string[] = [];
-    try {
-      pinned = await profilesUsingVersion(versionId);
-    } catch (e) {
-      actionError = errorText(e);
-      return;
-    }
-    const message = [
-      t("detail.deleteVersionConfirm", { label }),
-      pinned.length ? t("detail.deleteVersionProfiles", { profiles: pinned.join(", ") }) : "",
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-    const ok = await confirm(message, { title: t("detail.deleteVersion"), kind: "warning" });
-    if (!ok) return;
-    busy = true;
-    actionError = "";
-    versionNotice = "";
-    try {
-      const outcome = await deleteModVersion(versionId);
-      versionNotice = outcome.recycled
-        ? t("detail.deleteVersionRecycled", { label })
-        : t("detail.deleteVersionPurged", { label });
-      await reload();
-      onchange?.();
-    } catch (e) {
-      actionError = errorText(e);
-    } finally {
-      busy = false;
-    }
-  }
-
-  async function deactivate() {
-    if (!detail || busy) return;
-    busy = true;
-    actionError = "";
-    try {
-      await deactivateMod(detail.id_interne);
-      await reload();
-      onchange?.();
-    } catch (e) {
-      actionError = errorText(e);
-    } finally {
-      busy = false;
-    }
-  }
-
   async function toggleFav() {
     if (!detail) return;
     detail.is_favorite = !detail.is_favorite;
@@ -941,70 +757,6 @@
         ];
     parts.push(d.author ? t("detail.byAuthor", { author: d.author }) : null);
     return parts.filter(Boolean).join(" · ");
-  });
-
-  /** The game folder pruned to what this mod lays (DOSSIER§3.2). */
-  function showThisInGameFolder() {
-    void showInGameFolder({ kind: isCar ? "car" : "track", id }, detail?.display_name ?? id);
-  }
-
-  // Actions de la fiche (§6.3) : le ⋮ de `FicheHeader` les rend et les
-  // positionne — ici ne reste que leur liste. Cœur favori et pastille d'état
-  // n'y sont pas : ils se lisent en permanence, ce ne sont pas des actions.
-  const menuItems = $derived.by(() => {
-    const d = detail;
-    if (!d) return [];
-    const items: { label: string; onclick: () => void; disabled?: boolean; danger?: boolean }[] = [];
-    // In the showcase (ESPACE§6): no activation, no showroom, no export —
-    // the banner's "Recover the files" replaces them, and the only deletion
-    // left is the complete one.
-    if (!d.is_stock && !d.showcase) {
-      items.push({
-        label: d.active ? t("common.deactivate") : t("common.activate"),
-        onclick: d.active ? deactivate : () => activate(),
-        disabled: busy,
-      });
-    }
-    if (isCar && !d.showcase) {
-      items.push({
-        label: showroomBusy ? t("detail.showroomLaunching") : t("detail.showroom"),
-        onclick: openShowroom,
-        disabled: showroomBusy,
-      });
-    }
-    if (isCar && d.brand) {
-      const brand = d.brand;
-      items.push({ label: t("detail.editBrand", { brand }), onclick: () => void editBrand(brand) });
-    }
-    items.push({ label: t("detail.openFolder"), onclick: openFolder });
-    items.push({ label: t("detail.showInGameFolder"), onclick: showThisInGameFolder });
-    if (!d.is_stock && !d.showcase) {
-      items.push({
-        label: exporting ? t("detail.exporting") : t("detail.export"),
-        onclick: doExport,
-        disabled: exporting,
-      });
-    }
-    if (!d.is_stock) {
-      if (keptArchive(d) && !d.showcase) {
-        items.push({
-          label: reinstallBusy ? t("detail.reinstalling") : t("detail.reinstallFromArchive"),
-          onclick: doReinstall,
-          disabled: reinstallBusy,
-        });
-      }
-      items.push({
-        label: deleteBusy
-          ? t("common.working")
-          : d.showcase
-            ? t("showcase.deleteCompletelyMenu")
-            : t("detail.deleteFromLibrary"),
-        onclick: doDelete,
-        disabled: deleteBusy,
-        danger: true,
-      });
-    }
-    return items;
   });
 
 </script>
@@ -1078,13 +830,13 @@
     {/if}
 
     {#if actionError}<div class="errbox">{actionError}</div>{/if}
-    {#if reinstallOk}<div class="export-ok">{t("detail.reinstallSuccess")}</div>{/if}
-    {#if versionNotice}<div class="export-ok">{versionNotice}</div>{/if}
-    {#if exportResult}
+    {#if actions.reinstallOk}<div class="export-ok">{t("detail.reinstallSuccess")}</div>{/if}
+    {#if actions.versionNotice}<div class="export-ok">{actions.versionNotice}</div>{/if}
+    {#if actions.exportResult}
       <div class="export-ok">
-        {t("detail.exportSuccess", { count: exportResult.included.length })}
-        {#if exportResult.warnings.length}
-          <ul class="export-warn">{#each exportResult.warnings as w}<li>⚠ {w}</li>{/each}</ul>
+        {t("detail.exportSuccess", { count: actions.exportResult.included.length })}
+        {#if actions.exportResult.warnings.length}
+          <ul class="export-warn">{#each actions.exportResult.warnings as w}<li>⚠ {w}</li>{/each}</ul>
         {/if}
       </div>
     {/if}
@@ -1108,7 +860,7 @@
           revision={contentRevision}
           outline={isCar ? null : previewSrc(d.track?.layouts[previewLayout]?.outline ?? null)}
           freed={d.showcase}
-          {showroomBusy}
+          showroomBusy={actions.showroomBusy}
           bind:panelOpen={preview3dPanel}
         />
       </div>
@@ -1250,20 +1002,25 @@
       <div class="tab-body install">
         <div class="col">
           <AttachedBlock rows={attached} onopen={(a) => void openAttachedFiche(a)} />
-          <ExtrasBlock modId={id} ongamefolder={showThisInGameFolder} />
+          <ExtrasBlock modId={id} ongamefolder={() => actions.showInGameFolder()} />
           <DecisionsBlock modId={id} />
         </div>
         <div class="col">
           <ProvenanceBlock
             detail={d}
             {siblings}
-            busy={packBusy}
+            busy={actions.packBusy}
             onfilterbypack={filterByPack}
             onopenpack={openPack}
             onopensibling={openSibling}
-            onuninstallpack={uninstallPack}
+            onuninstallpack={() => void actions.uninstallPack()}
           />
-          <HistoryBlock detail={d} {busy} onactivateversion={(vid) => activate(vid)} ondeleteversion={deleteVersion} />
+          <HistoryBlock
+            detail={d}
+            busy={actions.busy}
+            onactivateversion={(vid) => void actions.activate(vid)}
+            ondeleteversion={(vid) => void actions.deleteVersion(vid)}
+          />
           <LayersBlock
             modId={id}
             onchanged={() => {
