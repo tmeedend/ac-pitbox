@@ -792,7 +792,9 @@
       perfUnreadable={index.perfUnreadable}
     >
       {#snippet end()}
-        {#if shown === "table"}
+        <!-- The columns of the table, not of the index: shown over the tiles,
+             the button changed nothing one could see. -->
+        {#if shown === "table" && !indexShown}
           <ColumnsMenu
             items={columns.map((c) => ({ key: c.key, label: t(c.labelKey), fixed: c.fixed }))}
             visible={columnsPrefs.visible}
