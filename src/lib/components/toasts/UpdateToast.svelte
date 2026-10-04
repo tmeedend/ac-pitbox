@@ -11,6 +11,7 @@
   import ProgressBar from "$lib/components/ui/ProgressBar.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { openInSection } from "$lib/shell/nav.svelte";
+  import { prepareRun } from "$lib/online/prepare.svelte";
   import {
     modUpdates,
     unannounced,
@@ -37,7 +38,9 @@
 <!-- Same anatomy as the import progress (`ImportToasts`), on purpose: the
      download hands over to the import, and the two toasts follow each other in
      the same corner — title = what, phase line + shared bar, "Stop" button. -->
-{#if modUpdates.busy?.phase === "download"}
+<!-- A « Prepare & join » shows its downloads in its own notification
+     (`PrepareToast`), one for the whole run. -->
+{#if modUpdates.busy?.phase === "download" && !prepareRun()}
   {@const b = modUpdates.busy}
   <Toast title={b.name} truncate>
     {#snippet actions()}

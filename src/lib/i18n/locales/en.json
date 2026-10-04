@@ -1543,6 +1543,8 @@
     "filterSession": "Session",
     "pingMeasuring": "Measuring ping · {count} servers left",
     "groupByTrack": "Group by track",
+    "prepareTitle": "Preparing to join {server}",
+    "prepareImporting": "Installing",
     "lobbyBackup": "The Kunos lobby is not answering: this is the list from {date}. Players have moved since; a server's panel shows it live.",
     "passwordWrong": "Wrong password: the server would refuse it.",
     "pickServer": "Pick a server",

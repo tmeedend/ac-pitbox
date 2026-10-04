@@ -308,6 +308,12 @@ d'abord, une source après l'autre, par les chemins existants : l'archive
 gardée comme la récupération d'un mod en vitrine, un lien ou le registre comme
 une mise à jour de mod (même progression, même annulation, puis l'import
 ordinaire : le contenu arrive **géré**, jamais posé tel quel dans `content/`).
+Toute la préparation se suit dans **une seule notification**, « Préparation
+pour rejoindre {serveur} » : comme un import en masse, le mod en cours dans la
+barre principale (téléchargement, puis installation), et sous elle le décompte
+« 3 / 12 » et la barre du tout ; « Arrêter » coupe le mod en cours et les
+suivants. Les notifications d'un seul mod (téléchargement, import, comptes
+rendus) s'effacent pendant ce temps ; les comptes rendus reviennent à la fin.
 Une page au lieu d'une archive s'ouvre dans le navigateur, le panneau le dit,
 et l'archive glissée ensuite sur Pit Box fait relire le serveur. Mesuré le
 2026-10-03 : 151 serveurs sur 254 interrogés publient des liens, souvent

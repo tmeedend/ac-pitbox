@@ -15,7 +15,7 @@
   import { joinServer, type CarSlots, type ServerDetail, type ServerSummary } from "$lib/online/online";
   import { carName, trackTitle, type Looks } from "$lib/online/looks";
   import { joinState, layersToSetAside } from "$lib/online/readiness";
-  import { fetchNeeded, type Needed } from "$lib/online/prepare";
+  import { fetchNeeded, type Needed } from "$lib/online/prepare.svelte";
   import { blockerText, levelText } from "$lib/online/labels";
   import { recordRecentJoin } from "$lib/online/store.svelte";
   import { passwordMatches } from "$lib/online/password";
@@ -124,7 +124,7 @@
     busy = true;
     browserFor = null;
     try {
-      const out = await fetchNeeded(needed);
+      const out = await fetchNeeded(needed, live.name);
       if (out.status === "browser") {
         browserFor = out.name;
         openUrl(out.url).catch((e) => console.error("openUrl", e));

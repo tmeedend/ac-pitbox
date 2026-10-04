@@ -17,6 +17,7 @@
   import Toast from "./Toast.svelte";
   import ProgressBar from "$lib/components/ui/ProgressBar.svelte";
   import { t } from "$lib/i18n/index.svelte";
+  import { prepareRun } from "$lib/online/prepare.svelte";
 
   // Clés explicites plutôt qu'une clé construite à la volée : `t()` renvoyant la
   // clé quand elle manque, une phase non prévue s'afficherait telle quelle.
@@ -41,11 +42,15 @@
   const arbitrating = $derived(
     importState.pendingConflicts.length > 0 || importState.pendingAmbiguous.length > 0,
   );
+  /** A « Prepare & join » is importing mod after mod: its own notification
+   * (`PrepareToast`) follows them, and their reports wait for its end — a
+   * dozen would otherwise scroll past during the run. */
+  const preparing = $derived(prepareRun() !== null);
 </script>
 
 <!-- Oldest first: the stack is a column, so the newest report — the unfolded
      one — ends up nearest the corner, and progress below everything. -->
-{#if !arbitrating}
+{#if !arbitrating && !preparing}
   {#each importState.reports as entry (entry.id)}
     <Toast
       title={importSummary(entry.report)}
@@ -58,7 +63,7 @@
   {/each}
 {/if}
 
-{#if importState.importing && importState.progress}
+{#if importState.importing && importState.progress && !preparing}
   {@const p = importState.progress}
   {@const settled = p.phase !== "queued" && p.phase !== "sizing"}
   <!-- Le titre retombe sur la phase : au tout début d'un lot, le backend n'a
