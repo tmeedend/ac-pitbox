@@ -14,7 +14,7 @@
   import { serverDetail, serverKey, type CarSlots, type Fetch, type ServerDetail, type ServerSummary } from "$lib/online/online";
   import { carName, layoutLook, layoutName, trackName, trackTitle, type Looks } from "$lib/online/looks";
   import { isFavourite, isFriend } from "$lib/online/lists";
-  import { libraryVersion } from "$lib/library/libraryVersion.svelte";
+  import { onLibraryChange } from "$lib/library/libraryVersion.svelte";
   import { pingOf } from "$lib/online/pings.svelte";
   import SessionTimeline from "./SessionTimeline.svelte";
   import ServerExtras from "./ServerExtras.svelte";
@@ -141,12 +141,9 @@
 
   // An archive dropped on the window — the way content from a page in the
   // browser arrives — changes the library: the panel reads its levels again.
-  // The version is read first, so the effect subscribes to it (CLAUDE.md).
-  let seenLibrary = -1;
-  $effect(() => {
-    const version = libraryVersion();
-    if (seenLibrary !== -1 && version !== seenLibrary && detail && !preparing) untrack(() => void refresh());
-    seenLibrary = version;
+  // Not while the foot is fetching: it reads the server itself once done.
+  onLibraryChange(() => {
+    if (detail && !preparing) void refresh();
   });
 </script>
 

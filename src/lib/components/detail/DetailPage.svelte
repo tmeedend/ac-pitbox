@@ -62,7 +62,7 @@
   } from "$lib/inventory/submods";
   import { open, confirm } from "@tauri-apps/plugin-dialog";
   import { nav, pickSession, requestSection } from "$lib/shell/nav.svelte";
-  import { libraryVersion } from "$lib/library/libraryVersion.svelte";
+  import { onLibraryChange } from "$lib/library/libraryVersion.svelte";
   import { getPreferredSkin, setPreferredSkin, getPreferredLayout, setPreferredLayout } from "$lib/preferred";
   import { t } from "$lib/i18n/index.svelte";
   import { trackLength } from "$lib/detail/trackLength";
@@ -694,16 +694,10 @@
   // Un import, une activation ou une suppression peuvent survenir depuis
   // n'importe quel écran (§4.2/§ resynchronisation) et concerner le mod
   // ouvert (ex. une extension importée, désactivée depuis le panneau
-  // compact). Dès que la bibliothèque change, recharger la fiche.
-  let lastLibraryVersion = libraryVersion();
-  $effect(() => {
-    const v = libraryVersion();
-    if (v === lastLibraryVersion) return;
-    lastLibraryVersion = v;
-    // Différé hors du suivi réactif : ne dépend que de libraryVersion(),
-    // pas de `id` (évite un double rechargement à la navigation).
-    queueMicrotask(() => void refreshEntity());
-  });
+  // compact). Dès que la bibliothèque change, recharger la fiche — hors du
+  // suivi réactif : ne dépend pas de `id` (évite un double rechargement à la
+  // navigation).
+  onLibraryChange(() => queueMicrotask(() => void refreshEntity()));
 
   // Son = bascule exclusive (§8.3) : un seul actif, original restaurable.
   async function pickSound(subId: string | null) {
