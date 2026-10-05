@@ -477,9 +477,11 @@ ici ; il se donne à part.
 - *À voir à l'écran* : la notification unique de « Préparer et rejoindre »
   (décompte et barre du tout) ; une couche écartée puis rendue en jeu (la
   couche « spa » de la machine de dev est le cas tout trouvé) ; un serveur en
-  réservation ; le niveau « Bloqué » ; une notification d'ami ou de place
-  libérée, dans l'app et dans Windows ; le bandeau de la liste de secours
-  (il faut que le lobby tombe).
+  réservation ; le niveau « Bloqué » ; le mot de passe vérifié avant le
+  lancement (recette confirmée sur 255 vrais serveurs, jamais essayée avec un
+  vrai mot de passe) ; une notification d'ami ou de place libérée, dans l'app
+  et dans Windows ; le bandeau de la liste de secours (il faut que le lobby
+  tombe).
 - *Améliorations possibles* : proposer le contenu servi par un serveur
   verrouillé (`sha1("tgys3cqpcwpbssphb0j46tak8ykldaub" + mot de passe)` en
   base64 coupé, `EncryptedContentKey` de CM) ; les niveaux de préparation de la

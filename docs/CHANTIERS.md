@@ -42,12 +42,16 @@ de reprendre. En cas d'écart, la spec fait foi.
         (2026-10-03) ; la carte Online de la fiche circuit, « Préparer et
         rejoindre » qui télécharge et importe pour de vrai, la recherche
         web, le layout d'origine de Spa retrouvé (2026-10-04).
-      - **Pas vu à l'écran** : la notification unique de « Préparer et
-        rejoindre », refaite après l'essai ; les notifications d'ami et de
-        place (ni dans l'app, ni dans Windows) ; le mot de passe vérifié
-        avant le lancement (recette confirmée sur 255 vrais serveurs, pas
-        essayée avec un vrai mot de passe) ; le bandeau de la liste de
-        secours (il faut que le lobby tombe) — tests et types seulement.
+      - **Pas vu à l'écran** — la même liste que « Restent » dans la spec :
+        la notification unique de « Préparer et rejoindre », refaite après
+        l'essai ; une couche écartée puis rendue en jeu ; un serveur en
+        réservation ; le niveau « Bloqué » (jaune dans le panneau aussi
+        depuis le 2026-10-04, il y était resté gris) ; le mot de passe
+        vérifié avant le lancement (recette confirmée sur 255 vrais
+        serveurs, pas essayée avec un vrai mot de passe) ; les notifications
+        d'ami et de place (ni dans l'app, ni dans Windows) ; le bandeau de la
+        liste de secours (il faut que le lobby tombe) — tests et types
+        seulement.
         Le clic sur une notification **Windows** n'ouvre pas le serveur : le
         plugin n'expose pas de clic sur bureau (sa doc le réserve au mobile,
         pas vérifié sur Windows) ; c'est la notification de la pile, gardée
