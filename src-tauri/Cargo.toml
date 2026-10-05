@@ -44,7 +44,15 @@ edition = "2021"
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "app_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+# `rlib` only: `main.rs` is its one user. The Tauri template also builds a
+# `staticlib` and a `cdylib`, which only iOS and Android need — and the app is
+# Windows-only. They cost every build a 1.2 GB static archive, plus a DLL
+# whose import library made MSVC's linker print "Création de la
+# bibliothèque…", which rustc 1.98 reports as a `linker_messages` warning.
+# Removing the cause rather than allowing the lint: an allowed lint would also
+# hide a linker message that matters. Bring both back if a mobile target is
+# ever added.
+crate-type = ["rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
