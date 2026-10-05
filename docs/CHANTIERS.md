@@ -36,22 +36,38 @@ de reprendre. En cas d'écart, la spec fait foi.
       carte Online de la fiche circuit, les notifications et « Me
       prévenir », le mot de passe vérifié, la liste de secours. **Ce qui
       reste est listé à la fin de la section Lots de `SPEC-play-online.md`
-      (« Restent ») : des vérifications à l'écran, deux améliorations
-      possibles, des limites connues.**
+      (« Restent ») : un défaut du panneau, des vérifications à l'écran,
+      une amélioration possible, des limites connues.**
       - **Vu à l'écran** : le tableau Online, colonnes, tri et regroupement
         (2026-10-03) ; la carte Online de la fiche circuit, « Préparer et
         rejoindre » qui télécharge et importe pour de vrai, la recherche
-        web, le layout d'origine de Spa retrouvé (2026-10-04).
+        web, le layout d'origine de Spa retrouvé (2026-10-04) ; un serveur en
+        réservation (frise, « Aussi nécessaires », « Réserver dans Content
+        Manager », la couche « spa » annoncée écartée), un faux mot de passe
+        refusé avant tout lancement, « Me prévenir » qui s'arrête et pose sa
+        notification dans la pile quand la place se libère (2026-10-05).
+      - **Défaut repéré (2026-10-05)** : rouvrir le serveur déjà ouvert
+        (« Ouvrir » sur une notification, lien collé) ou « Actualiser » ne
+        relit pas le panneau — « 0 libre » sur une place libre, erreur Steam
+        restée affichée. Détail dans « Restent » de la spec.
+      - **Pour retrouver un serveur précis sans toucher aux filtres** : le
+        lobby se lit directement (`http://93.57.10.21/lobby.ashx/list?guid=`
+        + SteamID64, agent `Assetto Corsa Launcher`), `pickup: false` pour la
+        réservation, `pass: true` pour le mot de passe, puis le lien CM collé
+        dans la page. Les places d'une voiture : `/JSON|<SteamID64>` du
+        serveur.
       - **Pas vu à l'écran** — la même liste que « Restent » dans la spec :
         la notification unique de « Préparer et rejoindre », refaite après
-        l'essai ; une couche écartée puis rendue en jeu ; un serveur en
-        réservation ; le niveau « Bloqué » (jaune dans le panneau aussi
-        depuis le 2026-10-04, il y était resté gris) ; le mot de passe
-        vérifié avant le lancement (recette confirmée sur 255 vrais
-        serveurs, pas essayée avec un vrai mot de passe) ; les notifications
-        d'ami et de place (ni dans l'app, ni dans Windows) ; le bandeau de la
-        liste de secours (il faut que le lobby tombe) — tests et types
-        seulement.
+        l'essai ; une couche écartée puis rendue en jeu ; le niveau « Bloqué »
+        (jaune dans le panneau aussi depuis le 2026-10-04 ; impossible à
+        provoquer sur la machine de dev, qui a tous les DLC et le CSP le plus
+        récent du lobby) ; un mot de passe juste accepté ; la notification
+        d'ami ; les notifications Windows ; le bandeau de la liste de secours
+        (il faut que le lobby tombe) — tests et types seulement.
+      - **Contenu d'un serveur verrouillé : écarté (2026-10-05).** 0 serveur
+        sur 65 qui déclarent leur contenu protégé n'héberge un fichier
+        lui-même ; la mesure et ce qu'il faudrait pour le reprendre sont dans
+        « Restent » de la spec.
         Le clic sur une notification **Windows** n'ouvre pas le serveur : le
         plugin n'expose pas de clic sur bureau (sa doc le réserve au mobile,
         pas vérifié sur Windows) ; c'est la notification de la pile, gardée

@@ -471,22 +471,37 @@ un ami l'ouvre avec CM depuis un navigateur ou une messagerie, ou le colle
 dans Pit Box. Sans mot de passe : celui de CM est chiffré et ne s'écrit pas
 ici ; il se donne à part.
 
-**Restent** (2026-10-04) — la spec, v1 et v2, est faite ; ce qui suit est soit
-à voir à l'écran, soit une amélioration possible, soit une limite connue :
+**Restent** (2026-10-05) — la spec, v1 et v2, est faite ; ce qui suit est soit
+un défaut, soit à voir à l'écran, soit une amélioration possible, soit une
+limite connue :
 
+- *Défaut* : le panneau ne relit son serveur que quand on en change. Rouvrir
+  le serveur déjà ouvert — « Ouvrir » sur la notification d'une place libérée,
+  un lien collé — ou « Actualiser » laissent donc l'état d'avant : constaté le
+  2026-10-05, « 0 libre » affiché sur une place que le serveur donnait libre,
+  et l'erreur « aucun compte Steam » restée au panneau après le retour de
+  Steam, quand la liste, elle, s'était rechargée.
 - *À voir à l'écran* : la notification unique de « Préparer et rejoindre »
   (décompte et barre du tout) ; une couche écartée puis rendue en jeu (la
-  couche « spa » de la machine de dev est le cas tout trouvé) ; un serveur en
-  réservation ; le niveau « Bloqué » ; le mot de passe vérifié avant le
-  lancement (recette confirmée sur 255 vrais serveurs, jamais essayée avec un
-  vrai mot de passe) ; une notification d'ami ou de place libérée, dans l'app
-  et dans Windows ; le bandeau de la liste de secours (il faut que le lobby
-  tombe).
-- *Améliorations possibles* : proposer le contenu servi par un serveur
-  verrouillé (`sha1("tgys3cqpcwpbssphb0j46tak8ykldaub" + mot de passe)` en
-  base64 coupé, `EncryptedContentKey` de CM) ; les niveaux de préparation de la
-  liste elle-même, qui ne voient ni les liens ni les versions des serveurs (il
-  faudrait `/api/details` serveur par serveur — lourd, seulement si ça gêne).
+  couche « spa » de la machine de dev est le cas tout trouvé) ; le niveau
+  « Bloqué » — impossible à provoquer sur la machine de dev, qui a tous les
+  DLC et un CSP plus récent que tout le lobby ; un mot de passe **juste**
+  accepté (un faux est bien refusé avant tout lancement) ; une notification
+  d'ami ; les notifications **Windows** (celle d'une place libérée est vue
+  dans la pile de l'app) ; le bandeau de la liste de secours (il faut que le
+  lobby tombe).
+- *Améliorations possibles* : les niveaux de préparation de la liste elle-même,
+  qui ne voient ni les liens ni les versions des serveurs (il faudrait
+  `/api/details` serveur par serveur — lourd, seulement si ça gêne).
+- *Écarté* (2026-10-05) : proposer le contenu d'un serveur verrouillé avec la
+  clé `EncryptedContentKey` de CM (`sha1("tgys3cqpcwpbssphb0j46tak8ykldaub" +
+  mot de passe)` en base64 coupé). La clé ne protège que les fichiers que le
+  serveur héberge lui-même (`/content/…`) ; les liens d'auteur restent en
+  clair et sont déjà proposés. Mesuré sur le vrai lobby : sur 1 764 serveurs
+  verrouillés, 1 399 répondent à `/api/details`, 65 déclarent
+  `"password": true`, et **aucun** n'héberge un fichier lui-même. À reprendre
+  le jour où l'un d'eux le fait — avec lui pour vérifier le format de la
+  requête, qu'aucun serveur ne permet d'essayer aujourd'hui.
 - *Limites connues* : des couches écartées restent écartées si CM ne lance
   finalement pas le jeu (un délai de garde à chiffrer) ; le clic sur une
   notification Windows n'ouvre pas le serveur (c'est celle de la pile qui y
