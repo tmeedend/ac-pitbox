@@ -859,7 +859,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Corrections par mod** | à faire : marque et classe d'un mod précis (pays et fiche technique : livrés avec la fiche) | `docs/CHANTIERS.md` |
 | **Règles de tags divergentes** | deux fichiers décrivent la même ontologie, un seul est chargé | `docs/CHANTIERS.md` |
 | **Dossier du jeu** | lot 1 livré (lecture seule) ; reste le lot 2, les tailles | `docs/SPEC-etat-dossier.md`, `docs/CHANTIERS.md` |
-| **Page Online** | v1 et v2 de la spec livrées (tableau, tokens, rejoindre via `race/online`, préparation et contenu récupéré, carte de la fiche circuit, notifications, « Me prévenir ») ; restent un défaut du panneau (il ne se relit pas sur le même serveur), des vérifications à l'écran et des limites connues (SPEC-play-online, « Restent ») | `docs/SPEC-play-online.md`, `docs/online-join-research.md` |
+| **Page Online** | v1 et v2 de la spec livrées (tableau, tokens, rejoindre via `race/online`, préparation et contenu récupéré, carte de la fiche circuit, notifications, « Me prévenir ») ; restent des vérifications à l'écran et des limites connues (SPEC-play-online, « Restent ») | `docs/SPEC-play-online.md`, `docs/online-join-research.md` |
 | **Refactorings reportés** | deux restent : la suite d'`importer.rs` (les restes à côté du mod, règle d'or n°3) et le curseur de régime | `docs/CHANTIERS.md` |
 
 ## Fin de tâche — dans cet ordre

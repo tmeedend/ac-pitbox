@@ -34,9 +34,13 @@
     preferredCar: string | null;
     /** A password carried by a pasted connection link, typed in for you. */
     presetPassword?: string | null;
+    /** Bumped by the page when the open server is asked for again — the
+     * list refreshed, a notification or a pasted link pointing at it: the
+     * panel then reads the server again (`readAgain`). */
+    reread?: number;
     onclose: () => void;
   }
-  let { server, looks, preferredCar, presetPassword = null, onclose }: Props = $props();
+  let { server, looks, preferredCar, presetPassword = null, reread = 0, onclose }: Props = $props();
 
   const favourite = $derived(isFavourite(onlineStore(), serverKey(server)));
 
@@ -62,8 +66,8 @@
     untrack(() => void load(key));
   });
 
-  // A link pasted for the server already open does not reload the panel:
-  // its password still has to land in the field.
+  // A link pasted for the server already open reads it again without
+  // starting over (`readAgain`): its password still has to land in the field.
   $effect(() => {
     const preset = presetPassword;
     if (preset) password = preset;
@@ -144,6 +148,30 @@
   // Not while the foot is fetching: it reads the server itself once done.
   onLibraryChange(() => {
     if (detail && !preparing) void refresh();
+  });
+
+  /** The same server asked for again. The panel only loaded on a change of
+   * server, so it kept what it had read (reported, 2026-10-05): « 0 free »
+   * after « Open » on the notification saying a slot was free, and the
+   * "no Steam account" error after Steam came back while the list beside it
+   * had reloaded. A panel that shows the server is read again keeping the
+   * car picked and the password typed; one that never got it (an error)
+   * loads afresh. Nothing while a load or the foot's fetch is under way, nor
+   * for a server the load effect is about to read anyway. */
+  function readAgain() {
+    const key = serverKey(server);
+    if (loading || preparing || key !== loadedKey) return;
+    if (detail) void refresh();
+    else void load(key);
+  }
+
+  // The token is read first, so the effect subscribes to it (CLAUDE.md).
+  let seenReread = untrack(() => reread);
+  $effect(() => {
+    const token = reread;
+    if (token === seenReread) return;
+    seenReread = token;
+    untrack(readAgain);
   });
 </script>
 

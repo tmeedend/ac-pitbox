@@ -472,16 +472,16 @@ dans Pit Box. Sans mot de passe : celui de CM est chiffré et ne s'écrit pas
 ici ; il se donne à part.
 
 **Restent** (2026-10-05) — la spec, v1 et v2, est faite ; ce qui suit est soit
-un défaut, soit à voir à l'écran, soit une amélioration possible, soit une
-limite connue :
+à voir à l'écran, soit une amélioration possible, soit une limite connue :
 
-- *Défaut* : le panneau ne relit son serveur que quand on en change. Rouvrir
-  le serveur déjà ouvert — « Ouvrir » sur la notification d'une place libérée,
-  un lien collé — ou « Actualiser » laissent donc l'état d'avant : constaté le
-  2026-10-05, « 0 libre » affiché sur une place que le serveur donnait libre,
-  et l'erreur « aucun compte Steam » restée au panneau après le retour de
-  Steam, quand la liste, elle, s'était rechargée.
-- *À voir à l'écran* : la notification unique de « Préparer et rejoindre »
+- *À voir à l'écran* : le panneau relu quand on redemande le serveur déjà
+  ouvert — « Ouvrir » sur la notification d'une place libérée, un lien collé,
+  un clic sur sa ligne, « Actualiser » — en gardant la voiture choisie et le
+  mot de passe tapé, et rechargé de zéro s'il était resté sur une erreur
+  (corrigé le 2026-10-05 : il ne se relisait que sur un changement de
+  serveur, d'où « 0 libre » sur une place libre et l'erreur « aucun compte
+  Steam » restée après le retour de Steam) ; la notification unique de
+  « Préparer et rejoindre »
   (décompte et barre du tout) ; une couche écartée puis rendue en jeu (la
   couche « spa » de la machine de dev est le cas tout trouvé) ; le niveau
   « Bloqué » — impossible à provoquer sur la machine de dev, qui a tous les

@@ -36,8 +36,8 @@ de reprendre. En cas d'écart, la spec fait foi.
       carte Online de la fiche circuit, les notifications et « Me
       prévenir », le mot de passe vérifié, la liste de secours. **Ce qui
       reste est listé à la fin de la section Lots de `SPEC-play-online.md`
-      (« Restent ») : un défaut du panneau, des vérifications à l'écran,
-      une amélioration possible, des limites connues.**
+      (« Restent ») : des vérifications à l'écran, une amélioration
+      possible, des limites connues.**
       - **Vu à l'écran** : le tableau Online, colonnes, tri et regroupement
         (2026-10-03) ; la carte Online de la fiche circuit, « Préparer et
         rejoindre » qui télécharge et importe pour de vrai, la recherche
@@ -46,10 +46,13 @@ de reprendre. En cas d'écart, la spec fait foi.
         Manager », la couche « spa » annoncée écartée), un faux mot de passe
         refusé avant tout lancement, « Me prévenir » qui s'arrête et pose sa
         notification dans la pile quand la place se libère (2026-10-05).
-      - **Défaut repéré (2026-10-05)** : rouvrir le serveur déjà ouvert
-        (« Ouvrir » sur une notification, lien collé) ou « Actualiser » ne
-        relit pas le panneau — « 0 libre » sur une place libre, erreur Steam
-        restée affichée. Détail dans « Restent » de la spec.
+      - **Défaut corrigé (2026-10-05), pas revu à l'écran** : rouvrir le
+        serveur déjà ouvert (« Ouvrir » sur une notification, lien collé, clic
+        sur sa ligne) ou « Actualiser » ne relisait pas le panneau — « 0
+        libre » sur une place libre, erreur Steam restée affichée. La page
+        incrémente désormais un compteur (`reread`) que le panneau suit ; il
+        se relit en gardant voiture et mot de passe, ou repart de zéro s'il
+        était en erreur.
       - **Pour retrouver un serveur précis sans toucher aux filtres** : le
         lobby se lit directement (`http://93.57.10.21/lobby.ashx/list?guid=`
         + SteamID64, agent `Assetto Corsa Launcher`), `pickup: false` pour la

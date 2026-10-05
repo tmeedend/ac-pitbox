@@ -41,6 +41,17 @@
   let selected = $state<ServerSummary | null>(null);
   /** The password a pasted link carried, for the server it opened. */
   let linkPassword = $state<string | null>(null);
+  /** Bumped to make the panel read its server again (`ServerDetail`'s
+   * `reread`): the panel only loads on a change of server by itself. */
+  let panelReread = $state(0);
+
+  /** Opens `server` in the panel. Asked for again while it is already
+   * open — a notification, a pasted link, a click on its row — the panel
+   * reads it again rather than keep what it read before. */
+  function openServer(server: ServerSummary) {
+    selected = server;
+    panelReread += 1;
+  }
   let tab = $state<OnlineTab>("all");
   /** All tab: servers gathered under one row per track (v2 of the spec). */
   let grouped = $state(false);
@@ -94,6 +105,9 @@
         const key = serverKey(selected);
         selected = servers.find((s) => serverKey(s) === key) ?? selected;
       }
+      // Refresh is also asked of the open server: what the panel shows was
+      // read before, and may be an error the lobby's answer just cleared.
+      if (force) panelReread += 1;
     } catch (e) {
       error = errorText(e);
     } finally {
@@ -116,13 +130,13 @@
     linkPassword = link.password;
     const listed = servers.find((s) => serverKey(s) === key);
     if (listed) {
-      selected = listed;
+      openServer(listed);
       return;
     }
     // Not in the lobby — a private server, or one the lobby lost: asked
     // directly, as its panel would.
     try {
-      selected = (await serverDetail(link.ip, link.httpPort)).summary;
+      openServer((await serverDetail(link.ip, link.httpPort)).summary);
     } catch (err) {
       error = errorText(err);
     }
@@ -205,7 +219,7 @@
     } else if (intent?.kind === "server") {
       autoPick = null;
       const key = serverKey(intent.server);
-      selected = servers.find((s) => serverKey(s) === key) ?? intent.server;
+      openServer(servers.find((s) => serverKey(s) === key) ?? intent.server);
       linkPassword = null;
     }
   }
@@ -276,7 +290,7 @@
           selected={selected ? serverKey(selected) : null}
           onselect={(s) => {
             autoPick = null;
-            selected = s;
+            openServer(s);
             linkPassword = null;
           }}
         />
@@ -290,6 +304,7 @@
       {looks}
       preferredCar={lastCars[serverKey(selected)] ?? null}
       presetPassword={linkPassword}
+      reread={panelReread}
       onclose={() => {
         autoPick = null;
         selected = null;
