@@ -67,14 +67,14 @@ de reprendre. En cas d'écart, la spec fait foi.
         récent du lobby) ; un mot de passe juste accepté ; la notification
         d'ami ; les notifications Windows ; le bandeau de la liste de secours
         (il faut que le lobby tombe) — tests et types seulement.
-      - **Contenu d'un serveur verrouillé : écarté (2026-10-05).** 0 serveur
-        sur 65 qui déclarent leur contenu protégé n'héberge un fichier
-        lui-même ; la mesure et ce qu'il faudrait pour le reprendre sont dans
-        « Restent » de la spec.
         Le clic sur une notification **Windows** n'ouvre pas le serveur : le
         plugin n'expose pas de clic sur bureau (sa doc le réserve au mobile,
         pas vérifié sur Windows) ; c'est la notification de la pile, gardée
         au retour, qui mène au panneau.
+      - **Contenu d'un serveur verrouillé : écarté (2026-10-05).** 0 serveur
+        sur 65 qui déclarent leur contenu protégé n'héberge un fichier
+        lui-même ; la mesure et ce qu'il faudrait pour le reprendre sont dans
+        « Restent » de la spec.
       - **Tokens (lot 8)** : la barre est le `FilterBar` de la bibliothèque,
         alimenté par `online/tokens.ts` ; le test d'une valeur
         (`valTest`) est partagé avec la bibliothèque, pour qu'un token veuille
