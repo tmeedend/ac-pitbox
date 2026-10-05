@@ -85,7 +85,8 @@
   let loaded = "";
 
   /** Les trois choses dont dépend le `.glb` demandé, en une clé comparable.
-   * `driver` vaut l'angle du volant, ou `null` quand il n'y a pas de pilote. */
+   * `driver` is the body and outfit imposed on the driver (`DriverView`), or
+   * `null` when no driver is grafted. */
   function sceneKey(car: string, skin: string | null | undefined, driver: DriverView | null): string {
     return `${car}|${skin}|${revision}|${driver ? JSON.stringify(driver) : ""}`;
   }
@@ -124,8 +125,8 @@
     // activée ne relancerait rien tant que la voiture et le skin ne bougent pas.
     void revision;
     // Lus à découvert, et volontairement : ce sont les seuls réglages qui
-    // changent le `.glb` lui-même — le pilote y est greffé et sa pose y est
-    // cuite — donc les bouger doit relancer une conversion. Les autres
+    // changent le `.glb` lui-même — le pilote y est greffé, avec son corps et
+    // sa tenue — donc les bouger doit relancer une conversion. Les autres
     // s'appliquent à la scène en place, plus bas.
     // `preview3dGraftsDriver` et non le mode brut : `always` et `ignition`
     // convertissent tous deux **avec** le mannequin, seule la vue les
@@ -244,10 +245,11 @@
     untrack(() => applyQuality(scene));
   });
 
-  // Le braquage s'applique **sans reconversion** : une rotation de nœud sur le
-  // modèle en place. Seuls les bras du pilote font encore exception — ils sont
-  // écrits en sommets figés, donc les bouger demande une conversion, et c'est
-  // l'effet de chargement plus bas qui s'en charge.
+  // Steering applies **without a reconversion**: a node rotation for the
+  // wheels and the steering wheel, a frame picked in the driver's clip for
+  // the arms that hold it (`applySteer`, `$lib/preview3d/rig.ts`). The `.glb`
+  // no longer depends on the angle, which is why the loading effect above
+  // does not read it.
   $effect(() => {
     void preview3dPrefs().steer;
     untrack(() => {
