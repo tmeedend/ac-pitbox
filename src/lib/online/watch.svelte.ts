@@ -6,8 +6,7 @@
 //   request each every two minutes (`watchRules.watchedServers`).
 // - **A free slot**: only on the server where the user asked "Notify me",
 //   every 30 s; it ends when the slot frees, after an hour, or when the game
-//   starts. Kept in `online.json` (`store.svelte.ts`): a restart of Pit Box
-//   resumes it, the hour still counted from when it was asked.
+//   starts.
 // - Paused while the game runs (`ac://running`): the user is driving, and a
 //   request a second to a server does not belong in a race.
 // - Switched off whole in Settings › General (`StorageKey.onlineWatch`).
@@ -18,10 +17,10 @@ import { isPermissionGranted, requestPermission, sendNotification } from "@tauri
 import { t } from "$lib/i18n/index.svelte";
 import { onAcRunning } from "$lib/launch/launch";
 import { StorageKey } from "$lib/storage";
-import { getUiPref, peekUiPref } from "$lib/uiPrefs.svelte";
-import { isFriend, sameSlotWatch, type SlotWatch } from "./lists";
+import { peekUiPref } from "$lib/uiPrefs.svelte";
+import { isFriend } from "./lists";
 import { serverDrivers, serverKey, slotCounts, type ServerSummary } from "./online";
-import { loadOnlineStore, onlineStore, saveSlotWatch } from "./store.svelte";
+import { loadOnlineStore, onlineStore } from "./store.svelte";
 import { friendsByServer, newSightings, slotFreed, watchedServers } from "./watchRules";
 
 const FRIENDS_EVERY_MS = 2 * 60 * 1000;
@@ -35,7 +34,14 @@ export type WatchAlert =
   | { id: number; kind: "friend"; name: string; server: ServerSummary }
   | { id: number; kind: "slot"; car: string | null; server: ServerSummary };
 
-const state = $state<{ alerts: WatchAlert[] }>({ alerts: [] });
+interface SlotWatch {
+  server: ServerSummary;
+  /** The car the slot is awaited for; `null` for any. */
+  car: string | null;
+  since: number;
+}
+
+const state = $state<{ slot: SlotWatch | null; alerts: WatchAlert[] }>({ slot: null, alerts: [] });
 let nextId = 1;
 let running = false;
 /** Friends seen per server, an empty list where none was, at the last round
@@ -49,7 +55,7 @@ export function onlineWatchOn(): boolean {
 
 /** The slot being awaited, if any. Reactive. */
 export function slotWatch(): SlotWatch | null {
-  return onlineStore().slotWatch;
+  return state.slot;
 }
 
 /** The alerts not dismissed yet. Reactive. */
@@ -64,12 +70,12 @@ export function dismissAlert(id: number): void {
 /** "Notify me": waits for a slot on `server`, for `car` or any. Replaces the
  * previous one — one server watched at a time. */
 export function watchSlot(server: ServerSummary, car: string | null): void {
-  saveSlotWatch({ server: $state.snapshot(server) as ServerSummary, car, since: Date.now() });
+  state.slot = { server: $state.snapshot(server) as ServerSummary, car, since: Date.now() };
   void checkSlot();
 }
 
 export function stopSlotWatch(): void {
-  if (onlineStore().slotWatch) saveSlotWatch(null);
+  state.slot = null;
 }
 
 function alertText(alert: WatchAlert): { title: string; body: string } {
@@ -115,10 +121,7 @@ async function checkFriends(): Promise<void> {
 }
 
 async function checkSlot(): Promise<void> {
-  // Both read before deciding: at startup, a watch kept from before must not
-  // be asked of its server while the "watch off" setting is still unread.
-  await Promise.all([loadOnlineStore(), getUiPref(StorageKey.onlineWatch)]);
-  const watch = $state.snapshot(onlineStore().slotWatch);
+  const watch = state.slot;
   if (!watch) return;
   // Switched off, or past the hour: the watch ends, not just pauses — it
   // would otherwise show as running forever.
@@ -130,7 +133,7 @@ async function checkSlot(): Promise<void> {
   try {
     const counts = await slotCounts(watch.server.ip, watch.server.http_port);
     // Stopped, replaced or the game started while the server answered.
-    if (!sameSlotWatch(onlineStore().slotWatch, watch) || running) return;
+    if (state.slot !== watch || running) return;
     if (slotFreed(counts, watch.car)) {
       stopSlotWatch();
       void deliver({ id: nextId++, kind: "slot", car: watch.car, server: watch.server });
@@ -145,8 +148,6 @@ export function startOnlineWatch(): () => void {
   const first = setTimeout(() => void checkFriends(), FIRST_ROUND_MS);
   const friends = setInterval(() => void checkFriends(), FRIENDS_EVERY_MS);
   const slot = setInterval(() => void checkSlot(), SLOT_EVERY_MS);
-  // A watch kept from before a restart is asked at once, not 30 s later.
-  void checkSlot();
   const stopListening = onAcRunning((now) => {
     running = now;
     if (!now) return;

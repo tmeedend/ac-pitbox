@@ -36,8 +36,8 @@ de reprendre. En cas d'écart, la spec fait foi.
       carte Online de la fiche circuit, les notifications et « Me
       prévenir », le mot de passe vérifié, la liste de secours. **Ce qui
       reste est listé à la fin de la section Lots de `SPEC-play-online.md`
-      (« Restent ») : des vérifications à l'écran, une amélioration
-      possible, des limites connues.**
+      (« Restent ») : des vérifications à l'écran et des limites
+      connues.**
       - **Vu à l'écran** : le tableau Online, colonnes, tri et regroupement
         (2026-10-03) ; la carte Online de la fiche circuit, « Préparer et
         rejoindre » qui télécharge et importe pour de vrai, la recherche
@@ -46,11 +46,12 @@ de reprendre. En cas d'écart, la spec fait foi.
         Manager », la couche « spa » annoncée écartée), un faux mot de passe
         refusé avant tout lancement, « Me prévenir » qui s'arrête et pose sa
         notification dans la pile quand la place se libère (2026-10-05).
-      - **« Me prévenir » survit au redémarrage (2026-10-06)** : la
-        surveillance est un champ `slotWatch` d'`online.json`, à côté des
-        favoris ; un fichier plus ancien se relit sans surveillance. Vu à
-        l'écran : activée, app tuée puis relancée, toujours là, puis arrêtée
-        et effacée du fichier.
+      - **« Me prévenir » ne survit pas au redémarrage, et c'est voulu
+        (2026-10-06)** : c'est une attente du moment, pas un réglage. Une
+        version persistée dans `online.json` a été faite puis annulée (revert
+        de `9fdae29`) — ne pas la refaire.
+      - **Niveaux fins dans la liste : écarté (2026-10-06)**, voir « Restent »
+        de la spec. Ne pas interroger les serveurs un par un pour la liste.
       - **Défaut corrigé (2026-10-05), vu à l'écran le 2026-10-06** : rouvrir le
         serveur déjà ouvert (« Ouvrir » sur une notification, lien collé, clic
         sur sa ligne) ou « Actualiser » ne relisait pas le panneau — « 0

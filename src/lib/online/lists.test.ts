@@ -8,8 +8,6 @@ import {
   recentCars,
   recordJoin,
   RECENTS_KEPT,
-  sameSlotWatch,
-  setSlotWatch,
   tabServers,
   toggleFavourite,
   toggleFriend,
@@ -78,26 +76,6 @@ describe("online favourites and recents (SPEC-play-online, case 1)", () => {
     expect(store.recents).toEqual([]);
     // A file written before friends existed has none.
     expect(store.friends).toEqual([]);
-    // Nor a slot awaited: the watch was not kept before.
-    expect(store.slotWatch).toBeNull();
-  });
-
-  it("keeps a slot awaited across a restart, and drops one it cannot use", () => {
-    // Rule (SPEC-play-online, v2, « Me prévenir »): the watch survives a
-    // restart of Pit Box. Bug it prevents: the watch was lost with the window.
-    const watch = { server: server("1.1.1.1"), car: "ks_mazda_miata", since: 1_000 };
-    const written = JSON.parse(JSON.stringify(setSlotWatch(EMPTY_STORE, watch)));
-    expect(parseStore(written).slotWatch).toEqual(watch);
-    expect(parseStore({ slotWatch: { server: server("1.1.1.1"), since: 1_000 } }).slotWatch?.car).toBeNull();
-    expect(parseStore({ slotWatch: { server: { ip: 3 }, since: 1_000 } }).slotWatch).toBeNull();
-    expect(parseStore({ slotWatch: { server: server("1.1.1.1") } }).slotWatch).toBeNull();
-  });
-
-  it("recognises the same watch by value, not by object", () => {
-    const watch = { server: server("1.1.1.1"), car: null, since: 1_000 };
-    expect(sameSlotWatch(watch, { ...watch, server: server("1.1.1.1", { clients: 9 }) })).toBe(true);
-    expect(sameSlotWatch(watch, { ...watch, since: 2_000 })).toBe(false);
-    expect(sameSlotWatch(watch, null)).toBe(false);
   });
 });
 

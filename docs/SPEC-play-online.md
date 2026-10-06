@@ -430,9 +430,9 @@ une machine qui contacte des milliers d'adresses :
   (`online_slot_counts`). La place attendue est celle de la voiture choisie
   quand c'est elle qui manque de place, sinon n'importe laquelle. La
   surveillance s'arrête quand la place se libère, au bout d'une heure, ou au
-  lancement du jeu ; un serveur à la fois. Elle est gardée dans `online.json`
-  avec les favoris : un redémarrage de Pit Box la reprend, l'heure toujours
-  comptée depuis la demande.
+  lancement du jeu ; un serveur à la fois. Elle ne vit que le temps de la
+  fenêtre : fermer Pit Box l'arrête, et c'est voulu — c'est une attente du
+  moment, pas un réglage (décidé le 2026-10-06).
 
 Elle se met en pause pendant une session (`ac://running`) et repart de zéro
 après : ce qu'elle savait avant ne dit rien de qui est arrivé pendant. Une
@@ -479,7 +479,7 @@ dans Pit Box. Sans mot de passe : celui de CM est chiffré et ne s'écrit pas
 ici ; il se donne à part.
 
 **Restent** (2026-10-06) — la spec, v1 et v2, est faite ; ce qui suit est soit
-à voir à l'écran, soit une amélioration possible, soit une limite connue :
+à voir à l'écran, soit écarté, soit une limite connue :
 
 - *À voir à l'écran* : le panneau relu quand on redemande le serveur déjà
   ouvert — vu par un lien collé (2026-10-06 : 15 puis 17 joueurs) ; restent
@@ -488,15 +488,18 @@ ici ; il se donne à part.
   notification unique de « Préparer et rejoindre » (décompte et barre du
   tout) ; une couche écartée puis rendue en jeu (la couche « spa » de la
   machine de dev est le cas tout trouvé), ou rendue par le délai de garde
-  quand CM ne lance rien ; le niveau « Bloqué » — impossible à provoquer sur la machine de dev, qui a tous les
-  DLC et un CSP plus récent que tout le lobby ; un mot de passe **juste**
-  accepté (un faux est bien refusé avant tout lancement) ; une notification
-  d'ami ; les notifications **Windows** (celle d'une place libérée est vue
-  dans la pile de l'app) ; le bandeau de la liste de secours (il faut que le
-  lobby tombe).
-- *Améliorations possibles* : les niveaux de préparation de la liste elle-même,
-  qui ne voient ni les liens ni les versions des serveurs (il faudrait
-  `/api/details` serveur par serveur — lourd, seulement si ça gêne).
+  quand CM ne lance rien ; le niveau « Bloqué » — impossible à provoquer sur
+  la machine de dev, qui a tous les DLC et un CSP plus récent que tout le
+  lobby ; un mot de passe **juste** accepté (un faux est bien refusé avant
+  tout lancement) ; une notification d'ami ; les notifications **Windows**
+  (celle d'une place libérée est vue dans la pile de l'app) ; le bandeau de
+  la liste de secours (il faut que le lobby tombe).
+- *Écarté* (2026-10-06) : donner à la liste les niveaux fins du panneau — un
+  manquant qui a un lien (« 1 clic » plutôt que « À télécharger »), une
+  version plus ancienne que celle du serveur. Il faudrait interroger
+  `/api/details` de chaque serveur : beaucoup de réseau, abusif envers les
+  serveurs, et ce que la liste dit aujourd'hui suffit — le panneau dit le
+  reste au moment de choisir. **Ne pas y revenir.**
 - *Écarté* (2026-10-05) : proposer le contenu d'un serveur verrouillé avec la
   clé `EncryptedContentKey` de CM (`sha1("tgys3cqpcwpbssphb0j46tak8ykldaub" +
   mot de passe)` en base64 coupé). La clé ne protège que les fichiers que le
@@ -506,9 +509,9 @@ ici ; il se donne à part.
   `"password": true`, et **aucun** n'héberge un fichier lui-même. À reprendre
   le jour où l'un d'eux le fait — avec lui pour vérifier le format de la
   requête, qu'aucun serveur ne permet d'essayer aujourd'hui.
-- *Limites connues* : le clic sur une
-  notification Windows n'ouvre pas le serveur (c'est celle de la pile qui y
-  mène) ; un serveur qui renvoie une liste de places vide le temps d'une
+- *Limites connues* : le clic sur une notification Windows n'ouvre pas le
+  serveur (c'est celle de la pile qui y mène ; accepté tel quel le
+  2026-10-06) ; un serveur qui renvoie une liste de places vide le temps d'une
   requête fait afficher toutes ses voitures à « 0 / 0 » dans le panneau
   jusqu'à la relecture suivante (vu le 2026-10-06 sur un serveur No Hesi) ;
   BSG et LA Canyons refusaient aussi l'authentification — peut-être une
