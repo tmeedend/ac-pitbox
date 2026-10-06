@@ -448,6 +448,26 @@ pub fn launch_replay(cfg: &AppConfig, replay_path: &Path) -> Result<(), String> 
     spawn_cm(cm, Some(replay_path.as_os_str())).map_err(|e| format!("lancement du replay : {e}"))
 }
 
+/// The grid as it can go on track: an opponent in the showcase is left out
+/// (ESPACE§6), and the others are laid in the game. Best-effort, unlike the
+/// player's car: a missing opponent must not stop the session, only be absent
+/// from the final grid. Track day has a grid too (SESSION§3), handled like
+/// Race.
+fn ready_opponents(conn: &Connection, cfg: &AppConfig, setup: &mut RaceSetup) {
+    setup.opponents.retain(|o| {
+        let showcase = crate::skeleton::is_showcase(conn, &o.car_id).unwrap_or(false);
+        if showcase {
+            log::warn!("launch: opponent {} is in the showcase, left out", o.car_id);
+        }
+        !showcase
+    });
+    if matches!(setup.session_type, SessionType::Race | SessionType::TrackDay) {
+        for opp in &setup.opponents {
+            let _ = ensure_available(conn, cfg, ModKind::Car, &opp.car_id);
+        }
+    }
+}
+
 /// Lance la session : active le contenu au besoin, écrit le race.ini, invoque CM.
 pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(), String> {
     let cm = cm_exe(cfg)?;
@@ -458,32 +478,16 @@ pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(
     // Nothing in the showcase goes on track (ESPACE R5). The session column
     // and the opponent picker already leave such mods out; this is the net,
     // checked before anything is activated or written. The player's car and
-    // track refuse the session; an opponent is left out of the grid and the
-    // session starts without it (ESPACE§6) — the same fate as an opponent
-    // that could not be installed, below.
+    // track refuse the session; an opponent is left out of the grid instead
+    // (`ready_opponents`).
     for id in [&setup.car_id, &setup.track_id] {
         crate::skeleton::guard_mod(conn, id)?;
     }
-    let mut setup = setup.clone();
-    setup.opponents.retain(|o| {
-        let showcase = crate::skeleton::is_showcase(conn, &o.car_id).unwrap_or(false);
-        if showcase {
-            log::warn!("launch: opponent {} is in the showcase, left out", o.car_id);
-        }
-        !showcase
-    });
-    let setup = &setup;
-
     ensure_available(conn, cfg, ModKind::Car, &setup.car_id)?;
     ensure_available(conn, cfg, ModKind::Track, &setup.track_id)?;
-    // Adversaires : best-effort — un adversaire manquant ne doit pas bloquer
-    // toute la session, seulement être absent du plateau final. Track day a
-    // aussi une grille (SESSION§3), même traitement que Course.
-    if matches!(setup.session_type, SessionType::Race | SessionType::TrackDay) {
-        for opp in &setup.opponents {
-            let _ = ensure_available(conn, cfg, ModKind::Car, &opp.car_id);
-        }
-    }
+    let mut setup = setup.clone();
+    ready_opponents(conn, cfg, &mut setup);
+    let setup = &setup;
 
     // Le pilote, **après** `ensure_available` et avant de lancer : la voiture
     // doit être déployée pour qu'on ait où écrire, et le jeu doit lire le
