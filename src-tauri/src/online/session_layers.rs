@@ -17,11 +17,19 @@
 //! the session, or killed, finds its layers back on the next start, like the
 //! sweep of `gamebackup`.
 //!
+//! **Nor on the game starting at all.** Content Manager may refuse the join
+//! before any game runs — a dialog, a server gone, CM closed — and then no game
+//! ends to give the layers back: they stayed set aside until the next session
+//! or the next start of Pit Box. A guard (`GUARD`, `restore_if_no_game`) gives
+//! them back when no game is running once the delay is over.
+//!
 //! Layers go through `compose::set_layer_active`, the same path as the switch
 //! on a sheet: nothing here writes to `content/` itself.
 
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::time::Duration;
 
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
@@ -32,9 +40,23 @@ use crate::modscan::ModKind;
 
 const FILE: &str = "online_layers.json";
 
-/// Restores run from two places (the game's end, and the startup
-/// announcement): never both at once on the same file.
+/// Restores run from three places (the game's end, the startup announcement,
+/// the guard): never two at once on the same file.
 static RESTORING: Mutex<()> = Mutex::new(());
+
+/// How long after a join the game must be running, or the layers set aside
+/// come back. Measured on Content Manager's own logs (2026-10-06, three
+/// joins): from CM's start to `acs.exe` 1.3 to 4.1 s, from the join link to
+/// `acs.exe` 0.8 to 2.6 s. Two minutes is some thirty times the worst of them:
+/// a slow disk or a cold CM still fits, and a join CM refused does not leave
+/// the user's layers off for long. The game's loading screen counts as
+/// running, so a long load is not cut short.
+pub const GUARD: Duration = Duration::from_secs(120);
+
+/// Bumped by each `set_aside`: a guard armed for an earlier join stands down
+/// when another join has set layers aside since — those belong to a CM that
+/// may still be starting.
+static GENERATION: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -138,11 +160,20 @@ fn write(config_dir: &Path, set_aside: &SetAside) -> Result<(), String> {
 /// anything stops halfway, the restore still knows every layer it has to give
 /// back. A layer that cannot be deactivated stops the join — joining with it
 /// is the failure this exists to avoid.
-pub fn set_aside(conn: &Connection, cfg: &AppConfig, config_dir: &Path, layer_ids: &[String]) -> Result<(), String> {
+///
+/// Returns the generation to arm the guard with (`restore_if_no_game`), or
+/// `None` when nothing was set aside and there is nothing to guard.
+pub fn set_aside(
+    conn: &Connection,
+    cfg: &AppConfig,
+    config_dir: &Path,
+    layer_ids: &[String],
+) -> Result<Option<u64>, String> {
     if layer_ids.is_empty() {
-        return Ok(());
+        return Ok(None);
     }
     let _guard = RESTORING.lock().unwrap_or_else(|e| e.into_inner());
+    let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
     let mut pending = read(config_dir);
     for id in layer_ids {
         if !pending.layers.contains(id) {
@@ -154,7 +185,33 @@ pub fn set_aside(conn: &Connection, cfg: &AppConfig, config_dir: &Path, layer_id
         crate::compose::set_layer_active(conn, cfg, id, false)?;
         log::info!("online: layer {id} set aside for the session");
     }
-    Ok(())
+    Ok(Some(generation))
+}
+
+/// The guard's end (`GUARD` after a join): gives the layers back when no game
+/// is running and no join has set layers aside since `generation`. A game
+/// running keeps them aside — its end gives them back; a game that has
+/// already come and gone has already given them back, and this finds nothing
+/// left to do.
+pub fn restore_if_no_game(
+    conn: &Connection,
+    cfg: &AppConfig,
+    config_dir: &Path,
+    generation: u64,
+    game_running: bool,
+) -> Vec<String> {
+    let _guard = RESTORING.lock().unwrap_or_else(|e| e.into_inner());
+    if game_running || GENERATION.load(Ordering::SeqCst) != generation {
+        return Vec::new();
+    }
+    let restored = restore_locked(conn, cfg, config_dir);
+    if !restored.is_empty() {
+        log::warn!(
+            "online: no game {} s after the join, set-aside layers given back",
+            GUARD.as_secs()
+        );
+    }
+    restored
 }
 
 /// Reactivates every layer set aside and forgets them; returns the names of
@@ -162,6 +219,11 @@ pub fn set_aside(conn: &Connection, cfg: &AppConfig, config_dir: &Path, layer_id
 /// come back stays in the file, for the next try, and is logged.
 pub fn restore(conn: &Connection, cfg: &AppConfig, config_dir: &Path) -> Vec<String> {
     let _guard = RESTORING.lock().unwrap_or_else(|e| e.into_inner());
+    restore_locked(conn, cfg, config_dir)
+}
+
+/// `restore`, with `RESTORING` already held by the caller.
+fn restore_locked(conn: &Connection, cfg: &AppConfig, config_dir: &Path) -> Vec<String> {
     let pending = read(config_dir);
     if pending.layers.is_empty() {
         return Vec::new();
@@ -269,6 +331,11 @@ mod tests {
         surfaces: std::path::PathBuf,
     }
 
+    /// `GENERATION` is global and tests run in parallel: those that set
+    /// layers aside take turns, or one's join would make another's guard
+    /// stand down.
+    static SERIAL: Mutex<()> = Mutex::new(());
+
     fn spa_with_grip(tag: &str) -> SpaWithGrip {
         let base = crate::testutil::temp_dir(tag);
         let ac = base.join("ac");
@@ -345,6 +412,7 @@ mod tests {
     /// given back whole, the list of what to give back gone with it.
     #[test]
     fn a_layer_set_aside_comes_back_after_the_session() {
+        let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         let SpaWithGrip {
             _base,
             conn,
@@ -381,6 +449,55 @@ mod tests {
         assert!(
             restore(&conn, &cfg, &config_dir).is_empty(),
             "a second restore does nothing"
+        );
+    }
+
+    /// Rule (SPEC-play-online, "Couches et versions"): when Content Manager
+    /// starts no game, the guard gives the layers back — but never while a
+    /// game runs, nor for a join that a newer one has replaced. Bug it
+    /// prevents: a join CM refused left the user's layers off until the next
+    /// session or the next start of Pit Box.
+    #[test]
+    fn the_guard_gives_layers_back_when_no_game_started() {
+        let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        let SpaWithGrip {
+            _base,
+            conn,
+            cfg,
+            config_dir,
+            surfaces,
+        } = spa_with_grip("online-layers-guard");
+        let base_seen = || std::fs::read_to_string(&surfaces).unwrap() == "base";
+
+        let first = set_aside(&conn, &cfg, &config_dir, &["grip".to_string()])
+            .unwrap()
+            .expect("a guard to arm");
+        assert!(
+            restore_if_no_game(&conn, &cfg, &config_dir, first, true).is_empty(),
+            "a game running keeps them aside: its end gives them back"
+        );
+        assert!(base_seen(), "still aside while the game runs");
+
+        let second = set_aside(&conn, &cfg, &config_dir, &["grip".to_string()])
+            .unwrap()
+            .expect("a guard to arm");
+        assert!(
+            restore_if_no_game(&conn, &cfg, &config_dir, first, false).is_empty(),
+            "the first join's guard stands down for the second"
+        );
+        assert!(base_seen(), "still aside for the second join");
+
+        assert_eq!(
+            restore_if_no_game(&conn, &cfg, &config_dir, second, false),
+            vec!["grip"],
+            "no game when the guard ends: given back"
+        );
+        assert!(!base_seen(), "the layer is back in the game");
+        assert!(!config_dir.join(FILE).exists(), "nothing left to give back");
+        assert_eq!(
+            set_aside(&conn, &cfg, &config_dir, &[]).unwrap(),
+            None,
+            "nothing set aside, nothing to guard"
         );
     }
 

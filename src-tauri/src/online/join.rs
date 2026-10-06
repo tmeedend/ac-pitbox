@@ -118,13 +118,16 @@ fn own_layers(conn: &Connection, request: &JoinRequest) -> Vec<String> {
 /// Puts the car and the track in the game if needed, sets aside the layers
 /// asked for, then hands the join to Content Manager. `features` come from
 /// `prepare`; `config_dir` holds the list of layers to give back.
+///
+/// Returns the generation to arm the set-aside guard with
+/// (`session_layers::restore_if_no_game`), `None` when no layer was set aside.
 pub fn join(
     conn: &Connection,
     cfg: &AppConfig,
     config_dir: &Path,
     request: &JoinRequest,
     features: Vec<String>,
-) -> Result<(), String> {
+) -> Result<Option<u64>, String> {
     let cm = crate::launch::cm_exe(cfg)?;
 
     // Same net as an offline session (ESPACE R5), then the same activation:
@@ -144,7 +147,7 @@ pub fn join(
 
     // After the activation, which lays the layers in too: set aside now,
     // they would otherwise come back with it.
-    super::session_layers::set_aside(conn, cfg, config_dir, &own_layers(conn, request))?;
+    let guard = super::session_layers::set_aside(conn, cfg, config_dir, &own_layers(conn, request))?;
 
     let uri = join_uri(request);
     if let Err(e) = crate::launch::spawn_cm(cm, Some(std::ffi::OsStr::new(&uri))) {
@@ -169,7 +172,7 @@ pub fn join(
             log::warn!("online: cannot mark {id} as driven — {e}");
         }
     }
-    Ok(())
+    Ok(guard)
 }
 
 #[cfg(test)]

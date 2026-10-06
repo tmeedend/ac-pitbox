@@ -89,6 +89,13 @@ de reprendre. En cas d'écart, la spec fait foi.
       - **Pas vu de bout en bout dans l'app** : une couche écartée puis
         rendue en jeu (vérifié par un test sur un vrai système de fichiers,
         pas à l'écran ; la couche « spa » de la machine de dev s'y prête).
+      - **Délai de garde des couches écartées (2026-10-06)** : deux minutes
+        après le join, les couches reviennent si aucun jeu ne tourne. Chiffré
+        sur les journaux de CM (`%LOCALAPPDATA%\AcTools Content
+        Manager\Logs`, lignes `URI Request` puis `Waiting for exit: …acs.exe`) :
+        1,3 à 4,1 s du démarrage de CM au jeu sur trois joins. Un compteur de
+        génération fait renoncer la garde d'un join remplacé par un plus
+        récent ; l'état du jeu vient du même sondage que la musique.
       Ce qui est fait et ce qui reste : `SPEC-play-online.md`, section Lots.
       **Pièges déjà payés** (`online-join-research.md`), à relire avant de
       toucher au lancement :

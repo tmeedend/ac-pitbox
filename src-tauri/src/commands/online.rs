@@ -4,6 +4,8 @@
 //! request, which would freeze every other screen for as long as a server
 //! takes to answer.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use super::prelude::*;
 use tauri::Manager;
 
@@ -139,35 +141,62 @@ pub async fn online_ping(servers: Vec<online::drivers::ServerAddr>) -> Result<Ve
         .map_err(|e| e.to_string())
 }
 
+/// Whether the game runs, as the game watch last announced it (`lib.rs`):
+/// what the set-aside guard asks when its delay is over.
+static GAME_RUNNING: AtomicBool = AtomicBool::new(false);
+
 /// Hooked on the game watch (`lib.rs`), which calls it on every change and
 /// once at startup: when the game is not running, gives back the layers an
 /// online session set aside (`online/session_layers.rs`), and tells the screen
 /// which. On its own thread — a recomposition must not hold the watch, which
 /// also drives the music.
 pub fn on_game_running(app: &AppHandle, running: bool) {
+    GAME_RUNNING.store(running, Ordering::SeqCst);
     if running {
         return;
     }
     let app = app.clone();
     std::thread::spawn(move || {
-        let Some(db) = app.try_state::<Db>() else {
-            log::warn!("online: the base is not open yet, set-aside layers wait for the next check");
-            return;
-        };
-        let Ok(dir) = config_dir(&app) else { return };
-        let cfg = crate::config::load(&app);
-        let restored = {
-            let _game_write = crate::gamestate::GameWrite::begin();
-            let Ok(conn) = db.0.lock() else { return };
-            online::session_layers::restore(&conn, &cfg, &dir)
-        };
-        if !restored.is_empty() {
-            use tauri::Emitter;
-            if let Err(e) = app.emit("online://layers-restored", restored) {
-                log::warn!("online://layers-restored not delivered — {e}");
-            }
-        }
+        give_layers_back(&app, online::session_layers::restore);
     });
+}
+
+/// The set-aside guard of a join (`session_layers::GUARD`): when no game runs
+/// once the delay is over, Content Manager started none, and the layers come
+/// back rather than wait for a session that will not happen.
+fn arm_layers_guard(app: &AppHandle, generation: u64) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(online::session_layers::GUARD);
+        give_layers_back(&app, |conn, cfg, dir| {
+            online::session_layers::restore_if_no_game(conn, cfg, dir, generation, GAME_RUNNING.load(Ordering::SeqCst))
+        });
+    });
+}
+
+/// Runs a restore under the game-write marker and the SQLite lock, then tells
+/// the screen which layers came back.
+fn give_layers_back(
+    app: &AppHandle,
+    restore: impl FnOnce(&rusqlite::Connection, &crate::config::AppConfig, &std::path::Path) -> Vec<String>,
+) {
+    let Some(db) = app.try_state::<Db>() else {
+        log::warn!("online: the base is not open yet, set-aside layers wait for the next check");
+        return;
+    };
+    let Ok(dir) = config_dir(app) else { return };
+    let cfg = crate::config::load(app);
+    let restored = {
+        let _game_write = crate::gamestate::GameWrite::begin();
+        let Ok(conn) = db.0.lock() else { return };
+        restore(&conn, &cfg, &dir)
+    };
+    if !restored.is_empty() {
+        use tauri::Emitter;
+        if let Err(e) = app.emit("online://layers-restored", restored) {
+            log::warn!("online://layers-restored not delivered — {e}");
+        }
+    }
 }
 
 fn config_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
@@ -192,11 +221,17 @@ pub fn save_online_store(app: AppHandle, store: serde_json::Value) -> Result<(),
 pub async fn online_join(app: AppHandle, request: online::join::JoinRequest) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let features = online::join::prepare(&request)?;
-        let _game_write = crate::gamestate::GameWrite::begin();
-        let cfg = crate::config::load(&app);
-        let db = app.state::<Db>();
-        let conn = db.0.lock().map_err(|e| e.to_string())?;
-        online::join::join(&conn, &cfg, &config_dir(&app)?, &request, features)
+        let guard = {
+            let _game_write = crate::gamestate::GameWrite::begin();
+            let cfg = crate::config::load(&app);
+            let db = app.state::<Db>();
+            let conn = db.0.lock().map_err(|e| e.to_string())?;
+            online::join::join(&conn, &cfg, &config_dir(&app)?, &request, features)?
+        };
+        if let Some(generation) = guard {
+            arm_layers_guard(&app, generation);
+        }
+        Ok(())
     })
     .await
     .map_err(|e| e.to_string())?

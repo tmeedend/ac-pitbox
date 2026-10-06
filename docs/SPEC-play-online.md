@@ -116,7 +116,7 @@ PitBox est le seul outil qui sait qu'une voiture ou un circuit n'est pas « tel 
 | **Échec possible** : une couche active touche autre chose sur la voiture ou le circuit (textures, extension CSP — le son seul, `sfx/`, passe) | Rien par défaut | Encadré jaune « Couche active sur cette voiture » avec son nom, et l'option « Rejoindre sans les couches » |
 | **Aucune couche** | Rien | Rien |
 
-**La réactivation ne dépend pas d'une fermeture propre.** Le choix « désactivée pour la session » est écrit sur disque avant le lancement. La fermeture du jeu (signal de fin de session déjà utilisé par les replays) réactive la couche et le dit dans une notification. Si PitBox a été fermé entre-temps, la réactivation se fait au démarrage suivant, comme le filet de `gamebackup`.
+**La réactivation ne dépend pas d'une fermeture propre.** Le choix « désactivée pour la session » est écrit sur disque avant le lancement. La fermeture du jeu (signal de fin de session déjà utilisé par les replays) réactive la couche et le dit dans une notification. Si PitBox a été fermé entre-temps, la réactivation se fait au démarrage suivant, comme le filet de `gamebackup`. Si aucun jeu ne démarre — CM a refusé le join —, la couche revient deux minutes après le join.
 
 **Versions à côté du choix.** Sous la voiture choisie et sous le circuit : la version installée et l'archive d'origine (`v1.4 · rss_911_v14.7z`). Quand le serveur déclare sa version (détails étendus), elle s'affiche à côté ; un écart passe en orange. Une mauvaise version installée est l'autre cause fréquente d'échec, et c'est ce qu'on vérifie en premier.
 
@@ -288,9 +288,14 @@ nomme les autres, avec « Rejoindre sans ces couches ». Le bouton devient
 `online_layers.json` **avant** la moindre désactivation ; la fin du jeu (le
 sondage du process qui sert déjà la musique) réactive les couches et le dit
 dans une notification, et l'annonce de départ de ce même sondage fait le
-rattrapage au démarrage suivant si Pit Box a été fermé entre-temps. Les couches
-passent par l'interrupteur ordinaire (`compose::set_layer_active`) ; seules
-celles de la voiture et du circuit rejoints sont acceptées.
+rattrapage au démarrage suivant si Pit Box a été fermé entre-temps. **Et si CM
+ne lance aucun jeu** (il refuse le lien, l'utilisateur le ferme), un délai de
+garde de deux minutes après le join rend les couches quand aucun jeu ne tourne
+à son échéance ; un join plus récent l'annule. Le délai vient des journaux de
+CM : du démarrage de CM à `acs.exe`, 1,3 à 4,1 s sur trois joins réels
+(2026-10-06). Les couches passent par l'interrupteur ordinaire
+(`compose::set_layer_active`) ; seules celles de la voiture et du circuit
+rejoints sont acceptées.
 
 **Lot 7b — récupérer le contenu manquant (livré).** Pour le circuit et chaque
 voiture d'un serveur, le panneau cherche une source, dans l'ordre de la table
@@ -483,7 +488,8 @@ ici ; il se donne à part.
   Steam » restée après le retour de Steam) ; la notification unique de
   « Préparer et rejoindre »
   (décompte et barre du tout) ; une couche écartée puis rendue en jeu (la
-  couche « spa » de la machine de dev est le cas tout trouvé) ; le niveau
+  couche « spa » de la machine de dev est le cas tout trouvé), ou rendue par
+  le délai de garde quand CM ne lance rien ; le niveau
   « Bloqué » — impossible à provoquer sur la machine de dev, qui a tous les
   DLC et un CSP plus récent que tout le lobby ; un mot de passe **juste**
   accepté (un faux est bien refusé avant tout lancement) ; une notification
@@ -502,8 +508,7 @@ ici ; il se donne à part.
   `"password": true`, et **aucun** n'héberge un fichier lui-même. À reprendre
   le jour où l'un d'eux le fait — avec lui pour vérifier le format de la
   requête, qu'aucun serveur ne permet d'essayer aujourd'hui.
-- *Limites connues* : des couches écartées restent écartées si CM ne lance
-  finalement pas le jeu (un délai de garde à chiffrer) ; le clic sur une
+- *Limites connues* : le clic sur une
   notification Windows n'ouvre pas le serveur (c'est celle de la pile qui y
   mène) ; une surveillance « Me prévenir » ne survit pas à un redémarrage ;
   BSG et LA Canyons refusaient aussi l'authentification — peut-être une
