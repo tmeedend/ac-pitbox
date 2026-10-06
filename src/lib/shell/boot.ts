@@ -1,0 +1,35 @@
+// The boot screen (§13): what the window shows from its first frame until the
+// shell is drawn at its final zoom.
+//
+// Before it, a start went through four looks in a row - white (the webview
+// before any CSS), black (the global stylesheet, nothing mounted), the shell
+// at 100 %, then the shell again at the user's zoom, applied once the config
+// came back. The window's own background is now dark (`tauri.conf.json`), the
+// screen is plain HTML in `app.html` - there before any script runs - and it
+// only goes once the prefs are applied and the first frame is painted.
+
+import { setLocale } from "$lib/i18n/index.svelte";
+import { setZoom } from "$lib/shell/zoom.svelte";
+
+/** Language and zoom of the user, applied before anything is mounted: the
+ * shell's first frame is already the right one. */
+export function applyStartupPrefs(prefs: { language: string | null; ui_zoom: number | null }): void {
+  if (prefs.language) setLocale(prefs.language);
+  setZoom(prefs.ui_zoom);
+}
+
+/** Fades the boot screen out once what replaced it has been painted. Two
+ * frames: the first is the one Svelte's mount lands in, the second the one
+ * after it was actually drawn. */
+export function dismissBootScreen(): void {
+  const boot = document.getElementById("boot");
+  if (!boot) return;
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      boot.classList.add("done");
+      // `transitionend` does not come when the transition is skipped (reduced
+      // motion, a hidden window): the timer removes it all the same.
+      setTimeout(() => boot.remove(), 400);
+    }),
+  );
+}

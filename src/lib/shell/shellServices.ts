@@ -19,9 +19,6 @@ import { startGamepadNav } from "$lib/shell/gamepadNav";
 import { startControllerWatch } from "$lib/shell/gamepadDevices.svelte";
 import { goBack, goForward } from "$lib/shell/navHistory";
 import { bigPictureState, exitBigPicture } from "$lib/shell/bigpicture.svelte";
-import { getConfig } from "$lib/config";
-import { setLocale } from "$lib/i18n/index.svelte";
-import { setZoom } from "$lib/shell/zoom.svelte";
 import { listen } from "@tauri-apps/api/event";
 import { bumpLibraryVersion } from "$lib/library/libraryVersion.svelte";
 import { loadTechSheetReport } from "$lib/detail/techSheetReport.svelte";
@@ -78,12 +75,8 @@ export function startShellServices(): () => void {
   stops.push(mouseSideButtonsNavigate());
   stops.push(escapeLeavesBigPicture());
 
-  // Langue forcée par l'utilisateur (Réglages), sinon langue système (déjà
-  // appliquée par défaut par le module i18n). Zoom d'interface, idem.
-  void getConfig().then((cfg) => {
-    if (cfg.prefs.language) setLocale(cfg.prefs.language);
-    setZoom(cfg.prefs.ui_zoom);
-  });
+  // Language and zoom are not here any more: applied by `+page.svelte` before
+  // the shell is mounted (`shell/boot.ts`), they no longer redraw it once.
 
   return () => {
     for (const stop of stops) stop();
