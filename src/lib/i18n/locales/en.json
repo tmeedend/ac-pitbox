@@ -745,6 +745,7 @@
     "noScreenshots": "No screenshot found for this entry.",
     "mediaReplaysTitle": "Replays",
     "playReplay": "▶ Play in CM",
+    "replayGameRunning": "Assetto Corsa is running: close the game to play this replay.",
     "noReplays": "No replay found for this entry.",
     "mediaBackgroundsTitle": "Backgrounds",
     "noBackgrounds": "No official background for this track.",

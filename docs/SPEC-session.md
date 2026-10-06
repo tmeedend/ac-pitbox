@@ -223,7 +223,9 @@ L'état vient de la surveillance du process du jeu qui existait déjà (`music/w
 | demande partie, jeu pas encore vu | `Lancement…`, désactivé | « Session envoyée à Content Manager — Assetto Corsa démarre… » |
 | jeu lancé | `Session en cours`, désactivé, infobulle | « Session en cours… », jusqu'à la fermeture du jeu |
 
-L'attente du jeu est bornée à **30 s** — CM met 0,8 à 4,1 s à démarrer `acs.exe` (mesuré, `online/session_layers.rs`). Au-delà, le bouton revient et le bandeau devient un avertissement : CM a affiché un message ou refusé. Le backend refuse de son côté (`launch::game_running`, scan ponctuel, erreur `errors.gameRunning`) : la porte du bouton n'est qu'un confort, celle du lancement est la garantie — elle couvre aussi un jeu apparu après le délai, et **rejoindre un serveur en ligne**, qui est une session comme une autre.
+L'attente du jeu est bornée à **30 s** — CM met 0,8 à 4,1 s à démarrer `acs.exe` (mesuré, `online/session_layers.rs`). Au-delà, le bouton revient et le bandeau devient un avertissement : CM a affiché un message ou refusé. Le backend refuse de son côté (`launch::game_running`, scan ponctuel, erreur `errors.gameRunning`) : la porte du bouton n'est qu'un confort, celle du lancement est la garantie — elle couvre aussi un jeu apparu après le délai.
+
+**Les deux autres façons de démarrer le jeu suivent la même règle**, porte du bouton comprise : **rejoindre un serveur en ligne** (le bouton du panneau de serveur affiche `Lancement…` puis `Session en cours`, désactivé ; refus backend dans `online::join::prepare`, avant que la moindre couche soit écartée) et **lire un replay** depuis l'onglet Médias de la fiche (`▶ Lire dans CM` désactivé, avec infobulle ; refus dans `launch::launch_replay`). L'un comme l'autre passe ensuite par l'état « demande partie », comme une session lancée d'ici.
 
 ## 3. Écran de réglages
 

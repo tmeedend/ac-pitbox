@@ -19,6 +19,7 @@
     onSessionEnd,
     type ReplayFile,
   } from "$lib/detail/media";
+  import { canStartSession, gameSession, markStarting } from "$lib/launch/gameSession.svelte";
   import { open } from "@tauri-apps/plugin-dialog";
   import { onMount } from "svelte";
   import { errorText } from "$lib/errors";
@@ -111,10 +112,11 @@
   }
 
   async function playReplay(path: string) {
-    if (launching) return;
+    if (launching || !canStartSession()) return;
     launching = path;
     try {
       await launchReplay(path);
+      markStarting();
     } catch (e) {
       onerror(errorText(e));
     } finally {
@@ -202,7 +204,15 @@
               </div>
               <div class="replay-name mono">{f.file_name}</div>
             </div>
-            <button class="btn-ghost play" type="button" onclick={() => playReplay(f.path)} disabled={launching === f.path}>
+            <!-- One game at a time (SESSION§2.4): a replay is played by the
+                 game, so not while a session runs. -->
+            <button
+              class="btn-ghost play"
+              type="button"
+              onclick={() => playReplay(f.path)}
+              disabled={launching === f.path || gameSession.phase !== "idle"}
+              title={gameSession.phase === "running" ? t("detail.replayGameRunning") : undefined}
+            >
               {launching === f.path ? t("common.working") : t("detail.playReplay")}
             </button>
             <button

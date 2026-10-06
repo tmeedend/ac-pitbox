@@ -440,7 +440,12 @@ pub fn open_content_manager(cfg: &AppConfig) -> Result<(), String> {
 /// l'exécutable directement plutôt que de compter sur l'association système,
 /// cohérent avec `launch`/`open_content_manager` qui invoquent déjà CM ainsi.
 pub fn launch_replay(cfg: &AppConfig, replay_path: &Path) -> Result<(), String> {
-    spawn_cm(cm_exe(cfg)?, Some(replay_path.as_os_str())).map_err(|e| format!("lancement du replay : {e}"))
+    let cm = cm_exe(cfg)?;
+    // A replay starts the game too: not while one runs (SESSION§2.4).
+    if game_running() {
+        return Err(crate::errors::GAME_RUNNING.to_string());
+    }
+    spawn_cm(cm, Some(replay_path.as_os_str())).map_err(|e| format!("lancement du replay : {e}"))
 }
 
 /// Lance la session : active le contenu au besoin, écrit le race.ini, invoque CM.

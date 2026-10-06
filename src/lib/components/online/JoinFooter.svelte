@@ -20,6 +20,7 @@
   import { recordRecentJoin } from "$lib/online/store.svelte";
   import { passwordMatches } from "$lib/online/password";
   import { launcherGate, unsourced, webSearchUrl } from "$lib/online/outside";
+  import { gameSession, markStarting } from "$lib/launch/gameSession.svelte";
   import LayersNotice from "./LayersNotice.svelte";
 
   interface Props {
@@ -193,6 +194,7 @@
       if (!(await prepare())) return;
       const others = allCars.map((c) => c.id).filter((id) => id !== carId);
       await joinServer(live, carId, password || null, setAside, others);
+      markStarting();
       joined = true;
       recordRecentJoin(server, carId);
     } catch (e) {
@@ -245,8 +247,24 @@
   {/if}
   {#if joinError}<p class="errbox">{joinError}</p>{/if}
   {#if joined}<p class="ok">{t("online.joined")}</p>{/if}
-  <button class="btn btn-primary join" type="button" disabled={!!blocker || joining || loading} onclick={join}>
-    {busy ? t("online.preparing") : joining ? t("online.joining") : (blocker ?? joinLabel)}
+  <!-- One game at a time (SESSION§2.4): a join is a session like the others,
+       and the button says why it waits rather than failing on click. -->
+  <button
+    class="btn btn-primary join"
+    type="button"
+    disabled={!!blocker || joining || loading || gameSession.phase !== "idle"}
+    title={gameSession.phase === "running" ? t("session.runningTooltip") : undefined}
+    onclick={join}
+  >
+    {busy
+      ? t("online.preparing")
+      : joining
+        ? t("online.joining")
+        : gameSession.phase === "running"
+          ? t("session.running")
+          : gameSession.phase === "starting"
+            ? t("session.starting")
+            : (blocker ?? joinLabel)}
   </button>
 </footer>
 
