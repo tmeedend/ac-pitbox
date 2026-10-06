@@ -723,6 +723,10 @@ pub struct PlanEntry {
     /// The archive's original name, and the site it came from, when known.
     pub source_file_name: Option<String>,
     pub source_site: Option<String>,
+    /// Library cars that take their 3D models from this one (SESSION§2.5),
+    /// by name, those leaving with it aside: the showcase and the deletion
+    /// both take the models away, and these cars would crash the game.
+    pub borrowed_by: Vec<String>,
 }
 
 /// A layer, a skin or a sound attached to a mod, as the screens name it.
@@ -773,6 +777,7 @@ fn kept_archive_exists(cfg: &AppConfig, v: &VersionRow) -> bool {
 /// measured now: "550 MB freed" must not read "0 B".
 pub fn plan(conn: &Connection, cfg: &AppConfig, ids: &[String]) -> Result<Vec<PlanEntry>, String> {
     let mut out = Vec::with_capacity(ids.len());
+    let borrowers = crate::lods::borrowers(conn, cfg)?;
     for id in ids {
         let Some(m) = overlay::get_mod(conn, id).map_err(|e| e.to_string())? else {
             continue;
@@ -824,6 +829,13 @@ pub fn plan(conn: &Connection, cfg: &AppConfig, ids: &[String]) -> Result<Vec<Pl
             kept_archive: versions.iter().any(|v| kept_archive_exists(cfg, v)),
             source_file_name: active.and_then(|v| v.source_file_name.clone().or_else(|| v.source_archive.clone())),
             source_site: active.and_then(|v| v.source_site.clone()),
+            borrowed_by: borrowers
+                .get(&id.to_lowercase())
+                .into_iter()
+                .flatten()
+                .filter(|b| !ids.iter().any(|i| i.eq_ignore_ascii_case(&b.id)))
+                .map(|b| b.name.clone())
+                .collect(),
         });
     }
     Ok(out)

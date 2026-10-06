@@ -227,6 +227,17 @@ L'attente du jeu est bornée à **30 s** — CM met 0,8 à 4,1 s à démarrer `a
 
 **Les deux autres façons de démarrer le jeu suivent la même règle**, porte du bouton comprise : **rejoindre un serveur en ligne** (le bouton du panneau de serveur affiche `Lancement…` puis `Session en cours`, désactivé ; refus backend dans `online::join::prepare`, avant que la moindre couche soit écartée) et **lire un replay** depuis l'onglet Médias de la fiche (`▶ Lire dans CM` désactivé, avec infobulle ; refus dans `launch::launch_replay`). L'un comme l'autre passe ensuite par l'état « demande partie », comme une session lancée d'ici.
 
+### 2.5 Une voiture qui emprunte ses modèles à une autre
+
+Le `lods.ini` d'une voiture nomme le `.kn5` de chaque niveau de détail, par un chemin **relatif à son dossier** — qui peut en sortir. Des variantes s'en servent pour ne livrer que leur physique : l'Auriel 90 « BOP » du pack VRC n'a aucun modèle à elle, ses quatre LOD sont `../vrc_arc_auriel90/vrc_arc_auriel90_*.kn5`. Pour Pit Box ce sont deux dossiers, deux voitures, deux entrées de bibliothèque ; pour le jeu, la seconde n'existe pas sans la première. Bug réel : la voiture de base supprimée comme un doublon apparent, la variante restée dans la liste, et Assetto Corsa qui plante en installant le pilote dans une voiture sans carrosserie (`DriverModel`, depuis `CarAvatar::init3D`).
+
+`lods.rs` répond à « à qui cette voiture emprunte-t-elle ses modèles ? ». Le `lods.ini` n'est lu (`data/` puis `data.acd`) que pour une voiture **sans modèle à elle** — un `collider.kn5` seul n'en est pas un —, si bien que poser la question à toute une bibliothèque coûte une lecture de dossier par voiture. Deux endroits la posent :
+
+- **Le lancement** (`launch::ensure_lenders`) : la voiture prêteuse est posée dans le jeu si elle est en bibliothèque, comme la voiture du joueur ; introuvable, la session est refusée **en la nommant** (`errors.carModelsMissing`, `{name}` — le remède est de la réinstaller, et il n'y en a pas sans son nom). Une prêteuse en bibliothèque qui ne peut pas être posée (en vitrine) garde sa propre erreur. Un adversaire dans ce cas est retiré de la grille, la session part sans lui.
+- **La suppression et la mise en vitrine** (`showcase::plan`, `borrowed_by`) : la confirmation nomme les voitures de la bibliothèque qui empruntent les modèles de celle qui part, quel que soit le choix — les deux retirent les modèles. Une voiture qui part dans le même lot n'est pas nommée.
+
+Une erreur destinée à l'utilisateur peut donc porter des valeurs : `errors.clé{"name":"…"}` (`errors::with_values`), relu par `$lib/errorKey` avant traduction. Une clé seule reste la forme normale.
+
 ## 3. Écran de réglages
 
 Pas de rappel du duo en haut (déjà dans la barre latérale). Le titre **suit la

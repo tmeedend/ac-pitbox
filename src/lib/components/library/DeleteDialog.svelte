@@ -30,6 +30,8 @@
   const unknownSource = $derived(freeable.filter((e) => !e.source_file_name));
   const anyKept = $derived(freeable.some((e) => e.kept_archive));
   const withAttached = $derived(freeable.filter((e) => e.attached.length > 0));
+  /** Mods other library cars take their 3D models from (SESSION§2.5). */
+  const lending = $derived(freeable.filter((e) => e.borrowed_by.length > 0));
 
   // Spelled out rather than built: `t()` returns the key it does not know.
   const ATTACHED_KEY: Record<string, string> = {
@@ -148,6 +150,12 @@
           </span>
         </label>
 
+        {#each lending as e (e.id)}
+          <!-- Both outcomes take the models away: said whichever is picked,
+               and before the rest - it is the one consequence that crashes
+               the game later, far from this dialog (SESSION§2.5). -->
+          <p class="warnbox">⚠ {t("showcase.borrowedBy", { name: e.name, names: e.borrowed_by.join(", ") })}</p>
+        {/each}
         {#if active.length}
           <p class="note">
             {one ? t("showcase.willDeactivate") : t("showcase.activeMany", { count: active.length })}

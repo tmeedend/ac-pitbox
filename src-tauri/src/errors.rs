@@ -39,6 +39,22 @@ pub const TRACK_NOT_INSTALLED: &str = "errors.trackNotInstalled";
 // A session asked for while Assetto Corsa still runs (SESSION§2.4): one game
 // at a time, whoever started it.
 pub const GAME_RUNNING: &str = "errors.gameRunning";
+// A car that takes its 3D models from another car absent from the game and
+// from the library (SESSION§2.5): the game would crash loading it. Carries
+// `{name}`, the folder of the missing car (`with_values`).
+pub const CAR_MODELS_MISSING: &str = "errors.carModelsMissing";
+
+/// A key with values for its placeholders, as `errors.key{"name":"value"}`:
+/// the frontend splits the two back (`$lib/errorKey`) and hands the values to
+/// the translation. For the error whose remedy is a name - which car to
+/// reinstall - and is no remedy without it.
+pub fn with_values(key: &str, values: &[(&str, &str)]) -> String {
+    let map: serde_json::Map<String, serde_json::Value> = values
+        .iter()
+        .map(|(k, v)| ((*k).to_string(), serde_json::Value::String((*v).to_string())))
+        .collect();
+    format!("{key}{}", serde_json::Value::Object(map))
+}
 // Online (docs/SPEC-play-online.md). The lobby and `/JSON` ask for the signed-in
 // Steam account, and the game needs Steam to play online: its absence is said,
 // not worked around. The lobby and a server are told apart because the user's

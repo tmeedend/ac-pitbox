@@ -35,6 +35,8 @@ export interface PlanEntry {
   kept_archive: boolean;
   source_file_name: string | null;
   source_site: string | null;
+  /** Library cars that take their 3D models from this one (SESSION§2.5). */
+  borrowed_by: string[];
 }
 
 /** Mirrors `showcase::AttachedEntry`: a layer, skin or sound of a mod, which

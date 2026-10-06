@@ -462,10 +462,44 @@ fn ready_opponents(conn: &Connection, cfg: &AppConfig, setup: &mut RaceSetup) {
         !showcase
     });
     if matches!(setup.session_type, SessionType::Race | SessionType::TrackDay) {
-        for opp in &setup.opponents {
-            let _ = ensure_available(conn, cfg, ModKind::Car, &opp.car_id);
+        setup.opponents.retain(|opp| {
+            if let Err(e) = ensure_available(conn, cfg, ModKind::Car, &opp.car_id) {
+                log::warn!("launch: opponent {} not laid in the game: {e}", opp.car_id);
+            }
+            // Same fate as the player's car below, but the session goes on:
+            // an opponent with no body crashes the whole race (SESSION§2.5).
+            match ensure_lenders(conn, cfg, &opp.car_id) {
+                Ok(()) => true,
+                Err(e) => {
+                    log::warn!("launch: opponent {} left out: {e}", opp.car_id);
+                    false
+                }
+            }
+        });
+    }
+}
+
+/// Lays in the game the cars `car_id` borrows its models from (SESSION§2.5),
+/// or refuses: without them the game loads a car with no body and crashes
+/// seating its driver. A lender found nowhere is named, since the remedy is to
+/// reinstall it; one in the library that cannot be laid (in the showcase, say)
+/// keeps its own error, which says why.
+fn ensure_lenders(conn: &Connection, cfg: &AppConfig, car_id: &str) -> Result<(), String> {
+    let ac = cfg.ac_install_path.as_ref().ok_or(crate::errors::AC_NOT_CONFIGURED)?;
+    let car_dir = ac.join("content").join("cars").join(car_id);
+    for lender in crate::lods::lenders(&car_dir, car_id) {
+        if let Err(e) = ensure_available(conn, cfg, ModKind::Car, &lender) {
+            log::warn!("launch: {car_id} borrows its models from {lender}, which cannot be laid: {e}");
+            if e == crate::errors::CAR_NOT_INSTALLED {
+                return Err(crate::errors::with_values(
+                    crate::errors::CAR_MODELS_MISSING,
+                    &[("name", &lender)],
+                ));
+            }
+            return Err(e);
         }
     }
+    Ok(())
 }
 
 /// Lance la session : active le contenu au besoin, écrit le race.ini, invoque CM.
@@ -484,6 +518,7 @@ pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(
         crate::skeleton::guard_mod(conn, id)?;
     }
     ensure_available(conn, cfg, ModKind::Car, &setup.car_id)?;
+    ensure_lenders(conn, cfg, &setup.car_id)?;
     ensure_available(conn, cfg, ModKind::Track, &setup.track_id)?;
     let mut setup = setup.clone();
     ready_opponents(conn, cfg, &mut setup);
@@ -549,6 +584,45 @@ pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// SESSION§2.5: a car whose models live in another car's folder goes on
+    /// track only with that car in the game. Absent from the game and from
+    /// the library, the launch is refused, naming it - the game would crash
+    /// seating the driver in a car with no body (the VRC "BOP" Auriel 90).
+    #[test]
+    fn a_car_without_its_lender_is_refused_with_the_lender_named() {
+        let base = crate::testutil::temp_dir("launch_lenders");
+        let cfg = AppConfig {
+            ac_install_path: Some(base.join("ac")),
+            library_path: Some(base.join("lib")),
+            ..Default::default()
+        };
+        let conn = overlay::open(&base.join("overlay.sqlite")).expect("base");
+        let cars = base.join("ac").join("content").join("cars");
+        std::fs::create_dir_all(cars.join("bop").join("data")).expect("variant");
+        std::fs::write(cars.join("bop").join("collider.kn5"), b"KN5").expect("collider");
+        std::fs::write(
+            cars.join("bop").join("data").join("lods.ini"),
+            "[LOD_0]
+FILE=../base_car/body.kn5
+",
+        )
+        .expect("lods");
+
+        let refused = ensure_lenders(&conn, &cfg, "bop").expect_err("no body, no session");
+        assert_eq!(
+            refused,
+            crate::errors::with_values(crate::errors::CAR_MODELS_MISSING, &[("name", "base_car")]),
+            "the missing car is named"
+        );
+
+        std::fs::create_dir_all(cars.join("base_car")).expect("lender");
+        std::fs::write(cars.join("base_car").join("body.kn5"), b"KN5").expect("body");
+        assert!(
+            ensure_lenders(&conn, &cfg, "bop").is_ok(),
+            "with its lender in the game, it goes"
+        );
+    }
 
     /// A saved session exactly as version 0.6.0 wrote it into
     /// `saved_sessions.json`, trimmed to its `setup` object. Verbatim: the six

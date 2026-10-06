@@ -1021,3 +1021,56 @@ fn a_locked_resource_puts_everything_back() {
     );
     assert!(!skeleton::is_showcase(&f.conn, "lanzo").unwrap());
 }
+
+/// Rule (SESSION§2.5): the confirmation names the library cars that take
+/// their 3D models from the one leaving - the showcase and the deletion both
+/// take the models away, and such a car crashes the game (real bug: the VRC
+/// Auriel 90 deleted as a duplicate of its "BOP" variant). A borrower leaving
+/// in the same lot is not a car left behind, and is not named.
+#[test]
+fn the_plan_names_the_cars_that_borrow_its_models() {
+    let f = fixture("showcase-borrowers", "lanzo", "Car", car);
+    let variant = f.base.join("lib").join("cars").join("lanzo_bop").join("v1");
+    write(&variant, "ui/ui_car.json", br#"{"name":"Lanzo BOP","brand":"RSS"}"#);
+    write(&variant, "collider.kn5", &[7; 100]);
+    write(&variant, "data/lods.ini", b"[LOD_0]\nFILE=../lanzo/lanzo.kn5\n");
+    let now = chrono::Local::now().to_rfc3339();
+    overlay::upsert_mod(
+        &f.conn,
+        "lanzo_bop",
+        "Car",
+        Some("RSS"),
+        Some("Lanzo BOP"),
+        "h2",
+        None,
+        &now,
+    )
+    .unwrap();
+    overlay::insert_version(
+        &f.conn,
+        "v1-bop",
+        "lanzo_bop",
+        Some("1.4"),
+        None,
+        &now,
+        &variant.to_string_lossy(),
+        Some("mod_v1.4.7z"),
+        "sig-bop",
+        &[],
+        &[],
+        &[],
+        &[],
+        None,
+    )
+    .unwrap();
+    overlay::set_active_version(&f.conn, "lanzo_bop", "v1-bop").unwrap();
+
+    let p = &plan(&f.conn, &f.cfg, &["lanzo".to_string()]).unwrap()[0];
+    assert_eq!(p.borrowed_by, vec!["Lanzo BOP".to_string()], "the variant is named");
+
+    let both = plan(&f.conn, &f.cfg, &["lanzo".to_string(), "lanzo_bop".to_string()]).unwrap();
+    assert!(
+        both.iter().all(|p| p.borrowed_by.is_empty()),
+        "nothing is left behind when both go"
+    );
+}
