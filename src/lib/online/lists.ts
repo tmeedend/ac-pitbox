@@ -18,6 +18,16 @@ export interface RecentJoin {
   at: string;
 }
 
+/** A "Notify me": the slot awaited on one server (SPEC-play-online.md, v2). */
+export interface SlotWatch {
+  server: ServerSummary;
+  /** The car the slot is awaited for; `null` for any. */
+  car: string | null;
+  /** When it was asked, in ms since the epoch: the watch ends an hour later,
+   * restarts of Pit Box included. */
+  since: number;
+}
+
 /** The schema of `online.json` (the Rust side keeps it opaque). */
 export interface OnlineStore {
   favourites: ServerSummary[];
@@ -25,12 +35,15 @@ export interface OnlineStore {
   /** Driver names, as servers display them — the way CM's own friends work
    * (SPEC-play-online.md, "Amis : comme CM, par nom affiché"). */
   friends: string[];
+  /** The slot being awaited, kept on disk so that it survives a restart of
+   * Pit Box (reported: it was lost with the window). */
+  slotWatch: SlotWatch | null;
 }
 
 /** Joins kept: enough for "yesterday's server", short enough to scan. */
 export const RECENTS_KEPT = 20;
 
-export const EMPTY_STORE: OnlineStore = { favourites: [], recents: [], friends: [] };
+export const EMPTY_STORE: OnlineStore = { favourites: [], recents: [], friends: [], slotWatch: null };
 
 function isServer(v: unknown): v is ServerSummary {
   const s = v as ServerSummary | null;
@@ -51,7 +64,27 @@ export function parseStore(raw: unknown): OnlineStore {
   const friends = Array.isArray(value.friends)
     ? value.friends.filter((f): f is string => typeof f === "string" && f.trim() !== "")
     : [];
-  return { favourites, recents, friends };
+  return { favourites, recents, friends, slotWatch: parseSlotWatch(value.slotWatch) };
+}
+
+/** Absent from a file written before the watch was kept; dropped when it
+ * cannot be used. */
+function parseSlotWatch(raw: unknown): SlotWatch | null {
+  const w = raw as Partial<SlotWatch> | null;
+  if (!w || !isServer(w.server) || typeof w.since !== "number") return null;
+  const car = typeof w.car === "string" ? w.car : null;
+  return { server: w.server, car, since: w.since };
+}
+
+/** Starts awaiting a slot, replacing the previous watch: one server at a time. */
+export function setSlotWatch(store: OnlineStore, watch: SlotWatch | null): OnlineStore {
+  return { ...store, slotWatch: watch };
+}
+
+/** The same watch, by value: the store hands back a new object at each write,
+ * so identity says nothing (CLAUDE.md, "Une Map ou un Set clés par objet"). */
+export function sameSlotWatch(a: SlotWatch | null, b: SlotWatch | null): boolean {
+  return !!a && !!b && a.since === b.since && a.car === b.car && serverKey(a.server) === serverKey(b.server);
 }
 
 /** Names compare trimmed and without case: a server's entry list writes the

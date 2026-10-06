@@ -430,7 +430,9 @@ une machine qui contacte des milliers d'adresses :
   (`online_slot_counts`). La place attendue est celle de la voiture choisie
   quand c'est elle qui manque de place, sinon n'importe laquelle. La
   surveillance s'arrête quand la place se libère, au bout d'une heure, ou au
-  lancement du jeu ; un serveur à la fois.
+  lancement du jeu ; un serveur à la fois. Elle est gardée dans `online.json`
+  avec les favoris : un redémarrage de Pit Box la reprend, l'heure toujours
+  comptée depuis la demande.
 
 Elle se met en pause pendant une session (`ac://running`) et repart de zéro
 après : ce qu'elle savait avant ne dit rien de qui est arrivé pendant. Une
@@ -476,21 +478,17 @@ un ami l'ouvre avec CM depuis un navigateur ou une messagerie, ou le colle
 dans Pit Box. Sans mot de passe : celui de CM est chiffré et ne s'écrit pas
 ici ; il se donne à part.
 
-**Restent** (2026-10-05) — la spec, v1 et v2, est faite ; ce qui suit est soit
+**Restent** (2026-10-06) — la spec, v1 et v2, est faite ; ce qui suit est soit
 à voir à l'écran, soit une amélioration possible, soit une limite connue :
 
 - *À voir à l'écran* : le panneau relu quand on redemande le serveur déjà
-  ouvert — « Ouvrir » sur la notification d'une place libérée, un lien collé,
-  un clic sur sa ligne, « Actualiser » — en gardant la voiture choisie et le
-  mot de passe tapé, et rechargé de zéro s'il était resté sur une erreur
-  (corrigé le 2026-10-05 : il ne se relisait que sur un changement de
-  serveur, d'où « 0 libre » sur une place libre et l'erreur « aucun compte
-  Steam » restée après le retour de Steam) ; la notification unique de
-  « Préparer et rejoindre »
-  (décompte et barre du tout) ; une couche écartée puis rendue en jeu (la
-  couche « spa » de la machine de dev est le cas tout trouvé), ou rendue par
-  le délai de garde quand CM ne lance rien ; le niveau
-  « Bloqué » — impossible à provoquer sur la machine de dev, qui a tous les
+  ouvert — vu par un lien collé (2026-10-06 : 15 puis 17 joueurs) ; restent
+  « Ouvrir » sur la notification d'une place libérée, « Actualiser » après le
+  retour de Steam (rechargé de zéro s'il était resté sur une erreur) ; la
+  notification unique de « Préparer et rejoindre » (décompte et barre du
+  tout) ; une couche écartée puis rendue en jeu (la couche « spa » de la
+  machine de dev est le cas tout trouvé), ou rendue par le délai de garde
+  quand CM ne lance rien ; le niveau « Bloqué » — impossible à provoquer sur la machine de dev, qui a tous les
   DLC et un CSP plus récent que tout le lobby ; un mot de passe **juste**
   accepté (un faux est bien refusé avant tout lancement) ; une notification
   d'ami ; les notifications **Windows** (celle d'une place libérée est vue
@@ -510,7 +508,9 @@ ici ; il se donne à part.
   requête, qu'aucun serveur ne permet d'essayer aujourd'hui.
 - *Limites connues* : le clic sur une
   notification Windows n'ouvre pas le serveur (c'est celle de la pile qui y
-  mène) ; une surveillance « Me prévenir » ne survit pas à un redémarrage ;
+  mène) ; un serveur qui renvoie une liste de places vide le temps d'une
+  requête fait afficher toutes ses voitures à « 0 / 0 » dans le panneau
+  jusqu'à la relecture suivante (vu le 2026-10-06 sur un serveur No Hesi) ;
   BSG et LA Canyons refusaient aussi l'authentification — peut-être une
   communauté à lanceur comme No Hesi, à vérifier dans
   `Documents/Assetto Corsa/logs/log.txt` (une ligne `ACP_…`) le jour où l'un

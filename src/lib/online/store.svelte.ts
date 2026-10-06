@@ -1,9 +1,19 @@
-// Favourites and recent joins, persisted in `online.json` by the Rust side
+// Favourites, recent joins, friends and the slot awaited, persisted in
+// `online.json` by the Rust side
 // (`online/store.rs`, golden rule 6). Loaded once, written whole on every
 // change through `durableWriter`: retried once, then shown by `PrefsToast`.
 import { invoke } from "@tauri-apps/api/core";
 import { durableWriter, type WriteFailure } from "$lib/durableWrite.svelte";
-import { EMPTY_STORE, parseStore, recordJoin, toggleFavourite, toggleFriend, type OnlineStore } from "./lists";
+import {
+  EMPTY_STORE,
+  parseStore,
+  recordJoin,
+  setSlotWatch,
+  toggleFavourite,
+  toggleFriend,
+  type OnlineStore,
+  type SlotWatch,
+} from "./lists";
 import type { ServerSummary } from "./online";
 
 const state = $state<{ store: OnlineStore }>({ store: EMPTY_STORE });
@@ -51,6 +61,11 @@ export function recordRecentJoin(server: ServerSummary, car: string): void {
 
 export function toggleFriendName(name: string): void {
   update(toggleFriend(state.store, name));
+}
+
+/** The "Notify me" watch, kept with the rest so that it survives a restart. */
+export function saveSlotWatch(watch: SlotWatch | null): void {
+  update(setSlotWatch(state.store, watch));
 }
 
 export function onlineStoreWriteFailure(): WriteFailure {

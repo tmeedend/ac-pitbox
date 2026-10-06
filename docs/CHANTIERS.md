@@ -46,7 +46,12 @@ de reprendre. En cas d'écart, la spec fait foi.
         Manager », la couche « spa » annoncée écartée), un faux mot de passe
         refusé avant tout lancement, « Me prévenir » qui s'arrête et pose sa
         notification dans la pile quand la place se libère (2026-10-05).
-      - **Défaut corrigé (2026-10-05), pas revu à l'écran** : rouvrir le
+      - **« Me prévenir » survit au redémarrage (2026-10-06)** : la
+        surveillance est un champ `slotWatch` d'`online.json`, à côté des
+        favoris ; un fichier plus ancien se relit sans surveillance. Vu à
+        l'écran : activée, app tuée puis relancée, toujours là, puis arrêtée
+        et effacée du fichier.
+      - **Défaut corrigé (2026-10-05), vu à l'écran le 2026-10-06** : rouvrir le
         serveur déjà ouvert (« Ouvrir » sur une notification, lien collé, clic
         sur sa ligne) ou « Actualiser » ne relisait pas le panneau — « 0
         libre » sur une place libre, erreur Steam restée affichée. La page
