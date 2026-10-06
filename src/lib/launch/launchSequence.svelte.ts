@@ -6,6 +6,7 @@
 // and the banner that reports the outcome — and passes it in as `run`.
 import { carClassOf, driverFor, isEmpty } from "$lib/driver/driverOverride.svelte";
 import { getModDetail } from "$lib/library/library";
+import { canStartSession } from "./gameSession.svelte";
 import { isSteamRunning, launchSession, type RaceSetup } from "./launch";
 
 // A failure of the check itself must not keep anyone from playing: in doubt
@@ -39,7 +40,9 @@ export class LaunchSequence {
   }
 
   async launch() {
-    if (this.launching || !this.#canLaunch()) return;
+    // One game at a time (SESSION§2.4): the button already says so, this is
+    // the gamepad's and the shortcut's way in.
+    if (this.launching || !canStartSession() || !this.#canLaunch()) return;
     if (!(await steamReady())) {
       this.steamStillMissing = false;
       this.steamPromptOpen = true;

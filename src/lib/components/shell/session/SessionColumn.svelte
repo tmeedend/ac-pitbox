@@ -9,6 +9,7 @@
   import CarFields from "./CarFields.svelte";
   import SessionTypes from "./SessionTypes.svelte";
   import { gridMods } from "$lib/launch/gridMods.svelte";
+  import { gameSession } from "$lib/launch/gameSession.svelte";
   import { bumpLibraryVersion, libraryVersion } from "$lib/library/libraryVersion.svelte";
   import { nav, requestSection, openInSection } from "$lib/shell/nav.svelte";
   import { previewSrc, getModDetail, activateMod } from "$lib/library/library";
@@ -377,11 +378,19 @@
     {/if}
     <!-- Cible du bouton Start de la manette (§7.4bis) : il y amène le
          curseur depuis n'importe quel écran, il ne lance pas lui-même. -->
+    <!-- One game at a time (SESSION§2.4): while CM starts it and while it
+         runs, the button says so instead of sending a second session. -->
     <button
       class="btn-launch"
-      disabled={!sessionReady || inactiveMods.length > 0 || showcased.length > 0}
+      disabled={!sessionReady || inactiveMods.length > 0 || showcased.length > 0 || gameSession.phase !== "idle"}
+      title={gameSession.phase === "running" ? t("session.runningTooltip") : undefined}
       {...{ [LAUNCH_BUTTON_ATTR]: "" }}
-      onclick={launchNow}>{t("session.start")}</button
+      onclick={launchNow}
+      >{gameSession.phase === "running"
+        ? t("session.running")
+        : gameSession.phase === "starting"
+          ? t("session.starting")
+          : t("session.start")}</button
     >
     <!-- La sortie vers Content Manager a rejoint le pied du rail
          (`NavRail`), entre Réglages et À propos : cette colonne n'a plus

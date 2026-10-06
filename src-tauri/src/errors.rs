@@ -36,6 +36,9 @@ pub const CM_NOT_CONFIGURED: &str = "errors.cmNotConfigured";
 // they did not just pick on screen.
 pub const CAR_NOT_INSTALLED: &str = "errors.carNotInstalled";
 pub const TRACK_NOT_INSTALLED: &str = "errors.trackNotInstalled";
+// A session asked for while Assetto Corsa still runs (SESSION§2.4): one game
+// at a time, whoever started it.
+pub const GAME_RUNNING: &str = "errors.gameRunning";
 // Online (docs/SPEC-play-online.md). The lobby and `/JSON` ask for the signed-in
 // Steam account, and the game needs Steam to play online: its absence is said,
 // not worked around. The lobby and a server are told apart because the user's

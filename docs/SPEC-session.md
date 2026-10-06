@@ -211,6 +211,20 @@ Le lancement vérifie donc la présence du process `steam.exe` (`launch::steam_r
 
 **Bouton « Ouvrir dans CM »** : lance CM sans argument de session, sélection active, pour les réglages fins (échappatoire power-user).
 
+### 2.4 Une session à la fois
+
+Pit Box ne lance pas de session tant qu'Assetto Corsa tourne, quel que soit celui qui l'a démarré (Pit Box, Content Manager directement, un replay). Deux raisons : le lancement réécrit les fichiers pilote dans le dossier de la voiture **du jeu** (§2), ce qui ne se fait pas sous un jeu lancé ; et ce que CM fait d'une seconde demande de course pendant qu'une première roule n'est pas de notre ressort. Content Manager simplement **ouvert**, sans jeu, ne gêne rien : il est mono-instance et reçoit la demande dans sa fenêtre.
+
+L'état vient de la surveillance du process du jeu qui existait déjà (`music/watch.rs`, `ac://running`, §16.2), complétée d'une question posée une fois au démarrage (`is_game_running`) — la première annonce de la surveillance part avant que la fenêtre n'écoute. Côté écran (`launch/gameSession.svelte.ts`), trois états :
+
+| État | Bouton de la colonne de session | Bandeau de l'écran de réglages |
+| --- | --- | --- |
+| aucun jeu | `▶ Démarrer la session` | — |
+| demande partie, jeu pas encore vu | `Lancement…`, désactivé | « Session envoyée à Content Manager — Assetto Corsa démarre… » |
+| jeu lancé | `Session en cours`, désactivé, infobulle | « Session en cours… », jusqu'à la fermeture du jeu |
+
+L'attente du jeu est bornée à **30 s** — CM met 0,8 à 4,1 s à démarrer `acs.exe` (mesuré, `online/session_layers.rs`). Au-delà, le bouton revient et le bandeau devient un avertissement : CM a affiché un message ou refusé. Le backend refuse de son côté (`launch::game_running`, scan ponctuel, erreur `errors.gameRunning`) : la porte du bouton n'est qu'un confort, celle du lancement est la garantie — elle couvre aussi un jeu apparu après le délai, et **rejoindre un serveur en ligne**, qui est une session comme une autre.
+
 ## 3. Écran de réglages
 
 Pas de rappel du duo en haut (déjà dans la barre latérale). Le titre **suit la

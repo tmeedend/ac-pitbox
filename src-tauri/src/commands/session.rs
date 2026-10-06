@@ -80,6 +80,14 @@ pub fn is_steam_running() -> bool {
     crate::launch::steam_running()
 }
 
+/// Does Assetto Corsa run? The game watch announces every change as
+/// `ac://running`, but its first announcement goes out before the window
+/// listens: the screen asks this once at startup (SESSION§2.4).
+#[tauri::command]
+pub fn is_game_running() -> bool {
+    crate::launch::game_running()
+}
+
 /// Ouvre Content Manager sans argument (§7.2).
 #[tauri::command]
 pub fn open_content_manager(app: AppHandle) -> Result<(), String> {

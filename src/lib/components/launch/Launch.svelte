@@ -38,6 +38,7 @@
   import type { SavedSession } from "$lib/launch/savedSessions";
   import { SavedSessionList, savedSessionMeta } from "$lib/launch/savedSessionList.svelte";
   import { LaunchSequence, startSession } from "$lib/launch/launchSequence.svelte";
+  import { gameSession, markStarting } from "$lib/launch/gameSession.svelte";
   import { deleteSavedGrid, listSavedGrids, saveGrid, type SavedGrid } from "$lib/launch/savedGrids";
   import { OpponentGrid } from "$lib/launch/opponentGrid.svelte";
   import { restoreOpponent } from "$lib/launch/gridRules";
@@ -588,7 +589,7 @@
     error = ""; info = ""; warning = "";
     try {
       await startSession(setup);
-      info = t("launch.launchSuccess");
+      markStarting();
     } catch (e) {
       error = errorText(e);
     }
@@ -741,6 +742,15 @@
     </div>
   </header>
 
+  <!-- The game's state, not the request's (SESSION§2.4): it follows the game
+       to its end, and says so when CM never started it. -->
+  {#if gameSession.phase === "starting"}
+    <div class="ok">{t("launch.launchSuccess")}</div>
+  {:else if gameSession.phase === "running"}
+    <div class="ok">{t("launch.gameRunning")}</div>
+  {:else if gameSession.stalled}
+    <div class="warnbox banner">⚠ {t("launch.gameNotStarted")}</div>
+  {/if}
   {#if info}<div class="ok">{info}</div>{/if}
   {#if error}<div class="errbox">{error}</div>{/if}
   {#if warning}<div class="warnbox banner">⚠ {warning}</div>{/if}

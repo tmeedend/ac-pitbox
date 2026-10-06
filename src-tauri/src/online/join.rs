@@ -75,6 +75,10 @@ pub fn join_uri(request: &JoinRequest) -> String {
 /// A server that does not answer is joined without features: a vanilla one
 /// has none, and CM will say better than us if it is down.
 pub fn prepare(request: &JoinRequest) -> Result<Vec<String>, String> {
+    // A join is a session like any other: not while one runs (SESSION§2.4).
+    if crate::launch::game_running() {
+        return Err(crate::errors::GAME_RUNNING.into());
+    }
     if !crate::launch::steam_running() {
         return Err(crate::errors::STEAM_NOT_RUNNING.into());
     }

@@ -392,6 +392,20 @@ pub fn steam_running() -> bool {
         .any(|p| p.name().to_string_lossy().eq_ignore_ascii_case("steam.exe"))
 }
 
+/// Does Assetto Corsa run already? (SESSION§2.4)
+///
+/// A second session sent while one runs is refused here, before anything is
+/// written: the driver files of the game's car folder would be rewritten under
+/// a running game, and what Content Manager does with a second race request
+/// is its own business. Same detection as the game watch (`music/watch.rs`),
+/// asked once at the click — the watch's own state is the screen's, and a
+/// session started from CM itself is a session all the same.
+pub fn game_running() -> bool {
+    let mut sys = sysinfo::System::new();
+    sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+    crate::music::watch::ac_running(&sys)
+}
+
 /// The Content Manager executable, or the user-facing error when none is
 /// configured.
 pub(crate) fn cm_exe(cfg: &AppConfig) -> Result<&Path, String> {
@@ -432,6 +446,9 @@ pub fn launch_replay(cfg: &AppConfig, replay_path: &Path) -> Result<(), String> 
 /// Lance la session : active le contenu au besoin, écrit le race.ini, invoque CM.
 pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(), String> {
     let cm = cm_exe(cfg)?;
+    if game_running() {
+        return Err(crate::errors::GAME_RUNNING.to_string());
+    }
 
     // Nothing in the showcase goes on track (ESPACE R5). The session column
     // and the opponent picker already leave such mods out; this is the net,

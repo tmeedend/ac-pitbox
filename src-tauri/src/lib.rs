@@ -398,6 +398,7 @@ pub fn run() {
             commands::session::car_factory_assists,
             commands::session::launch_session,
             commands::session::is_steam_running,
+            commands::session::is_game_running,
             commands::session::open_content_manager,
             commands::session::launch_replay,
             commands::session::open_native_showroom,

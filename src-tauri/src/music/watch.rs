@@ -20,7 +20,9 @@ use super::engine::EngineCommand;
 
 const PROCESS_NAMES: [&str; 2] = ["acs.exe", "assettocorsa.exe"];
 
-fn ac_running(sys: &System) -> bool {
+/// Whether a game process is in this snapshot — also asked once, at a click,
+/// by `launch::game_running`.
+pub(crate) fn ac_running(sys: &System) -> bool {
     sys.processes().values().any(|p| {
         let name = p.name().to_string_lossy();
         PROCESS_NAMES.iter().any(|n| name.eq_ignore_ascii_case(n))
