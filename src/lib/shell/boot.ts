@@ -9,13 +9,22 @@
 // only goes once the prefs are applied and the first frame is painted.
 
 import { setLocale } from "$lib/i18n/index.svelte";
-import { setZoom } from "$lib/shell/zoom.svelte";
+import { setZoom, zoomFactor } from "$lib/shell/zoom.svelte";
 
 /** Language and zoom of the user, applied before anything is mounted: the
- * shell's first frame is already the right one. */
+ * shell's first frame is already the right one.
+ *
+ * The boot screen is already on screen by then - the zoom lives in
+ * `config.json`, which no page can read before its script runs - and the zoom
+ * set on `<html>` scaled it up under the user's eyes (seen: the logo growing
+ * a moment before the shell appeared). CSS `zoom` compounds, so the boot
+ * screen takes the inverse in the same task, before any paint: measured, its
+ * logo stays 46 px at 125 %, centred, and it still covers the window. */
 export function applyStartupPrefs(prefs: { language: string | null; ui_zoom: number | null }): void {
   if (prefs.language) setLocale(prefs.language);
   setZoom(prefs.ui_zoom);
+  const boot = document.getElementById("boot");
+  if (boot) boot.style.zoom = String(1 / zoomFactor());
 }
 
 /** Fades the boot screen out once what replaced it has been painted. Two
