@@ -257,13 +257,20 @@ mod tests {
         std::fs::write(path, content).unwrap();
     }
 
-    /// Rule (SPEC-play-online, "Couches et versions"), end to end on a real
-    /// file system: a layer replacing a track's `surfaces.ini` is found as a
-    /// certain failure, set aside — the game then sees the base file — and
-    /// given back whole, the list of what to give back gone with it.
-    #[test]
-    fn a_layer_set_aside_comes_back_after_the_session() {
-        let base = crate::testutil::temp_dir("online-layers-e2e");
+    /// A track `spa` deployed in a synthetic game, with an active layer
+    /// `grip` that replaces its `surfaces.ini`. Returns the database, the
+    /// configuration, the folder for `online_layers.json`, and the
+    /// `surfaces.ini` the game reads.
+    struct SpaWithGrip {
+        _base: crate::testutil::TempDir,
+        conn: Connection,
+        cfg: AppConfig,
+        config_dir: std::path::PathBuf,
+        surfaces: std::path::PathBuf,
+    }
+
+    fn spa_with_grip(tag: &str) -> SpaWithGrip {
+        let base = crate::testutil::temp_dir(tag);
         let ac = base.join("ac");
         let library = base.join("library");
         let config_dir = base.join("config");
@@ -323,6 +330,28 @@ mod tests {
             .join("spa")
             .join("data")
             .join("surfaces.ini");
+        SpaWithGrip {
+            _base: base,
+            conn,
+            cfg,
+            config_dir,
+            surfaces,
+        }
+    }
+
+    /// Rule (SPEC-play-online, "Couches et versions"), end to end on a real
+    /// file system: a layer replacing a track's `surfaces.ini` is found as a
+    /// certain failure, set aside — the game then sees the base file — and
+    /// given back whole, the list of what to give back gone with it.
+    #[test]
+    fn a_layer_set_aside_comes_back_after_the_session() {
+        let SpaWithGrip {
+            _base,
+            conn,
+            cfg,
+            config_dir,
+            surfaces,
+        } = spa_with_grip("online-layers-e2e");
         assert_eq!(
             std::fs::read_to_string(&surfaces).unwrap(),
             "layer",
