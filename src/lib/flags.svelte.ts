@@ -14,7 +14,8 @@
 // pour une ligne de lecture. D'où ce cache, chargé à la demande.
 import { countryDisplayName, countryKey } from "$lib/flags";
 import { i18n, t } from "$lib/i18n/index.svelte";
-import { invokeSafe } from "$lib/invokeSafe";
+import { invoke } from "@tauri-apps/api/core";
+import { readOnce } from "$lib/readOnce";
 import type { Nationality } from "$lib/launch/launch";
 import { previewSrc } from "$lib/library/library";
 
@@ -24,9 +25,6 @@ const table = $state<{ byName: Map<string, Nationality>; byIso2: Map<string, Nat
   list: [],
 });
 
-/** Une seule lecture par session : la table du jeu ne bouge pas sous l'app. */
-let loading: Promise<void> | null = null;
-
 /**
  * Charge la table si ce n'est pas déjà fait. Idempotent, et sans effet visible
  * tant qu'elle n'est pas là — `flagFor` rend `null`, et la ligne s'affiche
@@ -35,15 +33,22 @@ let loading: Promise<void> | null = null;
  * Appelé par l'écran qui va montrer des drapeaux, jamais au démarrage : lire
  * `ac.utils.js` et vérifier 221 fichiers ne se justifie que si quelqu'un les
  * regarde.
+ *
+ * One read per session once it has come — the game does not move under the
+ * app — but only then (`readOnce`): a late table still lands, and an empty one
+ * (AC not configured yet) is asked again. The fallback used to be remembered
+ * for the session, and the country index then showed raw English names and
+ * "?" instead of flags until the next start (bug reported).
  */
-export function loadFlags(): Promise<void> {
-  loading ??= invokeSafe<Nationality[]>("nationalities", undefined, []).then((list) => {
+export const loadFlags = readOnce(
+  () => invoke<Nationality[]>("nationalities"),
+  (list) => {
     table.byName = new Map(list.map((n) => [n.name.toLowerCase(), n]));
     table.byIso2 = new Map(list.flatMap((n) => (n.iso2 ? [[n.iso2.toUpperCase(), n] as const] : [])));
     table.list = list;
-  });
-  return loading;
-}
+  },
+  { label: "nationalities", usable: (list) => list.length > 0 },
+);
 
 /**
  * L'URL du drapeau de ce pays, ou `null` — table pas encore chargée, nom vide,
