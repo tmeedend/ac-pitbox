@@ -98,7 +98,7 @@ pub fn sync(
             .any(|v| v.as_deref().is_some_and(|v| !v.is_empty()))
     });
     let Some(outfit) = wanted else {
-        revert(conn, cfg, car_dir, car_id, skin_dir);
+        revert(conn, cfg, car_dir, skin_dir);
         return Applied::default();
     };
     apply(conn, cfg, car_dir, car_id, skin_dir, outfit)
@@ -162,28 +162,12 @@ fn apply(
 ///
 /// Sans effet sur ce qu'on n'a pas posé : un `ext_config.ini` qu'aucune
 /// sauvegarde ne réclame et qui ne porte pas notre en-tête n'est pas à nous.
-fn revert(conn: &Connection, cfg: &AppConfig, car_dir: &Path, car_id: &str, skin_dir: Option<&Path>) {
-    restore_file(
-        conn,
-        cfg,
-        &car_dir.join("extension").join("ext_config.ini"),
-        BODY_SECTION,
-    );
+fn revert(conn: &Connection, cfg: &AppConfig, car_dir: &Path, skin_dir: Option<&Path>) {
+    restore_file(conn, cfg, &car_dir.join("extension").join("ext_config.ini"));
+    // The whole file comes back, whatever body the outfit was written under:
+    // a `skin.ini` that existed returns from its backup, one we created goes.
     if let Some(skin) = skin_dir {
-        // La section de tenue porte le nom du mannequin **d'origine** : c'est
-        // sous celui-là qu'on la retire, puisque le corps est déjà rendu.
-        //
-        // Limite connue, et étroite : si on avait écrit la tenue sous un corps
-        // substitué, cette ligne ne la retrouve pas. Les deux chemins normaux
-        // la couvrent pourtant — un `skin.ini` qui existait est restauré en
-        // entier par sa sauvegarde, un `skin.ini` qu'on a créé est supprimé —
-        // et il ne reste que le cas où quelqu'un a réécrit le fichier entre
-        // temps, en effaçant à la fois la trace de la sauvegarde et notre
-        // en-tête. Le jour où ça se voit, c'est un registre de ce qu'on a
-        // écrit qu'il faudra, pas une rustine ici.
-        if let Some(model) = crate::driver::outfit_of(car_dir, car_id, None).map(|o| o.model) {
-            restore_file(conn, cfg, &skin.join("skin.ini"), &model);
-        }
+        restore_file(conn, cfg, &skin.join("skin.ini"));
     }
 }
 
@@ -278,8 +262,8 @@ fn merge_section(text: &str, name: &str, section: &str) -> String {
 // --- Retour en arrière ---------------------------------------------------------
 
 /// Rend un fichier à ce qu'il était : sa sauvegarde s'il en a une, sinon la
-/// suppression s'il est de nous, sinon le retrait de notre seule section.
-fn restore_file(conn: &Connection, cfg: &AppConfig, path: &Path, section: &str) {
+/// suppression s'il est de nous, sinon rien : il n'est pas à nous.
+fn restore_file(conn: &Connection, cfg: &AppConfig, path: &Path) {
     if crate::gamebackup::is_replaced(conn, path) {
         crate::gamebackup::restore(conn, path);
         return;
@@ -288,14 +272,13 @@ fn restore_file(conn: &Connection, cfg: &AppConfig, path: &Path, section: &str) 
         return;
     };
     if !text.contains(MARKER) {
-        // Pas de sauvegarde et pas notre en-tête : le fichier existait avant
-        // nous sans qu'on l'ait touché, ou quelqu'un l'a réécrit depuis. On
-        // retire notre section et rien d'autre.
-        let stripped = strip_section(&text, section);
-        if stripped != text {
-            let _ = std::fs::remove_file(path);
-            let _ = std::fs::write(path, stripped);
-        }
+        // No backup and no header of ours: we never wrote this file - every
+        // write into an existing one goes through `gamebackup::protect`, every
+        // file we create carries the marker. It is the author's, and stays as
+        // is (golden rule 5). This used to strip "our" section anyway, but the
+        // name is not ours alone: the author's `[DRIVER3D_MODEL]`, the
+        // livery's `[driver_80]` outfit bear it too, and both went, on every
+        // launch, with the file rewritten in LF besides (seen on five cars).
         return;
     }
     // Fichier créé par nous : il repart, et son dossier avec lui s'il devient
@@ -305,24 +288,6 @@ fn restore_file(conn: &Connection, cfg: &AppConfig, path: &Path, section: &str) 
         let _ = std::fs::remove_dir(parent);
     }
     let _ = cfg;
-}
-
-/// Le même fichier sans la section nommée.
-fn strip_section(text: &str, name: &str) -> String {
-    let header = format!("[{name}]");
-    let mut out = String::with_capacity(text.len());
-    let mut skipping = false;
-    for line in text.lines() {
-        let trimmed = line.trim();
-        if trimmed.starts_with('[') {
-            skipping = trimmed.eq_ignore_ascii_case(&header);
-        }
-        if !skipping {
-            out.push_str(line);
-            out.push('\n');
-        }
-    }
-    out
 }
 
 #[cfg(test)]
@@ -372,14 +337,92 @@ OBJECT_NAME=ARROW_RPM
         assert!(!merged.contains("SUIT"), "l'ancienne est bien partie");
     }
 
-    /// Retirer notre section laisse le fichier utilisable.
+    /// A car of the game as the author shipped it: Windows line endings, no
+    /// final newline, and the two sections that bear the very names ours do -
+    /// the author's own body choice and the livery's outfit.
+    const AUTHOR_EXT: &str = "[DATA]\r\nDISABLE_LIGHTSINI = 1\r\n\r\n[DRIVER3D_MODEL]\r\nNAME = driver_80";
+    const AUTHOR_SKIN: &str =
+        "[driver_80]\r\nSUIT=\\type2\\black\r\nHELMET=\\HELMET_1985\\Red\r\n\r\n[CREW]\r\nSUIT=\\type2\\black";
+
+    struct AuthorCar {
+        _base: crate::testutil::TempDir,
+        conn: Connection,
+        cfg: AppConfig,
+        car: std::path::PathBuf,
+        skin: std::path::PathBuf,
+    }
+
+    fn author_car(tag: &str) -> AuthorCar {
+        let base = crate::testutil::temp_dir(tag);
+        let cfg = AppConfig {
+            library_path: Some(base.join("library")),
+            ac_install_path: Some(base.join("ac")),
+            ..Default::default()
+        };
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).expect("base");
+        let car = base.join("ac").join("content").join("cars").join("car");
+        let skin = car.join("skins").join("red");
+        std::fs::create_dir_all(car.join("data")).expect("data");
+        std::fs::create_dir_all(car.join("extension")).expect("extension");
+        std::fs::create_dir_all(&skin).expect("skin");
+        std::fs::write(car.join("data").join("driver3d.ini"), "[MODEL]\nNAME=driver_80\n").expect("driver3d");
+        std::fs::write(car.join("extension").join("ext_config.ini"), AUTHOR_EXT).expect("ext_config");
+        std::fs::write(skin.join("skin.ini"), AUTHOR_SKIN).expect("skin.ini");
+        AuthorCar {
+            _base: base,
+            conn,
+            cfg,
+            car,
+            skin,
+        }
+    }
+
+    /// Golden rule 5: a game file we did not write is not ours to touch. A
+    /// launch without a chosen driver used to strip, from every car, any
+    /// section named like ours - the author's `[DRIVER3D_MODEL]`, the livery's
+    /// `[driver_80]` outfit - and rewrote the rest in LF besides. Seen on five
+    /// cars of a real install: outfits gone from four liveries, the Zonda's own
+    /// driver body gone, and no backup to bring any of it back.
     #[test]
-    fn stripping_leaves_the_rest_alone() {
-        let merged = merge_section(EXISTING, BODY_SECTION, "[DRIVER3D_MODEL]\nNAME=driver_501");
-        let stripped = strip_section(&merged, BODY_SECTION);
-        assert!(!stripped.contains("DRIVER3D_MODEL"), "notre section est partie");
-        assert!(stripped.contains("[DATA]"), "le reste est intact");
-        assert!(stripped.contains("BIND_TO=RPM"), "jusqu'au bout");
+    fn going_back_leaves_a_file_we_never_wrote_byte_for_byte() {
+        let c = author_car("driver_apply_untouched");
+        let applied = sync(&c.conn, &c.cfg, &c.car, "car", Some(&c.skin), None);
+        assert!(applied.written.is_empty(), "nothing is written");
+        assert_eq!(
+            std::fs::read_to_string(c.car.join("extension").join("ext_config.ini")).expect("ext_config"),
+            AUTHOR_EXT,
+            "the author's ext_config.ini is left as is, its own body choice included"
+        );
+        assert_eq!(
+            std::fs::read_to_string(c.skin.join("skin.ini")).expect("skin.ini"),
+            AUTHOR_SKIN,
+            "the livery keeps the outfit its author gave it"
+        );
+    }
+
+    /// What we did write comes back exactly as the author had it: from its
+    /// backup, line endings and all.
+    #[test]
+    fn a_chosen_driver_then_none_gives_the_author_files_back_exactly() {
+        let c = author_car("driver_apply_roundtrip");
+        let outfit = crate::driver::OutfitOverride {
+            model: Some("woman_driver".into()),
+            suit: Some("plain/red".into()),
+            ..Default::default()
+        };
+        let applied = sync(&c.conn, &c.cfg, &c.car, "car", Some(&c.skin), Some(&outfit));
+        assert!(!applied.written.is_empty(), "the chosen driver is laid");
+        sync(&c.conn, &c.cfg, &c.car, "car", Some(&c.skin), None);
+        assert_eq!(
+            std::fs::read_to_string(c.car.join("extension").join("ext_config.ini")).expect("ext_config"),
+            AUTHOR_EXT,
+            "ext_config.ini restored byte for byte"
+        );
+        assert_eq!(
+            std::fs::read_to_string(c.skin.join("skin.ini")).expect("skin.ini"),
+            AUTHOR_SKIN,
+            "skin.ini restored byte for byte"
+        );
     }
 
     /// Un fichier créé de toutes pièces porte son en-tête : c'est lui, et lui
