@@ -9,9 +9,9 @@ use tauri::Manager;
 /// synchronous command runs on the thread that also drives the window, and
 /// this one reads several files per mod - measured on 385 mods, 0.37 s with a
 /// warm disk cache and 2.4 s on a first start, during which the window froze
-/// and every other command queued behind it. The base lock is taken per card
-/// (`list_cards_shared`), or the commands still synchronous would wait for it
-/// on that same thread.
+/// and every other command queued behind it. The base lock is held only while
+/// the base is read (`list_cards_shared`), or the commands still synchronous
+/// would wait for it on that same thread.
 #[tauri::command]
 pub async fn list_library(app: AppHandle) -> Result<Vec<ModCard>, String> {
     tauri::async_runtime::spawn_blocking(move || {

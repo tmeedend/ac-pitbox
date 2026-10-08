@@ -88,71 +88,74 @@ fn is_active(cfg: &AppConfig, m: &ModRow) -> bool {
 /// The card image of a mod in the showcase: the one frozen when its files
 /// went (ESPACE§3.3). The skin previews it was chosen from are gone, and a
 /// regenerated grid thumbnail could no longer be found without the `.kn5` it
-/// is keyed on.
-fn showcase_image(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<String> {
-    entity_dir(conn, cfg, m)
-        .and_then(|dir| crate::skeleton::image_of(&dir))
+/// is keyed on. `own` is the mod's own folder (`entity_dir`).
+fn showcase_image(own: Option<&Path>) -> Option<String> {
+    own.and_then(crate::skeleton::image_of)
         .map(|p| p.to_string_lossy().into_owned())
 }
 
 /// The image a mod's card shows, as the backend picks it — also what the
 /// showcase freezes when the screen did not name one (ESPACE§3.3).
 pub(crate) fn preview_for(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<String> {
+    preview_in(m, &entity_dirs(conn, cfg, m))
+}
+
+/// `preview_for` on a composition stack already resolved (`entity_dirs`).
+fn preview_in(m: &ModRow, stack: &[PathBuf]) -> Option<String> {
     // Version active en bibliothèque, sinon content/ (contenu de base Kunos) —
     // c'est ce qui fait apparaître la vignette du stock, comme l'écran de session.
     // Couches actives d'abord (§4.3) : ce que l'app montre doit être ce que le
     // jeu voit, sinon une couche qui remplace un `preview.png` reste invisible.
-    let dirs = entity_dirs(conn, cfg, m);
     match ModKind::from_column(&m.kind) {
-        ModKind::Car => layered(&dirs, |d| inspect::preview_path(ModKind::Car, d)),
+        ModKind::Car => layered(stack, |d| inspect::preview_path(ModKind::Car, d)),
         // Circuit : la photo illustratrice (fond), repli sur le tracé si absente.
         // Le repli se fait **pile épuisée**, pas couche par couche : une couche
         // qui n'apporte qu'un tracé ne doit pas priver la carte de la photo de
         // la base.
-        ModKind::Track => layered(&dirs, inspect::track_preview).or_else(|| layered(&dirs, inspect::track_outline)),
+        ModKind::Track => layered(stack, inspect::track_preview).or_else(|| layered(stack, inspect::track_outline)),
     }
 }
 
 /// Tracé d'un circuit à superposer à la photo (None pour une voiture).
-fn outline_for(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<String> {
+fn outline_in(m: &ModRow, stack: &[PathBuf]) -> Option<String> {
     if m.kind != "Track" {
         return None;
     }
-    layered(&entity_dirs(conn, cfg, m), inspect::track_outline)
+    layered(stack, inspect::track_outline)
 }
 
 /// Native spec sheet of a car (weight §6.2, description §6.1), read on the fly
 /// from ui_car.json - "native" data, never harmonized by the rule engine
 /// (§6). One read for both fields: two separate helpers would reopen and
 /// reparse the very same file for every card of the list.
-fn car_specs_for(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<NativeSpecs> {
+fn car_specs_in(m: &ModRow, stack: &[PathBuf]) -> Option<NativeSpecs> {
     if m.kind != "Car" {
         return None;
     }
-    layered(&entity_dirs(conn, cfg, m), uijson::read_car_specs)
+    layered(stack, uijson::read_car_specs)
 }
 
 /// Effective description of a card: the user's own text wins over the file
 /// (§5bis.3), exactly as on the detail view (`detail`, below). `native` is the
-/// sheet already read by `car_specs_for` - nothing to reread for a car; a track
+/// sheet already read by `car_specs_in` - nothing to reread for a car; a track
 /// only opens its `ui_track.json` when no user text spares it, and through the
 /// light reader (not the image scan of `read_track_detail`).
-fn description_for(conn: &Connection, cfg: &AppConfig, m: &ModRow, native: Option<&NativeSpecs>) -> Option<String> {
+fn description_in(m: &ModRow, stack: &[PathBuf], native: Option<&NativeSpecs>) -> Option<String> {
     if let Some(user) = &m.description_user {
         return Some(user.clone());
     }
     match ModKind::from_column(&m.kind) {
         ModKind::Car => native.and_then(|s| s.description.clone()),
-        ModKind::Track => layered(&entity_dirs(conn, cfg, m), uijson::read_track_description),
+        ModKind::Track => layered(stack, uijson::read_track_description),
     }
 }
 
 /// Badge/logo de la marque (voitures uniquement), lu à la volée dans `ui/badge.png`.
-fn badge_for(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<String> {
+fn badge_in(m: &ModRow, stack: &[PathBuf]) -> Option<String> {
     if m.kind != "Car" {
         return None;
     }
-    layered(&entity_dirs(conn, cfg, m), inspect::brand_badge)
+    layered(stack, inspect::brand_badge)
 }
 
 /// `(car id, brand, badge path)` of every car that has both - what the brand
@@ -163,26 +166,50 @@ pub fn car_badges(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<(S
         .filter(|m| m.kind == "Car")
         .filter_map(|m| {
             let brand = m.brand.clone().filter(|b| !b.trim().is_empty())?;
-            let badge = badge_for(conn, cfg, &m)?;
+            let badge = badge_in(&m, &entity_dirs(conn, cfg, &m))?;
             Some((m.id_interne, brand, badge))
         })
         .collect())
 }
 
-fn to_card(conn: &Connection, cfg: &AppConfig, m: ModRow) -> ModCard {
+/// What a card needs from the base: where its files are, and whether it is
+/// broken. Everything else on a card comes from the files (`card_from_disk`),
+/// read with no connection at hand - which is what lets `list_cards_shared`
+/// release the lock before the slow part.
+struct CardBase {
+    m: ModRow,
+    /// The composition stack (§4.3), resolved once for the whole card: each
+    /// reader used to resolve it again, up to six base queries per card.
+    stack: Vec<PathBuf>,
+    /// The mod's own folder alone, the last of `stack` when there is one.
+    own: Option<PathBuf>,
+    /// Read on the base side: `broken_reason` asks the base for the version's
+    /// path, and its few file checks cost little.
+    broken: bool,
+}
+
+fn card_base(conn: &Connection, cfg: &AppConfig, m: ModRow) -> CardBase {
+    let own = entity_dir(conn, cfg, &m);
+    let mut stack = layer_dirs(conn, cfg, &m);
+    stack.extend(own.clone());
+    let broken = crate::maintenance::broken_reason(conn, cfg, &m).is_some();
+    CardBase { m, stack, own, broken }
+}
+
+fn card_from_disk(cfg: &AppConfig, base: CardBase) -> ModCard {
+    let CardBase { m, stack, own, broken } = base;
     let preview = if m.showcase {
-        showcase_image(conn, cfg, &m)
+        showcase_image(own.as_deref())
     } else {
-        preview_for(conn, cfg, &m)
+        preview_in(&m, &stack)
     };
-    let outline = outline_for(conn, cfg, &m);
+    let outline = outline_in(&m, &stack);
     let active = is_active(cfg, &m);
-    let native = car_specs_for(conn, cfg, &m);
+    let native = car_specs_in(&m, &stack);
     let weight = native.as_ref().and_then(|s| s.weight.clone());
     let bhp = native.as_ref().and_then(|s| s.bhp.clone());
-    let description = description_for(conn, cfg, &m, native.as_ref());
-    let badge = badge_for(conn, cfg, &m);
-    let broken = crate::maintenance::broken_reason(conn, cfg, &m).is_some();
+    let description = description_in(&m, &stack, native.as_ref());
+    let badge = badge_in(&m, &stack);
     ModCard {
         base: m,
         preview,
@@ -198,6 +225,10 @@ fn to_card(conn: &Connection, cfg: &AppConfig, m: ModRow) -> ModCard {
     }
 }
 
+fn to_card(conn: &Connection, cfg: &AppConfig, m: ModRow) -> ModCard {
+    card_from_disk(cfg, card_base(conn, cfg, m))
+}
+
 /// Renseigne la distance CM et le marqueur « essayé » (§6) sur une carte.
 fn fill_usage(card: &mut ModCard, cm: &CmUsage, launched: &HashSet<String>) {
     let id = &card.base.id_interne;
@@ -206,41 +237,47 @@ fn fill_usage(card: &mut ModCard, cm: &CmUsage, launched: &HashSet<String>) {
 }
 
 pub fn list_cards(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<ModCard>> {
-    let cm = cm_stats::read();
-    let launched = overlay::launched_ids(conn)?;
-    Ok(overlay::list_mods(conn)?
-        .into_iter()
-        .map(|m| card_with_usage(conn, cfg, m, &cm, &launched))
-        .collect())
+    let (bases, launched) = card_bases(conn, cfg)?;
+    Ok(cards_from_disk(cfg, bases, &launched))
 }
 
-/// The same list as `list_cards`, the base lock taken **per card** rather than
-/// for the whole list.
+/// The same list as `list_cards`, the base lock held **only while the base is
+/// read** - not while the files are.
 ///
 /// A card reads several files besides the base (preview, `ui_car.json`, badge),
-/// so the whole list held the lock for 0.37 s with a warm disk cache and 2.4 s
-/// on a first start (385 mods). Any command needing the base meanwhile - the
-/// session column asks for its car's detail at startup - waited all that time,
-/// on the thread that drives the window. Taken per card, the wait is one card's.
-/// A write landing between two cards shows at the next listing, as it would
-/// had it landed just after this one.
+/// and the whole list used to hold the lock for all of it: 0.37 s with a warm
+/// disk cache and 2.4 s on a first start (385 mods). Any command needing the
+/// base meanwhile - the session column asks for its car's detail at startup -
+/// waited all that time, on the thread that drives the window. The base part
+/// is a few tens of milliseconds, read in one go, so the list is one snapshot.
 pub fn list_cards_shared(db: &overlay::Db, cfg: &AppConfig) -> Result<Vec<ModCard>, String> {
-    let lock = || db.0.lock().map_err(|e| e.to_string());
-    let cm = cm_stats::read();
-    let (launched, mods) = {
-        let conn = lock()?;
-        let launched = overlay::launched_ids(&conn).map_err(|e| e.to_string())?;
-        (launched, overlay::list_mods(&conn).map_err(|e| e.to_string())?)
+    let (bases, launched) = {
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        card_bases(&conn, cfg).map_err(|e| e.to_string())?
     };
-    mods.into_iter()
-        .map(|m| Ok(card_with_usage(&*lock()?, cfg, m, &cm, &launched)))
-        .collect()
+    Ok(cards_from_disk(cfg, bases, &launched))
 }
 
-fn card_with_usage(conn: &Connection, cfg: &AppConfig, m: ModRow, cm: &CmUsage, launched: &HashSet<String>) -> ModCard {
-    let mut card = to_card(conn, cfg, m);
-    fill_usage(&mut card, cm, launched);
-    card
+/// Every mod's `CardBase`, and the ids launched from Pit Box (§6).
+fn card_bases(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<(Vec<CardBase>, HashSet<String>)> {
+    let launched = overlay::launched_ids(conn)?;
+    let bases = overlay::list_mods(conn)?
+        .into_iter()
+        .map(|m| card_base(conn, cfg, m))
+        .collect();
+    Ok((bases, launched))
+}
+
+fn cards_from_disk(cfg: &AppConfig, bases: Vec<CardBase>, launched: &HashSet<String>) -> Vec<ModCard> {
+    let cm = cm_stats::read();
+    bases
+        .into_iter()
+        .map(|b| {
+            let mut card = card_from_disk(cfg, b);
+            fill_usage(&mut card, &cm, launched);
+            card
+        })
+        .collect()
 }
 
 /// Skin d'une voiture avec sa miniature (SESSION§1).
@@ -455,6 +492,14 @@ fn entity_dir(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Option<PathBuf>
 /// Une couche **inactive** est exclue, exactement comme à la composition : la
 /// désactiver doit faire réapparaître la base, à l'écran comme dans le jeu.
 fn entity_dirs(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Vec<PathBuf> {
+    let mut dirs = layer_dirs(conn, cfg, m);
+    dirs.extend(entity_dir(conn, cfg, m));
+    dirs
+}
+
+/// The active layers' folders of a mod, the one that wins first - the top of
+/// its composition stack, without the mod's own folder.
+fn layer_dirs(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Vec<PathBuf> {
     let mut dirs: Vec<PathBuf> = overlay::list_layers(conn, &m.id_interne, ModKind::from_column(&m.kind).into())
         .unwrap_or_default()
         .into_iter()
@@ -465,7 +510,6 @@ fn entity_dirs(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Vec<PathBuf> {
     // `list_layers` trie par priorité **croissante** et c'est la plus haute qui
     // gagne (§4.3) : la pile de lecture est donc l'inverse de la liste.
     dirs.reverse();
-    dirs.extend(entity_dir(conn, cfg, m));
     dirs
 }
 
@@ -922,10 +966,10 @@ mod tests {
         assert!(!stock.broken);
     }
 
-    /// The listing behind `list_library` takes the base lock per card: it must
-    /// still build exactly the cards of the single-lock listing.
+    /// The listing behind `list_library` reads the base first, then the files
+    /// with the lock released: it must build exactly the cards of `list_cards`.
     #[test]
-    fn listing_per_card_lock_matches_single_lock_listing() {
+    fn listing_on_the_shared_base_matches_listing_on_a_connection() {
         let base = crate::testutil::temp_dir("cards-shared");
         let (conn, cfg, _) = track_with_layer(&base);
         let now = chrono::Local::now().to_rfc3339();
