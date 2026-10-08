@@ -5,21 +5,20 @@ use super::prelude::*;
 use crate::logos::{BrandPref, LogosView};
 use tauri::Manager;
 
-/// `async` + `spawn_blocking`, and the base lock released before the files are
-/// read: the view decodes every car's badge (256 ms for 356 badges on the first
-/// call of a session, measured in release), and it is asked for at startup,
-/// alongside the library listing. It held the lock and the window's thread for
-/// all of it.
+/// Off the window's thread (`off_window`), and the base lock released before
+/// the files are read: the view decodes every car's badge (256 ms for 356
+/// badges on the first call of a session, measured in release), and it is
+/// asked for at startup, alongside the library listing. It held the lock and
+/// the window's thread for all of it.
 #[tauri::command]
 pub async fn get_brand_logos(app: AppHandle) -> Result<LogosView, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let dir = crate::rules::config_dir(&app)?;
-        let cfg = crate::config::load(&app);
+    off_window(app, |app| {
+        let dir = crate::rules::config_dir(app)?;
+        let cfg = crate::config::load(app);
         let cars = crate::library::car_badges_shared(&app.state::<Db>(), &cfg)?;
         Ok(crate::logos::view(&cars, &dir))
     })
     .await
-    .map_err(|e| e.to_string())?
 }
 
 /// His choice for a brand; an empty one is "automatic" again.

@@ -43,6 +43,8 @@ pub mod updates;
 pub mod usermeta;
 pub mod wiki;
 
+use prelude::*;
+
 /// Imports communs à toutes les façades. Import global volontaire : il ne
 /// déclenche pas d'avertissement `unused_imports` quand un module n'en
 /// utilise qu'une partie.
@@ -58,4 +60,22 @@ mod prelude {
     pub(crate) use crate::rules::{Rules, RulesOverlay};
     pub(crate) use crate::taxonomy::{FamilyOverlay, MapOverlay, TaxonomyOverlay, TaxonomyTables};
     pub(crate) use tauri_plugin_opener::OpenerExt;
+
+    pub(crate) use super::off_window;
+}
+
+/// Runs a façade's work off the thread that drives the window. A synchronous
+/// command runs **on** that thread: the window froze, and every other command
+/// waited, for as long as one of them read its files - 2.4 s for the library
+/// listing on a first start.
+///
+/// For reads. A write keeps its synchronous command, and with it the guarantee
+/// that two gestures in a row run in the order they were made.
+pub(crate) async fn off_window<T: Send + 'static>(
+    app: AppHandle,
+    work: impl FnOnce(&AppHandle) -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(move || work(&app))
+        .await
+        .map_err(|e| e.to_string())?
 }
