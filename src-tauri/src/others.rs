@@ -381,15 +381,11 @@ pub struct OtherModCard {
 }
 
 /// Liste les mods « autres » avec les conflits de fichiers détectés entre eux.
-pub fn list_others(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<OtherModCard>> {
-    let (rows, index) = others_base(conn)?;
-    Ok(others_from_disk(cfg, rows, &index))
-}
-
-/// `list_others`, the base lock held only while the base is read. The listing
-/// walks every file of every mod (conflicts, attachment), and it is asked for
-/// at every start - the rail's alert dots: a command needing the base waited
-/// for the whole walk.
+///
+/// The base lock is held only while the base is read: the listing walks every
+/// file of every mod (conflicts, attachment), and it is asked for at every
+/// start - the rail's alert dots. A command needing the base waited for the
+/// whole walk.
 pub fn list_others_shared(db: &overlay::Db, cfg: &AppConfig) -> Result<Vec<OtherModCard>, String> {
     let (rows, index) = {
         let conn = db.0.lock().map_err(|e| e.to_string())?;
@@ -400,7 +396,9 @@ pub fn list_others_shared(db: &overlay::Db, cfg: &AppConfig) -> Result<Vec<Other
 
 /// What `list_others` reads from the base: the rows, and the index of the
 /// library their attachment is deduced against.
-fn others_base(conn: &Connection) -> rusqlite::Result<(Vec<overlay::OtherModRow>, crate::attach::EntityIndex)> {
+pub(crate) fn others_base(
+    conn: &Connection,
+) -> rusqlite::Result<(Vec<overlay::OtherModRow>, crate::attach::EntityIndex)> {
     let rows = overlay::list_other_mods(conn)?;
     // Index construit UNE fois : la déduction interroge la bibliothèque une
     // fois par chemin de chaque mod, et la rebâtir à chaque appel est ce qui
@@ -410,7 +408,7 @@ fn others_base(conn: &Connection) -> rusqlite::Result<(Vec<overlay::OtherModRow>
 }
 
 /// The rest of `list_others`, from the files alone - no connection at hand.
-fn others_from_disk(
+pub(crate) fn others_from_disk(
     cfg: &AppConfig,
     rows: Vec<overlay::OtherModRow>,
     index: &crate::attach::EntityIndex,
@@ -751,6 +749,12 @@ pub fn delete_other(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The listing on a plain connection - `list_others_shared`, lock aside.
+    fn list_others(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<OtherModCard>> {
+        let (rows, index) = others_base(conn)?;
+        Ok(others_from_disk(cfg, rows, &index))
+    }
 
     /// Règle : un `.kn5` qui a déjà une destination dans le jeu n'est pas
     /// déplacé — et n'est même pas ouvert, ce qui évite un parsing par modèle
@@ -1171,8 +1175,9 @@ mod tests {
     }
 
     /// The listing behind `list_other_mods` reads the base first, then walks
-    /// the files with the lock released: it must build exactly the cards of
-    /// `list_others` - conflicts included, which compare the mods' files.
+    /// the files with the lock released: it must build exactly the cards of a
+    /// listing on a plain connection - conflicts included, which compare the
+    /// mods' files.
     #[test]
     fn listing_on_the_shared_base_matches_listing_on_a_connection() {
         let base = crate::testutil::temp_dir("others-shared");

@@ -33,22 +33,21 @@ pub fn open_other_mod_folder(app: AppHandle, db: State<Db>, id: String) -> Resul
 /// L'inventaire des compléments (§4) : une ligne par chose, cinq sources.
 #[tauri::command]
 pub async fn list_inventory(app: AppHandle) -> Result<Vec<crate::inventory::InventoryRow>, String> {
-    read_off_window(app, move |conn, cfg| {
-        crate::inventory::list(conn, cfg).map_err(|e| e.to_string())
+    off_window(app, |app| {
+        let cfg = crate::config::load(app);
+        crate::inventory::list_shared(&app.state::<Db>(), &cfg)
     })
     .await
 }
 
 /// Ce qui est greffé sur une voiture, un circuit ou une app (§4.3).
 #[tauri::command]
-pub fn list_attached(
-    app: AppHandle,
-    db: State<Db>,
-    entity_id: String,
-) -> Result<Vec<crate::inventory::InventoryRow>, String> {
-    let cfg = crate::config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::inventory::attached_to(&conn, &cfg, &entity_id).map_err(|e| e.to_string())
+pub async fn list_attached(app: AppHandle, entity_id: String) -> Result<Vec<crate::inventory::InventoryRow>, String> {
+    off_window(app, move |app| {
+        let cfg = crate::config::load(app);
+        crate::inventory::attached_to(&app.state::<Db>(), &cfg, &entity_id)
+    })
+    .await
 }
 
 /// Corrige le rattachement d'un mod « autre » (REFONTE§2.3). Chaîne vide = revenir à

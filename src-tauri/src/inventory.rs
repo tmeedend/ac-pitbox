@@ -106,12 +106,51 @@ pub struct InventoryRow {
 /// sélecteur de la fiche voiture **et** ici, et personne ne s'en plaint —
 /// choisir et gérer sont deux gestes, ils peuvent avoir deux écrans. Le type
 /// « Mannequin » et sa facette suffisent à ce que le doublon se lise.
-pub fn list(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<InventoryRow>> {
-    let index = attach::EntityIndex::build(conn)?;
+///
+/// The base lock is held only while the base is read: the inventory walks the
+/// files of every "other" mod and weighs the folder of every row
+/// (`dir_size_bytes`), and a command needing the base waited for all of it.
+pub fn list_shared(db: &overlay::Db, cfg: &AppConfig) -> Result<Vec<InventoryRow>, String> {
+    let base = {
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        inventory_base(&conn).map_err(|e| e.to_string())?
+    };
+    Ok(rows_from_disk(cfg, base))
+}
+
+/// What the inventory reads from the base: the rows of its sources, and the
+/// index of the library their hosts are looked up in.
+struct InventoryBase {
+    others: Vec<overlay::OtherModRow>,
+    subs: Vec<overlay::SubModRow>,
+    layers: Vec<overlay::LayerRow>,
+    index: attach::EntityIndex,
+}
+
+fn inventory_base(conn: &Connection) -> rusqlite::Result<InventoryBase> {
+    // One index for every source: the "other" mods' attachment is deduced
+    // against the same library the sub-elements and layers name their host in.
+    let (others, index) = crate::others::others_base(conn)?;
+    Ok(InventoryBase {
+        others,
+        subs: overlay::list_all_subs(conn)?,
+        layers: overlay::list_all_layers(conn)?,
+        index,
+    })
+}
+
+/// The rows, from the files alone - no connection at hand.
+fn rows_from_disk(cfg: &AppConfig, base: InventoryBase) -> Vec<InventoryRow> {
+    let InventoryBase {
+        others,
+        subs,
+        layers,
+        index,
+    } = base;
     let mut out: Vec<InventoryRow> = Vec::new();
 
     // --- Mods « autres » : la seule source dont le rattachement se déduit ---
-    for card in crate::others::list_others(conn, cfg)? {
+    for card in crate::others::others_from_disk(cfg, others, &index) {
         let dir = crate::libpath::resolve(cfg.library_path.as_deref(), &card.row.library_path);
         // Un mannequin ne touche QUE `content/driver` — c'est ce qui le
         // distingue d'un pack qui en livrerait un parmi d'autres choses.
@@ -177,7 +216,7 @@ pub fn list(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<Inventor
     }
 
     // --- Sous-éléments : le rattachement est certain, il est dans la table ---
-    for sub in overlay::list_all_subs(conn)? {
+    for sub in subs {
         let kind = match sub.sub_type.as_str() {
             "SOUND" => RowKind::Sound,
             "TRACK_SKIN" | "TRACK_MOD" => RowKind::TrackSkin,
@@ -219,7 +258,7 @@ pub fn list(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<Inventor
     }
 
     // --- Couches : hôte connu par construction lui aussi ---
-    for layer in overlay::list_all_layers(conn)? {
+    for layer in layers {
         let dir = crate::libpath::resolve(cfg.library_path.as_deref(), &layer.library_path);
         out.push(InventoryRow {
             uid: format!("LAYER:{}", layer.id),
@@ -241,7 +280,7 @@ pub fn list(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<Inventor
         });
     }
 
-    Ok(out)
+    out
 }
 
 /// Une livrée change ce qu'on voit, un son ce qu'on entend : les deux relèvent
@@ -285,9 +324,11 @@ fn host_attachment(index: &attach::EntityIndex, parent_id: &str, nature: Nature)
 /// la question qu'on se pose devant une voiture : qu'est-ce qui a été posé
 /// dessus ? Les notices livrées avec elle comprises, qui sont les ressources du
 /// mod qui les porte et que sa fiche à elle ne montrera jamais.
-pub fn attached_to(conn: &Connection, cfg: &AppConfig, entity_id: &str) -> rusqlite::Result<Vec<InventoryRow>> {
+///
+/// The whole inventory is built for it, so it goes through `list_shared` too.
+pub fn attached_to(db: &overlay::Db, cfg: &AppConfig, entity_id: &str) -> Result<Vec<InventoryRow>, String> {
     let key = entity_id.to_ascii_lowercase();
-    Ok(list(conn, cfg)?
+    Ok(list_shared(db, cfg)?
         .into_iter()
         .filter(|r| r.attachment.target_id.as_deref() == Some(key.as_str()))
         .collect())
@@ -296,6 +337,66 @@ pub fn attached_to(conn: &Connection, cfg: &AppConfig, entity_id: &str) -> rusql
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The inventory on a plain connection - `list_shared`, lock aside.
+    fn list(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<InventoryRow>> {
+        Ok(rows_from_disk(cfg, inventory_base(conn)?))
+    }
+
+    /// The inventory behind `list_inventory` reads the base first, then the
+    /// files with the lock released: it must build exactly the rows of a
+    /// listing on a plain connection, every source included - an "other" mod
+    /// (whose attachment is deduced from its files), a livery and a layer,
+    /// each weighed on the disk.
+    #[test]
+    fn inventory_on_the_shared_base_matches_inventory_on_a_connection() {
+        let base = crate::testutil::temp_dir("inventory-shared");
+        let library = base.join("library");
+        for dir in ["subs/livery", "layers/layer"] {
+            std::fs::create_dir_all(library.join(dir)).unwrap();
+            std::fs::write(library.join(dir).join("file.bin"), b"12345").unwrap();
+        }
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        overlay::upsert_mod(&conn, "spa", "Track", None, Some("Spa"), "h", None, &now).unwrap();
+        overlay::insert_sub_mod(&conn, "livery", "SKIN", "spa", "livery", "subs/livery", None, &now).unwrap();
+        overlay::insert_layer(
+            &conn,
+            "layer",
+            "spa",
+            "Track",
+            "layer.7z",
+            "layers/layer",
+            Some("layer.7z"),
+            1,
+            0,
+            0,
+            &now,
+        )
+        .unwrap();
+        let src = base.join("src").join("Weather");
+        std::fs::create_dir_all(src.join("extension").join("weather")).unwrap();
+        std::fs::write(src.join("extension").join("weather").join("w.ini"), b"x").unwrap();
+        crate::others::import_other(
+            &conn,
+            &library,
+            "Weather.zip",
+            &src,
+            true,
+            crate::resources::ExtractionMode::InfoOnly,
+        )
+        .unwrap();
+
+        let expected = serde_json::to_value(list(&conn, &cfg).unwrap()).unwrap();
+        let db = overlay::Db(std::sync::Mutex::new(conn));
+        let shared = serde_json::to_value(list_shared(&db, &cfg).unwrap()).unwrap();
+        assert_eq!(shared.as_array().map(Vec::len), Some(3), "one row per source");
+        assert_eq!(shared, expected, "same rows, sizes and attachments included");
+    }
 
     /// Rule (§4): one row per thing, whatever table it comes from — and the
     /// identifier is unique across the inventory. Nothing forbids a livery and
