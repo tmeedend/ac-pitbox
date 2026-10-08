@@ -161,15 +161,38 @@ fn badge_in(m: &ModRow, stack: &[PathBuf]) -> Option<String> {
 /// `(car id, brand, badge path)` of every car that has both - what the brand
 /// logos are elected from (`logos::elect`).
 pub fn car_badges(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<(String, String, String)>> {
+    Ok(badges_from_disk(branded_cars(conn, cfg)?))
+}
+
+/// `car_badges`, the base lock held only while the base is read - same reason
+/// as `list_cards_shared`: the badges are looked for on the disk, one car at a
+/// time, and the brand logos are asked for at every start.
+pub fn car_badges_shared(db: &overlay::Db, cfg: &AppConfig) -> Result<Vec<(String, String, String)>, String> {
+    let cars = {
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        branded_cars(&conn, cfg).map_err(|e| e.to_string())?
+    };
+    Ok(badges_from_disk(cars))
+}
+
+/// Every car with a brand, and its composition stack - the base side of
+/// `car_badges`.
+fn branded_cars(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<(ModRow, String, Vec<PathBuf>)>> {
     Ok(overlay::list_mods(conn)?
         .into_iter()
         .filter(|m| m.kind == "Car")
         .filter_map(|m| {
             let brand = m.brand.clone().filter(|b| !b.trim().is_empty())?;
-            let badge = badge_in(&m, &entity_dirs(conn, cfg, &m))?;
-            Some((m.id_interne, brand, badge))
+            let stack = entity_dirs(conn, cfg, &m);
+            Some((m, brand, stack))
         })
         .collect())
+}
+
+fn badges_from_disk(cars: Vec<(ModRow, String, Vec<PathBuf>)>) -> Vec<(String, String, String)> {
+    cars.into_iter()
+        .filter_map(|(m, brand, stack)| Some((m.id_interne.clone(), brand, badge_in(&m, &stack)?)))
+        .collect()
 }
 
 /// What a card needs from the base: where its files are, and whether it is
@@ -980,6 +1003,42 @@ mod tests {
         let shared = serde_json::to_value(list_cards_shared(&db, &cfg).unwrap()).unwrap();
         assert_eq!(shared.as_array().map(Vec::len), Some(2), "both mods listed");
         assert_eq!(shared, expected, "same cards, field for field");
+    }
+
+    /// The brand logos are elected from the cars that have both a brand and a
+    /// badge (TAXO§4) - and the listing that releases the base lock before
+    /// looking for badges finds exactly the same ones.
+    #[test]
+    fn badges_on_the_shared_base_match_badges_on_a_connection() {
+        let base = crate::testutil::temp_dir("badges-shared");
+        let ac = base.join("ac");
+        let cars = ac.join("content").join("cars");
+        for id in ["ks_badged", "ks_unbranded"] {
+            std::fs::create_dir_all(cars.join(id).join("ui")).unwrap();
+            std::fs::write(cars.join(id).join("ui").join("badge.png"), b"x").unwrap();
+        }
+        std::fs::create_dir_all(cars.join("ks_no_badge").join("ui")).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        overlay::upsert_stock_mod(&conn, "ks_badged", "Car", Some("Ferrari"), Some("A"), &now, false).unwrap();
+        overlay::upsert_stock_mod(&conn, "ks_unbranded", "Car", None, Some("B"), &now, false).unwrap();
+        overlay::upsert_stock_mod(&conn, "ks_no_badge", "Car", Some("Ferrari"), Some("C"), &now, false).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(ac),
+            ..Default::default()
+        };
+
+        let expected = car_badges(&conn, &cfg).unwrap();
+        assert_eq!(
+            expected
+                .iter()
+                .map(|(id, brand, _)| (id.as_str(), brand.as_str()))
+                .collect::<Vec<_>>(),
+            vec![("ks_badged", "Ferrari")],
+            "only the car with a brand and a badge"
+        );
+        let db = overlay::Db(std::sync::Mutex::new(conn));
+        assert_eq!(car_badges_shared(&db, &cfg).unwrap(), expected, "same badges");
     }
 
     /// Monte un circuit géré : version de base en bibliothèque + une couche.
