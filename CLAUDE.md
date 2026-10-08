@@ -692,6 +692,20 @@ Svelte. Les deux sont documentées comme écartées, en tête du script.
   simplement ignoré dans les `config.json` existants, pas de migration à
   écrire. Un champ ajouté prend sa valeur par défaut chez les utilisateurs
   existants.
+- **Une commande dont la durée dépend du disque ou de la taille de la
+  bibliothèque ne tourne pas sur le fil de la fenêtre.** Une commande Tauri
+  synchrone s'exécute sur le fil principal : tant qu'elle tourne, la fenêtre ne
+  répond plus et toutes les autres commandes attendent. Mesuré : `list_library`
+  prenait 0,37 s à chaud et 2,4 s au premier démarrage, et l'écart ne se voit
+  jamais en développement, où tout est en cache. **Et ces chiffres viennent
+  d'une machine haut de gamme** (Ryzen 7800X3D, NVMe) : sur un PC ordinaire,
+  un disque dur ou une bibliothèque plus grosse, ils ne peuvent qu'être pires.
+  Une telle commande passe par `off_window` (ou `read_off_window`), et **lit
+  la base d'abord, ses fichiers ensuite**, verrou rendu (`list_cards_shared`) :
+  sinon toute commande qui a besoin de la base attend la fin de ses lectures.
+  Une écriture courte reste synchrone, pour que deux gestes d'affilée
+  s'exécutent dans l'ordre où ils ont été faits. Une lecture qui ne touche que
+  la base, quelques millisecondes, aussi : la passer à côté n'apporterait rien.
 - **Un module métier Rust n'importe pas `tauri::{AppHandle, Emitter}`.** Pas
   seulement par propreté d'architecture : mesuré, l'import suffit à rendre le
   binaire de test de la lib **inexécutable** — il ne démarre plus du tout
