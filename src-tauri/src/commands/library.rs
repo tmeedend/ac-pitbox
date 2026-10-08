@@ -3,12 +3,23 @@
 
 use super::prelude::*;
 use crate::modscan::ModKind;
+use tauri::Manager;
 
+/// Every card of the library. `async` + `spawn_blocking`, like the import: a
+/// synchronous command runs on the thread that also drives the window, and
+/// this one reads several files per mod - measured on 385 mods, 0.37 s with a
+/// warm disk cache and 2.4 s on a first start, during which the window froze
+/// and every other command queued behind it. The base lock is taken per card
+/// (`list_cards_shared`), or the commands still synchronous would wait for it
+/// on that same thread.
 #[tauri::command]
-pub fn list_library(app: AppHandle, db: State<Db>) -> Result<Vec<ModCard>, String> {
-    let cfg = crate::config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::library::list_cards(&conn, &cfg).map_err(|e| e.to_string())
+pub async fn list_library(app: AppHandle) -> Result<Vec<ModCard>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let cfg = crate::config::load(&app);
+        crate::library::list_cards_shared(&app.state::<Db>(), &cfg)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

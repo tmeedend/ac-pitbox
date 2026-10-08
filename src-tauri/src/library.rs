@@ -210,12 +210,37 @@ pub fn list_cards(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<Mo
     let launched = overlay::launched_ids(conn)?;
     Ok(overlay::list_mods(conn)?
         .into_iter()
-        .map(|m| {
-            let mut card = to_card(conn, cfg, m);
-            fill_usage(&mut card, &cm, &launched);
-            card
-        })
+        .map(|m| card_with_usage(conn, cfg, m, &cm, &launched))
         .collect())
+}
+
+/// The same list as `list_cards`, the base lock taken **per card** rather than
+/// for the whole list.
+///
+/// A card reads several files besides the base (preview, `ui_car.json`, badge),
+/// so the whole list held the lock for 0.37 s with a warm disk cache and 2.4 s
+/// on a first start (385 mods). Any command needing the base meanwhile - the
+/// session column asks for its car's detail at startup - waited all that time,
+/// on the thread that drives the window. Taken per card, the wait is one card's.
+/// A write landing between two cards shows at the next listing, as it would
+/// had it landed just after this one.
+pub fn list_cards_shared(db: &overlay::Db, cfg: &AppConfig) -> Result<Vec<ModCard>, String> {
+    let lock = || db.0.lock().map_err(|e| e.to_string());
+    let cm = cm_stats::read();
+    let (launched, mods) = {
+        let conn = lock()?;
+        let launched = overlay::launched_ids(&conn).map_err(|e| e.to_string())?;
+        (launched, overlay::list_mods(&conn).map_err(|e| e.to_string())?)
+    };
+    mods.into_iter()
+        .map(|m| Ok(card_with_usage(&*lock()?, cfg, m, &cm, &launched)))
+        .collect()
+}
+
+fn card_with_usage(conn: &Connection, cfg: &AppConfig, m: ModRow, cm: &CmUsage, launched: &HashSet<String>) -> ModCard {
+    let mut card = to_card(conn, cfg, m);
+    fill_usage(&mut card, cm, launched);
+    card
 }
 
 /// Skin d'une voiture avec sa miniature (SESSION§1).
@@ -895,6 +920,22 @@ mod tests {
         let cards = list_cards(&conn, &AppConfig::default()).unwrap();
         let stock = cards.iter().find(|c| c.base.id_interne == "ks_test_track").unwrap();
         assert!(!stock.broken);
+    }
+
+    /// The listing behind `list_library` takes the base lock per card: it must
+    /// still build exactly the cards of the single-lock listing.
+    #[test]
+    fn listing_per_card_lock_matches_single_lock_listing() {
+        let base = crate::testutil::temp_dir("cards-shared");
+        let (conn, cfg, _) = track_with_layer(&base);
+        let now = chrono::Local::now().to_rfc3339();
+        overlay::upsert_stock_mod(&conn, "ks_test_car", "Car", None, Some("Test"), &now, false).unwrap();
+
+        let expected = serde_json::to_value(list_cards(&conn, &cfg).unwrap()).unwrap();
+        let db = overlay::Db(std::sync::Mutex::new(conn));
+        let shared = serde_json::to_value(list_cards_shared(&db, &cfg).unwrap()).unwrap();
+        assert_eq!(shared.as_array().map(Vec::len), Some(2), "both mods listed");
+        assert_eq!(shared, expected, "same cards, field for field");
     }
 
     /// Monte un circuit géré : version de base en bibliothèque + une couche.
