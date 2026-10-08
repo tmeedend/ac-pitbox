@@ -178,6 +178,58 @@ de reprendre. En cas d'écart, la spec fait foi.
       le code de `main`. Pour voir une branche, lancer `npm run tauri dev`
       détaché depuis le worktree.
 
+- [ ] **Performances du démarrage et des lectures — première passe faite
+      (2026-10-08), à remesurer sur une plus grosse bibliothèque.**
+      Mesuré en release, à chaud, 385 mods, **sur une machine haut de gamme**
+      (Ryzen 7800X3D, NVMe) — donc un plancher, pas un cas typique : les cartes
+      de la bibliothèque arrivaient à 1,15 s du chargement de la page, elles
+      arrivent à 0,66 s ; `list_library` seul est passé de 0,37 à 0,19 s. En
+      dev, compter environ 1 s de plus (interface servie fichier par fichier,
+      code de l'app non optimisé). **À froid (premier démarrage, rien en
+      cache), tout est environ six fois plus lent** : 2,4 s pour la liste en
+      dev, alors qu'une relance prend 0,49 s.
+      Fait : la liste et les logos de marque lisent la base d'abord et leurs
+      fichiers ensuite, verrou rendu ; vingt et une lectures qui vont lire des
+      fichiers passent hors du fil de la fenêtre (`off_window`,
+      `read_off_window`) ; la liste des « autres mods » et l'inventaire rendent
+      le verrou avant de parcourir les fichiers ; l'app se rouvre sur le
+      dernier écran. La règle qui en sort est dans `CLAUDE.md` (« Une commande
+      dont la durée dépend du disque… »).
+      **Reste** :
+      - Remesurer sur l'autre machine, à la bibliothèque plus grosse, à
+        chaud **et** à froid (juste après un redémarrage de Windows).
+      - Les ressources d'un mod et celles d'un « autre mod » (`list_mod_resources`,
+        `list_other_resources`) parcourent un dossier entier, encore sur le
+        fil de la fenêtre. Les onze autres lectures synchrones restantes ne
+        lisent qu'un fichier ou un petit dossier : laissées telles quelles.
+      - **Le saut « initiales → logo »** de l'index des marques au démarrage
+        (« FE » puis le logo Ferrari) : les logos arrivent après l'analyse de
+        tous les badges (256 ms pour 356 badges, en mémoire seulement, refaite
+        à chaque démarrage). Proposé, pas tranché : une case vide tant que les
+        logos ne sont pas connus ; en plus, si elle se remarque, l'analyse
+        gardée sur disque (un pur cache, indexé par chemin, date et taille).
+      - Un outil de mesure permanent, pour vérifier régulièrement sans
+        réécrire à chaque fois le chronométrage temporaire.
+      **Écarté** : un cache de la liste des cartes (décision du 2026-10-08 :
+      rien à gagner au démarrage, et une liste qui ne relit plus le disque
+      raterait un skin posé par CM) ; alléger la réponse de `list_library`
+      (841 Ko, dont 40 % de descriptions dont le filtre a besoin — au mieux
+      50 ms à gagner).
+      **Pièges payés** :
+      - Mesurer **de bout en bout** (cartes reçues par l'interface), jamais
+        la seule durée d'une commande : dès qu'une commande ne bloque plus
+        les autres, elles se partagent le verrou et sa durée propre gonfle
+        (0,37 → 0,71 s) alors que l'écran, lui, va plus vite.
+      - Le chronométrage s'écrit dans un fichier désigné par une variable
+        d'environnement, et l'app se lance en release avec
+        `npx tauri build --no-bundle` : un `.exe` sans console n'a pas de
+        sortie d'erreur à lire.
+      - Le cache disque de Windows ne se vide pas sans droits administrateur :
+        le seul vrai « à froid » est un démarrage juste après un redémarrage.
+      - Le premier passage de l'analyse des badges se mesure avec le test
+        ignoré `logos::tests::real_install_logos`
+        (`cargo test --release --lib logos::tests::real_install_logos -- --ignored --nocapture`).
+
 - [ ] **Sessions au format `.cmpreset` — une seule vérification reste.**
       Livré (SESSION§3.6) : une session enregistrée est un preset Quick Drive
       écrit chez Content Manager, portant en plus une clé `PitBox` avec
@@ -972,3 +1024,10 @@ de reprendre. En cas d'écart, la spec fait foi.
          (même `revControls`, même `Slider`, même bouton de démonstration).
          Quelques minutes, sans risque ; à mettre en commun au plus tard à la
          troisième copie.
+      3. **`inventory.rs::rows_from_disk` (142 lignes)** : une boucle par
+         source de l'inventaire (autres mods, sous-éléments, couches), à
+         sortir chacune dans sa fonction. Une petite session, risque faible,
+         couverte par les tests de l'inventaire (repéré le 2026-10-08).
+      4. **`others.rs::place` (122 lignes)** : la pose d'un « autre mod » dans
+         le jeu, donc à côté des règles d'or n°2 et n°5 — tests d'abord. Une
+         session, risque moyen (repéré le 2026-10-08).
