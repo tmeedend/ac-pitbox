@@ -72,47 +72,44 @@ pub fn bulk_remove_tag(db: State<Db>, ids: Vec<String>, tag: String) -> Result<(
 #[tauri::command]
 pub async fn bulk_activate(app: AppHandle, ids: Vec<String>) -> Result<crate::bulk::BulkReport, String> {
     let _game_write = crate::gamestate::GameWrite::begin();
-    tauri::async_runtime::spawn_blocking(move || {
-        let (cancel, emit) = begin(&app);
+    off_window(app, move |app| {
+        let (cancel, emit) = begin(app);
         let ctx = BulkCtx::new(&emit, "activate", cancel);
-        let cfg = crate::config::load(&app);
+        let cfg = crate::config::load(app);
         let db = app.state::<Db>();
         let conn = db.0.lock().map_err(|e| e.to_string())?;
         Ok(crate::bulk::activate(&ctx, &conn, &cfg, &ids))
     })
     .await
-    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 pub async fn bulk_deactivate(app: AppHandle, ids: Vec<String>) -> Result<crate::bulk::BulkReport, String> {
     let _game_write = crate::gamestate::GameWrite::begin();
-    tauri::async_runtime::spawn_blocking(move || {
-        let (cancel, emit) = begin(&app);
+    off_window(app, move |app| {
+        let (cancel, emit) = begin(app);
         let ctx = BulkCtx::new(&emit, "deactivate", cancel);
-        let cfg = crate::config::load(&app);
+        let cfg = crate::config::load(app);
         let db = app.state::<Db>();
         let conn = db.0.lock().map_err(|e| e.to_string())?;
         Ok(crate::bulk::deactivate(&ctx, &conn, &cfg, &ids))
     })
     .await
-    .map_err(|e| e.to_string())?
 }
 
 /// Supprime en masse (fichiers + junction + overlay pour chacun, §10).
 #[tauri::command]
 pub async fn bulk_delete(app: AppHandle, ids: Vec<String>) -> Result<crate::bulk::BulkReport, String> {
     let _game_write = crate::gamestate::GameWrite::begin();
-    tauri::async_runtime::spawn_blocking(move || {
-        let (cancel, emit) = begin(&app);
+    off_window(app, move |app| {
+        let (cancel, emit) = begin(app);
         let ctx = BulkCtx::new(&emit, "delete", cancel);
-        let cfg = crate::config::load(&app);
+        let cfg = crate::config::load(app);
         let db = app.state::<Db>();
         let conn = db.0.lock().map_err(|e| e.to_string())?;
         Ok(crate::bulk::delete(&ctx, &conn, &cfg, &ids))
     })
     .await
-    .map_err(|e| e.to_string())?
 }
 
 /// Puts mods in the showcase (ESPACE§5): heavy files to the recycle bin, the
@@ -125,10 +122,10 @@ pub async fn bulk_showcase(
     keep_archive: bool,
 ) -> Result<crate::bulk::ShowcaseReport, String> {
     let _game_write = crate::gamestate::GameWrite::begin();
-    tauri::async_runtime::spawn_blocking(move || {
-        let (cancel, emit) = begin(&app);
+    off_window(app, move |app| {
+        let (cancel, emit) = begin(app);
         let ctx = BulkCtx::new(&emit, "showcase", cancel);
-        let cfg = crate::config::load(&app);
+        let cfg = crate::config::load(app);
         let db = app.state::<Db>();
         let conn = db.0.lock().map_err(|e| e.to_string())?;
         Ok(crate::bulk::showcase(
@@ -141,7 +138,6 @@ pub async fn bulk_showcase(
         ))
     })
     .await
-    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -150,10 +146,10 @@ pub async fn bulk_export(
     ids: Vec<String>,
     dest_dir: String,
 ) -> Result<Vec<crate::bulk::BulkExportItem>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let (cancel, emit) = begin(&app);
+    off_window(app, move |app| {
+        let (cancel, emit) = begin(app);
         let ctx = BulkCtx::new(&emit, "export", cancel);
-        let cfg = crate::config::load(&app);
+        let cfg = crate::config::load(app);
         let db = app.state::<Db>();
         let conn = db.0.lock().map_err(|e| e.to_string())?;
         Ok(crate::bulk::export(
@@ -165,5 +161,4 @@ pub async fn bulk_export(
         ))
     })
     .await
-    .map_err(|e| e.to_string())?
 }

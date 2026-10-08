@@ -44,10 +44,10 @@ pub async fn import_archives(
     decisions: Option<Vec<crate::importer::ImportDecision>>,
 ) -> Result<Vec<ArchiveResult>, String> {
     let _game_write = crate::gamestate::GameWrite::begin();
-    tauri::async_runtime::spawn_blocking(move || {
-        let ctx = begin(&app);
-        let cfg = crate::config::load(&app);
-        let rules = crate::rules::load(&app);
+    off_window(app, move |app| {
+        let ctx = begin(app);
+        let cfg = crate::config::load(app);
+        let rules = crate::rules::load(app);
         let db = app.state::<Db>();
         let out =
             crate::importer::import_archives(&ctx, db.inner(), &cfg, &rules, &paths, &decisions.unwrap_or_default());
@@ -55,7 +55,6 @@ pub async fn import_archives(
         out
     })
     .await
-    .map_err(|e| e.to_string())?
 }
 
 /// Import depuis des dossiers déjà décompressés (§4.2). `copy=true` préserve la
@@ -69,10 +68,10 @@ pub async fn import_folders(
     decisions: Option<Vec<crate::importer::ImportDecision>>,
 ) -> Result<Vec<ArchiveResult>, String> {
     let _game_write = crate::gamestate::GameWrite::begin();
-    tauri::async_runtime::spawn_blocking(move || {
-        let ctx = begin(&app);
-        let cfg = crate::config::load(&app);
-        let rules = crate::rules::load(&app);
+    off_window(app, move |app| {
+        let ctx = begin(app);
+        let cfg = crate::config::load(app);
+        let rules = crate::rules::load(app);
         let db = app.state::<Db>();
         let out = crate::importer::import_folders(
             &ctx,
@@ -87,7 +86,6 @@ pub async fn import_folders(
         out
     })
     .await
-    .map_err(|e| e.to_string())?
 }
 
 /// Analyse un dossier parent (§4.2) : classe chaque sous-dossier sans rien
@@ -96,14 +94,10 @@ pub async fn import_folders(
 /// le tenir depuis le thread IPC gèlerait en plus la livraison des événements.
 #[tauri::command]
 pub async fn analyze_bulk_import(app: AppHandle, parent: String) -> Result<Vec<crate::importer::BulkEntry>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let cfg = crate::config::load(&app);
-        let db = app.state::<Db>();
-        let conn = db.0.lock().map_err(|e| e.to_string())?;
-        crate::importer::analyze_bulk(&conn, &cfg, std::path::Path::new(&parent))
+    read_off_window(app, move |conn, cfg| {
+        crate::importer::analyze_bulk(conn, cfg, std::path::Path::new(&parent))
     })
     .await
-    .map_err(|e| e.to_string())?
 }
 
 /// Exécute l'import en masse selon les décisions d'arbitrage (§4.2). Même
@@ -115,17 +109,16 @@ pub async fn execute_bulk_import(
     copy: bool,
 ) -> Result<Vec<ArchiveResult>, String> {
     let _game_write = crate::gamestate::GameWrite::begin();
-    tauri::async_runtime::spawn_blocking(move || {
-        let ctx = begin(&app);
-        let cfg = crate::config::load(&app);
-        let rules = crate::rules::load(&app);
+    off_window(app, move |app| {
+        let ctx = begin(app);
+        let cfg = crate::config::load(app);
+        let rules = crate::rules::load(app);
         let db = app.state::<Db>();
         let out = crate::importer::execute_bulk(&ctx, db.inner(), &cfg, &rules, &items, copy);
         ctx.finish_batch(ctx.cancelled());
         out
     })
     .await
-    .map_err(|e| e.to_string())?
 }
 
 /// Ce qu'un glisser-déposer contient réellement (§4.2). Le frontend ne peut pas

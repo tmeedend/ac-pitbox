@@ -111,18 +111,17 @@ pub fn reinstall_from_archive(app: AppHandle, db: State<Db>, id: String) -> Resu
 #[tauri::command]
 pub async fn repair_all(app: AppHandle, reinstall_broken: bool) -> Result<crate::maintenance::RepairAllReport, String> {
     let _game_write = crate::gamestate::GameWrite::begin();
-    tauri::async_runtime::spawn_blocking(move || {
+    off_window(app, move |app| {
         let emit = |p: crate::maintenance::RepairProgress| {
             let _ = app.emit("repair:progress", p);
         };
         let ctx = crate::maintenance::RepairCtx::new(&emit);
-        let cfg = crate::config::load(&app);
+        let cfg = crate::config::load(app);
         let db = app.state::<Db>();
         let conn = db.0.lock().map_err(|e| e.to_string())?;
         crate::maintenance::repair_all(&ctx, &conn, &cfg, reinstall_broken)
     })
     .await
-    .map_err(|e| e.to_string())?
 }
 
 /// Exporte la version active d'un mod en archive autonome dans `dest_dir` (§10).
