@@ -76,7 +76,7 @@ if (reviewed) {
   const when = git("log", "-1", "--format=%as", REVIEW_REF);
   console.log(
     since >= REVIEW_EVERY
-      ? `[code] refactoring review due: ${since} commits since the last one (${when}) — ask the user (CLAUDE.md, « Revue de refactoring »)`
+      ? `[code] refactoring review due: ${since} commits since the last one (${when}) — ask the user (CLAUDE.md, « Revue de refactoring »: the review, and npm run bench:startup)`
       : `[code] refactoring review: ${since}/${REVIEW_EVERY} commits since the last one (${when})`,
   );
 }

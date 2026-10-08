@@ -175,6 +175,14 @@ compte rendu si on fait la revue maintenant — ne jamais la lancer d'office.
   et rendre 3 à 5 refactorings classés par bénéfice sur risque, chacun avec sa
   taille. Ne rien modifier : l'utilisateur choisit ce qu'on lance, et ce qu'il
   reporte va dans `docs/CHANTIERS.md`.
+  **La revue mesure aussi le démarrage** : `npm run bench:startup`, Pit Box
+  fermé (l'app de dev comprise) et laissé sur Voitures. Le banc compare de
+  lui-même à la mesure précédente de la machine. Une régression nette — les
+  cartes à l'écran plus lentes d'au moins 10 % à nombre de cartes égal — entre
+  dans les points rendus, avec l'étape du banc qui l'explique ; une
+  bibliothèque qui a grossi se dit à part, ce n'est pas une régression du code.
+  Le code dérive une ligne à la fois, les performances aussi : c'est la même
+  cadence qui les rattrape.
 - **Non, pas maintenant** : rien de plus.
 
 Dans les deux cas, `npm run review:done` remet le compteur à zéro — sans quoi
