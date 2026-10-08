@@ -382,11 +382,39 @@ pub struct OtherModCard {
 
 /// Liste les mods « autres » avec les conflits de fichiers détectés entre eux.
 pub fn list_others(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<OtherModCard>> {
+    let (rows, index) = others_base(conn)?;
+    Ok(others_from_disk(cfg, rows, &index))
+}
+
+/// `list_others`, the base lock held only while the base is read. The listing
+/// walks every file of every mod (conflicts, attachment), and it is asked for
+/// at every start - the rail's alert dots: a command needing the base waited
+/// for the whole walk.
+pub fn list_others_shared(db: &overlay::Db, cfg: &AppConfig) -> Result<Vec<OtherModCard>, String> {
+    let (rows, index) = {
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        others_base(&conn).map_err(|e| e.to_string())?
+    };
+    Ok(others_from_disk(cfg, rows, &index))
+}
+
+/// What `list_others` reads from the base: the rows, and the index of the
+/// library their attachment is deduced against.
+fn others_base(conn: &Connection) -> rusqlite::Result<(Vec<overlay::OtherModRow>, crate::attach::EntityIndex)> {
     let rows = overlay::list_other_mods(conn)?;
     // Index construit UNE fois : la déduction interroge la bibliothèque une
     // fois par chemin de chaque mod, et la rebâtir à chaque appel est ce qui
     // transformerait un calcul gratuit en calcul lent.
     let index = crate::attach::EntityIndex::build(conn)?;
+    Ok((rows, index))
+}
+
+/// The rest of `list_others`, from the files alone - no connection at hand.
+fn others_from_disk(
+    cfg: &AppConfig,
+    rows: Vec<overlay::OtherModRow>,
+    index: &crate::attach::EntityIndex,
+) -> Vec<OtherModCard> {
     let files: Vec<(String, HashSet<PathBuf>)> = rows
         .iter()
         .map(|r| {
@@ -397,8 +425,7 @@ pub fn list_others(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<O
         })
         .collect();
 
-    Ok(rows
-        .into_iter()
+    rows.into_iter()
         .map(|row| {
             let mine = files.iter().find(|(id, _)| *id == row.id).map(|(_, f)| f);
             let conflicts = mine
@@ -424,7 +451,7 @@ pub fn list_others(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<O
                 .unwrap_or_else(|| vec![OTHER_CATEGORY.to_string()]);
             let paths: Vec<PathBuf> = mine.map(|f| f.iter().cloned().collect()).unwrap_or_default();
             let attachment = crate::attach::attachment_of(
-                &index,
+                index,
                 &row.id,
                 row.source_archive.as_deref(),
                 &paths,
@@ -456,7 +483,7 @@ pub fn list_others(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<O
                 attachment,
             }
         })
-        .collect())
+        .collect()
 }
 
 /// Corrige à la main le rattachement d'un mod « autre » (REFONTE§2.3). Chaîne vide =
@@ -1141,6 +1168,33 @@ mod tests {
         assert_eq!(a.conflicts.len(), 1);
         assert_eq!(a.conflicts[0].other_id, "ModB");
         assert_eq!(a.conflicts[0].count, 1, "un seul fichier commun (x.ini)");
+    }
+
+    /// The listing behind `list_other_mods` reads the base first, then walks
+    /// the files with the lock released: it must build exactly the cards of
+    /// `list_others` - conflicts included, which compare the mods' files.
+    #[test]
+    fn listing_on_the_shared_base_matches_listing_on_a_connection() {
+        let base = crate::testutil::temp_dir("others-shared");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let src_a = base.join("src").join("ModA");
+        make_tree(&src_a, &["extension/config/x.ini", "extension/config/only_a.ini"]);
+        let src_b = base.join("src").join("ModB");
+        make_tree(&src_b, &["extension/config/x.ini"]);
+        import_other(&conn, &library, "ModA.zip", &src_a, true, ExtractionMode::InfoOnly).unwrap();
+        import_other(&conn, &library, "ModB.zip", &src_b, true, ExtractionMode::InfoOnly).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+
+        let expected = serde_json::to_value(list_others(&conn, &cfg).unwrap()).unwrap();
+        let db = overlay::Db(std::sync::Mutex::new(conn));
+        let shared = serde_json::to_value(list_others_shared(&db, &cfg).unwrap()).unwrap();
+        assert_eq!(shared.as_array().map(Vec::len), Some(2), "both mods listed");
+        assert_eq!(shared, expected, "same cards, conflicts included");
     }
 
     #[test]

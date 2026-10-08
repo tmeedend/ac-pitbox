@@ -2,12 +2,14 @@
 //! avec résolution de conflits de fichiers par priorité.
 
 use super::prelude::*;
+use tauri::Manager;
 
 /// Liste les mods « autres » avec leurs conflits de fichiers détectés.
 #[tauri::command]
 pub async fn list_other_mods(app: AppHandle) -> Result<Vec<crate::others::OtherModCard>, String> {
-    read_off_window(app, move |conn, cfg| {
-        crate::others::list_others(conn, cfg).map_err(|e| e.to_string())
+    off_window(app, |app| {
+        let cfg = crate::config::load(app);
+        crate::others::list_others_shared(&app.state::<Db>(), &cfg)
     })
     .await
 }
