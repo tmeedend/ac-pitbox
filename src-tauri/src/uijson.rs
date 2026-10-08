@@ -5,6 +5,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 use serde::Serialize;
 use serde_json::Value;
@@ -127,9 +128,13 @@ fn clean_assetto_json(input: &str) -> String {
     }
 
     // Nettoyage final des virgules traînantes
-    let re_trailing_comma = regex::Regex::new(r",\s*([\]}])").unwrap();
-    re_trailing_comma.replace_all(&result, "$1").into_owned()
+    TRAILING_COMMA.replace_all(&result, "$1").into_owned()
 }
+
+/// Compiled once: it was compiled again for every `ui_*.json` read, and a
+/// library listing reads one per car.
+static TRAILING_COMMA: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r",\s*([\]}])").expect("valid trailing-comma pattern"));
 
 /// Chemin du `ui_car.json` d'un dossier voiture.
 pub fn car_ui_path(car_dir: &Path) -> PathBuf {
