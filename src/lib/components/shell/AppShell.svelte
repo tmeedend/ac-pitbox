@@ -17,7 +17,7 @@
   import DeleteDialog from "$lib/components/library/DeleteDialog.svelte";
   import ShellToasts from "$lib/components/toasts/ShellToasts.svelte";
   import ControllerSetup from "$lib/components/settings/ControllerSetup.svelte";
-  import { nav, inSessionZone, rememberLibrary, tabGroupOf } from "$lib/shell/nav.svelte";
+  import { nav, inSessionZone, rememberScreen, tabGroupOf } from "$lib/shell/nav.svelte";
   import { recordScreen } from "$lib/shell/navHistory";
   import { startShellServices } from "$lib/shell/shellServices";
   import { controllers } from "$lib/shell/gamepadDevices.svelte";
@@ -103,9 +103,10 @@
   $effect(() => {
     recordScreen({ section: nav.section, openFull: nav.openFull, openPack: nav.openPack });
   });
-  // Same reasoning for the library the rail's `Session` entry returns to:
-  // observed here, whichever path changed the screen.
-  $effect(() => rememberLibrary(nav.section));
+  // Same reasoning for the screen the app reopens on, and the library the
+  // rail's `Session` entry returns to: observed here, whichever path changed
+  // the screen.
+  $effect(() => rememberScreen(nav.section));
 
   // The session column is a zone, not permanent furniture (SPEC §7.2): shown
   // on the screens that choose what will be launched, its width given back to

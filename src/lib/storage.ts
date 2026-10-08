@@ -75,6 +75,11 @@ export const StorageKey = {
   inventoryFacets: `${PREFIX}.inventory.facets`,
   inventoryGroupBy: `${PREFIX}.inventory.groupBy`,
   inventorySortBy: `${PREFIX}.inventory.sortBy`,
+  /** The screen the app was closed on, and the library the `Session` rail
+   * entry returns to (SPEC §7.2): the app reopens where it was left. Born in
+   * `ui_prefs.json`. */
+  navSection: `${PREFIX}.nav.section`,
+  navLibrary: `${PREFIX}.nav.library`,
   preferredSkin: (carId: string) => `${PREFIX}.skin.${carId}`,
   preferredLayout: (trackId: string) => `${PREFIX}.layout.${trackId}`,
   /** Tenue de pilote choisie pour cette voiture (PILOTE§1.4).

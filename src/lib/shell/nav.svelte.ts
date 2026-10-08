@@ -5,6 +5,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { StorageKey } from "$lib/storage";
 import { durableWriter, type WriteFailure } from "$lib/durableWrite.svelte";
+import { getUiPrefs, setUiPrefs } from "$lib/uiPrefs.svelte";
 
 export interface LaunchPrefill {
   kind: "Car" | "Track";
@@ -161,7 +162,9 @@ export const nav = $state<{
   opponentsAction: null,
 });
 
-loadPicks().then((picks) => {
+/** Settled once the session pair is read: the start screen waits for it
+ * (`restoreStartScreen`), so a session screen does not open on an empty pair. */
+const picksLoaded = loadPicks().then((picks) => {
   // Repli sur l'ancien `localStorage` seulement si le nouveau fichier n'a
   // rien pour cette entité (première ouverture après la mise à jour) — et
   // dans ce cas, persiste tout de suite au nouvel endroit pour ne plus
@@ -247,15 +250,9 @@ export function inSessionZone(section: string): boolean {
 }
 
 /** The library the `Session` rail entry returns to: the last one consulted.
- * Not persisted: the app always opens on the car library (`nav.section`
- * above), which makes it the last one consulted at every start — a stored
- * value would be overwritten before anyone could click. */
+ * Stored with the screen (`rememberScreen`): an app reopened on its settings
+ * must still send `Session` back to the tracks if that is where the user was. */
 let lastLibrary: "cars" | "tracks" = "cars";
-
-/** Called on every screen change; only a library counts. */
-export function rememberLibrary(section: string): void {
-  if (section === "cars" || section === "tracks") lastLibrary = section;
-}
 
 /** Opens the session zone on the last library consulted (the `Session` rail
  * entry, and the controller's Start button from outside the zone). */
@@ -283,6 +280,52 @@ export function tabGroupOf(section: string): readonly string[] | null {
   if (SORTING_TABS.includes(section)) return SORTING_TABS;
   if (FILES_TABS.includes(section)) return FILES_TABS;
   return null;
+}
+
+// --- The start screen (SPEC §7.2) ---
+//
+// The app reopens on the screen it was closed on. Only the section: an open
+// sheet is not restored (the mod may be gone, and a sheet is a moment, not a
+// place), nor Big Picture.
+
+/** Every section `AppShell` shows. A stored screen outside it - renamed or
+ * removed by an update - falls back to the car library. */
+const KNOWN_SECTIONS: readonly string[] = [
+  ...SESSION_ZONE,
+  "apps",
+  "others",
+  "online",
+  ...SORTING_TABS,
+  ...FILES_TABS,
+  "settings",
+  "about",
+];
+
+const isLibrary = (s: string | null): s is "cars" | "tracks" => s === "cars" || s === "tracks";
+
+/** What `ui_prefs.json` holds, so an unchanged screen is not rewritten. */
+let stored: { section: string | null; library: string | null } = { section: null, library: null };
+
+/** Puts back the screen the app was closed on. Called once, before the shell
+ * is mounted, so its first frame is that screen - not the car library
+ * flashing by, with its listing started for nothing. Waits for the session
+ * pair too: until now no session screen could open before it was read, and
+ * the Driver screen would otherwise say "no car" for a moment. */
+export async function restoreStartScreen(): Promise<void> {
+  const [prefs] = await Promise.all([getUiPrefs([StorageKey.navSection, StorageKey.navLibrary]), picksLoaded]);
+  stored = { section: prefs[StorageKey.navSection], library: prefs[StorageKey.navLibrary] };
+  if (isLibrary(stored.library)) lastLibrary = stored.library;
+  if (stored.section && KNOWN_SECTIONS.includes(stored.section)) nav.section = stored.section;
+}
+
+/** Called on every screen change (an effect of `AppShell`): the screen to
+ * reopen on, and the library `Session` returns to. */
+export function rememberScreen(section: string): void {
+  if (!KNOWN_SECTIONS.includes(section)) return;
+  if (isLibrary(section)) lastLibrary = section;
+  if (stored.section === section && stored.library === lastLibrary) return;
+  stored = { section, library: lastLibrary };
+  void setUiPrefs({ [StorageKey.navSection]: section, [StorageKey.navLibrary]: lastLibrary });
 }
 
 /**

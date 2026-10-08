@@ -3,6 +3,7 @@
   import SetupWizard from "$lib/components/shell/SetupWizard.svelte";
   import AppShell from "$lib/components/shell/AppShell.svelte";
   import { getConfig, validateConfig } from "$lib/config";
+  import { restoreStartScreen } from "$lib/shell/nav.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { applyStartupPrefs, dismissBootScreen } from "$lib/shell/boot";
 
@@ -18,6 +19,9 @@
       const cfg = await getConfig();
       applyStartupPrefs(cfg.prefs);
       const v = await validateConfig(cfg);
+      // Only for a configured app: one coming out of the wizard starts on the
+      // car library, as every start did before.
+      if (v.is_valid) await restoreStartScreen();
       view = v.is_valid ? "app" : "wizard";
       await tick();
     } finally {

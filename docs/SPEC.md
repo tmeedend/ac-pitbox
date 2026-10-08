@@ -1080,8 +1080,9 @@ faisaient exactement ce que fait un clic sur la carte correspondante de la
 colonne, avec une icône générique là où la carte montre ce qui est retenu et
 porte ses sous-choix (layout, livrée, pilote, performance). Elles sont
 remplacées par **une seule entrée `Session`**, qui ramène à la **dernière
-bibliothèque consultée** (Voitures au démarrage, puisque l'app s'ouvre sur
-elle — l'écran Pilote n'est pas une bibliothèque et n'est pas retenu). Pas
+bibliothèque consultée**, retenue d'un lancement à l'autre (Voitures au
+tout premier — l'écran Pilote n'est pas une bibliothèque et n'est pas
+retenu). Pas
 d'écran de tableau de bord derrière : il serait vide, et doublerait la colonne.
 Le bouton Start de la manette, qui amène le curseur sur « Démarrer la
 session », passe par le même chemin quand on est hors de la zone.
@@ -1095,6 +1096,15 @@ réglages (SESSION§1.1). Sans ce relais, l'indication de position disparaissait
 des deux écrans les plus visités. C'est le niveau 2 du barème (§7.2ter, « ce
 qui a le focus ») : il remplace l'ancien encadré rouge du bloc voiture, retiré
 parce qu'il ne disait rien — celui-ci dit une chose précise.
+
+**L'app se rouvre sur l'écran où on l'a quittée** — la section, onglet de
+Classement ou de Fichiers compris, enregistrée dans `ui_prefs.json` à chaque
+changement d'écran. Pas une fiche ouverte : on retrouve la liste, le mod a pu
+disparaître et une fiche est un moment, pas un lieu ; pas Big Picture non plus.
+Un écran que la version courante ne connaît plus ramène à Voitures, de même
+qu'une sortie de l'assistant de première configuration. Démarrer ailleurs que
+dans une bibliothèque, c'est aussi ne pas payer la liste de ses cartes avant
+d'y aller.
 
 **Quitter Big Picture est au pied du rail** quand le mode est actif. Le bouton
 vivait en bas de la colonne de session : masquée hors de la zone, elle ne
@@ -1130,7 +1140,7 @@ Elles remplacent l'**Atelier**, qui réunissait les sept onglets sous un même t
 
 **L'onglet Pays** (TAXO§6) liste les pays rangés — drapeau, nom traduit (le nom rangé à côté quand il diffère), nombre de voitures et de circuits, nombre d'orthographes, fanion ⚑ quand elles diffèrent de la version livrée — triés par nombre de mods. Une ligne dépliée montre son code ISO (ou « inconnu du jeu »), ses orthographes rattachées (ajout, retrait), « Rattacher à… » (fusionner ce pays dans un autre, ce qui est aussi le moyen de le renommer : toutes les orthographes qui y menaient suivent) et « Rétablir les orthographes d'origine ». **Les valeurs inconnues du jeu** (sans drapeau, TAXO§3.1) sont proposées en bandeau jaune, le pays du jeu le plus proche présélectionné quand il y en a un (faute de frappe, nom tronqué), avec « Rattacher » ou « Ignorer » — mémorisé (`country_aliases.ignored`), réversible en pied d'écran. Un pays sans mod dont des orthographes restent curées n'est pas perdu : masqué, il réapparaît avec « Afficher les pays sans mod ». **Chaque modification réapplique les alias à toute la bibliothèque** (`save_country_aliases`), puisque le pays est décidé à l'écriture — contrairement aux familles. Chacun est un écran à une tâche sans sous-rubrique : c'est ce qui rend le regroupement possible sans créer le double niveau d'onglets que §7.2 interdit. Des entrées de rail économisées, et les outils gagnent une maison visible au lieu d'être quatre boutons dans une grille. Chaque onglet garde son propre **sous-titre** — il décrit l'outil, là où le titre décrit le lieu.
 
-**L'onglet reste porté par `nav.section`**, pas par un état local, et c'est ce qui compte à l'usage : la douzaine d'endroits qui appellent déjà `requestSection("import")` (le glisser-déposer global, un rapport d'import, un renvoi depuis la bibliothèque) atterrissent sur le bon onglet sans rien savoir de cet écran, la garde de navigation (§11) et l'historique (§7.2bis) restent en place, et chaque entrée du rail — qui vise son premier onglet, `rules` ou `import` — repart forcément de lui. **L'onglet actif n'est pas mémorisé.**
+**L'onglet reste porté par `nav.section`**, pas par un état local, et c'est ce qui compte à l'usage : la douzaine d'endroits qui appellent déjà `requestSection("import")` (le glisser-déposer global, un rapport d'import, un renvoi depuis la bibliothèque) atterrissent sur le bon onglet sans rien savoir de cet écran, la garde de navigation (§11) et l'historique (§7.2bis) restent en place, et chaque entrée du rail — qui vise son premier onglet, `rules` ou `import` — repart forcément de lui. **L'onglet actif n'est pas mémorisé** par l'entrée du rail — seul le démarrage rouvre l'écran quitté, onglet compris (§7.2).
 
 Les **préférences d'import** ont suivi l'opération : elles ont quitté les Réglages pour une **section repliable en pied de l'onglet Importer**, repliée par défaut. Deux noms quasi identiques dans deux endroits différents — l'un l'action, l'autre ses préférences — produisaient des allers-retours. Une section et non un onglet : cet écran est déjà un onglet de Fichiers. Écriture immédiate, sans bouton Enregistrer (deux réglages, aucun aperçu live à valider ou annuler), un échec s'affichant plutôt que de se perdre.
 
