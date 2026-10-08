@@ -21,27 +21,31 @@ fn counterpart_ids(conn: &rusqlite::Connection, own_kind: &str) -> Result<std::c
 }
 
 #[tauri::command]
-pub fn list_media_screenshots(db: State<Db>, id: String) -> Result<Vec<crate::media::ScreenshotFile>, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let m = crate::overlay::get_mod(&conn, &id)
-        .map_err(|e| e.to_string())?
-        .ok_or(crate::errors::MOD_NOT_FOUND)?;
-    let counterparts = counterpart_ids(&conn, &m.kind)?;
-    let auto = crate::media::list_screenshots(&id, &counterparts);
-    let manual = crate::overlay::list_media_links(&conn, &id, SCREENSHOT_KIND).map_err(|e| e.to_string())?;
-    Ok(crate::media::merge_screenshot_links(auto, &manual))
+pub async fn list_media_screenshots(app: AppHandle, id: String) -> Result<Vec<crate::media::ScreenshotFile>, String> {
+    read_off_window(app, move |conn, _| {
+        let m = crate::overlay::get_mod(conn, &id)
+            .map_err(|e| e.to_string())?
+            .ok_or(crate::errors::MOD_NOT_FOUND)?;
+        let counterparts = counterpart_ids(conn, &m.kind)?;
+        let auto = crate::media::list_screenshots(&id, &counterparts);
+        let manual = crate::overlay::list_media_links(conn, &id, SCREENSHOT_KIND).map_err(|e| e.to_string())?;
+        Ok(crate::media::merge_screenshot_links(auto, &manual))
+    })
+    .await
 }
 
 #[tauri::command]
-pub fn list_media_replays(db: State<Db>, id: String) -> Result<Vec<crate::media::ReplayFile>, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let m = crate::overlay::get_mod(&conn, &id)
-        .map_err(|e| e.to_string())?
-        .ok_or(crate::errors::MOD_NOT_FOUND)?;
-    let counterparts = counterpart_ids(&conn, &m.kind)?;
-    let auto = crate::media::list_replays(&id, &counterparts);
-    let manual = crate::overlay::list_media_links(&conn, &id, REPLAY_KIND).map_err(|e| e.to_string())?;
-    Ok(crate::media::merge_replay_links(auto, &manual))
+pub async fn list_media_replays(app: AppHandle, id: String) -> Result<Vec<crate::media::ReplayFile>, String> {
+    read_off_window(app, move |conn, _| {
+        let m = crate::overlay::get_mod(conn, &id)
+            .map_err(|e| e.to_string())?
+            .ok_or(crate::errors::MOD_NOT_FOUND)?;
+        let counterparts = counterpart_ids(conn, &m.kind)?;
+        let auto = crate::media::list_replays(&id, &counterparts);
+        let manual = crate::overlay::list_media_links(conn, &id, REPLAY_KIND).map_err(|e| e.to_string())?;
+        Ok(crate::media::merge_replay_links(auto, &manual))
+    })
+    .await
 }
 
 /// Backgrounds officiels CSP (§6.1, onglet dispo seulement pour un circuit) —

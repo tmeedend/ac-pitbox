@@ -19,8 +19,6 @@ pub fn showcase_plan(
 
 /// Where the files of a mod in the showcase could come back from.
 #[tauri::command]
-pub fn showcase_sources(app: AppHandle, db: State<Db>, id: String) -> Result<crate::showcase::Sources, String> {
-    let cfg = crate::config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::showcase::sources(&conn, &cfg, &id)
+pub async fn showcase_sources(app: AppHandle, id: String) -> Result<crate::showcase::Sources, String> {
+    read_off_window(app, move |conn, cfg| crate::showcase::sources(conn, cfg, &id)).await
 }

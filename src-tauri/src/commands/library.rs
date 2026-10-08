@@ -20,10 +20,11 @@ pub async fn list_library(app: AppHandle) -> Result<Vec<ModCard>, String> {
 }
 
 #[tauri::command]
-pub fn get_mod_detail(app: AppHandle, db: State<Db>, id: String) -> Result<Option<ModDetail>, String> {
-    let cfg = crate::config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::library::detail(&conn, &cfg, &id).map_err(|e| e.to_string())
+pub async fn get_mod_detail(app: AppHandle, id: String) -> Result<Option<ModDetail>, String> {
+    read_off_window(app, move |conn, cfg| {
+        crate::library::detail(conn, cfg, &id).map_err(|e| e.to_string())
+    })
+    .await
 }
 
 /// Ouvre le dossier réel d'un mod (voiture/circuit) dans l'explorateur.
@@ -171,18 +172,19 @@ pub fn list_import_decisions(db: State<Db>, id: String) -> Result<Vec<crate::ove
 /// Liste ce qu'un mod installe hors de `content/<type>/<id>` (§4.5.3) —
 /// onglet « Ajouts au jeu » de la fiche.
 #[tauri::command]
-pub fn list_mod_extras(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<crate::extras::ExtraFile>, String> {
-    let cfg = crate::config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let m = crate::overlay::get_mod(&conn, &id)
-        .map_err(|e| e.to_string())?
-        .ok_or(crate::errors::MOD_NOT_FOUND)?;
-    Ok(crate::extras::list(
-        &conn,
-        &cfg,
-        ModKind::from_column(&m.kind).into(),
-        &id,
-    ))
+pub async fn list_mod_extras(app: AppHandle, id: String) -> Result<Vec<crate::extras::ExtraFile>, String> {
+    read_off_window(app, move |conn, cfg| {
+        let m = crate::overlay::get_mod(conn, &id)
+            .map_err(|e| e.to_string())?
+            .ok_or(crate::errors::MOD_NOT_FOUND)?;
+        Ok(crate::extras::list(
+            conn,
+            cfg,
+            ModKind::from_column(&m.kind).into(),
+            &id,
+        ))
+    })
+    .await
 }
 
 /// Pose quand même un ajout au jeu que l'arbitrage par date refusait (§4.6ter).
@@ -223,10 +225,8 @@ pub fn open_mod_resource(
 /// Fonctionnalités CSP effectivement détectées pour un mod (§6) : sert à
 /// griser les réglages météo/saison non supportés sur l'écran de session.
 #[tauri::command]
-pub fn get_mod_csp_features(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<String>, String> {
-    let cfg = crate::config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::library::mod_csp_features(&conn, &cfg, &id)
+pub async fn get_mod_csp_features(app: AppHandle, id: String) -> Result<Vec<String>, String> {
+    read_off_window(app, move |conn, cfg| crate::library::mod_csp_features(conn, cfg, &id)).await
 }
 
 #[tauri::command]
@@ -249,8 +249,6 @@ pub fn set_mod_field(db: State<Db>, id: String, field: String, value: Option<Str
 
 /// Skins d'une voiture pour la fiche détail (mod ou voiture de base, §6.3/§8).
 #[tauri::command]
-pub fn list_mod_skins(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<crate::library::SkinItem>, String> {
-    let cfg = crate::config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    Ok(crate::library::list_mod_skins(&conn, &cfg, &id))
+pub async fn list_mod_skins(app: AppHandle, id: String) -> Result<Vec<crate::library::SkinItem>, String> {
+    read_off_window(app, move |conn, cfg| Ok(crate::library::list_mod_skins(conn, cfg, &id))).await
 }

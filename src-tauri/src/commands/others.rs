@@ -5,10 +5,11 @@ use super::prelude::*;
 
 /// Liste les mods « autres » avec leurs conflits de fichiers détectés.
 #[tauri::command]
-pub fn list_other_mods(app: AppHandle, db: State<Db>) -> Result<Vec<crate::others::OtherModCard>, String> {
-    let cfg = crate::config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::others::list_others(&conn, &cfg).map_err(|e| e.to_string())
+pub async fn list_other_mods(app: AppHandle) -> Result<Vec<crate::others::OtherModCard>, String> {
+    read_off_window(app, move |conn, cfg| {
+        crate::others::list_others(conn, cfg).map_err(|e| e.to_string())
+    })
+    .await
 }
 
 /// Ouvre le dossier de bibliothèque d'un mod « autre » dans l'explorateur.
@@ -29,10 +30,11 @@ pub fn open_other_mod_folder(app: AppHandle, db: State<Db>, id: String) -> Resul
 
 /// L'inventaire des compléments (§4) : une ligne par chose, cinq sources.
 #[tauri::command]
-pub fn list_inventory(app: AppHandle, db: State<Db>) -> Result<Vec<crate::inventory::InventoryRow>, String> {
-    let cfg = crate::config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::inventory::list(&conn, &cfg).map_err(|e| e.to_string())
+pub async fn list_inventory(app: AppHandle) -> Result<Vec<crate::inventory::InventoryRow>, String> {
+    read_off_window(app, move |conn, cfg| {
+        crate::inventory::list(conn, cfg).map_err(|e| e.to_string())
+    })
+    .await
 }
 
 /// Ce qui est greffé sur une voiture, un circuit ou une app (§4.3).

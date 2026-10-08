@@ -263,10 +263,8 @@ pub fn stop_audition_native(engine: State<crate::fmod::engine::FmodEngineHandle>
 /// contient réellement (§8). Tout est lu à la demande — rien de ce qui décrit
 /// un fichier n'est mémorisé en base, il peut changer sous nos pieds.
 #[tauri::command]
-pub fn sound_detail(app: AppHandle, db: State<Db>, sub_id: String) -> Result<crate::enginesound::SoundDetail, String> {
-    let cfg = crate::config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::enginesound::detail(&conn, &cfg, &sub_id)
+pub async fn sound_detail(app: AppHandle, sub_id: String) -> Result<crate::enginesound::SoundDetail, String> {
+    read_off_window(app, move |conn, cfg| crate::enginesound::detail(conn, cfg, &sub_id)).await
 }
 
 /// Fiche d'une livrée (§8.3), voiture ou circuit : ce qu'elle habille, ce
@@ -274,10 +272,8 @@ pub fn sound_detail(app: AppHandle, db: State<Db>, sub_id: String) -> Result<cra
 /// même raison que la fiche d'un son — un dossier de livrée change sous nos
 /// pieds, rien de tout cela n'a sa place en base.
 #[tauri::command]
-pub fn skin_detail(app: AppHandle, db: State<Db>, sub_id: String) -> Result<crate::submods::SkinDetail, String> {
-    let cfg = crate::config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::submods::skin_detail(&conn, &cfg, &sub_id)
+pub async fn skin_detail(app: AppHandle, sub_id: String) -> Result<crate::submods::SkinDetail, String> {
+    read_off_window(app, move |conn, cfg| crate::submods::skin_detail(conn, cfg, &sub_id)).await
 }
 
 /// Ouvre le dossier stocké d'une livrée dans l'explorateur.
@@ -397,10 +393,8 @@ pub fn delete_app(app: AppHandle, db: State<Db>, id: String) -> Result<(), Strin
 
 /// Liste les apps (Python ou Lua/CSP) avec leur état d'activation (§8.4).
 #[tauri::command]
-pub fn list_apps(app: AppHandle, db: State<Db>) -> Result<Vec<crate::apps::AppItem>, String> {
-    let cfg = crate::config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::apps::list_apps(&conn, &cfg)
+pub async fn list_apps(app: AppHandle) -> Result<Vec<crate::apps::AppItem>, String> {
+    read_off_window(app, crate::apps::list_apps).await
 }
 
 /// Active une app (junction vers apps/python/ ou apps/lua/ selon le langage
@@ -494,8 +488,9 @@ pub fn read_app_resource(app: AppHandle, id: String, rel_path: String) -> Result
 /// onglet « Ajouts au jeu » de sa fiche. Une app en a autant qu'une voiture :
 /// configs CSP, textures, fichiers de `cfg/` livrés à côté de son dossier.
 #[tauri::command]
-pub fn list_app_extras(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<crate::extras::ExtraFile>, String> {
-    let cfg = crate::config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    Ok(crate::extras::list(&conn, &cfg, crate::extras::OwnerKind::App, &id))
+pub async fn list_app_extras(app: AppHandle, id: String) -> Result<Vec<crate::extras::ExtraFile>, String> {
+    read_off_window(app, move |conn, cfg| {
+        Ok(crate::extras::list(conn, cfg, crate::extras::OwnerKind::App, &id))
+    })
+    .await
 }

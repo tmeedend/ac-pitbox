@@ -10,10 +10,8 @@ use super::prelude::*;
 
 /// La fiche : membres, ajouts au jeu, tailles, date d'entrée en bibliothèque.
 #[tauri::command]
-pub fn get_pack_detail(app: AppHandle, db: State<Db>, pack: String) -> Result<crate::packs::PackDetail, String> {
-    let cfg = crate::config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::packs::detail(&conn, &cfg, &pack)
+pub async fn get_pack_detail(app: AppHandle, pack: String) -> Result<crate::packs::PackDetail, String> {
+    read_off_window(app, move |conn, cfg| crate::packs::detail(conn, cfg, &pack)).await
 }
 
 /// Fichiers annexes du pack (§4.5.2) — notices et documents livrés à côté des
@@ -62,8 +60,9 @@ pub fn read_pack_resource(app: AppHandle, pack: String, rel_path: String) -> Res
 /// vient combler : `list_mod_extras` ne regarde que `extras/<type>/<id>`, donc
 /// les fichiers rattachés au pack n'étaient affichés nulle part.
 #[tauri::command]
-pub fn list_pack_extras(app: AppHandle, db: State<Db>, pack: String) -> Result<Vec<crate::extras::ExtraFile>, String> {
-    let cfg = crate::config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    Ok(crate::extras::list(&conn, &cfg, crate::extras::OwnerKind::Pack, &pack))
+pub async fn list_pack_extras(app: AppHandle, pack: String) -> Result<Vec<crate::extras::ExtraFile>, String> {
+    read_off_window(app, move |conn, cfg| {
+        Ok(crate::extras::list(conn, cfg, crate::extras::OwnerKind::Pack, &pack))
+    })
+    .await
 }

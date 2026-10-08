@@ -44,6 +44,7 @@ pub mod usermeta;
 pub mod wiki;
 
 use prelude::*;
+use tauri::Manager;
 
 /// Imports communs à toutes les façades. Import global volontaire : il ne
 /// déclenche pas d'avertissement `unused_imports` quand un module n'en
@@ -61,7 +62,7 @@ mod prelude {
     pub(crate) use crate::taxonomy::{FamilyOverlay, MapOverlay, TaxonomyOverlay, TaxonomyTables};
     pub(crate) use tauri_plugin_opener::OpenerExt;
 
-    pub(crate) use super::off_window;
+    pub(crate) use super::{off_window, read_off_window};
 }
 
 /// Runs a façade's work off the thread that drives the window. A synchronous
@@ -78,4 +79,21 @@ pub(crate) async fn off_window<T: Send + 'static>(
     tauri::async_runtime::spawn_blocking(move || work(&app))
         .await
         .map_err(|e| e.to_string())?
+}
+
+/// `off_window` for the usual façade: the config loaded and the base locked
+/// for the whole of `work` - files included, so a synchronous command needing
+/// the base still waits for it; releasing the lock before the files are read
+/// is up to each module (`library::list_cards_shared`).
+pub(crate) async fn read_off_window<T: Send + 'static>(
+    app: AppHandle,
+    work: impl FnOnce(&rusqlite::Connection, &AppConfig) -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    off_window(app, move |app| {
+        let cfg = crate::config::load(app);
+        let db = app.state::<Db>();
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        work(&conn, &cfg)
+    })
+    .await
 }

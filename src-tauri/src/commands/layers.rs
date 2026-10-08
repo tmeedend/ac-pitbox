@@ -47,10 +47,8 @@ pub fn reorder_layer(app: AppHandle, db: State<Db>, id: String, direction: Strin
 
 /// Fichiers apportés par une couche, avec ce que chacun fait à la base (§4.4).
 #[tauri::command]
-pub fn list_layer_files(app: AppHandle, db: State<Db>, id: String) -> Result<Vec<crate::layers::LayerFile>, String> {
-    let cfg = crate::config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::layers::list_files(&conn, &cfg, &id)
+pub async fn list_layer_files(app: AppHandle, id: String) -> Result<Vec<crate::layers::LayerFile>, String> {
+    read_off_window(app, move |conn, cfg| crate::layers::list_files(conn, cfg, &id)).await
 }
 
 /// Ouvre le dossier d'une couche dans l'explorateur. Même rationale que

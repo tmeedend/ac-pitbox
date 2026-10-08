@@ -217,10 +217,8 @@ pub fn remove_resource_folder(
 /// Lus en base, pas dans le rapport en mémoire : ne rien décider est une
 /// réponse valable, donc ce qui attend doit survivre à une fermeture de l'app.
 #[tauri::command]
-pub fn list_pending_folders(app: AppHandle, db: State<Db>) -> Result<Vec<crate::pending::PendingFolder>, String> {
-    let cfg = crate::config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::pending::list(&conn, &cfg)
+pub async fn list_pending_folders(app: AppHandle) -> Result<Vec<crate::pending::PendingFolder>, String> {
+    read_off_window(app, crate::pending::list).await
 }
 
 /// Applique le sort choisi pour un dossier proposé (§4.6ter) :
@@ -238,8 +236,9 @@ pub fn resolve_pending_folder(app: AppHandle, db: State<Db>, id: String, action:
 /// disque n'a pas. Même garde-fou anti-traversée et même plafond de taille que
 /// la prévisualisation des ressources (§4.5.2).
 #[tauri::command]
-pub fn read_pending_document(app: AppHandle, db: State<Db>, id: String, name: String) -> Result<String, String> {
-    let cfg = crate::config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::pending::read_document(&conn, &cfg, &id, &name)
+pub async fn read_pending_document(app: AppHandle, id: String, name: String) -> Result<String, String> {
+    read_off_window(app, move |conn, cfg| {
+        crate::pending::read_document(conn, cfg, &id, &name)
+    })
+    .await
 }

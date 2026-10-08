@@ -24,13 +24,19 @@ fn rules_view(app: &AppHandle, o: &RulesOverlay, effects: &crate::harmonize::Eff
 /// The Rules screen: every section in execution order, each rule with the
 /// number of mods it acts on - measured, so the whole library is read.
 #[tauri::command]
-pub fn get_rules_view(app: AppHandle, db: State<Db>) -> Result<RulesView, String> {
-    let o = crate::rules::load_rules_overlay(&app)?;
-    let rules = crate::rules::load(&app);
-    let cfg = crate::config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let effects = crate::harmonize::effects(&conn, &cfg, &rules).map_err(|e| e.to_string())?;
-    rules_view(&app, &o, &effects)
+pub async fn get_rules_view(app: AppHandle) -> Result<RulesView, String> {
+    off_window(app, |app| {
+        let o = crate::rules::load_rules_overlay(app)?;
+        let rules = crate::rules::load(app);
+        let cfg = crate::config::load(app);
+        let effects = {
+            let db = app.state::<Db>();
+            let conn = db.0.lock().map_err(|e| e.to_string())?;
+            crate::harmonize::effects(&conn, &cfg, &rules).map_err(|e| e.to_string())?
+        };
+        rules_view(app, &o, &effects)
+    })
+    .await
 }
 
 /// Writes the screen's decisions and re-applies them to the whole library;

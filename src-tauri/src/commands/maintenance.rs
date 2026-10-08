@@ -6,10 +6,8 @@ use tauri::{Emitter, Manager};
 
 /// Analyse mods cassés + junctions orphelines, sans rien supprimer (§10).
 #[tauri::command]
-pub fn maintenance_scan(app: AppHandle, db: State<Db>) -> Result<crate::maintenance::MaintenanceReport, String> {
-    let cfg = crate::config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::maintenance::scan(&conn, &cfg)
+pub async fn maintenance_scan(app: AppHandle) -> Result<crate::maintenance::MaintenanceReport, String> {
+    read_off_window(app, crate::maintenance::scan).await
 }
 
 /// Relit sur le disque les champs cache (nom, auteur, tags fichier, CSP,
