@@ -10,6 +10,7 @@
 
 import { setLocale } from "$lib/i18n/index.svelte";
 import { setZoom, zoomFactor } from "$lib/shell/zoom.svelte";
+import { mark } from "$lib/timing";
 
 /** Language and zoom of the user, applied before anything is mounted: the
  * shell's first frame is already the right one.
@@ -36,6 +37,7 @@ export function dismissBootScreen(): void {
   requestAnimationFrame(() =>
     requestAnimationFrame(() => {
       boot.classList.add("done");
+      mark("boot_dismissed");
       // `transitionend` does not come when the transition is skipped (reduced
       // motion, a hidden window): the timer removes it all the same.
       setTimeout(() => boot.remove(), 400);

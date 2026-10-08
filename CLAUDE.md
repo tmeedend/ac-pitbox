@@ -706,6 +706,10 @@ Svelte. Les deux sont documentées comme écartées, en tête du script.
   Une écriture courte reste synchrone, pour que deux gestes d'affilée
   s'exécutent dans l'ordre où ils ont été faits. Une lecture qui ne touche que
   la base, quelques millisecondes, aussi : la passer à côté n'apporterait rien.
+  **Le démarrage se mesure avec `npm run bench:startup`**, de bout en bout
+  (les cartes à l'écran) et comparé à la mesure précédente — jamais par un
+  chronométrage écrit à la main puis retiré. Une commande lente qu'on ajoute
+  au démarrage prend son `crate::timing::step` pour apparaître dans le banc.
 - **Un module métier Rust n'importe pas `tauri::{AppHandle, Emitter}`.** Pas
   seulement par propreté d'architecture : mesuré, l'import suffit à rendre le
   binaire de test de la lib **inexécutable** — il ne démarre plus du tout
@@ -874,7 +878,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Règles de tags divergentes** | deux fichiers décrivent la même ontologie, un seul est chargé | `docs/CHANTIERS.md` |
 | **Dossier du jeu** | lot 1 livré (lecture seule) ; reste le lot 2, les tailles | `docs/SPEC-etat-dossier.md`, `docs/CHANTIERS.md` |
 | **Page Online** | v1 et v2 de la spec livrées (tableau, tokens, rejoindre via `race/online`, préparation et contenu récupéré, carte de la fiche circuit, notifications, « Me prévenir ») ; restent des vérifications à l'écran et des limites connues (SPEC-play-online, « Restent ») | `docs/SPEC-play-online.md`, `docs/online-join-research.md` |
-| **Performances** | première passe faite (cartes à 0,66 s au lieu de 1,15 s) ; restent une mesure sur une plus grosse bibliothèque, deux lectures de ressources et le saut « initiales → logo » des marques | `docs/CHANTIERS.md` |
+| **Performances** | première passe faite (cartes à 0,66 s au lieu de 1,15 s), banc `npm run bench:startup` en place ; restent une mesure sur une plus grosse bibliothèque, le premier lancement après une mise à jour (3,4 s), deux lectures de ressources et le saut « initiales → logo » des marques | `docs/CHANTIERS.md` |
 | **Refactorings reportés** | quatre restent : la suite d'`importer.rs` (les restes à côté du mod, règle d'or n°3), le curseur de régime, et deux longues fonctions (`rows_from_disk`, `others::place`) | `docs/CHANTIERS.md` |
 
 ## Fin de tâche — dans cet ordre

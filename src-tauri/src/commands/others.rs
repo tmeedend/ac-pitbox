@@ -9,7 +9,9 @@ use tauri::Manager;
 pub async fn list_other_mods(app: AppHandle) -> Result<Vec<crate::others::OtherModCard>, String> {
     off_window(app, |app| {
         let cfg = crate::config::load(app);
-        crate::others::list_others_shared(&app.state::<Db>(), &cfg)
+        crate::timing::step("cmd.list_other_mods", || {
+            crate::others::list_others_shared(&app.state::<Db>(), &cfg)
+        })
     })
     .await
 }

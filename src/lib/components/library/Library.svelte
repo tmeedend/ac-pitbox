@@ -63,6 +63,7 @@
   } from "$lib/library/filters";
 
   import { StorageKey } from "$lib/storage";
+  import { mark } from "$lib/timing";
   // Une bibliothèque par type (§6.1) : ce composant est rendu une fois pour les
   // voitures, une fois pour les circuits. Toute la persistance est suffixée par
   // type pour rester indépendante entre les deux.
@@ -406,6 +407,7 @@
   async function refresh() {
     cards = await listLibrary();
     loading = false;
+    mark(`cards.${kind.toLowerCase()}`);
     // Purge de la sélection groupée : un mod supprimé pendant qu'il était
     // sélectionné (§6.3bis) ne doit pas laisser le panneau du bas affiché sur
     // une sélection en partie fantôme.

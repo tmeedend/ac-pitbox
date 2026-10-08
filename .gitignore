@@ -20,3 +20,7 @@ vite.config.ts.timestamp-*
 # vit le temps d'une investigation, cf. showroom-embed-test supprimé une fois
 # l'aperçu 3D intégré abandonné).
 /tools/
+
+# Mesures de `npm run bench:startup` : propres à une machine et à sa
+# bibliothèque, comparées d'une fois sur l'autre en local, jamais versionnées.
+/.bench/

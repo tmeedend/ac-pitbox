@@ -37,6 +37,7 @@ pub mod session_state;
 pub mod sessionpreset;
 pub mod showcase;
 pub mod techsheet;
+pub mod timing;
 pub mod trackstate;
 pub mod ui_prefs;
 pub mod updates;

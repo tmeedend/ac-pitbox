@@ -28,7 +28,8 @@
     "check:conventions": "node scripts/check-conventions.mjs",
     "report:docs": "node scripts/report-docs.mjs",
     "report:code": "node scripts/report-code.mjs",
-    "review:done": "node scripts/report-code.mjs --review-done"
+    "review:done": "node scripts/report-code.mjs --review-done",
+    "bench:startup": "node scripts/bench-startup.mjs"
   },
   "license": "MIT",
   "dependencies": {

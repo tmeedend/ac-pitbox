@@ -195,6 +195,21 @@ de reprendre. En cas d'écart, la spec fait foi.
       le verrou avant de parcourir les fichiers ; l'app se rouvre sur le
       dernier écran. La règle qui en sort est dans `CLAUDE.md` (« Une commande
       dont la durée dépend du disque… »).
+      **Mesurer : `npm run bench:startup`** (`scripts/bench-startup.mjs`) —
+      compile en release, lance l'app cinq fois sur la vraie bibliothèque, et
+      compare à la mesure précédente gardée dans `.bench/` (non versionné,
+      propre à chaque machine). L'app écrit elle-même ses temps quand
+      `PITBOX_TIMING` nomme un fichier (`timing.rs`, `$lib/timing`) ; éteint,
+      rien n'est écrit ni envoyé. Le banc refuse de tourner si Pit Box est
+      ouvert, et remet les sauvegardes de démarrage exactement comme il les a
+      trouvées (chaque lancement en fait une, et seules les 7 dernières sont
+      gardées). `--no-build` relance sur la dernière compilation, `--runs 1`
+      juste après un redémarrage de Windows donne la mesure à froid.
+      Premier banc (2026-10-08, 385 cartes) : cartes à l'écran à 1,06 s du
+      lancement du processus (0,66 s du chargement de la page), logos à
+      1,18 s. **Le premier lancement après une compilation a pris 3,4 s** —
+      sans doute le nouveau `.exe` inspecté par l'antivirus et les caches à
+      refaire : c'est ce que vit un utilisateur juste après une mise à jour.
       **Reste** :
       - Remesurer sur l'autre machine, à la bibliothèque plus grosse, à
         chaud **et** à froid (juste après un redémarrage de Windows).
@@ -208,8 +223,8 @@ de reprendre. En cas d'écart, la spec fait foi.
         à chaque démarrage). Proposé, pas tranché : une case vide tant que les
         logos ne sont pas connus ; en plus, si elle se remarque, l'analyse
         gardée sur disque (un pur cache, indexé par chemin, date et taille).
-      - Un outil de mesure permanent, pour vérifier régulièrement sans
-        réécrire à chaque fois le chronométrage temporaire.
+      - Comprendre les 3,4 s du premier lancement après une compilation (ou
+        une mise à jour), et voir s'il y a quelque chose à y faire.
       **Écarté** : un cache de la liste des cartes (décision du 2026-10-08 :
       rien à gagner au démarrage, et une liste qui ne relit plus le disque
       raterait un skin posé par CM) ; alléger la réponse de `list_library`
@@ -220,10 +235,8 @@ de reprendre. En cas d'écart, la spec fait foi.
         la seule durée d'une commande : dès qu'une commande ne bloque plus
         les autres, elles se partagent le verrou et sa durée propre gonfle
         (0,37 → 0,71 s) alors que l'écran, lui, va plus vite.
-      - Le chronométrage s'écrit dans un fichier désigné par une variable
-        d'environnement, et l'app se lance en release avec
-        `npx tauri build --no-bundle` : un `.exe` sans console n'a pas de
-        sortie d'erreur à lire.
+      - Un `.exe` en release n'a pas de console : le chronométrage s'écrit
+        dans un fichier (`PITBOX_TIMING`), jamais sur la sortie d'erreur.
       - Le cache disque de Windows ne se vide pas sans droits administrateur :
         le seul vrai « à froid » est un démarrage juste après un redémarrage.
       - Le premier passage de l'analyse des badges se mesure avec le test

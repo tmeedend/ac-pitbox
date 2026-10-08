@@ -6,6 +6,9 @@
   import { restoreStartScreen } from "$lib/shell/nav.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { applyStartupPrefs, dismissBootScreen } from "$lib/shell/boot";
+  import { mark } from "$lib/timing";
+
+  mark("page");
 
   type View = "loading" | "wizard" | "app";
   let view = $state<View>("loading");
@@ -19,11 +22,13 @@
       const cfg = await getConfig();
       applyStartupPrefs(cfg.prefs);
       const v = await validateConfig(cfg);
+      mark("config");
       // Only for a configured app: one coming out of the wizard starts on the
       // car library, as every start did before.
       if (v.is_valid) await restoreStartScreen();
       view = v.is_valid ? "app" : "wizard";
       await tick();
+      mark("shell");
     } finally {
       dismissBootScreen();
     }

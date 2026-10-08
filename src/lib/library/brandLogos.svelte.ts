@@ -9,6 +9,7 @@
 // the Brands tab.
 import { invoke } from "@tauri-apps/api/core";
 import { invokeSafe } from "$lib/invokeSafe";
+import { mark } from "$lib/timing";
 
 export type LogoBackground = "transparent" | "baked" | "opaque";
 
@@ -55,6 +56,7 @@ export async function loadBrandLogos(): Promise<void> {
   if (!v) return;
   brandLogos.brands = v.brands;
   brandLogos.plaque = Object.fromEntries(v.plaque.map((p) => [p, true as const]));
+  mark("logos");
 }
 
 /** The brand's logo (file path) and whether it goes on the plate. */

@@ -14,7 +14,11 @@ use tauri::Manager;
 pub async fn list_library(app: AppHandle) -> Result<Vec<ModCard>, String> {
     off_window(app, |app| {
         let cfg = crate::config::load(app);
-        crate::library::list_cards_shared(&app.state::<Db>(), &cfg)
+        let cards = crate::timing::step("cmd.list_library", || {
+            crate::library::list_cards_shared(&app.state::<Db>(), &cfg)
+        })?;
+        crate::timing::count("cmd.list_library.cards", cards.len());
+        Ok(cards)
     })
     .await
 }

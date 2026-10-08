@@ -84,6 +84,7 @@ mod techsheet;
 #[cfg(test)]
 mod testutil;
 mod thumbnails;
+mod timing;
 mod trackstates;
 mod ui_prefs;
 mod uijson;
@@ -96,6 +97,7 @@ use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    timing::start();
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -126,19 +128,22 @@ pub fn run() {
             preview::serve_request(ctx.app_handle(), &request)
         })
         .setup(|app| {
+            timing::mark("setup.begin", None);
             // Sauvegarde de démarrage (§10), avant toute ouverture de
             // connexion : on veut la base et les préférences exactement
             // telles que la session précédente les a laissées.
-            shadowdir::warn_at_startup(&app.config().identifier);
-            backup::run_startup_backup(app.handle());
+            timing::step("setup.shadowdir", || {
+                shadowdir::warn_at_startup(&app.config().identifier)
+            });
+            timing::step("setup.backup", || backup::run_startup_backup(app.handle()));
 
             let db_path = app.path().app_config_dir()?.join("overlay.sqlite");
-            let conn = overlay::open(&db_path)?;
+            let conn = timing::step("setup.overlay_open", || overlay::open(&db_path))?;
             // Corruption shows up otherwise as scattered "malformed" warnings
             // from whichever startup pass happens to touch a damaged page —
             // and went unnoticed for three days in 2026-09. One line naming
             // the cause, before them.
-            match overlay::quick_check(&conn) {
+            match timing::step("setup.quick_check", || overlay::quick_check(&conn)) {
                 Ok(v) if v == "ok" => {}
                 Ok(v) => log::warn!("overlay.sqlite failed its integrity check: {v}"),
                 Err(e) => log::warn!("overlay.sqlite failed its integrity check: {e}"),
@@ -148,7 +153,7 @@ pub fn run() {
             // et que plus personne ne réclame redevient celui du jeu. Rattrape
             // une app tuée entre la sauvegarde et la pose, ou entre le retrait
             // et la restauration.
-            gamebackup::restore_orphans(&conn);
+            timing::step("setup.restore_orphans", || gamebackup::restore_orphans(&conn));
 
             // Appariements Wikipédia livrés avec l'application (§10) : posés à
             // chaque démarrage parce que la table peut avoir grandi depuis la
@@ -159,14 +164,14 @@ pub fn run() {
             // l'article entier). Rien dans une ligne ne le dirait, et sa date
             // de récupération est récente : sans ça, un article tronqué serait
             // servi trente jours de plus.
-            match wiki::store::purge_outdated(&conn) {
+            match timing::step("setup.wiki_purge", || wiki::store::purge_outdated(&conn)) {
                 Ok(true) => log::warn!("wiki: cache d'articles vidé, son contenu datait d'une version antérieure"),
                 Err(e) => log::warn!("wiki: purge du cache d'articles échouée — {e}"),
                 _ => {}
             }
 
             let curated = wiki::curated::shipped();
-            let (written, skipped) = wiki::curated::seed_links(&conn, &curated);
+            let (written, skipped) = timing::step("setup.wiki_seed", || wiki::curated::seed_links(&conn, &curated));
             if written > 0 || skipped > 0 {
                 log::debug!("wiki: {written} appariements livrés posés, {skipped} laissés en place");
             }
@@ -176,16 +181,18 @@ pub fn run() {
             // mais une fermeture brutale en laisse un — vingt mégaoctets que
             // rien d'autre ne ramasse, son dossier étant hors du plafond du
             // cache exprès.
-            preview::release_scratch(app.handle());
+            timing::step("setup.release_scratch", || preview::release_scratch(app.handle()));
 
             // Filet de sécurité : restaure video.ini si une
             // sauvegarde laissée par l'ancien aperçu 3D intégré traîne encore
             // (il forçait le mode fenêtré ; Pit Box n'y touche plus).
-            showroom::restore_orphaned_video_ini();
+            timing::step("setup.video_ini", showroom::restore_orphaned_video_ini);
 
             // Safety net (ESPACE§5.5): a showcase removal stopped between its
             // manifest and the base is finished, from the manifest.
-            match showcase::resume_interrupted(&conn, &config::load(app.handle())) {
+            match timing::step("setup.showcase_resume", || {
+                showcase::resume_interrupted(&conn, &config::load(app.handle()))
+            }) {
                 0 => {}
                 n => log::warn!("finished {n} interrupted showcase removal(s)"),
             }
@@ -199,7 +206,9 @@ pub fn run() {
             let cfg = config::load(app.handle());
             if cfg.ac_install_path.is_some() && overlay::count_stock(&conn).unwrap_or(0) == 0 {
                 let rules = rules::load(app.handle());
-                if let Err(e) = stock::index_stock_content(&conn, &cfg, &rules, false) {
+                if let Err(e) = timing::step("setup.index_stock", || {
+                    stock::index_stock_content(&conn, &cfg, &rules, false)
+                }) {
                     log::warn!("index_stock_content at startup: {e}");
                 }
             }
@@ -210,7 +219,7 @@ pub fn run() {
             // (il exige un index vide), donc cette passe — sans disque, une
             // comparaison par entrée — rattrape le classement à chaque
             // démarrage.
-            match stock::reclassify_indexed_content(&conn) {
+            match timing::step("setup.reclassify", || stock::reclassify_indexed_content(&conn)) {
                 Ok(n) if n > 0 => log::warn!("reclassified {n} indexed entries as unmanaged mods"),
                 Err(e) => log::warn!("reclassify_indexed_content at startup: {e}"),
                 _ => {}
@@ -222,7 +231,7 @@ pub fn run() {
             // l'app en vrai dossier — ce qui bloquait ensuite son installation.
             // Idempotente par construction (plus aucun chemin `apps/<lang>/…`
             // ne subsiste après coup), donc sans drapeau à mémoriser.
-            match extras::migrate_app_extras_to_layers(&conn, &cfg) {
+            match timing::step("setup.app_extras", || extras::migrate_app_extras_to_layers(&conn, &cfg)) {
                 0 => {}
                 n => log::warn!("migrated {n} app extra tree(s) to app layers"),
             }
@@ -241,12 +250,14 @@ pub fn run() {
             // (TAXO§7.1) run by every harmonisation below and after. Before the
             // catch-up, which would otherwise run without it.
             if let Some(root) = cfg.ac_install_path.as_deref() {
-                nationalities::set_known(nationalities::nationalities(std::path::Path::new(root)));
+                timing::step("setup.nationalities", || {
+                    nationalities::set_known(nationalities::nationalities(std::path::Path::new(root)))
+                });
             }
 
             // The brand spellings the library uses most, which case and accent
             // variants fold onto (TAXO§7.1) - elected before any harmonisation.
-            brands::refresh_from(&conn);
+            timing::step("setup.brands", || brands::refresh_from(&conn));
 
             let lib_ready = cfg.library_path.as_deref().is_some_and(|p| p.is_dir());
 
@@ -255,7 +266,9 @@ pub fn run() {
             // for the Workshop. Before anything reads the rules - it is also
             // what re-installs the previous catalogue of a user who went back.
             match app.path().app_config_dir() {
-                Ok(dir) => catalog_update::on_startup(&dir, &conn, &cfg, lib_ready),
+                Ok(dir) => timing::step("setup.catalog", || {
+                    catalog_update::on_startup(&dir, &conn, &cfg, lib_ready)
+                }),
                 Err(e) => log::warn!("catalogue update skipped: {e}"),
             }
 
@@ -263,7 +276,7 @@ pub fn run() {
             let stamped = overlay::get_meta(&conn, overlay::META_ENGINE_VERSION).unwrap_or(None);
             if lib_ready && stamped.as_deref() != Some(engine.as_str()) {
                 let rules = rules::load(app.handle());
-                match harmonize::harmonize_all(&conn, &cfg, &rules) {
+                match timing::step("setup.harmonize", || harmonize::harmonize_all(&conn, &cfg, &rules)) {
                     Ok(n) => {
                         log::warn!("re-harmonized {n} mods for engine v{engine}");
                         if let Err(e) = overlay::set_meta(&conn, overlay::META_ENGINE_VERSION, &engine) {
@@ -288,13 +301,13 @@ pub fn run() {
             // The game folder index of the session (DOSSIER§5.3): empty until
             // the screen asks for a first scan.
             app.manage(gamestate::Store::default());
-            cup::sweep_leftovers(&std::env::temp_dir());
+            timing::step("setup.cup_sweep", || cup::sweep_leftovers(&std::env::temp_dir()));
 
             // Module musique du mode Big Picture (docs/spec-module-musique_2.md) :
             // dossiers par défaut créés au premier démarrage, peuplés du pack
             // embarqué (§16.1, `music/config.rs`), moteur audio + surveillance AC
             // démarrés pour toute la durée de vie de l'app.
-            music::config::ensure_default_dirs(app.handle());
+            timing::step("setup.music_dirs", || music::config::ensure_default_dirs(app.handle()));
             let music_cfg = music::config::load(app.handle());
             // Préchauffe le cache d'index (MUSIQUE§3.4/§16.3) en tâche de fond dès
             // le démarrage, pour que la première navigation Big Picture de
@@ -330,9 +343,12 @@ pub fn run() {
             #[cfg(windows)]
             app.manage(fmod::engine::spawn());
 
+            timing::mark("setup.end", None);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::timing::timing_enabled,
+            commands::timing::timing_mark,
             commands::config::get_config,
             commands::config::save_config,
             commands::config::validate_config,
