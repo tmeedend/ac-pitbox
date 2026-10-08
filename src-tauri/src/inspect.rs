@@ -225,11 +225,20 @@ pub fn brand_badge(car_dir: &Path) -> Option<String> {
 pub fn preview_path(kind: ModKind, mod_dir: &Path) -> Option<String> {
     match kind {
         ModKind::Car => {
+            // The entry's own type, not `Path::is_dir`: the listing already
+            // carries it, where `is_dir` asked the disk once per skin - about
+            // 5 000 times per library listing of 385 mods, which took a
+            // quarter off it once removed (0.71 s to 0.53 s at startup). Only a
+            // link (a junction to a skin projected from elsewhere) still has to
+            // be followed to know what it points to.
             let mut skins: Vec<PathBuf> = std::fs::read_dir(mod_dir.join("skins"))
                 .ok()?
                 .flatten()
+                .filter(|e| {
+                    e.file_type()
+                        .is_ok_and(|t| t.is_dir() || (t.is_symlink() && e.path().is_dir()))
+                })
                 .map(|e| e.path())
-                .filter(|p| p.is_dir())
                 .collect();
             skins.sort();
             skins.iter().find_map(|s| first_existing(s, &PREVIEW_NAMES))
@@ -320,5 +329,39 @@ mod tests {
         // Un circuit sans config "chargée" (fichier absent) ne renvoie rien,
         // sans planter.
         assert!(csp_features_loaded(&ac, ModKind::Track, "unknown_track").is_empty());
+    }
+
+    /// Rule (§6.1): a car's card shows the preview of its first skin in name
+    /// order that has one - a skin without a preview is passed over, a stray
+    /// file in `skins/` is not a skin, and a skin folder that is a junction
+    /// (a skin projected from elsewhere) counts like a real one.
+    #[test]
+    fn car_preview_is_the_first_skin_with_one_junctions_included() {
+        let base = crate::testutil::temp_dir("inspect-car-preview");
+        let car = base.join("car");
+        let skins = car.join("skins");
+        std::fs::create_dir_all(skins.join("a_bare")).unwrap();
+        std::fs::write(skins.join("0_not_a_skin.jpg"), b"x").unwrap();
+        let elsewhere = base.join("elsewhere").join("b_linked");
+        std::fs::create_dir_all(&elsewhere).unwrap();
+        std::fs::write(elsewhere.join("preview.png"), b"x").unwrap();
+        crate::activation::create_junction(&skins.join("b_linked"), &elsewhere).unwrap();
+        std::fs::create_dir_all(skins.join("c_real")).unwrap();
+        std::fs::write(skins.join("c_real").join("preview.jpg"), b"x").unwrap();
+
+        let found = preview_path(ModKind::Car, &car).expect("a preview is found");
+        assert_eq!(
+            Path::new(&found),
+            skins.join("b_linked").join("preview.png"),
+            "the junction skin comes first in name order and has a preview"
+        );
+
+        std::fs::remove_file(elsewhere.join("preview.png")).unwrap();
+        let found = preview_path(ModKind::Car, &car).expect("a preview is found");
+        assert_eq!(
+            Path::new(&found),
+            skins.join("c_real").join("preview.jpg"),
+            "skins without a preview are passed over"
+        );
     }
 }
