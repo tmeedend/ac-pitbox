@@ -292,6 +292,13 @@
       </button>
     </div>
   {/if}
+  {@const addonsBack =
+    (a.apps ?? []).filter((x) => x.rehydrated).length + (a.others ?? []).filter((x) => x.rehydrated).length}
+  {#if addonsBack}
+    <!-- Back from the showcase (ESPACE§5.6), in their own rows: names and
+         notes kept. Counted apart from what is new. -->
+    <div class="r-line shared">{t("importOverlay.addonsRehydrated", { count: addonsBack })}</div>
+  {/if}
   {@const resExtracted =
     a.mods.reduce((acc, m) => acc + (m.resources_extracted ?? 0), 0) +
     (a.subs ?? []).reduce((acc, s) => acc + (s.resources_extracted ?? 0), 0) +

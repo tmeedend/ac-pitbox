@@ -36,6 +36,8 @@ export interface OtherModRow {
   notes_user: string | null;
   /** Rattachement corrigé à la main (REFONTE§2.3), `null` tant qu'on n'a rien corrigé. */
   attachment_user: string | null;
+  /** `"skeleton"`: without its files (ESPACE§5.6). */
+  content_state: "full" | "skeleton";
   /** Rattachement effectif et nature, déduits ou corrigés. */
   attachment: Attachment;
   conflicts: ConflictInfo[];

@@ -18,6 +18,8 @@
   import { confirm } from "@tauri-apps/plugin-dialog";
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
+  import { openExternal } from "$lib/links";
+  import { webSearchUrl } from "$lib/webSearch";
 
   let {
     modId,
@@ -139,6 +141,16 @@
               </span>
             </button>
             <button class="layer-icon" type="button" title={t("detail.layerOpenFolder")} onclick={() => openFolder(l)}>🗀</button>
+            {#if l.content_state === "skeleton"}
+              <!-- A layer comes back only with its own archive (ESPACE§7.5),
+                   and on content of the game this row is the only place that
+                   says so: such a host never shows the showcase strip. -->
+              <button
+                class="layer-icon"
+                type="button"
+                title={t("showcase.searchWeb")}
+                onclick={() => openExternal(webSearchUrl(l.source_archive ?? l.name))}>{t("showcase.search")}</button>
+            {/if}
             <div class="layer-ord">
               <button class="layer-arrow" type="button" title={t("detail.layerUp")} disabled={busy || i === 0} onclick={() => move(l, "up")}>▲</button>
               <button class="layer-arrow" type="button" title={t("detail.layerDown")} disabled={busy || i === ordered.length - 1} onclick={() => move(l, "down")}>▼</button>

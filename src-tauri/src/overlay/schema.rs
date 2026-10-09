@@ -51,8 +51,10 @@ pub(super) fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     let _ = conn.execute("ALTER TABLE versions ADD COLUMN source_site TEXT", []);
     let _ = conn.execute("ALTER TABLE versions ADD COLUMN source_file_name TEXT", []);
     // A layer or an attached skin/sound follows its mod into the showcase
-    // (ESPACE§5.4): its row stays, its files go.
-    for table in ["layers", "sub_mods"] {
+    // (ESPACE§5.4): its row stays, its files go. An app or an "other" mod has
+    // the state without the gesture (ESPACE§5.6): only an imported library
+    // export brings one in without its files.
+    for table in ["layers", "sub_mods", "apps", "other_mods"] {
         let _ = conn.execute(
             &format!("ALTER TABLE {table} ADD COLUMN content_state TEXT NOT NULL DEFAULT 'full'"),
             [],

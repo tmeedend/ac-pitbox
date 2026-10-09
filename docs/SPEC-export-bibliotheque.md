@@ -4,7 +4,7 @@
 
 *Refaire une installation de Pit Box à l'identique sur une autre machine, ou après une réinstallation : les mods (en vitrine), le classement, les sessions, les profils et les préférences, dans un fichier de quelques Mo.*
 
-> **Étiquette de renvoi : `EXPORT§`.** Repose entièrement sur la vitrine (`ESPACE§`) : **un export est une bibliothèque dont tous les mods sont en vitrine.** Rien ici ne se construit avant ESPACE lot 1 ; les types autres que voitures et circuits n'ont pas de vitrine (ESPACE§5.4) et ne sont pas exportés (§9).
+> **Étiquette de renvoi : `EXPORT§`.** Repose entièrement sur la vitrine (`ESPACE§`) : **un export est une bibliothèque dont tous les mods sont en vitrine.** Rien ici ne se construit avant ESPACE lot 1. Les apps et les autres mods, qui n'ont pas le geste de la vitrine, en ont l'état depuis le 2026-10-09 (ESPACE§5.6) : ils sont exportés comme le reste (§9).
 >
 > Relevés de code du 2026-09-27 (`overlay.rs`, `backup.rs`, `config.rs`, `saved_grids.rs`, `ui_prefs.rs`).
 
@@ -79,8 +79,8 @@ L'export produit une copie de `overlay.sqlite` (`VACUUM INTO`, lecture seule, co
 |---|---|---|
 | `mods` | oui | toutes les lignes, contenu d'origine compris (§4.2) ; `active_version_id` gardé |
 | `versions` | oui | `content_state` forcé à `skeleton`, `freed_at` à la date d'export ; `library_path` relatif gardé ; signature, archive et origine gardées |
-| `layers`, `sub_mods` | oui | `content_state` forcé à `skeleton` ; `is_active` à 0 |
-| `apps`, `other_mods` | non | pas de vitrine pour ces types (ESPACE§5.4) ; le rapport d'export les liste par nom (§9) |
+| `layers`, `sub_mods` | oui | `content_state` forcé à `skeleton` ; `is_active` à 0. Une couche de voiture ou de circuit part avec le squelette de son hôte (ESPACE§5.4) |
+| `apps`, `other_mods` | oui | `content_state` forcé à `skeleton` (ESPACE§5.6), `is_active` à 0 et `junctions` vidé pour un autre mod ; leur dossier ne part qu'avec son manifeste, écrit par l'export. Nom repris, note, priorité et rattachement corrigé suivent |
 | `usage` | oui | « déjà essayé », nombre de lancements |
 | `tech_facts`, `tech_user` | oui | la fiche technique (`FICHE§`) : c'est elle qui garde, sans aucun fichier, les chiffres, la mécanique lue dans la physique et l'électronique ; et les corrections de l'utilisateur |
 | `history` | oui | plus une ligne « Exporté depuis une autre installation » à l'import |
@@ -174,14 +174,12 @@ Repris de la liste de la sauvegarde de démarrage (`backup.rs`), fichier par fic
   "counts": { "cars": 146, "tracks": 6, "layers": 11, "skins": 240, "sounds": 3,
               "stock_with_user_data": 17, "unmanaged": 4 },
   "active_at_export": ["rss_gtm_lanzo_v10", "shannonville"],
-  "library_bytes_at_export": 312400000000,
-  "not_exported": { "apps": ["RSS_Settings", "CamTool_2"], "other_mods": ["minimal_hud"] }
+  "library_bytes_at_export": 312400000000
 }
 ```
 
 - `format` est celui du conteneur ; `app_version` décide si l'export est importable (R4). Deux numéros, parce que le conteneur changera bien moins souvent que l'application.
 - `library_bytes_at_export` sert une seule phrase, à l'import : « Cette bibliothèque pesait 312 Go ; ce fichier en fait 4 Mo. »
-- `not_exported` dit ce qui manque et pourquoi, sans rien cacher (§9).
 
 ---
 
@@ -197,7 +195,7 @@ Repris de la liste de la sauvegarde de démarrage (`backup.rs`), fichier par fic
 
 1. **Les parties**, cochables, avec pour chacune ce qu'elle contient en une ligne et un décompte (« 152 mods, 11 couches, 17 voitures d'origine annotées »).
 2. **La taille estimée**, calculée avant d'écrire : « environ 4 Mo ».
-3. **Ce qui ne partira pas**, en clair : « Le contenu des mods ne part pas : ils arriveront en vitrine. 2 apps et 1 autre mod ne sont pas exportés. »
+3. **Ce qui ne partira pas**, en clair : « Le contenu des mods ne part pas : ils arriveront en vitrine, apps et compléments compris. »
 4. **Le fichier** : boîte d'enregistrement, nom proposé `Pit Box - <date>.pitbox`.
 5. **En fond**, progression dans la pile de notifications, comme le relevé anonyme. Rapport à la fin, avec « Ouvrir le dossier ».
 
@@ -207,7 +205,7 @@ Repris de la liste de la sauvegarde de démarrage (`backup.rs`), fichier par fic
 
 1. **Choisir le fichier.** Lecture du manifeste seul, sans rien écrire.
 2. **Vérifier** : format connu et version de l'application pas plus récente (R4), installation vide (R3). Un refus dit **pourquoi** et **quoi faire** : « Cette installation contient déjà 146 mods. L'import d'une bibliothèque ne se fait que dans une installation vide. » ; « Cet export vient de Pit Box 0.45. Mettez Pit Box à jour pour l'importer. »
-3. **Montrer ce qui arrive** : parties présentes (cochables, pour n'en reprendre qu'une partie), décomptes, date d'export, « pesait 312 Go », et ce qui n'y est pas (`not_exported`).
+3. **Montrer ce qui arrive** : parties présentes (cochables, pour n'en reprendre qu'une partie), décomptes, date d'export, « pesait 312 Go ».
 4. **Importer**, en fond, dans cet ordre :
    1. sauvegarde de la base courante (même vide), par le mécanisme de `backup.rs` ;
    2. indexation du contenu d'origine de cette machine ;
@@ -252,7 +250,7 @@ Un test liste les tables de la base (`sqlite_master`) et **échoue** si l'une d'
 
 ## 8.4 Tests
 
-- **Aller-retour** : une bibliothèque de fixture (mods complets et en vitrine, contenu d'origine annoté, un mod non géré, couches, profils, grilles, règles de l'utilisateur) ; export ; import dans une installation vide ; toutes les saisies et décisions sont identiques, tous les mods sont en vitrine, aucun `.kn5` ni `.acd` n'est dans le zip.
+- **Aller-retour** : une bibliothèque de fixture (mods complets et en vitrine, contenu d'origine annoté, un mod non géré, couches, une app et un mannequin renommés et annotés, profils, grilles, règles de l'utilisateur) ; export ; import dans une installation vide ; toutes les saisies et décisions sont identiques, tous les mods sont en vitrine, aucun `.kn5` ni `.acd` n'est dans le zip.
 - **Fiche technique** : après l'import, `techsheet::effective` rend pour chaque voiture exactement la même fiche qu'avant l'export, courbe, électronique et corrections comprises, sans lire aucun fichier (`FICHE§9.4`).
 - **Rien de la machine** : le zip ne contient aucune chaîne égale à un chemin absolu de la configuration d'origine.
 - **Refus** : installation non vide ; export d'une version plus récente de Pit Box ; zip sans manifeste.
@@ -269,9 +267,10 @@ Un test liste les tables de la base (`sqlite_master`) et **échoue** si l'une d'
 | Lot | Contenu | Dépend de |
 |---|---|---|
 | ESPACE lot 1 | vitrine des voitures et circuits, suppression à deux choix, réhydratation, origine des archives | — |
-| **EXPORT lot 1** | ce document, voitures et circuits ; apps et autres mods listés dans `not_exported` | ESPACE lot 1 |
+| ESPACE§5.6 | l'état sans fichiers des apps et des autres mods, le squelette des couches | ESPACE lot 1 |
+| **EXPORT lot 1** | ce document, tous types | ESPACE§5.6 |
 
-ESPACE lot 2 (la vitrine des apps, autres mods, mannequins, livrées et sons autonomes) et l'EXPORT lot 2 qui en dépendait sont **abandonnés** (2026-09-28, ESPACE§5.4) : ces types ne se rangent pas, les perdre coûte peu. À rouvrir si un besoin réel d'exporter les apps se présente.
+Le 2026-09-28, la vitrine des autres types avait été abandonnée, et l'export avec elle. Rouverte le 2026-10-09 pour l'export seul : une bibliothèque qu'on transfère doit emporter ses apps, ses mannequins et ses autres mods, avec leurs noms et leurs notes. Ce qui en est fait est l'**état** (ESPACE§5.6), pas le geste « Garder en vitrine » à leur suppression.
 
 **Hors périmètre, à rediscuter** :
 

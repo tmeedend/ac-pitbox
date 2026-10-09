@@ -9,6 +9,8 @@
 > **Mesures et relevés de code du 2026-09-26**, sur `D:\AC-Library` et `src-tauri/src`. Chiffres en §3.2, points de code en §9. Le fichier garde son nom d'origine (`sans-fichiers`) ; le vocabulaire a changé depuis (§4.4).
 >
 > **Livrée du 2026-09-27 au 2026-09-29** : `src-tauri/src/skeleton.rs` (ce qu'est un squelette, le garde-fou), `src-tauri/src/showcase/` (la mise en vitrine, sa reprise, la réhydratation), `src/lib/library/showcase.svelte.ts` et `recovery.svelte.ts` (la confirmation, la récupération en masse). Tranché avec l'utilisateur le 2026-09-28 : le squelette reste dans la bibliothèque plutôt que tout en base (R3), toutes les versions partent ensemble ou aucune (§5.4), la taille d'origine est gardée (§4.1), pas de vitrine pour les autres types (§5.4). Ce que l'implémentation a appris, ses écarts assumés et les pièges déjà payés sont au §10.
+>
+> **Étendue le 2026-10-09**, pour l'export (`EXPORT§`) : les apps et les autres mods peuvent exister sans leurs fichiers (§5.6), et une couche de voiture ou de circuit garde le squelette de son hôte (§5.4).
 
 ---
 
@@ -148,7 +150,7 @@ Migration par ajout de colonnes, défaut `'full'` : toutes les versions existant
 
 **Le statut d'un mod se déduit, il ne se stocke pas.** Un mod est **en vitrine** quand sa version active est `skeleton`. Une ancienne version peut être en vitrine alors que l'active ne l'est pas.
 
-`content_state` et `freed_at` s'ajoutent aussi à `layers` et à `sub_mods` (§5.4).
+`content_state` et `freed_at` s'ajoutent aussi à `layers` et à `sub_mods` (§5.4), et à `apps` et `other_mods` (§5.6).
 
 ## 4.2 Sur le disque : le manifeste
 
@@ -262,12 +264,14 @@ Sur un mod en vitrine, elle supprime le squelette et la ligne.
 | Élément | Traitement | Pourquoi |
 |---|---|---|
 | Toutes ses versions | vitrine, **toutes ou aucune** | une ancienne version sans la nouvelle n'a pas de sens pour le jeu ; si une seule résiste (fichier verrouillé), aucune ne perd ses fichiers et la suppression échoue en le disant. La confirmation annonce le nombre de versions (§5.2) |
-| Ses couches | vitrine, sans squelette : fichiers supprimés, ligne et manifeste gardés | elles ne composent rien sans leur base |
+| Ses couches | vitrine, avec **le squelette de leur hôte** (§3.1) : ligne et manifeste gardés, et ce que la liste blanche garde pour une voiture ou un circuit | elles ne composent rien sans leur base ; mais un layout qu'une couche apporte doit rester sur la fiche du circuit (voir ci-dessous) |
 | Ses ajouts au jeu (`extras/`) | supprimés, listés dans le manifeste | retirés du jeu à la désactivation |
 | Ses livrées et sons rattachés (`sub_mods`) | vitrine, sans squelette | inutilisables sans la voiture ; leurs noms restent |
 | Ses ressources | supprimées, sauf les fichiers texte de moins de 64 Ko (`.txt`, `.md`, `.nfo`, `.url`) | une notice dit souvent **où télécharger** le mod, et pèse quelques Ko |
 
-**Pas de vitrine pour les autres types** (décidé le 2026-09-28) : une app, un « autre mod », un mannequin de pilote, une livrée d'une voiture d'origine se suppriment comme aujourd'hui. On ne les range ni ne les annote comme les voitures et les circuits : les supprimer ne fait presque rien perdre, et la vitrine n'a d'intérêt que là où il y a quelque chose à garder. Le lot 2 que prévoyait cette spec est abandonné ; l'export en tire la conséquence (`EXPORT§4.1`).
+**Le squelette d'une couche** (2026-10-09). Une couche de circuit apporte souvent un layout entier (`spa2022` sur le Spa de Kunos) : sans rien garder, ce layout disparaissait de la fiche du circuit en vitrine, nom, contour et aperçu compris. Une couche garde donc ce que garde son hôte (§3.1), aperçus réduits, et **la fiche d'un hôte en vitrine lit ses couches en vitrine** comme elle lit son propre squelette. Sur un hôte qui a ses fichiers, en revanche, une couche en vitrine reste hors de la lecture : un layout qu'on ne peut pas lancer n'a rien à faire dans la liste des layouts. Elle reste dans le bloc Couches de la fiche, « En vitrine », avec le nom de son archive et une recherche sur le web — c'est le seul endroit d'où récupérer une couche posée sur du contenu d'origine, qui n'a jamais de bandeau de vitrine. Une couche d'app n'a pas de squelette.
+
+**Pas de geste « Garder en vitrine » pour les autres types** (décidé le 2026-09-28) : une app, un « autre mod », un mannequin de pilote, une livrée d'une voiture d'origine se suppriment comme aujourd'hui. Les supprimer ne fait presque rien perdre. Les apps et les autres mods ont en revanche, depuis le 2026-10-09, l'**état** sans fichiers, pour que l'export les emporte (§5.6).
 
 ## 5.5 Le déroulé
 
@@ -281,6 +285,22 @@ En fond (`spawn_blocking`, progression dans la pile de notifications, comme la r
 6. **Journaliser** : « Mis en vitrine, 550 Mo libérés ». C'est un événement de cycle de vie, il a sa place dans la frise.
 
 **Au démarrage**, un manifeste présent sur une version encore marquée `full` veut dire « interrompu entre 3 et 5 » : la suppression est reprise et le marquage terminé.
+
+## 5.6 Les apps et les autres mods
+
+Décidé le 2026-10-09, pour l'export (`EXPORT§`). Une app et un « autre mod » (mannequins et tenues de pilote compris, §7.3 du SPEC) portent un nom repris, une note, une priorité, une place dans les profils : une bibliothèque exportée doit les emporter, et leur ligne arrive alors sur l'autre machine **sans dossier**. Rien ne savait ce qu'est une telle ligne : l'activer aurait posé une junction vers un dossier vide, la réimporter l'aurait ignorée.
+
+**L'état, pas le geste.** Leur suppression ne propose toujours pas « Garder en vitrine » (§5.4) : aujourd'hui, seul l'import d'un export produit une app ou un autre mod en vitrine. Leur ajouter ce choix ne coûterait plus que la confirmation, le jour où le besoin s'en présente.
+
+| Point | Comportement |
+|---|---|
+| Base | `content_state` et `freed_at` sur `apps` et `other_mods`, défaut `full` (§4.1) |
+| Disque | le dossier de bibliothèque ne garde que le manifeste (§4.2), sans squelette ; sa liste `removed` porte chaque chemin et sa taille |
+| Ce qui se lit dans le manifeste | les zones du jeu d'un autre mod — c'est ce qui fait d'un mannequin un mannequin dans les Compléments —, son rattachement déduit, son nombre de fichiers et sa taille d'origine ; le langage d'une app |
+| Activation, profils | refusées par le garde-fou (`CONTENT_FREED`) ; un profil compte l'élément parmi les ignorés |
+| Conflits entre autres mods | aucun, ni dans un sens ni dans l'autre : un autre mod en vitrine ne pose rien |
+| Récupérer | réimporter l'archive. L'id d'un autre mod et celui d'une app se déduisent de l'archive et du dossier : même archive, même ligne, nom, note et priorité gardés. L'élément revient **actif**, comme toute app et tout autre mod importés (§4.2 du SPEC) — c'est l'écart avec une voiture (§7.3), dont la réhydratation laisse le choix |
+| Écrans | pastille « En vitrine » dans l'écran Apps, dans l'inventaire des Compléments (couches, livrées et sons en vitrine compris) et sur leur fiche, avec le nom de l'archive et une recherche sur le web ; valeur « En vitrine » dans la facette État des Compléments |
 
 ---
 

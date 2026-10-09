@@ -26,6 +26,8 @@ export interface InventoryRow {
   active: boolean | null;
   priority: boolean;
   has_note: boolean;
+  /** Without its files (ESPACE§5.4, ESPACE§5.6). */
+  showcase: boolean;
   source_archive: string | null;
   imported_at: string;
   size_bytes: number;

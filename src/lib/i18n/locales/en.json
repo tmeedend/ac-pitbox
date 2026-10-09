@@ -552,6 +552,7 @@
     "natureUNRECOGNISED": "Unidentified",
     "stateACTIVE": "Active",
     "stateINACTIVE": "Inactive",
+    "stateSHOWCASE": "In the showcase",
     "stateNOTE": "Has a note",
     "openHost": "Open its host",
     "openFiche": "Open its page",
@@ -1331,6 +1332,7 @@
     "appLayerAdded": "{count} file(s) from “{name}” added inside the {app} app",
     "appLayerReplacesMain": "⚠ replaces the app's main script",
     "othersImported": "+ {count} other mod(s) imported",
+    "addonsRehydrated": "Files recovered for {count} app(s) or other mod(s)",
     "resourcesExtracted": "+ {count} ancillary file(s) extracted to resources",
     "extrasAttached": "{count} game addition(s)",
     "newVersionTitle": "Possible new version",
@@ -2358,6 +2360,7 @@
   "showcase": {
     "state": "In the showcase",
     "explain": "In the showcase: this mod stays in your library with its image, its tech sheet and your notes, but its files are no longer on disk. Recover them to use it in a session.",
+    "explainAddon": "In the showcase: its files are no longer on disk. Its name and your notes are kept; import its archive again to use it.",
     "freed": "{size} freed.",
     "titleOne": "Delete {name}?",
     "titleMany": "Delete {count} mods?",

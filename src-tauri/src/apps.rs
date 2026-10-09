@@ -20,6 +20,8 @@ pub struct AppImported {
     pub name: String,
     /// Fichiers annexes redirigés vers le dossier ressources (§4.5.2).
     pub resources_extracted: usize,
+    /// The app was in the showcase and got its files back (ESPACE§5.6).
+    pub rehydrated: bool,
 }
 
 /// App avec son état d'activation (junction présente) pour la vue dédiée.
@@ -38,6 +40,9 @@ pub struct AppItem {
     pub display_name_user: Option<String>,
     /// Note libre (REFONTE§9).
     pub notes_user: Option<String>,
+    /// Without its files (ESPACE§5.6): it cannot be activated until its
+    /// archive is imported again.
+    pub showcase: bool,
 }
 
 /// Sous-dossier `apps/<langue>/` où pointe la junction d'activation d'une app
@@ -102,6 +107,12 @@ pub fn import_apps(
 ) -> Vec<AppImported> {
     let mut out = Vec::new();
     for app in apps {
+        let freed = overlay::get_app(conn, &app.name)
+            .ok()
+            .flatten()
+            .filter(overlay::AppRow::is_skeleton)
+            .and_then(|row| crate::libpath::resolve(Some(library), &row.library_path))
+            .and_then(|dir| crate::skeleton::read_manifest(&dir));
         let dest = library.join("apps").join(&app.name);
         // Ré-import : on remplace les fichiers existants (les ressources déjà
         // extraites, elles, sont conservées — dossier séparé, mod-level).
@@ -117,16 +128,25 @@ pub fn import_apps(
         else {
             continue;
         };
-        let _ = overlay::insert_app(
+        // A known id keeps its row (`insert_app`): an app in the showcase
+        // comes back with its name and note, complete again (ESPACE§5.6).
+        if let Err(e) = overlay::insert_app(
             conn,
             &app.name,
             &crate::libpath::to_relative(Some(library), &dest),
             Some(source_name),
             &Local::now().to_rfc3339(),
-        );
+        ) {
+            log::warn!("import_apps {}: not recorded: {e}", app.name);
+            continue;
+        }
+        if let Some(manifest) = &freed {
+            crate::skeleton::warn_missing(&app.name, &dest, manifest);
+        }
         out.push(AppImported {
             name: app.name.clone(),
             resources_extracted,
+            rehydrated: freed.is_some(),
         });
     }
     out
@@ -148,22 +168,40 @@ pub fn list_apps(conn: &Connection, cfg: &AppConfig) -> Result<Vec<AppItem>, Str
         .into_iter()
         .map(|a| {
             let stored = crate::libpath::resolve(cfg.library_path.as_deref(), &a.library_path);
-            let lang = stored.as_deref().map(|d| app_lang(d, &a.id)).unwrap_or("python");
+            let lang = stored
+                .as_deref()
+                .map(|d| if a.is_skeleton() { freed_app_lang(d, &a.id) } else { app_lang(d, &a.id) })
+                .unwrap_or("python");
             // Même définition d'« active » que `is_app_active` : junction pour
             // une app nue, arbre composé dès qu'une couche l'est (§8.4).
             // La dupliquer ici affichait « inactive » une app pourtant posée.
             let active = is_app_active(cfg, &a.id);
+            let showcase = a.is_skeleton();
             AppItem {
                 id: a.id,
                 source_archive: a.source_archive,
                 imported_at: a.imported_at,
                 active,
                 lang: lang.to_string(),
+                showcase,
                 display_name_user: a.display_name_user,
                 notes_user: a.notes_user,
             }
         })
         .collect())
+}
+
+/// [`app_lang`] for an app in the showcase: its script is gone, the manifest
+/// still names it (ESPACE§5.6).
+fn freed_app_lang(stored_dir: &Path, id: &str) -> &'static str {
+    let lua = format!("{id}.lua").to_lowercase();
+    let listed = crate::skeleton::read_manifest(stored_dir)
+        .is_some_and(|m| m.removed.iter().any(|f| f.path.to_lowercase() == lua));
+    if listed {
+        "lua"
+    } else {
+        "python"
+    }
 }
 
 /// Active une app dans `<ac>/apps/<lang>/<id>` : junction vers le dossier
@@ -173,6 +211,11 @@ pub fn activate_app(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<(), 
     let app = overlay::get_app(conn, id)
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::APP_NOT_FOUND)?;
+    // Without its files (ESPACE§5.6), a junction would lay an empty folder
+    // in the game.
+    if app.is_skeleton() {
+        return Err(crate::errors::CONTENT_FREED.into());
+    }
     let target = crate::libpath::resolve(cfg.library_path.as_deref(), &app.library_path)
         .ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
     let lang = app_lang(&target, id);
@@ -470,5 +513,75 @@ mod tests {
 
         deactivate_app(&conn, &cfg, "CamTool_2").unwrap();
         assert!(!link.exists(), "désactivation propre");
+    }
+
+    /// A Lua app imported, renamed and annotated, then left without its files
+    /// as an imported library export brings it in (ESPACE§5.6).
+    fn freed_lua_app(tag: &str) -> (crate::testutil::TempDir, std::path::PathBuf, Connection, AppConfig) {
+        let base = crate::testutil::temp_dir(tag);
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(&ac).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(ac),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let app = base.join("src").join("apps").join("lua").join("MyLuaApp");
+        std::fs::create_dir_all(&app).unwrap();
+        std::fs::write(app.join("MyLuaApp.lua"), b"-- app").unwrap();
+        let found = modscan::scan_apps(&base.join("src"));
+        import_apps(&conn, &library, "myluaapp.7z", &found, true, ExtractionMode::InfoOnly);
+        use crate::usermeta::{set_display_name, set_note, EntityKind};
+        set_display_name(&conn, EntityKind::App, "MyLuaApp", Some("Lap timer")).unwrap();
+        set_note(&conn, EntityKind::App, "MyLuaApp", Some("keep it")).unwrap();
+        let folder = library.join("apps").join("MyLuaApp");
+        crate::testutil::free_addon(&conn, "apps", "MyLuaApp", &folder, Some("myluaapp.7z"));
+        (base, library, conn, cfg)
+    }
+
+    /// Rule (ESPACE§5.6): an app without its files is never laid in the game —
+    /// a junction would point at an empty folder — and its listing still says
+    /// what it is.
+    #[test]
+    fn an_app_without_its_files_is_never_laid_in_the_game() {
+        let (_base, _library, conn, cfg) = freed_lua_app("app-freed");
+        assert_eq!(
+            activate_app(&conn, &cfg, "MyLuaApp").err().as_deref(),
+            Some(crate::errors::CONTENT_FREED),
+            "the guard refuses"
+        );
+        let ac = cfg.ac_install_path.as_ref().unwrap();
+        assert!(!ac.join("apps").join("lua").join("MyLuaApp").exists(), "nothing laid");
+
+        let item = list_apps(&conn, &cfg).unwrap().pop().unwrap();
+        assert!(item.showcase, "listed without its files");
+        assert!(!item.active);
+        assert_eq!(item.lang, "lua", "its language is read from the manifest");
+        assert_eq!(item.display_name_user.as_deref(), Some("Lap timer"));
+    }
+
+    /// Rule (ESPACE§5.6): importing the app again brings its files back into
+    /// its row, name and note kept, and it can be laid again.
+    #[test]
+    fn reimporting_its_archive_brings_an_app_back_with_its_name_and_note() {
+        let (base, library, conn, cfg) = freed_lua_app("app-refill");
+        let found = modscan::scan_apps(&base.join("src"));
+        let back = import_apps(&conn, &library, "myluaapp.7z", &found, true, ExtractionMode::InfoOnly);
+        assert!(back[0].rehydrated, "the report says the files came back");
+
+        let row = overlay::get_app(&conn, "MyLuaApp").unwrap().unwrap();
+        assert!(!row.is_skeleton(), "complete again");
+        assert_eq!(row.display_name_user.as_deref(), Some("Lap timer"), "its name survived");
+        assert_eq!(row.notes_user.as_deref(), Some("keep it"), "its note survived");
+        let folder = library.join("apps").join("MyLuaApp");
+        assert!(folder.join("MyLuaApp.lua").is_file(), "its script is back");
+        assert!(!folder.join(crate::skeleton::MANIFEST_NAME).exists(), "the manifest is gone");
+        activate_app(&conn, &cfg, "MyLuaApp").expect("it can be laid again");
+
+        let again = import_apps(&conn, &library, "myluaapp.7z", &found, true, ExtractionMode::InfoOnly);
+        assert!(!again[0].rehydrated, "a complete app imported again is a plain reimport");
     }
 }

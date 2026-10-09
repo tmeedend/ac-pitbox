@@ -131,7 +131,7 @@ fn an_app_and_a_track_sharing_an_id_do_not_share_their_layers() {
 /// Columns `migrate` adds, each paired with a listing that reads it. Used
 /// by the migration test below to build an "old" database out of the
 /// current one.
-const ADDED_LATER: [(&str, &str); 8] = [
+const ADDED_LATER: [(&str, &str); 10] = [
     ("mods", "is_unmanaged"),
     ("mods", "tech_marks"),
     ("layers", "notes_user"),
@@ -140,6 +140,8 @@ const ADDED_LATER: [(&str, &str); 8] = [
     ("versions", "content_state"),
     ("layers", "content_state"),
     ("sub_mods", "content_state"),
+    ("apps", "content_state"),
+    ("other_mods", "content_state"),
 ];
 
 /// Rule: `open` is safe to call on a database it has already migrated.
@@ -238,8 +240,41 @@ fn a_column_added_after_the_fact_reaches_a_database_that_predates_it() {
         "the migration put the column back, and the row is still there"
     );
     list_other_mods(&conn).expect("other_mods");
+    list_apps(&conn).expect("apps");
     list_subs_by_type(&conn, "SKIN").expect("sub_mods");
     list_layers(&conn, "x", HostKind::Track).expect("layers");
+}
+
+/// Rule (ESPACE§5.6): an app and an "other" mod an older base holds have
+/// their files. The state arrives with its default, and what the user typed on
+/// them is still there.
+#[test]
+fn an_app_and_an_other_mod_written_before_read_as_complete() {
+    let base = crate::testutil::temp_dir("db-addon-state");
+    let path = base.join("overlay.sqlite");
+    let now = chrono::Local::now().to_rfc3339();
+    {
+        let conn = open(&path).unwrap();
+        insert_app(&conn, "MyApp", "apps/MyApp", Some("myapp.7z"), &now).unwrap();
+        insert_other_mod(&conn, "Hud", "others/Hud", Some("hud.7z"), &now).unwrap();
+        conn.execute("UPDATE apps SET notes_user = 'app note'", []).unwrap();
+        conn.execute("UPDATE other_mods SET notes_user = 'mod note', is_priority = 1", [])
+            .unwrap();
+        for table in ["apps", "other_mods"] {
+            for col in ["content_state", "freed_at"] {
+                conn.execute(&format!("ALTER TABLE {table} DROP COLUMN {col}"), [])
+                    .unwrap_or_else(|e| panic!("{table}.{col} should be droppable: {e}"));
+            }
+        }
+    }
+    let conn = open(&path).expect("an older database still opens");
+    let app = get_app(&conn, "MyApp").unwrap().expect("the app is still there");
+    assert_eq!(app.content_state, CONTENT_FULL, "an existing app keeps its files");
+    assert_eq!(app.notes_user.as_deref(), Some("app note"));
+    let other = get_other_mod(&conn, "Hud").unwrap().expect("the mod is still there");
+    assert!(!other.is_skeleton(), "an existing mod keeps its files");
+    assert_eq!(other.notes_user.as_deref(), Some("mod note"));
+    assert!(other.is_priority);
 }
 
 /// Rule (ESPACE§5.3): the complete deletion takes what belonged to the

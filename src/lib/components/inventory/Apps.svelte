@@ -154,11 +154,11 @@
                 {a.id}
               </button>
               {#if a.source_archive}<span class="src mono">{a.source_archive}</span>{/if}
-              <StateBadge active={a.active} stock={false} />
+              <StateBadge active={a.active} stock={false} showcase={a.showcase} />
               <button class="btn" type="button" onclick={() => openFolder(a.id)} title={t("apps.openFolderTooltip")}>
                 {t("detail.openFolder")}
               </button>
-              <button class="btn" type="button" onclick={() => toggle(a)} disabled={busy === a.id}>
+              <button class="btn" type="button" onclick={() => toggle(a)} disabled={busy === a.id || a.showcase}>
                 {busy === a.id ? t("common.working") : a.active ? t("common.deactivate") : t("common.activate")}
               </button>
               <button class="btn del" type="button" title={t("common.delete")} onclick={() => remove(a)} disabled={busy === a.id}>✕</button>

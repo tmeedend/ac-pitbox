@@ -280,6 +280,11 @@ fn recompose_managed(
 /// `<id>.lua` à une app Python ferait autrement bouger le dossier de
 /// destination sous nos pieds, junction déjà posée ailleurs.
 fn recompose_app(conn: &Connection, cfg: &AppConfig, app: &overlay::AppRow) -> Result<(), String> {
+    // Same rule as a mod in the showcase: an app without its files
+    // (ESPACE§5.6) is never in the game, and its layers wait for it.
+    if app.is_skeleton() {
+        return Ok(());
+    }
     let Some(base) = crate::libpath::resolve(cfg.library_path.as_deref(), &app.library_path) else {
         return Ok(()); // bibliothèque non configurée : rien à projeter
     };

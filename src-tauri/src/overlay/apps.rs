@@ -13,8 +13,20 @@ pub struct AppRow {
     pub display_name_user: Option<String>,
     /// Note libre (REFONTE§9).
     pub notes_user: Option<String>,
+    /// [`CONTENT_FULL`] or [`CONTENT_SKELETON`]: an app can exist without its
+    /// files, its folder reduced to the showcase manifest (ESPACE§5.6).
+    pub content_state: String,
 }
 
+impl AppRow {
+    pub fn is_skeleton(&self) -> bool {
+        self.content_state == CONTENT_SKELETON
+    }
+}
+
+/// An imported app, or a reimported one: an existing row keeps its id, name
+/// and note, and gets its files back — which is how an app in the showcase is
+/// recovered (ESPACE§5.6).
 pub fn insert_app(
     conn: &Connection,
     id: &str,
@@ -25,7 +37,8 @@ pub fn insert_app(
     conn.execute(
         r#"INSERT INTO apps (id, library_path, source_archive, imported_at)
            VALUES (?1, ?2, ?3, ?4)
-           ON CONFLICT(id) DO UPDATE SET library_path = excluded.library_path"#,
+           ON CONFLICT(id) DO UPDATE SET library_path = excluded.library_path,
+                                         content_state = 'full', freed_at = NULL"#,
         params![id, library_path, source_archive, imported_at],
     )?;
     Ok(())
@@ -39,11 +52,12 @@ pub(super) fn map_app(row: &rusqlite::Row) -> rusqlite::Result<AppRow> {
         imported_at: row.get(3)?,
         display_name_user: row.get(4)?,
         notes_user: row.get(5)?,
+        content_state: row.get(6)?,
     })
 }
 
 pub(super) const APP_SELECT: &str =
-    "SELECT id, library_path, source_archive, imported_at, display_name_user, notes_user FROM apps";
+    "SELECT id, library_path, source_archive, imported_at, display_name_user, notes_user, content_state FROM apps";
 
 pub fn list_apps(conn: &Connection) -> rusqlite::Result<Vec<AppRow>> {
     let mut stmt = conn.prepare(&format!("{APP_SELECT} ORDER BY id COLLATE NOCASE"))?;

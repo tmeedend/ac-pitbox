@@ -16,6 +16,7 @@
   import NoteBlock from "$lib/components/detail/NoteBlock.svelte";
   import { bodyThumb, requestBodyThumb } from "$lib/driver/driverThumbs.svelte";
   import { splitProvenance } from "$lib/detail/provenance";
+  import AddonShowcaseBanner from "./AddonShowcaseBanner.svelte";
 
   interface Props {
     row: OtherModRow;
@@ -74,6 +75,7 @@
     row.junctions.map((path) => DRIVER_KN5.exec(path)?.[1]).filter((id): id is string => !!id),
   );
   const isDriverMod = $derived(row.categories.includes("driver"));
+  const freed = $derived(row.content_state === "skeleton");
   $effect(() => {
     for (const body of bodies) requestBodyThumb(body);
   });
@@ -91,20 +93,22 @@
       overridden: !!row.display_name_user,
       onsave: onrename,
     }}
-    deployment={{ active: row.is_active }}
+    deployment={{ active: row.is_active, showcase: freed }}
     actions={[
       { label: t("others.openFolder"), onclick: onopenFolder },
       { label: t("others.priority"), onclick: ontogglePriority, disabled: busy },
       {
         label: busy ? t("common.working") : row.is_active ? t("common.deactivate") : t("common.activate"),
         onclick: ontoggle,
-        disabled: busy,
+        disabled: busy || freed,
       },
       { label: t("common.delete"), onclick: ondelete, disabled: busy, danger: true },
     ]}
   />
 
   {#if error}<div class="errbox">{error}</div>{/if}
+
+  {#if freed}<AddonShowcaseBanner archive={provenance?.archive ?? null} name={row.id} />{/if}
 
   {#if isDriverMod}
     <section class="blk">

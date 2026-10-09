@@ -27,9 +27,9 @@ pub struct ApplyReport {
     pub activated: usize,
     pub deactivated: usize,
     pub errors: Vec<String>,
-    /// Mods of the profile that are in the showcase (ESPACE§6): left out and
-    /// named apart, never an error — the profile keeps them for when their
-    /// files come back.
+    /// Mods, apps and "other" mods of the profile that are in the showcase
+    /// (ESPACE§6, ESPACE§5.6): left out and named apart, never an error — the
+    /// profile keeps them for when their files come back.
     pub skipped: Vec<String>,
 }
 
@@ -119,6 +119,7 @@ pub fn apply(conn: &Connection, cfg: &AppConfig, profile_id: &str) -> Result<App
     for id in &target_other {
         match others::activate_other(conn, cfg, id) {
             Ok(_) => report.activated += 1,
+            Err(e) if e == crate::errors::CONTENT_FREED => report.skipped.push(id.clone()),
             Err(e) => report.errors.push(format!("{id} : {e}")),
         }
     }
@@ -135,6 +136,7 @@ pub fn apply(conn: &Connection, cfg: &AppConfig, profile_id: &str) -> Result<App
     for id in &target_apps {
         match apps::activate_app(conn, cfg, id) {
             Ok(()) => report.activated += 1,
+            Err(e) if e == crate::errors::CONTENT_FREED => report.skipped.push(id.clone()),
             Err(e) => report.errors.push(format!("{id} : {e}")),
         }
     }
@@ -252,5 +254,49 @@ mod tests {
             "autre mod réactivé"
         );
         assert!(apps::list_apps(&conn, &cfg).unwrap()[0].active, "app réactivée");
+    }
+
+    /// Rule (ESPACE§5.6): an app or an "other" mod without its files is
+    /// skipped by a profile, named apart — never an error, and the profile
+    /// keeps it for when its files come back.
+    #[test]
+    fn a_profile_skips_an_app_and_an_other_mod_without_their_files() {
+        let base = crate::testutil::temp_dir("profile-freed");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&ac).unwrap();
+        let other_dir = library.join("others").join("Hud");
+        std::fs::create_dir_all(other_dir.join("content").join("gui")).unwrap();
+        std::fs::write(other_dir.join("content").join("gui").join("hud.png"), b"x").unwrap();
+        let app_dir = library.join("apps").join("MyApp");
+        std::fs::create_dir_all(&app_dir).unwrap();
+        std::fs::write(app_dir.join("MyApp.py"), b"# app").unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let now = chrono::Local::now().to_rfc3339();
+        overlay::insert_other_mod(&conn, "Hud", "others/Hud", None, &now).unwrap();
+        overlay::insert_app(&conn, "MyApp", "apps/MyApp", None, &now).unwrap();
+        overlay::create_profile(&conn, "p", "Both", &now).unwrap();
+        overlay::add_profile_extra_entry(&conn, "p", "other", "Hud").unwrap();
+        overlay::add_profile_extra_entry(&conn, "p", "app", "MyApp").unwrap();
+        crate::testutil::free_addon(&conn, "other_mods", "Hud", &other_dir, None);
+        crate::testutil::free_addon(&conn, "apps", "MyApp", &app_dir, None);
+
+        let report = apply(&conn, &cfg, "p").unwrap();
+        assert!(report.errors.is_empty(), "not an error: {:?}", report.errors);
+        assert_eq!(report.activated, 0, "nothing laid");
+        let mut skipped = report.skipped.clone();
+        skipped.sort();
+        assert_eq!(skipped, vec!["Hud", "MyApp"], "both named apart");
+        assert!(!ac.join("apps").join("python").join("MyApp").exists());
+        assert_eq!(
+            overlay::get_profile_extra_entries(&conn, "p").unwrap().len(),
+            2,
+            "the profile keeps them"
+        );
     }
 }

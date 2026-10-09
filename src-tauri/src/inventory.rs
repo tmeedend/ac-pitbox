@@ -87,8 +87,13 @@ pub struct InventoryRow {
     /// étoile), jamais comme un bouton.
     pub priority: bool,
     pub has_note: bool,
+    /// Without its files (ESPACE§5.4, ESPACE§5.6): it followed its host into the
+    /// showcase, or arrived with an imported library export.
+    pub showcase: bool,
     pub source_archive: Option<String>,
     pub imported_at: String,
+    /// What it weighs — or, without its files, what it weighed: what
+    /// recovering it will bring back, as for a mod in the showcase (ESPACE§4.1).
     pub size_bytes: i64,
 }
 
@@ -208,9 +213,10 @@ fn rows_from_disk(cfg: &AppConfig, base: InventoryBase) -> Vec<InventoryRow> {
             active: Some(card.row.is_active),
             priority: card.row.is_priority,
             has_note: card.row.notes_user.is_some(),
+            showcase: card.row.is_skeleton(),
             source_archive: card.row.source_archive.clone(),
             imported_at: card.row.imported_at.clone(),
-            size_bytes: dir.map(|d| crate::inspect::dir_size_bytes(&d) as i64).unwrap_or(0),
+            size_bytes: row_size(dir.as_deref(), card.row.is_skeleton()),
             id: card.row.id,
         });
     }
@@ -250,9 +256,10 @@ fn rows_from_disk(cfg: &AppConfig, base: InventoryBase) -> Vec<InventoryRow> {
             },
             priority: false,
             has_note: sub.notes_user.is_some(),
+            showcase: sub.is_skeleton(),
             source_archive: sub.source_archive.clone(),
             imported_at: sub.imported_at.clone(),
-            size_bytes: dir.map(|d| crate::inspect::dir_size_bytes(&d) as i64).unwrap_or(0),
+            size_bytes: row_size(dir.as_deref(), sub.is_skeleton()),
             id: sub.id,
         });
     }
@@ -273,14 +280,29 @@ fn rows_from_disk(cfg: &AppConfig, base: InventoryBase) -> Vec<InventoryRow> {
             active: Some(layer.is_active),
             priority: false,
             has_note: layer.notes_user.is_some(),
+            showcase: layer.is_skeleton(),
             source_archive: layer.source_archive.clone(),
             imported_at: layer.imported_at.clone(),
-            size_bytes: dir.map(|d| crate::inspect::dir_size_bytes(&d) as i64).unwrap_or(0),
+            size_bytes: row_size(dir.as_deref(), layer.is_skeleton()),
             id: layer.id,
         });
     }
 
     out
+}
+
+/// The size of a row's folder; without its files, what its manifest says left
+/// is added back — a layer keeps its host's skeleton (ESPACE§5.4), the rest
+/// keeps nothing.
+fn row_size(dir: Option<&std::path::Path>, freed: bool) -> i64 {
+    let Some(dir) = dir else { return 0 };
+    let left = crate::inspect::dir_size_bytes(dir);
+    let gone = if freed {
+        crate::skeleton::read_manifest(dir).map_or(0, |m| m.removed_bytes)
+    } else {
+        0
+    };
+    (left + gone) as i64
 }
 
 /// Une livrée change ce qu'on voit, un son ce qu'on entend : les deux relèvent
@@ -592,5 +614,30 @@ mod tests {
         assert_eq!(rows[0].attachment.kind, AttachKind::Game);
         assert_eq!(rows[0].attachment.target_id, None);
         drop(base);
+    }
+
+    /// Rule (ESPACE§5.6): a mannequin without its files is still a mannequin
+    /// in the inventory, marked as such, and weighs what it weighed — what
+    /// recovering it will bring back.
+    #[test]
+    fn a_mannequin_without_its_files_is_still_a_mannequin_and_weighs_what_it_weighed() {
+        let base = crate::testutil::temp_dir("inventory-freed");
+        let library = base.join("library");
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        let dir = library.join("others").join("ada");
+        std::fs::create_dir_all(dir.join("content").join("driver")).unwrap();
+        std::fs::write(dir.join("content").join("driver").join("ada.kn5"), vec![0u8; 4096]).unwrap();
+        overlay::insert_other_mod(&conn, "ada", "others/ada", Some("ada.7z"), &now).unwrap();
+        crate::testutil::free_addon(&conn, "other_mods", "ada", &dir, Some("ada.7z"));
+
+        let rows = list(&conn, &cfg).unwrap();
+        assert_eq!(rows[0].kind, RowKind::Driver, "still a mannequin, read from the manifest");
+        assert!(rows[0].showcase, "marked as having no files");
+        assert!(rows[0].size_bytes >= 4096, "its original size, not the manifest's few bytes");
     }
 }

@@ -242,6 +242,19 @@ pub fn verify(dir: &Path, manifest: &Manifest) -> Vec<String> {
         .collect()
 }
 
+/// What a recovered app or "other" mod still lacks, against the manifest its
+/// folder held (ESPACE§7.4, ESPACE§5.6). Logged, not reported: the archive
+/// imported is the one the user has, and the element is back either way.
+pub fn warn_missing(id: &str, dir: &Path, manifest: &Manifest) {
+    let missing = verify(dir, manifest);
+    if let Some(first) = missing.first() {
+        log::warn!(
+            "{id} recovered from the showcase without {} expected file(s), first {first}",
+            missing.len()
+        );
+    }
+}
+
 /// What a skeleton's folder held before its files went: what it kept, plus
 /// what its manifest says left — in `identity::rel_files` form, so the import
 /// compares an incoming archive to the complete version (ESPACE§7.5). Without

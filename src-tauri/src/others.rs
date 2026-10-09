@@ -51,6 +51,8 @@ pub struct OtherImported {
     /// mod contient des trucs » non.
     #[serde(default)]
     pub game_files_replaced: usize,
+    /// It was in the showcase and got its files back (ESPACE§5.6).
+    pub rehydrated: bool,
 }
 
 /// Id à partir du nom d'archive/dossier importé (pas du dossier temp
@@ -90,6 +92,10 @@ fn other_id(source_name: &str) -> String {
 
 /// Importe un dossier non reconnu comme « autre mod » (§7.3) : stocké tel
 /// quel dans la bibliothèque, jamais perdu. Idempotent (ignore si déjà connu).
+///
+/// One exception: an id known **without its files** (ESPACE§5.6) gets them
+/// back, in the same row — name, note, priority and attachment kept. The id
+/// comes from the archive's name, so the same archive finds the same row.
 pub fn import_other(
     conn: &Connection,
     library: &Path,
@@ -99,8 +105,14 @@ pub fn import_other(
     mode: ExtractionMode,
 ) -> Option<OtherImported> {
     let id = other_id(source_name);
-    if overlay::other_exists(conn, &id).unwrap_or(false) {
-        return None;
+    match overlay::get_other_mod(conn, &id) {
+        Ok(Some(row)) if row.is_skeleton() => return refill(conn, library, row, root, copy, mode),
+        Ok(Some(_)) => return None,
+        Ok(None) => {}
+        Err(e) => {
+            log::warn!("import_other {id}: base not read: {e}");
+            return None;
+        }
     }
     let dest = library.join("others").join(&id);
     // Seul appelant en `BesideMod` (§4.5.2) : un « autre mod » est par
@@ -129,6 +141,53 @@ pub fn import_other(
         resources_extracted,
         optional: false,
         game_files_replaced: 0,
+        rehydrated: false,
+    })
+}
+
+/// The files of an "other" mod in the showcase come back into its folder,
+/// which held only the manifest (ESPACE§5.6), and the row reads complete
+/// again. The folder is the row's own, never one derived anew: the export may
+/// have stored it under another path than the import would choose today.
+fn refill(
+    conn: &Connection,
+    library: &Path,
+    row: OtherModRow,
+    root: &Path,
+    copy: bool,
+    mode: ExtractionMode,
+) -> Option<OtherImported> {
+    let dest = crate::libpath::resolve(Some(library), &row.library_path)?;
+    // A stored path is a library path: anything else is not ours to empty.
+    if !dest.starts_with(library) {
+        log::warn!("import_other {}: folder outside the library, not refilled", row.id);
+        return None;
+    }
+    let manifest = crate::skeleton::read_manifest(&dest);
+    if dest.exists() {
+        if let Err(e) = std::fs::remove_dir_all(&dest) {
+            log::warn!("import_other {}: {} not emptied: {e}", row.id, dest.display());
+            return None;
+        }
+    }
+    let res_dir = resources::resources_dir_for(library, "others", &[&row.id]);
+    let resources_extracted =
+        resources::file_mod(root, &dest, &res_dir, mode, !copy, resources::Source::BesideMod).ok()?;
+    relocate_driver_models(&dest);
+    if let Some(manifest) = &manifest {
+        crate::skeleton::warn_missing(&row.id, &dest, manifest);
+    }
+    if let Err(e) = overlay::mark_other_refilled(conn, &row.id) {
+        log::warn!("import_other {}: not marked complete: {e}", row.id);
+        return None;
+    }
+    Some(OtherImported {
+        categories: categories_of(&relative_files(&dest)),
+        id: row.id,
+        resources_extracted,
+        optional: false,
+        game_files_replaced: 0,
+        rehydrated: true,
     })
 }
 
@@ -243,6 +302,42 @@ fn relative_files(dir: &Path) -> HashSet<PathBuf> {
         .filter(|e| e.file_type().is_file())
         .filter_map(|e| e.path().strip_prefix(&root).ok().map(|p| p.to_path_buf()))
         .collect()
+}
+
+/// What an "other" mod in the showcase held, read from its manifest
+/// (ESPACE§5.6), in [`relative_files`] form: its zones of the game and its
+/// attachment are deduced from these paths, and a mannequin stays a
+/// mannequin without its `.kn5`.
+///
+/// The author's wrapper is crossed the way [`crate::acpath::effective_root`]
+/// crosses it on disk: a level made of a single folder that does not lead into
+/// the game.
+fn listed_files(dir: &Path) -> HashSet<PathBuf> {
+    let Some(manifest) = crate::skeleton::read_manifest(dir) else {
+        return HashSet::new();
+    };
+    let mut paths: Vec<PathBuf> = manifest.removed.iter().map(|f| PathBuf::from(&f.path)).collect();
+    while let Some(first) = paths.first().and_then(|p| p.components().next()) {
+        let first = first.as_os_str().to_os_string();
+        let wrapped = paths
+            .iter()
+            .all(|p| p.components().count() > 1 && p.components().next().map(|c| c.as_os_str()) == Some(&*first));
+        if !wrapped || crate::acpath::leads_into_game(Path::new(&first)) {
+            break;
+        }
+        paths = paths.iter().map(|p| p.components().skip(1).collect()).collect();
+    }
+    paths.into_iter().collect()
+}
+
+/// The files of an "other" mod, on disk or, without its files, as its manifest
+/// lists them.
+fn files_of(row: &OtherModRow, dir: &Path) -> HashSet<PathBuf> {
+    if row.is_skeleton() {
+        listed_files(dir)
+    } else {
+        relative_files(dir)
+    }
 }
 
 /// Tab order of the "other mods" screen (§7.3). Every id here has a
@@ -417,20 +512,24 @@ pub(crate) fn others_from_disk(
         .iter()
         .map(|r| {
             let files = crate::libpath::resolve(cfg.library_path.as_deref(), &r.library_path)
-                .map(|dir| relative_files(&dir))
+                .map(|dir| files_of(r, &dir))
                 .unwrap_or_default();
             (r.id.clone(), files)
         })
         .collect();
+    // A mod without its files lays nothing (ESPACE§5.6): it is in conflict
+    // with no one, and no one with it.
+    let freed: HashSet<String> = rows.iter().filter(|r| r.is_skeleton()).map(|r| r.id.clone()).collect();
 
     rows.into_iter()
         .map(|row| {
             let mine = files.iter().find(|(id, _)| *id == row.id).map(|(_, f)| f);
             let conflicts = mine
+                .filter(|_| !row.is_skeleton())
                 .map(|mine| {
                     files
                         .iter()
-                        .filter(|(id, _)| *id != row.id)
+                        .filter(|(id, _)| *id != row.id && !freed.contains(id))
                         .filter_map(|(id, f)| {
                             let n = mine.intersection(f).count();
                             (n > 0).then(|| ConflictInfo {
@@ -686,6 +785,10 @@ pub fn activate_other(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<Ac
     let m = overlay::get_other_mod(conn, id)
         .map_err(|e| e.to_string())?
         .ok_or(crate::errors::MOD_UNKNOWN)?;
+    // Without its files (ESPACE§5.6), there is nothing to lay.
+    if m.is_skeleton() {
+        return Err(crate::errors::CONTENT_FREED.into());
+    }
     let ac = cfg.ac_install_path.as_ref().ok_or(crate::errors::AC_NOT_CONFIGURED)?;
     let others = overlay::list_other_mods(conn).map_err(|e| e.to_string())?;
 
@@ -1355,6 +1458,98 @@ mod tests {
             folder_path(&conn, &cfg, "JustAPdf").unwrap(),
             resources::resources_dir_for(&library, "others", &["JustAPdf"]),
             "on ouvre le dossier ressources, là où le document est réellement"
+        );
+    }
+
+    /// A library with two "other" mods aiming at the same file, the driver
+    /// one wrapped in its author's folder, and an AC install.
+    fn two_others(tag: &str) -> (crate::testutil::TempDir, std::path::PathBuf, Connection, AppConfig) {
+        let base = crate::testutil::temp_dir(tag);
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(&ac).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(ac),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let doll = base.join("src").join("Dolls");
+        make_tree(&doll, &["Dolls v2/content/driver/ada.kn5"]);
+        import_other(&conn, &library, "Dolls.7z", &doll, true, ExtractionMode::InfoOnly).unwrap();
+        let rival = base.join("src").join("Rival");
+        make_tree(&rival, &["content/driver/ada.kn5"]);
+        import_other(&conn, &library, "Rival.7z", &rival, true, ExtractionMode::InfoOnly).unwrap();
+        (base, library, conn, cfg)
+    }
+
+    /// Rule (ESPACE§5.6): an "other" mod without its files is listed as it was
+    /// — its zones of the game read from its manifest, so a mannequin stays a
+    /// mannequin —, lays nothing, and so conflicts with no one.
+    #[test]
+    fn an_other_mod_without_its_files_keeps_its_zones_and_conflicts_with_no_one() {
+        let (_base, library, conn, cfg) = two_others("other-freed");
+        let before = list_others(&conn, &cfg).unwrap();
+        assert!(
+            before.iter().all(|c| c.conflicts.len() == 1),
+            "fixture: the two mods aim at the same mannequin"
+        );
+        crate::testutil::free_addon(&conn, "other_mods", "Dolls", &library.join("others").join("Dolls"), Some("Dolls.7z"));
+
+        let cards = list_others(&conn, &cfg).unwrap();
+        let dolls = cards.iter().find(|c| c.row.id == "Dolls").unwrap();
+        assert!(dolls.row.is_skeleton(), "the row says it has no files");
+        assert_eq!(dolls.categories, vec!["driver"], "the manifest still says what it is, wrapper crossed");
+        assert_eq!(dolls.file_count, 1, "its files are counted from the manifest");
+        assert!(dolls.conflicts.is_empty(), "a mod without files conflicts with no one");
+        let rival = cards.iter().find(|c| c.row.id == "Rival").unwrap();
+        assert!(rival.conflicts.is_empty(), "and no one conflicts with it");
+
+        assert_eq!(
+            activate_other(&conn, &cfg, "Dolls").err().as_deref(),
+            Some(crate::errors::CONTENT_FREED),
+            "nothing to lay: the guard refuses"
+        );
+        assert!(!overlay::get_other_mod(&conn, "Dolls").unwrap().unwrap().is_active);
+    }
+
+    /// Rule (ESPACE§5.6): importing the same archive again brings the files
+    /// back into the same row — name, note and priority kept — instead of
+    /// being ignored as an id already known.
+    #[test]
+    fn reimporting_its_archive_brings_an_other_mod_back_in_its_row() {
+        let (base, library, conn, cfg) = two_others("other-refill");
+        use crate::usermeta::{set_display_name, set_note, EntityKind};
+        set_display_name(&conn, EntityKind::Other, "Dolls", Some("Ada")).unwrap();
+        set_note(&conn, EntityKind::Other, "Dolls", Some("the good one")).unwrap();
+        set_priority(&conn, "Dolls", true).unwrap();
+        let folder = library.join("others").join("Dolls");
+        crate::testutil::free_addon(&conn, "other_mods", "Dolls", &folder, Some("Dolls.7z"));
+
+        let back = import_other(&conn, &library, "Dolls.7z", &base.join("src").join("Dolls"), true, ExtractionMode::InfoOnly)
+            .expect("an id known without its files is not ignored");
+        assert!(back.rehydrated, "the report says the files came back");
+        assert_eq!(back.categories, vec!["driver"]);
+
+        let row = overlay::get_other_mod(&conn, "Dolls").unwrap().unwrap();
+        assert!(!row.is_skeleton(), "complete again");
+        assert_eq!(row.display_name_user.as_deref(), Some("Ada"), "its name survived");
+        assert_eq!(row.notes_user.as_deref(), Some("the good one"), "its note survived");
+        assert!(row.is_priority, "its priority survived");
+        assert!(
+            !folder.join(crate::skeleton::MANIFEST_NAME).exists(),
+            "the manifest leaves with the state it described"
+        );
+        assert!(
+            relative_files(&folder).contains(Path::new("content/driver/ada.kn5")),
+            "the mannequin is back where the game reads it"
+        );
+        assert!(activate_other(&conn, &cfg, "Dolls").is_ok(), "and it can be laid again");
+        assert!(
+            import_other(&conn, &library, "Dolls.7z", &base.join("src").join("Dolls"), true, ExtractionMode::InfoOnly)
+                .is_none(),
+            "a complete mod imported again is still ignored (§7.3)"
         );
     }
 }

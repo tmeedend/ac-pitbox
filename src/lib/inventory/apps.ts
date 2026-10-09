@@ -15,6 +15,9 @@ export interface AppItem {
   display_name_user: string | null;
   /** Note libre (REFONTE§9). */
   notes_user: string | null;
+  /** Without its files (ESPACE§5.6): it cannot be activated until its archive
+   * is imported again. */
+  showcase: boolean;
 }
 
 export function listApps(): Promise<AppItem[]> {

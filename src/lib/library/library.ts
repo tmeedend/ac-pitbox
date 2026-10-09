@@ -300,6 +300,8 @@ export interface AppLayerImported {
 export interface AppImported {
   name: string;
   resources_extracted: number;
+  /** It was without its files and got them back (ESPACE§5.6). */
+  rehydrated: boolean;
 }
 
 /** Mod « autre » importé — type non reconnu, jamais perdu (§7.3). */
@@ -315,6 +317,8 @@ export interface OtherImported {
   optional?: boolean;
   /** Nombre de fichiers du jeu de base qu'il remplacerait. */
   game_files_replaced?: number;
+  /** It was without its files and got them back (ESPACE§5.6). */
+  rehydrated: boolean;
 }
 
 export interface ArchiveResult {

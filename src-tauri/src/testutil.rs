@@ -58,6 +58,29 @@ pub fn temp_dir(tag: &str) -> TempDir {
     TempDir(path)
 }
 
+/// Leaves an app or an "other" mod (`table` is `apps` or `other_mods`) the way
+/// an imported library export brings it in (ESPACE§5.6): its folder reduced to
+/// a manifest listing what it held, its row marked `skeleton`. Nothing in the
+/// app produces this state by itself yet — the export will.
+pub fn free_addon(conn: &rusqlite::Connection, table: &str, id: &str, dir: &Path, source_archive: Option<&str>) {
+    let mut manifest = crate::skeleton::Manifest::new(
+        "2026-10-09T08:00:00Z".into(),
+        id.to_string(),
+        crate::skeleton::all_files(dir),
+    );
+    manifest.source_archive = source_archive.map(str::to_string);
+    if dir.exists() {
+        std::fs::remove_dir_all(dir).expect("empty the folder");
+    }
+    std::fs::create_dir_all(dir).expect("keep the folder");
+    crate::skeleton::write_manifest(dir, &manifest).expect("write the manifest");
+    conn.execute(
+        &format!("UPDATE {table} SET content_state = 'skeleton', freed_at = '2026-10-09' WHERE id = ?1"),
+        [id],
+    )
+    .expect("mark the row");
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

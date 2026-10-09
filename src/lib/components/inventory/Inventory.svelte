@@ -205,7 +205,10 @@
     // Une livrée n'a pas d'état de déploiement (voir `active` côté Rust) :
     // elle ne compte donc ni dans « Actif » ni dans « Inactif ». Lui en
     // inventer un ferait mentir les deux compteurs à la fois.
-    if (r.active !== null) out.push(r.active ? "state:ACTIVE" : "state:INACTIVE");
+    // Without its files (ESPACE§5.6), a row is "in the showcase", not
+    // "inactive": the badge says so, the counter must agree with it.
+    if (r.showcase) out.push("state:SHOWCASE");
+    else if (r.active !== null) out.push(r.active ? "state:ACTIVE" : "state:INACTIVE");
     if (r.has_note) out.push("state:NOTE");
     return out;
   }
@@ -363,7 +366,7 @@
         {
           label: r.active ? t("common.deactivate") : t("common.activate"),
           onclick: () => void run(r.id, () => (r.active ? deactivateOther(r.id) : activateOther(r.id))),
-          disabled: busy === r.id,
+          disabled: busy === r.id || r.showcase,
         },
         {
           label: t("inventory.detach"),
@@ -420,7 +423,7 @@
       labelKey: "inventory.facetNature",
       values: ["CONTENT", "APPEARANCE", "BEHAVIOUR", "DEPENDENCY", "DOCUMENT", "UNRECOGNISED"],
     },
-    { axis: "state", labelKey: "inventory.facetState", values: ["ACTIVE", "INACTIVE", "NOTE"] },
+    { axis: "state", labelKey: "inventory.facetState", values: ["ACTIVE", "INACTIVE", "SHOWCASE", "NOTE"] },
   ];
 </script>
 
@@ -568,7 +571,9 @@
             </span>
             {#if r.priority}<span class="prio" title={t("others.priorityTooltip")}>★</span>{/if}
             <span class="st">
-              {#if r.active !== null}<StateBadge active={r.active} stock={false} />{/if}
+              {#if r.active !== null || r.showcase}
+                <StateBadge active={r.active ?? false} stock={false} showcase={r.showcase} />
+              {/if}
             </span>
             <button
               class="kebab"

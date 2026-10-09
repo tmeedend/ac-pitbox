@@ -19,6 +19,7 @@
   import FicheHeader from "$lib/components/detail/FicheHeader.svelte";
   import NoteBlock from "$lib/components/detail/NoteBlock.svelte";
   import Tabs from "$lib/components/ui/Tabs.svelte";
+  import AddonShowcaseBanner from "./AddonShowcaseBanner.svelte";
 
   interface Props {
     app: AppItem;
@@ -119,13 +120,13 @@
       overridden: !!app.display_name_user,
       onsave: rename,
     }}
-    deployment={{ active: app.active }}
+    deployment={{ active: app.active, showcase: app.showcase }}
     actions={[
       { label: t("detail.openFolder"), onclick: openFolder },
       {
         label: busy ? t("common.working") : app.active ? t("common.deactivate") : t("common.activate"),
         onclick: toggle,
-        disabled: busy,
+        disabled: busy || app.showcase,
       },
       { label: t("common.delete"), onclick: remove, disabled: busy, danger: true },
     ]}
@@ -149,6 +150,8 @@
       <dd>{new Date(app.imported_at).toLocaleString()}</dd>
     </div>
   </dl>
+
+  {#if app.showcase}<AddonShowcaseBanner archive={app.source_archive} name={app.id} />{/if}
 
   <NoteBlock value={app.notes_user} onsave={saveNote} />
 

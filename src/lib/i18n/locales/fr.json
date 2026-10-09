@@ -552,6 +552,7 @@
     "natureUNRECOGNISED": "Non reconnu",
     "stateACTIVE": "Actif",
     "stateINACTIVE": "Inactif",
+    "stateSHOWCASE": "En vitrine",
     "stateNOTE": "A une note",
     "openHost": "Ouvrir son hôte",
     "openFiche": "Ouvrir sa fiche",
@@ -1331,6 +1332,7 @@
     "appLayerAdded": "{count} fichier(s) de « {name} » ajoutés dans l'app {app}",
     "appLayerReplacesMain": "⚠ remplace le script principal de l'app",
     "othersImported": "+ {count} mod(s) autre(s) importé(s)",
+    "addonsRehydrated": "Fichiers récupérés pour {count} app(s) ou mod(s) autre(s)",
     "resourcesExtracted": "+ {count} fichier(s) annexe(s) extrait(s) vers les ressources",
     "extrasAttached": "{count} ajout(s) au jeu",
     "newVersionTitle": "Nouvelle version possible",
@@ -2358,6 +2360,7 @@
   "showcase": {
     "state": "En vitrine",
     "explain": "En vitrine : ce mod reste dans votre bibliothèque avec son image, sa fiche technique et vos notes, mais ses fichiers ne sont plus sur le disque. Récupérez-les pour pouvoir l'utiliser en session.",
+    "explainAddon": "En vitrine : ses fichiers ne sont plus sur le disque. Son nom et vos notes sont gardés ; réimportez son archive pour pouvoir l'utiliser.",
     "freed": "{size} libérés.",
     "titleOne": "Supprimer {name} ?",
     "titleMany": "Supprimer {count} mods ?",

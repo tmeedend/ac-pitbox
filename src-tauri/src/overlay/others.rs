@@ -21,6 +21,16 @@ pub struct OtherModRow {
     /// **correction** est stockée — la déduction se recalcule à chaque lecture,
     /// `attach.rs` dit pourquoi.
     pub attachment_user: Option<String>,
+    /// [`CONTENT_FULL`] or [`CONTENT_SKELETON`]: an "other" mod can exist
+    /// without its files, its folder reduced to the showcase manifest
+    /// (ESPACE§5.6).
+    pub content_state: String,
+}
+
+impl OtherModRow {
+    pub fn is_skeleton(&self) -> bool {
+        self.content_state == CONTENT_SKELETON
+    }
 }
 
 pub fn insert_other_mod(
@@ -51,11 +61,12 @@ pub(super) fn map_other(row: &rusqlite::Row) -> rusqlite::Result<OtherModRow> {
         display_name_user: row.get(7)?,
         notes_user: row.get(8)?,
         attachment_user: row.get(9)?,
+        content_state: row.get(10)?,
     })
 }
 
 pub(super) const OTHER_SELECT: &str =
-    "SELECT id, library_path, source_archive, imported_at, is_priority, is_active, junctions, display_name_user, notes_user, attachment_user FROM other_mods";
+    "SELECT id, library_path, source_archive, imported_at, is_priority, is_active, junctions, display_name_user, notes_user, attachment_user, content_state FROM other_mods";
 
 pub fn list_other_mods(conn: &Connection) -> rusqlite::Result<Vec<OtherModRow>> {
     let mut stmt = conn.prepare(&format!("{OTHER_SELECT} ORDER BY id COLLATE NOCASE"))?;
@@ -72,6 +83,9 @@ pub fn get_other_mod(conn: &Connection, id: &str) -> rusqlite::Result<Option<Oth
     }
 }
 
+/// Only the tests ask: the import reads the row itself, which says whether it
+/// has its files (ESPACE§5.6).
+#[cfg(test)]
 pub fn other_exists(conn: &Connection, id: &str) -> rusqlite::Result<bool> {
     let n: i64 = conn.query_row("SELECT COUNT(*) FROM other_mods WHERE id = ?1", [id], |r| r.get(0))?;
     Ok(n > 0)
@@ -95,6 +109,16 @@ pub fn set_other_active(conn: &Connection, id: &str, active: bool, junctions: &[
             active as i64,
             serde_json::to_string(junctions).unwrap_or_else(|_| "[]".into())
         ],
+    )?;
+    Ok(())
+}
+
+/// An "other" mod in the showcase got its files back (ESPACE§5.6): same row,
+/// same id, name, note and priority.
+pub fn mark_other_refilled(conn: &Connection, id: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE other_mods SET content_state = ?2, freed_at = NULL WHERE id = ?1",
+        params![id, CONTENT_FULL],
     )?;
     Ok(())
 }
