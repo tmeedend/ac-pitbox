@@ -255,6 +255,18 @@ pub fn warn_missing(id: &str, dir: &Path, manifest: &Manifest) {
     }
 }
 
+/// Puts a manifest back after a recovery that failed halfway (ESPACE§5.6):
+/// the folder was emptied to receive the files, and the row still says it has
+/// none. Without its manifest it would no longer say what it held.
+pub fn restore_manifest(dir: &Path, manifest: &Manifest) {
+    let restored = std::fs::create_dir_all(dir)
+        .map_err(|e| format!("{}: {e}", dir.display()))
+        .and_then(|()| write_manifest(dir, manifest));
+    if let Err(e) = restored {
+        log::warn!("showcase manifest not put back: {e}");
+    }
+}
+
 /// What a skeleton's folder held before its files went: what it kept, plus
 /// what its manifest says left — in `identity::rel_files` form, so the import
 /// compares an incoming archive to the complete version (ESPACE§7.5). Without
@@ -275,8 +287,9 @@ pub fn original_files(dir: &Path) -> std::collections::BTreeSet<String> {
     files
 }
 
-/// Every file of a layer's, a skin's or a sound's folder, with its size — they
-/// keep no skeleton (ESPACE§5.4). The showcase's own files excepted.
+/// Every file of a folder that keeps no skeleton, with its size: a skin's or a
+/// sound's (ESPACE§5.4), an app's or an "other" mod's (ESPACE§5.6). The
+/// showcase's own files excepted.
 pub fn all_files(dir: &Path) -> Vec<RemovedFile> {
     files_but(dir, |rel, _| is_own_file(&normalized(rel)))
 }

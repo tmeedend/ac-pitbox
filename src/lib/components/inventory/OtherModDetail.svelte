@@ -110,7 +110,9 @@
 
   {#if freed}<AddonShowcaseBanner archive={provenance?.archive ?? null} name={row.id} />{/if}
 
-  {#if isDriverMod}
+  <!-- Without its files, a mannequin has nothing to show, and the strip above
+       says why — not "activate it", which is refused. -->
+  {#if isDriverMod && !freed}
     <section class="blk">
       <header class="blk-h">
         <span class="blk-t">{t("others.driverTitle")}</span>

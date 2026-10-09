@@ -278,25 +278,27 @@
     </div>
   {/each}
 
-  {#if (a.apps ?? []).length}
+  <!-- What came back from the showcase (ESPACE§5.6) is counted apart from
+       what is new: one app recovered is not also "one app imported". -->
+  {@const newApps = (a.apps ?? []).filter((x) => !x.rehydrated).length}
+  {@const newOthers = (a.others ?? []).filter((x) => !x.rehydrated).length}
+  {#if newApps}
     <div class="r-line shared">
       <button class="r-open" type="button" onclick={() => openSection("apps")}>
-        {t("importOverlay.appsImported", { count: a.apps.length })}
+        {t("importOverlay.appsImported", { count: newApps })}
       </button>
     </div>
   {/if}
-  {#if (a.others ?? []).length}
+  {#if newOthers}
     <div class="r-line shared">
       <button class="r-open" type="button" onclick={() => openSection("others")}>
-        {t("importOverlay.othersImported", { count: a.others.length })}
+        {t("importOverlay.othersImported", { count: newOthers })}
       </button>
     </div>
   {/if}
-  {@const addonsBack =
-    (a.apps ?? []).filter((x) => x.rehydrated).length + (a.others ?? []).filter((x) => x.rehydrated).length}
+  {@const addonsBack = (a.apps ?? []).length - newApps + (a.others ?? []).length - newOthers}
   {#if addonsBack}
-    <!-- Back from the showcase (ESPACE§5.6), in their own rows: names and
-         notes kept. Counted apart from what is new. -->
+    <!-- Back in their own rows: names and notes kept. -->
     <div class="r-line shared">{t("importOverlay.addonsRehydrated", { count: addonsBack })}</div>
   {/if}
   {@const resExtracted =

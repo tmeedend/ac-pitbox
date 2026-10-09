@@ -172,7 +172,16 @@ fn refill(
     }
     let res_dir = resources::resources_dir_for(library, "others", &[&row.id]);
     let resources_extracted =
-        resources::file_mod(root, &dest, &res_dir, mode, !copy, resources::Source::BesideMod).ok()?;
+        match resources::file_mod(root, &dest, &res_dir, mode, !copy, resources::Source::BesideMod) {
+            Ok(n) => n,
+            Err(e) => {
+                log::warn!("import_other {}: files not refilled: {e}", row.id);
+                if let Some(manifest) = &manifest {
+                    crate::skeleton::restore_manifest(&dest, manifest);
+                }
+                return None;
+            }
+        };
     relocate_driver_models(&dest);
     if let Some(manifest) = &manifest {
         crate::skeleton::warn_missing(&row.id, &dest, manifest);

@@ -53,7 +53,16 @@ pub struct AppItem {
 /// schéma, et toujours juste même si le contenu de l'app change entre deux
 /// réimports.
 pub(crate) fn app_lang(stored_dir: &Path, id: &str) -> &'static str {
-    if stored_dir.join(format!("{id}.lua")).is_file() {
+    lang_of(stored_dir.join(lua_script(id)).is_file())
+}
+
+/// The script that makes an app a CSP Lua app ([`app_lang`]).
+fn lua_script(id: &str) -> String {
+    format!("{id}.lua")
+}
+
+fn lang_of(has_lua_script: bool) -> &'static str {
+    if has_lua_script {
         "lua"
     } else {
         "python"
@@ -107,13 +116,16 @@ pub fn import_apps(
 ) -> Vec<AppImported> {
     let mut out = Vec::new();
     for app in apps {
-        let freed = overlay::get_app(conn, &app.name)
+        // An app without its files comes back into its own folder, the one
+        // its row names (ESPACE§5.6) — never one derived anew next to it.
+        let freed_dir = overlay::get_app(conn, &app.name)
             .ok()
             .flatten()
             .filter(overlay::AppRow::is_skeleton)
             .and_then(|row| crate::libpath::resolve(Some(library), &row.library_path))
-            .and_then(|dir| crate::skeleton::read_manifest(&dir));
-        let dest = library.join("apps").join(&app.name);
+            .filter(|dir| dir.starts_with(library));
+        let freed = freed_dir.as_deref().and_then(crate::skeleton::read_manifest);
+        let dest = freed_dir.unwrap_or_else(|| library.join("apps").join(&app.name));
         // Ré-import : on remplace les fichiers existants (les ressources déjà
         // extraites, elles, sont conservées — dossier séparé, mod-level).
         if dest.exists() {
@@ -126,6 +138,9 @@ pub fn import_apps(
         let Ok(resources_extracted) =
             resources::file_mod(&app.dir, &dest, &res_dir, mode, !copy, resources::Source::ModFolder)
         else {
+            if let Some(manifest) = &freed {
+                crate::skeleton::restore_manifest(&dest, manifest);
+            }
             continue;
         };
         // A known id keeps its row (`insert_app`): an app in the showcase
@@ -200,14 +215,11 @@ pub fn list_apps(conn: &Connection, cfg: &AppConfig) -> Result<Vec<AppItem>, Str
 /// [`app_lang`] for an app in the showcase: its script is gone, the manifest
 /// still names it (ESPACE§5.6).
 fn freed_app_lang(stored_dir: &Path, id: &str) -> &'static str {
-    let lua = format!("{id}.lua").to_lowercase();
-    let listed = crate::skeleton::read_manifest(stored_dir)
-        .is_some_and(|m| m.removed.iter().any(|f| f.path.to_lowercase() == lua));
-    if listed {
-        "lua"
-    } else {
-        "python"
-    }
+    let lua = lua_script(id).to_lowercase();
+    lang_of(
+        crate::skeleton::read_manifest(stored_dir)
+            .is_some_and(|m| m.removed.iter().any(|f| f.path.to_lowercase() == lua)),
+    )
 }
 
 /// Active une app dans `<ac>/apps/<lang>/<id>` : junction vers le dossier
