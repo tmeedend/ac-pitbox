@@ -7,6 +7,8 @@
 > **Étiquette de renvoi : `EXPORT§`.** Repose entièrement sur la vitrine (`ESPACE§`) : **un export est une bibliothèque dont tous les mods sont en vitrine.** Rien ici ne se construit avant ESPACE lot 1. Les apps et les autres mods, qui n'ont pas le geste de la vitrine, en ont l'état depuis le 2026-10-09 (ESPACE§5.6) : ils sont exportés comme le reste (§9).
 >
 > Relevés de code du 2026-09-27 (`overlay.rs`, `backup.rs`, `config.rs`, `saved_grids.rs`, `ui_prefs.rs`).
+>
+> **Construit le 2026-10-09, derrière un interrupteur** (`FEATURE_LIBRARY_TRANSFER`, `src/lib/features.ts`) : visible sous `tauri dev`, absent d'un installateur tant qu'il n'a pas été essayé sur de vraies bibliothèques. `src-tauri/src/transfer/` (les deux parcours, le classement des tables, les fichiers), `ExportDialog`, `ImportDialog` et l'étape de l'assistant. Ses écarts assumés et ce que l'implémentation a appris sont au §10.
 
 ---
 
@@ -278,3 +280,36 @@ Le 2026-09-28, la vitrine des autres types avait été abandonnée, et l'export 
 - **Export partiel de mods** (une sélection, un profil) pour partager une collection avec quelqu'un. Le format le permet ; l'écran et la question des doublons à l'arrivée restent à penser.
 - **Une table d'auteurs connus** (préfixe d'id ou nom d'archive vers la page du magasin : RSS, VRC, URD…) comme source de plus pour « Récupérer les fichiers ». Les adresses sont à fournir par le propriétaire du projet, pas à deviner ; ce sont surtout des mods payants, donc toujours une page à ouvrir.
 - **Les captures et replays** (`media_links`) : ils vivent dans les dossiers de Content Manager et du jeu, pas dans la bibliothèque.
+
+---
+
+# 10. Ce que l'implémentation a appris
+
+## 10.1 Écarts assumés
+
+À reprendre s'ils gênent ; aucun ne touche au dossier du jeu.
+
+- **Une couche garde son interrupteur** (`layers.is_active`), au lieu du 0 du §4.1 : il dit si elle entre dans la composition, un choix de l'utilisateur, pas si elle est posée. `active_layers` écarte déjà une couche en vitrine. Le `is_active` d'un son ou d'un habillage de circuit, lui, dit qu'il est posé, et passe à 0.
+- **`music.json`** n'a pas de listes de lecture en ligne (§5.2) : il part entier, ses deux dossiers à `null`. L'autre machine joue son pack embarqué jusqu'à ce qu'on lui en désigne.
+- **Un preset de même nom** devient `Nom (2).cmpreset`, pas « (importé) » : le backend ne connaît pas la langue de l'utilisateur, et un nom de fichier n'a pas de traduction.
+- **La phrase de suite** (§7.3, étape 5) dit combien de mods sont en vitrine et combien étaient actifs, mais n'ouvre pas la bibliothèque filtrée sur « En vitrine » avec la sélection faite, et la case « Réactiver une fois récupérés » n'existe pas : « Ouvrir la bibliothèque » recharge l'application, et la récupération en masse (ESPACE§7.2) se lance de là. `active_at_export` est dans le manifeste pour le jour où on la fera.
+- **Un mod non géré** reçoit le dossier de version `<cars|tracks>/<id>/export` : la réhydratation copie dans le dossier existant de la version, quel que soit son nom.
+- **Une ligne dont le dossier est hors de la bibliothèque ne part pas** (`relativize`) : ce sont les livrées que le jeu livre avec son contenu, trouvées dans `content/`, et que l'autre machine retrouve. Les versions synthétiques du contenu d'origine non plus (§4.2) : l'autre machine indexe le sien.
+- **Les livrées fournies avec un mod** (`removable = 0`) restent `full` en base : elles vivent dans le dossier de sa version et reviennent avec lui, comme en vitrine (ESPACE§10.1).
+- **Le cache Wikipédia** n'est repris que si le manifeste porte la même version de contenu que l'application qui importe (`wiki_content_version`) ; sinon il se refait au réseau.
+- **Le contenu d'origine** reçoit aussi sa catégorie, sa classe et son pays, en plus des saisies du §4.2 : l'écran les édite. Seulement pour les lignes où l'utilisateur a écrit quelque chose (nom, description, note, tags, favori).
+- **Un refus de plus** : les chemins du jeu et de la bibliothèque non réglés. L'assistant les règle avant de proposer l'import ; l'écran Maintenance n'y mène que réglé.
+- **L'import se termine en rechargeant l'application** : les préférences, les colonnes et la musique viennent d'être réécrites, et chaque écran garde sa copie en mémoire. La copie de `ui_prefs.json` est relue dès la fin de l'import (`reloadUiPrefs`), avant que quoi que ce soit puisse l'écrire par-dessus.
+
+## 10.2 Pièges payés
+
+- **Une base copiée garde ce qu'on en efface.** Après `VACUUM INTO`, les lignes supprimées et les chemins réécrits restent lisibles dans les pages libres du fichier tant qu'on ne l'a pas compacté : le test « rien de la machine » a trouvé le chemin du dossier du jeu dans la base de l'export. Un `VACUUM` final avant d'emballer.
+- **Deux tables ont une clé étrangère vers `mods`** (`versions`, `tech_facts`) : une ligne sur un contenu d'origine absent de l'autre machine (un DLC) faisait échouer tout l'import. Ces lignes ne partent pas dans la base d'arrivée ; ce que l'utilisateur y avait écrit est compté dans `stock_missing`.
+- **Une entrée de zip est une donnée.** Seuls les fichiers que `files.rs` nomme reviennent dans `app_config_dir`, et aucun chemin d'entrée ne peut sortir du dossier où il atterrit (`..`, chemin absolu) : un `.pitbox` se transmet, et un fichier fabriqué ne doit pas pouvoir remplacer la base ou `config.json`.
+
+## 10.3 Décisions prises sans la spec
+
+- La dépendance **`zip`** (2.x, compression deflate seule) : lire le manifeste sans tout extraire et écrire en flux le demandaient. 7-Zip, déjà configuré pour l'import, aurait exigé d'extraire l'archive entière pour en lire une page.
+- L'import refait la **sauvegarde de démarrage** (`backup::backup_now`) avant tout, même dans une installation vide.
+- L'import se fait **dans** la base vivante (`ATTACH` puis une transaction), pas en remplaçant le fichier : la connexion de l'application reste ouverte, et un échec se défait par un `ROLLBACK`. Chaque fichier écrit est noté et retiré s'il échoue, chaque fichier remplacé retrouve ses octets.
+- Chaque mod importé reçoit dans son historique une ligne **« Transfert — exporté depuis une autre installation »** (§4.1, `history`).

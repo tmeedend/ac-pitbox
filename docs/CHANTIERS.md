@@ -145,20 +145,37 @@ de reprendre. En cas d'écart, la spec fait foi.
       du même cas (une communauté et son propre lanceur) : à vérifier, le
       journal du jeu (`Documents/Assetto Corsa/logs/log.txt`) donne la raison.
 
-- [ ] **Export / import de la bibliothèque (`EXPORT§`) — le lot A est fait,
-      l'export lui-même reste.** Élargi le 2026-10-09 : l'export emportera
-      aussi apps, mannequins, tenues et autres mods, ce qui rouvrait la
-      question de la vitrine pour eux. Fait (lot A) : l'**état** sans fichiers
-      des apps et des autres mods (ESPACE§5.6) — garde-fou, profils,
-      récupération par réimport dans la même ligne, pastille et facette — et le
-      **squelette des couches** (ESPACE§5.4). **Reste : EXPORT lot 1 entier**
-      (`transfer.rs`, les deux parcours, l'étape de l'assistant), dans l'ordre
-      de `SPEC-export-bibliotheque.md` §9.
-      - **Rien ne produit encore l'état sans fichiers d'une app ou d'un autre
-        mod** : seul `testutil::free_addon` le fait, dans les tests. L'export
-        devra faire la même chose à l'arrivée : manifeste écrit avec
-        `skeleton::all_files`, `content_state = 'skeleton'`, et pour un autre
-        mod `is_active = 0` et `junctions = '[]'`.
+- [ ] **Export / import de la bibliothèque (`EXPORT§`) — construit, derrière
+      un interrupteur ; reste à l'essayer sur de vraies bibliothèques.**
+      Élargi le 2026-10-09 : l'export emporte aussi apps, mannequins, tenues
+      et autres mods. Lot A : l'**état** sans fichiers des apps et des autres
+      mods (ESPACE§5.6) et le **squelette des couches** (ESPACE§5.4). Lot B :
+      l'export et l'import eux-mêmes (`src-tauri/src/transfer/`, `ExportDialog`,
+      `ImportDialog`, l'étape de l'assistant), visibles sous `tauri dev`
+      seulement (`FEATURE_LIBRARY_TRANSFER`).
+      **Reste :**
+      - **L'essai réel**, par l'utilisateur : exporter sa bibliothèque,
+        l'importer dans une installation vide (un second dossier de jeu et de
+        bibliothèque suffit), regarder les cartes, les fiches, les notes, les
+        Compléments, puis récupérer quelques mods par leur archive. Ensuite
+        seulement, `FEATURE_LIBRARY_TRANSFER = true`.
+      - **La suite de l'import** (EXPORT§10.1) : ouvrir la bibliothèque filtrée
+        sur « En vitrine » avec la sélection faite, et proposer de réactiver
+        les mods actifs à l'export une fois leurs fichiers récupérés
+        (`active_at_export` est dans le manifeste).
+      - **Mesurer l'export d'une grosse bibliothèque** : il parcourt chaque
+        dossier, et fige une image par version. Jamais mesuré au-delà des
+        tests.
+      - **Trois points de relecture laissés** (2026-10-09) : l'image figée
+        d'une voiture est celle que choisit le backend, pas la livrée préférée
+        que la carte montre ; l'estimation refait toute la préparation de
+        l'export à chaque ouverture de la boîte ; un mod installé à la main
+        des deux côtés remplace à l'import la ligne locale, alors que son vrai
+        dossier reste dans `content/`.
+      - **Le dossier de la bibliothèque doit ne rien contenir de ce que
+        l'export écrit** (`check_free`) ; un dossier `cars/` vide ne gêne pas,
+        un mod déjà là refuse l'import — à reprendre si le cas réel
+        (bibliothèque copiée à côté) se présente.
       - **L'id d'un autre mod vient du nom de l'archive** (`<archive>__<chemin
         dedans>` pour un reste, `others::other_id`). La récupération ne
         retrouve donc la ligne que si l'archive réimportée porte le même nom ;
