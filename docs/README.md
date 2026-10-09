@@ -143,7 +143,9 @@ fait — en cas d'écart, la spec fait foi.
   bibliothèque** dans un fichier `.pitbox` de quelques Mo : base, squelettes,
   classement, sessions, profils, préférences ; aucun fichier jouable, aucun
   chemin de la machine d'origine. Import dans une installation vide seulement,
-  tous les mods en vitrine. Repose sur `ESPACE§`. À construire.
+  tous les mods en vitrine, apps et autres mods compris. Repose sur
+  `ESPACE§` ; son préalable (l'état sans fichiers des apps et des autres
+  mods, ESPACE§5.6) est livré, l'export lui-même est à construire.
 - **`SPEC-fiche-technique.md`** (`FICHE§`) — la **fiche technique** d'une
   voiture passe en base, une source par valeur (modifié par vous › physique du
   mod › `ui_car.json` › tags), lit la physique déchiffrée au lieu de deviner

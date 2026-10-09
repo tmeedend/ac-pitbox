@@ -19,10 +19,10 @@
 //! A manifest on a version still marked complete therefore means "stopped
 //! between 3 and 5", and [`resume_interrupted`] finishes the job at startup.
 //!
-//! Only cars and tracks, and only their versions, in this first lot: layers,
-//! attached skins and sounds, additions to the game and resources keep their
-//! files (ESPACE§5.4 is the next step). Keeping them is safe — none of them
-//! can reach the game without their host.
+//! A mod's versions, layers, attached skins and sounds, additions to the game
+//! and resources all go together (ESPACE§5.4). A version keeps the skeleton of
+//! its type, and so does a layer — the layout a track layer brings must stay
+//! on the fiche; a skin or a sound keeps nothing but its manifest.
 
 use std::path::{Path, PathBuf};
 
@@ -135,7 +135,7 @@ pub fn to_showcase(
                 let image = (v.id == active).then_some(card_image.as_deref()).flatten();
                 prepare_version(cfg, kind, &m, v, image, &stamp)
             }
-            _ => prepare_attached(cfg, owner, &m.id_interne, &stamp),
+            _ => prepare_attached(cfg, kind, owner, &m.id_interne, &stamp),
         };
         push_staged(&mut freeing, prepared)?;
     }
@@ -321,11 +321,14 @@ fn start<'a>(owner: Owner<'a>, mod_id: &'a str, dir: PathBuf, manifest: Manifest
     Ok(freeing)
 }
 
-/// Steps 2 and 3 for a layer, a skin or a sound (ESPACE§5.4): **no skeleton**
-/// — nothing of it is read by the lists, its row keeps its name and notes —,
-/// so everything goes but the manifest.
+/// Steps 2 and 3 for a layer, a skin or a sound (ESPACE§5.4). A layer keeps
+/// the skeleton of its host's type (`kind`): a track layer often brings a
+/// whole layout, which the fiche must still list. A skin or a sound keeps
+/// nothing — its row keeps its name and notes —, so everything goes but the
+/// manifest.
 fn prepare_attached<'a>(
     cfg: &AppConfig,
+    kind: ModKind,
     owner: Owner<'a>,
     mod_id: &'a str,
     stamp: &str,
@@ -335,7 +338,11 @@ fn prepare_attached<'a>(
         .and_then(|p| crate::libpath::resolve(cfg.library_path.as_deref(), p))
         .ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    let mut manifest = Manifest::new(stamp.to_string(), mod_id.to_string(), skeleton::all_files(&dir));
+    let removed = match owner {
+        Owner::Layer(_) => skeleton::removable_files(kind, &dir),
+        _ => skeleton::all_files(&dir),
+    };
+    let mut manifest = Manifest::new(stamp.to_string(), mod_id.to_string(), removed);
     manifest.source_archive = match owner {
         Owner::Layer(l) => l.source_archive.clone(),
         Owner::Sub(s) => s.source_archive.clone(),
@@ -492,8 +499,10 @@ impl Freeing<'_> {
     fn complete(&self, conn: &Connection, kind: ModKind) -> Result<(u64, bool), String> {
         let (dir, mod_id) = (&self.dir, self.mod_id);
         let staging = self.staging();
-        let version = matches!(self.owner, Owner::Version(_));
-        if version {
+        // What keeps a skeleton (ESPACE§5.4): a version, and a layer, which
+        // keeps its host's.
+        let keeps_skeleton = matches!(self.owner, Owner::Version(_) | Owner::Layer(_));
+        if keeps_skeleton {
             copy_kept(dir, &staging);
         }
         let recycled = crate::maintenance::trash_or_delete(&staging)?;
@@ -507,7 +516,7 @@ impl Freeing<'_> {
             let Ok(rel) = entry.path().strip_prefix(dir) else {
                 continue;
             };
-            if version && entry.file_type().is_file() && skeleton::is_reduced(kind, rel) {
+            if keeps_skeleton && entry.file_type().is_file() && skeleton::is_reduced(kind, rel) {
                 match skeleton::reduce_in_place(entry.path()) {
                     Ok(gain) => reduced += gain,
                     Err(e) => log::warn!("showcase {mod_id}: {} not reduced: {e}", entry.path().display()),

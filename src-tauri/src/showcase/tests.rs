@@ -831,6 +831,89 @@ fn a_layer_onto_a_showcase_track_stays_a_layer() {
     );
 }
 
+/// The layouts the fiche of a track lists, by folder.
+fn listed_layouts(conn: &Connection, cfg: &AppConfig, id: &str) -> Vec<String> {
+    let detail = crate::library::detail(conn, cfg, id).unwrap().expect("the track");
+    detail
+        .track
+        .expect("a track detail")
+        .layouts
+        .into_iter()
+        .map(|l| l.id)
+        .collect()
+}
+
+/// Rule (ESPACE§5.4): a layer keeps its host's skeleton. The layout a layer
+/// brings stays on the fiche of a track in the showcase, with its name and a
+/// reduced image; once the track has its files again and the layer still has
+/// not, the layout leaves the list — it cannot be raced.
+#[test]
+fn a_layout_brought_by_a_layer_stays_on_the_fiche_of_a_track_in_the_showcase() {
+    let base = crate::testutil::temp_dir("showcase-layer-layout");
+    std::fs::create_dir_all(base.join("ac/content/tracks")).unwrap();
+    std::fs::create_dir_all(base.join("lib")).unwrap();
+    let db = overlay::Db(std::sync::Mutex::new(
+        overlay::open(&base.join("overlay.sqlite")).unwrap(),
+    ));
+    let cfg = AppConfig {
+        ac_install_path: Some(base.join("ac")),
+        library_path: Some(base.join("lib")),
+        ..Default::default()
+    };
+    let track = base.join("src/shannon");
+    write(&track, "ui/gp/ui_track.json", br#"{"name":"Shannonville GP"}"#);
+    write(&track, "gp/models.ini", b"[MODEL_0]");
+    write(&track, "shannon.kn5", &[3; 4000]);
+    assert_eq!(import(&db, &cfg, &base.join("src"))[0].outcome, "IMPORT");
+    let layer = base.join("layer/shannon");
+    write(&layer, "club/models.ini", b"[MODEL_0]");
+    write(&layer, "club.kn5", &[4; 3000]);
+    write(&layer, "ui/club/ui_track.json", br#"{"name":"Shannonville Club"}"#);
+    photo(&layer.join("ui/club/preview.png"), 1022, 575);
+    assert_eq!(import(&db, &cfg, &base.join("layer"))[0].outcome, "EXTENSION");
+
+    let conn = db.0.lock().unwrap();
+    assert!(
+        listed_layouts(&conn, &cfg, "shannon").contains(&"club".to_string()),
+        "fixture: the layer brings club"
+    );
+    to_showcase(&conn, &cfg, "shannon", None, true).unwrap();
+
+    let row = overlay::list_layers(&conn, "shannon", crate::layers::HostKind::Track)
+        .unwrap()
+        .remove(0);
+    assert!(row.is_skeleton(), "the layer followed its track");
+    let dir = crate::libpath::resolve(cfg.library_path.as_deref(), &row.library_path).unwrap();
+    assert_eq!(
+        files_of(&dir),
+        vec![".pitbox-vitrine.json", "ui/club/preview.png", "ui/club/ui_track.json"],
+        "the layer keeps what a track keeps, and nothing else"
+    );
+    assert!(
+        image::image_dimensions(dir.join("ui/club/preview.png")).unwrap().0 <= 480,
+        "its preview reduced like the track's own"
+    );
+    assert!(
+        listed_layouts(&conn, &cfg, "shannon").contains(&"club".to_string()),
+        "the layout the layer brings is still on the fiche"
+    );
+    assert!(
+        overlay::active_layers(&conn, "shannon", crate::layers::HostKind::Track)
+            .unwrap()
+            .is_empty(),
+        "and still never composed"
+    );
+    drop(conn);
+
+    // The track comes back, the layer does not.
+    assert_eq!(import(&db, &cfg, &base.join("src"))[0].outcome, "REHYDRATED");
+    let conn = db.0.lock().unwrap();
+    assert!(
+        !listed_layouts(&conn, &cfg, "shannon").contains(&"club".to_string()),
+        "a layout that cannot be raced leaves the list of a track that can"
+    );
+}
+
 /// A car imported with a layer (a fragment: a skins folder without a model)
 /// and an attached skin pack, all through the real import.
 fn car_with_attached(tag: &str) -> (crate::testutil::TempDir, overlay::Db, AppConfig) {
@@ -892,8 +975,8 @@ fn layers_and_attached_skins_follow_their_mod() {
     assert!(layer.is_skeleton(), "the layer is in the showcase");
     assert_eq!(
         files_of(&layer_dir),
-        vec![".pitbox-vitrine.json"],
-        "only its manifest is left"
+        vec![".pitbox-vitrine.json", "ui/ui_car.json"],
+        "its manifest, and what its car keeps (ESPACE§5.4): the texture pack is gone"
     );
     let skin = overlay::get_sub_mod(&conn, &skin.id).unwrap().unwrap();
     assert!(skin.is_skeleton(), "the attached skin too");

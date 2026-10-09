@@ -145,6 +145,33 @@ de reprendre. En cas d'écart, la spec fait foi.
       du même cas (une communauté et son propre lanceur) : à vérifier, le
       journal du jeu (`Documents/Assetto Corsa/logs/log.txt`) donne la raison.
 
+- [ ] **Export / import de la bibliothèque (`EXPORT§`) — le lot A est fait,
+      l'export lui-même reste.** Élargi le 2026-10-09 : l'export emportera
+      aussi apps, mannequins, tenues et autres mods, ce qui rouvrait la
+      question de la vitrine pour eux. Fait (lot A) : l'**état** sans fichiers
+      des apps et des autres mods (ESPACE§5.6) — garde-fou, profils,
+      récupération par réimport dans la même ligne, pastille et facette — et le
+      **squelette des couches** (ESPACE§5.4). **Reste : EXPORT lot 1 entier**
+      (`transfer.rs`, les deux parcours, l'étape de l'assistant), dans l'ordre
+      de `SPEC-export-bibliotheque.md` §9.
+      - **Rien ne produit encore l'état sans fichiers d'une app ou d'un autre
+        mod** : seul `testutil::free_addon` le fait, dans les tests. L'export
+        devra faire la même chose à l'arrivée : manifeste écrit avec
+        `skeleton::all_files`, `content_state = 'skeleton'`, et pour un autre
+        mod `is_active = 0` et `junctions = '[]'`.
+      - **L'id d'un autre mod vient du nom de l'archive** (`<archive>__<chemin
+        dedans>` pour un reste, `others::other_id`). La récupération ne
+        retrouve donc la ligne que si l'archive réimportée porte le même nom ;
+        une archive renommée crée une seconde ligne. Même limite pour une
+        couche, retrouvée par son archive.
+      - **Une couche partie en vitrine avant le 2026-10-09 n'a que son
+        manifeste** : les layouts qu'elle apportait restent absents de la
+        fiche de son circuit tant qu'elle n'est pas récupérée. Pas de
+        rattrapage possible, les fichiers sont partis.
+      - **Piège évité** : `import_other` ignorait tout id déjà connu (§7.3) ;
+        réimporter l'archive d'un autre mod sans fichiers n'aurait rien
+        ramené, en silence.
+
 - [ ] **Dossier du jeu — lot 1 livré, le lot 2 (les tailles) reste.**
       Livré (`SPEC-etat-dossier.md`) : l'onglet Fichiers › Dossier du jeu,
       son scan (`src-tauri/src/gamestate/`), le partage de l'Atelier en

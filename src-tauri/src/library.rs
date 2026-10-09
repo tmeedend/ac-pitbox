@@ -522,12 +522,16 @@ fn entity_dirs(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Vec<PathBuf> {
 
 /// The active layers' folders of a mod, the one that wins first - the top of
 /// its composition stack, without the mod's own folder.
+///
+/// A layer in the showcase keeps its host's skeleton (ESPACE§5.4). It is read
+/// with a host in the showcase, whose own skeleton is read the same way: the
+/// layout a layer brings stays on the fiche. With a host that has its files it
+/// is not — what it would add cannot be raced.
 fn layer_dirs(conn: &Connection, cfg: &AppConfig, m: &ModRow) -> Vec<PathBuf> {
     let mut dirs: Vec<PathBuf> = overlay::list_layers(conn, &m.id_interne, ModKind::from_column(&m.kind).into())
         .unwrap_or_default()
         .into_iter()
-        // A layer in the showcase has only its manifest (ESPACE§5.4).
-        .filter(|l| l.is_active && !l.is_skeleton())
+        .filter(|l| l.is_active && (m.showcase || !l.is_skeleton()))
         .filter_map(|l| crate::libpath::resolve(cfg.library_path.as_deref(), &l.library_path))
         .collect();
     // `list_layers` trie par priorité **croissante** et c'est la plus haute qui
