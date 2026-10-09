@@ -799,7 +799,8 @@
       "EXTENSION_ADDED": "Extension",
       "TECH_EDITED": "Fiche technique",
       "SHOWCASE": "Mise en vitrine",
-      "REHYDRATED": "Fichiers récupérés"
+      "REHYDRATED": "Fichiers récupérés",
+      "TRANSFER": "Transfert"
     },
     "imported": "depuis {archive}",
     "updated": "nouvelle version {version}",
@@ -809,7 +810,8 @@
     "extensionAdded": "couche depuis {archive} ({added} ajoutés, {overwritten} écrasés)",
     "techEdited": "modifiée ({fields})",
     "showcased": "{size} libérés",
-    "rehydrated": "fichiers récupérés"
+    "rehydrated": "fichiers récupérés",
+    "transferred": "exporté depuis une autre installation"
   },
   "modpanel": {
     "ctxOpenDetail": "Ouvrir la page de détails",
@@ -1056,7 +1058,9 @@
     "profile_rich": "Soigné",
     "profileWhat_rich": "Aperçu 3D, plus des vignettes régénérées pour toute la bibliothèque — même cadrage, même éclairage.",
     "profileCost_rich": "Cache : 4 Go · vignettes : environ {size} Mo, générées au fil de la navigation.",
-    "profileLater": "Modifiable à tout moment dans les réglages."
+    "profileLater": "Modifiable à tout moment dans les réglages.",
+    "transferIntro": "Vous avez un export Pit Box ? Importez-le pour retrouver votre bibliothèque.",
+    "transferImport": "Importer un export…"
   },
   "maintenance": {
     "subtitle": "Détecte les mods cassés (fichiers manquants) et les junctions orphelines. Rien n'est supprimé sans ton action.",
@@ -1700,7 +1704,11 @@
     "logoFormat": "Un logo doit être une image PNG ou SVG.",
     "logoTooSmall": "Ce PNG est trop petit : au moins 64 px sur son plus petit côté.",
     "updateRegistryUnavailable": "Le registre des mises à jour ne répond pas pour le moment. Réessaie plus tard.",
-    "updateDownloadFailed": "Le téléchargement de la mise à jour s'est interrompu. Réessaie."
+    "updateDownloadFailed": "Le téléchargement de la mise à jour s'est interrompu. Réessaie.",
+    "transferNotAnExport": "Ce fichier n'est pas un export Pit Box.",
+    "transferIncompatible": "Cet export ne peut pas être lu par cette version de Pit Box : mettez-la à jour.",
+    "transferNotEmpty": "L'import d'une bibliothèque ne se fait que dans une installation vide.",
+    "transferFolderNotEmpty": "Le dossier de la bibliothèque contient déjà des mods : l'import d'une bibliothèque ne se fait que dans un dossier vide."
   },
   "pack": {
     "tabMembers": "Mods",
@@ -2422,5 +2430,49 @@
     "recoveredMany": "Fichiers récupérés pour {count} mod(s)",
     "recoverOnPage": "le registre propose une page, pas une archive",
     "recoverManual": "pas de téléchargement direct"
+  },
+  "transfer": {
+    "title": "Transférer la bibliothèque",
+    "hint": "Un fichier de quelques Mo qui refait cette bibliothèque sur une autre machine : les mods en vitrine, vos notes, le classement, les sessions et les préférences.",
+    "export": "Exporter…",
+    "import": "Importer…",
+    "exportTitle": "Exporter la bibliothèque",
+    "exportGo": "Exporter…",
+    "exporting": "Export en cours…",
+    "exportDone": "Bibliothèque exportée ({size})",
+    "openFolder": "Ouvrir le dossier",
+    "fileFilter": "Export Pit Box",
+    "estimate": "Environ {size}.",
+    "notExported": "Le contenu des mods ne part pas : ils arriveront en vitrine, apps et compléments compris.",
+    "contentNote": "Ce fichier contient vos notes et les images des mods (celles de leurs auteurs), mais aucun fichier jouable.",
+    "partLibrary": "Bibliothèque",
+    "partClassification": "Classement",
+    "partSessions": "Sessions et grilles",
+    "partProfiles": "Profils",
+    "partPreferences": "Préférences",
+    "whatLibrary": "{mods} mods, {layers} couches, {addons} apps et compléments",
+    "whatStock": "{count} contenus du jeu annotés",
+    "whatClassification": "Règles de tags, familles, marques, pays et logos",
+    "whatSessions": "{sessions} sessions, {grids} grilles",
+    "whatProfiles": "{count} profils",
+    "whatPreferences": "Affichage, colonnes et musique, sans les dossiers de cette machine",
+    "profilesNeedLibrary": "Les profils nomment des mods : ils demandent la bibliothèque.",
+    "importTitle": "Importer une bibliothèque",
+    "openTitle": "Choisir un export Pit Box",
+    "exportedOn": "Exporté le {date} par Pit Box {version}.",
+    "weighed": "Cette bibliothèque pesait {size} ; ce fichier en fait {file}.",
+    "importGo": "Importer",
+    "importing": "Import en cours…",
+    "refuseNotEmpty": "Cette installation contient déjà {count} mods ou compléments. L'import d'une bibliothèque ne se fait que dans une installation vide.",
+    "refuseNewer": "Cet export vient de Pit Box {version}. Mettez Pit Box à jour pour l'importer.",
+    "refuseFormat": "Cet export a été écrit par une version plus récente de Pit Box. Mettez Pit Box à jour pour l'importer.",
+    "refusePaths": "Réglez d'abord le dossier du jeu et la bibliothèque, dans les Réglages.",
+    "importedMods": "{count} mods sont en vitrine : récupérez leurs fichiers pour les utiliser.",
+    "importedAddons": "{count} apps et compléments sont en vitrine.",
+    "stockApplied": "Vos notes sur {count} contenus du jeu sont reprises.",
+    "stockMissing": "{count} contenus du jeu absents de cette installation (DLC ?) : leurs notes n'ont pas été reprises.",
+    "presetsRenamed": "{count} sessions portaient un nom déjà pris ici : un numéro y a été ajouté.",
+    "activeAtExport": "{count} étaient actifs à l'export.",
+    "openLibrary": "Ouvrir la bibliothèque"
   }
 }

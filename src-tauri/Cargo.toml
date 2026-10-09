@@ -118,6 +118,7 @@ pitbox-catalog = { path = "crates/catalog" }
 # connected, a slot freed) when Pit Box is not the window in front — the
 # app's own notification stack only shows while one looks at it.
 tauri-plugin-notification = "2"
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 # Lecture registre Windows uniquement (détection du Mode développeur, §12) —
 # déjà présent transitivement via tauri, pas une dépendance de plus en pratique.

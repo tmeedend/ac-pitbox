@@ -10,6 +10,7 @@
   import RecoverToast from "./RecoverToast.svelte";
   import RepairToast from "./RepairToast.svelte";
   import SurveyToast from "./SurveyToast.svelte";
+  import TransferToast from "./TransferToast.svelte";
   import CatalogToast from "./CatalogToast.svelte";
   import TechSheetToast from "./TechSheetToast.svelte";
   import ImportToasts from "./ImportToasts.svelte";
@@ -31,6 +32,7 @@
   <RecoverToast />
   <RepairToast />
   <SurveyToast />
+  <TransferToast />
   <CatalogToast />
   <TechSheetToast />
   <ImportToasts />

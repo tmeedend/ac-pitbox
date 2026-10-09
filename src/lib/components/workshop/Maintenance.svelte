@@ -19,7 +19,11 @@
   import { confirm, open as openDialog, save } from "@tauri-apps/plugin-dialog";
   import { exportFolderSurvey, exportSurvey } from "$lib/workshop/rules";
   import { runSurvey, surveyState } from "$lib/workshop/surveyState.svelte";
+  import { exportState } from "$lib/workshop/transferState.svelte";
+  import { FEATURE_LIBRARY_TRANSFER } from "$lib/features";
   import { t } from "$lib/i18n/index.svelte";
+  import ExportDialog from "./ExportDialog.svelte";
+  import ImportDialog from "./ImportDialog.svelte";
 
   import { errorText } from "$lib/errors";
   let report = $state<MaintenanceReport | null>(null);
@@ -72,6 +76,21 @@
     });
     if (!path) return;
     await runSurvey(() => (root ? exportFolderSurvey(root, path) : exportSurvey(path)));
+  }
+
+  // Transferring the library (EXPORT§7.1): next to the survey, the other
+  // file the library produces. Both journeys are dialogs of their own.
+  let exportOpen = $state(false);
+  let importPath = $state<string | null>(null);
+
+  async function chooseImport() {
+    const path = await openDialog({
+      title: t("transfer.openTitle"),
+      multiple: false,
+      directory: false,
+      filters: [{ name: t("transfer.fileFilter"), extensions: ["pitbox"] }],
+    });
+    if (typeof path === "string") importPath = path;
   }
 
   async function doIndexStock() {
@@ -340,6 +359,21 @@
       >
     </div>
   </section>
+
+  {#if FEATURE_LIBRARY_TRANSFER}
+    <section class="stock-sec">
+      <h3>{t("transfer.title")}</h3>
+      <p class="hint">{t("transfer.hint")}</p>
+      <div class="stock-row">
+        <button class="btn" type="button" disabled={exportState.running} onclick={() => (exportOpen = true)}>
+          {exportState.running ? t("transfer.exporting") : t("transfer.export")}
+        </button>
+        <button class="btn" type="button" onclick={chooseImport}>{t("transfer.import")}</button>
+      </div>
+    </section>
+    {#if exportOpen}<ExportDialog onclose={() => (exportOpen = false)} />{/if}
+    {#if importPath}<ImportDialog path={importPath} onclose={() => (importPath = null)} />{/if}
+  {/if}
 
   {#if report}
     {#if isClean}

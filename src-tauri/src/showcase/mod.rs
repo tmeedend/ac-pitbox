@@ -49,8 +49,8 @@ pub struct ShowcaseOutcome {
 }
 
 /// The preview a version shows on its own: its first skin's for a car, its
-/// default layout's for a track.
-fn own_preview(kind: ModKind, dir: &Path) -> Option<PathBuf> {
+/// default layout's for a track. The export freezes the same one (EXPORT§4.3).
+pub(crate) fn own_preview(kind: ModKind, dir: &Path) -> Option<PathBuf> {
     match kind {
         ModKind::Car => crate::inspect::preview_path(kind, dir),
         ModKind::Track => crate::inspect::track_preview(dir),

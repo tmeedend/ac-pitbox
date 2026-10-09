@@ -238,3 +238,21 @@ export function removeUiPref(key: string): void {
     return next;
   });
 }
+
+/** Reads the file again after something else wrote it — a library import
+ * (EXPORT§7.3) lays the other machine's `ui_prefs.json` in place, and this
+ * module's copy would put the old one back at its next write. Queued like a
+ * write: one waiting before it lands first, none after it can bring back the
+ * old content. A failed read keeps the copy it has. */
+export function reloadUiPrefs(): Promise<void> {
+  return untrack(() => {
+    writing = writing
+      .then(async () => {
+        cache = await invoke<Record<string, string>>("get_ui_prefs");
+      })
+      .catch((e: unknown) => {
+        console.error("ui_prefs: reload abandoned", e);
+      });
+    return writing;
+  });
+}

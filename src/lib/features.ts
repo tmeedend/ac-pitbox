@@ -48,3 +48,21 @@
  * interrupteur qui détruit en passant à `false` n'est plus un interrupteur.
  */
 export const FEATURE_GRID_THUMBS = false;
+
+/**
+ * **Export and import of the library** (EXPORT§).
+ *
+ * On in development (`npm run tauri dev`), off in a built installer — the
+ * one switch here that is not a constant: the feature is complete, and
+ * must be tried on real libraries before anyone else sees it. Once it is,
+ * this becomes `true`.
+ *
+ * **What `false` turns off**, the only two places that exposed it:
+ *
+ *  - the « Transférer la bibliothèque » section of Fichiers › Maintenance
+ *    (`Maintenance.svelte`);
+ *  - the import step of the setup wizard (`SetupWizard.svelte`).
+ *
+ * The backend commands stay registered: nothing calls them without a screen.
+ */
+export const FEATURE_LIBRARY_TRANSFER: boolean = import.meta.env.DEV;

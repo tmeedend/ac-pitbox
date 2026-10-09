@@ -799,7 +799,8 @@
       "EXTENSION_ADDED": "Extension",
       "TECH_EDITED": "Tech sheet",
       "SHOWCASE": "In the showcase",
-      "REHYDRATED": "Files recovered"
+      "REHYDRATED": "Files recovered",
+      "TRANSFER": "Transfer"
     },
     "imported": "from {archive}",
     "updated": "new version {version}",
@@ -809,7 +810,8 @@
     "extensionAdded": "layer from {archive} ({added} added, {overwritten} overwritten)",
     "techEdited": "edited ({fields})",
     "showcased": "{size} freed",
-    "rehydrated": "files recovered"
+    "rehydrated": "files recovered",
+    "transferred": "exported from another installation"
   },
   "modpanel": {
     "ctxOpenDetail": "Open detail page",
@@ -1056,7 +1058,9 @@
     "profile_rich": "Rich",
     "profileWhat_rich": "3D preview, plus regenerated thumbnails for the whole library — same framing, same lighting.",
     "profileCost_rich": "Cache: 4 GB · thumbnails: about {size} MB, produced as you browse.",
-    "profileLater": "You can change this at any time in the settings."
+    "profileLater": "You can change this at any time in the settings.",
+    "transferIntro": "Do you have a Pit Box export? Import it to get your library back.",
+    "transferImport": "Import an export…"
   },
   "maintenance": {
     "subtitle": "Detects broken mods (missing files) and orphan junctions. Nothing is deleted without your action.",
@@ -1700,7 +1704,11 @@
     "logoFormat": "A logo must be a PNG or SVG image.",
     "logoTooSmall": "This PNG is too small: at least 64 px on its smaller side.",
     "updateRegistryUnavailable": "The update registry can't be reached right now. Try again later.",
-    "updateDownloadFailed": "The download of the update was interrupted. Try again."
+    "updateDownloadFailed": "The download of the update was interrupted. Try again.",
+    "transferNotAnExport": "This file is not a Pit Box export.",
+    "transferIncompatible": "This version of Pit Box cannot read this export: update it.",
+    "transferNotEmpty": "A library is only imported into an empty installation.",
+    "transferFolderNotEmpty": "The library folder already holds mods: a library is only imported into an empty folder."
   },
   "pack": {
     "tabMembers": "Mods",
@@ -2422,5 +2430,49 @@
     "recoveredMany": "Files recovered for {count} mod(s)",
     "recoverOnPage": "the registry offers a page, not an archive",
     "recoverManual": "no direct download"
+  },
+  "transfer": {
+    "title": "Transfer the library",
+    "hint": "A file of a few MB that rebuilds this library on another machine: the mods in the showcase, your notes, the classification, the sessions and the preferences.",
+    "export": "Export…",
+    "import": "Import…",
+    "exportTitle": "Export the library",
+    "exportGo": "Export…",
+    "exporting": "Exporting…",
+    "exportDone": "Library exported ({size})",
+    "openFolder": "Open the folder",
+    "fileFilter": "Pit Box export",
+    "estimate": "About {size}.",
+    "notExported": "The mods' content does not leave: they arrive in the showcase, apps and add-ons included.",
+    "contentNote": "This file holds your notes and the mods' images (their authors'), but no playable file.",
+    "partLibrary": "Library",
+    "partClassification": "Classification",
+    "partSessions": "Sessions and grids",
+    "partProfiles": "Profiles",
+    "partPreferences": "Preferences",
+    "whatLibrary": "{mods} mods, {layers} layers, {addons} apps and add-ons",
+    "whatStock": "{count} pieces of game content annotated",
+    "whatClassification": "Tag rules, families, brands, countries and logos",
+    "whatSessions": "{sessions} sessions, {grids} grids",
+    "whatProfiles": "{count} profiles",
+    "whatPreferences": "Display, columns and music, without this machine's folders",
+    "profilesNeedLibrary": "Profiles name mods: they need the library.",
+    "importTitle": "Import a library",
+    "openTitle": "Choose a Pit Box export",
+    "exportedOn": "Exported on {date} by Pit Box {version}.",
+    "weighed": "This library weighed {size}; this file is {file}.",
+    "importGo": "Import",
+    "importing": "Importing…",
+    "refuseNotEmpty": "This installation already holds {count} mods or add-ons. A library is only imported into an empty installation.",
+    "refuseNewer": "This export comes from Pit Box {version}. Update Pit Box to import it.",
+    "refuseFormat": "This export was written by a newer version of Pit Box. Update Pit Box to import it.",
+    "refusePaths": "Set the game folder and the library first, in the Settings.",
+    "importedMods": "{count} mods are in the showcase: recover their files to use them.",
+    "importedAddons": "{count} apps and add-ons are in the showcase.",
+    "stockApplied": "Your notes on {count} pieces of game content are back.",
+    "stockMissing": "{count} pieces of game content are missing from this installation (DLC?): their notes were not brought back.",
+    "presetsRenamed": "{count} sessions had a name already taken here: a number was added to it.",
+    "activeAtExport": "{count} were active at export.",
+    "openLibrary": "Open the library"
   }
 }

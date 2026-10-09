@@ -86,6 +86,7 @@ mod testutil;
 mod thumbnails;
 mod timing;
 mod trackstates;
+mod transfer;
 mod ui_prefs;
 mod uijson;
 mod usermeta;
@@ -490,6 +491,10 @@ pub fn run() {
             commands::bulk_ops::bulk_showcase,
             commands::showcase::showcase_plan,
             commands::showcase::showcase_sources,
+            commands::transfer::transfer_estimate,
+            commands::transfer::transfer_export,
+            commands::transfer::transfer_inspect,
+            commands::transfer::transfer_import,
             commands::bulk_ops::bulk_export,
             commands::addons::index_stock_content,
             commands::addons::list_sub_mods,

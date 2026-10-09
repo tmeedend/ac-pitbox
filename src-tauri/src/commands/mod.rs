@@ -39,6 +39,7 @@ pub mod showcase;
 pub mod techsheet;
 pub mod timing;
 pub mod trackstate;
+pub mod transfer;
 pub mod ui_prefs;
 pub mod updates;
 pub mod usermeta;

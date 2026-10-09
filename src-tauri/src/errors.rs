@@ -150,3 +150,10 @@ pub const PREVIEW_SUPERSEDED: &str = "errors.previewSuperseded";
 // breaks off means "try that one again".
 pub const UPDATE_REGISTRY_UNAVAILABLE: &str = "errors.updateRegistryUnavailable";
 pub const UPDATE_DOWNLOAD_FAILED: &str = "errors.updateDownloadFailed";
+// Library transfer (EXPORT§7.3). The inspection says the same refusals with
+// their count and version (`transfer::Refusal`); these are what the import
+// itself returns when one is met anyway.
+pub const TRANSFER_NOT_AN_EXPORT: &str = "errors.transferNotAnExport";
+pub const TRANSFER_INCOMPATIBLE: &str = "errors.transferIncompatible";
+pub const TRANSFER_NOT_EMPTY: &str = "errors.transferNotEmpty";
+pub const TRANSFER_FOLDER_NOT_EMPTY: &str = "errors.transferFolderNotEmpty";

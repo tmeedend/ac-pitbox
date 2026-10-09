@@ -45,6 +45,12 @@ fn is_own_file(rel: &str) -> bool {
     rel == MANIFEST_NAME || IMAGE_EXTENSIONS.iter().any(|ext| rel == format!("{IMAGE_STEM}.{ext}"))
 }
 
+/// Whether `rel`, relative to a folder, is one of the showcase's own files at
+/// its root — the manifest or the frozen image —, not one of the mod's.
+pub fn is_showcase_file(rel: &Path) -> bool {
+    is_own_file(&normalized(rel))
+}
+
 /// Whether `rel`, a file of a car or track folder, stays in its skeleton
 /// (ESPACE§3.1). **The only definition of a skeleton**, for the showcase as
 /// for the export.

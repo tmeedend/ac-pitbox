@@ -81,7 +81,9 @@ pub fn run_startup_backup(app: &AppHandle) {
     }
 }
 
-fn backup_now(base: &Path, presets: Option<&Path>) -> Result<(), String> {
+/// The startup net's copy, taken now: also the first step of a library
+/// import (EXPORT§7.3), even into an empty installation.
+pub(crate) fn backup_now(base: &Path, presets: Option<&Path>) -> Result<(), String> {
     let root = backups_root(base);
     let stamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
     let dest = root.join(&stamp);

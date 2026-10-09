@@ -14,7 +14,9 @@
   import { listLibrary } from "$lib/library/library";
   import { savePreview3dPrefs, setPreview3dEnabled, setPreview3dValue } from "$lib/preview3d/preview3dPrefs.svelte";
   import { saveGridThumbPrefs, setGridThumbsEnabled } from "$lib/gridthumbs/gridThumbPrefs.svelte";
-  import { FEATURE_GRID_THUMBS } from "$lib/features";
+  import { FEATURE_GRID_THUMBS, FEATURE_LIBRARY_TRANSFER } from "$lib/features";
+  import { open as openDialog } from "@tauri-apps/plugin-dialog";
+  import ImportDialog from "$lib/components/workshop/ImportDialog.svelte";
 
   import { errorText } from "$lib/errors";
   interface Props {
@@ -62,24 +64,52 @@
     error = "";
     try {
       await saveConfig(config);
-      // Sans les vignettes régénérées, la page des profils n'a plus de question
-      // à poser : ce qu'elle réglait d'autre — aperçu 3D, plafond du cache — a
-      // des défauts qui **sont** ceux du profil « Normal » qu'elle
-      // présélectionnait (`features.ts`).
-      if (!FEATURE_GRID_THUMBS) {
-        ondone();
+      // The paths are set: the one moment an export can be imported into an
+      // installation that is sure to be empty (EXPORT§7.1).
+      if (FEATURE_LIBRARY_TRANSFER) {
+        step = "transfer";
         return;
       }
-      // Le contenu de base est indexé par `save_config` : c'est seulement
-      // maintenant qu'on sait combien de voitures cette installation contient,
-      // et le choix de profil ne se pose **qu'avec ce chiffre** (GRILLE§5.5).
-      carCount = (await listLibrary().catch(() => [])).filter((c) => c.kind === "Car").length;
-      step = "profile";
+      await afterPaths();
     } catch (e) {
       error = errorText(e);
     } finally {
       saving = false;
     }
+  }
+
+  /** What follows the paths, once the transfer step is passed. */
+  async function afterPaths() {
+    // Sans les vignettes régénérées, la page des profils n'a plus de question
+    // à poser : ce qu'elle réglait d'autre — aperçu 3D, plafond du cache — a
+    // des défauts qui **sont** ceux du profil « Normal » qu'elle
+    // présélectionnait (`features.ts`).
+    if (!FEATURE_GRID_THUMBS) {
+      ondone();
+      return;
+    }
+    // Le contenu de base est indexé par `save_config` : c'est seulement
+    // maintenant qu'on sait combien de voitures cette installation contient,
+    // et le choix de profil ne se pose **qu'avec ce chiffre** (GRILLE§5.5).
+    carCount = (await listLibrary().catch(() => [])).filter((c) => c.kind === "Car").length;
+    step = "profile";
+  }
+
+  // --- Import d'un export (EXPORT§7.1) --------------------------
+  //
+  // A successful import reloads the app (`ImportDialog`), which then opens on
+  // the library it brought: the profile page is not shown after it, and its
+  // defaults apply.
+  let importPath = $state<string | null>(null);
+
+  async function chooseImport() {
+    const path = await openDialog({
+      title: t("transfer.openTitle"),
+      multiple: false,
+      directory: false,
+      filters: [{ name: t("transfer.fileFilter"), extensions: ["pitbox"] }],
+    });
+    if (typeof path === "string") importPath = path;
   }
 
   // --- Profil de rendu (GRILLE§5.5) ---------------------------
@@ -95,7 +125,7 @@
   // propre bibliothèque, présélectionner le milieu, et dire que c'est
   // modifiable — cette dernière phrase transforme une décision en préférence et
   // divise le poids ressenti de l'écran.
-  type Step = "paths" | "profile";
+  type Step = "paths" | "transfer" | "profile";
   const PROFILES = ["light", "normal", "rich"] as const;
   type Profile = (typeof PROFILES)[number];
 
@@ -140,7 +170,16 @@
         </div>
       </header>
 
-      {#if step === "profile"}
+      {#if step === "transfer"}
+        <p class="intro">{t("setup.transferIntro")}</p>
+        <footer>
+          <button class="btn" type="button" onclick={chooseImport}>{t("setup.transferImport")}</button>
+          <button class="btn btn-primary" type="button" onclick={afterPaths}>
+            {FEATURE_GRID_THUMBS ? t("setup.next") : t("setup.finish")}
+          </button>
+        </footer>
+        {#if importPath}<ImportDialog path={importPath} onclose={() => (importPath = null)} />{/if}
+      {:else if step === "profile"}
         <p class="intro">{t("setup.profileIntro", { count: count(carCount) })}</p>
 
         <div class="profiles">
@@ -196,7 +235,11 @@
           onclick={finish}
           disabled={!validation?.is_valid || saving}
         >
-          {saving ? t("settings.saving") : FEATURE_GRID_THUMBS ? t("setup.next") : t("setup.finish")}
+          {saving
+            ? t("settings.saving")
+            : FEATURE_GRID_THUMBS || FEATURE_LIBRARY_TRANSFER
+              ? t("setup.next")
+              : t("setup.finish")}
         </button>
       </footer>
       {/if}
@@ -328,5 +371,6 @@
     border-top: 1px solid var(--line);
     display: flex;
     justify-content: flex-end;
+    gap: 8px;
   }
 </style>
