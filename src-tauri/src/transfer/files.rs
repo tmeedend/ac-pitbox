@@ -481,97 +481,107 @@ fn read_json(path: &Path) -> Option<serde_json::Value> {
 
 /// The settings of the parts asked for, file by file (EXPORT§5.2).
 pub(super) fn settings(places: &Places, parts: &[Part]) -> Result<Settings, String> {
-    let dir = &places.config_dir;
-    let mut entries = Vec::new();
-    let mut presets = 0;
-    let mut grids = 0;
-
+    let mut settings = Settings {
+        entries: Vec::new(),
+        presets: 0,
+        grids: 0,
+    };
     if parts.contains(&Part::Classification) {
-        for name in CLASSIFICATION_FILES {
-            let path = dir.join(name);
-            if path.is_file() {
-                entries.push(Entry::file(
-                    Part::Classification,
-                    format!("{CLASSIFICATION_PREFIX}{name}"),
-                    path,
-                ));
-            }
-        }
-        for path in flat_files(&dir.join(crate::logos::LOGOS_DIR)) {
-            if let Some(name) = logo_name(&path) {
-                entries.push(Entry::file(
-                    Part::Classification,
-                    format!("{CLASSIFICATION_PREFIX}{}/{name}", crate::logos::LOGOS_DIR),
-                    path,
-                ));
-            }
-        }
+        classification(&places.config_dir, &mut settings.entries);
     }
-
     if parts.contains(&Part::Sessions) {
-        let path = dir.join(GRIDS_FILE);
-        if let Some(value) = read_json(&path) {
-            grids = value.as_object().map_or(0, |o| o.len());
-            entries.push(Entry::file(
-                Part::Sessions,
-                format!("{SESSIONS_PREFIX}{GRIDS_FILE}"),
+        sessions(places, &mut settings);
+    }
+    if parts.contains(&Part::Preferences) {
+        preferences(&places.config_dir, &mut settings.entries)?;
+    }
+    Ok(settings)
+}
+
+/// The rules, the taxonomies, the logo choices and the user's own logos.
+fn classification(dir: &Path, out: &mut Vec<Entry>) {
+    for name in CLASSIFICATION_FILES {
+        let path = dir.join(name);
+        if path.is_file() {
+            out.push(Entry::file(
+                Part::Classification,
+                format!("{CLASSIFICATION_PREFIX}{name}"),
                 path,
             ));
         }
-        if let Some(presets_dir) = &places.presets_dir {
-            for path in flat_files(presets_dir) {
-                if let Some(name) = preset_name(&path) {
-                    entries.push(Entry::file(
-                        Part::Sessions,
-                        format!("{SESSIONS_PREFIX}presets/{name}"),
-                        path,
-                    ));
-                    presets += 1;
-                }
-            }
+    }
+    for path in flat_files(&dir.join(crate::logos::LOGOS_DIR)) {
+        if let Some(name) = logo_name(&path) {
+            out.push(Entry::file(
+                Part::Classification,
+                format!("{CLASSIFICATION_PREFIX}{}/{name}", crate::logos::LOGOS_DIR),
+                path,
+            ));
         }
     }
+}
 
-    if parts.contains(&Part::Preferences) {
-        // `prefs` alone: the six paths of `config.json` are this machine's (R2).
-        if let Some(prefs) = read_json(&dir.join(CONFIG_FILE)).and_then(|c| c.get("prefs").cloned()) {
-            let json = serde_json::to_vec_pretty(&prefs).map_err(|e| e.to_string())?;
-            entries.push(Entry::bytes(
-                Part::Preferences,
-                format!("{PREFERENCES_PREFIX}{PREFS_ENTRY}"),
-                json,
+/// The saved grids, and the sessions saved as Content Manager presets.
+fn sessions(places: &Places, settings: &mut Settings) {
+    let path = places.config_dir.join(GRIDS_FILE);
+    if let Some(value) = read_json(&path) {
+        settings.grids = value.as_object().map_or(0, |o| o.len());
+        settings.entries.push(Entry::file(
+            Part::Sessions,
+            format!("{SESSIONS_PREFIX}{GRIDS_FILE}"),
+            path,
+        ));
+    }
+    let Some(presets_dir) = &places.presets_dir else { return };
+    for path in flat_files(presets_dir) {
+        if let Some(name) = preset_name(&path) {
+            settings.entries.push(Entry::file(
+                Part::Sessions,
+                format!("{SESSIONS_PREFIX}presets/{name}"),
+                path,
             ));
+            settings.presets += 1;
         }
-        for name in PREFERENCE_FILES {
-            let path = dir.join(name);
-            if path.is_file() {
-                entries.push(Entry::file(
-                    Part::Preferences,
-                    format!("{PREFERENCES_PREFIX}{name}"),
-                    path,
-                ));
-            }
-        }
-        // The music's own folders are paths of this machine: they go, and the
-        // other one plays its defaults until the user picks its own.
-        if let Some(mut music) = read_json(&dir.join(MUSIC_FILE)) {
-            if let Some(o) = music.as_object_mut() {
-                o.insert("menu_folder".into(), serde_json::Value::Null);
-                o.insert("grid_folder".into(), serde_json::Value::Null);
-            }
-            let json = serde_json::to_vec_pretty(&music).map_err(|e| e.to_string())?;
-            entries.push(Entry::bytes(
+    }
+}
+
+/// The application's and the screens' preferences, without a path of this
+/// machine.
+fn preferences(dir: &Path, out: &mut Vec<Entry>) -> Result<(), String> {
+    // `prefs` alone: the six paths of `config.json` are this machine's (R2).
+    if let Some(prefs) = read_json(&dir.join(CONFIG_FILE)).and_then(|c| c.get("prefs").cloned()) {
+        let json = serde_json::to_vec_pretty(&prefs).map_err(|e| e.to_string())?;
+        out.push(Entry::bytes(
+            Part::Preferences,
+            format!("{PREFERENCES_PREFIX}{PREFS_ENTRY}"),
+            json,
+        ));
+    }
+    for name in PREFERENCE_FILES {
+        let path = dir.join(name);
+        if path.is_file() {
+            out.push(Entry::file(
                 Part::Preferences,
-                format!("{PREFERENCES_PREFIX}{MUSIC_FILE}"),
-                json,
+                format!("{PREFERENCES_PREFIX}{name}"),
+                path,
             ));
         }
     }
-    Ok(Settings {
-        entries,
-        presets,
-        grids,
-    })
+    // The music's own folders are paths of this machine: they go, and the
+    // other one plays its defaults until the user picks its own.
+    if let Some(mut music) = read_json(&dir.join(MUSIC_FILE)) {
+        if let Some(o) = music.as_object_mut() {
+            o.insert("menu_folder".into(), serde_json::Value::Null);
+            o.insert("grid_folder".into(), serde_json::Value::Null);
+        }
+        let json = serde_json::to_vec_pretty(&music).map_err(|e| e.to_string())?;
+        out.push(Entry::bytes(
+            Part::Preferences,
+            format!("{PREFERENCES_PREFIX}{MUSIC_FILE}"),
+            json,
+        ));
+    }
+    Ok(())
 }
 
 fn flat_files(dir: &Path) -> Vec<PathBuf> {

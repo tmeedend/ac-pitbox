@@ -241,41 +241,81 @@ fn every_table_of_the_base_is_classified() {
     }
 }
 
-/// Rule (EXPORT§8.4, the round trip): everything the user entered and decided
-/// comes back on another machine, every mod in the showcase, and the zip holds
-/// no playable file and no path of the machine it was made on.
-#[test]
-fn a_library_goes_to_another_installation_and_keeps_everything_but_its_files() {
-    let root = crate::testutil::temp_dir("transfer-roundtrip");
+/// The round trip of EXPORT§8.4, done once per test: the source exported
+/// whole, then imported into another installation that has the cup car and
+/// not the DLC, a preset of the same name already, and its own paths.
+struct Transferred {
+    _root: crate::testutil::TempDir,
+    src: Install,
+    dest: Install,
+    file: PathBuf,
+    exported: ExportReport,
+    imported: ImportReport,
+    sheet_before: crate::techsheet::TechSheet,
+}
+
+fn transferred(tag: &str) -> Transferred {
+    let root = crate::testutil::temp_dir(tag);
     let src = source(&root);
     let sheet_before = crate::techsheet::effective(&src.conn(), "lanzo").unwrap();
     let file = root.join("library.pitbox");
-    let report = export(&src.db, &src.cfg, &src.places, &Part::ALL, &file).unwrap();
-    assert_eq!(report.counts.cars, 2, "the managed car and the one installed by hand");
-    assert_eq!(report.counts.unmanaged, 1);
-    assert_eq!(report.counts.stock_with_user_data, 2);
-    assert_eq!(report.counts.apps, 1);
-    assert_eq!(report.counts.others, 1);
-    assert_eq!(report.counts.layers, 1);
-    assert_eq!(report.counts.sessions, 1);
-    assert_eq!(report.counts.grids, 1);
+    let exported = export(&src.db, &src.cfg, &src.places, &Part::ALL, &file).unwrap();
 
-    // Nothing playable, nothing of the machine (R1, R2).
-    let zipped = entries(&file);
+    let dest = Install::new(&root, "dest", &["ks_mazda_mx5_cup"]);
+    write(dest.places.presets_dir.as_ref().unwrap(), "Spa dusk.cmpreset", b"mine");
+    write(
+        &dest.places.config_dir,
+        "config.json",
+        serde_json::to_string(&serde_json::json!({ "library_path": dest.cfg.library_path, "prefs": {} }))
+            .unwrap()
+            .as_bytes(),
+    );
+    let inspection = inspect(&dest.conn(), &dest.cfg, &dest.places, &file).unwrap();
+    assert_eq!(inspection.refusal, None, "an empty installation takes it");
+    let imported = import(
+        &dest.db,
+        &dest.cfg,
+        &dest.places,
+        &crate::rules::default_rules(),
+        &file,
+        &Part::ALL,
+    )
+    .unwrap();
+    Transferred {
+        _root: root,
+        src,
+        dest,
+        file,
+        exported,
+        imported,
+        sheet_before,
+    }
+}
+
+/// Rule (EXPORT R1, R2): the export holds no playable file and no path of
+/// the machine it was made on — the skeletons and nothing heavier.
+#[test]
+fn the_export_holds_no_playable_file_and_no_path_of_the_machine() {
+    let t = transferred("transfer-zip");
+    let counts = &t.exported.counts;
+    assert_eq!(counts.cars, 2, "the managed car and the one installed by hand");
+    assert_eq!(counts.unmanaged, 1);
+    assert_eq!(counts.stock_with_user_data, 2);
+    assert_eq!((counts.apps, counts.others, counts.layers), (1, 1, 1));
+    assert_eq!((counts.sessions, counts.grids), (1, 1));
+
+    let zipped = entries(&t.file);
     for (name, _) in &zipped {
         let lower = name.to_lowercase();
         assert!(
-            !lower.ends_with(".kn5")
-                && !lower.ends_with(".acd")
-                && !lower.ends_with(".bank")
-                && !lower.ends_with(".dds"),
+            ![".kn5", ".acd", ".bank", ".dds"].iter().any(|e| lower.ends_with(e)),
             "no heavy file leaves: {name}"
         );
     }
     let machine: Vec<String> = [
-        src.cfg.ac_install_path.clone(),
-        src.cfg.library_path.clone(),
-        Some(src.places.config_dir.clone()),
+        t.src.cfg.ac_install_path.clone(),
+        t.src.cfg.library_path.clone(),
+        Some(t.src.places.config_dir.clone()),
     ]
     .into_iter()
     .flatten()
@@ -297,50 +337,27 @@ fn a_library_goes_to_another_installation_and_keeps_everything_but_its_files() {
         zipped.iter().any(|(n, _)| n.ends_with("ui/ui_car.json")),
         "the skeletons leave"
     );
+}
 
-    // The other machine has the cup car, not the DLC; one preset of the same
-    // name already; its own paths.
-    let dest = Install::new(&root, "dest", &["ks_mazda_mx5_cup"]);
-    write(dest.places.presets_dir.as_ref().unwrap(), "Spa dusk.cmpreset", b"mine");
-    write(
-        &dest.places.config_dir,
-        "config.json",
-        serde_json::to_string(&serde_json::json!({ "library_path": dest.cfg.library_path, "prefs": {} }))
-            .unwrap()
-            .as_bytes(),
-    );
-    let inspection = inspect(&dest.conn(), &dest.cfg, &dest.places, &file).unwrap();
-    assert_eq!(inspection.refusal, None, "an empty installation takes it");
-    let imported = import(
-        &dest.db,
-        &dest.cfg,
-        &dest.places,
-        &crate::rules::default_rules(),
-        &file,
-        &Part::ALL,
-    )
-    .unwrap();
-    assert_eq!(imported.mods, 2);
-    assert_eq!(imported.stock_applied, 1, "the note on the cup car is laid on it");
-    assert_eq!(
-        imported.stock_missing,
-        vec!["ks_ferrari_f2004"],
-        "the DLC note is named, not lost"
-    );
-    assert_eq!(imported.presets_renamed, 1);
-
-    let conn = dest.conn();
+/// Rule (EXPORT§4, §8.4): what the user entered and decided comes back on the
+/// other machine, every mod in the showcase with its skeleton, and the tech
+/// sheet without reading a single file (FICHE§9.4).
+#[test]
+fn what_the_user_entered_comes_back_and_every_mod_is_in_the_showcase() {
+    let t = transferred("transfer-mods");
+    assert_eq!(t.imported.mods, 2);
+    let conn = t.dest.conn();
     let lanzo = overlay::get_mod(&conn, "lanzo").unwrap().expect("the managed car");
     assert!(lanzo.showcase, "every mod arrives in the showcase");
     assert_eq!(lanzo.display_name_user.as_deref(), Some("Lanzo V10"));
     assert_eq!(lanzo.notes_user.as_deref(), Some("brakes early"));
     assert_eq!(
         crate::techsheet::effective(&conn, "lanzo").unwrap(),
-        sheet_before,
-        "the tech sheet comes back without reading a single file (FICHE§9.4)"
+        t.sheet_before,
+        "the tech sheet comes back without reading a single file"
     );
     let version = overlay::get_versions(&conn, "lanzo").unwrap().remove(0);
-    let folder = crate::libpath::resolve(dest.cfg.library_path.as_deref(), &version.library_path).unwrap();
+    let folder = crate::libpath::resolve(t.dest.cfg.library_path.as_deref(), &version.library_path).unwrap();
     assert!(
         folder.join("ui/ui_car.json").is_file(),
         "its skeleton is in the library"
@@ -357,10 +374,6 @@ fn a_library_goes_to_another_installation_and_keeps_everything_but_its_files() {
         .unwrap()
         .remove(0);
     assert!(layer.is_skeleton(), "its layer too");
-
-    let cup = overlay::get_mod(&conn, "ks_mazda_mx5_cup").unwrap().unwrap();
-    assert_eq!(cup.notes_user.as_deref(), Some("cup note"));
-    assert!(cup.is_stock, "game content stays game content");
 
     let hybrid = overlay::get_mod(&conn, "rss_hybrid")
         .unwrap()
@@ -379,7 +392,7 @@ fn a_library_goes_to_another_installation_and_keeps_everything_but_its_files() {
     assert!(other.is_skeleton());
     assert_eq!(other.notes_user.as_deref(), Some("the good one"));
     let (rows, index) = crate::others::others_base(&conn).unwrap();
-    let card = crate::others::others_from_disk(&dest.cfg, rows, &index).remove(0);
+    let card = crate::others::others_from_disk(&t.dest.cfg, rows, &index).remove(0);
     assert_eq!(
         card.categories,
         vec!["driver"],
@@ -390,35 +403,64 @@ fn a_library_goes_to_another_installation_and_keeps_everything_but_its_files() {
         1,
         "the profile"
     );
+}
 
-    let config = &dest.places.config_dir;
+/// Rule (EXPORT§4.2): the notes on the game's own content are laid on the
+/// same content of the other machine; those on content it does not have (a
+/// DLC) are named, never lost in silence.
+#[test]
+fn notes_on_game_content_land_where_it_exists_and_the_rest_is_named() {
+    let t = transferred("transfer-stock");
+    assert_eq!(t.imported.stock_applied, 1, "the note on the cup car is laid on it");
+    assert_eq!(
+        t.imported.stock_missing,
+        vec!["ks_ferrari_f2004"],
+        "the DLC note is named"
+    );
+    let cup = overlay::get_mod(&t.dest.conn(), "ks_mazda_mx5_cup").unwrap().unwrap();
+    assert_eq!(cup.notes_user.as_deref(), Some("cup note"));
+    assert!(cup.is_stock, "game content stays game content");
+}
+
+/// Rule (EXPORT§5.2, §7.3): the settings come back into this machine's
+/// folders without moving its paths, a preset of the same name is never
+/// overwritten, and the next start harmonizes again.
+#[test]
+fn the_settings_come_back_and_this_machines_paths_stay() {
+    let t = transferred("transfer-settings");
+    let config = &t.dest.places.config_dir;
     let merged: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(config.join("config.json")).unwrap()).unwrap();
     assert_eq!(merged["prefs"]["language"], "it", "the preferences come");
     assert_eq!(
         merged["library_path"],
-        serde_json::json!(dest.cfg.library_path),
+        serde_json::json!(t.dest.cfg.library_path),
         "this machine's paths stay"
     );
-    assert!(config.join("ui_prefs.json").is_file());
-    assert!(config.join("saved_grids.json").is_file());
-    assert!(config.join("taxonomy.json").is_file());
-    assert!(config.join("logos/rss-1234abcd.png").is_file());
+    for file in [
+        "ui_prefs.json",
+        "saved_grids.json",
+        "taxonomy.json",
+        "logos/rss-1234abcd.png",
+    ] {
+        assert!(config.join(file).is_file(), "{file} came");
+    }
     let music: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(config.join("music.json")).unwrap()).unwrap();
     assert!(
         music["menu_folder"].is_null(),
         "the music folder of the other machine stays there"
     );
-    let presets = dest.places.presets_dir.as_ref().unwrap();
+    let presets = t.dest.places.presets_dir.as_ref().unwrap();
     assert_eq!(
         std::fs::read(presets.join("Spa dusk.cmpreset")).unwrap(),
         b"mine",
         "never overwritten"
     );
     assert!(presets.join("Spa dusk (2).cmpreset").is_file());
+    assert_eq!(t.imported.presets_renamed, 1);
     assert_eq!(
-        overlay::get_meta(&conn, overlay::META_ENGINE_VERSION).unwrap(),
+        overlay::get_meta(&t.dest.conn(), overlay::META_ENGINE_VERSION).unwrap(),
         None,
         "the next start harmonizes again"
     );
