@@ -129,12 +129,12 @@ pub struct Manifest {
 }
 
 /// What an export of every part would hold and weigh, before writing it
-/// (EXPORT§7.2). The weight is per part: the screen adds up the checked ones.
+/// (EXPORT§7.2). The weight is per part, what the zip will hold: the screen
+/// adds up the checked ones.
 #[derive(Debug, Clone, Serialize)]
 pub struct Estimate {
     pub counts: Counts,
     pub bytes: BTreeMap<Part, u64>,
-    pub library_bytes: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -214,10 +214,8 @@ struct Built {
     library_bytes: u64,
 }
 
-/// `dry`: weigh without producing — no image frozen nor reduced, their
-/// weight estimated. What the confirmation shows before anything is written.
-fn build(db: &Db, cfg: &AppConfig, places: &Places, parts: &[Part], dry: bool) -> Result<Built, String> {
-    let scratch = Scratch::new(if dry { "estimate" } else { "export" })?;
+fn build(db: &Db, cfg: &AppConfig, places: &Places, parts: &[Part]) -> Result<Built, String> {
+    let scratch = Scratch::new("export")?;
     let stamp = now();
     let mut entries = Vec::new();
     let mut counts = Counts::default();
@@ -254,7 +252,6 @@ fn build(db: &Db, cfg: &AppConfig, places: &Places, parts: &[Part], dry: bool) -
             library,
             scratch: &scratch.0,
             stamp: &stamp,
-            dry,
             preferred: &preferred,
         };
         entries.extend(skel.of_library()?);
@@ -292,26 +289,38 @@ fn build(db: &Db, cfg: &AppConfig, places: &Places, parts: &[Part], dry: bool) -
     })
 }
 
-/// Counts and weight of every part, nothing written (EXPORT§7.2).
+/// Counts and weight of every part, nothing prepared nor written
+/// (EXPORT§7.2): counts from the base, weights from the files a skeleton
+/// keeps and the compression measured on a real export ([`files::weigh`]).
 pub fn estimate(db: &Db, cfg: &AppConfig, places: &Places) -> Result<Estimate, String> {
-    let parts = if cfg.library_path.is_some() {
-        Part::ALL.to_vec()
-    } else {
-        effective(&[Part::Classification, Part::Sessions, Part::Preferences])
+    let (mut counts, folders, base_bytes) = {
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        let counts = tables::counts(&conn).map_err(|e| e.to_string())?;
+        let folders = match cfg.library_path.as_deref() {
+            Some(library) => files::folders_to_weigh(&conn, library).map_err(|e| e.to_string())?,
+            None => Vec::new(),
+        };
+        let base_bytes: i64 = conn
+            .query_row(
+                "SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()",
+                [],
+                |r| r.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        (counts, folders, base_bytes.max(0) as u64)
     };
-    let built = build(db, cfg, places, &parts, true)?;
     let mut bytes: BTreeMap<Part, u64> = BTreeMap::new();
-    if let Some(db_file) = &built.database {
-        *bytes.entry(Part::Library).or_default() += std::fs::metadata(db_file).map(|m| m.len()).unwrap_or(0);
+    if cfg.library_path.is_some() {
+        let base = (base_bytes as f64 * files::BASE_RATIO) as u64;
+        bytes.insert(Part::Library, base + files::weigh(&folders));
     }
-    for e in &built.entries {
-        *bytes.entry(e.part).or_default() += e.size();
+    let settings = files::settings(places, &[Part::Classification, Part::Sessions, Part::Preferences])?;
+    counts.sessions = settings.presets;
+    counts.grids = settings.grids;
+    for e in &settings.entries {
+        *bytes.entry(e.part).or_default() += e.zipped_size();
     }
-    Ok(Estimate {
-        counts: built.counts,
-        bytes,
-        library_bytes: built.library_bytes,
-    })
+    Ok(Estimate { counts, bytes })
 }
 
 /// Writes the export to `dest` (EXPORT§4 to §6). Written beside `dest` first
@@ -319,7 +328,7 @@ pub fn estimate(db: &Db, cfg: &AppConfig, places: &Places) -> Result<Estimate, S
 /// name the user chose.
 pub fn export(db: &Db, cfg: &AppConfig, places: &Places, parts: &[Part], dest: &Path) -> Result<ExportReport, String> {
     let parts = effective(parts);
-    let built = build(db, cfg, places, &parts, false)?;
+    let built = build(db, cfg, places, &parts)?;
     let manifest = Manifest {
         format: FORMAT,
         app_version: places.app_version.clone(),

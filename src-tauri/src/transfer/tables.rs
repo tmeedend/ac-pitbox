@@ -267,21 +267,27 @@ const STOCK_USER_FIELDS: &[&str] = &[
     "country",
 ];
 
+/// What a base holds, part by part. Read on the live base by the estimate,
+/// and on the export's copy once reshaped: a mod installed by hand counts
+/// among the cars and tracks on both — it leaves managed (EXPORT§4.2).
 pub(super) fn counts(conn: &Connection) -> rusqlite::Result<Counts> {
     let n = |sql: &str| conn.query_row(sql, [], |r| r.get::<_, i64>(0)).map(|n| n as usize);
+    const MODS: &str = "(is_stock = 0 OR (is_unmanaged = 1 AND active_version_id IS NOT NULL))";
     Ok(Counts {
-        cars: n("SELECT COUNT(*) FROM mods WHERE is_stock = 0 AND kind = 'Car'")?,
-        tracks: n("SELECT COUNT(*) FROM mods WHERE is_stock = 0 AND kind = 'Track'")?,
+        cars: n(&format!("SELECT COUNT(*) FROM mods WHERE {MODS} AND kind = 'Car'"))?,
+        tracks: n(&format!("SELECT COUNT(*) FROM mods WHERE {MODS} AND kind = 'Track'"))?,
         layers: n("SELECT COUNT(*) FROM layers")?,
         skins: n("SELECT COUNT(*) FROM sub_mods WHERE sub_type <> 'SOUND' AND removable = 1")?,
         sounds: n("SELECT COUNT(*) FROM sub_mods WHERE sub_type = 'SOUND'")?,
         apps: n("SELECT COUNT(*) FROM apps")?,
         others: n("SELECT COUNT(*) FROM other_mods")?,
         stock_with_user_data: n(&format!(
-            "SELECT COUNT(*) FROM mods WHERE is_stock = 1 AND {}",
+            "SELECT COUNT(*) FROM mods WHERE is_stock = 1 AND is_unmanaged = 0 AND {}",
             user_data("")
         ))?,
-        unmanaged: 0,
+        unmanaged: n(
+            "SELECT COUNT(*) FROM mods WHERE is_stock = 1 AND is_unmanaged = 1 AND active_version_id IS NOT NULL",
+        )?,
         profiles: n("SELECT COUNT(*) FROM profiles")?,
         sessions: 0,
         grids: 0,

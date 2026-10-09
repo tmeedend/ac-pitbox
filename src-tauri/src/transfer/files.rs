@@ -41,8 +41,6 @@ const PREFERENCE_FILES: &[&str] = &["ui_prefs.json", "library_columns.json"];
 const MUSIC_FILE: &str = "music.json";
 const PREFS_ENTRY: &str = "prefs.json";
 const CONFIG_FILE: &str = "config.json";
-/// What a frozen image weighs, for the estimate: a few dozen KB (ESPACE§3.2).
-const IMAGE_ESTIMATE: u64 = 60 * 1024;
 
 /// One file of the zip.
 pub(super) struct Entry {
@@ -54,8 +52,6 @@ pub(super) struct Entry {
 enum Source {
     File(PathBuf),
     Bytes(Vec<u8>),
-    /// Weighed, never written: an image the estimate does not produce.
-    Estimated(u64),
 }
 
 impl Entry {
@@ -79,8 +75,12 @@ impl Entry {
         match &self.source {
             Source::File(p) => std::fs::metadata(p).map(|m| m.len()).unwrap_or(0),
             Source::Bytes(b) => b.len() as u64,
-            Source::Estimated(n) => *n,
         }
+    }
+
+    /// What it will weigh in the zip ([`zipped`]).
+    pub fn zipped_size(&self) -> u64 {
+        zipped(&self.name, self.size())
     }
 
     pub fn is_image(&self) -> bool {
@@ -95,7 +95,6 @@ impl Entry {
                 std::io::copy(&mut f, out).map_err(|e| e.to_string())?;
             }
             Source::Bytes(b) => out.write_all(b).map_err(|e| e.to_string())?,
-            Source::Estimated(_) => return Err(format!("{}: weighed, never produced", self.name)),
         }
         Ok(())
     }
@@ -130,7 +129,6 @@ pub(super) struct Skeletons<'a> {
     pub library: &'a Path,
     pub scratch: &'a Path,
     pub stamp: &'a str,
-    pub dry: bool,
     /// The previews the cards show ([`preferred_previews`]), by mod id.
     pub preferred: &'a std::collections::HashMap<String, PathBuf>,
 }
@@ -211,9 +209,7 @@ impl Skeletons<'_> {
                 continue;
             }
             let kind = ModKind::from_column(&kind);
-            let image = if self.dry {
-                None
-            } else if active {
+            let image = if active {
                 // The image the card shows (ESPACE§3.3): the preferred livery
                 // or layout the screens chose, the backend's own pick else.
                 match self.preferred.get(&mod_id) {
@@ -349,13 +345,7 @@ impl Skeletons<'_> {
             )),
             Err(e) => log::warn!("transfer: manifest of {} not written: {e}", folder.rel),
         }
-        if self.dry && kind.is_some() {
-            out.push(Entry {
-                name: zip_name(LIBRARY_PREFIX, &folder.rel, Path::new(".pitbox-vitrine.jpg")),
-                part: Part::Library,
-                source: Source::Estimated(IMAGE_ESTIMATE),
-            });
-        } else if let Some(src) = image {
+        if let Some(src) = image {
             match self.frozen(&src) {
                 Ok(frozen) => {
                     let file = frozen.file_name().map(PathBuf::from).unwrap_or_default();
@@ -372,14 +362,6 @@ impl Skeletons<'_> {
 
     /// A track preview, reduced in a scratch copy (ESPACE§3.3).
     fn reduced(&self, name: String, path: &Path) -> Entry {
-        if self.dry {
-            let size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
-            return Entry {
-                name,
-                part: Part::Library,
-                source: Source::Estimated(size.min(IMAGE_ESTIMATE)),
-            };
-        }
         let copy = self.scratch_file(path.file_name().map(PathBuf::from).unwrap_or_default());
         let made = std::fs::copy(path, &copy)
             .map_err(|e| e.to_string())
@@ -444,7 +426,7 @@ impl Skeletons<'_> {
             let size = crate::inspect::dir_size_bytes(&dir) as i64;
             let mut manifest = Manifest::new(self.stamp.to_string(), id.clone(), Vec::new());
             manifest.content_signature = Some(signature.clone());
-            let image = (!self.dry).then(|| crate::showcase::own_preview(kind, &dir)).flatten();
+            let image = crate::showcase::own_preview(kind, &dir);
             let folder = Folder {
                 rel: rel.clone(),
                 dir,
@@ -467,6 +449,130 @@ impl Skeletons<'_> {
         }
         Ok((converted, out))
     }
+}
+
+// --- Weighing --------------------------------------------------------------------
+
+/// What the zip makes of each kind of file, measured on the export of a real
+/// library (2026-10-10, 186 mods, 16.1 MB): images do not compress, the base
+/// falls to a fifth, a JSON file to under a third, a manifest to about 1 KB;
+/// a frozen card image weighs about 18 KB, a reduced preview a few dozen.
+pub(super) const BASE_RATIO: f64 = 0.2;
+const JSON_RATIO: f64 = 0.3;
+const MANIFEST_ZIPPED: u64 = 1024;
+const FROZEN_IMAGE: u64 = 20 * 1024;
+const REDUCED_PREVIEW: u64 = 40 * 1024;
+
+/// What a file of `size` bytes named `name` weighs in the zip.
+fn zipped(name: &str, size: u64) -> u64 {
+    let lower = name.to_lowercase();
+    if lower.ends_with(".json") || lower.ends_with(".cmpreset") || lower.ends_with(".ini") {
+        (size as f64 * JSON_RATIO) as u64
+    } else {
+        size
+    }
+}
+
+/// One folder of the library, as the estimate weighs it.
+pub(super) struct ToWeigh {
+    dir: PathBuf,
+    /// The skeleton's whitelist, for a version or a car or track layer.
+    kind: Option<ModKind>,
+    /// Already a skeleton: its few files leave as they are.
+    freed: bool,
+    /// A version, which gets a frozen card image.
+    version: bool,
+}
+
+/// The folders an export would take, from the base alone: the disk is read
+/// after, the lock given back ([`weigh`]).
+pub(super) fn folders_to_weigh(conn: &Connection, library: &Path) -> rusqlite::Result<Vec<ToWeigh>> {
+    let mut out = Vec::new();
+    let mut collect = |sql: &str, version: bool| -> rusqlite::Result<()> {
+        let mut stmt = conn.prepare(sql)?;
+        let rows = stmt.query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, Option<String>>(2)?,
+            ))
+        })?;
+        for row in rows {
+            let (stored, state, kind) = row?;
+            // A mod installed by hand lives in the game: its version is an
+            // absolute path outside the library, and it leaves all the same.
+            let dir = match super::tables::relative(library, &stored) {
+                Some(rel) => library.join(rel),
+                None if version => PathBuf::from(stored),
+                None => continue,
+            };
+            out.push(ToWeigh {
+                dir,
+                kind: match kind.as_deref() {
+                    Some("Car") => Some(ModKind::Car),
+                    Some("Track") => Some(ModKind::Track),
+                    _ => None,
+                },
+                freed: state == crate::overlay::CONTENT_SKELETON,
+                version,
+            });
+        }
+        Ok(())
+    };
+    collect(
+        "SELECT v.library_path, v.content_state, m.kind FROM versions v JOIN mods m ON m.id_interne = v.mod_id
+         WHERE m.is_stock = 0 OR (m.is_unmanaged = 1 AND v.id = m.active_version_id)",
+        true,
+    )?;
+    collect("SELECT library_path, content_state, parent_kind FROM layers", false)?;
+    collect(
+        "SELECT library_path, content_state, NULL FROM sub_mods WHERE removable = 1",
+        false,
+    )?;
+    collect("SELECT library_path, content_state, NULL FROM apps", false)?;
+    collect("SELECT library_path, content_state, NULL FROM other_mods", false)?;
+    Ok(out)
+}
+
+/// What those folders will weigh in the zip, reading only what a skeleton
+/// keeps — a car's or a track's `ui/` —, never the whole folder: preparing
+/// the whole export to weigh it took 6 s on a real library, and added up
+/// uncompressed sizes (30.7 MB announced for a 16.1 MB file).
+pub(super) fn weigh(folders: &[ToWeigh]) -> u64 {
+    folders
+        .iter()
+        .map(|f| {
+            if f.freed {
+                return files_in(&f.dir)
+                    .iter()
+                    .map(|(rel, path)| zipped(&rel.to_string_lossy(), size_of(path)))
+                    .sum();
+            }
+            let mut bytes = MANIFEST_ZIPPED;
+            if f.version {
+                bytes += FROZEN_IMAGE;
+            }
+            if let Some(kind) = f.kind {
+                for (rel, path) in files_in(&f.dir.join("ui")) {
+                    let rel = Path::new("ui").join(rel);
+                    if skeleton::is_showcase_file(&rel) || !skeleton::is_kept(kind, &rel) {
+                        continue;
+                    }
+                    let size = size_of(&path);
+                    bytes += if skeleton::is_reduced(kind, &rel) {
+                        size.min(REDUCED_PREVIEW)
+                    } else {
+                        zipped(&rel.to_string_lossy(), size)
+                    };
+                }
+            }
+            bytes
+        })
+        .sum()
+}
+
+fn size_of(path: &Path) -> u64 {
+    std::fs::metadata(path).map(|m| m.len()).unwrap_or(0)
 }
 
 // --- Settings --------------------------------------------------------------------

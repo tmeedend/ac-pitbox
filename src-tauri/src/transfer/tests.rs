@@ -385,6 +385,30 @@ fn the_export_holds_no_playable_file_and_no_path_of_the_machine() {
     );
 }
 
+/// Rule (EXPORT§7.2): the estimate counts what the export holds, and weighs
+/// near what it writes — without making it. It once announced 30.7 MB for a
+/// 16.1 MB file, adding up uncompressed sizes, after preparing the whole
+/// export for it.
+#[test]
+fn the_estimate_counts_what_the_export_holds_and_weighs_near_it() {
+    let root = crate::testutil::temp_dir("transfer-estimate");
+    let src = source(&root);
+    let estimate = estimate(&src.db, &src.cfg, &src.places).unwrap();
+    let file = root.join("library.pitbox");
+    let report = export(&src.db, &src.cfg, &src.places, &Part::ALL, &file).unwrap();
+    assert_eq!(
+        estimate.counts, report.counts,
+        "the same counts, read from the base alone"
+    );
+    let weighed: u64 = estimate.bytes.values().sum();
+    let ratio = weighed as f64 / report.bytes as f64;
+    assert!(
+        (0.5..=2.0).contains(&ratio),
+        "estimated {weighed} bytes for a file of {}: {ratio:.2}",
+        report.bytes
+    );
+}
+
 /// Rule (EXPORT§4, §8.4): what the user entered and decided comes back on the
 /// other machine, every mod in the showcase with its skeleton, and the tech
 /// sheet without reading a single file (FICHE§9.4).

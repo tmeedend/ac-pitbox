@@ -33,9 +33,9 @@ export interface Manifest {
 
 export interface Estimate {
   counts: Counts;
-  /** Per part; a part with nothing to carry is absent. */
+  /** Per part, as the zip will hold it; a part with nothing to carry is
+   * absent. */
   bytes: Partial<Record<Part, number>>;
-  library_bytes: number;
 }
 
 export interface ExportReport {
