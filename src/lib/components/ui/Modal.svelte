@@ -4,8 +4,14 @@
   // it holds. Escape closes it, unless `onclose` is left out — a dialog that
   // must not be dismissed (an import running) simply does not pass one.
   //
-  // The dialogs written before it (`DeleteDialog`, `NamedListDialog`…) still
-  // carry their own copy of this frame.
+  // The other dialogs keep their own frame, each for a reason that would show
+  // on screen if they took this one: a ✕ in the header and a list that
+  // scrolls under a fixed input (`NamedListDialog`), a layer above every
+  // other dialog and a body laid out by its children (`ControllerSetup`), a
+  // focus trap and filters in the header (`OpponentPicker`), no header at all
+  // (`SteamPrompt`, the fork question of `RulesEditor`, which has no red
+  // accent by rule), its own title size (`BulkImport`). Bringing them here is
+  // a visual decision, one at a time.
   import type { Snippet } from "svelte";
 
   interface Props {

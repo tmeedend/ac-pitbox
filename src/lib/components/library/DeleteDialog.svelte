@@ -12,6 +12,7 @@
   import { fmtSize } from "$lib/format";
   import { getUiPref, setUiPref } from "$lib/uiPrefs.svelte";
   import { deleteDialog, freedLine, HOW_IT_WORKS_KEY, type PlanEntry } from "$lib/library/showcase.svelte";
+  import Modal from "$lib/components/ui/Modal.svelte";
 
   let mode = $state<"showcase" | "complete">("showcase");
   let keepArchive = $state(true);
@@ -74,153 +75,105 @@
     }
   }
 
-  function onkeydown(e: KeyboardEvent) {
-    if (request && e.key === "Escape") answer(false);
-  }
+  const title = $derived(
+    one
+      ? completeOnly
+        ? t("showcase.titleCompleteOne", { name: one.name })
+        : t("showcase.titleOne", { name: one.name })
+      : completeOnly
+        ? t("showcase.titleCompleteMany", { count: entries.length })
+        : t("showcase.titleMany", { count: entries.length }),
+  );
 </script>
 
-<svelte:window {onkeydown} />
-
 {#if request}
-  <div class="backdrop">
-    <div class="modal" role="dialog" aria-modal="true">
-      <header>
-        <h2>
-          {#if one}
-            {completeOnly ? t("showcase.titleCompleteOne", { name: one.name }) : t("showcase.titleOne", { name: one.name })}
-          {:else}
-            {completeOnly
-              ? t("showcase.titleCompleteMany", { count: entries.length })
-              : t("showcase.titleMany", { count: entries.length })}
+  <Modal {title} onclose={() => answer(false)}>
+    {#if !one}
+      <p class="summary">{t("showcase.summaryMany", { count: entries.length, size: fmtSize(size) })}</p>
+    {/if}
+
+    {#if !completeOnly}
+      <label class="choice" class:on={mode === "showcase"}>
+        <input type="radio" name="delete-mode" value="showcase" bind:group={mode} />
+        <span class="c-body">
+          <span class="c-title">{t("showcase.keep")} <span class="c-reco">({t("showcase.recommended")})</span></span>
+          <span class="c-line">{freedLine(size)} {t("showcase.explain")}</span>
+          {#if mode === "showcase"}
+            {#if one}
+              <span class="c-line c-source">{sourceLine(one)}</span>
+            {:else if unknownSource.length}
+              <span class="c-line c-source">
+                {t("showcase.noSourceMany", { count: unknownSource.length })}
+                {unknownSource.map((e) => e.name).join(", ")}
+              </span>
+            {/if}
+            {#if anyKept}
+              <span class="c-check">
+                <input type="checkbox" bind:checked={keepArchive} />
+                {t("showcase.keepArchive")}
+              </span>
+            {/if}
           {/if}
-        </h2>
-      </header>
+        </span>
+      </label>
 
-      <div class="body">
-        {#if !one}
-          <p class="summary">{t("showcase.summaryMany", { count: entries.length, size: fmtSize(size) })}</p>
-        {/if}
+      {#if !howHidden && mode === "showcase"}
+        <div class="how">
+          <div class="how-t">{t("showcase.howTitle")}</div>
+          <ol>
+            <li>{t("showcase.how1")}</li>
+            <li>{t("showcase.how2")}</li>
+            <li>{t("showcase.how3")}</li>
+          </ol>
+          <button class="btn btn-ghost how-hide" type="button" onclick={hideHow}>{t("showcase.hideHow")}</button>
+        </div>
+      {/if}
+    {/if}
 
-        {#if !completeOnly}
-          <label class="choice" class:on={mode === "showcase"}>
-            <input type="radio" name="delete-mode" value="showcase" bind:group={mode} />
-            <span class="c-body">
-              <span class="c-title">{t("showcase.keep")} <span class="c-reco">({t("showcase.recommended")})</span></span>
-              <span class="c-line">{freedLine(size)} {t("showcase.explain")}</span>
-              {#if mode === "showcase"}
-                {#if one}
-                  <span class="c-line c-source">{sourceLine(one)}</span>
-                {:else if unknownSource.length}
-                  <span class="c-line c-source">
-                    {t("showcase.noSourceMany", { count: unknownSource.length })}
-                    {unknownSource.map((e) => e.name).join(", ")}
-                  </span>
-                {/if}
-                {#if anyKept}
-                  <span class="c-check">
-                    <input type="checkbox" bind:checked={keepArchive} />
-                    {t("showcase.keepArchive")}
-                  </span>
-                {/if}
-              {/if}
-            </span>
-          </label>
+    <label class="choice" class:on={mode === "complete"}>
+      <input type="radio" name="delete-mode" value="complete" bind:group={mode} disabled={completeOnly} />
+      <span class="c-body">
+        <span class="c-title">{t("showcase.complete")}</span>
+        <span class="c-line">
+          {#if !completeOnly}{freedLine(size)}{/if}
+          {t("showcase.completeLine")}
+        </span>
+      </span>
+    </label>
 
-          {#if !howHidden && mode === "showcase"}
-            <div class="how">
-              <div class="how-t">{t("showcase.howTitle")}</div>
-              <ol>
-                <li>{t("showcase.how1")}</li>
-                <li>{t("showcase.how2")}</li>
-                <li>{t("showcase.how3")}</li>
-              </ol>
-              <button class="btn btn-ghost how-hide" type="button" onclick={hideHow}>{t("showcase.hideHow")}</button>
-            </div>
-          {/if}
-        {/if}
-
-        <label class="choice" class:on={mode === "complete"}>
-          <input type="radio" name="delete-mode" value="complete" bind:group={mode} disabled={completeOnly} />
-          <span class="c-body">
-            <span class="c-title">{t("showcase.complete")}</span>
-            <span class="c-line">
-              {#if !completeOnly}{freedLine(size)}{/if}
-              {t("showcase.completeLine")}
-            </span>
-          </span>
-        </label>
-
-        {#each lending as e (e.id)}
-          <!-- Both outcomes take the models away: said whichever is picked,
-               and before the rest - it is the one consequence that crashes
-               the game later, far from this dialog (SESSION§2.5). -->
-          <p class="warnbox">⚠ {t("showcase.borrowedBy", { name: e.name, names: e.borrowed_by.join(", ") })}</p>
-        {/each}
-        {#if active.length}
-          <p class="note">
-            {one ? t("showcase.willDeactivate") : t("showcase.activeMany", { count: active.length })}
-          </p>
-        {/if}
-        {#if one && one.versions > 1}
-          <p class="note">{t("showcase.versions", { count: one.versions })}</p>
-        {/if}
-        {#if one && one.attached.length}
-          <!-- One line each (ESPACE§5.2): each comes back only with its own
-               archive, so each must be named before it goes. -->
-          {#each one.attached as a (a.kind + a.name)}
-            <p class="note">{t(ATTACHED_KEY[a.kind], { name: a.name, size: fmtSize(a.size_bytes) })}</p>
-          {/each}
-          <p class="note muted">{t("showcase.attachedOwnArchive")}</p>
-        {:else if withAttached.length}
-          <p class="note">{t("showcase.attachedMany", { count: withAttached.length })}</p>
-        {/if}
-        <p class="note muted">{t("showcase.bin")}</p>
-      </div>
-
-      <footer>
-        <button class="btn" type="button" onclick={() => answer(false)}>{t("common.cancel")}</button>
-        <button class="btn btn-primary" type="button" onclick={() => answer(true)}>{t("showcase.confirm")}</button>
-      </footer>
-    </div>
-  </div>
+    {#each lending as e (e.id)}
+      <!-- Both outcomes take the models away: said whichever is picked,
+           and before the rest - it is the one consequence that crashes
+           the game later, far from this dialog (SESSION§2.5). -->
+      <p class="warnbox">⚠ {t("showcase.borrowedBy", { name: e.name, names: e.borrowed_by.join(", ") })}</p>
+    {/each}
+    {#if active.length}
+      <p class="note">
+        {one ? t("showcase.willDeactivate") : t("showcase.activeMany", { count: active.length })}
+      </p>
+    {/if}
+    {#if one && one.versions > 1}
+      <p class="note">{t("showcase.versions", { count: one.versions })}</p>
+    {/if}
+    {#if one && one.attached.length}
+      <!-- One line each (ESPACE§5.2): each comes back only with its own
+           archive, so each must be named before it goes. -->
+      {#each one.attached as a (a.kind + a.name)}
+        <p class="note">{t(ATTACHED_KEY[a.kind], { name: a.name, size: fmtSize(a.size_bytes) })}</p>
+      {/each}
+      <p class="note muted">{t("showcase.attachedOwnArchive")}</p>
+    {:else if withAttached.length}
+      <p class="note">{t("showcase.attachedMany", { count: withAttached.length })}</p>
+    {/if}
+    <p class="note muted">{t("showcase.bin")}</p>
+    {#snippet footer()}
+      <button class="btn" type="button" onclick={() => answer(false)}>{t("common.cancel")}</button>
+      <button class="btn btn-primary" type="button" onclick={() => answer(true)}>{t("showcase.confirm")}</button>
+    {/snippet}
+  </Modal>
 {/if}
 
 <style>
-  .backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgb(0 0 0 / 60%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-  }
-  .modal {
-    width: 520px;
-    max-width: 92vw;
-    max-height: 85vh;
-    display: flex;
-    flex-direction: column;
-    background: var(--panel);
-    border: 1px solid var(--rosso);
-  }
-  header {
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--line);
-  }
-  h2 {
-    font-size: 13px;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    color: var(--txt2);
-  }
-  .body {
-    overflow-y: auto;
-    padding: 14px 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
   .summary {
     color: var(--txt2);
     font-size: 12px;
@@ -294,12 +247,5 @@
   }
   .note.muted {
     color: var(--muted);
-  }
-  footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    padding: 12px 16px;
-    border-top: 1px solid var(--line);
   }
 </style>
