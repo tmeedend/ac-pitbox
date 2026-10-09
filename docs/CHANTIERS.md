@@ -167,20 +167,23 @@ de reprendre. En cas d'écart, la spec fait foi.
       - **Mesuré sur la bibliothèque réelle (2026-10-10)** : 186 mods,
         3 couches, 67 apps et compléments, 49,5 Go → un fichier de 16,1 Mo
         en une vingtaine de secondes, dont 8,4 Mo pour la base ; aucun fichier
-        lourd ni chemin de la machine dedans, vérifié sur le fichier lui-même.
-        L'estimation (environ 6 s) annonçait 30,7 Mo : elle additionne les
-        tailles **non compressées**. À reprendre si l'écart gêne. Le premier
-        essai pesait 28,7 Mo : un JPEG nommé `preview.png` (`Ph_highway`) n'était
-        pas réduit, corrigé pour la vitrine comme pour l'export (`1ff3556`).
+        lourd dedans. L'estimation annonce 13,7 Mo en moins d'une seconde.
         L'import, lui, n'a été essayé que dans les tests et pour son refus
         (installation non vide) : l'essai réel dans une installation vide
         reste à faire.
-      - **Trois points de relecture laissés** (2026-10-09) : l'image figée
-        d'une voiture est celle que choisit le backend, pas la livrée préférée
-        que la carte montre ; l'estimation refait toute la préparation de
-        l'export à chaque ouverture de la boîte ; un mod installé à la main
-        des deux côtés remplace à l'import la ligne locale, alors que son vrai
-        dossier reste dans `content/`.
+      - **Trois défauts trouvés sur ce fichier réel, corrigés** (2026-10-10) :
+        un JPEG nommé `preview.png` (`Ph_highway`) n'était pas réduit (28,7 Mo
+        au premier essai, `1ff3556`, la vitrine en souffrait aussi) ;
+        `ui_prefs.json` emportait 76 chemins absolus et un preset de Content
+        Manager le nom d'utilisateur Windows (EXPORT§10.2) ; l'estimation
+        préparait tout l'export (6 s) et annonçait 30,7 Mo, tailles non
+        compressées. **Le test qui cherchait les chemins de la machine ne
+        voyait pas les deux fuites** : il cherche maintenant n'importe quel
+        chemin absolu, à toute profondeur d'échappement.
+      - **Trois points de relecture traités** (2026-10-10) : l'image figée est
+        celle de la livrée ou du layout préféré ; l'estimation ne prépare plus
+        l'export ; un mod installé à la main des deux côtés garde sa ligne
+        locale (EXPORT§10.1).
       - **Le dossier de la bibliothèque doit ne rien contenir de ce que
         l'export écrit** (`check_free`) ; un dossier `cars/` vide ne gêne pas,
         un mod déjà là refuse l'import — à reprendre si le cas réel
