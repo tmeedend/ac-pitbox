@@ -514,7 +514,7 @@ mod tests {
     // will draw for each. The equations are pinned by the tests above; what
     // this one exercises is the plumbing around them — sections found, summer
     // time applied, geotags picked up for the one mod track CSP ignores.
-    // `PITBOX_AC_ROOT=D:\...ssettocorsa cargo test --lib sun -- --ignored --nocapture`
+    // `PITBOX_AC_ROOT=D:\...\assettocorsa cargo test --lib sun -- --ignored --nocapture`
     #[test]
     #[ignore = "needs a real Assetto Corsa install; measurement, not a check"]
     fn every_installed_track_gives_up_its_sun() {

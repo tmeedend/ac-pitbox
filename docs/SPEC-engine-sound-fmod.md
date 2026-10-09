@@ -485,7 +485,7 @@ d'Assetto Corsa ni de carte son. Il se lance à la main et sans la variable il
 passe au lieu d'échouer faussement :
 
 ```
-PITBOX_AC_ROOT="D:\...ssettocorsa" cargo test --lib fmod::engine -- --ignored --nocapture
+PITBOX_AC_ROOT="D:\...\assettocorsa" cargo test --lib fmod::engine -- --ignored --nocapture
 ```
 
 Vérifié ainsi sur trois voitures — la GT40 Kunos et deux mods (`art_skyline_r32_gtr`,

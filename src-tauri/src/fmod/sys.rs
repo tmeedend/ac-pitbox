@@ -869,7 +869,9 @@ mod survey {
     /// with a manual starter, a turbo, an ignition switch. Plays nothing:
     ///
     /// ```text
-    /// PITBOX_AC_ROOT="D:\...ssettocorsa"     ///   PITBOX_CAR_DIR="D:\AC-Library\cars\<mod>\<version>"     ///   cargo test --lib fmod::sys::survey -- --ignored --nocapture lists_one_bank
+    /// PITBOX_AC_ROOT="D:\...\assettocorsa" \
+    ///   PITBOX_CAR_DIR="D:\AC-Library\cars\<mod>\<version>" \
+    ///   cargo test --lib fmod::sys::survey -- --ignored --nocapture lists_one_bank
     /// ```
     #[test]
     #[ignore = "needs a real Assetto Corsa install; measurement, not a check"]
@@ -942,7 +944,10 @@ mod survey {
     /// the answer.
     ///
     /// ```text
-    /// PITBOX_AC_ROOT="D:\...ssettocorsa"     ///   PITBOX_CAR_DIR="D:\AC-Library\cars\<mod>\<version>"     ///   PITBOX_AC_CAR="<car id>"     ///   cargo test --lib fmod::sys::survey -- --ignored --nocapture ignition_event_at
+    /// PITBOX_AC_ROOT="D:\...\assettocorsa" \
+    ///   PITBOX_CAR_DIR="D:\AC-Library\cars\<mod>\<version>" \
+    ///   PITBOX_AC_CAR="<car id>" \
+    ///   cargo test --lib fmod::sys::survey -- --ignored --nocapture ignition_event_at
     /// ```
     #[test]
     #[ignore = "needs a real Assetto Corsa install and an audio device"]

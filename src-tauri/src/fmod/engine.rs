@@ -1549,7 +1549,8 @@ mod tests {
     /// check. Plays about a second of engine per round.
     ///
     /// ```text
-    /// PITBOX_AC_ROOT="D:\...ssettocorsa"     ///   cargo test --lib fmod::engine -- --ignored --nocapture second_audition
+    /// PITBOX_AC_ROOT="D:\...\assettocorsa" \
+    ///   cargo test --lib fmod::engine -- --ignored --nocapture second_audition
     /// ```
     #[test]
     #[ignore = "needs a real Assetto Corsa install and an audio device"]
@@ -1746,7 +1747,8 @@ mod tests {
     /// rest of this module's tests: it needs the game's DLLs and a sound card.
     ///
     /// ```text
-    /// PITBOX_AC_ROOT="D:\...ssettocorsa"     ///   cargo test --lib fmod::engine::tests::showcase -- --ignored --nocapture
+    /// PITBOX_AC_ROOT="D:\...\assettocorsa" \
+    ///   cargo test --lib fmod::engine::tests::showcase -- --ignored --nocapture
     /// ```
     #[test]
     #[ignore = "needs a real Assetto Corsa install and an audio device"]
