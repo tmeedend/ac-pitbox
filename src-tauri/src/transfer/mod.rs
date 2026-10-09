@@ -247,6 +247,7 @@ fn build(db: &Db, cfg: &AppConfig, places: &Places, parts: &[Part], dry: bool) -
             .map_err(|e| e.to_string())?;
 
         // Skeletons first: they read each row's state before it is forced.
+        let preferred = files::preferred_previews(&places.config_dir);
         let skel = files::Skeletons {
             conn: &copy,
             cfg,
@@ -254,6 +255,7 @@ fn build(db: &Db, cfg: &AppConfig, places: &Places, parts: &[Part], dry: bool) -
             scratch: &scratch.0,
             stamp: &stamp,
             dry,
+            preferred: &preferred,
         };
         entries.extend(skel.of_library()?);
         let (converted, unmanaged_entries) = skel.convert_unmanaged()?;

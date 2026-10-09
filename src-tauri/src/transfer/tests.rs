@@ -118,6 +118,12 @@ impl Install {
 fn source(root: &Path) -> Install {
     let src = Install::new(root, "source", &["ks_mazda_mx5_cup", "ks_ferrari_f2004"]);
     car(&src.root.join("in/lanzo"), "Lanzo");
+    // A second livery, plain blue, first in alphabetical order.
+    let blue = src.root.join("in/lanzo/skins/blue/preview.jpg");
+    std::fs::create_dir_all(blue.parent().unwrap()).unwrap();
+    image::RgbImage::from_pixel(1022, 575, image::Rgb([20, 40, 230]))
+        .save(&blue)
+        .unwrap();
     assert_eq!(src.import_folder(&src.root.join("in"))[0].outcome, "IMPORT");
     // A layer: the car's folder without a model.
     write(&src.root.join("hd/lanzo"), "ui/ui_car.json", br#"{"name":"Lanzo HD"}"#);
@@ -187,7 +193,21 @@ fn write_settings(src: &Install) {
         .unwrap()
         .as_bytes(),
     );
-    write(config, "ui_prefs.json", br#"{"pitbox.nav.section":"tracks"}"#);
+    // The preferred livery, as the screens store it: a JSON object serialized
+    // into a string, its preview an absolute path of this machine. Not the
+    // first one: `blue` comes before it, and is what the backend alone picks.
+    let version = overlay::get_versions(&src.conn(), "lanzo").unwrap().remove(0);
+    let red = crate::libpath::resolve(src.cfg.library_path.as_deref(), &version.library_path)
+        .unwrap()
+        .join("skins/red/preview.jpg");
+    let preferred = serde_json::json!({ "id": "red", "name": "Red", "preview": red }).to_string();
+    write(
+        config,
+        "ui_prefs.json",
+        serde_json::json!({ "pitbox.nav.section": "tracks", "pitbox.skin.lanzo": preferred })
+            .to_string()
+            .as_bytes(),
+    );
     write(config, "saved_grids.json", br#"{"GT3 night":{"cars":["lanzo"]}}"#);
     write(config, "taxonomy.json", br#"{"brands":{}}"#);
     write(config, "logos/rss-1234abcd.png", b"png");
@@ -201,7 +221,30 @@ fn write_settings(src: &Install) {
         .replace('\\', "\\\\")
         .as_bytes(),
     );
-    write(src.places.presets_dir.as_ref().unwrap(), "Spa dusk.cmpreset", b"{}");
+    // A Content Manager preset names its other presets by absolute path, at
+    // the top and inside the JSON it stores as strings.
+    let cm = config.join("CM/Presets/Assists/Pro.cmpreset");
+    let mode = serde_json::json!({ "Laps": 7, "Grid": cm }).to_string();
+    write(
+        src.places.presets_dir.as_ref().unwrap(),
+        "Spa dusk.cmpreset",
+        serde_json::json!({ "AssistsPresetFilename": cm, "AssistsData": "{\"Abs\":1}", "ModeData": mode })
+            .to_string()
+            .as_bytes(),
+    );
+}
+
+/// Whether `bytes` hold an absolute Windows path — `C:\`, `C:/`, at any
+/// depth of escaping (`C:\\\\`): a drive letter that does not end a word,
+/// then a colon and a separator. `http://` does not match, its letter ends
+/// a word.
+fn names_a_path(bytes: &[u8]) -> bool {
+    bytes.windows(3).enumerate().any(|(i, w)| {
+        w[0].is_ascii_alphabetic()
+            && w[1] == b':'
+            && (w[2] == b'\\' || w[2] == b'/')
+            && (i == 0 || !bytes[i - 1].is_ascii_alphanumeric())
+    })
 }
 
 fn entries(path: &Path) -> Vec<(String, Vec<u8>)> {
@@ -251,7 +294,6 @@ fn every_table_of_the_base_is_classified() {
 /// not the DLC, a preset of the same name already, and its own paths.
 struct Transferred {
     _root: crate::testutil::TempDir,
-    src: Install,
     dest: Install,
     file: PathBuf,
     exported: ExportReport,
@@ -288,7 +330,6 @@ fn transferred(tag: &str) -> Transferred {
     .unwrap();
     Transferred {
         _root: root,
-        src,
         dest,
         file,
         exported,
@@ -317,27 +358,27 @@ fn the_export_holds_no_playable_file_and_no_path_of_the_machine() {
             "no heavy file leaves: {name}"
         );
     }
-    let machine: Vec<String> = [
-        t.src.cfg.ac_install_path.clone(),
-        t.src.cfg.library_path.clone(),
-        Some(t.src.places.config_dir.clone()),
-    ]
-    .into_iter()
-    .flatten()
-    .flat_map(|p| {
-        let s = p.to_string_lossy().into_owned();
-        [s.clone(), s.replace('\\', "\\\\"), s.replace('\\', "/")]
-    })
-    .collect();
+    // Any absolute path at all, at any depth of escaping: the preferred
+    // livery's preview in `ui_prefs.json` is a JSON string inside a JSON
+    // string, and a search for the machine's paths as such missed it on the
+    // real library.
     for (name, bytes) in &zipped {
-        let text = String::from_utf8_lossy(bytes);
-        for path in &machine {
-            assert!(
-                !text.contains(path.as_str()),
-                "{name} names a path of the machine: {path}"
-            );
+        let lower = name.to_lowercase();
+        if lower.ends_with(".png") || lower.ends_with(".jpg") {
+            continue;
         }
+        assert!(
+            !names_a_path(bytes),
+            "{name} names a path of the machine: {}",
+            String::from_utf8_lossy(bytes)
+        );
     }
+    let presets: Vec<&(String, Vec<u8>)> = zipped.iter().filter(|(n, _)| n.ends_with(".cmpreset")).collect();
+    let preset: serde_json::Value = serde_json::from_slice(&presets[0].1).unwrap();
+    assert_eq!(
+        preset["AssistsData"], "{\"Abs\":1}",
+        "what is not a path stays as it was"
+    );
     assert!(
         zipped.iter().any(|(n, _)| n.ends_with("ui/ui_car.json")),
         "the skeletons leave"
@@ -370,7 +411,13 @@ fn what_the_user_entered_comes_back_and_every_mod_is_in_the_showcase() {
     assert!(!folder.join("model.kn5").exists());
     let manifest = crate::skeleton::read_manifest(&folder).expect("it knows what it lacks");
     assert!(manifest.removed.iter().any(|f| f.path == "model.kn5"));
-    assert!(crate::skeleton::image_of(&folder).is_some(), "with its frozen image");
+    let frozen = crate::skeleton::image_of(&folder).expect("with its frozen image");
+    let center = image::open(&frozen).unwrap().to_rgb8();
+    let px = center.get_pixel(center.width() / 2, center.height() / 2);
+    assert!(
+        px[0] > 80 && px[2] < 150,
+        "the livery the card shows, the preferred red one, not the first blue one: {px:?}"
+    );
     assert!(
         crate::skeleton::guard_mod(&conn, "lanzo").is_err(),
         "it cannot go into the game"
