@@ -170,7 +170,13 @@ pub fn list_apps(conn: &Connection, cfg: &AppConfig) -> Result<Vec<AppItem>, Str
             let stored = crate::libpath::resolve(cfg.library_path.as_deref(), &a.library_path);
             let lang = stored
                 .as_deref()
-                .map(|d| if a.is_skeleton() { freed_app_lang(d, &a.id) } else { app_lang(d, &a.id) })
+                .map(|d| {
+                    if a.is_skeleton() {
+                        freed_app_lang(d, &a.id)
+                    } else {
+                        app_lang(d, &a.id)
+                    }
+                })
                 .unwrap_or("python");
             // Même définition d'« active » que `is_app_active` : junction pour
             // une app nue, arbre composé dès qu'une couche l'est (§8.4).
@@ -578,10 +584,16 @@ mod tests {
         assert_eq!(row.notes_user.as_deref(), Some("keep it"), "its note survived");
         let folder = library.join("apps").join("MyLuaApp");
         assert!(folder.join("MyLuaApp.lua").is_file(), "its script is back");
-        assert!(!folder.join(crate::skeleton::MANIFEST_NAME).exists(), "the manifest is gone");
+        assert!(
+            !folder.join(crate::skeleton::MANIFEST_NAME).exists(),
+            "the manifest is gone"
+        );
         activate_app(&conn, &cfg, "MyLuaApp").expect("it can be laid again");
 
         let again = import_apps(&conn, &library, "myluaapp.7z", &found, true, ExtractionMode::InfoOnly);
-        assert!(!again[0].rehydrated, "a complete app imported again is a plain reimport");
+        assert!(
+            !again[0].rehydrated,
+            "a complete app imported again is a plain reimport"
+        );
     }
 }

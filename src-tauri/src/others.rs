@@ -1495,12 +1495,22 @@ mod tests {
             before.iter().all(|c| c.conflicts.len() == 1),
             "fixture: the two mods aim at the same mannequin"
         );
-        crate::testutil::free_addon(&conn, "other_mods", "Dolls", &library.join("others").join("Dolls"), Some("Dolls.7z"));
+        crate::testutil::free_addon(
+            &conn,
+            "other_mods",
+            "Dolls",
+            &library.join("others").join("Dolls"),
+            Some("Dolls.7z"),
+        );
 
         let cards = list_others(&conn, &cfg).unwrap();
         let dolls = cards.iter().find(|c| c.row.id == "Dolls").unwrap();
         assert!(dolls.row.is_skeleton(), "the row says it has no files");
-        assert_eq!(dolls.categories, vec!["driver"], "the manifest still says what it is, wrapper crossed");
+        assert_eq!(
+            dolls.categories,
+            vec!["driver"],
+            "the manifest still says what it is, wrapper crossed"
+        );
         assert_eq!(dolls.file_count, 1, "its files are counted from the manifest");
         assert!(dolls.conflicts.is_empty(), "a mod without files conflicts with no one");
         let rival = cards.iter().find(|c| c.row.id == "Rival").unwrap();
@@ -1527,8 +1537,15 @@ mod tests {
         let folder = library.join("others").join("Dolls");
         crate::testutil::free_addon(&conn, "other_mods", "Dolls", &folder, Some("Dolls.7z"));
 
-        let back = import_other(&conn, &library, "Dolls.7z", &base.join("src").join("Dolls"), true, ExtractionMode::InfoOnly)
-            .expect("an id known without its files is not ignored");
+        let back = import_other(
+            &conn,
+            &library,
+            "Dolls.7z",
+            &base.join("src").join("Dolls"),
+            true,
+            ExtractionMode::InfoOnly,
+        )
+        .expect("an id known without its files is not ignored");
         assert!(back.rehydrated, "the report says the files came back");
         assert_eq!(back.categories, vec!["driver"]);
 
@@ -1547,8 +1564,15 @@ mod tests {
         );
         assert!(activate_other(&conn, &cfg, "Dolls").is_ok(), "and it can be laid again");
         assert!(
-            import_other(&conn, &library, "Dolls.7z", &base.join("src").join("Dolls"), true, ExtractionMode::InfoOnly)
-                .is_none(),
+            import_other(
+                &conn,
+                &library,
+                "Dolls.7z",
+                &base.join("src").join("Dolls"),
+                true,
+                ExtractionMode::InfoOnly
+            )
+            .is_none(),
             "a complete mod imported again is still ignored (§7.3)"
         );
     }

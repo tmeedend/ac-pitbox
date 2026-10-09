@@ -636,8 +636,15 @@ mod tests {
         crate::testutil::free_addon(&conn, "other_mods", "ada", &dir, Some("ada.7z"));
 
         let rows = list(&conn, &cfg).unwrap();
-        assert_eq!(rows[0].kind, RowKind::Driver, "still a mannequin, read from the manifest");
+        assert_eq!(
+            rows[0].kind,
+            RowKind::Driver,
+            "still a mannequin, read from the manifest"
+        );
         assert!(rows[0].showcase, "marked as having no files");
-        assert!(rows[0].size_bytes >= 4096, "its original size, not the manifest's few bytes");
+        assert!(
+            rows[0].size_bytes >= 4096,
+            "its original size, not the manifest's few bytes"
+        );
     }
 }
