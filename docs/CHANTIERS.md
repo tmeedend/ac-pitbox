@@ -163,9 +163,17 @@ de reprendre. En cas d'écart, la spec fait foi.
         sur « En vitrine » avec la sélection faite, et proposer de réactiver
         les mods actifs à l'export une fois leurs fichiers récupérés
         (`active_at_export` est dans le manifeste).
-      - **Mesurer l'export d'une grosse bibliothèque** : il parcourt chaque
-        dossier, et fige une image par version. Jamais mesuré au-delà des
-        tests.
+      - **Mesuré sur la bibliothèque réelle (2026-10-10)** : 186 mods,
+        3 couches, 67 apps et compléments, 49,5 Go → un fichier de 16,1 Mo
+        en une vingtaine de secondes, dont 8,4 Mo pour la base ; aucun fichier
+        lourd ni chemin de la machine dedans, vérifié sur le fichier lui-même.
+        L'estimation (environ 6 s) annonçait 30,7 Mo : elle additionne les
+        tailles **non compressées**. À reprendre si l'écart gêne. Le premier
+        essai pesait 28,7 Mo : un JPEG nommé `preview.png` (`Ph_highway`) n'était
+        pas réduit, corrigé pour la vitrine comme pour l'export (`1ff3556`).
+        L'import, lui, n'a été essayé que dans les tests et pour son refus
+        (installation non vide) : l'essai réel dans une installation vide
+        reste à faire.
       - **Trois points de relecture laissés** (2026-10-09) : l'image figée
         d'une voiture est celle que choisit le backend, pas la livrée préférée
         que la carte montre ; l'estimation refait toute la préparation de
