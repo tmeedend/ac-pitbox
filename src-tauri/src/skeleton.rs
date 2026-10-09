@@ -120,7 +120,7 @@ pub fn image_of(dir: &Path) -> Option<PathBuf> {
 /// wide, PNG when it has transparency (a regenerated grid thumbnail), JPEG
 /// otherwise. Replaces a previous one of either format.
 pub fn freeze_image(src: &Path, dir: &Path) -> Result<PathBuf, String> {
-    let img = image::open(src).map_err(|e| format!("{}: {e}", src.display()))?;
+    let (img, _) = decode(src)?;
     let img = narrowed(img);
     for old in IMAGE_EXTENSIONS
         .iter()
@@ -136,19 +136,32 @@ pub fn freeze_image(src: &Path, dir: &Path) -> Result<PathBuf, String> {
     Ok(dest)
 }
 
-/// Reduces an image to [`IMAGE_WIDTH`] where it lies, in its own format.
+/// Reduces an image to [`IMAGE_WIDTH`] where it lies, in its own format — the
+/// one its bytes say, whatever its extension.
 /// Returns the bytes it gave back; an image already narrow enough is left
 /// untouched.
 pub fn reduce_in_place(path: &Path) -> Result<u64, String> {
     let before = std::fs::metadata(path).map_err(|e| e.to_string())?.len();
-    let img = image::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let (img, format) = decode(path)?;
     if img.width() <= IMAGE_WIDTH {
         return Ok(0);
     }
-    let png = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("png"));
-    write_image(&narrowed(img), path, png)?;
+    write_image(&narrowed(img), path, format == image::ImageFormat::Png)?;
     let after = std::fs::metadata(path).map_err(|e| e.to_string())?.len();
     Ok(before.saturating_sub(after))
+}
+
+/// An image and its real format, read from its bytes and not from its name:
+/// mods ship JPEGs named `preview.png`, which the game reads all the same.
+fn decode(path: &Path) -> Result<(image::DynamicImage, image::ImageFormat), String> {
+    let err = |e: &dyn std::fmt::Display| format!("{}: {e}", path.display());
+    let reader = image::ImageReader::open(path)
+        .map_err(|e| err(&e))?
+        .with_guessed_format()
+        .map_err(|e| err(&e))?;
+    let format = reader.format().ok_or_else(|| err(&"unknown image format"))?;
+    let img = reader.decode().map_err(|e| err(&e))?;
+    Ok((img, format))
 }
 
 fn narrowed(img: image::DynamicImage) -> image::DynamicImage {
@@ -520,6 +533,34 @@ mod tests {
     /// Rule (ESPACE§3.3): the frozen image is narrow, a PNG when it has
     /// transparency (a regenerated thumbnail), a JPEG otherwise — and
     /// freezing again replaces it instead of leaving two.
+    /// Rule: an image is read for what it is, not for what its name says. Bug
+    /// met on a real library (`Ph_highway`): a JPEG named `preview.png`, which
+    /// the game reads all the same, failed to decode as a PNG and left its
+    /// 13 MB in the skeleton and in the export.
+    #[test]
+    fn a_jpeg_named_png_is_reduced_all_the_same() {
+        let base = crate::testutil::temp_dir("skeleton-misnamed");
+        let preview = base.join("preview.png");
+        let jpeg = base.join("photo.jpg");
+        image::RgbImage::from_pixel(1920, 1080, image::Rgb([30, 90, 200]))
+            .save(&jpeg)
+            .unwrap();
+        std::fs::rename(&jpeg, &preview).unwrap();
+
+        assert!(reduce_in_place(&preview).unwrap() > 0, "it gave bytes back");
+        let reduced = image::ImageReader::open(&preview)
+            .unwrap()
+            .with_guessed_format()
+            .unwrap();
+        assert_eq!(
+            reduced.format(),
+            Some(image::ImageFormat::Jpeg),
+            "still a JPEG, as the game read it"
+        );
+        assert_eq!(reduced.decode().unwrap().width(), IMAGE_WIDTH);
+        assert!(freeze_image(&preview, &base).is_ok(), "and it can be frozen");
+    }
+
     #[test]
     fn the_frozen_image_is_narrow_and_keeps_its_transparency() {
         let base = crate::testutil::temp_dir("skeleton-image");
