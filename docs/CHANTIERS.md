@@ -159,10 +159,11 @@ de reprendre. En cas d'écart, la spec fait foi.
         bibliothèque suffit), regarder les cartes, les fiches, les notes, les
         Compléments, puis récupérer quelques mods par leur archive. Ensuite
         seulement, `FEATURE_LIBRARY_TRANSFER = true`.
-      - **La suite de l'import** (EXPORT§10.1) : ouvrir la bibliothèque filtrée
-        sur « En vitrine » avec la sélection faite, et proposer de réactiver
-        les mods actifs à l'export une fois leurs fichiers récupérés
-        (`active_at_export` est dans le manifeste).
+      - **Pas de suite à l'import, décidé le 2026-10-10** (EXPORT§10.1) : ni
+        bibliothèque filtrée pour tout récupérer, ni réactivation automatique.
+        Sur une autre machine, la plupart des mods ne se retéléchargent pas ;
+        ils restent en vitrine, et on récupère ceux dont on a l'archive. Ne
+        pas les refaire sans en reparler.
       - **Mesuré sur la bibliothèque réelle (2026-10-10)** : 186 mods,
         3 couches, 67 apps et compléments, 49,5 Go → un fichier de 16,1 Mo
         en une vingtaine de secondes, dont 8,4 Mo pour la base ; aucun fichier
