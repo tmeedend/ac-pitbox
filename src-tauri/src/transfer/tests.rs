@@ -169,6 +169,12 @@ fn source(root: &Path) -> Install {
         overlay::create_profile(&conn, "p1", "Evening", "2026-10-09").unwrap();
         overlay::add_profile_extra_entry(&conn, "p1", "app", "Timer").unwrap();
     }
+    write_settings(&src);
+    src
+}
+
+/// A file of every part's settings, `config.json` naming this machine's paths.
+fn write_settings(src: &Install) {
     let config = &src.places.config_dir;
     write(
         config,
@@ -196,7 +202,6 @@ fn source(root: &Path) -> Install {
         .as_bytes(),
     );
     write(src.places.presets_dir.as_ref().unwrap(), "Spa dusk.cmpreset", b"{}");
-    src
 }
 
 fn entries(path: &Path) -> Vec<(String, Vec<u8>)> {
