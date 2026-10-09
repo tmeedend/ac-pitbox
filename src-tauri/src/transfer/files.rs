@@ -656,9 +656,19 @@ pub(super) fn check_free(zip: &mut Archive, library: &Path) -> Result<(), String
     Ok(())
 }
 
-/// Step 5 of EXPORT§7.3: the skeletons, at the library's relative paths.
-pub(super) fn unpack_library(zip: &mut Archive, library: &Path, undo: &mut Undo) -> Result<(), String> {
+/// Step 5 of EXPORT§7.3: the skeletons, at the library's relative paths —
+/// but those under `skipped`, folders of what the base did not bring in.
+pub(super) fn unpack_library(
+    zip: &mut Archive,
+    library: &Path,
+    skipped: &[String],
+    undo: &mut Undo,
+) -> Result<(), String> {
+    let skipped: Vec<PathBuf> = skipped.iter().map(|rel| library.join(rel)).collect();
     for (i, target) in library_targets(zip, library)? {
+        if skipped.iter().any(|dir| target.starts_with(dir)) {
+            continue;
+        }
         let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
         undo.write(&target, |f| std::io::copy(&mut entry, f).map(|_| ()))?;
     }

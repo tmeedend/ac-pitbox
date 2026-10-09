@@ -509,6 +509,82 @@ fn a_mod_installed_by_hand_is_recovered_by_importing_its_archive() {
     assert!(!skeleton_of(&dest, "rss_hybrid"), "and it has its files again");
 }
 
+/// Rule (EXPORT§4.2): a mod the other machine already has, installed by hand
+/// in its `content/`, stays what it is there — a real folder, its own row —
+/// and gets the notes written on it. The export's version, layers and
+/// skeleton would describe a mod in the showcase whose real folder sits in
+/// the game, and recovering it would then run into that folder.
+#[test]
+fn a_mod_installed_by_hand_on_both_sides_keeps_its_local_row() {
+    let root = crate::testutil::temp_dir("transfer-both");
+    let src = Install::new(&root, "source", &[]);
+    car(
+        &src.cfg
+            .ac_install_path
+            .as_ref()
+            .unwrap()
+            .join("content/cars/rss_hybrid"),
+        "Hybrid",
+    );
+    crate::stock::index_stock_content(&src.conn(), &src.cfg, &crate::rules::default_rules(), false).unwrap();
+    set_note(&src.conn(), EntityKind::Mod, "rss_hybrid", Some("mine on both")).unwrap();
+    // A layer on it, on the source machine: it must not land on the local one.
+    write(
+        &src.root.join("hd/rss_hybrid"),
+        "ui/ui_car.json",
+        br#"{"name":"Hybrid HD"}"#,
+    );
+    write(&src.root.join("hd/rss_hybrid"), "texture_hd/body.dds", &[5; 2000]);
+    src.import_folder(&src.root.join("hd"));
+    let file = root.join("library.pitbox");
+    export(&src.db, &src.cfg, &src.places, &[Part::Library], &file).unwrap();
+
+    let dest = Install::new(&root, "dest", &[]);
+    let local = dest
+        .cfg
+        .ac_install_path
+        .as_ref()
+        .unwrap()
+        .join("content/cars/rss_hybrid");
+    car(&local, "Hybrid");
+    crate::stock::index_stock_content(&dest.conn(), &dest.cfg, &crate::rules::default_rules(), false).unwrap();
+    let report = import(
+        &dest.db,
+        &dest.cfg,
+        &dest.places,
+        &crate::rules::default_rules(),
+        &file,
+        &[Part::Library],
+    )
+    .unwrap();
+
+    assert_eq!(report.local_kept, vec!["rss_hybrid"], "named in the report");
+    assert_eq!(report.mods, 0, "nothing imported in its place");
+    let conn = dest.conn();
+    let hybrid = overlay::get_mod(&conn, "rss_hybrid").unwrap().unwrap();
+    assert!(
+        hybrid.is_stock && hybrid.is_unmanaged,
+        "still the mod installed by hand here"
+    );
+    assert!(!hybrid.showcase, "with its files");
+    assert_eq!(
+        hybrid.notes_user.as_deref(),
+        Some("mine on both"),
+        "and the note written on it"
+    );
+    assert!(
+        overlay::list_layers(&conn, "rss_hybrid", crate::layers::HostKind::Car)
+            .unwrap()
+            .is_empty(),
+        "no layer laid on a mod Pit Box does not manage"
+    );
+    assert!(
+        !dest.library().join("cars").join("rss_hybrid").exists(),
+        "no skeleton written for it in the library"
+    );
+    assert!(local.join("model.kn5").is_file(), "its real folder untouched");
+}
+
 fn skeleton_of(install: &Install, id: &str) -> bool {
     crate::skeleton::is_showcase(&install.conn(), id).unwrap()
 }

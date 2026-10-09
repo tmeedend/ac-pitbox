@@ -82,6 +82,10 @@ pub(super) const TABLES: &[(&str, Out, In)] = &[
 /// schema's real foreign keys by a test, like [`TABLES`].
 pub(super) const NAME_A_MOD: &[&str] = &["versions", "tech_facts"];
 
+/// The tables whose `parent_id` names the mod a row is laid on: a layer, a
+/// skin or a sound of a mod kept as it is here ([`keep_local`]) does not come.
+const NAME_A_HOST: &[&str] = &["layers", "sub_mods"];
+
 /// The tables that hold something of a library: an installation with any
 /// of them filled is not empty (EXPORT R3). Game content does not count — a
 /// fresh installation indexes it at its first start.
@@ -302,6 +306,12 @@ pub(super) struct Merged {
     pub others: usize,
     pub stock_applied: usize,
     pub stock_missing: Vec<String>,
+    /// Mods of the export this machine has as its own, installed by hand:
+    /// kept as they are here (see [`keep_local`]).
+    pub local_kept: Vec<String>,
+    /// The library folders of what was not brought in for them — their
+    /// versions, layers, skins and sounds —, whose skeletons stay in the zip.
+    pub skipped_folders: Vec<String>,
 }
 
 fn columns(conn: &Connection, schema: &str, table: &str) -> rusqlite::Result<Vec<String>> {
@@ -311,11 +321,83 @@ fn columns(conn: &Connection, schema: &str, table: &str) -> rusqlite::Result<Vec
 }
 
 /// Brings the attached export base (`src`) into the live one (`main`), inside
-/// the caller's transaction (EXPORT§7.3, steps 3 and 4). Only the columns both
-/// know: the export was brought up to this schema by `overlay::open`, but a
-/// column it has and this one does not would have no meaning here.
+/// the caller's transaction (EXPORT§7.3, steps 3 and 4).
 pub(super) fn merge(conn: &Connection, profiles: bool, wiki: bool, now: &str) -> rusqlite::Result<Merged> {
-    let mut merged = Merged::default();
+    let local_kept = keep_local(conn)?;
+    copy_tables(conn, profiles, wiki)?;
+
+    let n = |sql: &str| conn.query_row(sql, [], |r| r.get::<_, i64>(0)).map(|n| n as usize);
+    let (stock_applied, stock_missing) = lay_user_fields(conn)?;
+    let mut merged = Merged {
+        mods: n(&format!(
+            "SELECT COUNT(*) FROM src.mods WHERE is_stock = 0 AND id_interne NOT IN {KEPT}"
+        ))?,
+        layers: n(&format!(
+            "SELECT COUNT(*) FROM src.layers WHERE parent_id NOT IN {KEPT}"
+        ))?,
+        apps: n("SELECT COUNT(*) FROM src.apps")?,
+        others: n("SELECT COUNT(*) FROM src.other_mods")?,
+        stock_applied,
+        stock_missing,
+        local_kept,
+        skipped_folders: Vec::new(),
+    };
+    let mut stmt = conn.prepare(&format!(
+        "SELECT library_path FROM src.versions WHERE mod_id IN {KEPT}
+         UNION ALL SELECT library_path FROM src.layers WHERE parent_id IN {KEPT}
+         UNION ALL SELECT library_path FROM src.sub_mods WHERE parent_id IN {KEPT}"
+    ))?;
+    merged.skipped_folders = stmt
+        .query_map([], |r| r.get::<_, String>(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    drop(stmt);
+
+    // One line in each mod's timeline: where it came from.
+    conn.execute(
+        &format!(
+            "INSERT INTO main.history (mod_id, timestamp, event, details)
+             SELECT id_interne, ?1, 'TRANSFER', '{{\"key\":\"transferred\"}}' FROM src.mods
+             WHERE is_stock = 0 AND id_interne NOT IN {KEPT}"
+        ),
+        [now],
+    )?;
+    // Harmonized by another engine maybe: the next start runs it again
+    // (EXPORT§7.3, step 8).
+    conn.execute(
+        "DELETE FROM main.meta WHERE key = ?1",
+        [crate::overlay::META_ENGINE_VERSION],
+    )?;
+    conn.execute_batch("DROP TABLE temp.transfer_kept")?;
+    Ok(merged)
+}
+
+/// The ids [`keep_local`] lists, for a query's `IN`.
+const KEPT: &str = "(SELECT id FROM temp.transfer_kept)";
+
+/// Mods of the export this machine already has as its own game content —
+/// installed by hand in its `content/`, a real folder Pit Box only reads.
+/// They stay what they are here, and get only what the user wrote on them:
+/// the export's version, layers and skeleton would make them mods in the
+/// showcase whose real folder sits in the game, and recovering one would run
+/// into that folder. Listed in `temp.transfer_kept` for the queries after.
+fn keep_local(conn: &Connection) -> rusqlite::Result<Vec<String>> {
+    conn.execute_batch(
+        "CREATE TEMP TABLE IF NOT EXISTS transfer_kept (id TEXT PRIMARY KEY);
+         DELETE FROM temp.transfer_kept;
+         INSERT INTO temp.transfer_kept
+           SELECT s.id_interne FROM src.mods AS s JOIN main.mods AS m ON m.id_interne = s.id_interne
+           WHERE s.is_stock = 0 AND m.is_stock = 1;",
+    )?;
+    let mut stmt = conn.prepare("SELECT id FROM temp.transfer_kept ORDER BY id")?;
+    let ids = stmt.query_map([], |r| r.get::<_, String>(0))?;
+    ids.collect()
+}
+
+/// Every table that comes in, table by table (EXPORT§4.1). Only the columns
+/// both bases know: the export was brought up to this schema by
+/// `overlay::open`, but a column it has and this one does not would have no
+/// meaning here.
+fn copy_tables(conn: &Connection, profiles: bool, wiki: bool) -> rusqlite::Result<()> {
     for (table, out, into) in TABLES {
         let skipped = *out == Out::Exclude
             || (*out == Out::Profiles && !profiles)
@@ -340,25 +422,28 @@ pub(super) fn merge(conn: &Connection, profiles: bool, wiki: bool, now: &str) ->
             In::Append | In::Skip => "INSERT",
         };
         let filter = if *into == In::Mods {
-            " WHERE is_stock = 0"
+            format!(" WHERE is_stock = 0 AND id_interne NOT IN {KEPT}")
         } else if NAME_A_MOD.contains(table) {
-            " WHERE mod_id IN (SELECT id_interne FROM main.mods)"
+            // Only the mods brought in: game content computes its own here.
+            " WHERE mod_id IN (SELECT id_interne FROM main.mods WHERE is_stock = 0)".to_string()
+        } else if NAME_A_HOST.contains(table) {
+            format!(" WHERE parent_id NOT IN {KEPT}")
         } else {
-            ""
+            String::new()
         };
         conn.execute(
             &format!("{verb} INTO main.{table} ({list}) SELECT {list} FROM src.{table}{filter}"),
             [],
         )?;
     }
+    Ok(())
+}
 
-    let n = |sql: &str| conn.query_row(sql, [], |r| r.get::<_, i64>(0)).map(|n| n as usize);
-    merged.mods = n("SELECT COUNT(*) FROM src.mods WHERE is_stock = 0")?;
-    merged.layers = n("SELECT COUNT(*) FROM src.layers")?;
-    merged.apps = n("SELECT COUNT(*) FROM src.apps")?;
-    merged.others = n("SELECT COUNT(*) FROM src.other_mods")?;
-
-    // Game content: only what the user wrote, on the ids this machine has.
+/// What the user wrote on content this machine has as its own — the game's,
+/// or a mod installed by hand ([`keep_local`]) —, laid on the same id
+/// (EXPORT§4.2). Returns how many rows got it, and the game content written on
+/// that this machine does not have.
+fn lay_user_fields(conn: &Connection) -> rusqlite::Result<(usize, Vec<String>)> {
     let theirs = columns(conn, "src", "mods")?;
     let ours = columns(conn, "main", "mods")?;
     let set = STOCK_USER_FIELDS
@@ -368,11 +453,11 @@ pub(super) fn merge(conn: &Connection, profiles: bool, wiki: bool, now: &str) ->
         .collect::<Vec<_>>()
         .join(", ");
     let user_data = user_data("s.");
-    merged.stock_applied = conn.execute(
+    let applied = conn.execute(
         &format!(
             "UPDATE main.mods SET {set} FROM src.mods AS s
              WHERE main.mods.id_interne = s.id_interne AND main.mods.is_stock = 1
-               AND s.is_stock = 1 AND {user_data}"
+               AND (s.is_stock = 1 OR s.id_interne IN {KEPT}) AND {user_data}"
         ),
         [],
     )?;
@@ -382,21 +467,8 @@ pub(super) fn merge(conn: &Connection, profiles: bool, wiki: bool, now: &str) ->
            AND NOT EXISTS (SELECT 1 FROM main.mods m WHERE m.id_interne = s.id_interne)
          ORDER BY s.id_interne"
     ))?;
-    merged.stock_missing = stmt
+    let missing = stmt
         .query_map([], |r| r.get::<_, String>(0))?
         .collect::<rusqlite::Result<_>>()?;
-
-    // One line in each mod's timeline: where it came from.
-    conn.execute(
-        "INSERT INTO main.history (mod_id, timestamp, event, details)
-         SELECT id_interne, ?1, 'TRANSFER', '{\"key\":\"transferred\"}' FROM src.mods WHERE is_stock = 0",
-        [now],
-    )?;
-    // Harmonized by another engine maybe: the next start runs it again
-    // (EXPORT§7.3, step 8).
-    conn.execute(
-        "DELETE FROM main.meta WHERE key = ?1",
-        [crate::overlay::META_ENGINE_VERSION],
-    )?;
-    Ok(merged)
+    Ok((applied, missing))
 }

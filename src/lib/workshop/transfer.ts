@@ -66,6 +66,9 @@ export interface ImportReport {
   others: number;
   stock_applied: number;
   stock_missing: string[];
+  /** Mods this installation already has, installed by hand: kept as they
+   * are here, with the notes written on them. */
+  local_kept: string[];
   presets_renamed: number;
   active_at_export: number;
   library_bytes_at_export: number;

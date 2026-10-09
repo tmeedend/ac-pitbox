@@ -174,6 +174,9 @@ pub struct ImportReport {
     /// Game content the user wrote on and this installation does not have
     /// (a DLC?): listed, never dropped in silence (EXPORT§4.2).
     pub stock_missing: Vec<String>,
+    /// Mods of the export this machine already has, installed by hand in its
+    /// `content/`: kept as they are, with the notes written on them.
+    pub local_kept: Vec<String>,
     /// Presets renamed because one of the same name was already there.
     pub presets_renamed: usize,
     pub active_at_export: usize,
@@ -520,7 +523,8 @@ pub fn import(
             report.others = merged.others;
             report.stock_applied = merged.stock_applied;
             report.stock_missing = merged.stock_missing;
-            files::unpack_library(&mut zip, &library, &mut undo)?;
+            report.local_kept = merged.local_kept;
+            files::unpack_library(&mut zip, &library, &merged.skipped_folders, &mut undo)?;
         }
         report.presets_renamed = files::unpack_settings(&mut zip, places, &parts, &mut undo)?;
         if attached.is_some() {

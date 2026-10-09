@@ -85,6 +85,12 @@
         <span class="mono ids">{report.stock_missing.join(", ")}</span>
       </p>
     {/if}
+    {#if report.local_kept.length}
+      <p class="line">
+        {t("transfer.localKept", { count: report.local_kept.length })}
+        <span class="mono ids">{report.local_kept.join(", ")}</span>
+      </p>
+    {/if}
     {#if report.presets_renamed}
       <p class="line">{t("transfer.presetsRenamed", { count: report.presets_renamed })}</p>
     {/if}

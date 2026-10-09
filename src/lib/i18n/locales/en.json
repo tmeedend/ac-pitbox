@@ -2471,6 +2471,7 @@
     "importedAddons": "{count} apps and add-ons are in the showcase.",
     "stockApplied": "Your notes on {count} pieces of game content are back.",
     "stockMissing": "{count} pieces of game content are missing from this installation (DLC?): their notes were not brought back.",
+    "localKept": "{count} mods already installed here by hand are kept as they are, with your notes:",
     "presetsRenamed": "{count} sessions had a name already taken here: a number was added to it.",
     "activeAtExport": "{count} were active at export.",
     "openLibrary": "Open the library"
