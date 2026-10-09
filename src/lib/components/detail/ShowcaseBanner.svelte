@@ -23,6 +23,7 @@
     type UpdateDetails,
   } from "$lib/library/modUpdates.svelte";
   import { reinstallFromArchive } from "$lib/workshop/maintenance";
+  import { siteHost, webSearchUrl } from "$lib/webSearch";
 
   interface Props {
     kind: ModKind;
@@ -97,22 +98,11 @@
   }
 
   /** What to search for: the archive's own name is the best key there is
-   * (ESPACE§8.2), the mod's name otherwise. Without quotes: an exact-phrase
-   * search on a file name found nothing on the real case, the same words
-   * without them found the page. */
+   * (ESPACE§8.2), the mod's name otherwise. */
   const query = $derived(sources?.file_name ?? name);
 
-  function host(site: string): string {
-    try {
-      return new URL(site).hostname.replace(/^www\./, "");
-    } catch {
-      return site;
-    }
-  }
-
   function search(site: string | null): void {
-    const q = site ? `site:${host(site)} ${query}` : query;
-    openUrl(`https://duckduckgo.com/?q=${encodeURIComponent(q)}`).catch((e) => (error = errorText(e)));
+    openUrl(webSearchUrl(query, site)).catch((e) => (error = errorText(e)));
   }
 
   function visit(url: string): void {
@@ -166,7 +156,7 @@
         {/if}
         {#if sources.source_site}
           <div class="src">
-            <span class="s-what">{t("showcase.searchSite", { site: host(sources.source_site) })}</span>
+            <span class="s-what">{t("showcase.searchSite", { site: siteHost(sources.source_site) })}</span>
             <button class="btn" type="button" onclick={() => search(sources!.source_site)}>{t("showcase.search")}</button>
           </div>
         {/if}

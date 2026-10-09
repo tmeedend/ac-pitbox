@@ -3,13 +3,13 @@
 // knows, to be looked for by hand, and servers that only let in the players
 // of their own launcher. Pure, for Vitest.
 import type { Fetch, Level } from "./online";
+import { webSearchUrl as search } from "$lib/webSearch";
 
-/** A general web search for a mod, by the id the server names it with —
- * DuckDuckGo, no site in particular (the user's choice, 2026-10-04). The
+/** A general web search for a mod, by the id the server names it with. The
  * archive found is dropped on Pit Box, imported, and recognised like any
  * other. */
 export function webSearchUrl(id: string): string {
-  return `https://duckduckgo.com/?q=${encodeURIComponent(`${id} assetto corsa`)}`;
+  return search(`${id} assetto corsa`);
 }
 
 export interface Wanted {
