@@ -3,22 +3,32 @@
 
 import type { BulkEntry, BulkExecItem, BulkStatus } from "$lib/library/library";
 
-export type BulkCounts = Record<BulkStatus | "ignored", number>;
+export type BulkCounts = Record<BulkStatus | "other" | "ignored", number>;
+
+/** A non-empty folder with no car or track in it: the execution files it as
+ *  one "other mod" (§7.3), the way a folder imported alone would be. Bodies of
+ *  drivers (`content/driver/*.kn5`) are the usual case. Counting only the
+ *  recognised mods showed such a batch as "0 new" with a disabled button. */
+export function isOtherContent(e: BulkEntry): boolean {
+  return !e.ignored && e.mods.length === 0;
+}
 
 export function bulkCounts(entries: BulkEntry[]): BulkCounts {
-  const c: BulkCounts = { new: 0, update: 0, duplicate: 0, ambiguous: 0, rehydrate: 0, ignored: 0 };
+  const c: BulkCounts = { new: 0, update: 0, duplicate: 0, ambiguous: 0, rehydrate: 0, other: 0, ignored: 0 };
   for (const e of entries) {
     if (e.ignored) c.ignored++;
+    else if (isOtherContent(e)) c.other++;
     for (const m of e.mods) c[m.status]++;
   }
   return c;
 }
 
-/** Number of mods the execution will import (the button's count). */
+/** Number of items the execution will import (the button's count). */
 export function importCount(entries: BulkEntry[], skipDuplicates: boolean): number {
   let n = 0;
   for (const e of entries) {
     if (e.ignored) continue;
+    if (isOtherContent(e)) n++;
     for (const m of e.mods) {
       if (m.status === "duplicate" && skipDuplicates) continue;
       n++;

@@ -5173,6 +5173,53 @@ mod tests {
         );
     }
 
+    /// Rule (§4.2, §7.3): a parent folder of driver bodies, each delivered as
+    /// `<name>/content/driver/<name>.kn5`, is a batch of "other mods" — one per
+    /// subfolder, the body kept at its game path. Real case: sixteen bodies
+    /// analysed as "0 new" (the screen only counted cars and tracks).
+    #[test]
+    fn bulk_driver_bodies_become_one_other_mod_each() {
+        let base = crate::testutil::temp_dir("import-bulk-drivers");
+        let parent = base.join("drivers");
+        for name in ["senna", "goku"] {
+            let dir = parent.join(name).join("content").join("driver");
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join(format!("{name}.kn5")), b"KN5").unwrap();
+        }
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+
+        let entries = analyze_bulk(&conn, &cfg, &parent).unwrap();
+        assert_eq!(entries.len(), 2, "one entry per subfolder");
+        for e in &entries {
+            assert!(
+                !e.ignored && e.mods.is_empty(),
+                "{}: other content, not ignored",
+                e.subfolder
+            );
+            let item = BulkExecItem {
+                path: e.path.clone(),
+                skip_ids: vec![],
+                replace_ids: vec![],
+            };
+            let r = exec_one(&ImportCtx::silent(), &conn, &cfg, &rules, 0, &item, true);
+            assert_eq!(r.others.len(), 1, "{}: filed as one other mod", e.subfolder);
+            let body = library
+                .join("others")
+                .join(&r.others[0].id)
+                .join("content")
+                .join("driver")
+                .join(format!("{}.kn5", e.subfolder));
+            assert!(body.is_file(), "body kept at its game path: {}", body.display());
+        }
+    }
+
     #[test]
     fn published_at_estimated_on_import() {
         let base = crate::testutil::temp_dir("import");

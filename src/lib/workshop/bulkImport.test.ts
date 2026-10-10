@@ -19,7 +19,26 @@ describe("bulk import summary", () => {
       entry("upd", [mod("c", "update")]),
       entry("empty", [], true),
     ];
-    expect(bulkCounts(entries)).toEqual({ new: 1, update: 1, duplicate: 1, ambiguous: 0, rehydrate: 0, ignored: 1 });
+    expect(bulkCounts(entries)).toEqual({
+      new: 1,
+      update: 1,
+      duplicate: 1,
+      ambiguous: 0,
+      rehydrate: 0,
+      other: 0,
+      ignored: 1,
+    });
+  });
+
+  // Real bug: a folder of sixteen driver bodies (`<name>/content/driver/<name>.kn5`)
+  // showed "0 new" and an "Import 0 mod(s)" button that could not be clicked,
+  // although the execution files each folder as an "other mod" (§7.3).
+  it("counts a non-empty folder with no car or track as one other mod to import", () => {
+    const entries = [entry("senna", []), entry("goku", []), entry("empty", [], true)];
+    expect(bulkCounts(entries).other).toBe(2);
+    expect(bulkCounts(entries).ignored).toBe(1);
+    expect(importCount(entries, true)).toBe(2);
+    expect(buildExecItems(entries, true, {}).map((i) => i.path)).toEqual(["C:\\src\\senna", "C:\\src\\goku"]);
   });
 
   it("leaves duplicates out of the import count only when they are skipped", () => {

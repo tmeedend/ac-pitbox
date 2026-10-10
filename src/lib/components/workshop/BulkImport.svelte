@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { analyzeBulkImport, executeBulkImport, type ArchiveResult, type BulkEntry } from "$lib/library/library";
-  import { bulkCounts, buildExecItems, importCount } from "$lib/workshop/bulkImport";
+  import { bulkCounts, buildExecItems, importCount, isOtherContent } from "$lib/workshop/bulkImport";
   import { t } from "$lib/i18n/index.svelte";
 
   import { errorText } from "$lib/errors";
@@ -93,6 +93,7 @@
         <span class="ct dup">{t("bulkImport.countDuplicate", { count: counts.duplicate })}</span>
         <span class="ct amb">{t("bulkImport.countAmbiguous", { count: counts.ambiguous })}</span>
         {#if counts.rehydrate > 0}<span class="ct upd">{t("bulkImport.countRehydrate", { count: counts.rehydrate })}</span>{/if}
+        {#if counts.other > 0}<span class="ct new">{t("bulkImport.countOther", { count: counts.other })}</span>{/if}
         <span class="ct ign">{t("bulkImport.countIgnored", { count: counts.ignored })}</span>
       </div>
 
@@ -118,6 +119,8 @@
             <div class="e-name">{e.subfolder}</div>
             {#if e.ignored}
               <span class="badge ign">{t("bulkImport.ignoredBadge")}</span>
+            {:else if isOtherContent(e)}
+              <span class="badge new">{t("bulkImport.statusOther")}</span>
             {:else}
               <div class="e-mods">
                 {#each e.mods as m (m.id)}
