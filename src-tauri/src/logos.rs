@@ -341,10 +341,9 @@ fn rank(variants: &mut [(Variant, String)]) {
     });
 }
 
-/// Every brand's logos, from the badges of the library's cars. Brands with a
-/// choice but no car left (TAXO§9: the curation survives) are included, with
-/// their file if they have one.
-pub fn elect(cars: &[CarBadge], prefs: &Prefs, dir: &Path) -> BTreeMap<String, BrandLogo> {
+/// Each brand's variants, with the first car shipping each - one per file,
+/// its votes counted, and whether it is borrowed.
+fn tally(cars: &[CarBadge]) -> BTreeMap<&str, BTreeMap<String, (Variant, String)>> {
     let mut sorted: Vec<(&CarBadge, Analysis)> = cars
         .iter()
         .filter_map(|b| Some((b, analyze(Path::new(&b.path))?)))
@@ -392,6 +391,14 @@ pub fn elect(cars: &[CarBadge], prefs: &Prefs, dir: &Path) -> BTreeMap<String, B
         e.0.cars += 1;
         e.0.borrowed &= borrowed;
     }
+    by_brand
+}
+
+/// Every brand's logos, from the badges of the library's cars. Brands with a
+/// choice but no car left (TAXO§9: the curation survives) are included, with
+/// their file if they have one.
+pub fn elect(cars: &[CarBadge], prefs: &Prefs, dir: &Path) -> BTreeMap<String, BrandLogo> {
+    let by_brand = tally(cars);
     let mut out = BTreeMap::new();
     let brands: Vec<String> = by_brand
         .keys()
