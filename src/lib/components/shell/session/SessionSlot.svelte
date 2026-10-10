@@ -171,22 +171,54 @@
     width: 100%;
     height: auto;
   }
-  /* Fenêtre basse : la photo et le plan tombent à la moitié de leur hauteur
-     (L5§2.3, premier des trois recours). Un plafond de hauteur plutôt
-     qu'un rapport d'image, parce que la boîte prend le rapport de SA photo
-     dès qu'il y en a une (`.thumb.photo`) — c'est donc la hauteur qu'il faut
-     borner, et le recadrage est préférable à une image écrasée.
-     `sidecol` est le conteneur que déclare `.side` dans `SessionColumn`. */
+  /* Low window (SESSION§1): the photo stops taking room of its own and becomes
+     the BACKDROP of the whole block — darkened and blurred, with the name and
+     the fields laid over it. It used to drop to a 68 px band in `cover`, so a
+     zoomed-in window cut the wheels and the edges of the map off (reported on
+     screen); a backdrop gives back its entire height instead of half of it,
+     and a blurred backdrop has no edge whose loss could be seen.
+     The box is positioned against `.blk` (`SessionColumn`), not against the
+     button: `.pick` stays static on purpose, so that the photo spans the
+     fields too. It ignores the pointer — a click that missed a menu by a few
+     pixels must not eject to the library, so only the name navigates.
+     Stacking without `z-index`: the photo comes first in tree order, and the
+     name and the fields are positioned after it (`relative` here and in
+     `SessionColumn`), so they paint above. A negative `z-index` would need a
+     stacking context on `.blk`, which would trap the open lists of the track
+     block under the car block.
+     `sidecol` is the container declared by `.side` in `SessionColumn`. */
   @container sidecol (max-height: 960px) {
-    /* Hauteur EXPLICITE et non un plafond : la boîte tire sa hauteur de son
-       image (`aspect-ratio: auto`), donc un `max-height` ne donnerait à
-       l'image aucune hauteur de référence à laquelle se rapporter. */
     .thumb.photo {
-      height: 68px;
+      position: absolute;
+      inset: 0;
+      border: none;
+      pointer-events: none;
     }
     .thumb.photo img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
       height: 100%;
       object-fit: cover;
+      /* The blur fades the edges of the image towards transparency: the
+         slight zoom pushes that fringe outside the box, which clips it. */
+      transform: scale(1.08);
+      filter: blur(3px) brightness(0.38);
+      transition: filter 0.13s;
+    }
+    .pick:hover .thumb.photo img,
+    .pick:focus-visible .thumb.photo img {
+      filter: blur(3px) brightness(0.55);
+    }
+    /* The layout outline is the thumbnail of the Layout field right below:
+       laid over a backdrop, behind the text, it would only blur the name. */
+    .thumb.photo img.outline,
+    .thumb.photo .veil {
+      display: none;
+    }
+    .pick > :global(:not(.thumb)) {
+      position: relative;
+      text-shadow: 0 1px 3px rgb(0 0 0 / 80%);
     }
     .thumb:not(.photo) {
       aspect-ratio: 4.6;
