@@ -40,7 +40,10 @@ pub const DEFAULT_RULES: &str = include_str!("../rules/default-tag-rules.json");
 ///     library's most used spelling (TAXO§7, `brands.rs`).
 /// 7 — the rules become one source of a car's tech sheet (FICHE§6.2): the
 ///     re-harmonisation files what they deduce, and the country, as facts.
-pub const ENGINE_VERSION: u32 = 7;
+/// 8 — invisible characters are no difference in a brand (`brands::clean`):
+///     the bump files the "No Hesi Traffic" cars, stored as "\u{1d17a}BMW",
+///     back under "BMW".
+pub const ENGINE_VERSION: u32 = 8;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Rules {

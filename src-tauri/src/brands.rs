@@ -27,9 +27,34 @@ pub fn fold(s: &str) -> String {
     crate::rules::fold(&clean(s))
 }
 
-/// Trimmed, inner whitespace collapsed.
+/// Trimmed, inner whitespace collapsed, invisible characters dropped.
 fn clean(s: &str) -> String {
-    s.split_whitespace().collect::<Vec<_>>().join(" ")
+    let visible: String = s.chars().filter(|&c| !is_invisible(c)).collect();
+    visible.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Formatting characters nothing draws (Unicode category Cf, the ones met in
+/// text): zero-width spaces and joiners, direction marks, the BOM, and the
+/// musical formatting marks U+1D173-U+1D17A. Kept, they make a second brand
+/// that reads exactly like the first - real case: the "No Hesi Traffic" pack
+/// prefixes its brands with U+1D17A, so "BMW" and "BMW" were two brands with
+/// two logos. Listed by hand: std does not expose the general category, and
+/// the list is short enough not to take a dependency for it.
+fn is_invisible(c: char) -> bool {
+    matches!(
+        c,
+        '\u{00AD}'
+            | '\u{061C}'
+            | '\u{180E}'
+            | '\u{200B}'..='\u{200F}'
+            | '\u{202A}'..='\u{202E}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{206F}'
+            | '\u{FEFF}'
+            | '\u{1D173}'..='\u{1D17A}'
+            | '\u{E0001}'
+            | '\u{E0020}'..='\u{E007F}'
+    )
 }
 
 /// Elects one spelling per folded key: the most used; on a tie, the one with
@@ -193,6 +218,35 @@ mod tests {
             "unknown stays"
         );
         assert_eq!(canonical_in("  ", &none, &known), None);
+    }
+
+    /// TAXO§7.1: an invisible character is no difference either. Real case:
+    /// the 14 cars of the "No Hesi Traffic" pack start their brand (and name)
+    /// with U+1D17A, a musical formatting character nothing draws - "BMW"
+    /// and "BMW" then showed as two brands in the Brands tab, each with its
+    /// own logo.
+    #[test]
+    fn an_invisible_character_does_not_make_a_second_brand() {
+        let known = elect(["BMW", "BMW", "\u{1d17a}BMW", "\u{200b}Ford\u{feff}", "Ford"]);
+        assert_eq!(known.len(), 2, "one brand per folded key: {known:?}");
+        assert_eq!(known["bmw"], "BMW");
+        assert_eq!(known["ford"], "Ford", "zero-width space and BOM are invisible too");
+        let none = BTreeMap::new();
+        assert_eq!(
+            canonical_in("\u{1d17a}BMW", &none, &known).as_deref(),
+            Some("BMW"),
+            "filed under the brand already there"
+        );
+        assert_eq!(
+            canonical_in("\u{1d17a}Unknown", &none, &known).as_deref(),
+            Some("Unknown"),
+            "a brand of its own is stored without the invisible character"
+        );
+        assert_eq!(
+            canonical_in("\u{1d17a}", &none, &known),
+            None,
+            "nothing visible, no brand"
+        );
     }
 
     /// A pack is no brand: the car's name says its brand - whole words only,
