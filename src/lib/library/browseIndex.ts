@@ -66,19 +66,21 @@ export function significantBrandCount(counts: number[], total: number): number {
 }
 
 /**
- * The brand tiles to draw: the significant ones by count, then - once unfolded
- * - the rest in alphabetical order (INDEX§6.2), which is how one looks a
- * brand up in a long list.
+ * The brand tiles to draw (INDEX§6.2): folded, the significant ones by count;
+ * unfolded, every brand by name - a long list is where one looks a brand up,
+ * not a ranking (asked at use: the significant ones used to stay on top by
+ * count, the rest following by name). Folding brings the count order back.
+ * The absent value closes the list either way (INDEX§4.3).
  */
 export function brandTiles(tiles: IndexTile[], total: number, unfolded: boolean): { shown: IndexTile[]; hidden: number } {
   const n = significantBrandCount(
     tiles.map((t) => t.count),
     total,
   );
-  const head = tiles.slice(0, n);
-  const rest = tiles.slice(n);
-  if (!unfolded) return { shown: head, hidden: rest.length };
-  return { shown: [...head, ...[...rest].sort((a, b) => a.label.localeCompare(b.label))], hidden: 0 };
+  if (!unfolded) return { shown: tiles.slice(0, n), hidden: tiles.length - n };
+  const byName = (a: IndexTile, b: IndexTile) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" });
+  const named = tiles.filter((t) => !t.unset).sort(byName);
+  return { shown: [...named, ...tiles.filter((t) => t.unset)], hidden: 0 };
 }
 
 /** Initials of a brand without a logo - never an empty disc (INDEX§4.1). */

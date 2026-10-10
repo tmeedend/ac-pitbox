@@ -61,19 +61,36 @@ describe("significantBrandCount", () => {
 describe("brandTiles", () => {
   const tile = (value: string, count: number) => ({ value, label: value, count, unset: false });
 
-  it("unfolds the rest in alphabetical order, after the significant ones", () => {
+  // INDEX§6.2, asked at use: folded, the significant brands by count;
+  // unfolded, every brand by name - the significant ones no longer stay on
+  // top - and folding again brings the count order back.
+  it("shows the significant brands by count, and every brand by name once unfolded", () => {
     const tiles = [
       tile("Porsche", 50),
-      ...["B", "C", "D", "E", "F", "G", "H"].map((b) => tile(b, 5)),
-      tile("Zonda", 1),
+      ...["H", "G", "F", "E", "D", "C", "B"].map((b) => tile(b, 5)),
+      tile("zonda", 1),
       tile("Abarth", 1),
+      { value: "", label: "—", count: 3, unset: true },
     ];
     const folded = brandTiles(tiles, 100, false);
-    expect(folded.shown).toHaveLength(8);
-    expect(folded.hidden, "the link says what it unfolds").toBe(2);
+    expect(folded.shown.map((t) => t.value)).toEqual(["Porsche", "H", "G", "F", "E", "D", "C", "B"]);
+    expect(folded.hidden, "the link says what it unfolds").toBe(3);
     const open = brandTiles(tiles, 100, true);
-    expect(open.shown.slice(8).map((t) => t.value)).toEqual(["Abarth", "Zonda"]);
+    expect(open.shown.map((t) => t.value), "by name, case aside; the absent value last").toEqual([
+      "Abarth",
+      "B",
+      "C",
+      "D",
+      "E",
+      "F",
+      "G",
+      "H",
+      "Porsche",
+      "zonda",
+      "",
+    ]);
     expect(open.hidden).toBe(0);
+    expect(brandTiles(tiles, 100, false).shown[0].value, "folding again: by count").toBe("Porsche");
   });
 });
 

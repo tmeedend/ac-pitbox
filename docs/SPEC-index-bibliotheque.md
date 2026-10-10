@@ -153,7 +153,7 @@ Deux conséquences d'interface :
 
 ## 6.2 Parcourir par marque
 
-**Seules les marques significatives sont affichées**, plus un lien `Toutes les marques (N)` qui déplie le reste par ordre alphabétique.
+**Seules les marques significatives sont affichées**, plus un lien `Toutes les marques (N)` qui déplie la liste entière, **toute par ordre alphabétique** (les significatives ne restent pas en tête), et `Réduire` qui revient aux significatives, par nombre.
 
 Soixante-dix marques dont la moitié ne mène qu'à une seule voiture : une grille complète serait surtout du bruit, et beaucoup de clics pour rien.
 
