@@ -153,142 +153,149 @@ fn rows_from_disk(cfg: &AppConfig, base: InventoryBase) -> Vec<InventoryRow> {
         index,
     } = base;
     let mut out: Vec<InventoryRow> = Vec::new();
-
-    // --- Mods « autres » : la seule source dont le rattachement se déduit ---
-    for card in crate::others::others_from_disk(cfg, others, &index) {
-        let dir = crate::libpath::resolve(cfg.library_path.as_deref(), &card.row.library_path);
-        // Un mannequin ne touche QUE `content/driver` — c'est ce qui le
-        // distingue d'un pack qui en livrerait un parmi d'autres choses.
-        //
-        // La catégorie fourre-tout ne compte pas dans ce jugement : elle
-        // ramasse ce qui ne va nulle part dans le jeu, c'est-à-dire l'emballage
-        // de l'auteur. `DORIKIN_DRIVER_MOD` livre deux mannequins **et** sa
-        // notice d'installation en japonais avec deux captures d'écran ; une
-        // égalité stricte en faisait un mod quelconque à cause d'elles.
-        let is_driver = card.categories.iter().any(|c| c == "driver")
-            && card
-                .categories
-                .iter()
-                .all(|c| c == "driver" || c == crate::others::OTHER_CATEGORY);
-        // Aucun fichier stocké : tout est parti en ressources (§4.5.2). C'est
-        // une notice ou un manuel — le seul cas où un mod « autre » ne pose
-        // rien du tout, et il a un nom.
-        let is_document = !is_driver && card.file_count == 0;
-        let attachment = if is_document {
-            crate::attach::Attachment {
-                nature: Nature::Document,
-                ..card.attachment.clone()
-            }
-        } else if is_driver {
-            // « Autonome », pas « le jeu » : un modèle de pilote ne se greffe
-            // sur rien, il se choisit (§2). Et sa nature est **contenu** — il
-            // n'habille pas quelque chose d'autre, il EST la chose.
-            crate::attach::Attachment {
-                kind: crate::attach::AttachKind::Standalone,
-                target_id: None,
-                target_name: None,
-                signal: card.attachment.signal,
-                nature: Nature::Content,
-            }
-        } else {
-            card.attachment
-        };
-        out.push(InventoryRow {
-            uid: format!("OTHER:{}", card.row.id),
-            kind: if is_driver {
-                RowKind::Driver
-            } else if is_document {
-                RowKind::Document
-            } else {
-                RowKind::Other
-            },
-            name: card
-                .row
-                .display_name_user
-                .clone()
-                .unwrap_or_else(|| card.row.id.clone()),
-            tech_id: card.row.id.clone(),
-            areas: card.categories.clone(),
-            attachment,
-            active: Some(card.row.is_active),
-            priority: card.row.is_priority,
-            has_note: card.row.notes_user.is_some(),
-            showcase: card.row.is_skeleton(),
-            source_archive: card.row.source_archive.clone(),
-            imported_at: card.row.imported_at.clone(),
-            size_bytes: row_size(dir.as_deref(), card.row.is_skeleton()),
-            id: card.row.id,
-        });
-    }
-
-    // --- Sous-éléments : le rattachement est certain, il est dans la table ---
-    for sub in subs {
-        let kind = match sub.sub_type.as_str() {
-            "SOUND" => RowKind::Sound,
-            "TRACK_SKIN" | "TRACK_MOD" => RowKind::TrackSkin,
-            _ => RowKind::Skin,
-        };
-        let dir = crate::libpath::resolve(cfg.library_path.as_deref(), &sub.library_path);
-        // Nom lisible d'une livrée : celui de son `ui_skin.json`, le même que
-        // montre le sélecteur de la fiche. Sans lui, la ligne répétait deux
-        // fois `chp_unit_118` — en blanc puis en gris.
-        let readable = if kind == RowKind::Skin {
-            dir.as_deref().and_then(crate::library::read_skin_name)
-        } else {
-            None
-        };
-        out.push(InventoryRow {
-            uid: format!("SUB:{}", sub.id),
-            kind,
-            name: sub
-                .display_name_user
-                .clone()
-                .or(readable)
-                .unwrap_or_else(|| sub.name.clone()),
-            tech_id: sub.name.clone(),
-            areas: Vec::new(),
-            attachment: host_attachment(&index, &sub.parent_id, nature_of_sub(kind)),
-            // Voir `active` : seuls les sons et les habillages de circuit ont
-            // un état de déploiement propre.
-            active: match kind {
-                RowKind::Sound | RowKind::TrackSkin => Some(sub.is_active),
-                _ => None,
-            },
-            priority: false,
-            has_note: sub.notes_user.is_some(),
-            showcase: sub.is_skeleton(),
-            source_archive: sub.source_archive.clone(),
-            imported_at: sub.imported_at.clone(),
-            size_bytes: row_size(dir.as_deref(), sub.is_skeleton()),
-            id: sub.id,
-        });
-    }
-
-    // --- Couches : hôte connu par construction lui aussi ---
-    for layer in layers {
-        let dir = crate::libpath::resolve(cfg.library_path.as_deref(), &layer.library_path);
-        out.push(InventoryRow {
-            uid: format!("LAYER:{}", layer.id),
-            kind: RowKind::Layer,
-            // Le nom dérivé (retrait de l'extension, du préfixe de l'hôte) est
-            // calculé côté front, qui le fait déjà pour la fiche de couche : le
-            // dupliquer ici en ferait deux versions à garder d'accord.
-            name: layer.display_name_user.clone().unwrap_or_else(|| layer.name.clone()),
-            tech_id: layer.source_archive.clone().unwrap_or_else(|| layer.name.clone()),
-            areas: Vec::new(),
-            attachment: host_attachment(&index, &layer.parent_id, Nature::Appearance),
-            active: Some(layer.is_active),
-            priority: false,
-            has_note: layer.notes_user.is_some(),
-            showcase: layer.is_skeleton(),
-            source_archive: layer.source_archive.clone(),
-            imported_at: layer.imported_at.clone(),
-            size_bytes: row_size(dir.as_deref(), layer.is_skeleton()),
-            id: layer.id,
-        });
-    }
-
+    out.extend(
+        crate::others::others_from_disk(cfg, others, &index)
+            .into_iter()
+            .map(|card| other_row(cfg, card)),
+    );
+    out.extend(subs.into_iter().map(|sub| sub_row(cfg, &index, sub)));
+    out.extend(layers.into_iter().map(|layer| layer_row(cfg, &index, layer)));
     out
+}
+
+/// The row of an "other" mod: the only source whose attachment is deduced, and
+/// the one that also carries the driver models and the documents.
+fn other_row(cfg: &AppConfig, card: crate::others::OtherModCard) -> InventoryRow {
+    let dir = crate::libpath::resolve(cfg.library_path.as_deref(), &card.row.library_path);
+    // Un mannequin ne touche QUE `content/driver` — c'est ce qui le
+    // distingue d'un pack qui en livrerait un parmi d'autres choses.
+    //
+    // La catégorie fourre-tout ne compte pas dans ce jugement : elle
+    // ramasse ce qui ne va nulle part dans le jeu, c'est-à-dire l'emballage
+    // de l'auteur. `DORIKIN_DRIVER_MOD` livre deux mannequins **et** sa
+    // notice d'installation en japonais avec deux captures d'écran ; une
+    // égalité stricte en faisait un mod quelconque à cause d'elles.
+    let is_driver = card.categories.iter().any(|c| c == "driver")
+        && card
+            .categories
+            .iter()
+            .all(|c| c == "driver" || c == crate::others::OTHER_CATEGORY);
+    // Aucun fichier stocké : tout est parti en ressources (§4.5.2). C'est
+    // une notice ou un manuel — le seul cas où un mod « autre » ne pose
+    // rien du tout, et il a un nom.
+    let is_document = !is_driver && card.file_count == 0;
+    let attachment = if is_document {
+        crate::attach::Attachment {
+            nature: Nature::Document,
+            ..card.attachment.clone()
+        }
+    } else if is_driver {
+        // « Autonome », pas « le jeu » : un modèle de pilote ne se greffe
+        // sur rien, il se choisit (§2). Et sa nature est **contenu** — il
+        // n'habille pas quelque chose d'autre, il EST la chose.
+        crate::attach::Attachment {
+            kind: crate::attach::AttachKind::Standalone,
+            target_id: None,
+            target_name: None,
+            signal: card.attachment.signal,
+            nature: Nature::Content,
+        }
+    } else {
+        card.attachment
+    };
+    InventoryRow {
+        uid: format!("OTHER:{}", card.row.id),
+        kind: if is_driver {
+            RowKind::Driver
+        } else if is_document {
+            RowKind::Document
+        } else {
+            RowKind::Other
+        },
+        name: card
+            .row
+            .display_name_user
+            .clone()
+            .unwrap_or_else(|| card.row.id.clone()),
+        tech_id: card.row.id.clone(),
+        areas: card.categories.clone(),
+        attachment,
+        active: Some(card.row.is_active),
+        priority: card.row.is_priority,
+        has_note: card.row.notes_user.is_some(),
+        showcase: card.row.is_skeleton(),
+        source_archive: card.row.source_archive.clone(),
+        imported_at: card.row.imported_at.clone(),
+        size_bytes: row_size(dir.as_deref(), card.row.is_skeleton()),
+        id: card.row.id,
+    }
+}
+
+/// The row of a sub-element: its host is certain, it is written in its table.
+fn sub_row(cfg: &AppConfig, index: &attach::EntityIndex, sub: overlay::SubModRow) -> InventoryRow {
+    let kind = match sub.sub_type.as_str() {
+        "SOUND" => RowKind::Sound,
+        "TRACK_SKIN" | "TRACK_MOD" => RowKind::TrackSkin,
+        _ => RowKind::Skin,
+    };
+    let dir = crate::libpath::resolve(cfg.library_path.as_deref(), &sub.library_path);
+    // Nom lisible d'une livrée : celui de son `ui_skin.json`, le même que
+    // montre le sélecteur de la fiche. Sans lui, la ligne répétait deux
+    // fois `chp_unit_118` — en blanc puis en gris.
+    let readable = if kind == RowKind::Skin {
+        dir.as_deref().and_then(crate::library::read_skin_name)
+    } else {
+        None
+    };
+    InventoryRow {
+        uid: format!("SUB:{}", sub.id),
+        kind,
+        name: sub
+            .display_name_user
+            .clone()
+            .or(readable)
+            .unwrap_or_else(|| sub.name.clone()),
+        tech_id: sub.name.clone(),
+        areas: Vec::new(),
+        attachment: host_attachment(index, &sub.parent_id, nature_of_sub(kind)),
+        // Voir `active` : seuls les sons et les habillages de circuit ont
+        // un état de déploiement propre.
+        active: match kind {
+            RowKind::Sound | RowKind::TrackSkin => Some(sub.is_active),
+            _ => None,
+        },
+        priority: false,
+        has_note: sub.notes_user.is_some(),
+        showcase: sub.is_skeleton(),
+        source_archive: sub.source_archive.clone(),
+        imported_at: sub.imported_at.clone(),
+        size_bytes: row_size(dir.as_deref(), sub.is_skeleton()),
+        id: sub.id,
+    }
+}
+
+/// The row of a layer: its host is known by construction too.
+fn layer_row(cfg: &AppConfig, index: &attach::EntityIndex, layer: overlay::LayerRow) -> InventoryRow {
+    let dir = crate::libpath::resolve(cfg.library_path.as_deref(), &layer.library_path);
+    InventoryRow {
+        uid: format!("LAYER:{}", layer.id),
+        kind: RowKind::Layer,
+        // Le nom dérivé (retrait de l'extension, du préfixe de l'hôte) est
+        // calculé côté front, qui le fait déjà pour la fiche de couche : le
+        // dupliquer ici en ferait deux versions à garder d'accord.
+        name: layer.display_name_user.clone().unwrap_or_else(|| layer.name.clone()),
+        tech_id: layer.source_archive.clone().unwrap_or_else(|| layer.name.clone()),
+        areas: Vec::new(),
+        attachment: host_attachment(index, &layer.parent_id, Nature::Appearance),
+        active: Some(layer.is_active),
+        priority: false,
+        has_note: layer.notes_user.is_some(),
+        showcase: layer.is_skeleton(),
+        source_archive: layer.source_archive.clone(),
+        imported_at: layer.imported_at.clone(),
+        size_bytes: row_size(dir.as_deref(), layer.is_skeleton()),
+        id: layer.id,
+    }
 }
 
 /// The size of a row's folder; without its files, what its manifest says left
