@@ -381,7 +381,9 @@ compris : il en est indemne aujourd'hui.
 
 ```
 src-tauri/src/          Backend Rust — un module par domaine
-  lib.rs                Point d'entrée : mod, état partagé, setup, invoke_handler
+  lib.rs                Point d'entrée : mod, plugins, invoke_handler
+  startup.rs            Le démarrage, dans l'ordre : base, filets de sécurité,
+                        rattrapages, services et état partagé
   commands/             Façades #[tauri::command], un fichier par domaine
   errors.rs             Clés i18n des erreurs destinées à l'utilisateur
   overlay/              Base SQLite : un fichier par famille de tables, schéma et
