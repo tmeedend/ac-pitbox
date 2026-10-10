@@ -6,16 +6,8 @@
   // changes, and that stops the engine when the car changes.
   import type { SubModRow } from "$lib/inventory/submods";
   import IgnitionKey from "./IgnitionKey.svelte";
-  import Slider from "$lib/components/ui/Slider.svelte";
-  import {
-    engineControls,
-    engineRev,
-    engineShowcase,
-    engineState,
-    setEnginePedal,
-    setEngineRev,
-    setEngineShowcase,
-  } from "$lib/detail/enginePlayer.svelte";
+  import EngineRevControls from "./EngineRevControls.svelte";
+  import { engineState } from "$lib/detail/enginePlayer.svelte";
   import { t } from "$lib/i18n/index.svelte";
 
   interface Props {
@@ -33,14 +25,6 @@
   let { modId, sounds, busy, onpick, onlisten, freed = false }: Props = $props();
 
   const activeSound = $derived(sounds.find((s) => s.is_active) ?? null);
-
-  // `null` tant que le chemin natif ne joue pas, ou quand l'événement joué
-  // n'expose aucun paramètre de régime reconnaissable — il s'entend quand même,
-  // il ne se règle simplement pas (FMOD§2.4).
-  const revControls = $derived.by(() => {
-    const c = engineControls();
-    return c && c.revParam ? c : null;
-  });
 </script>
 
 <section class="blk">
@@ -73,34 +57,7 @@
         </div>
       {/each}
     </div>
-    <!-- Le curseur n'apparaît que quand le vrai moteur du jeu tourne : le
-         repli joue un échantillon figé, qu'il n'y a rien à régler. Sa
-         plage vient de la courbe de puissance de **cette** voiture, d'où
-         un F1 qui monte à 19 500 et un utilitaire diesel à 5 000. -->
-    {#if revControls}
-      <div class="rev-row">
-        <!-- Le curseur disparaît pendant la démonstration : les deux
-             pilotent le même paramètre, et un curseur qui ne suit pas ce
-             qu'on entend serait pire qu'absent. -->
-        {#if !engineShowcase()}
-          <Slider
-            compact
-            label={t("detail.soundRev")}
-            min={revControls.revFloor}
-            max={revControls.revCeiling}
-            step={50}
-            value={engineRev()}
-            display={t("detail.soundRevValue", { rpm: Math.round(engineRev()).toLocaleString() })}
-            oninput={setEngineRev}
-            onpress={() => setEnginePedal(true)}
-            onrelease={() => setEnginePedal(false)}
-          />
-        {/if}
-        <button class="blip" class:on={engineShowcase()} type="button" onclick={() => setEngineShowcase(!engineShowcase())}>
-          {engineShowcase() ? t("detail.soundBlipStop") : t("detail.soundBlip")}
-        </button>
-      </div>
-    {/if}
+    <EngineRevControls />
     <!-- L'exclusivité et l'absence de mod se lisent sur les boutons radio
          eux-mêmes : « Origine » seule et cochée dit tout. -->
     {/if}
@@ -117,39 +74,9 @@
     flex-direction: column;
     gap: 5px;
   }
-  .rev-row {
-    display: flex;
-    align-items: flex-end;
-    gap: 12px;
+  /* The rev controls sit under the list of sounds. */
+  .blk-b :global(.rev) {
     margin-top: 10px;
-  }
-
-  /* Le curseur prend la place restante ; le bouton garde la sienne. */
-  .rev-row :global(.slider) {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .blip {
-    flex: 0 0 auto;
-    margin-left: auto;
-    padding: 6px 12px;
-    border: 1px solid var(--rosso-border);
-    border-radius: 4px;
-    background: var(--rosso-dim);
-    color: var(--txt);
-    font-size: 11.5px;
-    cursor: pointer;
-  }
-
-  .blip:hover {
-    border-color: var(--rosso-bright);
-  }
-
-  .blip.on {
-    background: var(--rosso-bright);
-    border-color: var(--rosso-bright);
-    color: #fff;
   }
 
   .sound-row {

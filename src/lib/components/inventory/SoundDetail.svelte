@@ -19,18 +19,8 @@
   import InlineEdit from "$lib/components/ui/InlineEdit.svelte";
   import FicheHeader from "$lib/components/detail/FicheHeader.svelte";
   import NoteBlock from "$lib/components/detail/NoteBlock.svelte";
-  import {
-    engineControls,
-    engineRev,
-    engineShowcase,
-    engineState,
-    setEnginePedal,
-  setEngineRev,
-    setEngineShowcase,
-    stopEngine,
-    toggleEngine,
-  } from "$lib/detail/enginePlayer.svelte";
-  import Slider from "$lib/components/ui/Slider.svelte";
+  import EngineRevControls from "$lib/components/detail/EngineRevControls.svelte";
+  import { engineState, stopEngine, toggleEngine } from "$lib/detail/enginePlayer.svelte";
 
   interface Props {
     subId: string;
@@ -103,14 +93,6 @@
       error = errorText(e);
     }
   }
-
-  // Voir `DetailPage` : le curseur n'existe que sur le chemin natif, et
-  // seulement quand l'événement expose un régime réglable.
-  const revControls = $derived.by(() => {
-    const c = engineControls();
-    return c && c.revParam ? c : null;
-  });
-
 </script>
 
 <div class="page">
@@ -133,27 +115,7 @@
     <FicheHeader onback={onclose} backLabel={t("sounds.back")} glyph="♪" name={subId} />
   {/if}
 
-  {#if revControls}
-    <div class="rev">
-      {#if !engineShowcase()}
-        <Slider
-          compact
-          label={t("detail.soundRev")}
-          min={revControls.revFloor}
-          max={revControls.revCeiling}
-          step={50}
-          value={engineRev()}
-          display={t("detail.soundRevValue", { rpm: Math.round(engineRev()).toLocaleString() })}
-          oninput={setEngineRev}
-          onpress={() => setEnginePedal(true)}
-          onrelease={() => setEnginePedal(false)}
-        />
-      {/if}
-      <button class="blip" class:on={engineShowcase()} type="button" onclick={() => setEngineShowcase(!engineShowcase())}>
-        {engineShowcase() ? t("detail.soundBlipStop") : t("detail.soundBlip")}
-      </button>
-    </div>
-  {/if}
+  <EngineRevControls />
 
   {#if error}<div class="errbox">{error}</div>{/if}
 
@@ -265,40 +227,10 @@
   .body {
     margin-top: 14px;
   }
-  /* Le curseur prend la largeur du bandeau, sous l'en-tête qui porte la clé. */
-  .rev {
-    display: flex;
-    align-items: flex-end;
-    gap: 12px;
+  /* The slider takes the width of the band, under the header that carries the key. */
+  .page > :global(.rev) {
     max-width: 520px;
     margin: 0 0 12px;
-  }
-
-  .rev :global(.slider) {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .blip {
-    flex: 0 0 auto;
-    margin-left: auto;
-    padding: 6px 12px;
-    border: 1px solid var(--rosso-border);
-    border-radius: 4px;
-    background: var(--rosso-dim);
-    color: var(--txt);
-    font-size: 11.5px;
-    cursor: pointer;
-  }
-
-  .blip:hover {
-    border-color: var(--rosso-bright);
-  }
-
-  .blip.on {
-    background: var(--rosso-bright);
-    border-color: var(--rosso-bright);
-    color: #fff;
   }
 
   .errbox {
