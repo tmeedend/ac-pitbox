@@ -1112,6 +1112,86 @@ mod tests {
         );
     }
 
+    /// Rule (§4.6ter): a placement the user explicitly authorised is not
+    /// refused by a date — an older file of the mod does replace the game's —
+    /// but the backup stays mandatory, and the original comes back.
+    #[test]
+    fn a_forced_file_replaces_even_a_newer_game_file_and_gives_it_back() {
+        let base = crate::testutil::temp_dir("other-forced");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        let kunos = ac.join("content").join("gui").join("logo.png");
+        std::fs::create_dir_all(kunos.parent().unwrap()).unwrap();
+        std::fs::write(&kunos, b"RECENT").unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+
+        let src = base.join("src").join("OldHud");
+        make_tree(&src, &["content/gui/logo.png"]);
+        std::fs::write(src.join("content").join("gui").join("logo.png"), b"MOD-LOGO").unwrap();
+        let t = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+        std::fs::File::options()
+            .write(true)
+            .open(src.join("content").join("gui").join("logo.png"))
+            .unwrap()
+            .set_modified(t)
+            .unwrap();
+
+        import_other(&conn, &library, "OldHud.zip", &src, true, ExtractionMode::InfoOnly).unwrap();
+        overlay::mark_forced_extra(&conn, "OldHud", &kunos.to_string_lossy()).unwrap();
+        let res = activate_other(&conn, &cfg, "OldHud").unwrap();
+        assert_eq!(res.junctions, 1, "forced: laid despite being older");
+        assert_eq!(std::fs::read(&kunos).unwrap(), b"MOD-LOGO", "the mod's file is in place");
+        assert!(
+            crate::gamebackup::is_replaced(&conn, &kunos),
+            "the original went to the backup first"
+        );
+
+        deactivate_other(&conn, "OldHud").unwrap();
+        assert_eq!(std::fs::read(&kunos).unwrap(), b"RECENT", "the game's file comes back");
+    }
+
+    /// Rule (§4.5.3): what is not a game path stays in the library instead of
+    /// being laid at the root of the install — a folder as well as a file —
+    /// and says so, while the rest of the mod is still laid.
+    #[test]
+    fn what_is_not_a_game_path_is_reported_and_never_laid_at_the_install_root() {
+        let base = crate::testutil::temp_dir("other-not-game-path");
+        let library = base.join("library");
+        let ac = base.join("ac");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(ac.join("content").join("gui").join("flags")).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+
+        let src = base.join("src").join("Flags");
+        make_tree(&src, &["content/gui/flags/new_flag.png"]);
+        import_other(&conn, &library, "Flags.zip", &src, true, ExtractionMode::InfoOnly).unwrap();
+        // Entries imported before the import learnt to sort them out still
+        // carry such things in their stored tree.
+        let row = overlay::get_other_mod(&conn, "Flags").unwrap().unwrap();
+        let stored = crate::libpath::resolve(Some(&library), &row.library_path).unwrap();
+        make_tree(&stored, &["stray/notes.txt"]);
+
+        let res = activate_other(&conn, &cfg, "Flags").unwrap();
+        assert_eq!(res.junctions, 1, "the game file is laid all the same");
+        assert!(
+            ac.join("content/gui/flags/new_flag.png").is_file(),
+            "the legit file reached the game"
+        );
+        assert!(!ac.join("stray").exists(), "nothing laid at the install root");
+        assert_eq!(res.warnings.len(), 1, "the refused folder is reported: {:?}", res.warnings);
+    }
+
     #[test]
     fn import_and_activate_new_gap() {
         let base = crate::testutil::temp_dir("other");
