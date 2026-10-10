@@ -64,7 +64,7 @@ fn backups_root(base: &Path) -> PathBuf {
     base.join("backups")
 }
 
-/// Appelée une fois au démarrage (`lib.rs`, avant l'ouverture de la connexion
+/// Appelée une fois au démarrage (`startup.rs`, avant l'ouverture de la connexion
 /// SQLite — on veut la base exactement telle que la session précédente l'a
 /// laissée). Ne remonte jamais d'erreur bloquante : un échec (disque plein,
 /// permission) ne doit jamais empêcher le démarrage de l'app, seulement

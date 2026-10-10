@@ -141,11 +141,11 @@ pub async fn online_ping(servers: Vec<online::drivers::ServerAddr>) -> Result<Ve
         .map_err(|e| e.to_string())
 }
 
-/// Whether the game runs, as the game watch last announced it (`lib.rs`):
+/// Whether the game runs, as the game watch last announced it (`startup.rs`):
 /// what the set-aside guard asks when its delay is over.
 static GAME_RUNNING: AtomicBool = AtomicBool::new(false);
 
-/// Hooked on the game watch (`lib.rs`), which calls it on every change and
+/// Hooked on the game watch (`startup.rs`), which calls it on every change and
 /// once at startup: when the game is not running, gives back the layers an
 /// online session set aside (`online/session_layers.rs`), and tells the screen
 /// which. On its own thread — a recomposition must not hold the watch, which

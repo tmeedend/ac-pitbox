@@ -299,7 +299,7 @@ pub fn iso2_of(code3: &str) -> Option<&'static str> {
 /// deep inside the harmonisation where no configuration is at hand.
 ///
 /// Process-wide on purpose: it is read-only data of the game install, loaded
-/// once at startup (`lib.rs`), and threading it through `harmonize::store`
+/// once at startup (`startup.rs`), and threading it through `harmonize::store`
 /// would reach every importer for a lookup. **Empty is a valid state** — no
 /// install configured, or in tests: the normalisation then keeps the aliases
 /// only, as before it existed.

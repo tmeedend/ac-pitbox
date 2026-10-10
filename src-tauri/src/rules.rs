@@ -24,7 +24,7 @@ pub const DEFAULT_RULES: &str = include_str!("../rules/default-tag-rules.json");
 
 /// Harmonisation engine version. Bumped whenever the same rules would now
 /// yield a different result — the overlay then holds a stale computation, and
-/// the startup catch-up in `lib.rs` recomputes it. Same need, and same remedy,
+/// the startup catch-up in `startup.rs` recomputes it. Same need, and same remedy,
 /// as `preview::CONVERTER_VERSION`: a cached result has to be told when the
 /// code that produced it has moved on.
 ///
