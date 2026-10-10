@@ -78,9 +78,15 @@ export function brandTiles(tiles: IndexTile[], total: number, unfolded: boolean)
     total,
   );
   if (!unfolded) return { shown: tiles.slice(0, n), hidden: tiles.length - n };
+  return { shown: tilesByName(tiles), hidden: 0 };
+}
+
+/** The same tiles by name, case aside; the absent value still closes the list
+ * (INDEX§4.3). */
+export function tilesByName(tiles: IndexTile[]): IndexTile[] {
   const byName = (a: IndexTile, b: IndexTile) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" });
   const named = tiles.filter((t) => !t.unset).sort(byName);
-  return { shown: [...named, ...tiles.filter((t) => t.unset)], hidden: 0 };
+  return [...named, ...tiles.filter((t) => t.unset)];
 }
 
 /** Initials of a brand without a logo - never an empty disc (INDEX§4.1). */
