@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 // for its chip labels; nothing here translates (see `filters.test.ts`).
 vi.mock("$lib/i18n/index.svelte", () => ({ t: (key: string) => key }));
 
-const { brandTiles, indexTiles, initials, significantBrandCount } = await import("./browseIndex");
+const { brandTiles, indexTiles, initials, significantBrandCount, tilesByName } = await import("./browseIndex");
 const { buildCardIndex, buildPredicate, filterDefs, hasActiveFilter, poseValue, UNSET_VALUE } = await import("./filters");
 type ModCard = import("./library").ModCard;
 
@@ -26,6 +26,15 @@ describe("indexTiles", () => {
 
   it("breaks ties by name, so two launches draw the same grid", () => {
     expect(indexTiles([opt("Spain", 4), opt("Brazil", 4)]).map((t) => t.value)).toEqual(["Brazil", "Spain"]);
+  });
+});
+
+// Asked at use: the countries of the track index are looked up by name, the
+// count order scattered them. The absent value still closes the list.
+describe("tilesByName", () => {
+  it("orders by the label shown, case aside, the absent value last", () => {
+    const tiles = indexTiles([opt("Italy", 38), opt(UNSET_VALUE, 40), opt("belgium", 2), opt("Japan", 34)]);
+    expect(tilesByName(tiles).map((t) => t.value)).toEqual(["belgium", "Italy", "Japan", UNSET_VALUE]);
   });
 });
 

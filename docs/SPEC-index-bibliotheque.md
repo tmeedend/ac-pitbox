@@ -114,14 +114,16 @@ Un seul index : **par pays**.
 ```
 Parcourir par pays            21 pays représentés        [ Voir tous les circuits ]
 ────────────────────────────────────────────────────────────────────────────────
- 🇮🇹 Italie      🇯🇵 Japon      🇩🇪 Allemagne    🇬🇧 Royaume-Uni   🇺🇸 États-Unis
- 38 circuits     34 circuits    29 circuits      27 circuits      21 circuits
+ 🇩🇪 Allemagne   🇧🇪 Belgique    🇪🇸 Espagne      🇺🇸 États-Unis    🇫🇷 France
+ 29 circuits     6 circuits     9 circuits       21 circuits      17 circuits
  …
  ⬚ Non renseigné
  14 circuits
 ```
 
 **Pourquoi le pays fonctionne ici.** Un circuit *est* son lieu. Le drapeau est le symbole le plus universellement reconnaissable qui existe, la vingtaine de pays tient dans une grille lisible, et la répartition est raisonnablement équilibrée.
+
+**Par ordre alphabétique**, sur le nom affiché (donc traduit), et Non renseigné toujours en dernier. Les pays se classaient d'abord par nombre de circuits ; mais un circuit se cherche par son pays, et l'ordre par nombre éparpillait la liste (demandé à l'usage).
 
 ## 5.1 Voir tous les circuits
 

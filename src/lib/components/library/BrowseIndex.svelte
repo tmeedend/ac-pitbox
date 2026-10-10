@@ -16,7 +16,7 @@
   // what `#jdm` says.
   import { flagFor, loadFlags } from "$lib/flags.svelte";
   import { t } from "$lib/i18n/index.svelte";
-  import { brandTiles, indexTiles, initials, type IndexTile } from "$lib/library/browseIndex";
+  import { brandTiles, indexTiles, initials, tilesByName, type IndexTile } from "$lib/library/browseIndex";
   import type { CategoryFamily } from "$lib/library/families";
   import { familyIcon, NEUTRAL_ICON } from "$lib/library/familyIcons";
   import Emblem from "$lib/components/ui/Emblem.svelte";
@@ -48,7 +48,9 @@
     if (!isCar) void loadFlags();
   });
 
-  const countries = $derived(isCar ? [] : indexTiles(optionsFor("country")));
+  // By name, not by count (asked at use): a track is looked up by its country,
+  // and the count order scattered the list.
+  const countries = $derived(isCar ? [] : tilesByName(indexTiles(optionsFor("country"))));
   const familyTiles = $derived(isCar && families.length ? indexTiles(optionsFor("family")) : []);
   /** Not remembered, on purpose (INDEX§6.2): folded again next time. */
   let allBrands = $state(false);
