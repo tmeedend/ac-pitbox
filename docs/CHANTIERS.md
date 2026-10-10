@@ -1073,7 +1073,8 @@ de reprendre. En cas d'écart, la spec fait foi.
       par se séparer à nouveau. L'avertissement est écrit dans
       `docs/README.md` et au §14 de `SPEC.md` en attendant.
 
-- [ ] **Refactorings repérés, reportés (2026-09-25, revus le 2026-10-04).**
+- [ ] **Refactorings repérés, reportés (2026-09-25, revus le 2026-10-04 et le
+      2026-10-10).**
       Classés par bénéfice sur risque ; aucun ne change le comportement,
       aucun ne touche un format persisté. Les actions de la fiche
       (`$lib/detail/actions.svelte.ts`) et la scène de l'aperçu 3D
@@ -1100,3 +1101,22 @@ de reprendre. En cas d'écart, la spec fait foi.
       4. **`others.rs::place` (122 lignes)** : la pose d'un « autre mod » dans
          le jeu, donc à côté des règles d'or n°2 et n°5 — tests d'abord. Une
          session, risque moyen (repéré le 2026-10-08).
+      5. **`submods.rs` (2 983 lignes, le deuxième fichier du projet)** mêle
+         trois sujets : les livrées, les habillages de circuit et les sons. Un
+         fichier par sujet, tests compris (environ 1 500 lignes). Une session,
+         risque faible : des déplacements (revue du 2026-10-10).
+      6. **Les sons et les habillages de circuit sortent de `DetailPage.svelte`**
+         (1 205 lignes, script de 762) : environ 100 lignes et trois effets, à
+         ranger dans `$lib/detail` comme les actions de la fiche le
+         2026-10-04. Une session ; risque faible à moyen, aucun test de
+         composant — regarder la fiche à l'écran après (revue du 2026-10-10).
+      7. **Le démarrage sort de `lib.rs`** (`run`, 511 lignes) : environ 220
+         lignes d'étapes de démarrage vers un `startup.rs`, en quatre groupes
+         (base, filets de sécurité, rattrapages, services). Une session ;
+         risque moyen, l'ordre des étapes compte et aucun test ne couvre le
+         démarrage — le banc mesure les temps, pas l'ordre (revue du
+         2026-10-10).
+
+      **Revue du 2026-10-10** : démarrage sans régression (cartes à l'écran
+      en 999 ms, 1 064 ms le 2026-10-08, 385 cartes) ; `transfer/files.rs`
+      découpé en un module par sujet (`0164f5c`).
