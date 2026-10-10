@@ -657,132 +657,146 @@ pub struct ActivateOtherResult {
     pub warnings: Vec<String>,
 }
 
-/// Pose une jonction à `current`'s enfants, en descendant tant que
-/// l'emplacement AC correspondant existe déjà (vrai dossier). S'arrête et
-/// jonctionne dès qu'un emplacement est libre. Un fichier isolé dont le
-/// dossier parent existe déjà réellement est posé par lien fichier ; s'il vise
-/// un fichier déjà présent, il le **remplace après sauvegarde** (§4.5.4) — et
-/// seulement si son exemplaire est plus récent.
-#[allow(clippy::too_many_arguments)]
-fn place(
-    conn: &Connection,
-    cfg: &AppConfig,
-    current: &Path,
-    root: &Path,
-    ac: &Path,
-    mine_id: &str,
+/// What laying an "other" mod carries down its tree: the mod, where it goes,
+/// and what it has laid or had to leave so far.
+struct Placement<'a> {
+    conn: &'a Connection,
+    cfg: &'a AppConfig,
+    /// The stored tree's root: what a path is relative to in the game.
+    root: &'a Path,
+    ac: &'a Path,
+    mine_id: &'a str,
     mine_priority: bool,
-    others: &[OtherModRow],
-    junctions: &mut Vec<String>,
-    warnings: &mut Vec<String>,
-) {
-    let Ok(entries) = std::fs::read_dir(current) else {
-        return;
-    };
-    for e in entries.flatten() {
-        let p = e.path();
-        let Ok(rel) = p.strip_prefix(root) else { continue };
-        // Même refus que pour les ajouts au jeu (§4.5.3) : un « autre mod »
-        // dont le chemin n'est pas un chemin de jeu reste en bibliothèque
-        // plutôt que d'être jonctionné à la racine de l'install.
-        //
-        // Le test diffère selon qu'on regarde un dossier ou un fichier. En
-        // descendant, `content` seul est un début de chemin valide alors que
-        // ce n'en est pas encore un ; un fichier, lui, doit désigner un chemin
-        // complet — d'où `leads_into_game` d'un côté, `is_ac_relative` de
-        // l'autre.
-        let acceptable = if p.is_dir() {
-            crate::acpath::leads_into_game(rel)
-        } else {
-            crate::acpath::is_ac_relative(rel)
+    others: &'a [OtherModRow],
+    junctions: Vec<String>,
+    warnings: Vec<String>,
+}
+
+impl Placement<'_> {
+    /// Pose une jonction à `current`'s enfants, en descendant tant que
+    /// l'emplacement AC correspondant existe déjà (vrai dossier). S'arrête et
+    /// jonctionne dès qu'un emplacement est libre. Un fichier isolé dont le
+    /// dossier parent existe déjà réellement est posé par lien fichier ; s'il vise
+    /// un fichier déjà présent, il le **remplace après sauvegarde** (§4.5.4) — et
+    /// seulement si son exemplaire est plus récent.
+    fn place(&mut self, current: &Path) {
+        let Ok(entries) = std::fs::read_dir(current) else {
+            return;
         };
-        if !acceptable {
-            log::warn!("place {mine_id}: {} is not an AC path, skipped", rel.display());
-            warnings.push(format!("{} : hors chemin de jeu, non posé", rel.display()));
-            continue;
-        }
-        let target = ac.join(rel);
-        if !p.is_dir() {
-            // Fichier isolé : posé par lien fichier si son dossier parent
-            // existe déjà (vrai dossier ou tout juste jonctionné). Un fichier
-            // déjà présent à cet emplacement n'est plus sauté en silence — il
-            // est remplacé après sauvegarde de l'original (§4.5.4), sous la même
-            // condition que partout ailleurs : seul un exemplaire plus récent
-            // prend la place de ce qui tourne déjà.
-            if !target.parent().is_some_and(|p| p.exists()) {
-                log::warn!(
-                    "place {mine_id} {}: parent dir missing at {}",
-                    rel.display(),
-                    target.display()
-                );
-                warnings.push(format!("{} : dossier parent introuvable", rel.display()));
+        for e in entries.flatten() {
+            let p = e.path();
+            let Ok(rel) = p.strip_prefix(self.root) else { continue };
+            // Même refus que pour les ajouts au jeu (§4.5.3) : un « autre mod »
+            // dont le chemin n'est pas un chemin de jeu reste en bibliothèque
+            // plutôt que d'être jonctionné à la racine de l'install.
+            //
+            // Le test diffère selon qu'on regarde un dossier ou un fichier. En
+            // descendant, `content` seul est un début de chemin valide alors que
+            // ce n'en est pas encore un ; un fichier, lui, doit désigner un chemin
+            // complet — d'où `leads_into_game` d'un côté, `is_ac_relative` de
+            // l'autre.
+            let acceptable = if p.is_dir() {
+                crate::acpath::leads_into_game(rel)
+            } else {
+                crate::acpath::is_ac_relative(rel)
+            };
+            if !acceptable {
+                log::warn!("place {}: {} is not an AC path, skipped", self.mine_id, rel.display());
+                self.warnings
+                    .push(format!("{} : hors chemin de jeu, non posé", rel.display()));
                 continue;
             }
-            if target.exists() {
-                // Même exception qu'aux ajouts au jeu (§4.6ter) : une pose que
-                // l'utilisateur a explicitement autorisée ne se laisse pas
-                // refuser par une date. La sauvegarde, elle, reste obligatoire.
-                let forced = overlay::is_forced_extra(conn, mine_id, &target.to_string_lossy());
-                if !forced && !crate::gamebackup::is_newer(&p, &target) {
-                    log::warn!(
-                        "place {mine_id} {}: target exists and is not older, left alone",
-                        rel.display()
-                    );
-                    continue;
-                }
-                // `protect` refuse s'il n'a pas pu sécuriser l'original : alors
-                // on ne touche à rien, plutôt que d'altérer sans filet.
-                if !crate::gamebackup::protect(conn, cfg, &target) {
-                    warnings.push(format!("{} : sauvegarde impossible, non remplacé", rel.display()));
-                    continue;
-                }
-                if let Err(e) = std::fs::remove_file(&target) {
-                    log::warn!("place {mine_id} {}: {e}", rel.display());
-                    continue;
-                }
+            let target = self.ac.join(rel);
+            if p.is_dir() {
+                self.place_dir(&p, rel, &target);
+            } else {
+                self.place_file(&p, rel, &target);
             }
-            match activation::create_file_link(&target, &p) {
-                Ok(()) => junctions.push(target.to_string_lossy().into_owned()),
-                Err(err) => warnings.push(format!("{} : {err}", rel.display())),
-            }
-            continue;
         }
-        if !target.exists() {
-            match activation::create_junction(&target, &p) {
-                Ok(()) => junctions.push(target.to_string_lossy().into_owned()),
-                Err(err) => warnings.push(format!("{} : {err}", rel.display())),
+    }
+
+    /// Fichier isolé : posé par lien fichier si son dossier parent existe déjà
+    /// (vrai dossier ou tout juste jonctionné). Un fichier déjà présent à cet
+    /// emplacement n'est plus sauté en silence — il est remplacé après
+    /// sauvegarde de l'original (§4.5.4), sous la même condition que partout
+    /// ailleurs : seul un exemplaire plus récent prend la place de ce qui tourne
+    /// déjà.
+    fn place_file(&mut self, src: &Path, rel: &Path, target: &Path) {
+        let mine_id = self.mine_id;
+        if !target.parent().is_some_and(|p| p.exists()) {
+            log::warn!(
+                "place {mine_id} {}: parent dir missing at {}",
+                rel.display(),
+                target.display()
+            );
+            self.warnings
+                .push(format!("{} : dossier parent introuvable", rel.display()));
+            return;
+        }
+        if target.exists() {
+            // Même exception qu'aux ajouts au jeu (§4.6ter) : une pose que
+            // l'utilisateur a explicitement autorisée ne se laisse pas
+            // refuser par une date. La sauvegarde, elle, reste obligatoire.
+            let forced = overlay::is_forced_extra(self.conn, mine_id, &target.to_string_lossy());
+            if !forced && !crate::gamebackup::is_newer(src, target) {
+                log::warn!(
+                    "place {mine_id} {}: target exists and is not older, left alone",
+                    rel.display()
+                );
+                return;
             }
-        } else if activation::is_junction(&target) {
+            // `protect` refuse s'il n'a pas pu sécuriser l'original : alors
+            // on ne touche à rien, plutôt que d'altérer sans filet.
+            if !crate::gamebackup::protect(self.conn, self.cfg, target) {
+                self.warnings
+                    .push(format!("{} : sauvegarde impossible, non remplacé", rel.display()));
+                return;
+            }
+            if let Err(e) = std::fs::remove_file(target) {
+                log::warn!("place {mine_id} {}: {e}", rel.display());
+                return;
+            }
+        }
+        let laid = activation::create_file_link(target, src);
+        self.record(laid, rel, target);
+    }
+
+    /// A folder: a junction where the game has nothing, the priority settling
+    /// a place another "other" mod holds (§7.3), and a real folder never
+    /// touched — the descent goes on below it.
+    fn place_dir(&mut self, src: &Path, rel: &Path, target: &Path) {
+        if !target.exists() {
+            let laid = activation::create_junction(target, src);
+            self.record(laid, rel, target);
+        } else if activation::is_junction(target) {
             // Emplacement déjà pris par un autre mod « autre » actif : la
             // priorité tranche (le mod prioritaire gagne, §7.3).
-            let holder = others
+            let holder = self
+                .others
                 .iter()
-                .find(|o| o.id != mine_id && o.is_active && o.junctions.iter().any(|j| Path::new(j) == target));
-            let take = holder.map(|h| mine_priority || !h.is_priority).unwrap_or(true);
+                .find(|o| o.id != self.mine_id && o.is_active && o.junctions.iter().any(|j| Path::new(j) == target));
+            let take = holder.map(|h| self.mine_priority || !h.is_priority).unwrap_or(true);
             if take {
-                let _ = activation::remove_junction(&target);
-                match activation::create_junction(&target, &p) {
-                    Ok(()) => junctions.push(target.to_string_lossy().into_owned()),
-                    Err(err) => warnings.push(format!("{} : {err}", rel.display())),
-                }
+                let _ = activation::remove_junction(target);
+                let laid = activation::create_junction(target, src);
+                self.record(laid, rel, target);
             } else {
-                warnings.push(format!("{} : emplacement pris par un mod prioritaire", rel.display()));
+                self.warnings
+                    .push(format!("{} : emplacement pris par un mod prioritaire", rel.display()));
             }
         } else {
             // Vrai dossier existant, jamais touché (garde-fou) : on essaie de
             // se glisser plus profond, dans un sous-dossier qui n'existe pas.
-            place(
-                conn,
-                cfg,
-                &p,
-                root,
-                ac,
-                mine_id,
-                mine_priority,
-                others,
-                junctions,
-                warnings,
-            );
+            self.place(src);
+        }
+    }
+
+    /// What a link attempt leaves: the path to remove at deactivation, or why
+    /// it could not be laid.
+    fn record(&mut self, laid: Result<(), String>, rel: &Path, target: &Path) {
+        match laid {
+            Ok(()) => self.junctions.push(target.to_string_lossy().into_owned()),
+            Err(err) => self.warnings.push(format!("{} : {err}", rel.display())),
         }
     }
 }
@@ -801,26 +815,27 @@ pub fn activate_other(conn: &Connection, cfg: &AppConfig, id: &str) -> Result<Ac
     let ac = cfg.ac_install_path.as_ref().ok_or(crate::errors::AC_NOT_CONFIGURED)?;
     let others = overlay::list_other_mods(conn).map_err(|e| e.to_string())?;
 
-    let mut junctions = Vec::new();
-    let mut warnings = Vec::new();
     // Emballage de l'auteur traversé, même raison que `relative_files` : les
     // entrées importées avant le correctif le portent encore dans leur arbre
     // stocké, et `place` refuserait tout (`NFS_…` n'est pas un chemin de jeu).
     let src = crate::libpath::resolve(cfg.library_path.as_deref(), &m.library_path)
         .map(|d| crate::acpath::effective_root(&d))
         .ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
-    place(
+    let mut placement = Placement {
         conn,
         cfg,
-        &src,
-        &src,
+        root: &src,
         ac,
-        id,
-        m.is_priority,
-        &others,
-        &mut junctions,
-        &mut warnings,
-    );
+        mine_id: id,
+        mine_priority: m.is_priority,
+        others: &others,
+        junctions: Vec::new(),
+        warnings: Vec::new(),
+    };
+    placement.place(&src);
+    let Placement {
+        junctions, warnings, ..
+    } = placement;
 
     overlay::set_other_active(conn, id, true, &junctions).map_err(|e| e.to_string())?;
     Ok(ActivateOtherResult {
@@ -1146,7 +1161,11 @@ mod tests {
         overlay::mark_forced_extra(&conn, "OldHud", &kunos.to_string_lossy()).unwrap();
         let res = activate_other(&conn, &cfg, "OldHud").unwrap();
         assert_eq!(res.junctions, 1, "forced: laid despite being older");
-        assert_eq!(std::fs::read(&kunos).unwrap(), b"MOD-LOGO", "the mod's file is in place");
+        assert_eq!(
+            std::fs::read(&kunos).unwrap(),
+            b"MOD-LOGO",
+            "the mod's file is in place"
+        );
         assert!(
             crate::gamebackup::is_replaced(&conn, &kunos),
             "the original went to the backup first"
@@ -1189,7 +1208,12 @@ mod tests {
             "the legit file reached the game"
         );
         assert!(!ac.join("stray").exists(), "nothing laid at the install root");
-        assert_eq!(res.warnings.len(), 1, "the refused folder is reported: {:?}", res.warnings);
+        assert_eq!(
+            res.warnings.len(),
+            1,
+            "the refused folder is reported: {:?}",
+            res.warnings
+        );
     }
 
     #[test]
