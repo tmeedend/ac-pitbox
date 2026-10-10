@@ -168,9 +168,12 @@ pub fn track_location(ac_install_path: &Path, track_id: &str, layout: Option<&st
     })
 }
 
-/// `geotags` of a `ui_track.json`, layout first. Values are strings in every
-/// file seen, but numbers are accepted too; Kunos' literal `["lat", "lon"]`
-/// placeholder simply fails to parse, which is exactly the wanted outcome.
+/// `geotags` of a `ui_track.json`: the layout's first, then the track's, then
+/// any other layout's — every layout of a track is the same place, and many
+/// tracks declare their position only in some of their layout files. Values
+/// are strings in every file seen, but numbers are accepted too; Kunos' literal
+/// `["lat", "lon"]` placeholder simply fails to parse, which is exactly the
+/// wanted outcome.
 fn geotags(ac_install_path: &Path, track_id: &str, layout: Option<&str>) -> Option<(f64, f64)> {
     let ui = ac_install_path.join("content").join("tracks").join(track_id).join("ui");
     let mut candidates: Vec<PathBuf> = Vec::new();
@@ -178,25 +181,96 @@ fn geotags(ac_install_path: &Path, track_id: &str, layout: Option<&str>) -> Opti
         candidates.push(ui.join(l).join("ui_track.json"));
     }
     candidates.push(ui.join("ui_track.json"));
+    let mut others: Vec<PathBuf> = std::fs::read_dir(&ui)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path().join("ui_track.json"))
+        .filter(|p| p.is_file() && !candidates.contains(p))
+        .collect();
+    others.sort();
+    candidates.extend(others);
     for path in candidates {
-        let Ok(raw) = std::fs::read_to_string(&path) else {
+        // The lenient reader of every `ui_*.json`: BOM, Latin-1 bytes and raw
+        // line breaks in strings are routine in mods.
+        let Some(value) = crate::uijson::read_ui_json(&path) else {
             continue;
         };
-        // `ui_json` files routinely carry a BOM and invalid escapes; only the
-        // two numbers matter here, so a failed parse just moves on.
-        let Ok(value) = serde_json::from_str::<serde_json::Value>(raw.trim_start_matches('\u{feff}')) else {
+        let Some(tags) = value.get("geotags").and_then(|v| v.as_array()) else {
             continue;
         };
-        let tags = value.get("geotags").and_then(|v| v.as_array())?;
-        let number = |v: &serde_json::Value| -> Option<f64> {
+        let number = |v: &serde_json::Value, max: f64| -> Option<f64> {
             v.as_f64()
-                .or_else(|| v.as_str().and_then(|s| s.trim().trim_end_matches('°').parse().ok()))
+                .or_else(|| v.as_str().and_then(parse_coordinate))
+                .filter(|c| c.abs() <= max)
         };
-        if let (Some(lat), Some(lon)) = (tags.first().and_then(number), tags.get(1).and_then(number)) {
+        if let (Some(lat), Some(lon)) = (
+            tags.first().and_then(|v| number(v, 90.0)),
+            tags.get(1).and_then(|v| number(v, 180.0)),
+        ) {
             return Some((lat, lon));
         }
     }
     None
+}
+
+/// One geotag as authors write it, in signed decimal degrees.
+///
+/// Only plain decimals (`"45.9541"`) were read, and that cost nothing while
+/// CSP shipped its own table of track coordinates: the band was drawn from it.
+/// Its 0.3.0 previews ship none, and 67 of the 140 tracks of a real install
+/// turned out to declare a perfectly usable position in another form — the
+/// band vanished from all of them at once. Forms met in that install:
+/// `42° 25′ 57″ N`, `50°59′26″N`, `49.443 N`, `45.9541° N`, `52 25.054`
+/// (degrees, decimal minutes), and the degree sign mangled by an encoding
+/// (`50� 13' 57 N`, `35° 22? 18? N`).
+///
+/// Numbers are degrees, minutes, seconds in that order; any symbol between
+/// them is a separator. A single `N`/`S`/`E`/`W` gives the sign. Any other
+/// word — Kunos' literal `"lat"` placeholder first — means no coordinate.
+fn parse_coordinate(text: &str) -> Option<f64> {
+    let mut numbers: Vec<f64> = Vec::new();
+    let mut negative = false;
+    let mut hemisphere: Option<char> = None;
+    let mut chars = text.trim().chars().peekable();
+    while let Some(&c) = chars.peek() {
+        if c.is_ascii_digit() || c == '.' {
+            let mut token = String::new();
+            while let Some(&d) = chars.peek().filter(|d| d.is_ascii_digit() || **d == '.') {
+                token.push(d);
+                chars.next();
+            }
+            numbers.push(token.parse().ok()?);
+        } else if c.is_ascii_alphabetic() {
+            let mut word = String::new();
+            while let Some(&l) = chars.peek().filter(|l| l.is_ascii_alphabetic()) {
+                word.push(l);
+                chars.next();
+            }
+            let letter = word.to_ascii_uppercase();
+            if hemisphere.is_some() || !matches!(letter.as_str(), "N" | "S" | "E" | "W") {
+                return None;
+            }
+            hemisphere = letter.chars().next();
+        } else {
+            // A leading minus is a sign; everything else (°, its look-alike º,
+            // ′, ″, ', ", the replacement character, spaces) only separates numbers.
+            negative |= c == '-' && numbers.is_empty();
+            chars.next();
+        }
+    }
+    let (degrees, minutes, seconds) = match numbers[..] {
+        [d] => (d, 0.0, 0.0),
+        [d, m] => (d, m, 0.0),
+        [d, m, s] => (d, m, s),
+        _ => return None,
+    };
+    if minutes >= 60.0 || seconds >= 60.0 {
+        return None;
+    }
+    let value = degrees + minutes / 60.0 + seconds / 3600.0;
+    let south_or_west = matches!(hemisphere, Some('S' | 'W'));
+    Some(if negative || south_or_west { -value } else { value })
 }
 
 /// `[SEASONS] ALLOW_ADJUSTMENTS`: the user's value wins over the shipped
@@ -608,5 +682,84 @@ mod tests {
             track_location(&dir, "spa", None).is_none(),
             "the placeholder is not a location"
         );
+    }
+
+    // Real geotags of one install, each in a form the plain-decimal reading
+    // missed: without CSP's table (0.3.0 previews ship none), 67 tracks of 140
+    // lost their day/night band although they declare where they are.
+    #[test]
+    fn geotags_read_in_every_form_authors_write_them() {
+        let cases: &[(&str, f64)] = &[
+            ("44.8976", 44.8976),
+            ("45.9541° N", 45.9541),
+            ("49.443 N", 49.443),
+            ("42° 25′ 57″ N", 42.0 + 25.0 / 60.0 + 57.0 / 3600.0),
+            ("18° 46′ 55″ E", 18.0 + 46.0 / 60.0 + 55.0 / 3600.0),
+            ("50°59′26″N", 50.0 + 59.0 / 60.0 + 26.0 / 3600.0),
+            ("27° 59′ 25″ S", -(27.0 + 59.0 / 60.0 + 25.0 / 3600.0)),
+            ("52 25.054", 52.0 + 25.054 / 60.0),
+            ("50\u{FFFD} 13' 57 N", 50.0 + 13.0 / 60.0 + 57.0 / 3600.0),
+            ("35° 22? 18? N", 35.0 + 22.0 / 60.0 + 18.0 / 3600.0),
+            ("1\u{FFFD} 21' 19.4 N", 1.0 + 21.0 / 60.0 + 19.4 / 3600.0),
+            ("41º 53' 16\" N", 41.0 + 53.0 / 60.0 + 16.0 / 3600.0),
+            ("-3.7038", -3.7038),
+            ("W 3.7038", -3.7038),
+        ];
+        for &(text, expected) in cases {
+            let got = parse_coordinate(text);
+            assert!(
+                got.is_some_and(|v| (v - expected).abs() < 1e-9),
+                "{text:?} read as {got:?}, expected {expected}"
+            );
+        }
+        for text in ["lat", "lon", "", "N", "12 34 56 78", "45 75", "50 N S", "near Spa 50.4"] {
+            assert_eq!(parse_coordinate(text), None, "{text:?} is not a coordinate");
+        }
+    }
+
+    // Kotor-Trojica, as shipped: a track whose position lives only in its
+    // layout's `ui_track.json`, written in degrees, minutes and seconds.
+    // A layout file without geotags must not hide the track's own ones either.
+    #[test]
+    fn geotags_in_dms_and_layout_files_give_a_location() {
+        let dir = crate::testutil::temp_dir("sun-dms");
+        let ui = dir
+            .join("content")
+            .join("tracks")
+            .join("lemax_kotor-trojica")
+            .join("ui");
+        std::fs::create_dir_all(ui.join("trojica")).unwrap();
+        std::fs::write(
+            ui.join("trojica").join("ui_track.json"),
+            "{\"name\": \"Kotor-Trojica\", \"geotags\": [\"42° 25′ 57″ N\", \"18° 46′ 55″ E\"]}",
+        )
+        .unwrap();
+        let loc = track_location(&dir, "lemax_kotor-trojica", Some("trojica")).expect("DMS geotags read");
+        assert!((loc.latitude - 42.4325).abs() < 1e-3, "latitude {}", loc.latitude);
+        assert!((loc.longitude - 18.7819).abs() < 1e-3, "longitude {}", loc.longitude);
+
+        let ui = dir.join("content").join("tracks").join("two_files").join("ui");
+        std::fs::create_dir_all(ui.join("short")).unwrap();
+        std::fs::write(ui.join("short").join("ui_track.json"), r#"{"name": "Short"}"#).unwrap();
+        std::fs::write(ui.join("ui_track.json"), r#"{"geotags": ["44.8976", "8.8637"]}"#).unwrap();
+        assert!(
+            track_location(&dir, "two_files", Some("short")).is_some(),
+            "the track's own file is read when the layout's says nothing"
+        );
+        assert!(
+            track_location(&dir, "lemax_kotor-trojica", None).is_some(),
+            "no layout given: any layout's position is the track's"
+        );
+    }
+
+    // A latitude beyond the pole is a typo or two values swapped: no band
+    // rather than a sun computed for nowhere.
+    #[test]
+    fn geotags_out_of_range_are_not_a_location() {
+        let dir = crate::testutil::temp_dir("sun-range");
+        let ui = dir.join("content").join("tracks").join("swapped").join("ui");
+        std::fs::create_dir_all(&ui).unwrap();
+        std::fs::write(ui.join("ui_track.json"), r#"{"geotags": ["120.5", "45.2"]}"#).unwrap();
+        assert!(track_location(&dir, "swapped", None).is_none());
     }
 }
