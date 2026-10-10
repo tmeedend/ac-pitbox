@@ -295,7 +295,7 @@
     /* Le document ne défile jamais (global.css) : sur un petit écran/fenêtre,
        un contenu plus haut que la fenêtre serait sinon coupé sans recours —
        c'est ce qui obligeait à agrandir la fenêtre à la main. */
-    height: 100vh;
+    height: calc(100 * var(--vh));
     overflow-y: auto;
     display: flex;
     align-items: center;

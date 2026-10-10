@@ -179,8 +179,8 @@
   }
   .modal {
     width: 460px;
-    max-width: 92vw;
-    max-height: 80vh;
+    max-width: calc(92 * var(--vw));
+    max-height: calc(80 * var(--vh));
     display: flex;
     flex-direction: column;
     background: var(--panel);

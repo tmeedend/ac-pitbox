@@ -285,9 +285,9 @@
      claim on the red scale (§7.2ter). It carried a full red border. */
   .modal {
     width: 880px;
-    max-width: 92vw;
+    max-width: calc(92 * var(--vw));
     height: 620px;
-    max-height: 86vh;
+    max-height: calc(86 * var(--vh));
     display: flex;
     flex-direction: column;
     background: var(--panel);

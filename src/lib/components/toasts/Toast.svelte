@@ -91,7 +91,7 @@
 <style>
   .toast {
     width: 380px;
-    max-width: calc(100vw - 44px);
+    max-width: calc(100 * var(--vw) - 44px);
     background: var(--panel);
     border: 1px solid var(--line);
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
@@ -184,7 +184,7 @@
     padding: 8px 12px 10px;
     /* Capped here rather than on the card: a forty-mod report scrolls inside
        its own body while the header stays put. */
-    max-height: 50vh;
+    max-height: calc(50 * var(--vh));
     overflow-y: auto;
     border-top: 1px solid var(--line);
   }

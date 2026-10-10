@@ -518,7 +518,7 @@
     display: flex;
     flex-direction: column;
     gap: 3px;
-    max-height: 70vh;
+    max-height: calc(70 * var(--vh));
     overflow-y: auto;
     padding-right: 10px;
     border-right: 1px solid var(--line);

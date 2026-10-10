@@ -202,11 +202,8 @@
   .frame {
     background: var(--panel);
     border: 1px solid var(--rosso);
-    /* `zoom` (voir zoom.svelte.ts) agrandit tout le rendu, mais vh/vw restent
-       relatifs à la fenêtre réelle — sans cette division, .frame devient plus
-       haut que la fenêtre à >100% (rien à scroller pour atteindre le bas :
-       bouton Enregistrer hors champ, coquille tronquée un peu partout). */
-    height: calc(100vh / var(--ui-zoom, 1));
+    /* The window's height under the UI zoom — see `--vh` in global.css. */
+    height: calc(100 * var(--vh));
     /* Barre de titre custom en position fixe (voir TitleBar.svelte) : réserve
        sa hauteur ici plutôt que de la compter comme un enfant flex, pour
        qu'elle reste toujours à l'écran quel que soit ce qui défile en dessous. */

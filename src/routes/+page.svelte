@@ -45,7 +45,7 @@
 
 <style>
   .loading {
-    min-height: 100vh;
+    min-height: calc(100 * var(--vh));
     display: flex;
     align-items: center;
     justify-content: center;

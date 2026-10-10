@@ -305,18 +305,18 @@
   }
   .lb-center {
     flex: none;
-    max-width: min(80vw, 1400px);
+    max-width: min(80 * var(--vw), 1400px);
     display: flex;
     flex-direction: column;
     align-items: center;
   }
   .lb-stage {
-    max-height: 78vh;
+    max-height: calc(78 * var(--vh));
     pointer-events: none;
   }
   .lb-stage img {
     max-width: 100%;
-    max-height: 78vh;
+    max-height: calc(78 * var(--vh));
     object-fit: contain;
     display: block;
   }

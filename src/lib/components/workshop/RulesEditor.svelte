@@ -805,7 +805,7 @@
   }
   .modal {
     width: 480px;
-    max-width: 92vw;
+    max-width: calc(92 * var(--vw));
     background: var(--panel);
     border: 1px solid var(--line);
     padding: 18px 20px;

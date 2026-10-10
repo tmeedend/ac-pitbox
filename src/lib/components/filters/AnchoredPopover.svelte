@@ -109,6 +109,6 @@
     border: 1px solid var(--line);
     box-shadow: 0 12px 34px rgba(0, 0, 0, 0.62);
     padding: 9px;
-    max-width: 92vw;
+    max-width: calc(92 * var(--vw));
   }
 </style>

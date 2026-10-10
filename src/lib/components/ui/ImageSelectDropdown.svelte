@@ -406,7 +406,7 @@
     z-index: 200;
     list-style: none;
     width: max-content;
-    max-width: min(420px, calc(100vw - 16px));
+    max-width: min(420px, calc(100 * var(--vw) - 16px));
     max-height: 260px;
     overflow-y: auto;
     background: var(--panel);

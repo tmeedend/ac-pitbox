@@ -49,7 +49,7 @@
   }
   .modal {
     width: 420px;
-    max-width: 92vw;
+    max-width: calc(92 * var(--vw));
     display: flex;
     flex-direction: column;
     gap: 12px;

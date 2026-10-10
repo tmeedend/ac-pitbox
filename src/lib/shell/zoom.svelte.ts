@@ -16,8 +16,8 @@ export function setZoom(level: number | null): void {
     // `height: 100vh` devient donc physiquement plus haute que la fenêtre à
     // >100% (rien à scroller pour la voir en entier, ex. bouton Enregistrer
     // hors champ). Cette variable permet de diviser les tailles en vh par le
-    // facteur de zoom (cf. AppShell.svelte .frame) pour qu'elles retrouvent
-    // leur taille réelle une fois zoomées.
+    // facteur de zoom pour qu'elles retrouvent leur taille réelle une fois
+    // zoomées : c'est ce que font les jetons `--vh`/`--vw` de global.css.
     document.documentElement.style.setProperty("--ui-zoom", String(lvl / 100));
   }
 }

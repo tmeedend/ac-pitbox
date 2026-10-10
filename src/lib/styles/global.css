@@ -33,6 +33,15 @@
      (`scrollbar-gutter: stable` d'un côté, ce retrait de l'autre). Les deux
      valeurs doivent bouger ensemble, donc elles n'en font qu'une. */
   --scrollbar-w: 9px;
+  /* 1 % of the window's height and width, in CSS pixels **under the UI
+     zoom**. The zoom is a CSS `zoom` on <html> (shell/zoom.svelte.ts, which
+     sets `--ui-zoom`): it scales every length, but `vh`/`vw` stay relative to
+     the real window — so a raw `85vh` is 85 % of the window times the zoom,
+     106 % at 125 %. Real bugs: the shell taller than the window (Save button
+     off screen), the bulk import dialog with its buttons off screen. A window
+     fraction is written `calc(85 * var(--vh))`, never `85vh`. */
+  --vh: calc(1vh / var(--ui-zoom, 1));
+  --vw: calc(1vw / var(--ui-zoom, 1));
   --rosso: #d40000;
   --rosso-bright: #ff5555;
   --rosso-dim: #1a0606;
