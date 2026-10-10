@@ -2029,9 +2029,11 @@
     "more": "Charger plus",
     "use": "Utiliser ce logo",
     "none": "Aucun logo trouvé.",
-    "official": "Wikidata",
-    "officialTip": "Le logo que Wikidata donne à cette marque",
-    "source": "Logos de Wikimedia Commons"
+    "carlogos": "carlogos",
+    "carlogosTip": "Le logo de cette marque dans car-logos-dataset, tiré de carlogos.org",
+    "wikidata": "Wikidata",
+    "wikidataTip": "Le logo que Wikidata donne à cette marque",
+    "source": "Logos de carlogos.org (car-logos-dataset) et de Wikimedia Commons"
   },
   "brandsTab": {
     "subtitle": "Les marques des voitures : le nom sous lequel chacune est rangée, et les orthographes qui y mènent.",

@@ -260,12 +260,19 @@ Formats acceptés : PNG et SVG. Le PNG doit faire au moins 64 px sur son plus pe
 
 Pour une marque dont aucun mod ne livre le bon logo — Renault, dont la seule voiture est une VRC (§4) —, le détail d'une marque propose **« Chercher en ligne… »** à côté du fichier personnel. Une fenêtre affiche des candidats, l'utilisateur en choisit un, et le fichier est téléchargé puis traité **exactement comme un fichier personnel** : copié dans `logos/`, mêmes formats, même survie à la suppression des mods.
 
-Deux sources Wikimedia, dans cet ordre, sans clé d'API :
+Trois sources, dans cet ordre, sans clé d'API :
 
-1. **Wikidata, propriété P154 (« logo »)** des entités que nomme la recherche, la valeur de rang préféré d'abord. Précis : pour « Renault », le logo actuel du groupe, celui de 2009, celui de l'écurie de F1. Marqués « Wikidata » dans la grille.
-2. **Une recherche de fichiers sur Commons** (« <recherche> logo »), par pages de 30 : les logos d'autres époques, les variantes.
+1. **car-logos-dataset**, un index ouvert de 387 constructeurs (sur GitHub), aux logos tirés de carlogos.org : des emblèmes chromés à fond transparent, ce à quoi ressemble un badge du jeu, à 256 px. Un logo par marque, retrouvé par son nom — le nom exact d'abord, puis les noms qui contiennent la recherche ou qu'elle contient. Mesuré : 39 des 47 marques de la bibliothèque de référence, les absentes étant confidentielles (Tatuus, Glickenhaus, UD Trucks). En tête, parce qu'il est fait pour exactement cela. Marqué « carlogos » dans la grille.
+2. **Wikidata, propriété P154 (« logo »)** des entités que nomme la recherche, la valeur de rang préféré d'abord : pour « Renault », le logo actuel du groupe, celui de 2009, celui de l'écurie de F1. Marqués « Wikidata ».
+3. **Une recherche de fichiers sur Commons** (« <recherche> logo »), par pages de 30 : les logos d'autres époques, les variantes. L'offre la plus large et la moins convaincante — beaucoup de logotypes en lettres, de logos de modèles.
 
-Seuls le SVG et le PNG sont proposés, puisque ce sont les seuls formats d'un fichier personnel ; le téléchargement ne part que de l'hébergeur de fichiers de Commons (`upload.wikimedia.org`) et s'arrête au-delà de 5 Mo. **Rien n'est demandé au réseau avant que l'utilisateur ouvre la fenêtre.** La recherche part du nom de la marque et se corrige à la main (« Renault Sport »).
+Seuls le SVG et le PNG sont proposés, puisque ce sont les seuls formats d'un fichier personnel.
+
+**Jamais une image plus grande qu'un logo ne l'exige** (demandé à l'usage : des résultats dépassaient 5 000 px). Un SVG reste vectoriel, et la grille n'en affiche pas de dimensions — elles n'y veulent rien dire. Un PNG de Commons se télécharge dans la déclinaison à 500 px que Commons fabrique, pas en original. Et tout PNG téléchargé, quelle que soit sa source, est ramené à **512 px sur son plus grand côté** avant d'être rangé — jamais sous les 64 px de son plus petit côté qu'exige un fichier personnel, ce qu'un long logotype perdrait sinon.
+
+Le téléchargement ne part que des hébergeurs de fichiers de ces sources (`upload.wikimedia.org`, `thumb.wikimedia.org`, le dépôt du jeu de données sur GitHub) et s'arrête au-delà de 5 Mo. **Rien n'est demandé au réseau avant que l'utilisateur ouvre la fenêtre.** La recherche part du nom de la marque et se corrige à la main (« Renault Sport »).
+
+D'autres services de logos (Brandfetch, logo.dev) exigent une clé d'API : elle devrait vivre chez l'utilisateur, jamais dans le dépôt, qui est public. Écartés tant que les trois sources suffisent.
 
 Google Images, la source de Playnite pour les icônes de jeu, a été écarté : c'est de l'extraction de page, contraire aux conditions de Google et cassée au premier changement de la page.
 

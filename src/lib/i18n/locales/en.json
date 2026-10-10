@@ -2029,9 +2029,11 @@
     "more": "Load more",
     "use": "Use this logo",
     "none": "No logo found.",
-    "official": "Wikidata",
-    "officialTip": "The logo Wikidata gives this brand",
-    "source": "Logos from Wikimedia Commons"
+    "carlogos": "carlogos",
+    "carlogosTip": "This brand's logo in car-logos-dataset, taken from carlogos.org",
+    "wikidata": "Wikidata",
+    "wikidataTip": "The logo Wikidata gives this brand",
+    "source": "Logos from carlogos.org (car-logos-dataset) and Wikimedia Commons"
   },
   "brandsTab": {
     "subtitle": "The car brands: the name each is filed under, and the spellings that lead to it.",

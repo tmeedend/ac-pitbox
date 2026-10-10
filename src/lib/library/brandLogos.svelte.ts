@@ -86,17 +86,19 @@ export async function importBrandLogo(brand: string, path: string): Promise<void
 
 /** A logo offered online (TAXO§9.1, `logo_search.rs`). */
 export interface LogoCandidate {
-  /** File name on Wikimedia Commons. */
+  /** File name at its source, for the tooltip. */
   name: string;
-  /** The original file, what is downloaded when picked. */
+  /** What is downloaded when picked - a rendition rather than a huge original. */
   url: string;
   /** A PNG preview, an SVG's included. */
   thumb: string;
-  width: number;
-  height: number;
+  /** The size of what is downloaded; null for a vector file, or when the
+   * source does not say. */
+  width: number | null;
+  height: number | null;
   format: "svg" | "png";
-  /** The logo Wikidata gives an entity the search named. */
-  official: boolean;
+  /** car-logos-dataset, the logo Wikidata gives the brand, or a Commons file. */
+  source: "carlogos" | "wikidata" | "commons";
 }
 
 export interface LogoPage {

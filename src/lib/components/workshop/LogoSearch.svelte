@@ -1,6 +1,7 @@
 <script lang="ts">
-  // A brand's logo searched online (TAXO§9.1): Wikidata's logos for the
-  // brand first, then a Wikimedia Commons search, page by page. The user picks
+  // A brand's logo searched online (TAXO§9.1): car-logos-dataset's and
+  // Wikidata's logos for the brand first, then a Wikimedia Commons search,
+  // page by page. The user picks
   // one; it is downloaded and becomes his own logo file, as one he gave would
   // (TAXO§9). Nothing is fetched before he opens this.
   import { onMount } from "svelte";
@@ -57,6 +58,10 @@
     }
   }
 
+  // The two sources worth naming on a tile; a Commons file is the default.
+  const SOURCE = { carlogos: "logoSearch.carlogos", wikidata: "logoSearch.wikidata" } as const;
+  const SOURCE_TIP = { carlogos: "logoSearch.carlogosTip", wikidata: "logoSearch.wikidataTip" } as const;
+
   onMount(() => {
     query = brand;
     void search(0);
@@ -93,8 +98,10 @@
           }}
         >
           <span class="thumb"><img src={c.thumb} alt={c.name} loading="lazy" /></span>
-          <span class="meta mono">{c.format.toUpperCase()} · {c.width}×{c.height}</span>
-          {#if c.official}<span class="pill" title={t("logoSearch.officialTip")}>{t("logoSearch.official")}</span>{/if}
+          <span class="meta mono"
+            >{c.format.toUpperCase()}{#if c.width && c.height}&nbsp;· {c.width}×{c.height}{/if}</span
+          >
+          {#if c.source !== "commons"}<span class="pill" title={t(SOURCE_TIP[c.source])}>{t(SOURCE[c.source])}</span>{/if}
         </button>
       {/each}
     </div>
