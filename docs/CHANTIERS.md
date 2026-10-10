@@ -1089,33 +1089,23 @@ de reprendre. En cas d'écart, la spec fait foi.
          `import_one_folder` (140 à 160 chacune). Même méthode : tests
          d'abord, puis un module par étape. Une session par fonction ;
          risque élevé pour les deux premières.
-      2. **Le curseur de régime existe en deux exemplaires** :
-         `detail/EngineSoundBlock.svelte` et `inventory/SoundDetail.svelte`
-         (même `revControls`, même `Slider`, même bouton de démonstration).
-         Quelques minutes, sans risque ; à mettre en commun au plus tard à la
-         troisième copie.
-      3. **`inventory.rs::rows_from_disk` (142 lignes)** : une boucle par
-         source de l'inventaire (autres mods, sous-éléments, couches), à
-         sortir chacune dans sa fonction. Une petite session, risque faible,
-         couverte par les tests de l'inventaire (repéré le 2026-10-08).
-      4. **`others.rs::place` (122 lignes)** : la pose d'un « autre mod » dans
-         le jeu, donc à côté des règles d'or n°2 et n°5 — tests d'abord. Une
-         session, risque moyen (repéré le 2026-10-08).
-      5. **`submods.rs` (2 983 lignes, le deuxième fichier du projet)** mêle
-         trois sujets : les livrées, les habillages de circuit et les sons. Un
-         fichier par sujet, tests compris (environ 1 500 lignes). Une session,
-         risque faible : des déplacements (revue du 2026-10-10).
-      6. **Les sons et les habillages de circuit sortent de `DetailPage.svelte`**
-         (1 205 lignes, script de 762) : environ 100 lignes et trois effets, à
-         ranger dans `$lib/detail` comme les actions de la fiche le
-         2026-10-04. Une session ; risque faible à moyen, aucun test de
-         composant — regarder la fiche à l'écran après (revue du 2026-10-10).
-      7. **Le démarrage sort de `lib.rs`** (`run`, 511 lignes) : environ 220
-         lignes d'étapes de démarrage vers un `startup.rs`, en quatre groupes
-         (base, filets de sécurité, rattrapages, services). Une session ;
-         risque moyen, l'ordre des étapes compte et aucun test ne couvre le
-         démarrage — le banc mesure les temps, pas l'ordre (revue du
+      2. **Deux longues fonctions rendues visibles par le découpage de
+         `submods`** : `submods/skins.rs::import_skin_pack` (116 lignes) et
+         `submods/sounds.rs::import_sound` (93). Elles étaient déjà là, noyées
+         dans un fichier de 3 000 lignes. Une petite session chacune, risque
+         faible à moyen (l'import), couvertes par leurs tests (repéré le
          2026-10-10).
+
+      **Faits le 2026-10-10**, sans changement de comportement, un commit
+      chacun : le curseur de régime mis en commun (`EngineRevControls`,
+      `f653c39`) ; `inventory::rows_from_disk` découpée par source
+      (`30da7d7`) ; `submods.rs` découpé en `submods/` — livrées, habillages
+      de circuit, sons (`9b0925d`) ; les sons et les habillages de circuit
+      sortis de `DetailPage` (`SheetSounds`, `SheetTrackSkins`, `275bde7`) ;
+      `others::place` découpée en `Placement` après deux tests de
+      caractérisation (`9ffd715`, `79d6e1c`) ; le démarrage sorti de `lib.rs`
+      vers `startup.rs` (`f01ad6e`) — avec un seul déplacement d'étape, les
+      appariements Wikipédia passés en tête des rattrapages.
 
       **Revue du 2026-10-10** : démarrage sans régression (cartes à l'écran
       en 999 ms, 1 064 ms le 2026-10-08, 385 cartes) ; `transfer/files.rs`

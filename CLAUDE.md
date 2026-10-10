@@ -890,7 +890,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Dossier du jeu** | lot 1 livré (lecture seule) ; reste le lot 2, les tailles | `docs/SPEC-etat-dossier.md`, `docs/CHANTIERS.md` |
 | **Page Online** | v1 et v2 de la spec livrées (tableau, tokens, rejoindre via `race/online`, préparation et contenu récupéré, carte de la fiche circuit, notifications, « Me prévenir ») ; restent des vérifications à l'écran et des limites connues (SPEC-play-online, « Restent ») | `docs/SPEC-play-online.md`, `docs/online-join-research.md` |
 | **Performances** | première passe faite (cartes à 0,66 s au lieu de 1,15 s), banc `npm run bench:startup` en place ; restent une mesure sur une plus grosse bibliothèque, le premier lancement après une mise à jour (3,4 s), deux lectures de ressources et le saut « initiales → logo » des marques | `docs/CHANTIERS.md` |
-| **Refactorings reportés** | sept restent : la suite d'`importer.rs` (les restes à côté du mod, règle d'or n°3), le curseur de régime, deux longues fonctions (`rows_from_disk`, `others::place`), `submods.rs` par sujet, les sons de `DetailPage`, le démarrage hors de `lib.rs` | `docs/CHANTIERS.md` |
+| **Refactorings reportés** | deux restent : la suite d'`importer.rs` (les restes à côté du mod, règle d'or n°3), et deux longues fonctions d'import de `submods/` (`import_skin_pack`, `import_sound`) | `docs/CHANTIERS.md` |
 
 ## Fin de tâche — dans cet ordre
 
