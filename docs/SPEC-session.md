@@ -53,8 +53,15 @@ juste sous la liste des types, qui est le dernier choix avant de partir.
 Course sélectionnée, sous-entrée affichée, en 1920 × 1080. Deux dispositifs y
 suffisent — le repli `PERFORMANCE`, qui ramène quatre réglages à une ligne, et
 des **vignettes adaptatives** : sous le seuil de hauteur, la photo de voiture et
-le plan de circuit tombent à 68 px. Le seuil est une requête de **conteneur**
-(`container: sidecol / size`, 1020 px) et non de média : une requête de média
+celle du circuit cessent de prendre leur propre hauteur et passent **en fond de
+leur bloc**, assombries et floutées, sous le nom et les champs, qui laissent
+deviner l'image à travers leur plaque. Elles ne sont plus jamais rognées en
+bandeau : elles tombaient à 68 px en `cover`, et une fenêtre zoomée y perdait
+les roues et les bords du tracé. Le tracé du layout, lui, ne se superpose pas
+au fond — la ligne Layout juste dessous le montre déjà. Seul le nom mène à la
+bibliothèque : un clic tombé entre deux menus ne doit pas y éjecter. Le seuil
+est une requête de **conteneur** (`container: sidecol / size`, 960 px) et non
+de média : une requête de média
 interroge la fenêtre, que le zoom d'interface ne touche pas — à 150 %, une
 fenêtre de 1080 px n'offre plus que 720 px de mise en page et la règle ne se
 déclencherait pas. Le nombre est une mesure, pas une valeur ronde : la colonne

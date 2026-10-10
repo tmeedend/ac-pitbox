@@ -411,7 +411,8 @@
     border-right: 1px solid var(--line);
     overflow-y: auto;
     /* **La colonne ne doit jamais défiler** (L5§2.3), et ce qu'on réduit
-       quand le compte n'y est pas, ce sont les deux vignettes. Le seuil est
+       quand le compte n'y est pas, ce sont les deux vignettes : elles passent
+       en fond de leur bloc, sous le nom et les champs. Le seuil est
        donc une requête de CONTENEUR et non de média : une `@media
        (max-height)` interroge la fenêtre, que le zoom d'interface ne touche
        pas — à 150 %, une fenêtre de 1080 px n'offre plus que 720 px de mise en
@@ -482,6 +483,10 @@
     background: var(--cell);
     border-color: var(--cell-line);
     padding: 8px;
+    /* The box the photo spans once it turns into a backdrop (low window, see
+       `SessionSlot`). No `z-index`: a stacking context here would keep the
+       open lists of the track block under the car block. */
+    position: relative;
     /* La colonne de session est large de 328 px : le nom y a la place de la
        grille confortable, pas celle de la dense. */
     --ident-size: 12.5px;
@@ -545,11 +550,26 @@
      entry — level 2 of the accent scale (§7.2ter), "what has the focus".
      Border colour plus a 1 px inset shadow, not a wider border: the rule is
      2 px of red, and nothing inside moves when it comes and goes. After the
-     hover rule, which would otherwise grey the rule under the pointer. */
+     hover rule, which would otherwise grey the rule under the pointer.
+     The block draws its inner pixel as a last child rather than a shadow: a
+     shadow paints with the block's background, under the photo once that
+     photo is the backdrop (`SessionSlot`), and the rule fell to 1 px. */
   .blk.here,
   .session :global(.field.here) {
     border-left-color: var(--rosso);
+  }
+  .session :global(.field.here) {
     box-shadow: inset 1px 0 0 var(--rosso);
+  }
+  .blk.here::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 1px;
+    background: var(--rosso);
+    pointer-events: none;
   }
   .session :global(.field .k) {
     flex: 0 0 var(--sess-lblw, 60px);
@@ -659,5 +679,23 @@
   .btn-launch:disabled {
     opacity: 0.45;
     cursor: not-allowed;
+  }
+  /* Low window: the photo is the backdrop of the block (`SessionSlot`). The
+     fields are positioned so that they paint above it, and their plate lets
+     it show through — an opaque plate would hide all of it but the band
+     behind the name.
+     Last in the sheet: it overrides `.field` and the `.pick + *` gap, which
+     weigh the same. */
+  @container sidecol (max-height: 960px) {
+    .blk > :global(:not(.pick)) {
+      position: relative;
+    }
+    .blk > :global(.pick + *) {
+      margin-top: 8px;
+    }
+    .blk :global(.field),
+    .blk :global(.isd-trigger) {
+      background: color-mix(in srgb, var(--panel2) 62%, transparent);
+    }
   }
 </style>
