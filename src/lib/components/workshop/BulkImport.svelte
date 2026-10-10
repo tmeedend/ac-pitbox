@@ -179,7 +179,10 @@
   .modal {
     width: 720px;
     max-width: 100%;
-    max-height: 90vh;
+    /* vh ignores the UI zoom set on <html> (zoom.svelte.ts), which then scales
+       the result: at 125 %, 90vh became 112 % of the window and pushed the
+       footer — the import button — off screen on a long list. */
+    max-height: calc(90vh / var(--ui-zoom, 1));
     display: flex;
     flex-direction: column;
     background: var(--panel);
