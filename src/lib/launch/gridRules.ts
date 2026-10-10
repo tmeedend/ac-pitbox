@@ -111,8 +111,9 @@ export function hasDuplicateDrivers(
   const seen = new Set<string>();
   for (const opp of opponents) {
     const sk = skinOf(opp);
-    const key = `${opp.driver_name ?? sk?.number ?? ""}|${opp.driver_name ?? sk?.driver ?? ""}`.trim().toLowerCase();
-    if (key === "|") continue;
+    const typed = opp.driver_name != null ? `${opp.driver_name}|${opp.driver_name}`.trim().toLowerCase() : null;
+    const key = typed ?? (sk ? driverKey(sk) : null);
+    if (!key || key === "|") continue;
     if (seen.has(key)) return true;
     seen.add(key);
   }
