@@ -1,12 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import {
-    analyzeBulkImport,
-    executeBulkImport,
-    type ArchiveResult,
-    type BulkEntry,
-    type BulkExecItem,
-  } from "$lib/library/library";
+  import { analyzeBulkImport, executeBulkImport, type ArchiveResult, type BulkEntry } from "$lib/library/library";
+  import { bulkCounts, buildExecItems, importCount } from "$lib/workshop/bulkImport";
   import { t } from "$lib/i18n/index.svelte";
 
   import { errorText } from "$lib/errors";
@@ -29,28 +24,11 @@
 
   const parentName = $derived(parent.split(/[\\/]/).filter(Boolean).pop() ?? parent);
 
-  const counts = $derived.by(() => {
-    const c = { new: 0, update: 0, duplicate: 0, ambiguous: 0, rehydrate: 0, ignored: 0 };
-    for (const e of entries) {
-      if (e.ignored) c.ignored++;
-      for (const m of e.mods) c[m.status]++;
-    }
-    return c;
-  });
+  const counts = $derived(bulkCounts(entries));
 
   const ambiguousMods = $derived(entries.flatMap((e) => e.mods.filter((m) => m.status === "ambiguous")));
 
-  const toImport = $derived.by(() => {
-    let n = 0;
-    for (const e of entries) {
-      if (e.ignored) continue;
-      for (const m of e.mods) {
-        if (m.status === "duplicate" && skipDuplicates) continue;
-        n++;
-      }
-    }
-    return n;
-  });
+  const toImport = $derived(importCount(entries, skipDuplicates));
 
   onMount(async () => {
     try {
@@ -68,22 +46,12 @@
     decisions = d;
   }
 
-  function buildItems(): BulkExecItem[] {
-    return entries
-      .filter((e) => !e.ignored)
-      .map((e) => ({
-        path: e.path,
-        skip_ids: skipDuplicates ? e.mods.filter((m) => m.status === "duplicate").map((m) => m.id) : [],
-        replace_ids: e.mods.filter((m) => m.status === "ambiguous" && decisions[m.id] === "replace").map((m) => m.id),
-      }));
-  }
-
   async function execute() {
     if (running) return;
     running = true;
     error = "";
     try {
-      const report = await executeBulkImport(buildItems(), copy);
+      const report = await executeBulkImport(buildExecItems(entries, skipDuplicates, decisions), copy);
       ondone(report);
     } catch (e) {
       error = errorText(e);
