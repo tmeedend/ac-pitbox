@@ -7,12 +7,13 @@
 //! 300 GB library becomes a few MB, and the other machine gets back exactly
 //! what cannot be downloaded again: names, notes, tags, decisions.
 //!
-//! Three files share the work:
+//! The work is shared out:
 //!
 //! - `tables.rs`: what each table of the base becomes on the way out and on
 //!   the way in, and the gate that fails when a table is not classified;
-//! - `files.rs`: what lands in the zip besides the base — skeletons and
-//!   settings — and how it lands back, with its undo;
+//! - `files.rs`, and around it `skeletons.rs`, `settings.rs`, `weigh.rs` and
+//!   `unpack.rs`: what lands in the zip besides the base, what it weighs, and
+//!   how it lands back, with its undo;
 //! - this one: the two journeys, in the spec's order.
 //!
 //! The container is a plain zip with a readable JSON manifest and an SQLite
@@ -29,9 +30,13 @@ use crate::config::AppConfig;
 use crate::overlay::{self, Db};
 
 mod files;
+mod settings;
+mod skeletons;
 mod tables;
 #[cfg(test)]
 mod tests;
+mod unpack;
+mod weigh;
 
 /// The container's format. Bumped only when an older Pit Box could no longer
 /// read the zip itself; what the base holds is versioned by `app_version`.
@@ -245,8 +250,8 @@ fn build(db: &Db, cfg: &AppConfig, places: &Places, parts: &[Part]) -> Result<Bu
             .map_err(|e| e.to_string())?;
 
         // Skeletons first: they read each row's state before it is forced.
-        let preferred = files::preferred_previews(&places.config_dir);
-        let skel = files::Skeletons {
+        let preferred = settings::preferred_previews(&places.config_dir);
+        let skel = skeletons::Skeletons {
             conn: &copy,
             cfg,
             library,
@@ -274,7 +279,7 @@ fn build(db: &Db, cfg: &AppConfig, places: &Places, parts: &[Part]) -> Result<Bu
         database = Some(copy_path);
     }
 
-    let settings = files::settings(places, parts)?;
+    let settings = settings::settings(places, parts)?;
     counts.sessions = settings.presets;
     counts.grids = settings.grids;
     entries.extend(settings.entries);
@@ -291,13 +296,13 @@ fn build(db: &Db, cfg: &AppConfig, places: &Places, parts: &[Part]) -> Result<Bu
 
 /// Counts and weight of every part, nothing prepared nor written
 /// (EXPORT§7.2): counts from the base, weights from the files a skeleton
-/// keeps and the compression measured on a real export ([`files::weigh`]).
+/// keeps and the compression measured on a real export ([`weigh::weigh`]).
 pub fn estimate(db: &Db, cfg: &AppConfig, places: &Places) -> Result<Estimate, String> {
     let (mut counts, folders, base_bytes) = {
         let conn = db.0.lock().map_err(|e| e.to_string())?;
         let counts = tables::counts(&conn).map_err(|e| e.to_string())?;
         let folders = match cfg.library_path.as_deref() {
-            Some(library) => files::folders_to_weigh(&conn, library).map_err(|e| e.to_string())?,
+            Some(library) => weigh::folders_to_weigh(&conn, library).map_err(|e| e.to_string())?,
             None => Vec::new(),
         };
         let base_bytes: i64 = conn
@@ -311,10 +316,10 @@ pub fn estimate(db: &Db, cfg: &AppConfig, places: &Places) -> Result<Estimate, S
     };
     let mut bytes: BTreeMap<Part, u64> = BTreeMap::new();
     if cfg.library_path.is_some() {
-        let base = (base_bytes as f64 * files::BASE_RATIO) as u64;
-        bytes.insert(Part::Library, base + files::weigh(&folders));
+        let base = (base_bytes as f64 * weigh::BASE_RATIO) as u64;
+        bytes.insert(Part::Library, base + weigh::weigh(&folders));
     }
-    let settings = files::settings(places, &[Part::Classification, Part::Sessions, Part::Preferences])?;
+    let settings = settings::settings(places, &[Part::Classification, Part::Sessions, Part::Preferences])?;
     counts.sessions = settings.presets;
     counts.grids = settings.grids;
     for e in &settings.entries {
@@ -499,7 +504,7 @@ pub fn import(
     }
     let library_part = parts.contains(&Part::Library);
     if library_part {
-        files::check_free(&mut zip, &library)?;
+        unpack::check_free(&mut zip, &library)?;
     }
 
     // 1. The current base saved, even empty, by the startup net's mechanism.
@@ -511,7 +516,7 @@ pub fn import(
     }
 
     let scratch = Scratch::new("import")?;
-    let mut undo = files::Undo::default();
+    let mut undo = unpack::Undo::default();
     let mut report = ImportReport {
         active_at_export: manifest.active_at_export.len(),
         library_bytes_at_export: manifest.library_bytes_at_export,
@@ -535,9 +540,9 @@ pub fn import(
             report.stock_applied = merged.stock_applied;
             report.stock_missing = merged.stock_missing;
             report.local_kept = merged.local_kept;
-            files::unpack_library(&mut zip, &library, &merged.skipped_folders, &mut undo)?;
+            unpack::unpack_library(&mut zip, &library, &merged.skipped_folders, &mut undo)?;
         }
-        report.presets_renamed = files::unpack_settings(&mut zip, places, &parts, &mut undo)?;
+        report.presets_renamed = unpack::unpack_settings(&mut zip, places, &parts, &mut undo)?;
         if attached.is_some() {
             conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
         }
