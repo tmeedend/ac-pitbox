@@ -14,7 +14,7 @@
     type LayerRow,
     type LayerHostKind,
   } from "$lib/library/library";
-  import { layerDisplayName } from "$lib/detail/layerName";
+  import { layerDisplayName, layerSource } from "$lib/detail/layerName";
   import { confirm } from "@tauri-apps/plugin-dialog";
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
@@ -94,7 +94,7 @@
   }
 
   async function remove(layer: LayerRow) {
-    const ok = await confirm(t("detail.layerDeleteConfirm", { name: layer.source_archive ?? layer.name }), {
+    const ok = await confirm(t("detail.layerDeleteConfirm", { name: layerSource(layer) }), {
       title: t("detail.layerDeleteTitle"),
       kind: "warning",
     });
@@ -129,12 +129,12 @@
               />
             </label>
             <button class="layer-main" type="button" title={t("detail.layerOpenDetail")} onclick={() => onopen(l, layers.length)}>
-              <span class="layer-nm">{l.display_name_user ?? layerDisplayName(l.name, hostName)}</span>
+              <span class="layer-nm">{l.display_name_user ?? layerDisplayName(layerSource(l), hostName)}</span>
               <span class="layer-counts mono">
                 {#if l.content_state === "skeleton"}
                   <!-- In the showcase (ESPACE§5.4): its files come back with
                        its own archive, named here. -->
-                  {t("showcase.state")} · {l.source_archive ?? l.name}
+                  {t("showcase.state")} · {layerSource(l)}
                 {:else}
                   {t("detail.layerCounts", { added: l.added_count, overwritten: l.overwritten_count })}
                 {/if}
@@ -149,7 +149,7 @@
                 class="layer-icon"
                 type="button"
                 title={t("showcase.searchWeb")}
-                onclick={() => openExternal(webSearchUrl(l.source_archive ?? l.name))}>{t("showcase.search")}</button>
+                onclick={() => openExternal(webSearchUrl(layerSource(l)))}>{t("showcase.search")}</button>
             {/if}
             <div class="layer-ord">
               <button class="layer-arrow" type="button" title={t("detail.layerUp")} disabled={busy || i === 0} onclick={() => move(l, "up")}>▲</button>

@@ -16,8 +16,20 @@ import { withoutBrand } from "$lib/library/displayName";
 const ARCHIVE_EXT = /\.(rar|zip|7z|tar|gz|bz2|xz)$/i;
 
 /**
- * Le nom d'une couche tel qu'on le montre, à partir du nom de son archive et
- * de celui de son hôte.
+ * What a layer's derived name is made from: the archive it came in, the
+ * folder found inside it only when there was no archive. The folder is often
+ * named after the host itself — a Spa 2022 layout shipped as
+ * `spa2022-release_V1-03.rar` holds a folder `spa` — so naming the layer after
+ * it said nothing about where it came from, and every layer of a host could
+ * read the same.
+ */
+export function layerSource(layer: { name: string; source_archive: string | null }): string {
+  return layer.source_archive ?? layer.name;
+}
+
+/**
+ * Le nom d'une couche tel qu'on le montre, à partir du nom de son archive
+ * ([`layerSource`]) et de celui de son hôte.
  *
  * Le retrait du préfixe passe par [`withoutBrand`], qui fait déjà ce travail
  * pour les marques de voitures : comparaison insensible à la casse et aux

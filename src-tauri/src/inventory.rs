@@ -277,14 +277,19 @@ fn sub_row(cfg: &AppConfig, index: &attach::EntityIndex, sub: overlay::SubModRow
 /// The row of a layer: its host is known by construction too.
 fn layer_row(cfg: &AppConfig, index: &attach::EntityIndex, layer: overlay::LayerRow) -> InventoryRow {
     let dir = crate::libpath::resolve(cfg.library_path.as_deref(), &layer.library_path);
+    // Named after its archive, the folder inside only without one: that folder
+    // is often the host's own id (`spa` for a Spa 2022 layout), which says
+    // nothing about where the layer came from (`layerSource` on the front).
+    let source = layer.source_archive.clone().unwrap_or_else(|| layer.name.clone());
     InventoryRow {
         uid: format!("LAYER:{}", layer.id),
         kind: RowKind::Layer,
         // Le nom dérivé (retrait de l'extension, du préfixe de l'hôte) est
         // calculé côté front, qui le fait déjà pour la fiche de couche : le
-        // dupliquer ici en ferait deux versions à garder d'accord.
-        name: layer.display_name_user.clone().unwrap_or_else(|| layer.name.clone()),
-        tech_id: layer.source_archive.clone().unwrap_or_else(|| layer.name.clone()),
+        // dupliquer ici en ferait deux versions à garder d'accord. Il le fait
+        // quand `name` vaut `tech_id`, c'est-à-dire sans nom saisi.
+        name: layer.display_name_user.clone().unwrap_or_else(|| source.clone()),
+        tech_id: source,
         areas: Vec::new(),
         attachment: host_attachment(index, &layer.parent_id, Nature::Appearance),
         active: Some(layer.is_active),
@@ -425,6 +430,58 @@ mod tests {
         let shared = serde_json::to_value(list_shared(&db, &cfg).unwrap()).unwrap();
         assert_eq!(shared.as_array().map(Vec::len), Some(3), "one row per source");
         assert_eq!(shared, expected, "same rows, sizes and attachments included");
+    }
+
+    /// Rule (§4): a layer is named after its archive, the folder inside it only
+    /// without one. Real case: a Spa 2022 layout, `spa2022-release_V1-03.rar`,
+    /// holds a folder `spa` — the host's own id, which said nothing of where
+    /// the layer came from.
+    #[test]
+    fn a_layer_is_named_after_its_archive() {
+        let base = crate::testutil::temp_dir("inventory-layer-name");
+        let cfg = AppConfig {
+            library_path: Some(base.join("library")),
+            ..Default::default()
+        };
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let now = chrono::Local::now().to_rfc3339();
+        overlay::upsert_mod(&conn, "spa", "Track", None, Some("Spa"), "h", None, &now).unwrap();
+        for (id, archive) in [
+            ("from_archive", Some("spa2022-release_V1-03.rar")),
+            ("no_archive", None),
+        ] {
+            overlay::insert_layer(
+                &conn,
+                id,
+                "spa",
+                "Track",
+                "spa",
+                &format!("layers/{id}"),
+                archive,
+                1,
+                0,
+                0,
+                &now,
+            )
+            .unwrap();
+        }
+        let rows = list(&conn, &cfg).unwrap();
+        let named = |uid: &str| {
+            rows.iter()
+                .find(|r| r.uid == uid)
+                .map(|r| (r.name.clone(), r.tech_id.clone()))
+        };
+        let archive = "spa2022-release_V1-03.rar".to_string();
+        assert_eq!(
+            named("LAYER:from_archive"),
+            Some((archive.clone(), archive)),
+            "the archive, not `spa`"
+        );
+        assert_eq!(
+            named("LAYER:no_archive"),
+            Some(("spa".to_string(), "spa".to_string())),
+            "no archive: the folder"
+        );
     }
 
     /// Rule (§4): one row per thing, whatever table it comes from — and the

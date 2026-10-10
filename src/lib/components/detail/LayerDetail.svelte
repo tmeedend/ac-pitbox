@@ -15,7 +15,7 @@
   import { t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
   import { fmtSize } from "$lib/format";
-  import { layerDisplayName } from "$lib/detail/layerName";
+  import { layerDisplayName, layerSource } from "$lib/detail/layerName";
   import { setEntityDisplayName, setEntityNote } from "$lib/detail/userMeta";
   import {
     listLayerFiles,
@@ -51,7 +51,7 @@
    * d'abord ce que la couche touche, le détail vient sur demande. */
   let opened = $state<Set<string>>(new Set());
 
-  const name = $derived(layer.display_name_user ?? layerDisplayName(layer.name, hostName));
+  const name = $derived(layer.display_name_user ?? layerDisplayName(layerSource(layer), hostName));
   const overwrites = $derived(files.filter((f) => f.overwrites));
   const additions = $derived(files.filter((f) => !f.overwrites));
   const totalBytes = $derived(files.reduce((sum, f) => sum + f.size_bytes, 0));
@@ -147,8 +147,8 @@
     backLabel={t("detail.layerBack")}
     glyph="▤"
     {name}
-    subtitle={layer.source_archive ?? layer.name}
-    rename={{ original: layerDisplayName(layer.name, hostName), overridden: !!layer.display_name_user, onsave: rename }}
+    subtitle={layerSource(layer)}
+    rename={{ original: layerDisplayName(layerSource(layer), hostName), overridden: !!layer.display_name_user, onsave: rename }}
     deployment={{ active: layer.is_active }}
     actions={[
       {

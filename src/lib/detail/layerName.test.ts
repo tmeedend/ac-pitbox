@@ -1,5 +1,20 @@
 import { describe, it, expect } from "vitest";
-import { layerDisplayName } from "./layerName";
+import { layerDisplayName, layerSource } from "./layerName";
+
+// Real case: a Spa 2022 layout shipped as `spa2022-release_V1-03.rar`, holding
+// a folder `spa` — the host's own id. Named after the folder, the layer read
+// "spa" on the track's sheet, which said nothing about where it came from.
+describe("layerSource", () => {
+  it("names a layer after its archive, not the folder inside it", () => {
+    expect(layerSource({ name: "spa", source_archive: "spa2022-release_V1-03.rar" })).toBe(
+      "spa2022-release_V1-03.rar",
+    );
+  });
+
+  it("falls back on the folder when there was no archive", () => {
+    expect(layerSource({ name: "cameras_extra", source_archive: null })).toBe("cameras_extra");
+  });
+});
 
 // A layer's derived name (REFONTE§8.3). Derived, therefore fallible, therefore
 // correctable by hand — but the derivation still has to be conservative: every
