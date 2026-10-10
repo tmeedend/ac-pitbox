@@ -249,7 +249,7 @@ impl Filing<'_> {
     /// la couche est rangée sous l'id attendu, sans rien poser dans le jeu, et
     /// l'hôte la reprendra le jour où il arrivera (`compose::recompose` lit les
     /// couches par `parent_id`, que le mod existe ou non). Même parti que
-    /// `submods::resolve_sound_parent` pour un son dont la voiture manque :
+    /// `submods::sounds::resolve_sound_parent` pour un son dont la voiture manque :
     /// ranger au bon endroit pour le jour où il y aura quelque chose dessous.
     fn fragment_without_host(&self, incoming: &Incoming) -> Result<Option<ImportedMod>, String> {
         match &incoming.host {

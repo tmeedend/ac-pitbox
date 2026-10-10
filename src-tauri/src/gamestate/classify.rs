@@ -221,7 +221,7 @@ impl Classifier<'_> {
     // --- 1. Links (DOSSIER§4.1, population 1) -------------------------------
 
     /// Who laid the link at `rel`, from where it sits: the layouts Pit Box
-    /// uses (`submods::project_skin`, `apps::app_link`, the legacy mod
+    /// uses (`submods::skins::project_skin`, `apps::app_link`, the legacy mod
     /// junction), then the links an other mod recorded at its activation.
     fn link_owner(&self, rel: &Path, abs: &Path) -> Option<OwnerId> {
         let parts = lower_parts(rel);

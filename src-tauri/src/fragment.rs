@@ -19,7 +19,7 @@
 //! update-vs-layer arbitration at all. The result is a library entry the game
 //! can never load, and a base track that never receives what was meant for it.
 //!
-//! The cascade below follows the shape of `submods::resolve_sound_parent`:
+//! The cascade below follows the shape of `submods::sounds::resolve_sound_parent`:
 //! ordered sources, surest first, each one documented with what it was measured
 //! to be worth on the reference library.
 
@@ -233,7 +233,7 @@ fn structural_hosts(kind: ModKind, dir: &Path, hosts: &[(String, PathBuf)]) -> V
 
 /// Hosts whose id appears in the fragment's folder name.
 ///
-/// Same idea as `submods::guess_sound_parent`, and the same caution: this is
+/// Same idea as `submods::sounds::guess_sound_parent`, and the same caution: this is
 /// the weakest signal of the cascade, kept because authors often do write the
 /// target in the folder name (`ks_nordschleife_extra_trees`). Only an id
 /// written **in full** counts — a fuzzy segment match, useful for sounds where
@@ -283,7 +283,7 @@ fn path_overlap_host(dir: &Path, hosts: &[(String, PathBuf)]) -> Option<String> 
 }
 
 /// Has the shape of an AC content id: a compound word, not a generic label.
-/// Same test as `submods::looks_like_ac_id`, for the same reason — it keeps a
+/// Same test as `submods::sounds::looks_like_ac_id`, for the same reason — it keeps a
 /// `models.vao-patch` from being read as the name of a mod to wait for.
 fn looks_like_ac_id(name: &str) -> bool {
     name.len() >= 5 && name.contains('_') && !name.to_ascii_lowercase().starts_with("models")

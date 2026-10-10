@@ -151,7 +151,7 @@ Mesuré sur tout le corpus de référence, **sans une seule exception** : 103 ve
 
 **Bug réel qui a motivé la règle** : `Mike08_santamonica01`, une refonte visuelle de Santa Monica Mountains (`ui/` de deux layouts, `texture/`, `extension/ext_config.ini`, un `.vao-patch` — aucune géométrie). Nommée d'après son auteur, elle devenait un circuit de plus, **sans qu'aucune question ne soit posée** : l'identité d'un mod se réduisait au nom de son dossier, donc un fragment ainsi nommé ne rencontrait jamais l'arbitrage du §4.3. Résultat : une entrée que le jeu ne peut pas charger, et un circuit de base qui ne reçoit jamais ce qui lui était destiné.
 
-**Trouver l'hôte** (`fragment.rs`), sources ordonnées de la plus sûre à la plus faible — même forme que `submods::resolve_sound_parent`, chacune chiffrée sur la bibliothèque de référence :
+**Trouver l'hôte** (`fragment.rs`), sources ordonnées de la plus sûre à la plus faible — même forme que `submods::sounds::resolve_sound_parent`, chacune chiffrée sur la bibliothèque de référence :
 
 1. **le dossier porte déjà le nom d'un mod connu** — la règle d'identité historique, inchangée ;
 2. **le `.vao-patch`** nomme le `.kn5` ou le `models*.ini` qu'il accompagne (**121/124** ; le nommer d'après l'id du circuit ne tient que pour 32/124, contrairement à l'intuition) ;

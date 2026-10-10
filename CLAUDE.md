@@ -390,7 +390,7 @@ src-tauri/src/          Backend Rust — un module par domaine
   fragment.rs           Mod ou couche déguisée en mod : géométrie, recherche de l'hôte
   activation.rs deploy.rs compose.rs layers.rs   Déploiement dans content/
   extras.rs gamebackup.rs              Ce qu'un mod pose hors de content/<type>/<id>
-  library.rs submods.rs apps.rs others.rs        Bibliothèque et add-ons
+  library.rs submods/ apps.rs others.rs          Bibliothèque et add-ons
   attach.rs inventory.rs usermeta.rs   Inventaire des compléments : sur quoi un
                         mod se greffe, ce qu'il fait, et ce que l'utilisateur a
                         saisi dessus (note, nom repris à la main)

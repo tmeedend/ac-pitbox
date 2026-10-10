@@ -108,7 +108,7 @@ fn overlay_tree(source: &Path, dest: &Path) -> Result<(), String> {
 /// Walks `source`, **following junctions**.
 ///
 /// A separately stored livery is projected into the host folder as a junction
-/// (`submods::project_skin`, §8.3), and a junction is neither a file nor a
+/// (`submods::skins::project_skin`, §8.3), and a junction is neither a file nor a
 /// directory to `symlink_metadata`: `is_dir()` and `is_file()` are **both**
 /// false on it (verified empirically — Rust std reports a mount point as a
 /// symlink). Left unfollowed, `WalkDir` hands back an entry that both branches
