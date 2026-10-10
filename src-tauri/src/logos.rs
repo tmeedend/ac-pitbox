@@ -11,7 +11,7 @@
 //! from the user's mods, or from a file he gave, copied into Pit Box's own
 //! folder - never into the game's (TAXO§9).
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::SystemTime;
@@ -276,6 +276,18 @@ pub fn set_pref(dir: &Path, brand: &str, pref: BrandPref) -> Result<(), String> 
 
 // --- The election ------------------------------------------------------------------
 
+/// A car's badge, as the election reads it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CarBadge {
+    pub car: String,
+    /// The brand the car is filed under.
+    pub brand: String,
+    pub path: String,
+    /// The car's own file names that brand (`brands::declares`): only then
+    /// does its badge vote for it (TAXO§4).
+    pub declared: bool,
+}
+
 /// One logo a brand's cars ship.
 #[derive(Debug, Clone, Serialize)]
 pub struct Variant {
@@ -287,6 +299,10 @@ pub struct Variant {
     pub background: Background,
     /// Cars shipping it: the vote (TAXO§4, criterion 3).
     pub cars: usize,
+    /// Shipped only by cars filed under this brand without their file naming
+    /// it - the VRC team's badge on its "Pageau", filed under Peugeot by a
+    /// rule. Listed, to be picked by hand, never elected (TAXO§4).
+    pub borrowed: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -308,32 +324,53 @@ pub struct BrandLogo {
 /// vote the spec relies on never got a say.
 const ENOUGH_PX: u32 = 128;
 
-/// TAXO§4, in this order: transparent background, then resolution (up to
+/// TAXO§4, in this order: a badge its car declares the brand of, then
+/// transparent background, then resolution (up to
 /// what a screen shows), then the most cars, then the first car id - two
 /// launches give the same result. No recency rule, on purpose: the vote
 /// adapts to the collection, a library of 1960s cars elects the period logo.
 fn rank(variants: &mut [(Variant, String)]) {
     let res = |v: &Variant| v.width.min(v.height).min(ENOUGH_PX);
     variants.sort_by(|(a, ida), (b, idb)| {
-        (b.background == Background::Transparent)
-            .cmp(&(a.background == Background::Transparent))
+        a.borrowed
+            .cmp(&b.borrowed)
+            .then_with(|| (b.background == Background::Transparent).cmp(&(a.background == Background::Transparent)))
             .then_with(|| res(b).cmp(&res(a)))
             .then_with(|| b.cars.cmp(&a.cars))
             .then_with(|| ida.cmp(idb))
     });
 }
 
-/// Every brand's logos, from `(car id, brand, badge path)` of the library.
-/// Brands with a choice but no car left (TAXO§9: the curation survives) are
-/// included, with their file if they have one.
-pub fn elect(cars: &[(String, String, String)], prefs: &Prefs, dir: &Path) -> BTreeMap<String, BrandLogo> {
+/// Every brand's logos, from the badges of the library's cars. Brands with a
+/// choice but no car left (TAXO§9: the curation survives) are included, with
+/// their file if they have one.
+pub fn elect(cars: &[CarBadge], prefs: &Prefs, dir: &Path) -> BTreeMap<String, BrandLogo> {
+    let mut sorted: Vec<(&CarBadge, Analysis)> = cars
+        .iter()
+        .filter_map(|b| Some((b, analyze(Path::new(&b.path))?)))
+        .collect();
+    sorted.sort_by(|(a, _), (b, _)| a.car.cmp(&b.car));
+    // The brands each file is filed under. A badge whose car does not declare
+    // its brand, and whose file also serves another brand, is a team's or a
+    // modder's logo: VRC's on eight brands, RSS's on Lamborghini and Lexus.
+    // Not declaring alone is not enough - a "traffic" pack declares no brand
+    // and ships the real Isuzu and Toyota logos, one brand each.
+    let mut brands_of: HashMap<&str, BTreeSet<&str>> = HashMap::new();
+    for (b, a) in &sorted {
+        brands_of.entry(a.hash.as_str()).or_default().insert(b.brand.as_str());
+    }
     let mut by_brand: BTreeMap<&str, BTreeMap<String, (Variant, String)>> = BTreeMap::new();
-    let mut sorted: Vec<&(String, String, String)> = cars.iter().collect();
-    sorted.sort_by(|a, b| a.0.cmp(&b.0));
-    for (id, brand, path) in sorted {
-        let Some(a) = analyze(Path::new(path)) else {
-            continue;
-        };
+    for (
+        CarBadge {
+            car: id,
+            brand,
+            path,
+            declared,
+        },
+        a,
+    ) in &sorted
+    {
+        let borrowed = !declared && brands_of.get(a.hash.as_str()).is_some_and(|b| b.len() > 1);
         let e = by_brand
             .entry(brand.as_str())
             .or_default()
@@ -347,11 +384,13 @@ pub fn elect(cars: &[(String, String, String)], prefs: &Prefs, dir: &Path) -> BT
                         height: a.height,
                         background: a.background,
                         cars: 0,
+                        borrowed: true,
                     },
                     id.clone(),
                 )
             });
         e.0.cars += 1;
+        e.0.borrowed &= borrowed;
     }
     let mut out = BTreeMap::new();
     let brands: Vec<String> = by_brand
@@ -380,7 +419,8 @@ pub fn elect(cars: &[(String, String, String)], prefs: &Prefs, dir: &Path) -> BT
             .variant
             .as_ref()
             .and_then(|h| variants.iter().find(|v| &v.hash == h));
-        let (path, background, choice) = match (&custom, picked, variants.first()) {
+        let elected = variants.iter().find(|v| !v.borrowed);
+        let (path, background, choice) = match (&custom, picked, elected) {
             (Some((p, a)), _, _) => (Some(p.to_string_lossy().into_owned()), Some(a.background), "custom"),
             (None, Some(v), _) => (Some(v.path.clone()), Some(v.background), "variant"),
             (None, None, Some(v)) => (Some(v.path.clone()), Some(v.background), "auto"),
@@ -411,12 +451,12 @@ pub struct LogosView {
     pub plaque: Vec<String>,
 }
 
-pub fn view(cars: &[(String, String, String)], dir: &Path) -> LogosView {
+pub fn view(cars: &[CarBadge], dir: &Path) -> LogosView {
     let brands = elect(cars, &load_prefs(dir), dir);
     let mut plaque: Vec<String> = cars
         .iter()
-        .filter(|(_, _, p)| analyze(Path::new(p)).is_some_and(|a| a.background == Background::Baked))
-        .map(|(_, _, p)| p.clone())
+        .filter(|b| analyze(Path::new(&b.path)).is_some_and(|a| a.background == Background::Baked))
+        .map(|b| b.path.clone())
         .collect();
     plaque.sort();
     plaque.dedup();
@@ -465,6 +505,78 @@ mod tests {
         p.to_string_lossy().into_owned()
     }
 
+    /// The badge of a car whose file names the brand it is filed under.
+    fn badge(car: &str, brand: &str, path: &str) -> CarBadge {
+        CarBadge {
+            car: car.into(),
+            brand: brand.into(),
+            path: path.into(),
+            declared: true,
+        }
+    }
+
+    /// TAXO§4: a badge votes only for the brand its car's file names. Real
+    /// case: the VRC team may not write "Peugeot", so its cars say "VRC" and
+    /// ship the team's badge - transparent and sharp, it won Peugeot's logo
+    /// over the real one. Still listed, to be picked by hand; and a brand
+    /// with nothing but such badges has no automatic logo (Renault).
+    #[test]
+    fn a_badge_votes_only_for_the_brand_its_car_declares() {
+        let base = crate::testutil::temp_dir("logos-borrowed");
+        let vrc = write(&base, "vrc.png", &square([0, 0, 0, 0]));
+        let peugeot = write(&base, "peugeot.png", &square([255, 255, 255, 255]));
+        let borrowed = |car: &str, brand: &str| CarBadge {
+            declared: false,
+            ..badge(car, brand, &vrc)
+        };
+        let cars = vec![
+            borrowed("vrc_erc_1998_pageau", "Peugeot"),
+            borrowed("vrc_pt_2023_pageau_98", "Peugeot"),
+            badge("ks_peugeot_504", "Peugeot", &peugeot),
+            borrowed("vrc_erc_1999_renoir", "Renault"),
+        ];
+        let logos = elect(&cars, &Prefs::new(), &base);
+        let p = &logos["Peugeot"];
+        assert_eq!(
+            p.path.as_deref(),
+            Some(peugeot.as_str()),
+            "the real logo, though baked and outvoted"
+        );
+        assert_eq!(p.variants.len(), 2, "the team's badge is still offered");
+        assert!(p.variants[1].borrowed && !p.variants[0].borrowed, "listed last");
+        let r = &logos["Renault"];
+        assert_eq!(r.path, None, "no automatic logo rather than the team's");
+        assert_eq!(r.variants.len(), 1);
+
+        let mut prefs = Prefs::new();
+        prefs.insert(
+            "Renault".into(),
+            BrandPref {
+                variant: Some(r.variants[0].hash.clone()),
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            elect(&cars, &prefs, &base)["Renault"].path.as_deref(),
+            Some(vrc.as_str()),
+            "picked by hand, it is shown"
+        );
+
+        // A pack that declares no brand but ships each brand's real logo -
+        // one file per brand - keeps its vote: Isuzu has only such cars.
+        // A pixel apart from the VRC file, or the two would be one variant.
+        let mut img = square([0, 0, 0, 0]);
+        img.put_pixel(1, 1, Rgba([9, 9, 9, 255]));
+        let isuzu = write(&base, "isuzu.png", &img);
+        let mut traffic = cars.clone();
+        traffic.push(CarBadge {
+            declared: false,
+            ..badge("traffic_isuzu_npr", "Isuzu", &isuzu)
+        });
+        let i = &elect(&traffic, &Prefs::new(), &base)["Isuzu"];
+        assert_eq!(i.path.as_deref(), Some(isuzu.as_str()), "a file of one brand votes");
+    }
+
     /// TAXO§4: transparent first - even outvoted - then resolution, then
     /// votes; a pick and a file of his override; the plate follows the chosen
     /// file unless he forced it.
@@ -474,9 +586,9 @@ mod tests {
         let white = write(&base, "white.png", &square([255, 255, 255, 255]));
         let clear = write(&base, "clear.png", &square([0, 0, 0, 0]));
         let cars = vec![
-            ("ks_porsche_911".to_string(), "Porsche".to_string(), white.clone()),
-            ("ks_porsche_718".to_string(), "Porsche".to_string(), white.clone()),
-            ("rss_porsche_gt".to_string(), "Porsche".to_string(), clear.clone()),
+            badge("ks_porsche_911", "Porsche", &white),
+            badge("ks_porsche_718", "Porsche", &white),
+            badge("rss_porsche_gt", "Porsche", &clear),
         ];
         let auto = elect(&cars, &Prefs::new(), &base);
         let p = &auto["Porsche"];
@@ -507,9 +619,9 @@ mod tests {
         small.put_pixel(64, 64, Rgba([1, 2, 3, 255]));
         let small = write(&base, "small.png", &small);
         let nissan = vec![
-            ("a".to_string(), "Nissan".to_string(), big),
-            ("b".to_string(), "Nissan".to_string(), small.clone()),
-            ("c".to_string(), "Nissan".to_string(), small.clone()),
+            badge("a", "Nissan", &big),
+            badge("b", "Nissan", &small),
+            badge("c", "Nissan", &small),
         ];
         assert_eq!(
             elect(&nissan, &Prefs::new(), &base)["Nissan"].path,
@@ -570,7 +682,7 @@ mod tests {
         let cfg: crate::config::AppConfig =
             serde_json::from_str(&std::fs::read_to_string(work.join("config.json")).unwrap()).unwrap();
         let conn = crate::overlay::open(&work.join("overlay.sqlite")).unwrap();
-        let cars = crate::library::car_badges(&conn, &cfg).unwrap();
+        let cars = crate::library::car_badges(&conn, &cfg, &BTreeMap::new()).unwrap();
         let t = std::time::Instant::now();
         let v = view(&cars, &work);
         println!(

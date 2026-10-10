@@ -21,6 +21,9 @@ export interface LogoVariant {
   background: LogoBackground;
   /** Cars shipping this very file: the vote (TAXO§4). */
   cars: number;
+  /** A team's or modder's badge, on cars filed here without their file
+   * naming the brand (VRC on Peugeot): offered, never elected (TAXO§4). */
+  borrowed: boolean;
 }
 
 /** What the user decided for a brand; empty = automatic. */
@@ -35,7 +38,7 @@ export interface BrandLogo {
   path: string | null;
   plaque: boolean;
   choice: "auto" | "variant" | "custom";
-  /** In election order: the first is the automatic choice. */
+  /** In election order: the first one not borrowed is the automatic choice. */
   variants: LogoVariant[];
   pref: BrandPref;
 }

@@ -15,8 +15,9 @@ pub async fn get_brand_logos(app: AppHandle) -> Result<LogosView, String> {
     off_window(app, |app| {
         let dir = crate::rules::config_dir(app)?;
         let cfg = crate::config::load(app);
+        let aliases = crate::rules::load(app).brand_aliases;
         crate::timing::step("cmd.get_brand_logos", || {
-            let cars = crate::library::car_badges_shared(&app.state::<Db>(), &cfg)?;
+            let cars = crate::library::car_badges_shared(&app.state::<Db>(), &cfg, &aliases)?;
             Ok(crate::logos::view(&cars, &dir))
         })
     })

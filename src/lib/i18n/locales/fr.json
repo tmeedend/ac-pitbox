@@ -2047,6 +2047,7 @@
     "bgBaked": "fond cuit",
     "bgOpaque": "fond plein",
     "elected": "Celui choisi automatiquement",
+    "borrowed": "Le badge d'une équipe ou d'un moddeur, qui sert aussi pour d'autres marques : jamais choisi automatiquement",
     "logoFile": "Utiliser un fichier à moi…",
     "logoFileTitle": "Un logo pour cette marque",
     "logoFileFilter": "Image PNG ou SVG",

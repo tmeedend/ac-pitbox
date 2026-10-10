@@ -2047,6 +2047,7 @@
     "bgBaked": "baked background",
     "bgOpaque": "full background",
     "elected": "The one chosen automatically",
+    "borrowed": "A team's or modder's badge, also used for other brands: never chosen automatically",
     "logoFile": "Use a file of mine…",
     "logoFileTitle": "A logo for this brand",
     "logoFileFilter": "PNG or SVG image",

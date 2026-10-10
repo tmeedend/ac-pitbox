@@ -381,8 +381,9 @@
                         type="button"
                         class="variant"
                         class:on={logo.choice !== "custom" && logo.path === v.path}
+                        class:borrowed={v.borrowed}
                         disabled={busy}
-                        title={i === 0 ? t("brandsTab.elected") : undefined}
+                        title={v.borrowed ? t("brandsTab.borrowed") : i === 0 ? t("brandsTab.elected") : undefined}
                         onclick={() => pickVariant(r.name, logo.pref, v)}
                       >
                         {#if src}<Emblem {src} plaque={v.background === "baked"} size={32} />{/if}
@@ -814,6 +815,10 @@
   }
   .variant.on {
     border-color: var(--txt2);
+  }
+  /* Never elected (TAXO§4): set back, still pickable. */
+  .variant.borrowed:not(.on) {
+    opacity: 0.55;
   }
   .v-meta {
     font-size: 10.5px;

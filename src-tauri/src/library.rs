@@ -1,7 +1,7 @@
 //! Vue bibliothèque (§6) : assemble les lignes overlay avec la vignette de
 //! preview et l'état actif/inactif pour la galerie et le tableau.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use rusqlite::Connection;
@@ -10,6 +10,7 @@ use serde::Serialize;
 use crate::cm_stats::{self, CmUsage};
 use crate::config::AppConfig;
 use crate::inspect;
+use crate::logos;
 use crate::modscan::ModKind;
 use crate::overlay::{self, HistoryRow, ModRow, VersionRow};
 use crate::uijson::{self, NativeSpecs};
@@ -158,21 +159,30 @@ fn badge_in(m: &ModRow, stack: &[PathBuf]) -> Option<String> {
     layered(stack, inspect::brand_badge)
 }
 
-/// `(car id, brand, badge path)` of every car that has both - what the brand
-/// logos are elected from (`logos::elect`).
-pub fn car_badges(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<(String, String, String)>> {
-    Ok(badges_from_disk(branded_cars(conn, cfg)?))
+/// The badge of every car that has a brand and a badge - what the brand logos
+/// are elected from (`logos::elect`). `aliases`: the user's brand merges, for
+/// whether a car's file names the brand it is filed under.
+pub fn car_badges(
+    conn: &Connection,
+    cfg: &AppConfig,
+    aliases: &BTreeMap<String, String>,
+) -> rusqlite::Result<Vec<logos::CarBadge>> {
+    Ok(badges_from_disk(branded_cars(conn, cfg)?, aliases))
 }
 
 /// `car_badges`, the base lock held only while the base is read - same reason
 /// as `list_cards_shared`: the badges are looked for on the disk, one car at a
 /// time, and the brand logos are asked for at every start.
-pub fn car_badges_shared(db: &overlay::Db, cfg: &AppConfig) -> Result<Vec<(String, String, String)>, String> {
+pub fn car_badges_shared(
+    db: &overlay::Db,
+    cfg: &AppConfig,
+    aliases: &BTreeMap<String, String>,
+) -> Result<Vec<logos::CarBadge>, String> {
     let cars = {
         let conn = db.0.lock().map_err(|e| e.to_string())?;
         branded_cars(&conn, cfg).map_err(|e| e.to_string())?
     };
-    Ok(badges_from_disk(cars))
+    Ok(badges_from_disk(cars, aliases))
 }
 
 /// Every car with a brand, and its composition stack - the base side of
@@ -189,9 +199,23 @@ fn branded_cars(conn: &Connection, cfg: &AppConfig) -> rusqlite::Result<Vec<(Mod
         .collect())
 }
 
-fn badges_from_disk(cars: Vec<(ModRow, String, Vec<PathBuf>)>) -> Vec<(String, String, String)> {
+fn badges_from_disk(
+    cars: Vec<(ModRow, String, Vec<PathBuf>)>,
+    aliases: &BTreeMap<String, String>,
+) -> Vec<logos::CarBadge> {
     cars.into_iter()
-        .filter_map(|(m, brand, stack)| Some((m.id_interne.clone(), brand, badge_in(&m, &stack)?)))
+        .filter_map(|(m, brand, stack)| {
+            let path = badge_in(&m, &stack)?;
+            // A file that names no brand contradicts nothing: its badge votes.
+            let declared = layered(&stack, |d| uijson::read_car(d)?.brand)
+                .is_none_or(|raw| crate::brands::declares(&raw, &brand, aliases));
+            Some(logos::CarBadge {
+                car: m.id_interne,
+                brand,
+                path,
+                declared,
+            })
+        })
         .collect()
 }
 
@@ -1029,17 +1053,21 @@ mod tests {
             ..Default::default()
         };
 
-        let expected = car_badges(&conn, &cfg).unwrap();
+        let expected = car_badges(&conn, &cfg, &BTreeMap::new()).unwrap();
         assert_eq!(
             expected
                 .iter()
-                .map(|(id, brand, _)| (id.as_str(), brand.as_str()))
+                .map(|b| (b.car.as_str(), b.brand.as_str()))
                 .collect::<Vec<_>>(),
             vec![("ks_badged", "Ferrari")],
             "only the car with a brand and a badge"
         );
         let db = overlay::Db(std::sync::Mutex::new(conn));
-        assert_eq!(car_badges_shared(&db, &cfg).unwrap(), expected, "same badges");
+        assert_eq!(
+            car_badges_shared(&db, &cfg, &BTreeMap::new()).unwrap(),
+            expected,
+            "same badges"
+        );
     }
 
     /// Monte un circuit géré : version de base en bibliothèque + une couche.

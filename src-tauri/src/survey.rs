@@ -153,7 +153,7 @@ pub fn build(conn: &Connection, cfg: &AppConfig, rules: &Rules, dir: &Path) -> r
             })
         })
         .collect();
-    let badges = crate::library::car_badges(conn, cfg)?;
+    let badges = crate::library::car_badges(conn, cfg, &rules.brand_aliases)?;
     Ok(assemble(mods, &badges, rules, dir, "library"))
 }
 
@@ -198,8 +198,16 @@ pub fn build_from_folder(root: &Path, rules: &Rules, dir: &Path) -> Survey {
             ui.brand.as_deref(),
         );
         if is_car {
-            if let (Some(brand), Some(badge)) = (&h.brand, crate::inspect::brand_badge(&f.dir)) {
-                badges.push((id.clone(), brand.clone(), badge));
+            if let (Some(brand), Some(path)) = (&h.brand, crate::inspect::brand_badge(&f.dir)) {
+                badges.push(crate::logos::CarBadge {
+                    car: id.clone(),
+                    declared: ui
+                        .brand
+                        .as_deref()
+                        .is_none_or(|raw| crate::brands::declares(raw, brand, &rules.brand_aliases)),
+                    brand: brand.clone(),
+                    path,
+                });
             }
         }
         mods.push(Surveyed { id, is_car, ui, h });
@@ -352,7 +360,7 @@ impl Known {
 }
 
 /// The logo variants of each brand, without a path (TAXO§4).
-fn logo_lines(badges: &[(String, String, String)], dir: &Path) -> Vec<LogoLine> {
+fn logo_lines(badges: &[crate::logos::CarBadge], dir: &Path) -> Vec<LogoLine> {
     crate::logos::elect(badges, &crate::logos::Prefs::new(), dir)
         .into_values()
         .filter(|b| !b.variants.is_empty())
@@ -372,11 +380,10 @@ fn logo_lines(badges: &[(String, String, String)], dir: &Path) -> Vec<LogoLine> 
         .collect()
 }
 
-/// The survey of a set of mods and of their cars' badges `(car id, brand,
-/// badge path)`.
+/// The survey of a set of mods and of their cars' badges.
 fn assemble(
     mods: Vec<Surveyed>,
-    badges: &[(String, String, String)],
+    badges: &[crate::logos::CarBadge],
     rules: &Rules,
     dir: &Path,
     source: &'static str,

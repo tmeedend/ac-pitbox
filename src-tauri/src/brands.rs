@@ -102,6 +102,31 @@ pub fn canonical(raw: &str, aliases: &BTreeMap<String, String>) -> Option<String
     canonical_in(raw, aliases, &known)
 }
 
+/// Whether a car whose file says `raw` names, itself, the brand it is filed
+/// under (TAXO§4): the same brand once folded or merged, or the brand's words
+/// inside what it says ("Mercedes Benz AMG" filed under Mercedes-Benz).
+pub fn declares(raw: &str, filed: &str, aliases: &BTreeMap<String, String>) -> bool {
+    let known = KNOWN.read().map(|k| k.clone()).unwrap_or_default();
+    declares_in(raw, filed, aliases, &known)
+}
+
+/// [`declares`], the elected spellings given. Not "VRC" filed under Peugeot by
+/// a rule: the VRC team may not write the real brand, so its file says "VRC"
+/// and its badge is the team's - which then won Peugeot's logo, being
+/// transparent and sharp.
+pub fn declares_in(
+    raw: &str,
+    filed: &str,
+    aliases: &BTreeMap<String, String>,
+    known: &BTreeMap<String, String>,
+) -> bool {
+    if canonical_in(raw, aliases, known).is_some_and(|c| fold(&c) == fold(filed)) {
+        return true;
+    }
+    let (raw, filed) = (words(raw), words(filed));
+    !filed.is_empty() && raw.windows(filed.len()).any(|w| w == filed.as_slice())
+}
+
 /// Whether a brand is no brand - a pack, a series, a modder the user marked
 /// as such (`not_brands`, TAXO§7).
 pub fn is_not_brand(brand: &str, not_brands: &BTreeSet<String>) -> bool {
@@ -227,6 +252,29 @@ mod tests {
             None,
             "nothing visible, no brand"
         );
+    }
+
+    /// TAXO§4: a car declares the brand it is filed under when its file says
+    /// it - in another case, through a merge, or within a longer brand - and
+    /// not when a rule moved it there from another name (the VRC case).
+    #[test]
+    fn a_car_declares_its_brand_only_when_its_file_says_it() {
+        let known = elect(["Volkswagen", "Peugeot", "Mercedes-Benz"]);
+        let aliases = BTreeMap::from([("vw".to_string(), "Volkswagen".to_string())]);
+        let says = |raw: &str, filed: &str| declares_in(raw, filed, &aliases, &known);
+        assert!(says("Volkswagen", "Volkswagen"));
+        assert!(says("VOLKSWAGEN ", "Volkswagen"), "case and spaces");
+        assert!(says("VW", "Volkswagen"), "a merge of the user's");
+        assert!(
+            says("Mercedes Benz AMG", "Mercedes-Benz"),
+            "the brand within a longer name"
+        );
+        assert!(
+            !says("VRC", "Peugeot"),
+            "moved by a rule: the team's badge, not Peugeot's"
+        );
+        assert!(!says("Pageau", "Peugeot"), "a near spelling is no declaration");
+        assert!(!says("Volkswagenwerk", "Volkswagen"), "whole words only");
     }
 
     /// A pack is no brand: the car's name says its brand - whole words only,
