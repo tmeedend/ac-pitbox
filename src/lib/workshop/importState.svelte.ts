@@ -9,13 +9,16 @@ import { StorageKey } from "$lib/storage";
 import { getUiPref, setUiPref } from "$lib/uiPrefs.svelte";
 import { bumpLibraryVersion } from "$lib/library/libraryVersion.svelte";
 import { listPendingFolders } from "./pending";
+import { errorText } from "$lib/errors";
 import {
   cancelImport,
+  executeBulkImport,
   importArchives,
   importFolders,
   resolveConflict,
   splitDroppedPaths,
   type ArchiveResult,
+  type BulkExecItem,
   type ImportProgress,
   type ImportDecision,
   type ModKind,
@@ -429,10 +432,24 @@ export function collapseReportOnNavigate(id: number): void {
   toggleReport(id, true);
 }
 
-/** Fin du flux d'import en masse (§4.2) : conflits déjà arbitrés, pas de modale. */
-export function reportBulkDone(report: ArchiveResult[]): void {
-  pushReport(report);
-  bumpLibraryVersion();
+/** Executes a bulk import (§4.2) once its conflicts are arbitrated. Through
+ * the shared import state like any other batch: the progress toast follows it
+ * and can stop it, and the app stays usable meanwhile. It used to be awaited
+ * by its own dialog, outside that state — no progress at all, a greyed
+ * "Importing…" button for minutes, then the report at once: it looked frozen.
+ *
+ * `label` names the parent folder in the report should the batch fail before
+ * its first item (disk space): the dialog that could have shown it is gone. */
+export async function runBulkImport(label: string, items: BulkExecItem[], copy: boolean): Promise<void> {
+  if (importState.importing) return;
+  await whileImporting(items.length, async () => {
+    try {
+      pushReport(await executeBulkImport(items, copy));
+    } catch (e) {
+      pushReport([{ archive: label, mods: [], error: errorText(e), subs: [], apps: [], others: [] }]);
+    }
+    bumpLibraryVersion();
+  });
 }
 
 /** Issues pour lesquelles **rien n'a été écrit** : l'archive identique qu'on ne

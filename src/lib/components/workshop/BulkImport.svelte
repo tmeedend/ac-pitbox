@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { analyzeBulkImport, executeBulkImport, type ArchiveResult, type BulkAddon, type BulkEntry } from "$lib/library/library";
+  import { analyzeBulkImport, type BulkAddon, type BulkEntry } from "$lib/library/library";
+  import { importState, runBulkImport } from "$lib/workshop/importState.svelte";
   import { bulkCounts, buildExecItems, importCount, isOtherContent } from "$lib/workshop/bulkImport";
   import { t } from "$lib/i18n/index.svelte";
 
@@ -10,13 +11,11 @@
     parent: string;
     copy: boolean;
     onclose: () => void;
-    ondone: (report: ArchiveResult[]) => void;
   }
-  let { parent, copy, onclose, ondone }: Props = $props();
+  let { parent, copy, onclose }: Props = $props();
 
   let entries = $state<BulkEntry[]>([]);
   let loading = $state(true);
-  let running = $state(false);
   let error = $state("");
   let skipDuplicates = $state(true);
   // Décisions d'arbitrage des cas ambigus : id → "keep_both" | "replace".
@@ -46,17 +45,11 @@
     decisions = d;
   }
 
-  async function execute() {
-    if (running) return;
-    running = true;
-    error = "";
-    try {
-      const report = await executeBulkImport(buildExecItems(entries, skipDuplicates, decisions), copy);
-      ondone(report);
-    } catch (e) {
-      error = errorText(e);
-      running = false;
-    }
+  // The batch goes on in the progress toast (§4.2bis), like any import: the
+  // dialog has nothing left to show, and keeping it open blocked the app.
+  function execute() {
+    void runBulkImport(parentName, buildExecItems(entries, skipDuplicates, decisions), copy);
+    onclose();
   }
 
   function statusLabel(status: string): string {
@@ -170,9 +163,9 @@
       <footer>
         <span class="mode mono">{copy ? t("import.copy") : t("import.move")}</span>
         <div class="f-actions">
-          <button class="btn" type="button" onclick={onclose} disabled={running}>{t("common.cancel")}</button>
-          <button class="btn btn-primary" type="button" onclick={execute} disabled={running || toImport === 0}>
-            {running ? t("bulkImport.importing") : t("bulkImport.importButton", { count: toImport })}
+          <button class="btn" type="button" onclick={onclose}>{t("common.cancel")}</button>
+          <button class="btn btn-primary" type="button" onclick={execute} disabled={importState.importing || toImport === 0}>
+            {t("bulkImport.importButton", { count: toImport })}
           </button>
         </div>
       </footer>

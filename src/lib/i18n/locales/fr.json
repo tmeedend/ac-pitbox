@@ -1433,7 +1433,6 @@
     "addonApp": "App",
     "keepBoth": "Garder les 2",
     "replace": "Écraser",
-    "importing": "Import en cours…",
     "importButton": "Importer {count} mod(s)"
   },
   "about": {

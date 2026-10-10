@@ -1433,7 +1433,6 @@
     "addonApp": "App",
     "keepBoth": "Keep both",
     "replace": "Overwrite",
-    "importing": "Importing…",
     "importButton": "Import {count} mod(s)"
   },
   "about": {

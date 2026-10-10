@@ -926,7 +926,6 @@
     "statusAmbiguous": "Mehrdeutig",
     "keepBoth": "Beide behalten",
     "replace": "Überschreiben",
-    "importing": "Wird importiert…",
     "importButton": "{count} Mod(s) importieren"
   },
   "about": {

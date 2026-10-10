@@ -19,7 +19,6 @@
     setCopyMode,
     pickAndImportArchive,
     pickAndImportFolder,
-    reportBulkDone,
   } from "$lib/workshop/importState.svelte";
   import { t } from "$lib/i18n/index.svelte";
 
@@ -250,10 +249,6 @@
     parent={bulkParent}
     copy={importState.copyMode}
     onclose={() => (bulkParent = null)}
-    ondone={(r) => {
-      reportBulkDone(r);
-      bulkParent = null;
-    }}
   />
 {/if}
 
