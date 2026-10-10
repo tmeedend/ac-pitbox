@@ -35,6 +35,13 @@ describe("driverKey", () => {
   it("is null for a silent livery", () => {
     expect(driverKey(skin("a"))).toBeNull();
   });
+
+  // AC's own liveries say `"number": "0"` when they have no number.
+  it("reads a number 0 as no number", () => {
+    expect(driverKey(skin("a", "0"))).toBeNull();
+    expect(driverKey(skin("a", "0", "Juan")), "the name still identifies").toBe(driverKey(skin("b", null, "juan")));
+    expect(driverKey(skin("a", "00")), "00 is a real racing number").not.toBeNull();
+  });
 });
 
 describe("pickSkin", () => {
@@ -91,6 +98,21 @@ describe("hasDuplicateDrivers", () => {
 
   it("ignores rows with no identity at all", () => {
     expect(hasDuplicateDrivers([opp("c"), opp("c")], skinOf)).toBe(false);
+  });
+
+  // Real grid: BMW M3 E30 `black`, Ferrari 458 `03_blupozzi`, Huracán
+  // `nero_noctis`, Lotus 2-Eleven `red` — four different Kunos liveries, all
+  // `"number": "0"` with no driver. "Two drivers share the same number."
+  it("does not take liveries numbered 0 for the same driver", () => {
+    const zeros: Record<string, SkinItem> = { black: skin("black", "0"), blupozzi: skin("blupozzi", "0") };
+    const zeroOf = (o: Opponent) => (o.car_skin ? zeros[o.car_skin] : undefined);
+    expect(hasDuplicateDrivers([opp("black"), opp("blupozzi")], zeroOf)).toBe(false);
+  });
+
+  it("avoids nothing in the draw because of a number 0", () => {
+    const taken = newTaken();
+    pickSkin([skin("black", "0")], taken, first);
+    expect(pickSkin([skin("blupozzi", "0"), skin("other", "7")], taken, first)).toBe("blupozzi");
   });
 });
 

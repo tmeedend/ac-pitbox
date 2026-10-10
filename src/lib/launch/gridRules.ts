@@ -34,9 +34,16 @@ export interface TakenIdentities {
 export const newTaken = (): TakenIdentities => ({ skins: new Set(), drivers: new Set() });
 
 /** Ce qui doit rester unique : le couple numéro + nom, insensible à la
- * casse. Une livrée muette ne participe pas — elle n'impose rien. */
+ * casse. Une livrée muette ne participe pas — elle n'impose rien.
+ *
+ * A number `0` is no number: it is what AC's own liveries carry when they
+ * have none (`"number": "0"`, no driver). Read as a number, every such livery
+ * was "driver #0 with no name" — the same one: the check warned on a grid
+ * whose liveries were all different (four of seventeen rows in a real case),
+ * and the draw avoided them as if one were already on the grid. */
 export function driverKey(skin: SkinItem): string | null {
-  const key = `${skin.number ?? ""}|${skin.driver ?? ""}`.trim().toLowerCase();
+  const number = skin.number?.trim() === "0" ? "" : (skin.number ?? "");
+  const key = `${number}|${skin.driver ?? ""}`.trim().toLowerCase();
   return key === "|" ? null : key;
 }
 
