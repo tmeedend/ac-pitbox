@@ -56,7 +56,10 @@ const OBLIQUITY_DEG: f64 = 23.4397;
 pub enum CoordSource {
     /// `data_track_params.ini` — the file CSP itself reads.
     Csp,
-    /// `ui_track.json` geotags — a track CSP does not know about.
+    /// Content Manager's copy of the same table (`Track Params.ini` in its
+    /// data): same values, timezone included.
+    Cm,
+    /// `ui_track.json` geotags — a track no table knows about.
     Geotags,
 }
 
@@ -142,13 +145,49 @@ pub struct TrackLocation {
     pub source: CoordSource,
 }
 
-/// CSP's own table first, the mod's `ui_track.json` second.
+/// The tables of track coordinates, most authoritative first: CSP's own (what
+/// the game reads), then the copy Content Manager keeps in its data — its
+/// user override (`Data (User)`) before the shipped one.
+///
+/// CM's copy is what Content Manager shows as "Geo tags" for a Kunos track,
+/// whose `ui_track.json` only says `["lat", "lon"]`. It matters since CSP's
+/// 0.3.0 previews stopped shipping their own table: without it, Spa and every
+/// Kunos track lost the day/night band, and every other track its timezone.
+fn params_tables(ac_install_path: &Path) -> Vec<(PathBuf, CoordSource)> {
+    let mut tables = vec![(
+        ac_install_path
+            .join("extension")
+            .join("config")
+            .join("data_track_params.ini"),
+        CoordSource::Csp,
+    )];
+    if let Some(local) = dirs::data_local_dir() {
+        let cm = local.join("AcTools Content Manager");
+        for data in ["Data (User)", "Data"] {
+            tables.push((
+                cm.join(data).join("Miscellaneous").join("Track Params.ini"),
+                CoordSource::Cm,
+            ));
+        }
+    }
+    tables
+}
+
+/// A track's coordinates: the tables first, the mod's `ui_track.json` last.
 pub fn track_location(ac_install_path: &Path, track_id: &str, layout: Option<&str>) -> Option<TrackLocation> {
-    let params = ac_install_path
-        .join("extension")
-        .join("config")
-        .join("data_track_params.ini");
-    if let Ok(text) = std::fs::read_to_string(&params) {
+    locate(&params_tables(ac_install_path), ac_install_path, track_id, layout)
+}
+
+fn locate(
+    tables: &[(PathBuf, CoordSource)],
+    ac_install_path: &Path,
+    track_id: &str,
+    layout: Option<&str>,
+) -> Option<TrackLocation> {
+    for (path, source) in tables {
+        let Ok(text) = std::fs::read_to_string(path) else {
+            continue;
+        };
         let lat = ini_value(&text, track_id, "LATITUDE").and_then(|v| v.parse::<f64>().ok());
         let lon = ini_value(&text, track_id, "LONGITUDE").and_then(|v| v.parse::<f64>().ok());
         if let (Some(latitude), Some(longitude)) = (lat, lon) {
@@ -156,7 +195,7 @@ pub fn track_location(ac_install_path: &Path, track_id: &str, layout: Option<&st
                 latitude,
                 longitude,
                 timezone: ini_value(&text, track_id, "TIMEZONE").filter(|s| !s.is_empty()),
-                source: CoordSource::Csp,
+                source: *source,
             });
         }
     }
@@ -459,6 +498,46 @@ mod tests {
         NaiveDate::from_ymd_opt(y, m, d).unwrap()
     }
 
+    /// CSP's table of a synthetic install, and no other: the machine running
+    /// the tests may have a real Content Manager whose table knows Spa.
+    fn csp_table(ac: &Path) -> Vec<(PathBuf, CoordSource)> {
+        params_tables(ac).into_iter().take(1).collect()
+    }
+
+    // Spa as Content Manager shows it: a Kunos track whose `ui_track.json`
+    // says `["lat", "lon"]`, known only to CM's copy of the table once CSP
+    // (0.3.0 previews) stopped shipping its own. CSP's still wins when there.
+    #[test]
+    fn content_managers_table_locates_a_track_after_csps() {
+        let dir = crate::testutil::temp_dir("sun-cm");
+        let ui = dir.join("content").join("tracks").join("spa").join("ui");
+        std::fs::create_dir_all(&ui).unwrap();
+        std::fs::write(ui.join("ui_track.json"), r#"{"geotags": ["lat", "lon"]}"#).unwrap();
+        let cm = dir.join("cm").join("Track Params.ini");
+        std::fs::create_dir_all(cm.parent().unwrap()).unwrap();
+        std::fs::write(
+            &cm,
+            "[spa]\nHEADING_ANGLE=0\nLATITUDE=50.4552\nLONGITUDE=5.95238\nTIMEZONE=Europe/Paris\n",
+        )
+        .unwrap();
+        let mut tables = csp_table(&dir);
+        tables.push((cm, CoordSource::Cm));
+
+        let loc = locate(&tables, &dir, "spa", None).expect("found in CM's table");
+        assert_eq!(loc.source, CoordSource::Cm);
+        assert_eq!(loc.timezone.as_deref(), Some("Europe/Paris"), "timezone comes with it");
+
+        let csp = dir.join("extension").join("config");
+        std::fs::create_dir_all(&csp).unwrap();
+        std::fs::write(
+            csp.join("data_track_params.ini"),
+            "[spa]\nLATITUDE=50.44\nLONGITUDE=5.97\n",
+        )
+        .unwrap();
+        let loc = locate(&tables, &dir, "spa", None).expect("found");
+        assert_eq!(loc.source, CoordSource::Csp, "what the game reads comes first");
+    }
+
     /// Minutes between an hour value and an expected `HH:MM`.
     fn minutes_off(hours: f64, expected_h: f64, expected_m: f64) -> f64 {
         (hours * 60.0 - (expected_h * 60.0 + expected_m)).abs()
@@ -653,7 +732,7 @@ mod tests {
             "[ks_nordschleife]\nHEADING_ANGLE=-10\nLATITUDE=50.3356\nLONGITUDE=6.9475\nTIMEZONE=Europe/Berlin\n",
         )
         .unwrap();
-        let loc = track_location(&dir, "ks_nordschleife", None).expect("track found");
+        let loc = locate(&csp_table(&dir), &dir, "ks_nordschleife", None).expect("track found");
         assert_eq!(loc.source, CoordSource::Csp, "CSP's own table is the reference");
         assert_eq!(loc.timezone.as_deref(), Some("Europe/Berlin"));
         assert!((loc.latitude - 50.3356).abs() < 1e-6, "latitude read as written");
@@ -671,7 +750,7 @@ mod tests {
             r#"{"name": "Montagna", "geotags": ["44.8976", "8.8637"]}"#,
         )
         .unwrap();
-        let loc = track_location(&dir, "rmi_mdpietra", None).expect("geotags found");
+        let loc = locate(&csp_table(&dir), &dir, "rmi_mdpietra", None).expect("geotags found");
         assert_eq!(loc.source, CoordSource::Geotags);
         assert!(loc.timezone.is_none(), "geotags carry no timezone");
 
@@ -679,7 +758,7 @@ mod tests {
         std::fs::create_dir_all(&ui).unwrap();
         std::fs::write(ui.join("ui_track.json"), r#"{"geotags": ["lat", "lon"]}"#).unwrap();
         assert!(
-            track_location(&dir, "spa", None).is_none(),
+            locate(&csp_table(&dir), &dir, "spa", None).is_none(),
             "the placeholder is not a location"
         );
     }
@@ -734,7 +813,7 @@ mod tests {
             "{\"name\": \"Kotor-Trojica\", \"geotags\": [\"42° 25′ 57″ N\", \"18° 46′ 55″ E\"]}",
         )
         .unwrap();
-        let loc = track_location(&dir, "lemax_kotor-trojica", Some("trojica")).expect("DMS geotags read");
+        let loc = locate(&csp_table(&dir), &dir, "lemax_kotor-trojica", Some("trojica")).expect("DMS geotags read");
         assert!((loc.latitude - 42.4325).abs() < 1e-3, "latitude {}", loc.latitude);
         assert!((loc.longitude - 18.7819).abs() < 1e-3, "longitude {}", loc.longitude);
 
@@ -743,11 +822,11 @@ mod tests {
         std::fs::write(ui.join("short").join("ui_track.json"), r#"{"name": "Short"}"#).unwrap();
         std::fs::write(ui.join("ui_track.json"), r#"{"geotags": ["44.8976", "8.8637"]}"#).unwrap();
         assert!(
-            track_location(&dir, "two_files", Some("short")).is_some(),
+            locate(&csp_table(&dir), &dir, "two_files", Some("short")).is_some(),
             "the track's own file is read when the layout's says nothing"
         );
         assert!(
-            track_location(&dir, "lemax_kotor-trojica", None).is_some(),
+            locate(&csp_table(&dir), &dir, "lemax_kotor-trojica", None).is_some(),
             "no layout given: any layout's position is the track's"
         );
     }
@@ -760,6 +839,6 @@ mod tests {
         let ui = dir.join("content").join("tracks").join("swapped").join("ui");
         std::fs::create_dir_all(&ui).unwrap();
         std::fs::write(ui.join("ui_track.json"), r#"{"geotags": ["120.5", "45.2"]}"#).unwrap();
-        assert!(track_location(&dir, "swapped", None).is_none());
+        assert!(locate(&csp_table(&dir), &dir, "swapped", None).is_none());
     }
 }

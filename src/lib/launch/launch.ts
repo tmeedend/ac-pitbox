@@ -303,9 +303,10 @@ export interface TrackSun {
   longitude: number;
   timezone: string | null;
   utcOffsetHours: number;
-  /** "csp" = data_track_params.ini (ce que le jeu lira), "geotags" = position
+  /** "csp" = data_track_params.ini (ce que le jeu lira), "cm" = la copie de
+   * cette table dans les données de Content Manager, "geotags" = position
    * déclarée par le mod, fuseau approché d'après la longitude. */
-  source: "csp" | "geotags";
+  source: "csp" | "cm" | "geotags";
   seasonalSetting: number;
   dateBasis: "session" | "today" | "midsummer";
   date: string;
