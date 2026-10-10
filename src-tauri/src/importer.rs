@@ -2494,10 +2494,14 @@ pub fn execute_bulk(
         let label = source_label(Path::new(&it.path));
         ctx.set_current(i, PHASE_FILING, label.clone());
         let started = Instant::now();
+        // Source kept (§10/§11) outside the lock, as `import_folders` does: a
+        // full copy, sometimes of several GB, during which every screen
+        // reading the overlay would wait.
+        let kept = keep_source(cfg, Path::new(&it.path), &label);
         // Verrou par entrée, jamais un seul pour tout le lot : un import en
         // masse ne doit pas geler les écrans qui lisent l'overlay.
         let result = match db.0.lock() {
-            Ok(conn) => exec_one(ctx, &conn, cfg, rules, i, it, copy),
+            Ok(conn) => exec_one(ctx, &conn, cfg, rules, i, it, copy, kept.as_deref()),
             Err(e) => failed_result(&label, e.to_string()),
         };
         ctx.record(bucket, sizes[i], started.elapsed().as_secs_f64());
@@ -2507,6 +2511,7 @@ pub fn execute_bulk(
     Ok(results)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn exec_one(
     ctx: &ImportCtx,
     conn: &Connection,
@@ -2515,6 +2520,8 @@ fn exec_one(
     index: usize,
     it: &BulkExecItem,
     copy: bool,
+    // Copied by the caller, before taking the lock (§10/§11).
+    kept_archive: Option<&str>,
 ) -> ArchiveResult {
     let dir = Path::new(&it.path);
     let name = dir
@@ -2552,7 +2559,6 @@ fn exec_one(
         // qui, lui, sait déjà le ranger via `others::relocate_driver_models`.
         ctx.sub(0, 1, name.clone());
         ctx.file_ratio(index, SCAN_SHARE);
-        let kept_archive = keep_source(cfg, dir, &name);
         let rescued = rescue_nested_archives(
             ctx,
             index,
@@ -2576,14 +2582,12 @@ fn exec_one(
                 result.error = Some(crate::errors::NOTHING_TO_IMPORT_IN_FOLDER.into());
             }
         }
-        drop_unused_kept_source(conn, cfg, kept_archive.as_deref());
+        drop_unused_kept_source(conn, cfg, kept_archive);
         return result;
     }
 
     ctx.sub(0, found.len(), name.clone());
     ctx.file_ratio(index, SCAN_SHARE);
-    // Conservation du dossier source (§10/§11), avant tout rangement.
-    let kept_archive = keep_source(cfg, dir, &name);
     // Pack (§4.4) : plusieurs mods issus du même dossier partagent leur source.
     let pack = (found.len() > 1).then_some(name.as_str());
     for (i, fm) in found.iter().enumerate() {
@@ -2611,7 +2615,7 @@ fn exec_one(
             None,
             false,
             ArchiveSource {
-                kept: kept_archive.as_deref(),
+                kept: kept_archive,
                 origin: None,
             },
             &mod_progress(ctx, index, i, found.len()),
@@ -2663,7 +2667,7 @@ fn exec_one(
         &[],
         &mut result,
     );
-    drop_unused_kept_source(conn, cfg, kept_archive.as_deref());
+    drop_unused_kept_source(conn, cfg, kept_archive);
     result
 }
 
@@ -5150,7 +5154,7 @@ mod tests {
             skip_ids: vec![],
             replace_ids: vec![],
         };
-        let r = exec_one(&ImportCtx::silent(), &conn, &cfg, &rules, 0, &item, true);
+        let r = exec_one(&ImportCtx::silent(), &conn, &cfg, &rules, 0, &item, true, None);
         assert_eq!(r.mods.len(), 1);
         assert!(library.join("cars").join("bulk_car").exists());
 
@@ -5192,7 +5196,7 @@ mod tests {
             skip_ids: vec![],
             replace_ids: vec![],
         };
-        let r = exec_one(&ImportCtx::silent(), &conn, &cfg, &rules, 0, &item, true);
+        let r = exec_one(&ImportCtx::silent(), &conn, &cfg, &rules, 0, &item, true, None);
         assert_eq!(r.others.len(), 1, "rangé comme autre mod, pas perdu");
         assert!(
             crate::overlay::other_exists(&conn, &r.others[0].id).unwrap(),
@@ -5240,7 +5244,7 @@ mod tests {
             skip_ids: vec![],
             replace_ids: vec![],
         };
-        let r = exec_one(&ImportCtx::silent(), &conn, &cfg, &rules, 0, &item, true);
+        let r = exec_one(&ImportCtx::silent(), &conn, &cfg, &rules, 0, &item, true, None);
         assert_eq!(r.subs.len(), 1, "the sound is filed: {r:?}");
         assert_eq!(r.subs[0].sub_type, "SOUND");
         assert_eq!(r.subs[0].parent_id, "a3dr_viper_rt10");
@@ -5282,7 +5286,7 @@ mod tests {
                 skip_ids: vec![],
                 replace_ids: vec![],
             };
-            let r = exec_one(&ImportCtx::silent(), &conn, &cfg, &rules, 0, &item, true);
+            let r = exec_one(&ImportCtx::silent(), &conn, &cfg, &rules, 0, &item, true, None);
             assert_eq!(r.others.len(), 1, "{}: filed as one other mod", e.subfolder);
             let body = library
                 .join("others")
@@ -5497,6 +5501,45 @@ mod tests {
             src.join("keep_car").join("model.kn5").is_file(),
             "source d'origine intacte (copie)"
         );
+    }
+
+    /// Rule (§10/§11): a bulk import keeps each subfolder's source like the
+    /// import of that folder alone — copied once, recorded on the version.
+    #[test]
+    fn bulk_import_keeps_each_subfolder_source() {
+        let base = crate::testutil::temp_dir("import-bulk-keep");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let db_path = base.join("overlay.sqlite");
+        let db = crate::overlay::Db(std::sync::Mutex::new(crate::overlay::open(&db_path).unwrap()));
+        let mut cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        cfg.prefs.keep_source_archive = true;
+        let rules = crate::rules::default_rules();
+        let parent = base.join("catalog");
+        make_fake_car(&parent.join("sub_a"), "bulk_keep_car");
+
+        let items = [BulkExecItem {
+            path: parent.join("sub_a").to_string_lossy().into_owned(),
+            skip_ids: vec![],
+            replace_ids: vec![],
+        }];
+        let r = execute_bulk(&ImportCtx::silent(), &db, &cfg, &rules, &items, true).unwrap();
+        assert_eq!(r[0].mods.len(), 1, "car imported");
+
+        let conn = db.0.lock().unwrap();
+        let versions = crate::overlay::get_versions(&conn, "bulk_keep_car").unwrap();
+        let kept = versions[0].kept_archive_path.as_ref().expect("source kept");
+        let kept_path = library.join(kept);
+        assert!(
+            kept_path.join("bulk_keep_car").join("ui").join("ui_car.json").is_file(),
+            "the subfolder is copied whole: {}",
+            kept_path.display()
+        );
+        let copies = std::fs::read_dir(library.join("_source_archives")).unwrap().count();
+        assert_eq!(copies, 1, "one copy per subfolder, no stray one");
     }
 
     /// Règle (§10/§11) : une copie de source qu'aucune version ne réclame est
