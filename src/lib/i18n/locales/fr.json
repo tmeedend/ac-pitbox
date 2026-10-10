@@ -337,7 +337,7 @@
     "discard": "Annuler les modifications",
     "unsavedTitle": "Modifications non enregistrées",
     "unsavedPrompt": "Des réglages ont été modifiés (et déjà appliqués en aperçu, ex. zoom/langue) mais pas enregistrés. Enregistrer, ou annuler et revenir en arrière ?",
-    "bigpictureView": "Vue de bibliothèque",
+    "bigpictureView": "Vue de bibliothèque en mode Big Picture",
     "bigpictureViewOption": {
       "comfortable": "Vignettes espacées",
       "dense": "Vignettes denses",
