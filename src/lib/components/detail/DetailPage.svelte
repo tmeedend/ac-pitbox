@@ -6,7 +6,8 @@
   // the library or the deployed content changes, what gets remembered and
   // pushed to the session. The gestures of the ⋮ menu and of the version
   // history — activate, delete, reinstall, export — are `DetailActions`'s
-  // (`$lib/detail/actions.svelte.ts`). The cards it lays out (`DetailHero`, `PickerCard`,
+  // (`$lib/detail/actions.svelte.ts`); the engine sounds and the track skins
+  // are `SheetSounds`'s and `SheetTrackSkins`'s. The cards it lays out (`DetailHero`, `PickerCard`,
   // `EngineSoundBlock`, `TrackSkinsBlock`, `DescriptionCard`…) only draw what
   // they are given: most of them are unmounted on every tab switch, and state
   // kept there would be reloaded, or lost, each time.
@@ -41,15 +42,8 @@
   import { tick, untrack } from "svelte";
   import { focusGamepadElement, isGamepadDriving } from "$lib/shell/gamepadNav";
   import { DetailActions } from "$lib/detail/actions.svelte";
-  import {
-    listSubMods,
-    activateSound,
-    restoreSound,
-    syncTrackSkins,
-    listActiveTrackSkins,
-    setTrackSkinActive,
-    type SubModRow,
-  } from "$lib/inventory/submods";
+  import { SheetSounds } from "$lib/detail/sheetSounds.svelte";
+  import { SheetTrackSkins } from "$lib/detail/sheetTrackSkins.svelte";
   import { nav, pickSession, requestSection } from "$lib/shell/nav.svelte";
   import { onLibraryChange } from "$lib/library/libraryVersion.svelte";
   import { getPreferredSkin, setPreferredSkin, getPreferredLayout, setPreferredLayout } from "$lib/preferred";
@@ -77,7 +71,6 @@
   import DescriptionCard, { type TextTab } from "./DescriptionCard.svelte";
   import AttachedBlock from "./AttachedBlock.svelte";
   import AttachedModSheet from "./AttachedModSheet.svelte";
-  import { stopEngine, toggleEngine } from "$lib/detail/enginePlayer.svelte";
 
   import { errorText } from "$lib/errors";
   interface Props {
@@ -225,13 +218,19 @@
   let skins = $state<SkinItem[]>([]);
   let previewSkin = $state(0);
   let previewLayout = $state(0);
-  let sounds = $state<SubModRow[]>([]);
-  let soundBusy = $state(false);
-  let trackSkins = $state<SubModRow[]>([]);
-  let activeTrackSkins = $state<string[]>([]);
-  let trackSkinsLoading = $state(true);
-  let trackSkinBusy = $state(false);
   let actionError = $state("");
+  /** Sounds of a car, skins of a track (§8.3, §8): `$lib/detail/sheetSounds`, `sheetTrackSkins`. */
+  const subsHost = {
+    get id() {
+      return id;
+    },
+    get loadedId() {
+      return detail?.id_interne ?? null;
+    },
+    setError: (message: string) => (actionError = message),
+  };
+  const sounds = new SheetSounds(subsHost);
+  const trackSkins = new SheetTrackSkins(subsHost);
   // Provenance / pack d'origine (§4.4).
   let siblings = $state<ModCard[]>([]);
 
@@ -399,9 +398,9 @@
       // voiture est ouverte doit le faire apparaître dans la liste. Ils
       // manquaient ici, et seuls un aller-retour hors de la fiche ou une
       // activation les rechargeaient.
-      await loadSounds(current);
+      await sounds.load(current);
     } else {
-      await loadTrackSkins(current);
+      await trackSkins.load(current);
     }
   }
 
@@ -427,7 +426,7 @@
     textTab = "desc";
     siblings = [];
     previewLayout = 0;
-    trackSkinsLoading = true;
+    trackSkins.loading = true;
     getModDetail(current).then((d) => {
       if (current !== id) return;
       detail = d;
@@ -484,9 +483,9 @@
           if (wi >= 0) selectSkin(wi);
         })
         .finally(() => skinsLoadResolve?.());
-      loadSounds(current);
+      sounds.load(current);
     } else {
-      loadTrackSkins(current);
+      trackSkins.load(current);
     }
 
     screenshotsCount = null;
@@ -555,41 +554,6 @@
       .catch(() => {});
   });
 
-  async function loadSounds(parent: string) {
-    const all = await listSubMods(parent);
-    if (parent !== id) return;
-    sounds = all.filter((s) => s.sub_type === "SOUND");
-  }
-
-  async function loadTrackSkins(parent: string) {
-    try {
-      // Reconnaît d'abord les skins fournis avec le mod (§8) — sinon ils
-      // n'apparaîtraient pas encore dans le listSubMods qui suit.
-      await syncTrackSkins(parent);
-      if (parent !== id) return;
-      const [all, active] = await Promise.all([listSubMods(parent), listActiveTrackSkins(parent)]);
-      if (parent !== id) return;
-      trackSkins = all.filter((s) => s.sub_type === "TRACK_SKIN");
-      activeTrackSkins = active;
-    } finally {
-      if (parent === id) trackSkinsLoading = false;
-    }
-  }
-
-  async function toggleTrackSkin(name: string) {
-    if (trackSkinBusy) return;
-    trackSkinBusy = true;
-    const wasActive = activeTrackSkins.includes(name);
-    try {
-      await setTrackSkinActive(id, name, !wasActive);
-      activeTrackSkins = wasActive ? activeTrackSkins.filter((n) => n !== name) : [...activeTrackSkins, name];
-    } catch (e) {
-      actionError = errorText(e);
-    } finally {
-      trackSkinBusy = false;
-    }
-  }
-
   // Un import, une activation ou une suppression peuvent survenir depuis
   // n'importe quel écran (§4.2/§ resynchronisation) et concerner le mod
   // ouvert (ex. une extension importée, désactivée depuis le panneau
@@ -597,60 +561,6 @@
   // suivi réactif : ne dépend pas de `id` (évite un double rechargement à la
   // navigation).
   onLibraryChange(() => queueMicrotask(() => void refreshEntity()));
-
-  // Son = bascule exclusive (§8.3) : un seul actif, original restaurable.
-  async function pickSound(subId: string | null) {
-    if (!detail || soundBusy) return;
-    soundBusy = true;
-    actionError = "";
-    try {
-      if (subId) await activateSound(subId);
-      else await restoreSound(detail.id_interne);
-      await loadSounds(detail.id_interne);
-    } catch (e) {
-      actionError = errorText(e);
-    } finally {
-      soundBusy = false;
-    }
-  }
-
-  /**
-   * Écouter une entrée, sans rien déployer — à ne pas confondre avec
-   * `pickSound` juste au-dessus, qui remplace les fichiers du jeu.
-   *
-   * Ne pose pas `soundBusy` : ce drapeau désarme les boutons radio le temps
-   * d'un déploiement, et écouter n'en est pas un. Les deux gestes doivent
-   * rester possibles en même temps.
-   */
-  async function listenSound(subId: string | null) {
-    if (!detail) return;
-    actionError = "";
-    try {
-      const clip = await toggleEngine(detail.id_interne, subId);
-      // Quel échantillon a été retenu, et comment : invisible à l'écran, mais
-      // c'est ce qu'il faut dans le journal quand quelqu'un rapporte avoir
-      // entendu le klaxon.
-      if (clip) {
-        console.info(
-          `[son moteur] ${clip.codec} #${clip.sampleIndex}` +
-            ` ${clip.sampleName ?? "(sans nom)"} par ${clip.pickedBy}, ${clip.seconds.toFixed(1)} s`,
-        );
-      }
-    } catch (e) {
-      actionError = errorText(e);
-    }
-  }
-
-  // Un moteur qui survit à son bouton est un moteur qu'on ne peut plus couper.
-  //
-  // L'effet **lit `id`** : sans cette lecture il ne se rejouerait jamais, et
-  // passer à une voiture voisine (`openSibling`, qui remplace le contenu sans
-  // démonter la fiche) laisserait tourner le moteur de la précédente sous la
-  // suivante.
-  $effect(() => {
-    void id;
-    return () => stopEngine();
-  });
 
   async function reload() {
     detail = await getModDetail(id);
@@ -872,11 +782,11 @@
           {#key d.id_interne}<CarSpecsBlock detail={d} onchanged={techSaved} />{/key}
           <EngineSoundBlock
             modId={d.id_interne}
-            {sounds}
-            busy={soundBusy}
+            sounds={sounds.list}
+            busy={sounds.busy}
             freed={d.showcase}
-            onpick={pickSound}
-            onlisten={listenSound}
+            onpick={(subId) => sounds.pick(subId)}
+            onlisten={(subId) => sounds.listen(subId)}
           />
           <PickerCard
             title={t("detail.skinsLabel")}
@@ -906,11 +816,11 @@
             addedLayouts={layoutOrigins.length}
           />
           <TrackSkinsBlock
-            skins={trackSkins}
-            active={activeTrackSkins}
-            loading={trackSkinsLoading}
-            busy={trackSkinBusy}
-            ontoggle={toggleTrackSkin}
+            skins={trackSkins.list}
+            active={trackSkins.active}
+            loading={trackSkins.loading}
+            busy={trackSkins.busy}
+            ontoggle={(name) => trackSkins.toggle(name)}
           />
           <!-- Même carte que le sélecteur de livrée, et même raison : il vit
                parmi les cartes de la colonne, il en prend le cadre. -->
