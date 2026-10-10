@@ -26,6 +26,62 @@ fn every_listing_runs_on_a_fresh_database() {
     drop(base);
 }
 
+/// Rule: what a `ui_*.json` stored before its reading dropped the invisible
+/// characters is cleaned once - names, brands, lists - and nothing typed by
+/// the user is touched; the pass then never runs again.
+#[test]
+fn stored_texts_lose_their_invisible_characters_once() {
+    let base = crate::testutil::temp_dir("strip-invisible");
+    let conn = open(&base.join("overlay.sqlite")).unwrap();
+    upsert_mod(
+        &conn,
+        "nohesi_traffic_bmw_x5",
+        "Car",
+        Some("\u{1d17a}BMW"),
+        Some("\u{1d17a}BMW X5 | No Hesi Traffic"),
+        "h",
+        None,
+        "2026-10-10",
+    )
+    .unwrap();
+    upsert_mod(
+        &conn,
+        "clean_car",
+        "Car",
+        Some("Ford"),
+        Some("Ford GT"),
+        "h2",
+        None,
+        "2026-10-10",
+    )
+    .unwrap();
+    conn.execute(
+        "UPDATE mods SET display_name_user = ?1 WHERE id_interne = 'clean_car'",
+        ["\u{200b}typed by the user"],
+    )
+    .unwrap();
+
+    assert_eq!(strip_invisible_from_stored_texts(&conn).unwrap(), 2, "brand and name");
+    let m = get_mod(&conn, "nohesi_traffic_bmw_x5").unwrap().unwrap();
+    assert_eq!(m.brand.as_deref(), Some("BMW"));
+    assert_eq!(m.display_name.as_deref(), Some("BMW X5 | No Hesi Traffic"));
+    let typed: String = conn
+        .query_row(
+            "SELECT display_name_user FROM mods WHERE id_interne = 'clean_car'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(typed, "\u{200b}typed by the user", "the user's input is left alone");
+
+    conn.execute(
+        "UPDATE mods SET display_name = ?1 WHERE id_interne = 'clean_car'",
+        ["\u{1d17a}Ford GT"],
+    )
+    .unwrap();
+    assert_eq!(strip_invisible_from_stored_texts(&conn).unwrap(), 0, "once per base");
+}
+
 /// Rule (§4.6ter): a database written before answers were remembered
 /// opens, gains the table, and reads "no answer" for every folder.
 #[test]

@@ -348,10 +348,7 @@ fn skin_field(v: &serde_json::Value, key: &str) -> Option<String> {
 }
 
 pub(crate) fn read_skin_info(skin_dir: &Path) -> SkinInfo {
-    let Ok(text) = std::fs::read_to_string(skin_dir.join("ui_skin.json")) else {
-        return SkinInfo::default();
-    };
-    let Ok(v) = serde_json::from_str::<serde_json::Value>(text.trim_start_matches('\u{feff}')) else {
+    let Some(v) = crate::uijson::read_ui_json(&skin_dir.join("ui_skin.json")) else {
         return SkinInfo::default();
     };
     SkinInfo {

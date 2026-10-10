@@ -261,6 +261,52 @@ pub fn update_mod_reindexed_fields(
     Ok(())
 }
 
+/// `meta` key of [`strip_invisible_from_stored_texts`]: set once it has run.
+const META_INVISIBLE_STRIPPED: &str = "invisible_chars_stripped";
+
+/// What the base stored of the `ui_*.json` before their reading dropped the
+/// invisible characters (`uijson::strip_invisible`), cleaned the same way -
+/// the 14 "No Hesi Traffic" cars kept a U+1D17A in front of their name
+/// otherwise, since a name is only read again on a reindex. Once per base (a
+/// `meta` marker), and the number of values changed is returned.
+pub fn strip_invisible_from_stored_texts(conn: &Connection) -> rusqlite::Result<usize> {
+    if get_meta(conn, META_INVISIBLE_STRIPPED)?.is_some() {
+        return Ok(0);
+    }
+    // The columns a `ui_*.json` fills, JSON lists included: the character is
+    // never part of their structure, only of the texts inside.
+    let tables: [(&str, &str, &[&str]); 2] = [
+        ("mods", "id_interne", &["brand", "display_name", "car_class", "country"]),
+        (
+            "versions",
+            "id",
+            &["version_label", "author", "layouts", "tags_from_mod"],
+        ),
+    ];
+    let mut changed = 0;
+    for (table, key, columns) in tables {
+        for column in columns {
+            let mut stmt = conn.prepare(&format!(
+                "SELECT {key}, {column} FROM {table} WHERE {column} IS NOT NULL"
+            ))?;
+            let rows = stmt
+                .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            for (id, value) in rows {
+                if let std::borrow::Cow::Owned(clean) = crate::uijson::strip_invisible(&value) {
+                    conn.execute(
+                        &format!("UPDATE {table} SET {column} = ?2 WHERE {key} = ?1"),
+                        params![id, clean],
+                    )?;
+                    changed += 1;
+                }
+            }
+        }
+    }
+    set_meta(conn, META_INVISIBLE_STRIPPED, "1")?;
+    Ok(changed)
+}
+
 /// Rafraîchit les champs d'une version dérivés du `ui_*.json`/inspection
 /// (réindexation), même logique que `update_mod_reindexed_fields`.
 #[allow(clippy::too_many_arguments)]

@@ -27,34 +27,14 @@ pub fn fold(s: &str) -> String {
     crate::rules::fold(&clean(s))
 }
 
-/// Trimmed, inner whitespace collapsed, invisible characters dropped.
+/// Trimmed, inner whitespace collapsed, invisible characters dropped
+/// (`uijson::strip_invisible`): a brand also comes from a rule or from the
+/// base, not only from a file just read.
 fn clean(s: &str) -> String {
-    let visible: String = s.chars().filter(|&c| !is_invisible(c)).collect();
-    visible.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-/// Formatting characters nothing draws (Unicode category Cf, the ones met in
-/// text): zero-width spaces and joiners, direction marks, the BOM, and the
-/// musical formatting marks U+1D173-U+1D17A. Kept, they make a second brand
-/// that reads exactly like the first - real case: the "No Hesi Traffic" pack
-/// prefixes its brands with U+1D17A, so "BMW" and "BMW" were two brands with
-/// two logos. Listed by hand: std does not expose the general category, and
-/// the list is short enough not to take a dependency for it.
-fn is_invisible(c: char) -> bool {
-    matches!(
-        c,
-        '\u{00AD}'
-            | '\u{061C}'
-            | '\u{180E}'
-            | '\u{200B}'..='\u{200F}'
-            | '\u{202A}'..='\u{202E}'
-            | '\u{2060}'..='\u{2064}'
-            | '\u{2066}'..='\u{206F}'
-            | '\u{FEFF}'
-            | '\u{1D173}'..='\u{1D17A}'
-            | '\u{E0001}'
-            | '\u{E0020}'..='\u{E007F}'
-    )
+    crate::uijson::strip_invisible(s)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Elects one spelling per folded key: the most used; on a tie, the one with

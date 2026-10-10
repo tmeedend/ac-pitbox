@@ -145,6 +145,17 @@ fn catch_up_index(app: &App, conn: &Connection, cfg: &AppConfig) {
         0 => {}
         n => log::warn!("migrated {n} app extra tree(s) to app layers"),
     }
+
+    // What a `ui_*.json` filled before its reading dropped the invisible
+    // characters (`uijson::strip_invisible`) is cleaned once, here: a name is
+    // otherwise only read again on a reindex.
+    match timing::step("setup.strip_invisible", || {
+        overlay::strip_invisible_from_stored_texts(conn)
+    }) {
+        Ok(0) => {}
+        Ok(n) => log::warn!("stripped invisible characters from {n} stored text(s)"),
+        Err(e) => log::warn!("strip_invisible_from_stored_texts at startup: {e}"),
+    }
 }
 
 /// The classification: what it is computed against (nationalities, brand

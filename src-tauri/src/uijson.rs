@@ -44,7 +44,10 @@ fn read_text_lossy(path: &Path) -> Option<String> {
     }
 }
 
-fn read_json(path: &Path) -> Option<Value> {
+/// Reads a `ui_*.json` of a mod: `ui_car.json`, `ui_track.json`,
+/// `ui_skin.json`, `ui_showroom.json`. Every string of the tree comes out
+/// without invisible characters ([`strip_invisible`]).
+pub(crate) fn read_ui_json(path: &Path) -> Option<Value> {
     let text = read_text_lossy(path)?;
     // Tolère un BOM UTF-8 en tête (fréquent sur les mods).
     let text = text.trim_start_matches('\u{feff}');
@@ -52,7 +55,61 @@ fn read_json(path: &Path) -> Option<Value> {
     // ligne bruts collés dans une chaîne — ex. description — invalident tout
     // le fichier pour un parseur JSON strict ; voir clean_assetto_json).
     let text = clean_assetto_json(text);
-    serde_json::from_str(&text).ok()
+    let mut v = serde_json::from_str(&text).ok()?;
+    // After parsing, not on the raw text: an author may write the character
+    // escaped (`"​BMW"`), which only the parser turns into one.
+    strip_invisible_in(&mut v);
+    Some(v)
+}
+
+/// Formatting characters nothing draws (Unicode category Cf, the ones met in
+/// text): soft hyphen, zero-width spaces and joiners, direction marks, the
+/// BOM, the musical formatting marks U+1D173-U+1D17A, the tag characters.
+///
+/// Kept, they make two texts that read exactly alike and are not equal. Real
+/// case: the "No Hesi Traffic" pack starts the brand and the name of its 14
+/// cars with U+1D17A - "BMW" and "BMW" were two brands with two logos, and the
+/// names did not sort where they read. Listed by hand: std does not expose the
+/// general category, and the list is short enough not to take a dependency.
+pub(crate) fn is_invisible(c: char) -> bool {
+    matches!(
+        c,
+        '\u{00AD}'
+            | '\u{061C}'
+            | '\u{180E}'
+            | '\u{200B}'..='\u{200F}'
+            | '\u{202A}'..='\u{202E}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{206F}'
+            | '\u{FEFF}'
+            | '\u{1D173}'..='\u{1D17A}'
+            | '\u{E0001}'
+            | '\u{E0020}'..='\u{E007F}'
+    )
+}
+
+/// `s` without its invisible characters - borrowed when it has none, which is
+/// nearly always.
+pub(crate) fn strip_invisible(s: &str) -> std::borrow::Cow<'_, str> {
+    if s.chars().any(is_invisible) {
+        std::borrow::Cow::Owned(s.chars().filter(|&c| !is_invisible(c)).collect())
+    } else {
+        std::borrow::Cow::Borrowed(s)
+    }
+}
+
+/// Strips every string of a JSON tree, in place.
+fn strip_invisible_in(v: &mut Value) {
+    match v {
+        Value::String(s) => {
+            if let std::borrow::Cow::Owned(clean) = strip_invisible(s) {
+                *s = clean;
+            }
+        }
+        Value::Array(items) => items.iter_mut().for_each(strip_invisible_in),
+        Value::Object(map) => map.values_mut().for_each(strip_invisible_in),
+        _ => {}
+    }
 }
 
 /// Convertit une valeur JSON en chaîne (gère nombre ou chaîne).
@@ -72,7 +129,7 @@ fn as_string(v: &Value) -> Option<String> {
 }
 
 fn parse(path: &Path) -> Option<UiInfo> {
-    let v = read_json(path)?;
+    let v = read_ui_json(path)?;
 
     let year = v.get("year").and_then(|y| match y {
         Value::Number(n) => n.as_i64(),
@@ -175,7 +232,7 @@ pub fn read_track(track_dir: &Path) -> Option<UiInfo> {
 /// du dossier. Passe par le lecteur tolérant : ces fichiers Kunos sont indentés
 /// à la tabulation et truffés d'espaces en fin de ligne.
 pub fn read_showroom_name(showroom_dir: &Path) -> Option<String> {
-    let v = read_json(&showroom_dir.join("ui").join("ui_showroom.json"))?;
+    let v = read_ui_json(&showroom_dir.join("ui").join("ui_showroom.json"))?;
     as_string(v.get("name")?)
 }
 
@@ -303,7 +360,7 @@ pub fn read_track_detail(dirs: &[PathBuf]) -> TrackDetail {
                 d.join("ui").join(&id)
             }
         };
-        let v = dirs.iter().find_map(|d| read_json(&of(d).join("ui_track.json")));
+        let v = dirs.iter().find_map(|d| read_ui_json(&of(d).join("ui_track.json")));
         let name = v
             .as_ref()
             .and_then(|v| v.get("name").and_then(as_string))
@@ -360,7 +417,7 @@ fn layout_dirs(track_dir: &Path) -> Vec<(PathBuf, String)> {
 /// directory walk per track for nothing.
 pub fn read_track_description(track_dir: &Path) -> Option<String> {
     layout_dirs(track_dir).into_iter().find_map(|(dir, _)| {
-        read_json(&dir.join("ui_track.json"))?
+        read_ui_json(&dir.join("ui_track.json"))?
             .get("description")
             .and_then(as_string)
     })
@@ -376,7 +433,7 @@ pub fn read_track_description(track_dir: &Path) -> Option<String> {
 pub fn read_track_name(track_dir: &Path) -> Option<String> {
     let names: Vec<String> = layout_dirs(track_dir)
         .iter()
-        .filter_map(|(dir, _)| read_json(&dir.join("ui_track.json")))
+        .filter_map(|(dir, _)| read_ui_json(&dir.join("ui_track.json")))
         .filter_map(|v| v.get("name").and_then(as_string))
         .collect();
     // Repli sur le premier nom lisible : sans racine commune (des layouts qui
@@ -432,7 +489,7 @@ pub fn common_layout_name(names: &[String]) -> Option<String> {
 }
 
 pub fn read_car_specs(car_dir: &Path) -> Option<NativeSpecs> {
-    let v = read_json(&car_ui_path(car_dir))?;
+    let v = read_ui_json(&car_ui_path(car_dir))?;
     let specs = v.get("specs");
     let sget = |k: &str| specs.and_then(|s| s.get(k)).and_then(as_string);
     let year = v.get("year").and_then(|y| match y {
@@ -476,6 +533,38 @@ mod tests {
             curve(&as_text, "powerCurve").last().map(|p| p[0]),
             Some(17000.0),
             "the top of the range is what the rev slider is built on"
+        );
+    }
+
+    /// Rule: no text read from a `ui_*.json` keeps an invisible character -
+    /// written raw or escaped, in a field, a list or a nested object. Real
+    /// case: the "No Hesi Traffic" pack writes U+1D17A in front of the brand
+    /// and the name of its cars, which made a second "BMW" in the Brands tab.
+    #[test]
+    fn no_text_read_from_a_ui_file_keeps_an_invisible_character() {
+        let base = crate::testutil::temp_dir("uijson-invisible");
+        let car = base.join("nohesi_traffic_bmw_x5");
+        std::fs::create_dir_all(car.join("ui")).unwrap();
+        std::fs::write(
+            car_ui_path(&car),
+            "{\"name\": \"\u{1d17a}BMW X5 | No Hesi Traffic\", \"brand\": \"\u{1d17a}BMW\", \
+             \"class\": \"street\\u200b\", \"tags\": [\"\u{feff}#traffic\"], \"author\": \"\\u2060NoHesi\"}",
+        )
+        .unwrap();
+        let ui = read_car(&car).expect("readable");
+        assert_eq!(ui.name.as_deref(), Some("BMW X5 | No Hesi Traffic"), "raw character");
+        assert_eq!(ui.brand.as_deref(), Some("BMW"));
+        assert_eq!(ui.class.as_deref(), Some("street"), "escaped character");
+        assert_eq!(ui.tags, vec!["#traffic".to_string()], "inside a list");
+        assert_eq!(ui.author.as_deref(), Some("NoHesi"));
+
+        let skin = car.join("skins").join("white");
+        std::fs::create_dir_all(&skin).unwrap();
+        std::fs::write(skin.join("ui_skin.json"), "{\"skinname\": \"\u{1d17a}White\"}").unwrap();
+        assert_eq!(
+            crate::library::read_skin_name(&skin).as_deref(),
+            Some("White"),
+            "a livery's ui_skin.json too"
         );
     }
 
