@@ -30,6 +30,26 @@ pub fn save_brand_logo(app: AppHandle, brand: String, pref: BrandPref) -> Result
     crate::logos::set_pref(&crate::rules::config_dir(&app)?, &brand, pref)
 }
 
+/// Logos found online for a brand (TAXO§9.1), one page at a time. Off the
+/// window's thread: up to four requests to Wikimedia.
+#[tauri::command]
+pub async fn search_brand_logos(
+    app: AppHandle,
+    query: String,
+    offset: u32,
+) -> Result<crate::logo_search::Page, String> {
+    off_window(app, move |_| crate::logo_search::search(&query, offset)).await
+}
+
+/// Downloads the logo he picked online and makes it the brand's (TAXO§9.1).
+#[tauri::command]
+pub async fn adopt_brand_logo(app: AppHandle, brand: String, url: String) -> Result<(), String> {
+    off_window(app, move |app| {
+        crate::logo_search::adopt(&crate::rules::config_dir(app)?, &brand, &url)
+    })
+    .await
+}
+
 /// Copies a file of his into Pit Box's folder and makes it the brand's logo
 /// (TAXO§9), keeping his plate setting.
 #[tauri::command]

@@ -52,6 +52,7 @@
   import { open as openFile } from "@tauri-apps/plugin-dialog";
   import Emblem from "$lib/components/ui/Emblem.svelte";
   import Seg from "$lib/components/ui/Seg.svelte";
+  import LogoSearch from "./LogoSearch.svelte";
   import { previewSrc } from "$lib/library/library";
   import {
     brandLogos,
@@ -205,6 +206,9 @@
     });
     if (typeof picked === "string") void logoChoice(() => importBrandLogo(brand, picked));
   }
+
+  /** The brand whose logo is being searched online (TAXO§9.1). */
+  let searchingLogo = $state<string | null>(null);
 
   const PREVIEW_SIZES = [13, 18, 20, 32];
   const bgKey: Record<string, string> = {
@@ -395,6 +399,9 @@
                   </div>
                 {/if}
                 <div class="logo-acts">
+                  <button type="button" class="btn" disabled={busy} onclick={() => (searchingLogo = r.name)}
+                    >{t("brandsTab.logoSearch")}</button
+                  >
                   <button type="button" class="btn" disabled={busy} onclick={() => void giveFile(r.name)}
                     >{t("brandsTab.logoFile")}</button
                   >
@@ -605,6 +612,10 @@
     </div>
   {/if}
 </div>
+
+{#if searchingLogo}
+  <LogoSearch brand={searchingLogo} onclose={() => (searchingLogo = null)} />
+{/if}
 
 <style>
   .brands {

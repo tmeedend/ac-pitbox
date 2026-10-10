@@ -83,3 +83,36 @@ export async function importBrandLogo(brand: string, path: string): Promise<void
   await invoke("import_brand_logo", { brand, path });
   await loadBrandLogos();
 }
+
+/** A logo offered online (TAXO§9.1, `logo_search.rs`). */
+export interface LogoCandidate {
+  /** File name on Wikimedia Commons. */
+  name: string;
+  /** The original file, what is downloaded when picked. */
+  url: string;
+  /** A PNG preview, an SVG's included. */
+  thumb: string;
+  width: number;
+  height: number;
+  format: "svg" | "png";
+  /** The logo Wikidata gives an entity the search named. */
+  official: boolean;
+}
+
+export interface LogoPage {
+  candidates: LogoCandidate[];
+  /** Where the next page starts, `null` past the last. */
+  next: number | null;
+}
+
+/** A search the user asked for: plain `invoke`, its failure is said where he
+ * is looking. */
+export function searchBrandLogos(query: string, offset: number): Promise<LogoPage> {
+  return invoke<LogoPage>("search_brand_logos", { query, offset });
+}
+
+/** WRITES: downloads the logo he picked and makes it the brand's. */
+export async function adoptBrandLogo(brand: string, url: string): Promise<void> {
+  await invoke("adopt_brand_logo", { brand, url });
+  await loadBrandLogos();
+}

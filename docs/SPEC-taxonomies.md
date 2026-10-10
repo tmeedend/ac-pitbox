@@ -256,6 +256,19 @@ Formats acceptés : PNG et SVG. Le PNG doit faire au moins 64 px sur son plus pe
 
 **Il est prévisualisé aux tailles réelles avant validation** (§6.3), avec détection automatique du mode de rendu, modifiable.
 
+## 9.1 Logo cherché en ligne
+
+Pour une marque dont aucun mod ne livre le bon logo — Renault, dont la seule voiture est une VRC (§4) —, le détail d'une marque propose **« Chercher en ligne… »** à côté du fichier personnel. Une fenêtre affiche des candidats, l'utilisateur en choisit un, et le fichier est téléchargé puis traité **exactement comme un fichier personnel** : copié dans `logos/`, mêmes formats, même survie à la suppression des mods.
+
+Deux sources Wikimedia, dans cet ordre, sans clé d'API :
+
+1. **Wikidata, propriété P154 (« logo »)** des entités que nomme la recherche, la valeur de rang préféré d'abord. Précis : pour « Renault », le logo actuel du groupe, celui de 2009, celui de l'écurie de F1. Marqués « Wikidata » dans la grille.
+2. **Une recherche de fichiers sur Commons** (« <recherche> logo »), par pages de 30 : les logos d'autres époques, les variantes.
+
+Seuls le SVG et le PNG sont proposés, puisque ce sont les seuls formats d'un fichier personnel ; le téléchargement ne part que de l'hébergeur de fichiers de Commons (`upload.wikimedia.org`) et s'arrête au-delà de 5 Mo. **Rien n'est demandé au réseau avant que l'utilisateur ouvre la fenêtre.** La recherche part du nom de la marque et se corrige à la main (« Renault Sport »).
+
+Google Images, la source de Playnite pour les icônes de jeu, a été écarté : c'est de l'extraction de page, contraire aux conditions de Google et cassée au premier changement de la page.
+
 ---
 
 # 10. Où les emblèmes apparaissent
@@ -307,7 +320,7 @@ Les familles de catégorie livrées avec l'application sont traduites ; une fami
 
 # 13. Hors périmètre
 
-**Un catalogue de logos de marque embarqué** est exclu : ce sont des marques déposées, et les redistribuer est un risque que le produit n'a pas à prendre. Tous les logos viennent des mods de l'utilisateur ou de ses propres fichiers. Les drapeaux et les icônes de catégorie, eux, sont embarqués sans difficulté (§3.1, §3.2).
+**Un catalogue de logos de marque embarqué** est exclu : ce sont des marques déposées, et les redistribuer est un risque que le produit n'a pas à prendre. Tous les logos viennent des mods de l'utilisateur ou de ses propres fichiers — y compris un logo qu'il est allé chercher en ligne et a choisi lui-même (§9.1), qui devient l'un d'eux. Les drapeaux et les icônes de catégorie, eux, sont embarqués sans difficulté (§3.1, §3.2).
 
 **La normalisation des noms de modèle** — au-delà du retrait du préfixe de marque et de pack (GRILLE§3.4) — n'est pas couverte.
 

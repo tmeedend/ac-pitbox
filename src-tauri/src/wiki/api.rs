@@ -237,6 +237,12 @@ impl WikiClient {
         }
     }
 
+    /// The User-Agent Wikimedia asks for - for a download from its file host
+    /// (`logo_search`), which is no API call.
+    pub(crate) fn user_agent(&self) -> &str {
+        &self.user_agent
+    }
+
     /// Sitelinks and parent entity for a Q-id, in one `wbgetentities` call.
     ///
     /// This single request pays for three things at once: the titles the
@@ -492,7 +498,7 @@ impl WikiClient {
     /// timeout, and trying again would only make the fiche wait longer for
     /// something it does not need. Only an answer that explicitly says "later"
     /// (429) or "not now" (5xx) is worth a second try.
-    fn get_json(&self, host: &str, path: &str) -> Fetched<Value> {
+    pub(crate) fn get_json(&self, host: &str, path: &str) -> Fetched<Value> {
         for attempt in 0..RETRIES {
             let Some(response) = http::get(host, path, &self.user_agent, TIMEOUT_MS) else {
                 return Fetched::Unavailable;

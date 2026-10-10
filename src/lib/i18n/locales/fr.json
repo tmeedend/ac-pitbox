@@ -1703,6 +1703,8 @@
     "rulesExportTooNew": "Cet export vient d'une version plus récente de Pit Box. Mettez l'application à jour pour l'importer.",
     "logoFormat": "Un logo doit être une image PNG ou SVG.",
     "logoTooSmall": "Ce PNG est trop petit : au moins 64 px sur son plus petit côté.",
+    "logoSearchUnavailable": "Wikimedia ne répond pas. Vérifie la connexion, puis réessaie.",
+    "logoDownloadFailed": "Ce logo n'a pas pu être téléchargé.",
     "updateRegistryUnavailable": "Le registre des mises à jour ne répond pas pour le moment. Réessaie plus tard.",
     "updateDownloadFailed": "Le téléchargement de la mise à jour s'est interrompu. Réessaie.",
     "transferNotAnExport": "Ce fichier n'est pas un export Pit Box.",
@@ -2021,6 +2023,16 @@
     "addTag": "Ajouter un tag…",
     "removeTag": "Retirer ce tag"
   },
+  "logoSearch": {
+    "title": "Un logo pour {brand}",
+    "search": "Rechercher",
+    "more": "Charger plus",
+    "use": "Utiliser ce logo",
+    "none": "Aucun logo trouvé.",
+    "official": "Wikidata",
+    "officialTip": "Le logo que Wikidata donne à cette marque",
+    "source": "Logos de Wikimedia Commons"
+  },
   "brandsTab": {
     "subtitle": "Les marques des voitures : le nom sous lequel chacune est rangée, et les orthographes qui y mènent.",
     "unset": "{count} voitures sans marque",
@@ -2048,6 +2060,7 @@
     "bgOpaque": "fond plein",
     "elected": "Celui choisi automatiquement",
     "borrowed": "Le badge d'une équipe ou d'un moddeur, qui sert aussi pour d'autres marques : jamais choisi automatiquement",
+    "logoSearch": "Chercher en ligne…",
     "logoFile": "Utiliser un fichier à moi…",
     "logoFileTitle": "Un logo pour cette marque",
     "logoFileFilter": "Image PNG ou SVG",

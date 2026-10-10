@@ -47,6 +47,7 @@ mod libpath;
 mod library;
 mod library_columns;
 mod lods;
+mod logo_search;
 mod logos;
 mod maintenance;
 mod media;
@@ -374,6 +375,8 @@ pub fn run() {
             commands::logos::get_brand_logos,
             commands::logos::save_brand_logo,
             commands::logos::import_brand_logo,
+            commands::logos::search_brand_logos,
+            commands::logos::adopt_brand_logo,
             commands::rules::get_catalog_report,
             commands::rules::set_catalog_reverted,
             commands::rules::dismiss_catalog_report,

@@ -27,6 +27,10 @@ pub const RULES_EXPORT_TOO_NEW: &str = "errors.rulesExportTooNew";
 // A brand logo of the user's (TAXO§9): PNG or SVG, a PNG of at least 64 px.
 pub const LOGO_FORMAT: &str = "errors.logoFormat";
 pub const LOGO_TOO_SMALL: &str = "errors.logoTooSmall";
+// A logo searched online (TAXO§9.1): Wikimedia could not be reached, or the
+// file could not be downloaded.
+pub const LOGO_SEARCH_UNAVAILABLE: &str = "errors.logoSearchUnavailable";
+pub const LOGO_DOWNLOAD_FAILED: &str = "errors.logoDownloadFailed";
 pub const LIBRARY_NOT_CONFIGURED: &str = "errors.libraryNotConfigured";
 pub const CM_NOT_CONFIGURED: &str = "errors.cmNotConfigured";
 // Launching a session onto content the game does not have (SESSION§2). Two
