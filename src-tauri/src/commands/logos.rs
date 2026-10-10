@@ -34,9 +34,5 @@ pub fn save_brand_logo(app: AppHandle, brand: String, pref: BrandPref) -> Result
 /// (TAXO§9), keeping his plate setting.
 #[tauri::command]
 pub fn import_brand_logo(app: AppHandle, brand: String, path: String) -> Result<(), String> {
-    let dir = crate::rules::config_dir(&app)?;
-    let name = crate::logos::import_file(&dir, &brand, std::path::Path::new(&path))?;
-    let mut pref = crate::logos::load_prefs(&dir).remove(&brand).unwrap_or_default();
-    pref.custom = Some(name);
-    crate::logos::set_pref(&dir, &brand, pref)
+    crate::logos::adopt_file(&crate::rules::config_dir(&app)?, &brand, std::path::Path::new(&path))
 }

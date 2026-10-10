@@ -256,6 +256,15 @@ pub fn remove_file(dir: &Path, name: &str) {
     }
 }
 
+/// Copies a file of his into `logos/` and makes it the brand's logo (TAXO§9),
+/// keeping his plate setting.
+pub fn adopt_file(dir: &Path, brand: &str, source: &Path) -> Result<(), String> {
+    let name = import_file(dir, brand, source)?;
+    let mut pref = load_prefs(dir).remove(brand).unwrap_or_default();
+    pref.custom = Some(name);
+    set_pref(dir, brand, pref)
+}
+
 /// Records his choice for a brand. A file of his that the new choice no
 /// longer names is deleted from `logos/` - it is ours, and nothing else
 /// points to it.
