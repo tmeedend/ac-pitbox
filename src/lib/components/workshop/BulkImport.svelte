@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { analyzeBulkImport, executeBulkImport, type ArchiveResult, type BulkEntry } from "$lib/library/library";
+  import { analyzeBulkImport, executeBulkImport, type ArchiveResult, type BulkAddon, type BulkEntry } from "$lib/library/library";
   import { bulkCounts, buildExecItems, importCount, isOtherContent } from "$lib/workshop/bulkImport";
   import { t } from "$lib/i18n/index.svelte";
 
@@ -69,6 +69,14 @@
       default: return status;
     }
   }
+
+  function addonLabel(kind: BulkAddon["kind"]): string {
+    switch (kind) {
+      case "sound": return t("bulkImport.addonSound");
+      case "skin": return t("bulkImport.addonSkin");
+      case "app": return t("bulkImport.addonApp");
+    }
+  }
 </script>
 
 <div class="backdrop">
@@ -93,6 +101,7 @@
         <span class="ct dup">{t("bulkImport.countDuplicate", { count: counts.duplicate })}</span>
         <span class="ct amb">{t("bulkImport.countAmbiguous", { count: counts.ambiguous })}</span>
         {#if counts.rehydrate > 0}<span class="ct upd">{t("bulkImport.countRehydrate", { count: counts.rehydrate })}</span>{/if}
+        {#if counts.addon > 0}<span class="ct new">{t("bulkImport.countAddon", { count: counts.addon })}</span>{/if}
         {#if counts.other > 0}<span class="ct new">{t("bulkImport.countOther", { count: counts.other })}</span>{/if}
         <span class="ct ign">{t("bulkImport.countIgnored", { count: counts.ignored })}</span>
       </div>
@@ -142,6 +151,12 @@
                         />
                       </span>
                     {/if}
+                  </div>
+                {/each}
+                {#each e.addons as a, i (i)}
+                  <div class="mod">
+                    <span class="badge new">{addonLabel(a.kind)}</span>
+                    <span class="m-name mono">{a.target}</span>
                   </div>
                 {/each}
               </div>

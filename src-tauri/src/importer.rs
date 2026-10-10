@@ -2284,6 +2284,17 @@ pub struct BulkMod {
     pub existing_name: Option<String>,
 }
 
+/// A skin pack, a sound or an app found in a subfolder (§8.3, §8.4): filed by
+/// the execution like the import of that folder alone would. No status — the
+/// duplicate and update questions are those of cars and tracks.
+#[derive(Debug, Clone, Serialize)]
+pub struct BulkAddon {
+    /// "skin" | "sound" | "app"
+    pub kind: &'static str,
+    /// The car or track it attaches to; the app's own name for an app.
+    pub target: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct BulkEntry {
     pub subfolder: String,
@@ -2291,6 +2302,22 @@ pub struct BulkEntry {
     /// Sous-dossier sans structure AC reconnaissable.
     pub ignored: bool,
     pub mods: Vec<BulkMod>,
+    pub addons: Vec<BulkAddon>,
+}
+
+fn bulk_addons(conn: &Connection, dir: &Path, source_name: &str) -> Vec<BulkAddon> {
+    let subs = modscan::scan_subs(dir).into_iter().map(|s| BulkAddon {
+        kind: match s.kind {
+            modscan::SubKind::Skin => "skin",
+            modscan::SubKind::Sound => "sound",
+        },
+        target: crate::submods::target_of(conn, &s, source_name),
+    });
+    let apps = modscan::scan_apps(dir).into_iter().map(|a| BulkAddon {
+        kind: "app",
+        target: a.name,
+    });
+    subs.chain(apps).collect()
 }
 
 /// Classe un mod trouvé sans rien écrire (§4.2 phase d'analyse).
@@ -2376,6 +2403,7 @@ pub fn analyze_bulk(conn: &Connection, _cfg: &AppConfig, parent: &Path) -> Resul
                 path,
                 ignored: true,
                 mods: Vec::new(),
+                addons: Vec::new(),
             });
             continue;
         }
@@ -2404,11 +2432,13 @@ pub fn analyze_bulk(conn: &Connection, _cfg: &AppConfig, parent: &Path) -> Resul
                 existing_name,
             });
         }
+        let addons = bulk_addons(conn, &sub, &subfolder);
         entries.push(BulkEntry {
             subfolder,
             path,
             ignored: false,
             mods,
+            addons,
         });
     }
     Ok(entries)
@@ -2609,17 +2639,12 @@ fn exec_one(
     // Activation par défaut des mods importés (§4.2).
     auto_activate(conn, cfg, &result.mods);
 
-    // Ce qui entoure les mods reconnus (§7.3/§4.5.3). Ce chemin d'import en
-    // masse n'avait aucun balayage : tout ce qui n'était pas une voiture ou un
-    // circuit y disparaissait, à l'exception des fonts et drivers qu'une copie
-    // globale attrapait au passage. Skins, sons et apps sont marqués consommés
-    // sans être importés — l'import en masse ne les traite pas davantage
-    // qu'avant, mais il ne les prend plus pour des restes.
-    // (`subs`, `apps` et `res_mode` déjà calculés plus haut, pour le repli
-    // vers `import_other` quand rien n'est reconnu.)
-    let consumed = consumed_paths(&found, &subs, &apps);
-    let owners = owners_of(&found, &apps);
-    sweep_leftovers(
+    // Skins, sounds, apps and leftovers (§8.3, §8.4, §7.3): the same tail as a
+    // folder imported alone, never asking (§4.2bis). This path once had its
+    // own copy that only swept leftovers — skins, sounds and apps were marked
+    // consumed and never filed, so a folder of car sounds imported nothing,
+    // without an error.
+    file_tail(
         ctx,
         index,
         conn,
@@ -2628,12 +2653,14 @@ fn exec_one(
         library,
         &name,
         dir,
-        &consumed,
-        &owners,
-        &mod_dirs_of(&found),
+        &found,
+        &subs,
+        &apps,
         pack,
         copy,
         res_mode,
+        false,
+        &[],
         &mut result,
     );
     drop_unused_kept_source(conn, cfg, kept_archive.as_deref());
@@ -5171,6 +5198,53 @@ mod tests {
             crate::overlay::other_exists(&conn, &r.others[0].id).unwrap(),
             "et vraiment inséré dans l'overlay"
         );
+    }
+
+    /// Rule (§4.2, §8.3): a bulk import files the sounds, skins and apps it
+    /// finds, the way the import of the same folder alone does. Real bug: a
+    /// parent folder of eighteen car sounds (`<name>/content/cars/<car>/sfx/`)
+    /// imported nothing at all — the bulk path marked them consumed and never
+    /// handed them to `submods`.
+    #[test]
+    fn bulk_files_a_car_sound() {
+        let base = crate::testutil::temp_dir("import-bulk-sound");
+        let parent = base.join("sounds");
+        let sfx = parent
+            .join("Sound - a3dr_viper_rt10 by AmplifiedNL")
+            .join("content")
+            .join("cars")
+            .join("a3dr_viper_rt10")
+            .join("sfx");
+        std::fs::create_dir_all(&sfx).unwrap();
+        std::fs::write(sfx.join("GUIDs.txt"), b"{guid} event:/cars/a3dr_viper_rt10/engine_ext").unwrap();
+        std::fs::write(sfx.join("a3dr_viper_rt10.bank"), b"BANK").unwrap();
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+
+        let entries = analyze_bulk(&conn, &cfg, &parent).unwrap();
+        assert_eq!(entries.len(), 1);
+        let addons = &entries[0].addons;
+        assert_eq!(addons.len(), 1, "the analysis announces the sound");
+        assert_eq!(
+            (addons[0].kind, addons[0].target.as_str()),
+            ("sound", "a3dr_viper_rt10")
+        );
+        let item = BulkExecItem {
+            path: entries[0].path.clone(),
+            skip_ids: vec![],
+            replace_ids: vec![],
+        };
+        let r = exec_one(&ImportCtx::silent(), &conn, &cfg, &rules, 0, &item, true);
+        assert_eq!(r.subs.len(), 1, "the sound is filed: {r:?}");
+        assert_eq!(r.subs[0].sub_type, "SOUND");
+        assert_eq!(r.subs[0].parent_id, "a3dr_viper_rt10");
+        assert!(r.others.is_empty(), "not an other mod: {:?}", r.others);
     }
 
     /// Rule (§4.2, §7.3): a parent folder of driver bodies, each delivered as

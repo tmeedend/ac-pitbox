@@ -103,7 +103,7 @@ fn looks_like_ac_id(name: &str) -> bool {
 /// pas aboutir — le nom ne contient pas `ks_ford_gt40`, seulement `ford`, qui
 /// désigne tout autant les cinq Mustang de la bibliothèque, donc ambiguïté et
 /// abandon. L'identifiant était pourtant écrit deux fois dans l'archive.
-fn resolve_sound_parent(conn: &Connection, sub: &FoundSub, source_name: &str) -> String {
+pub(super) fn resolve_sound_parent(conn: &Connection, sub: &FoundSub, source_name: &str) -> String {
     if is_known_car(conn, &sub.parent_id) {
         return sub.parent_id.clone();
     }

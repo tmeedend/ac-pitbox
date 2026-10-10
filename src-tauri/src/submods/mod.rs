@@ -40,6 +40,17 @@ use crate::modscan::{FoundSub, SubKind};
 use crate::resources::ExtractionMode;
 use crate::{activation, overlay};
 
+/// The host a found sub-element will be filed under — the import's own answer,
+/// for a screen that announces it beforehand (bulk analysis, §4.2). A sound's
+/// `parent_id` is often only `sfx`: the car is read from the path, the bank
+/// name or `source_name` (the archive or folder imported).
+pub fn target_of(conn: &Connection, sub: &FoundSub, source_name: &str) -> String {
+    match sub.kind {
+        SubKind::Sound => sounds::resolve_sound_parent(conn, sub, source_name),
+        SubKind::Skin => sub.parent_id.clone(),
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct SubImported {
     /// "SKIN" | "SOUND"

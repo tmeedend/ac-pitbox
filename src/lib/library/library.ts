@@ -472,11 +472,19 @@ export interface BulkMod {
   existing_name: string | null;
 }
 
+/** A skin pack, sound or app the execution will file (§8.3, §8.4). `target`:
+ *  the car or track it attaches to, or the app's own name. */
+export interface BulkAddon {
+  kind: "skin" | "sound" | "app";
+  target: string;
+}
+
 export interface BulkEntry {
   subfolder: string;
   path: string;
   ignored: boolean;
   mods: BulkMod[];
+  addons: BulkAddon[];
 }
 
 export interface BulkExecItem {
