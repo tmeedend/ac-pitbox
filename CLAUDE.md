@@ -618,7 +618,10 @@ Svelte. Les deux sont documentées comme écartées, en tête du script.
   session ont déjà pris. Une requête de conteneur interroge la largeur
   réellement disponible, la seule dont dépende la mise en colonnes. `DetailPage`
   déclare `container: detail / inline-size` sur `.page`, et tous ses seuils s'y
-  réfèrent.
+  réfèrent. **Même piège pour `vh`/`vw`** : ils ignorent le zoom, qui multiplie
+  ensuite le résultat — une modale en `85vh` montait à 106 % de l'écran à 125 %,
+  boutons hors champ. Une fraction de fenêtre s'écrit `calc(85 * var(--vh))`
+  (jetons `--vh`/`--vw` de `global.css`), jamais `85vh`.
 - **Un défilement programmatique ne doit jamais atteindre `<html>` ni
   `<body>`.** `global.css` les met en `overflow: hidden` exprès — « le document
   lui-même ne défile jamais, un scroll de page entraînait toute la coquille,
