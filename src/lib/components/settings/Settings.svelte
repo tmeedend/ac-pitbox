@@ -80,7 +80,12 @@
   // modifications non sauvegardées et à revenir en arrière (zoom/langue,
   // appliqués en aperçu live avant même de cliquer Enregistrer) si l'utilisateur
   // choisit d'annuler en quittant l'écran.
-  let savedConfig = emptyConfig();
+  // A `$state`, not a plain `let`: `dirty` below compares against it, and a
+  // derived only re-runs on what it can observe. As a plain variable, saving
+  // never cleared `dirty`, so leaving the screen right after "Saved" still
+  // asked whether to save (reported with the zoom, true of every field).
+  // `raw` because it is only ever replaced whole, never mutated in place.
+  let savedConfig = $state.raw(emptyConfig());
   let validation = $state<ConfigValidation | null>(null);
   let saving = $state(false);
   let saved = $state(false);
