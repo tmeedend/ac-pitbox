@@ -134,6 +134,24 @@ function queuedProgress(count: number): ImportProgress {
   };
 }
 
+/** Runs one batch inside the shared import state: `importing` set and a
+ * "queued" progress shown at once (§4.2) — the command takes a moment to
+ * really start, and the progress toast is conditioned on `progress` being
+ * set — then both cleared whatever happens. Replaced by the first real
+ * `import:progress` event. */
+async function whileImporting<T>(count: number, run: () => Promise<T>): Promise<T> {
+  importState.importing = true;
+  importState.cancelling = false;
+  importState.progress = queuedProgress(count);
+  try {
+    return await run();
+  } finally {
+    importState.importing = false;
+    importState.cancelling = false;
+    importState.progress = null;
+  }
+}
+
 /** Demande l'arrêt du lot en cours (§4.2bis). */
 export function requestCancelImport(): void {
   importState.cancelling = true;
@@ -160,15 +178,7 @@ async function runImport(source: {
   // état de progression, deux lots concurrents se marcheraient dessus. Les
   // boutons sont déjà désactivés pendant un import, mais pas le glisser-déposer.
   if (importState.importing) return null;
-  importState.importing = true;
-  importState.cancelling = false;
-  // Retour immédiat (§4.2) : la commande est asynchrone côté backend et met
-  // un instant à démarrer réellement le traitement — sans cet état "queued",
-  // le toast de progression (conditionné sur `progress` non nul) resterait
-  // invisible pendant ce court laps, donnant l'impression que le drop n'a rien
-  // fait. Remplacé dès le premier événement `import:progress` réel.
-  importState.progress = queuedProgress(source.paths.length);
-  try {
+  return whileImporting(source.paths.length, async () => {
     const report = source.folder
       ? await importFolders(source.paths, source.copy)
       : await importArchives(source.paths);
@@ -232,11 +242,7 @@ async function runImport(source: {
     });
     bumpLibraryVersion();
     return report;
-  } finally {
-    importState.importing = false;
-    importState.cancelling = false;
-    importState.progress = null;
-  }
+  });
 }
 
 /** Imports an archive the app downloaded itself (a mod update, §4.7) through
@@ -312,10 +318,7 @@ async function resumeWithDecision(
   item: { id: string; source: { paths: string[]; folder: boolean; copy: boolean } },
   decision: ImportDecision["decision"],
 ): Promise<void> {
-  importState.importing = true;
-  importState.cancelling = false;
-  importState.progress = queuedProgress(item.source.paths.length);
-  try {
+  await whileImporting(item.source.paths.length, async () => {
     const decisions = [{ id: item.id, decision }];
     const report = item.source.folder
       ? await importFolders(item.source.paths, item.source.copy, decisions)
@@ -346,11 +349,7 @@ async function resumeWithDecision(
       }
     }
     bumpLibraryVersion();
-  } finally {
-    importState.importing = false;
-    importState.cancelling = false;
-    importState.progress = null;
-  }
+  });
 }
 
 export async function resolvePendingConflict(
