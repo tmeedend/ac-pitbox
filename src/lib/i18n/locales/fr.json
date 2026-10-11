@@ -2282,7 +2282,16 @@
     "filterOn": "Filtrer sur ce mod",
     "showInExplorer": "Afficher dans l'Explorateur",
     "saySameAsCopy": "Le fichier en place a le même contenu que l'exemplaire de {name} : rien n'attend. Pit Box ne l'a pas posé, et ne le retirera pas si {name} est désactivé.",
-    "reasonIdentical": "même contenu que le fichier en place"
+    "reasonIdentical": "même contenu que le fichier en place",
+    "stateHelp": {
+      "posed": "Posé par Pit Box depuis la bibliothèque, et identique à l'exemplaire du mod. Il est retiré quand le mod est désactivé.",
+      "replacesGame": "Un fichier d'origine d'Assetto Corsa qu'un mod a remplacé. L'original est sauvegardé dans la bibliothèque et revient dès qu'aucun mod ne réclame plus ce chemin.",
+      "waiting": "Un mod actif veut poser ce fichier, mais un autre fichier, au contenu différent, occupe déjà la place. L'exemplaire du mod reste en bibliothèque ; sa fiche permet de le poser quand même.",
+      "cmZone": "Dans un dossier que Content Manager met à jour tout seul (configs CSP téléchargées, vao-patches). CM peut y remplacer un fichier sans prévenir, même s'il vient d'un mod.",
+      "drift": "Le disque ne correspond plus à ce que Pit Box a posé : fichier modifié par un autre outil, fichier manquant, reste d'un mod supprimé, ou junction dont la cible a disparu. La réparation générale (Maintenance) remet en ordre.",
+      "nobody": "Ni Pit Box ni un mod de la bibliothèque ne l'a posé : contenu d'origine du jeu, mods installés hors de Pit Box, fichiers de CSP ou de Content Manager. Pit Box n'y touche jamais.",
+      "shared": "Plusieurs mods réclament ce même fichier (une texture commune à toute une série, par exemple). Un seul exemplaire est posé : le plus récent."
+    }
   },
   "techsheet": {
     "edit": "Modifier la fiche technique",

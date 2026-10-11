@@ -2282,7 +2282,16 @@
     "filterOn": "Filter on this mod",
     "showInExplorer": "Show in Explorer",
     "saySameAsCopy": "The file in place has the same content as the copy of {name}: nothing waits. Pit Box did not lay it, and will not remove it if {name} is deactivated.",
-    "reasonIdentical": "same content as the file in place"
+    "reasonIdentical": "same content as the file in place",
+    "stateHelp": {
+      "posed": "Laid by Pit Box from the library, and identical to the mod's copy. It is removed when the mod is deactivated.",
+      "replacesGame": "An original Assetto Corsa file a mod replaced. The original is kept in the library and comes back as soon as no mod claims this path any more.",
+      "waiting": "An active mod wants to lay this file, but another file, with different content, already holds the place. The mod's copy stays in the library; its sheet can lay it anyway.",
+      "cmZone": "In a folder Content Manager keeps up to date on its own (downloaded CSP configs, vao-patches). CM may replace a file there without warning, even one from a mod.",
+      "drift": "The disk no longer matches what Pit Box laid: a file changed by another tool, a missing file, the remains of a deleted mod, or a junction whose target is gone. The general repair (Maintenance) puts it right.",
+      "nobody": "Neither Pit Box nor a mod of the library laid it: the game's own content, mods installed outside Pit Box, CSP or Content Manager files. Pit Box never touches it.",
+      "shared": "Several mods claim this same file (a texture common to a whole series, for example). Only one copy is laid: the most recent."
+    }
   },
   "techsheet": {
     "edit": "Edit the tech sheet",

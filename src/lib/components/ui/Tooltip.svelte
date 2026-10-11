@@ -28,12 +28,16 @@
      * affichée malgré `opacity`/`visibility` (bug réel constaté — ⓘ des
      * en-têtes de colonnes dates). */
     side?: "top" | "bottom";
+    /** The wrapper fills its slot (a grid cell) instead of hugging its
+     * content: for a trigger that is a whole tile, like a count of the game
+     * folder's summary band. The trigger itself takes the room with `flex: 1`. */
+    fill?: boolean;
     children: Snippet;
   }
-  let { text, align = "center", side = "top", children }: Props = $props();
+  let { text, align = "center", side = "top", fill = false, children }: Props = $props();
 </script>
 
-<span class="tt-wrap">
+<span class="tt-wrap" class:fill>
   {@render children()}
   <span
     class="tt-bubble"
@@ -49,6 +53,11 @@
     position: relative;
     display: inline-flex;
     align-items: center;
+  }
+  .tt-wrap.fill {
+    display: flex;
+    align-items: stretch;
+    min-width: 0;
   }
   .tt-bubble {
     position: absolute;
