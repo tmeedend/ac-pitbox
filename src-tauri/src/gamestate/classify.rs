@@ -89,49 +89,6 @@ fn key(p: &str) -> String {
     p.to_lowercase().replace('/', "\\")
 }
 
-/// Does the file in the game hold the content of the library copy?
-///
-/// Size and date first - the comparison the engine itself makes
-/// (`extras::is_still_ours`, §4.5.4 rule 4), and what a copy laid by Pit Box
-/// always passes. When only the date differs, the bytes decide: an archive
-/// repacked by a third party, or the same file laid by an earlier install, keeps
-/// the content and loses the date. Measured on the dev install (2026-10): of the
-/// 39 paths the date rule alone called "waiting", 38 held exactly the mod's
-/// content - and the screen told the user a foreign file held the place.
-///
-/// Only ever called on a handful of files of equal size (an unclaimed copy that
-/// a file occupies), never across the install: the scan stays a matter of
-/// metadata (DOSSIER§4.3).
-fn same_content(copy: &Path, in_game: &Path) -> bool {
-    use std::io::Read;
-    if crate::extras::is_still_ours(copy, in_game) {
-        return true;
-    }
-    let (Ok(a), Ok(b)) = (std::fs::metadata(copy), std::fs::metadata(in_game)) else {
-        return false;
-    };
-    if a.len() != b.len() {
-        return false;
-    }
-    let (Ok(fa), Ok(fb)) = (std::fs::File::open(copy), std::fs::File::open(in_game)) else {
-        return false;
-    };
-    let (mut ra, mut rb) = (std::io::BufReader::new(fa), std::io::BufReader::new(fb));
-    let (mut ba, mut bb) = (vec![0u8; 64 * 1024], vec![0u8; 64 * 1024]);
-    loop {
-        let Ok(na) = ra.read(&mut ba) else {
-            return false;
-        };
-        // The sizes are equal: the end of one is the end of the other.
-        if na == 0 {
-            return true;
-        }
-        if rb.read_exact(&mut bb[..na]).is_err() || ba[..na] != bb[..na] {
-            return false;
-        }
-    }
-}
-
 fn starts_with_ci(path: &Path, prefix: &Path) -> bool {
     let p = key(&path.to_string_lossy());
     let pre = key(&prefix.to_string_lossy());
@@ -489,7 +446,8 @@ impl Classifier<'_> {
             let id = match node {
                 Some(id) => {
                     let abs = self.tree.root.join(&rel);
-                    let identical = provider.is_none() && claims.iter().any(|c| same_content(&c.copy, &abs));
+                    let identical =
+                        provider.is_none() && claims.iter().any(|c| crate::extras::same_content(&c.copy, &abs));
                     let (state, drift) = match provider {
                         Some(p) if crate::extras::is_still_ours(&p.copy, &abs) => (State::Posed, None),
                         Some(_) => (State::Posed, Some(Drift::Modified)),
@@ -556,7 +514,7 @@ impl Classifier<'_> {
     /// The library copies no claim covers, crossed with the disk. Three cases:
     ///
     /// - the owner is deployed and the file in place has its content
-    ///   (`same_content`): laid before Pit Box or by an earlier install, so the
+    ///   (`extras::same_content`): laid before Pit Box or by an earlier install, so the
     ///   deployment found it there and claimed nothing - but **nothing waits**;
     /// - the owner is deployed and another file occupies the path: its copy
     ///   **waits**. A foreign file holds the place and won the date arbitration
@@ -620,7 +578,10 @@ impl Classifier<'_> {
         // A deployed owner whose content is already in place: nothing waits,
         // whoever laid it (DOSSIER§4.2). Pit Box did not, so it is nobody's -
         // it stays if the mod goes.
-        if let Some((kind, owner_id, _)) = active.iter().find(|(_, _, copy)| same_content(copy, &in_game)) {
+        if let Some((kind, owner_id, _)) = active
+            .iter()
+            .find(|(_, _, copy)| crate::extras::same_content(copy, &in_game))
+        {
             let owner = self.extra_owner(kind.category(), owner_id);
             self.decide(id, Population::Extra, State::Nobody, None, owner);
             self.class[id as usize].same_as_copy = true;

@@ -540,6 +540,48 @@ pub(crate) fn is_still_ours(src: &Path, deployed: &Path) -> bool {
     a.len() == b.len() && a.modified().ok() == b.modified().ok()
 }
 
+/// Does the file in the game hold the content of the library copy?
+///
+/// Size and date first - [`is_still_ours`], the comparison of §4.5.4 rule 4,
+/// and what a copy laid by Pit Box always passes. When only the date differs,
+/// the bytes decide: an archive repacked by a third party, or the same file
+/// laid by an earlier install, keeps the content and loses the date. Measured on the dev install (2026-10): of the
+/// 39 paths the date rule alone called "waiting", 38 held exactly the mod's
+/// content - and the screen told the user a foreign file held the place.
+///
+/// Only ever called on a handful of files of equal size (an unclaimed copy that
+/// a file occupies), never across the install: the game folder scan stays a
+/// matter of metadata (DOSSIER§4.3).
+pub(crate) fn same_content(copy: &Path, in_game: &Path) -> bool {
+    use std::io::Read;
+    if is_still_ours(copy, in_game) {
+        return true;
+    }
+    let (Ok(a), Ok(b)) = (std::fs::metadata(copy), std::fs::metadata(in_game)) else {
+        return false;
+    };
+    if a.len() != b.len() {
+        return false;
+    }
+    let (Ok(fa), Ok(fb)) = (std::fs::File::open(copy), std::fs::File::open(in_game)) else {
+        return false;
+    };
+    let (mut ra, mut rb) = (std::io::BufReader::new(fa), std::io::BufReader::new(fb));
+    let (mut ba, mut bb) = (vec![0u8; 64 * 1024], vec![0u8; 64 * 1024]);
+    loop {
+        let Ok(na) = ra.read(&mut ba) else {
+            return false;
+        };
+        // The sizes are equal: the end of one is the end of the other.
+        if na == 0 {
+            return true;
+        }
+        if rb.read_exact(&mut bb[..na]).is_err() || ba[..na] != bb[..na] {
+            return false;
+        }
+    }
+}
+
 /// Retire la réclamation du mod sur ses ajouts au jeu, puis réaligne chaque
 /// fichier : encore réclamé par un autre mod, il **reste** (et repasse à
 /// l'exemplaire du meilleur réclamant restant) ; plus réclamé du tout, il est

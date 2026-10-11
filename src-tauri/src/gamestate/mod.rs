@@ -125,7 +125,7 @@ pub struct Class {
     /// In a zone Content Manager resynchronises (`acpath`).
     pub cm_zone: bool,
     /// Not laid by Pit Box, but the file in place has the content of a mod's
-    /// copy: nothing waits (`classify::same_content`).
+    /// copy: nothing waits (`extras::same_content`).
     pub same_as_copy: bool,
     /// Set once a population is decided, so that the first match wins.
     decided: bool,
