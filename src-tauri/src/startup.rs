@@ -17,21 +17,41 @@ use crate::config::AppConfig;
 use crate::overlay::{self, Db};
 use crate::{
     backup, brands, catalog_update, commands, config, cup, extras, fmod, gamebackup, gamestate, harmonize, music,
-    nationalities, preview, rules, shadowdir, showcase, showroom, stock, timing, wiki,
+    nationalities, preview, rules, shadowdir, showcase, showroom, stock, timing, version_guard, wiki,
 };
 
-/// Backs up the base and the preferences, then opens the base and checks it.
+/// Refuses a base a newer build opened, backs up the base and the
+/// preferences, then opens the base, checks it, and records this build.
 pub(crate) fn open_base(app: &App) -> Result<Connection, Box<dyn std::error::Error>> {
+    let db_path = app.path().app_config_dir()?.join("overlay.sqlite");
+    // First of all (§10): an older build than one that opened the base stops
+    // here, before a backup rotates the good copies out or a write lands.
+    let newest = version_guard::newest(&db_path);
+    if let Some(n) = newest
+        .as_ref()
+        .filter(|n| version_guard::refuses(Some(n), version_guard::BUILD_TIME))
+    {
+        refuse_newer_base(app, n);
+    }
+
     // Sauvegarde de démarrage (§10), avant toute ouverture de
     // connexion : on veut la base et les préférences exactement
     // telles que la session précédente les a laissées.
     timing::step("setup.shadowdir", || {
         shadowdir::warn_at_startup(&app.config().identifier)
     });
-    timing::step("setup.backup", || backup::run_startup_backup(app.handle()));
+    let new_build = version_guard::is_newer(newest.as_ref(), version_guard::BUILD_TIME);
+    timing::step("setup.backup", || backup::run_startup_backup(app.handle(), new_build));
 
-    let db_path = app.path().app_config_dir()?.join("overlay.sqlite");
     let conn = timing::step("setup.overlay_open", || overlay::open(&db_path))?;
+    if let Err(e) = version_guard::stamp(
+        &conn,
+        newest.as_ref(),
+        version_guard::BUILD_TIME,
+        version_guard::BUILD_LABEL,
+    ) {
+        log::warn!("this build not recorded in the base, an older one would not be refused: {e}");
+    }
     // Corruption shows up otherwise as scattered "malformed" warnings
     // from whichever startup pass happens to touch a damaged page —
     // and went unnoticed for three days in 2026-09. One line naming
@@ -42,6 +62,21 @@ pub(crate) fn open_base(app: &App) -> Result<Connection, Box<dyn std::error::Err
         Err(e) => log::warn!("overlay.sqlite failed its integrity check: {e}"),
     }
     Ok(conn)
+}
+
+/// Says why it will not start, in the user's language, and quits - nothing
+/// opened, nothing written.
+fn refuse_newer_base(app: &App, newest: &version_guard::NewestBuild) -> ! {
+    log::warn!(
+        "refusing to start: the base was opened by {}, newer than this build {}",
+        newest.label,
+        version_guard::BUILD_LABEL
+    );
+    let cfg = config::load(app.handle());
+    let lang = version_guard::language(cfg.prefs.language.as_deref());
+    let (title, body) = version_guard::refusal_text(&lang, newest);
+    version_guard::show_refusal(&title, &body);
+    std::process::exit(1);
 }
 
 /// Puts right what an app killed halfway left behind.

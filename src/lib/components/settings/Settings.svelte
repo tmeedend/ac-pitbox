@@ -347,6 +347,18 @@
       </section>
 
       <section class="lang-section">
+        <label>
+          <span>{t("settings.backupFrequency")}</span>
+          <select class="input" bind:value={config.prefs.backup_frequency}>
+            <option value="startup">{t("settings.backupStartup")}</option>
+            <option value="daily">{t("settings.backupDaily")}</option>
+            <option value="weekly">{t("settings.backupWeekly")}</option>
+          </select>
+        </label>
+        <p class="hint">{t("settings.backupHint")}</p>
+      </section>
+
+      <section class="lang-section">
         <label class="check">
           <input type="checkbox" bind:checked={config.prefs.mod_updates_online} />
           <span>{t("modUpdates.settingOnline")}</span>

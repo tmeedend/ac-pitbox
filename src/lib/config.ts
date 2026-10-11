@@ -38,6 +38,9 @@ export interface Prefs {
    * lit Content Manager. Même raison d'être un interrupteur que
    * `wiki_online` : une requête vers un serveur tiers. */
   mod_updates_online: boolean;
+  /** How often the startup backup is taken (§10); a new version's first
+   * start takes one whatever this says. */
+  backup_frequency: "startup" | "daily" | "weekly";
 }
 
 export interface AppConfig {
@@ -91,6 +94,7 @@ export function emptyConfig(): AppConfig {
       wiki_online: true,
       mod_updates_online: true,
       deploy_mode: "hardlink",
+      backup_frequency: "weekly",
     },
   };
 }

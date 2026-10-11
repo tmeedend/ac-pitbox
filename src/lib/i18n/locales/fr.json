@@ -316,7 +316,12 @@
     "bigpictureZoomHint": "Zoom supplémentaire appliqué uniquement en mode Big Picture (plein écran) — pratique pour lire l'interface de loin, manette en main.",
     "showroomScene": "Décor de l'aperçu 3D",
     "showroomSceneDefault": "Studio blanc (le plus rapide)",
-    "showroomSceneHint": "Décor chargé par acShowroom quand on clique « Aperçu 3D » sur une fiche voiture, parmi ceux installés dans Assetto Corsa. Le studio blanc se charge quasi instantanément et sans musique ; les autres décors pèsent plusieurs centaines de Mo.",
+    "backupFrequency": "Sauvegarde de la bibliothèque",
+    "backupStartup": "À chaque démarrage",
+    "backupDaily": "Une fois par jour",
+    "backupWeekly": "Une fois par semaine",
+    "backupHint": "Une copie de la base et des réglages, prise au démarrage. Les 7 dernières sont gardées. Une nouvelle version de Pit Box en prend toujours une à son premier démarrage.",
+    "showroomSceneHint":"Décor chargé par acShowroom quand on clique « Aperçu 3D » sur une fiche voiture, parmi ceux installés dans Assetto Corsa. Le studio blanc se charge quasi instantanément et sans musique ; les autres décors pèsent plusieurs centaines de Mo.",
     "resourceExtraction": "Extraction des fichiers annexes",
     "resourceExtractionNone": "Aucun",
     "resourceExtractionInfo": "Informations seulement",
@@ -2027,6 +2032,10 @@
     "tags": "Tags qui le désignent",
     "addTag": "Ajouter un tag…",
     "removeTag": "Retirer ce tag"
+  },
+  "startupGuard": {
+    "title": "Pit Box ne peut pas démarrer",
+    "body": "Ta bibliothèque a déjà été ouverte par une version plus récente de Pit Box : {newer}.\n\nCelle-ci, {ours}, est plus ancienne : elle pourrait mal lire ou abîmer ce que la plus récente a enregistré. Elle s'arrête donc sans rien toucher.\n\nLance la version la plus récente, ou réinstalle-la."
   },
   "logoSearch": {
     "title": "Un logo pour {brand}",

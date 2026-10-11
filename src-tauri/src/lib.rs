@@ -92,6 +92,7 @@ mod transfer;
 mod ui_prefs;
 mod uijson;
 mod usermeta;
+mod version_guard;
 mod weather;
 mod wiki;
 

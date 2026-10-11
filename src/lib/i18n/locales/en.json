@@ -316,7 +316,12 @@
     "bigpictureZoomHint": "Extra zoom applied only in Big Picture mode (fullscreen) — handy for reading the interface from a distance, controller in hand.",
     "showroomScene": "3D preview showroom",
     "showroomSceneDefault": "White studio (fastest)",
-    "showroomSceneHint": "Showroom loaded by acShowroom when you click \"3D preview\" on a car sheet, among those installed in Assetto Corsa. The white studio loads almost instantly and without music; the other showrooms weigh several hundred MB.",
+    "backupFrequency": "Library backup",
+    "backupStartup": "At every start",
+    "backupDaily": "Once a day",
+    "backupWeekly": "Once a week",
+    "backupHint": "A copy of the database and the settings, taken at startup. The last 7 are kept. A new version of Pit Box always takes one at its first start.",
+    "showroomSceneHint":"Showroom loaded by acShowroom when you click \"3D preview\" on a car sheet, among those installed in Assetto Corsa. The white studio loads almost instantly and without music; the other showrooms weigh several hundred MB.",
     "resourceExtraction": "Ancillary file extraction",
     "resourceExtractionNone": "None",
     "resourceExtractionInfo": "Information only",
@@ -2027,6 +2032,10 @@
     "tags": "Tags that name it",
     "addTag": "Add a tag…",
     "removeTag": "Remove this tag"
+  },
+  "startupGuard": {
+    "title": "Pit Box cannot start",
+    "body": "Your library has already been opened by a newer version of Pit Box: {newer}.\n\nThis one, {ours}, is older: it could misread or damage what the newer one saved. So it stops without touching anything.\n\nStart the newer version, or reinstall it."
   },
   "logoSearch": {
     "title": "A logo for {brand}",
