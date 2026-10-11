@@ -161,8 +161,7 @@ fn params_tables(ac_install_path: &Path) -> Vec<(PathBuf, CoordSource)> {
             .join("data_track_params.ini"),
         CoordSource::Csp,
     )];
-    if let Some(local) = dirs::data_local_dir() {
-        let cm = local.join("AcTools Content Manager");
+    if let Some(cm) = crate::detect::cm_data_dir() {
         for data in ["Data (User)", "Data"] {
             tables.push((
                 cm.join(data).join("Miscellaneous").join("Track Params.ini"),

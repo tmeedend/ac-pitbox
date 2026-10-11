@@ -106,8 +106,21 @@ fn cm_from_protocol() -> Option<PathBuf> {
     None
 }
 
+/// Where Content Manager keeps its data — `%LOCALAPPDATA%\AcTools Content
+/// Manager`: presets (`Presets\`), session log (`Progress\`), shipped tables
+/// (`Data\`, overridden by `Data (User)\`), plugins (`Plugins\`). The same
+/// folder wherever the executable itself was unpacked. `None` only when
+/// Windows gives no local app data folder; the caller checks what it needs
+/// inside, since CM may never have run.
+///
+/// The one place this path is spelled: it was rebuilt in five places, three
+/// through the `LOCALAPPDATA` variable and two through `dirs::data_local_dir()`.
+pub fn cm_data_dir() -> Option<PathBuf> {
+    Some(dirs::data_local_dir()?.join("AcTools Content Manager"))
+}
+
 /// Content Manager se trouve le plus souvent dans le dossier AC, sinon dans
-/// `%LOCALAPPDATA%\AcTools Content Manager` — et ailleurs, n'importe où : CM
+/// son dossier de données ([`cm_data_dir`]) — et ailleurs, n'importe où : CM
 /// se décompresse où l'on veut. En dernier recours, l'association du protocole
 /// `acmanager://` dit où il est.
 pub fn find_cm(ac: Option<&Path>) -> Option<PathBuf> {
@@ -119,10 +132,7 @@ pub fn find_cm(ac: Option<&Path>) -> Option<PathBuf> {
             }
         }
     }
-    if let Ok(local) = std::env::var("LOCALAPPDATA") {
-        let p = PathBuf::from(local)
-            .join("AcTools Content Manager")
-            .join("Content Manager.exe");
+    if let Some(p) = cm_data_dir().map(|d| d.join("Content Manager.exe")) {
         if p.is_file() {
             return Some(p);
         }
@@ -141,12 +151,7 @@ pub fn find_7zip() -> Option<PathBuf> {
             return Some(pb);
         }
     }
-    if let Ok(local) = std::env::var("LOCALAPPDATA") {
-        let p = PathBuf::from(local)
-            .join("AcTools Content Manager")
-            .join("Plugins")
-            .join("7Zip")
-            .join("7z.exe");
+    if let Some(p) = cm_data_dir().map(|d| d.join("Plugins").join("7Zip").join("7z.exe")) {
         if p.is_file() {
             return Some(p);
         }
@@ -170,6 +175,21 @@ pub fn autodetect() -> DetectedPaths {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Rule: CM's data folder is the one every caller used to spell by hand.
+    /// Three of them started from the `LOCALAPPDATA` variable, two from
+    /// `dirs::data_local_dir()`: both must name the same folder, or moving the
+    /// first three onto the shared function moved them somewhere else.
+    #[test]
+    fn cm_data_dir_is_the_folder_under_local_app_data() {
+        let dir = cm_data_dir().expect("Windows has a local app data folder");
+        assert_eq!(
+            dir.file_name().and_then(|n| n.to_str()),
+            Some("AcTools Content Manager")
+        );
+        let from_env = std::env::var_os("LOCALAPPDATA").map(|v| PathBuf::from(v).join("AcTools Content Manager"));
+        assert_eq!(Some(dir), from_env, "same folder as through LOCALAPPDATA");
+    }
 
     /// Rule: the executable of the `acmanager://` handler is read from its
     /// command line — the shape Content Manager writes (measured on a real

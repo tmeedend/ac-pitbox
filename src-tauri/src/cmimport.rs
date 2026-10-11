@@ -82,7 +82,7 @@ pub struct CmScan {
 
 /// `%LocalAppData%\AcTools Content Manager\Presets`.
 pub fn presets_dir() -> Option<PathBuf> {
-    let dir = dirs::data_local_dir()?.join("AcTools Content Manager").join("Presets");
+    let dir = crate::detect::cm_data_dir()?.join("Presets");
     dir.is_dir().then_some(dir)
 }
 

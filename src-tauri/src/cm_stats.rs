@@ -37,12 +37,10 @@ struct Session {
     distance: Option<f64>,
 }
 
-/// Chemin du journal de sessions CM (`%LOCALAPPDATA%\AcTools Content Manager\…`).
+/// Chemin du journal de sessions CM, dans son dossier de données.
 fn sessions_path() -> Option<std::path::PathBuf> {
-    let local = std::env::var_os("LOCALAPPDATA")?;
     Some(
-        std::path::Path::new(&local)
-            .join("AcTools Content Manager")
+        crate::detect::cm_data_dir()?
             .join("Progress")
             .join("Profile (Sessions).data"),
     )
