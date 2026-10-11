@@ -321,7 +321,7 @@
     "backupDaily": "Une fois par jour",
     "backupWeekly": "Une fois par semaine",
     "backupHint": "Une copie de la base et des réglages, prise au démarrage. Les 7 dernières sont gardées. Une nouvelle version de Pit Box en prend toujours une à son premier démarrage.",
-    "showroomSceneHint":"Décor chargé par acShowroom quand on clique « Aperçu 3D » sur une fiche voiture, parmi ceux installés dans Assetto Corsa. Le studio blanc se charge quasi instantanément et sans musique ; les autres décors pèsent plusieurs centaines de Mo.",
+    "showroomSceneHint": "Décor chargé par acShowroom quand on clique « Aperçu 3D » sur une fiche voiture, parmi ceux installés dans Assetto Corsa. Le studio blanc se charge quasi instantanément et sans musique ; les autres décors pèsent plusieurs centaines de Mo.",
     "resourceExtraction": "Extraction des fichiers annexes",
     "resourceExtractionNone": "Aucun",
     "resourceExtractionInfo": "Informations seulement",
@@ -2280,7 +2280,9 @@
     "andOthers": "et {count} autres",
     "openSheet": "Ouvrir la fiche",
     "filterOn": "Filtrer sur ce mod",
-    "showInExplorer": "Afficher dans l'Explorateur"
+    "showInExplorer": "Afficher dans l'Explorateur",
+    "saySameAsCopy": "Le fichier en place a le même contenu que l'exemplaire de {name} : rien n'attend. Pit Box ne l'a pas posé, et ne le retirera pas si {name} est désactivé.",
+    "reasonIdentical": "même contenu que le fichier en place"
   },
   "techsheet": {
     "edit": "Modifier la fiche technique",

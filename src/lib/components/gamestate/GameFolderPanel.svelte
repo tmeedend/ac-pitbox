@@ -60,6 +60,7 @@
       case "waiting":
         return t("gamefolder.sayWaiting", { name });
       default:
+        if (d.sameAsCopy) return t("gamefolder.saySameAsCopy", { name });
         if (d.population === "origin") return t("gamefolder.sayOrigin");
         if (d.population === "unmanaged") return t("gamefolder.sayUnmanaged");
         return t("gamefolder.sayNobody");
@@ -69,7 +70,7 @@
   const TONE: Record<string, string> = {
     posed: "pill-ok",
     replacesGame: "pill-err",
-    waiting: "pill-warn",
+    waiting: "pill-idle",
     drift: "pill-warn",
   };
 
@@ -87,6 +88,7 @@
     older: "gamefolder.reasonOlder",
     sameDate: "gamefolder.reasonSameDate",
     waiting: "gamefolder.reasonWaiting",
+    identical: "gamefolder.reasonIdentical",
   };
 </script>
 
@@ -110,7 +112,7 @@
           {:else if d.state !== "nobody"}
             <span class="pill {TONE[d.state]}">{t(`gamefolder.state.${d.state}`)}</span>
           {/if}
-          {#if d.cmZone}<span class="pill pill-cm">{t("gamefolder.state.cmZone")}</span>{/if}
+          {#if d.cmZone}<span class="pill pill-info">{t("gamefolder.state.cmZone")}</span>{/if}
         </span>
       {/if}
       {#if sentence}<p class="say">{sentence}</p>{/if}
@@ -278,11 +280,6 @@
   .pills {
     display: inline-flex;
     gap: 4px;
-  }
-  .pill-cm {
-    color: var(--blue);
-    border-color: var(--blue-border);
-    background: var(--blue-dim);
   }
   .say {
     font-size: 12.5px;

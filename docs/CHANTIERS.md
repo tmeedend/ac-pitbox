@@ -223,6 +223,18 @@ de reprendre. En cas d'écart, la spec fait foi.
         la copie n'est réclamée par aucune ligne : quand un fichier étranger
         gagne l'arbitrage, `extras::deploy` n'enregistre pas de
         réclamation — la base seule ne le verrait jamais.
+        **Piège payé (2026-10)** : la date seule en faisait trop. Mesuré sur
+        l'install de dev, 38 des 39 « en attente » avaient exactement le
+        contenu du mod — posés avant Pit Box, ou repackés avec une autre
+        date ; un seul était un vrai fichier étranger. Le contenu décide
+        désormais (taille et date, puis les octets si seule la date diffère),
+        sur ces seuls candidats. **La fiche, elle, dit encore « en attente »**
+        pour ces fichiers (`extras::list`, `held_by_foreign_file`) : même
+        règle à y reporter si on veut les deux d'accord.
+      - *Compteur de génération* : `sync_track_skins` le bougeait à tort (il
+        n'écrit que dans la base) ; la colonne de session l'appelant à chaque
+        démarrage, l'index était périmé avant d'être regardé, et chaque retour
+        sur l'écran rescannait. Retiré (2026-10).
       - *Fiche d'une livrée* : « Ouvrir la fiche » ouvre sa fiche dans
         Compléments ; celle d'un pack n'est pas proposée.
       - *Compteur de génération* : bougé par les façades qui écrivent dans le

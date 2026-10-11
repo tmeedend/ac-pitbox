@@ -321,7 +321,7 @@
     "backupDaily": "Once a day",
     "backupWeekly": "Once a week",
     "backupHint": "A copy of the database and the settings, taken at startup. The last 7 are kept. A new version of Pit Box always takes one at its first start.",
-    "showroomSceneHint":"Showroom loaded by acShowroom when you click \"3D preview\" on a car sheet, among those installed in Assetto Corsa. The white studio loads almost instantly and without music; the other showrooms weigh several hundred MB.",
+    "showroomSceneHint": "Showroom loaded by acShowroom when you click \"3D preview\" on a car sheet, among those installed in Assetto Corsa. The white studio loads almost instantly and without music; the other showrooms weigh several hundred MB.",
     "resourceExtraction": "Ancillary file extraction",
     "resourceExtractionNone": "None",
     "resourceExtractionInfo": "Information only",
@@ -2280,7 +2280,9 @@
     "andOthers": "and {count} more",
     "openSheet": "Open the sheet",
     "filterOn": "Filter on this mod",
-    "showInExplorer": "Show in Explorer"
+    "showInExplorer": "Show in Explorer",
+    "saySameAsCopy": "The file in place has the same content as the copy of {name}: nothing waits. Pit Box did not lay it, and will not remove it if {name} is deactivated.",
+    "reasonIdentical": "same content as the file in place"
   },
   "techsheet": {
     "edit": "Edit the tech sheet",

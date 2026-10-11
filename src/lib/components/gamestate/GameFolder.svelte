@@ -344,7 +344,7 @@
   const DOT: Record<string, string> = {
     posed: "var(--green)",
     replacesGame: "var(--rosso-bright)",
-    waiting: "var(--yellow)",
+    waiting: "var(--orange)",
     drift: "var(--yellow)",
     cmZone: "var(--blue)",
     nobody: "var(--muted)",
