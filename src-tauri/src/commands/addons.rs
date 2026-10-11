@@ -41,7 +41,9 @@ pub fn list_subs_by_type(
 /// les skins d'un circuit pour qu'ils y apparaissent.
 #[tauri::command]
 pub fn sync_track_skins(app: AppHandle, db: State<Db>, track_id: String) -> Result<(), String> {
-    let _game_write = crate::gamestate::GameWrite::begin();
+    // No `GameWrite` here: it reads the game and writes the database only. The
+    // session column calls it at every start, so counting it made the game
+    // folder index stale before anyone could look at it (DOSSIER§5.4).
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::submods::sync_bundled_track_skins(&conn, &cfg, &track_id);
