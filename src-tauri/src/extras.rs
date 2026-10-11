@@ -749,7 +749,15 @@ pub fn list(conn: &Connection, cfg: &AppConfig, owner: OwnerKind, mod_id: &str) 
                 // Personne ne fournit ce chemin et pourtant il est occupé : ce
                 // qui est là vient d'ailleurs (CM, une install manuelle). Sans
                 // intérêt sur un chemin qu'on ne pose jamais de toute façon.
-                held_by_foreign_file: !off_game_path && provider.is_none() && !replaces_game_file && target.is_file(),
+                // ... unless what is there has the mod's own content: laid
+                // before Pit Box, or repacked under another date. Then nothing
+                // waits, and "lay it anyway" would only swap a file for itself
+                // (same rule as the game folder screen, DOSSIER§4.2).
+                held_by_foreign_file: !off_game_path
+                    && provider.is_none()
+                    && !replaces_game_file
+                    && target.is_file()
+                    && !same_content(e.path(), &target),
                 provided_by: provider.filter(|p| p != mod_id),
                 replaces_game_file,
                 off_game_path,
@@ -1217,6 +1225,54 @@ mod tests {
         assert!(!weather.externally_managed, "hors zone auto-gérée");
         assert!(!weather.held_by_foreign_file);
         assert!(weather.deployed);
+    }
+
+    /// Rule (§4.5.5, DOSSIER§4.2): a file in place that already has the mod's
+    /// content - laid before Pit Box, or repacked under another date - does not
+    /// make the copy "waiting". Measured on the dev install: 38 of 39 such
+    /// paths, which the sheet offered to "lay anyway" over themselves.
+    #[test]
+    fn the_mods_own_content_in_place_is_not_waiting() {
+        let base = crate::testutil::temp_dir("sat-same");
+        let cfg = cfg_for(&base);
+        let library = cfg.library_path.clone().unwrap();
+        let ac = cfg.ac_install_path.clone().unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+
+        let same = Path::new("content").join("fonts").join("rss-arial.png");
+        let repacked = Path::new("content").join("fonts").join("digital_mid.png");
+        let other = Path::new("content").join("fonts").join("rss_gtm.png");
+        let sat = dir(&library, OwnerKind::Car, "lanzo");
+        for (rel, mine, theirs) in [
+            (&same, b"FONT", b"FONT"),
+            (&repacked, b"MID!", b"MID!"),
+            (&other, b"OLD!", b"NEW!"),
+        ] {
+            write(&sat.join(rel), mine);
+            set_mtime(&sat.join(rel), 1_000_000);
+            write(&ac.join(rel), theirs);
+        }
+        // Same date for the first, newer for the other two: the arbitration
+        // refuses all three, and only the content tells them apart.
+        set_mtime(&ac.join(&same), 1_000_000);
+        set_mtime(&ac.join(&repacked), 2_000_000);
+        set_mtime(&ac.join(&other), 2_000_000);
+        assert_eq!(deploy(&conn, &cfg, OwnerKind::Car, "lanzo").unwrap(), 0, "nothing laid");
+
+        let listed = list(&conn, &cfg, OwnerKind::Car, "lanzo");
+        let waits = |name: &str| {
+            listed
+                .iter()
+                .find(|f| f.rel_path.ends_with(name))
+                .unwrap()
+                .held_by_foreign_file
+        };
+        assert!(!waits("rss-arial.png"), "same size and date: the mod's file is there");
+        assert!(
+            !waits("digital_mid.png"),
+            "same bytes under a newer date: still the mod's content"
+        );
+        assert!(waits("rss_gtm.png"), "other content: the copy really waits");
     }
 
     /// Rule (§4.6ter): a file the date arbitration refuses is not a dead end.

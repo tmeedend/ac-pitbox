@@ -228,9 +228,8 @@ de reprendre. En cas d'écart, la spec fait foi.
         contenu du mod — posés avant Pit Box, ou repackés avec une autre
         date ; un seul était un vrai fichier étranger. Le contenu décide
         désormais (taille et date, puis les octets si seule la date diffère),
-        sur ces seuls candidats. **La fiche, elle, dit encore « en attente »**
-        pour ces fichiers (`extras::list`, `held_by_foreign_file`) : même
-        règle à y reporter si on veut les deux d'accord.
+        sur ces seuls candidats — à l'écran comme sur la fiche du mod
+        (`extras::same_content`, partagé).
       - *Compteur de génération* : `sync_track_skins` le bougeait à tort (il
         n'écrit que dans la base) ; la colonne de session l'appelant à chaque
         démarrage, l'index était périmé avant d'être regardé, et chaque retour
