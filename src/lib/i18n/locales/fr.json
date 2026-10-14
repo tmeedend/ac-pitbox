@@ -1978,6 +1978,21 @@
     "rally": "Rallye",
     "traffic": "Trafic"
   },
+  "trackCategories": {
+    "circuit": "Circuit",
+    "street": "Ville",
+    "oval": "Ovale",
+    "drift": "Drift",
+    "touge": "Touge",
+    "rally": "Rallye",
+    "rallycross": "Rallycross",
+    "hillclimb": "Course de côte",
+    "drag": "Drag",
+    "freeroam": "Freeroam",
+    "karting": "Karting",
+    "a2b": "A2B",
+    "test": "Test"
+  },
   "index": {
     "byCountry": "Parcourir par pays",
     "byFamily": "Parcourir par famille",

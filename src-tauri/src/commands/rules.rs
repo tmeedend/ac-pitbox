@@ -88,6 +88,31 @@ pub fn save_family_overlay(app: AppHandle, families: FamilyOverlay) -> Result<Ta
     Ok(view(&rules, o))
 }
 
+/// Writes the names and icons of the track categories. **No re-harmonisation**:
+/// they are display only, the stored category is its `#tag` (Families ›
+/// Tracks).
+#[tauri::command]
+pub fn save_track_category_looks(
+    app: AppHandle,
+    looks: std::collections::BTreeMap<String, pitbox_catalog::taxonomy::FamilyMeta>,
+) -> Result<TaxonomyView, String> {
+    let mut o = crate::rules::load_taxonomy(&app);
+    o.track_category_looks = looks;
+    let (rules, o) = crate::rules::save_taxonomy(&app, o)?;
+    Ok(view(&rules, o))
+}
+
+/// Writes the decisions on the Online page's keywords (server word →
+/// category). Nothing stored per mod reads them: the Online page reads them
+/// when it opens (`online/categories.rs`).
+#[tauri::command]
+pub fn save_server_keywords(app: AppHandle, keywords: MapOverlay) -> Result<TaxonomyView, String> {
+    let mut o = crate::rules::load_taxonomy(&app);
+    o.server_keywords = keywords;
+    let (rules, o) = crate::rules::save_taxonomy(&app, o)?;
+    Ok(view(&rules, o))
+}
+
 /// Writes the country decisions and re-applies them: the country is decided
 /// at write time (`harmonize::store`), so an alias or a country tag changes
 /// what is stored for every mod it reaches.

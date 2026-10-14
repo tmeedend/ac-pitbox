@@ -373,6 +373,8 @@ pub fn run() {
             commands::rules::export_folder_survey,
             commands::rules::get_taxonomy,
             commands::rules::save_family_overlay,
+            commands::rules::save_track_category_looks,
+            commands::rules::save_server_keywords,
             commands::rules::save_country_overlay,
             commands::rules::save_brand_overlay,
             commands::logos::get_brand_logos,

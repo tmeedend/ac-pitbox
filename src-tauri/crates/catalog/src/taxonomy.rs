@@ -395,6 +395,30 @@ pub struct TaxonomyOverlay {
     pub track_categories: MapOverlay,
     #[serde(default, skip_serializing_if = "MapOverlay::is_empty")]
     pub server_keywords: MapOverlay,
+    /// Names and icons given to track categories (Families › Tracks), keyed by
+    /// the category's `#tag`. **Display only**: the tag is what is stored,
+    /// matched and filtered, so renaming re-applies nothing. Nothing of it is
+    /// shipped — a shipped category is named by the app's translations and
+    /// drawn by the pictogram of its own name — hence no catalogue side.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub track_category_looks: BTreeMap<String, FamilyMeta>,
+}
+
+/// The looks as written: keys as categories (`#`, lowercase), values trimmed,
+/// and no entry that says nothing.
+fn normalized_looks(looks: BTreeMap<String, FamilyMeta>) -> BTreeMap<String, FamilyMeta> {
+    let clean = |v: Option<String>| v.map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
+    looks
+        .into_iter()
+        .filter_map(|(tag, m)| {
+            let key = category_list(&tag).into_iter().next()?;
+            let meta = FamilyMeta {
+                name: clean(m.name),
+                icon: clean(m.icon),
+            };
+            (meta != FamilyMeta::default()).then_some((key, meta))
+        })
+        .collect()
 }
 
 impl TaxonomyOverlay {
@@ -425,6 +449,7 @@ impl TaxonomyOverlay {
             not_brands: self.not_brands.normalized(&catalog.not_brands),
             track_categories: self.track_categories.normalized(&catalog.track_categories),
             server_keywords: self.server_keywords.normalized(&catalog.server_keywords),
+            track_category_looks: normalized_looks(self.track_category_looks),
         }
     }
 
@@ -437,7 +462,8 @@ impl TaxonomyOverlay {
             && self.brand_aliases.is_empty()
             && self.not_brands.is_empty()
             && self.track_categories.is_empty()
-            && self.server_keywords.is_empty())
+            && self.server_keywords.is_empty()
+            && self.track_category_looks.is_empty())
     }
 }
 
@@ -599,6 +625,33 @@ mod tests {
         assert_eq!(t.track_categories["pk_akina"], "#touge #drift", "the user's entry wins");
         assert_eq!(t.track_categories["spa"], "#circuit", "the catalogue's stays");
         assert!(t.server_keywords.is_empty(), "a tombstone holds");
+        assert!(o.has_decisions());
+    }
+
+    /// Rule (Families › Tracks): a name or an icon is kept under the
+    /// category's tag, written the one way; an entry that says nothing goes.
+    /// A file written before the field reads as no decision.
+    #[test]
+    fn track_category_looks_are_keyed_by_the_tag() {
+        let old: TaxonomyOverlay = serde_json::from_str(r#"{"format":1}"#).unwrap();
+        assert!(old.track_category_looks.is_empty(), "an older overlay");
+        let mut o = TaxonomyOverlay::default();
+        let look = |name: &str, icon: &str| FamilyMeta {
+            name: (!name.is_empty()).then(|| name.to_string()),
+            icon: (!icon.is_empty()).then(|| icon.to_string()),
+        };
+        o.track_category_looks.insert(" Drift ".into(), look(" Glisse ", ""));
+        o.track_category_looks.insert("#touge".into(), look("  ", " "));
+        let o = o.normalized(&TaxonomyTables::default());
+        assert_eq!(
+            o.track_category_looks.get("#drift").and_then(|m| m.name.as_deref()),
+            Some("Glisse"),
+            "keyed by the tag, trimmed"
+        );
+        assert!(
+            !o.track_category_looks.contains_key("#touge"),
+            "an empty look is no decision"
+        );
         assert!(o.has_decisions());
     }
 
