@@ -6,7 +6,9 @@ use std::path::{Path, PathBuf};
 
 use rusqlite::Connection;
 
-use super::{destination, gated, host_exists, parent_subdir, record_sub, SubGate, SubImported, SubProgress};
+use super::{
+    destination, gated, host_exists, parent_subdir, record_sub, try_redeploy_host, SubGate, SubImported, SubProgress,
+};
 use crate::config::AppConfig;
 use crate::modscan::FoundSub;
 use crate::resources::{self, ExtractionMode};
@@ -291,7 +293,10 @@ pub fn activate_sound(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Resul
         .ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
     replace_dir_contents(&sound_dir, &sfx)?;
     overlay::set_active_sound(conn, &sub.parent_id, Some(sub_id)).map_err(|e| e.to_string())?;
-    Ok(())
+    // The game's `content/cars/<id>` is a hardlink mirror of the library
+    // folder just rewritten: its names still hold the OLD sound until the car
+    // is laid again (real bug — "active" on screen, stock sound in game).
+    try_redeploy_host(conn, cfg, &sub.parent_id)
 }
 
 /// Restaure le son d'origine d'une voiture (désactive le mod de son actif).
@@ -302,7 +307,8 @@ pub fn restore_sound(conn: &Connection, cfg: &AppConfig, parent_id: &str) -> Res
         replace_dir_contents(&backup, &sfx)?;
     }
     overlay::set_active_sound(conn, parent_id, None).map_err(|e| e.to_string())?;
-    Ok(())
+    // Same gap as on activation, the other way round.
+    try_redeploy_host(conn, cfg, parent_id)
 }
 
 /// `<lib>/sounds/<parent>/__original__` : sauvegarde du son d'origine.
@@ -412,6 +418,57 @@ mod tests {
         restore_sound(&conn, &cfg, "snd_car").unwrap();
         assert_eq!(std::fs::read_to_string(sfx.join("GUIDs.txt")).unwrap(), "ORIG");
         assert!(!overlay::get_sub_mod(&conn, "s1").unwrap().unwrap().is_active);
+    }
+
+    // Real bug (§8.3): the swap rewrote the car's `sfx/` in the library, but
+    // `content/cars/<id>` is laid by hardlinks — its files are other names for
+    // the ORIGINAL data, which deleting the library's names does not touch.
+    // The screen said "active", the game kept playing the stock sound until
+    // the car happened to be deployed again. The game must hear the switch at
+    // once, both ways.
+    #[test]
+    fn a_deployed_car_plays_the_sound_switched_on_and_off() {
+        let (base, _library, conn, cfg) = car_with_sound("sndgame");
+        crate::activation::activate(&conn, &cfg, "snd_car", None).unwrap();
+        let bank = base
+            .join("ac")
+            .join("content")
+            .join("cars")
+            .join("snd_car")
+            .join("sfx")
+            .join("car.bank");
+        assert_eq!(
+            std::fs::read_to_string(&bank).unwrap(),
+            "ORIGBANK",
+            "the car is in the game"
+        );
+
+        activate_sound(&conn, &cfg, "s1").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&bank).unwrap(),
+            "MODBANK",
+            "the game plays the mod's sound as soon as it is active"
+        );
+
+        restore_sound(&conn, &cfg, "snd_car").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&bank).unwrap(),
+            "ORIGBANK",
+            "the game plays the stock sound again as soon as it is restored"
+        );
+    }
+
+    // The other side of the same rule: a car that is not in the game stays
+    // out of it — switching its sound must not deploy it.
+    #[test]
+    fn switching_the_sound_of_an_inactive_car_does_not_deploy_it() {
+        let (base, _library, conn, cfg) = car_with_sound("sndoff");
+        activate_sound(&conn, &cfg, "s1").unwrap();
+        restore_sound(&conn, &cfg, "snd_car").unwrap();
+        assert!(
+            !base.join("ac").join("content").join("cars").join("snd_car").exists(),
+            "an inactive car stays out of content/"
+        );
     }
 
     /// Fabrique un décor : bibliothèque, base, et les voitures données.
