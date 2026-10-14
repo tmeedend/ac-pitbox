@@ -13,32 +13,14 @@ import {
   trackLabel,
   type TokenContext,
 } from "./tokens";
+import { testServer } from "./testServer";
 
 // The chip model labels its values through i18n, which needs the Svelte
 // runtime; `vi.mock` is hoisted above the imports.
 vi.mock("$lib/i18n/index.svelte", () => ({ t: (key: string) => key }));
 
 function server(over: Partial<ServerSummary>): ServerSummary {
-  return {
-    ip: "1.2.3.4",
-    port: 9600,
-    http_port: 8081,
-    name: "Server",
-    country: "DE",
-    clients: 0,
-    max_clients: 24,
-    password: false,
-    booking: false,
-    track: { kunos_id: "monza", id: "monza", layout: null, csp_min_build: null },
-    cars: ["ks_mazda_miata"],
-    session: "practice",
-    sessions: ["practice"],
-    time_left: 600,
-    track_available: true,
-    cars_available: 1,
-    official: true,
-    ...over,
-  };
+  return testServer(over);
 }
 
 const track = (kunos_id: string, id = kunos_id, layout: string | null = null) => ({
