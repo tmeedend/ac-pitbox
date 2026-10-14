@@ -29,6 +29,7 @@
     "report:docs": "node scripts/report-docs.mjs",
     "report:code": "node scripts/report-code.mjs",
     "review:done": "node scripts/report-code.mjs --review-done",
+    "online:tracks": "node scripts/lobby-tracks.mjs",
     "bench:startup": "node scripts/bench-startup.mjs"
   },
   "license": "MIT",
