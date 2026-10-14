@@ -1060,6 +1060,38 @@ de reprendre. En cas d'écart, la spec fait foi.
       « Benetton B191 » reste sous son pack faute de Benetton connu. Une liste
       livrée de marques connues lèverait la limite — à faire si ça gêne.
 
+- [ ] **Son d'une voiture Kunos — solution provisoire (B), à reconsidérer
+      (2026-10-14).** Pour une voiture Kunos, activer un son écrit dans le
+      `sfx/` **du jeu**, hors de `gamebackup.rs`, que la règle d'or n°5 dit
+      pourtant de toujours emprunter. L'original est à l'abri dans
+      `<lib>/sounds/<voiture>/__original__` (copie unique, avant la première
+      bascule) ; le seul défaut concret était la fenêtre où une app tuée entre
+      l'effacement du `sfx/` et la copie du mod laissait la voiture sans son,
+      rien ne la réparant hors « son d'origine » à la main.
+      - **Fait (B)** : bascule d'un seul geste (préparé dans
+        `sfx.pitbox-new`, deux renommages, base écrite avant le nettoyage de
+        `sfx.pitbox-old`) et filet au démarrage
+        (`submods::recover_interrupted_swaps`, étape `setup.sound_swaps`), qui
+        donne à la voiture le son que dit la base. Tout dans `sounds.rs`.
+      - **Écarté pour l'instant (A)** : tout faire passer par `gamebackup.rs`,
+        fichier par fichier. Ce qu'il faudrait : (1) son balayage de démarrage
+        (`restore_orphans`) remet l'original de **toute** sauvegarde que plus
+        rien ne réclame — aujourd'hui seuls les ajouts au jeu et les « autres
+        mods » réclament —, donc un son actif devrait devenir un troisième
+        réclamant, sinon le balayage annulerait le son à chaque démarrage ;
+        (2) l'écoute « Origine » (`enginesound::sound_dir`) lit `__original__`
+        et lirait la sauvegarde de `game_backup/` ; (3) l'écran Dossier du jeu
+        (`gamestate/classify.rs`, `sounds`) classe le `sfx/` par la même
+        copie ; (4) reprendre l'existant : les voitures Kunos qui ont déjà un
+        son actif avec l'ancienne copie `__original__`. Une session, zone des
+        règles d'or, tests d'abord.
+      - **Ce qui ferait changer d'avis** : un second mécanisme hors
+        `gamebackup.rs` qui écrirait dans le jeu (deux font un motif), un
+        bug où `__original__` ne suffit pas (bibliothèque supprimée alors
+        qu'un son Kunos est actif : `clean-ac-footprint.ps1` ne le voit pas,
+        pas plus qu'il ne verrait `game_backup/`), ou l'envie d'un seul
+        registre de ce que Pit Box a changé dans le jeu.
+
 - [ ] **Corrections par mod — à faire, chantier à part.** Aujourd'hui on
       corrige d'un mod son nom, sa description, ses tags (couche 4 de
       REGLES§14), et depuis la fiche technique (FICHE§8) son **pays** et sa

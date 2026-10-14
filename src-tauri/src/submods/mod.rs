@@ -23,7 +23,7 @@ mod track_skins;
 pub(crate) use skins::project_attached;
 pub use skins::{repair_projections, skin_detail, skin_folder, RepairReport, SkinDetail};
 pub(crate) use sounds::sound_backup_dir;
-pub use sounds::{activate_sound, restore_sound};
+pub use sounds::{activate_sound, recover_interrupted_swaps, restore_sound};
 pub use track_skins::{
     list_active_track_skins, list_track_skin_options, set_track_skin_active, sync_bundled_track_skins, TrackSkinOption,
 };

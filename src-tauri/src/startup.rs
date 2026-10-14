@@ -17,7 +17,7 @@ use crate::config::AppConfig;
 use crate::overlay::{self, Db};
 use crate::{
     backup, brands, catalog_update, commands, config, cup, extras, fmod, gamebackup, gamestate, harmonize, music,
-    nationalities, preview, rules, shadowdir, showcase, showroom, stock, timing, version_guard, wiki,
+    nationalities, preview, rules, shadowdir, showcase, showroom, stock, submods, timing, version_guard, wiki,
 };
 
 /// Refuses a base a newer build opened, backs up the base and the
@@ -86,6 +86,13 @@ pub(crate) fn safety_nets(app: &App, conn: &Connection) {
     // une app tuée entre la sauvegarde et la pose, ou entre le retrait
     // et la restauration.
     timing::step("setup.restore_orphans", || gamebackup::restore_orphans(conn));
+
+    // Safety net (§8.3): a car sound swap stopped halfway is finished with
+    // the sound the base says the car has — a stock car's `sfx/` is the
+    // game's own folder, and must not stay empty.
+    timing::step("setup.sound_swaps", || {
+        submods::recover_interrupted_swaps(conn, &config::load(app.handle()))
+    });
 
     // Filet de sécurité : le brouillon de conversion des vignettes de
     // grille (GRILLE§5.3) est effacé dès l'image rendue,
