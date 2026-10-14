@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Categories tab of the Workshop (TAXO§6): the family table the car index
+  // The car half of Classement › Families (TAXO§6): the family table the car index
   // and the Family filter read (INDEX§6.1).
   //
   // One row per family, unfolded in place. What a family is made of is a list
