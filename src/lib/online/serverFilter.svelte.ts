@@ -16,9 +16,12 @@ import { tabServers, type OnlineStore, type OnlineTab } from "./lists";
 import { carName, searchText, type Looks } from "./looks";
 import { serverKey, type ServerSummary } from "./online";
 import { measureAll, pingOf, pingsLeft, stopMeasuring } from "./pings.svelte";
+import { filterCategories, serverCategories } from "./categories";
+import { trackCategories } from "./trackCategories.svelte";
 import {
   asksPing,
   BOOL_KEYS,
+  CATEGORY_KEY,
   DEFAULT_PINNED,
   DEFAULT_TOKENS,
   onlineTokenDefs,
@@ -56,6 +59,9 @@ export class ServerFilter {
 
   /** A gesture of the moment: not remembered. */
   search = $state("");
+  /** The servers an included category leaves out for an unknown category,
+   * shown anyway: the toggle under the list, a gesture of the moment too. */
+  showUnknownCategories = $state(false);
   tokens = $state<FilterMap>({ ...DEFAULT_TOKENS });
   pinned = $state<string[]>([...DEFAULT_PINNED]);
 
@@ -86,24 +92,53 @@ export class ServerFilter {
     ),
   );
 
+  /** Each server's categories, resolved once per list and knowledge: the
+   * filter asks for them on every change of chip, over 9 000 servers. */
+  readonly #categories = $derived.by(() => {
+    const { looks } = this.#host;
+    const knowledge = trackCategories.knowledge;
+    const memo = new Map<string, string[] | null>();
+    return (s: ServerSummary): string[] | null => {
+      const key = serverKey(s);
+      if (!memo.has(key)) memo.set(key, filterCategories(serverCategories(s, looks, knowledge)));
+      return memo.get(key) ?? null;
+    };
+  });
+
   readonly #ctx: TokenContext = $derived.by(() => ({
     looks: this.#host.looks,
+    categoriesOf: this.#categories,
+    showUnknownCategories: this.showUnknownCategories,
     pingOf: (s) => pingOf(serverKey(s)),
     // The game's English name is what flags and labels are keyed on. Fills
     // in once the game's table is loaded (the bar loads it).
     countryName: (iso2) => gameCountryByIso2(iso2)?.name ?? null,
   }));
 
-  /** Every filter but the ping: the servers a ping token has to measure. */
-  readonly #unpinged = $derived.by(() => {
+  /** The servers the search and the tab leave, before the chips. */
+  readonly #searched = $derived.by(() => {
     const { servers, looks, tab, store, friends } = this.#host;
     const text = (s: ServerSummary) => searchText(looks, s);
+    return searchServers(tab === "all" ? servers : tabServers(tab, servers, store, friends), this.search, text);
+  });
+
+  /** Every filter but the ping: the servers a ping token has to measure. */
+  readonly #unpinged = $derived.by(() => {
     const tokensOk = tokenPredicate(this.defs, splitPing(this.tokens).rest, this.#ctx);
-    if (tab === "all") {
-      const kept = searchServers(servers, this.search, text).filter(tokensOk);
-      return sortServers(kept, new Set(Object.keys(friends)));
-    }
-    return searchServers(tabServers(tab, servers, store, friends), this.search, text).filter(tokensOk);
+    const kept = this.#searched.filter(tokensOk);
+    return this.#host.tab === "all" ? sortServers(kept, new Set(Object.keys(this.#host.friends))) : kept;
+  });
+
+  /** Servers an included category leaves out only because theirs is
+   * unknown — shown or not: what the line under the list counts. 0 without
+   * such a chip. Counted before the ping, which measures as it goes. */
+  readonly unknownCount = $derived.by(() => {
+    const st = this.tokens[CATEGORY_KEY];
+    if (!(st?.type === "val" && st.values.some((v) => v.sign > 0))) return 0;
+    const { rest } = splitPing(this.tokens);
+    const count = (showUnknownCategories: boolean) =>
+      this.#searched.filter(tokenPredicate(this.defs, rest, { ...this.#ctx, showUnknownCategories })).length;
+    return count(true) - count(false);
   });
 
   readonly #wantsPing = $derived(asksPing(this.tokens));

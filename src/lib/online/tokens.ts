@@ -7,10 +7,13 @@
 // means the same thing on both screens. Pure, for Vitest.
 //
 // One rule the library does not have: a value the page cannot know is
-// **unknown**, and an unknown value neither matches nor fails. The spec says
-// it for the track category ("ni inclus ni exclu, sinon on masque en silence
-// les serveurs qu'on cherche justement à découvrir"): a track missing from the
-// library has no category, and most of the lobby's tracks are missing.
+// **unknown**. For most tokens an unknown value neither matches nor fails. The
+// track category is the exception (`categories.ts` resolves it): an unknown
+// category is left out of an INCLUDED category and kept under an EXCLUDED
+// one. Letting it through both ways - the first rule of the spec - made
+// "Drift" list whatever ran on the many tracks nobody knows; the servers it
+// leaves out are counted under the list, one click from being shown
+// (`showUnknownCategories`).
 import {
   optionsFrom,
   sanitizeFilterMap,
@@ -116,6 +119,11 @@ export function onlineTokenDefs(labels: TokenLabels = {}, bools = true): FilterD
 /** What the tokens read about a server that the server itself does not say. */
 export interface TokenContext {
   looks: Looks;
+  /** A server's track categories (`categories.ts`), `null` when unknown. */
+  categoriesOf: (s: ServerSummary) => string[] | null;
+  /** The servers an included category leaves out for an unknown category
+   * are shown anyway — the toggle under the list. */
+  showUnknownCategories?: boolean;
   /** The measured round trip, `undefined` until measured — or when the
    * server did not answer. */
   pingOf: (s: ServerSummary) => number | undefined;
@@ -143,7 +151,7 @@ function valuesOf(key: string, ctx: TokenContext): (s: ServerSummary) => string[
     case CAR_KEY:
       return (s) => s.cars.map((c) => c.toLowerCase());
     case CATEGORY_KEY:
-      return (s) => ctx.looks.tracks[s.track.id.toLowerCase()]?.categories ?? null;
+      return ctx.categoriesOf;
     case CONTENT_KEY:
       // A snapshot saved before servers were judged on it does not say.
       return (s) => (s.official === undefined ? null : [s.official ? "kunos" : "mods"]);
@@ -199,9 +207,13 @@ export function tokenPredicate(
     const test = valTest(def, st);
     if (!test) continue;
     const get = valuesOf(def.key, ctx);
+    // An unknown value passes, but for an unknown category under an included
+    // one (module docs).
+    const unknownPasses =
+      def.key !== CATEGORY_KEY || !!ctx.showUnknownCategories || !st.values.some((v) => v.sign > 0);
     tests.push((s) => {
       const values = get(s);
-      return values === null || test(values);
+      return values === null ? unknownPasses : test(values);
     });
   }
   return (s) => tests.every((test) => test(s));

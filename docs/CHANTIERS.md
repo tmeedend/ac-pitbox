@@ -102,6 +102,15 @@ de reprendre. En cas d'écart, la spec fait foi.
         1,3 à 4,1 s du démarrage de CM au jeu sur trois joins. Un compteur de
         génération fait renoncer la garde d'un join remplacé par un plus
         récent ; l'état du jeu vient du même sondage que la musique.
+      - **Catégorie des circuits hors bibliothèque (2026-10-14)** : choix
+        dans le panneau, catalogue et mots-clés du serveur. **Reste** à
+        remplir la table `track_categories` de `taxonomy-catalog.json`, livrée
+        vide : `npm run online:tracks` donne les ids qui pèsent (les 50
+        premiers couvrent 75 % des joueurs), le reste est un classement à faire
+        à la main. Les choix faits dans l'app se promeuvent ensuite comme les
+        autres décisions (`npm run rules:diff` / `rules:promote`) — mais ils
+        vivent dans `overlay.sqlite`, pas dans la surcouche du catalogue :
+        les promouvoir demande de les recopier, aucun outil ne le fait.
       Ce qui est fait et ce qui reste : `SPEC-play-online.md`, section Lots.
       **Pièges déjà payés** (`online-join-research.md`), à relire avant de
       toucher au lancement :

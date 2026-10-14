@@ -135,13 +135,13 @@ Une barre unique, sur une seule ligne comme celle de la bibliothèque : un champ
 | Joinable (`READY` ou `1 CLICK`) | Puce oui/non, épinglée | fantôme |
 | Circuit | Token avec autocomplétion sur les circuits en ligne, nombre de serveurs affiché (`Spa · 23 servers`) | aucun |
 | Voiture | Même principe que le circuit | aucun |
-| Catégorie de circuit | Token `track category: Freeroam`, tiré des catégories de circuit de ta bibliothèque | aucun |
+| Catégorie de circuit | Token `track category: Freeroam` : ton choix, ta bibliothèque, le catalogue Pit Box, puis les mots du serveur (voir plus bas) | aucun |
 | Contenu | Token `content: kunos` (rejoignable sans rien télécharger) ou `content: mods` | aucun |
 | Ping max | Token `ping < 100` | aucun |
 | Pays / région | Token avec drapeaux | aucun |
 | Session en cours | Token `session: race` | aucun |
 
-La catégorie de circuit répond au cas 3 (freeroam, drift, touge, circuit) avec un vocabulaire que PitBox tient déjà. Un circuit absent de ta bibliothèque n'a pas de catégorie : il compte comme **inconnu**, ni inclus ni exclu, sinon on masque en silence les serveurs qu'on cherche justement à découvrir.
+La catégorie de circuit répond au cas 3 (freeroam, drift, touge, circuit) avec un vocabulaire que PitBox tient déjà. Un serveur dont personne ne connaît la catégorie compte comme **inconnu** : une catégorie **incluse** l'écarte, une catégorie **exclue** le garde. Ce qu'une catégorie incluse écarte ainsi se compte sous la liste (« + N serveurs sur des circuits de catégorie inconnue · Afficher »), à un clic d'être montré — une bascule d'affichage, pas un filtre de plus. La première règle, « ni inclus ni exclu », laissait passer la majorité du lobby sous « Drift ». D'où vient la catégorie : « Catégorie des circuits hors bibliothèque », dans les Lots.
 
 Une puce oui/non a trois états, comme à la bibliothèque : absente (indifférent), positive, négative. Le négatif sert : « Avec mot de passe » retrouve le serveur privé de sa ligue, « Pas joignable » montre ce qu'il faudrait télécharger.
 
@@ -178,7 +178,7 @@ La v1 se construit autour des onglets Favoris / Récents / Amis, du statut de pr
 | Lancement | Via CM, par `acmanager://race/online?ip=…&port=…&httpPort=…&car=…&track=…` (lancement direct avec la voiture choisie), plus la réinjection de `[REMOTE] __FEATURES` dans `race.ini` sur AssettoServer. `race/online/join` ne sert qu'en repli (booking) : il rouvre la fiche de CM où la voiture se rechoisit. Voir `online-join-research.md` |
 | Source de la liste | Lobby Kunos en direct, `/INFO` et `/JSON` interrogés à la demande. En repli, la dernière liste reçue, gardée sur disque (voir plus bas) |
 | Ping | Mesuré sur les lignes visibles, mis en cache quelques minutes |
-| Freeroam, drift, etc. | Filtre par catégorie de circuit, depuis la bibliothèque. Un libellé « type de serveur » plus tard, seulement si une donnée fiable le permet |
+| Freeroam, drift, etc. | Filtre par catégorie de circuit : choix de l'utilisateur, bibliothèque, catalogue Pit Box, mots du serveur (« ≈ »). Un libellé « type de serveur » plus tard, seulement si une donnée fiable le permet |
 | Rail | Entrée `Online` dédiée, juste sous `Session`, au-dessus du filet. La colonne de session est masquée sur Online : le panneau de détail joue son rôle (choix de la voiture, lancement) |
 
 **Sur la source de la liste**, il y a deux choses distinctes, et aucune n'est une base de contenu. La liste officielle est le **lobby Kunos** : chaque serveur public s'y enregistre, et c'est lui que le jeu interroge. Content Manager tient en plus **son propre miroir en cache** de cette liste, hébergé par son auteur : plus rapide, et il a maintenu la liste visible quand le lobby Kunos est tombé ([OverTake](https://www.overtake.gg/threads/lobby-server-unavailable.272823/)). PitBox dépend déjà d'acstuff pour les mises à jour (CUP), donc s'en servir en repli ne changerait pas de principe. **Mais son adresse n'est pas publique** (vérifié le 2026-10-03 dans les sources de CM, `KunosApiProvider.TryToGetListAsync`) : elle vient d'`InternalUtils.GetKunosServerCompressedProxyUri()`, d'un module de CM qui n'est pas publié — comme la liste des autres serveurs de lobby Kunos que CM essaie à la suite (`MoveToNextKunosServer`). La prendre voudrait dire la tirer du binaire de CM, donc la deviner. **Le repli retenu est la dernière liste reçue** (`online/lobby_cache.rs`) : chaque réponse du lobby est écrite telle quelle dans le dossier de cache ; quand il ne répond pas, elle revient, gardée une minute avant de redemander, sous un bandeau qui la date (« Le lobby Kunos ne répond pas : voici la liste du … »). Elle mène encore quelque part : les serveurs répondent à leur `/INFO` et leur `/JSON` quoi que fasse le lobby, et le panneau les interroge en direct. La fiche d'un circuit ne compte rien dessus — une vieille liste ne dit pas qui roule maintenant. Sans Steam, pas de repli : la raison s'affiche, la cacher derrière une vieille liste n'aiderait pas.
@@ -333,9 +333,9 @@ bibliothèque, puces et popovers compris (`FilterBar`) : la recherche, `+ Filtre
 et les puces, avec `Circuit`, `Voiture` et `Catégorie de circuit` épinglés en
 fantômes. Sept tokens : **circuit** (le layout, sous son nom ici, et le nombre
 de serveurs qui le font tourner), **voiture** (`ET` / `OU` entre deux),
-**catégorie de circuit** (celles de la bibliothèque — un circuit qu'elle n'a
-pas est inconnu, ni inclus ni exclu ; un circuit qu'elle a sans catégorie, lui,
-n'en a pas), **contenu** (`Kunos` : circuit et toutes les voitures officiels,
+**catégorie de circuit** (d'abord celles de la bibliothèque seule ; ses autres
+sources et la règle de l'inconnu sont venues ensuite, voir « Catégorie des
+circuits hors bibliothèque »), **contenu** (`Kunos` : circuit et toutes les voitures officiels,
 DLC compris, possédés ou non ; `Mods` : au moins un mod), **ping** (moins de
 60, 120 ou 200 ms), **pays** (drapeau et nom dans la langue de l'utilisateur)
 et **session en cours**. Chaque valeur s'inclut ou s'exclut comme à la
@@ -477,6 +477,43 @@ de partage de Content Manager (`https://acstuff.club/s/q:race/online/join?ip=…
 un ami l'ouvre avec CM depuis un navigateur ou une messagerie, ou le colle
 dans Pit Box. Sans mot de passe : celui de CM est chiffré et ne s'écrit pas
 ici ; il se donne à part.
+
+**Catégorie des circuits hors bibliothèque (livré, 2026-10-14).** La
+bibliothèque ne connaît qu'une petite partie des circuits du lobby (1 726 ids
+le 2026-10-11). La catégorie d'un serveur se résout donc dans cet ordre, la
+première source qui répond donnant celle du circuit :
+
+1. **ton choix**, fait dans le panneau : « Catégorie : inconnue · Choisir »
+   ouvre la liste fermée des catégories de circuit (l'allowlist des règles),
+   chacune se coche ou se décoche et s'enregistre aussitôt. Le choix est
+   rangé dans `overlay.sqlite` par id de circuit : il survit à l'installation
+   du circuit et passe avant ce qu'elle apportera. Tout décocher l'oublie.
+   « Modifier » remplace « Choisir » une fois un choix fait ; le choix reste
+   offert sur un circuit connu, pour corriger une source qui se trompe ;
+2. **la bibliothèque**, quand elle a le circuit avec au moins une catégorie (un
+   circuit qu'elle a sans catégorie ne dit rien : on passe à la suite) ;
+3. **le catalogue Pit Box** : la table `track_categories` de
+   `taxonomy-catalog.json` (id de circuit → catégories), avec sa surcouche
+   (REGLES§2), promouvable par `rules-tool` comme le reste du catalogue.
+
+Puis **les mots du serveur**, marqués « ≈ » : un mot-clé du **nom** du serveur,
+de sa **description** (ses détails étendus, donc dans le panneau seulement — la
+liste ne les a pas) ou de l'**id du circuit** annonce une catégorie, qui
+**s'ajoute** à celles du circuit. Table `server_keywords` du même catalogue,
+même surcouche ; au départ `drift` → Drift, `touge` → Touge, `traffic`,
+`cruise`, `freeroam` → Freeroam. Mots entiers, sans casse ni accents (un id
+`ek_akina_drift` en compte trois) ; un mot-clé précédé de « no » est ignoré
+(« No drift » n'annonce pas du drift). L'infobulle dit la catégorie, la source
+et le mot (« ≈ #drift, d'après le nom du serveur (« drift ») »).
+
+Les valeurs s'écrivent comme à la bibliothèque (`#drift`). Les choix voyagent
+avec l'export de la bibliothèque (`online_track_categories`, remplacée à
+l'import). Pour remplir le catalogue, `npm run online:tracks` (outil de
+développement, jamais livré) lit la dernière liste du lobby gardée sur disque
+et classe les ids de circuit par joueurs : serveurs, serveurs occupés, joueurs,
+et la couverture cumulée. Mesuré le 2026-10-11 (8 996 serveurs, 876 occupés,
+3 763 joueurs) : les **30** premiers ids couvrent 67 % des joueurs et 52 % des
+serveurs occupés, les **50** premiers 75 % et 60 %.
 
 **Restent** (2026-10-06) — la spec, v1 et v2, est faite ; ce qui suit est soit
 à voir à l'écran, soit écarté, soit une limite connue :

@@ -22,6 +22,7 @@
   import NotifyMe from "./NotifyMe.svelte";
   import ServerCountry from "./ServerCountry.svelte";
   import LevelTag from "./LevelTag.svelte";
+  import TrackCategory from "./TrackCategory.svelte";
   import { onlineStore, toggleFavouriteServer, toggleFriendName } from "$lib/online/store.svelte";
   import { previewSrc } from "$lib/library/library";
   import { shareLink } from "$lib/online/link";
@@ -229,6 +230,8 @@
       </span>
     {/if}
   </div>
+
+  <TrackCategory server={live} {looks} description={detail?.extended?.description ?? null} />
 
   <SessionTimeline server={live} />
 
