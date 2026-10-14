@@ -13,6 +13,7 @@ use serde::Serialize;
 
 use crate::config::AppConfig;
 
+pub mod categories;
 pub mod content;
 pub mod drivers;
 pub mod extended;

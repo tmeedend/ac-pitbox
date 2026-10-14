@@ -64,6 +64,15 @@ pub struct Rules {
     /// lowercased: the brand is read from the car's name (`brands.rs`).
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub not_brands: BTreeSet<String>,
+    /// Track id → its categories, for the tracks of the public servers one
+    /// does not own (Online, `online/categories.rs`). From the taxonomy
+    /// catalogue and overlay; `pitbox_catalog::taxonomy::category_list` reads
+    /// a value.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub online_track_categories: BTreeMap<String, String>,
+    /// A word of a server's name → the track category it announces (Online).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub online_keywords: BTreeMap<String, String>,
 }
 
 /// Comment un pays s'écrit, et le nom sous lequel on le range.
@@ -307,6 +316,8 @@ pub fn catalog_from(texts: &crate::catalog_update::CatalogTexts) -> Option<Rules
     r.car.extraction_country.map = t.country_tags;
     r.brand_aliases = t.brand_aliases;
     r.not_brands = t.not_brands;
+    r.online_track_categories = t.track_categories;
+    r.online_keywords = t.server_keywords;
     Some(r)
 }
 

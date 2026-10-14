@@ -23,6 +23,7 @@ fn every_listing_runs_on_a_fresh_database() {
     list_game_backups(&conn).expect("game_backups");
     list_all_layers(&conn).expect("all layers");
     list_all_subs(&conn).expect("all sub_mods");
+    list_chosen_track_categories(&conn).expect("online_track_categories");
     drop(base);
 }
 

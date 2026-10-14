@@ -241,6 +241,9 @@ export interface TaxonomyOverlay {
   /** Brand merges answered "Ignore", as `from → to` (TAXO§7.2). */
   ignored_brand_merges?: string[];
   not_brands?: SetOverlay;
+  /** Online: track id → categories, and server word → category. */
+  track_categories?: MapOverlay;
+  server_keywords?: MapOverlay;
 }
 
 /** Overlay of a set of names: added by the user, catalogue ones removed. */

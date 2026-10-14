@@ -329,6 +329,8 @@ pub fn run() {
             commands::addons::open_app_resource,
             commands::addons::open_app_folder,
             commands::online::online_servers,
+            commands::online::online_track_categories,
+            commands::online::choose_online_track_category,
             commands::online::online_server_detail,
             commands::online::online_join,
             commands::online::online_server_drivers,

@@ -203,6 +203,31 @@ fn config_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
     app.path().app_config_dir().map_err(|e| e.to_string())
 }
 
+/// What the page knows of track categories beyond the library
+/// (`online/categories.rs`): the vocabulary, the user's choices, the
+/// catalogue's tracks and keywords.
+#[tauri::command]
+pub fn online_track_categories(app: AppHandle, db: State<Db>) -> Result<online::categories::CategoryKnowledge, String> {
+    let rules = crate::rules::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    Ok(online::categories::knowledge(&conn, &rules))
+}
+
+/// Records the categories chosen for a track on the panel (none forgets the
+/// choice), and returns what the page now knows.
+#[tauri::command]
+pub fn choose_online_track_category(
+    app: AppHandle,
+    db: State<Db>,
+    track_id: String,
+    categories: Vec<String>,
+) -> Result<online::categories::CategoryKnowledge, String> {
+    let rules = crate::rules::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    online::categories::choose(&conn, &rules, &track_id, &categories)?;
+    Ok(online::categories::knowledge(&conn, &rules))
+}
+
 /// Favourites and recent joins (`online/store.rs`); an empty object when
 /// there are none yet.
 #[tauri::command]

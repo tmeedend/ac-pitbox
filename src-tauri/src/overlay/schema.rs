@@ -461,6 +461,16 @@ pub(super) fn init(conn: &Connection) -> rusqlite::Result<()> {
             PRIMARY KEY (mod_id, field)
         );
 
+        -- Track categories chosen on the Online page (SPEC-play-online.md),
+        -- by lowercase track id: a track one does not own has none
+        -- otherwise. Kept when the track is installed - a choice made by
+        -- hand comes first. `categories` is space-separated (`#drift #touge`).
+        CREATE TABLE IF NOT EXISTS online_track_categories (
+            track_id   TEXT PRIMARY KEY,
+            categories TEXT NOT NULL,
+            chosen_at  TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS wiki_no_match (
             mod_key      TEXT PRIMARY KEY,
             attempted_at TEXT NOT NULL

@@ -1,9 +1,11 @@
 //! Taxonomy tables of Pit Box in two layers (REGLES§2): the **catalogue** the
 //! application ships, and the user's **overlay** of decisions on top of it.
 //!
-//! Three tables: the category families, the country aliases (a spelling →
-//! the game's name) and the country tags (a tag → the country it gives a mod
-//! declaring none).
+//! The tables: the category families, the country aliases (a spelling →
+//! the game's name), the country tags (a tag → the country it gives a mod
+//! declaring none), the brand tables, and two for the Online page — the
+//! categories of tracks one does not own, and the words of a server's name
+//! that announce one (SPEC-play-online.md).
 //!
 //! ## Why two layers
 //!
@@ -77,6 +79,34 @@ pub struct TaxonomyTables {
     /// read from the car's name instead (`brands::from_name` in the app).
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub not_brands: BTreeSet<String>,
+    /// Track id (lowercased, the folder) → its track categories, for the
+    /// tracks of the public servers one does not own: the Online page's
+    /// category filter knows them otherwise only from the library. The value
+    /// lists categories of the rules' allowlist, separated by spaces or
+    /// commas (`"#drift #touge"`): a string, so the table is a plain map like
+    /// the others - overlay, merge, promotion and update report come as is.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub track_categories: BTreeMap<String, String>,
+    /// A word of a server's name or description (lowercased) → the track
+    /// category it announces (`drift` → `#drift`). A key of several words is
+    /// a phrase, matched as one. What the
+    /// Online page reads where neither the library nor the table above knows
+    /// the track.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub server_keywords: BTreeMap<String, String>,
+}
+
+/// The categories of a `track_categories` value: `#`-prefixed, lowercased,
+/// in their order, without repeats.
+pub fn category_list(value: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for c in value.split(|ch: char| ch == ',' || ch.is_whitespace()) {
+        let c = c.trim().trim_start_matches('#').to_lowercase();
+        if !c.is_empty() && !out.iter().any(|o| o[1..] == c) {
+            out.push(format!("#{c}"));
+        }
+    }
+    out
 }
 
 /// Overlay of a `key → value` table (country aliases, country tags).
@@ -361,6 +391,10 @@ pub struct TaxonomyOverlay {
     pub ignored_brand_merges: Vec<String>,
     #[serde(default, skip_serializing_if = "SetOverlay::is_empty")]
     pub not_brands: SetOverlay,
+    #[serde(default, skip_serializing_if = "MapOverlay::is_empty")]
+    pub track_categories: MapOverlay,
+    #[serde(default, skip_serializing_if = "MapOverlay::is_empty")]
+    pub server_keywords: MapOverlay,
 }
 
 impl TaxonomyOverlay {
@@ -389,6 +423,8 @@ impl TaxonomyOverlay {
             brand_aliases: self.brand_aliases.normalized(&catalog.brand_aliases),
             ignored_brand_merges: ignored_merges,
             not_brands: self.not_brands.normalized(&catalog.not_brands),
+            track_categories: self.track_categories.normalized(&catalog.track_categories),
+            server_keywords: self.server_keywords.normalized(&catalog.server_keywords),
         }
     }
 
@@ -399,7 +435,9 @@ impl TaxonomyOverlay {
             && self.country_aliases.is_empty()
             && self.country_tags.is_empty()
             && self.brand_aliases.is_empty()
-            && self.not_brands.is_empty())
+            && self.not_brands.is_empty()
+            && self.track_categories.is_empty()
+            && self.server_keywords.is_empty())
     }
 }
 
@@ -412,6 +450,8 @@ impl TaxonomyTables {
             country_tags: o.country_tags.apply(&self.country_tags),
             brand_aliases: o.brand_aliases.apply(&self.brand_aliases),
             not_brands: o.not_brands.apply(&self.not_brands),
+            track_categories: o.track_categories.apply(&self.track_categories),
+            server_keywords: o.server_keywords.apply(&self.server_keywords),
         }
     }
 }
@@ -484,7 +524,7 @@ mod tests {
             country_aliases: map(&[("usa", "United States")]),
             country_tags: BTreeMap::new(),
             brand_aliases: map(&[("alfa", "Alfa Romeo")]),
-            not_brands: BTreeSet::new(),
+            ..Default::default()
         };
         let mut o = TaxonomyOverlay::default();
         o.brand_aliases.set.insert("ALFA".into(), "Alfa Romeo".into());
@@ -532,5 +572,39 @@ mod tests {
         );
         let old: TaxonomyOverlay = serde_json::from_str(r#"{"format":1,"families":{}}"#).unwrap();
         assert!(old.not_brands.is_empty(), "an older taxonomy.json reads as no decision");
+    }
+
+    /// The Online tables are maps in two layers like the others: a catalogue
+    /// written before them reads as empty tables, an overlay too, and the
+    /// user's entry wins over the catalogue's.
+    #[test]
+    fn the_online_tables_are_maps_in_two_layers() {
+        let old: TaxonomyTables = serde_json::from_str(r#"{"families":[],"not_brands":["traffic"]}"#).unwrap();
+        assert!(
+            old.track_categories.is_empty() && old.server_keywords.is_empty(),
+            "an older catalogue"
+        );
+        let catalog = TaxonomyTables {
+            track_categories: map(&[("pk_akina", "#touge"), ("spa", "#circuit")]),
+            server_keywords: map(&[("drift", "#drift")]),
+            ..Default::default()
+        };
+        let mut o: TaxonomyOverlay = serde_json::from_str(r#"{"format":1}"#).unwrap();
+        o.track_categories
+            .set
+            .insert(" PK_Akina ".into(), "#touge #drift".into());
+        o.server_keywords.removed.insert("drift".into());
+        let o = o.normalized(&catalog);
+        let t = catalog.apply(&o);
+        assert_eq!(t.track_categories["pk_akina"], "#touge #drift", "the user's entry wins");
+        assert_eq!(t.track_categories["spa"], "#circuit", "the catalogue's stays");
+        assert!(t.server_keywords.is_empty(), "a tombstone holds");
+        assert!(o.has_decisions());
+    }
+
+    #[test]
+    fn a_category_list_reads_spaces_commas_and_missing_hashes() {
+        assert_eq!(category_list("#Drift, touge  #drift"), vec!["#drift", "#touge"]);
+        assert!(category_list(" , ").is_empty());
     }
 }

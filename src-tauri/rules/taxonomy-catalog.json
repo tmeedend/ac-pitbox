@@ -243,5 +243,12 @@
     "wsc legends",
     "wsc60 legends",
     "wsc69 legends"
-  ]
+  ],
+  "server_keywords": {
+    "cruise": "#freeroam",
+    "drift": "#drift",
+    "freeroam": "#freeroam",
+    "touge": "#touge",
+    "traffic": "#freeroam"
+  }
 }

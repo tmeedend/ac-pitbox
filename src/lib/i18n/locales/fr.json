@@ -2135,7 +2135,9 @@
       "country_alias": "Orthographe de pays",
       "country_tag": "Tag de pays",
       "brand_alias": "Orthographe de marque",
-      "not_brand": "Pas une marque"
+      "not_brand": "Pas une marque",
+      "online_track_category": "Catégorie d'un circuit (Online)",
+      "server_keyword": "Mot-clé de serveur (Online)"
     },
     "disable": "Désactiver",
     "enable": "Réactiver"
