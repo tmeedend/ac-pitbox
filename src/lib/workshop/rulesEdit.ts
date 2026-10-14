@@ -6,6 +6,7 @@
 // Every function returns a new overlay; the backend normalises what it
 // receives (ids of new rules, origin of new forks), so the screen never has to
 // invent an id nor fingerprint a rule.
+import { categoryTag } from "$lib/library/trackCategoryNames";
 import type {
   BrandFix,
   ClassFix,
@@ -130,12 +131,6 @@ export function isDeletable(row: RuleRow<AnyRule>): boolean {
 
 // --- The track categories allowlist ------------------------------------------
 
-/** `Hillclimb ` → `#hillclimb`. */
-export function normCategory(s: string): string {
-  const v = s.trim().toLowerCase().replace(/^#+/, "");
-  return v ? `#${v}` : "";
-}
-
 function order(o: RulesOverlay) {
   const t = (o.track_categories ??= {});
   t.removed ??= [];
@@ -155,7 +150,7 @@ export function setCategoryOn(o: RulesOverlay, name: string, on: boolean): Rules
 /** Adds a category; one the catalogue ships and he had removed comes back
  * instead of being added twice. */
 export function addCategory(o: RulesOverlay, raw: string, shipped: string[]): RulesOverlay {
-  const name = normCategory(raw);
+  const name = categoryTag(raw);
   if (!name) return o;
   const out = clone(o);
   const t = order(out);
