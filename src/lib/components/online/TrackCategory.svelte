@@ -71,14 +71,14 @@
 <div class="category">
   <span class="lbl-key">{t("online.category")}</span>
   {#if cats.base.length}
-    <Tooltip text={t(SOURCE_KEYS[cats.source ?? "library"])} align="left">
+    <Tooltip text={t(SOURCE_KEYS[cats.source ?? "library"])} align="left" side="bottom">
       <span class="values mono">{cats.base.join(" ")}</span>
     </Tooltip>
   {:else if !cats.hints.length}
     <span class="unknown">{t("online.categoryUnknown")}</span>
   {/if}
   {#each cats.hints as h (h.category)}
-    <Tooltip text={hintText(h)} align="left">
+    <Tooltip text={hintText(h)} align="left" side="bottom">
       <span class="hint mono">≈ {h.category}</span>
     </Tooltip>
   {/each}
@@ -115,7 +115,7 @@
     color: var(--txt2);
   }
   .unknown {
-    color: var(--faint);
+    color: var(--muted2);
   }
   .hint {
     color: var(--muted);
@@ -136,7 +136,11 @@
     padding: 0 16px 10px;
   }
   .picker .pill {
+    background: none;
     cursor: pointer;
+  }
+  .picker .pill:hover {
+    color: var(--txt2);
   }
   .picker .pill.on {
     border-color: var(--blue-border);

@@ -122,33 +122,42 @@ export class ServerFilter {
     return searchServers(tab === "all" ? servers : tabServers(tab, servers, store, friends), this.search, text);
   });
 
-  /** Every filter but the ping: the servers a ping token has to measure. */
-  readonly #unpinged = $derived.by(() => {
-    const tokensOk = tokenPredicate(this.defs, splitPing(this.tokens).rest, this.#ctx);
-    const kept = this.#searched.filter(tokensOk);
+  /** An included category: the servers of unknown category are left out. */
+  readonly #categoryIncluded = $derived.by(() => {
+    const st = this.tokens[CATEGORY_KEY];
+    return st?.type === "val" && st.values.some((v) => v.sign > 0);
+  });
+
+  /** Every filter but the ping, the servers of unknown category let through:
+   * what a ping token has to measure, so that the line under the list counts
+   * them as the list would show them. */
+  readonly #loose = $derived.by(() => {
+    const ctx = { ...this.#ctx, showUnknownCategories: true };
+    const kept = this.#searched.filter(tokenPredicate(this.defs, splitPing(this.tokens).rest, ctx));
     return this.#host.tab === "all" ? sortServers(kept, new Set(Object.keys(this.#host.friends))) : kept;
   });
 
-  /** Servers an included category leaves out only because theirs is
-   * unknown — shown or not: what the line under the list counts. 0 without
-   * such a chip. Counted before the ping, which measures as it goes. */
-  readonly unknownCount = $derived.by(() => {
-    const st = this.tokens[CATEGORY_KEY];
-    if (!(st?.type === "val" && st.values.some((v) => v.sign > 0))) return 0;
-    const { rest } = splitPing(this.tokens);
-    const count = (showUnknownCategories: boolean) =>
-      this.#searched.filter(tokenPredicate(this.defs, rest, { ...this.#ctx, showUnknownCategories })).length;
-    return count(true) - count(false);
+  /** The same with the unknown categories left out, as an included category
+   * wants. Filtered from `#loose`, whose order it keeps. */
+  readonly #strict = $derived.by(() => {
+    if (!this.#categoryIncluded) return this.#loose;
+    const ctx = { ...this.#ctx, showUnknownCategories: false };
+    return this.#loose.filter(tokenPredicate(this.defs, splitPing(this.tokens).rest, ctx));
   });
 
   readonly #wantsPing = $derived(asksPing(this.tokens));
+  readonly #pingOk = $derived(tokenPredicate(this.defs, splitPing(this.tokens).ping, this.#ctx));
+  readonly #withPing = (list: ServerSummary[]) => (this.#wantsPing ? list.filter(this.#pingOk) : list);
+
+  /** Servers an included category leaves out only because theirs is
+   * unknown — shown or not: what the line under the list counts. 0 without
+   * such a chip. */
+  readonly unknownCount = $derived.by(() =>
+    this.#categoryIncluded ? this.#withPing(this.#loose).length - this.#withPing(this.#strict).length : 0,
+  );
 
   /** The servers to show, in the default order (friends, joinable, players). */
-  readonly shown = $derived.by(() => {
-    if (!this.#wantsPing) return this.#unpinged;
-    const pingOk = tokenPredicate(this.defs, splitPing(this.tokens).ping, this.#ctx);
-    return this.#unpinged.filter(pingOk);
-  });
+  readonly shown = $derived(this.#withPing(this.showUnknownCategories ? this.#loose : this.#strict));
 
   /** Servers the ping sweep has yet to ask, 0 without a ping token. */
   readonly measuring = $derived(this.#wantsPing ? pingsLeft() : 0);
@@ -194,13 +203,15 @@ export class ServerFilter {
   /**
    * Starts the ping sweep for the life of the calling component — to call
    * during its initialisation. A ping token cannot keep a server it has not
-   * measured: the candidates are measured, top of the list first, and show as
+   * measured: the candidates are measured — those of unknown category an
+   * included one leaves out too, for the line under the list to count them
+   * truly —, top of the list first, and show as
    * they answer. It waits for the typing to settle, like the visible rows
    * wait for the scroll, and stops with the page: nobody reads the list then.
    */
   sweepPings(): void {
     $effect(() => {
-      const list = this.#unpinged;
+      const list = this.#loose;
       if (!this.#wantsPing) {
         stopMeasuring();
         return;
