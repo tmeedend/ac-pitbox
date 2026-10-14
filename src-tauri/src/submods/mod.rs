@@ -315,13 +315,23 @@ fn record_sub(
 /// lose the rest of a pack. Hence the `log::warn!` — on a packaged build there
 /// is no console to catch it otherwise.
 fn redeploy_host(conn: &Connection, cfg: &AppConfig, parent_id: &str) {
-    let managed = matches!(overlay::get_mod(conn, parent_id), Ok(Some(m)) if !m.is_stock);
-    if !managed {
-        return;
-    }
-    if let Err(e) = crate::compose::recompose(conn, cfg, parent_id) {
+    if let Err(e) = try_redeploy_host(conn, cfg, parent_id) {
         log::warn!("redeploy_host {parent_id}: {e}");
     }
+}
+
+/// [`redeploy_host`] for a caller that must report the failure rather than
+/// log it: a gesture of the user whose whole point is what the game gets.
+/// A stock host is left alone — its folder in `content/` is the game's own,
+/// a change made to it is already there.
+fn try_redeploy_host(conn: &Connection, cfg: &AppConfig, parent_id: &str) -> Result<(), String> {
+    let managed = overlay::get_mod(conn, parent_id)
+        .map_err(|e| e.to_string())?
+        .is_some_and(|m| !m.is_stock);
+    if managed {
+        crate::compose::recompose(conn, cfg, parent_id)?;
+    }
+    Ok(())
 }
 
 fn parent_skins_dir(conn: &Connection, cfg: &AppConfig, parent_id: &str) -> Option<PathBuf> {
