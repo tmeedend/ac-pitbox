@@ -329,19 +329,21 @@ mod tests {
     use crate::modscan;
     use crate::submods::import_subs;
     use chrono::Local;
-    #[test]
-    fn sound_swap_and_restore() {
-        let base = crate::testutil::temp_dir("snd");
+    /// A managed car `snd_car` (version `v1`, original sound in its `sfx/`)
+    /// and a sound mod `s1` for it, stored apart in the library. The AC
+    /// install is configured, the car is not deployed.
+    fn car_with_sound(tag: &str) -> (crate::testutil::TempDir, PathBuf, Connection, AppConfig) {
+        let base = crate::testutil::temp_dir(tag);
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
         let cfg = AppConfig {
             library_path: Some(library.clone()),
+            ac_install_path: Some(base.join("ac")),
             ..Default::default()
         };
         let now = Local::now().to_rfc3339();
 
-        // Voiture (mod) avec son d'origine dans sfx/.
         let carv = library.join("cars").join("snd_car").join("v1");
         let sfx = carv.join("sfx");
         std::fs::create_dir_all(&sfx).unwrap();
@@ -367,7 +369,6 @@ mod tests {
         .unwrap();
         overlay::set_active_version(&conn, "snd_car", "v1").unwrap();
 
-        // Mod de son stocké à part.
         let snd = library.join("sounds").join("snd_car").join("v8");
         std::fs::create_dir_all(&snd).unwrap();
         std::fs::write(snd.join("GUIDs.txt"), b"MOD").unwrap();
@@ -383,6 +384,13 @@ mod tests {
             &now,
         )
         .unwrap();
+        (base, library, conn, cfg)
+    }
+
+    #[test]
+    fn sound_swap_and_restore() {
+        let (_base, library, conn, cfg) = car_with_sound("snd");
+        let sfx = library.join("cars").join("snd_car").join("v1").join("sfx");
 
         // Activation : sfx remplacé, original sauvegardé, sub actif.
         activate_sound(&conn, &cfg, "s1").unwrap();
