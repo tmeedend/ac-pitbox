@@ -98,6 +98,12 @@ export interface FilterDef {
    */
   logos?: boolean;
   /**
+   * The values are track categories (`#drift`), drawn with their pictogram
+   * and named as the user named them (`trackCategoryTable.svelte.ts`). The
+   * name is set by the screen (`withTrackCategoryLabels`), like a country's.
+   */
+  categoryIcons?: boolean;
+  /**
    * The filter offers the "carries none" value (`UNSET_VALUE`), under this
    * label. Only where the gap is worth seeing: a track without a country is a
    * hole in the data one may want to fill, and the index shows it as a tile.
@@ -140,7 +146,16 @@ export function filterDefs(kind: ModKind, families: CategoryFamily[] = []): Filt
   const defs: FilterDef[] = [
     // A track carries SEVERAL categories, a car exactly one: the operator is
     // only offered where an AND can ever match.
-    { key: "category", labelKey: "library.filterCategory", type: "val", operator: !isCar },
+    {
+      key: "category",
+      labelKey: "library.filterCategory",
+      type: "val",
+      operator: !isCar,
+      // A track's categories are a closed list with pictograms, and a track
+      // without one is a hole worth a tile of the index (INDEX§5.2). A car's
+      // category is Content Manager's free first tag: neither applies.
+      ...(isCar ? {} : { categoryIcons: true, unsetLabelKey: "index.unclassified" }),
+    },
   ];
   // Families (INDEX§6.1) are a filter of their OWN, next to `category`
   // and not in its place. `category` is the car's first `#` tag - Content

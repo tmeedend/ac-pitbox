@@ -2001,6 +2001,8 @@
     "addKeyword": "Add a keyword"
   },
   "index": {
+    "byCategory": "Browse by category",
+    "categoriesOverlap": "A track can have several categories",
     "byCountry": "Browse by country",
     "byFamily": "Browse by family",
     "byBrand": "Browse by brand",

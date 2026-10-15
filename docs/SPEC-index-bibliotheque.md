@@ -109,7 +109,7 @@ Elle se comporte comme les autres : elle pose une puce.
 
 # 5. Écran Circuits
 
-Un seul index : **par pays**.
+Deux index empilés, **dans cet ordre** : catégories (§5.2), puis pays.
 
 ```
 Parcourir par pays            21 pays représentés        [ Voir tous les circuits ]
@@ -127,11 +127,19 @@ Parcourir par pays            21 pays représentés        [ Voir tous les circu
 
 ## 5.1 Voir tous les circuits
 
-Lien en tête de section, aligné à droite. **Obligatoire** : personne ne doit être forcé de passer par un pays pour chercher Spa.
+Lien en tête de la **première** section, aligné à droite — celle des catégories quand il y en a, sinon celle des pays : c'est la sortie de l'index, elle ne doit pas tomber sous la ligne de flottaison. **Obligatoire** : personne ne doit être forcé de passer par un pays pour chercher Spa.
 
 Il n'ajoute aucune puce — il bascule simplement en vue liste, sans filtre. Techniquement, c'est le seul chemin vers la liste complète qui ne passe pas par une puce ; il mérite donc son propre état, distinct de « index » et de « liste filtrée ».
 
 Dans cette vue, le drapeau du surtitre de chaque carte devient une information réelle, puisque les pays se mélangent.
+
+## 5.2 Parcourir par catégorie
+
+Une tuile par catégorie de circuit : son pictogramme (TAXO§3.3), son nom tel que Familles › Circuits le donne (TAXO§6.4), et le nombre de circuits qui la portent. Ordre par nombre décroissant, comme les familles de voitures ; tuile `Non classé` en pointillés à la fin (§4.3), pour les circuits qui n'en portent aucune.
+
+Une tuile pose la puce **Catégorie**, multi-valuée pour les circuits, avec l'opérateur ET/OU déjà en place (§7). Les décomptes ne s'additionnent pas — un circuit peut être à la fois circuit et drift —, et le sous-titre de la section le dit, comme pour les familles.
+
+Les pictogrammes apparaissent aussi dans l'éditeur du filtre Catégorie, à côté de chaque valeur, et dans une puce qui ne porte qu'une catégorie ; au-delà d'une, la puce n'aligne que les noms (même règle que les logos de marque, TAXO§10). Le filtre « Track category » de la page Online fait de même.
 
 ---
 

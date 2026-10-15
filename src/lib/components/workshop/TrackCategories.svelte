@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The track half of Classement › Families (TAXO§6.3): the closed vocabulary
+  // The track half of Classement › Families (TAXO§6.4): the closed vocabulary
   // of track categories, out of the Rules tab - it is a list of terms, not a
   // heuristic, the same reason brands and countries have their own tab. The
   // Rules tab keeps the merge rules that PRODUCE these categories; each row

@@ -10,16 +10,18 @@
   // index back for the same reason — there is no "back to the index" button,
   // and there must not be one.
   //
-  // Tracks get ONE index, by country: a circuit is its place. Cars get two,
-  // families then brands, and deliberately no country (INDEX§6.3): three
-  // stacked grids are the wall again, and "Japan" on a car only says less well
-  // what `#jdm` says.
+  // Tracks get two, categories then countries (INDEX§5.2): what kind of
+  // driving, then where - a circuit is also its place. Cars get two, families
+  // then brands, and deliberately no country (INDEX§6.3): three stacked grids
+  // are the wall again, and "Japan" on a car only says less well what `#jdm`
+  // says.
   import { flagFor, loadFlags } from "$lib/flags.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { brandTiles, indexTiles, initials, tilesByName, type IndexTile } from "$lib/library/browseIndex";
   import type { CategoryFamily } from "$lib/library/families";
   import { familyIcon, NEUTRAL_ICON } from "$lib/library/familyIcons";
   import Emblem from "$lib/components/ui/Emblem.svelte";
+  import TrackCategoryIcon from "./TrackCategoryIcon.svelte";
   import type { FilterOption } from "$lib/library/filters";
   import type { ModKind } from "$lib/library/library";
 
@@ -52,6 +54,7 @@
   // and the count order scattered the list.
   const countries = $derived(isCar ? [] : tilesByName(indexTiles(optionsFor("country"))));
   const familyTiles = $derived(isCar && families.length ? indexTiles(optionsFor("family")) : []);
+  const categoryTiles = $derived(isCar ? [] : indexTiles(optionsFor("category")));
   /** Not remembered, on purpose (INDEX§6.2): folded again next time. */
   let allBrands = $state(false);
   const brandAll = $derived(isCar ? indexTiles(optionsFor("brand")) : []);
@@ -88,7 +91,7 @@
 <!-- The emblem kind is NOT a class of the tile: `flag` is also the class of
      the flag itself, and the tile took its 44×29 box and `overflow: hidden` -
      a squashed tile showing only its count. -->
-{#snippet tile(key: string, tl: IndexTile, emblem: "flag" | "family" | "brand")}
+{#snippet tile(key: string, tl: IndexTile, emblem: "flag" | "family" | "category" | "brand")}
   <!-- The label comes translated from the filter itself (a country through
        `withCountryLabels`, INDEX§11), so the tile and its chip say the same
        name. -->
@@ -109,6 +112,8 @@
       </span>
     {:else if emblem === "family"}
       <svg class="ico" viewBox="0 0 120 52" aria-hidden="true">{@html tl.unset ? NEUTRAL_ICON : iconOf(tl.value)}</svg>
+    {:else if emblem === "category"}
+      <span class="cat"><TrackCategoryIcon icon={tl.unset ? "" : undefined} tag={tl.value} /></span>
     {:else}
       {@const logo = badgeOf(tl.value)}
       <span class="logo">
@@ -122,11 +127,29 @@
 
 <div class="index">
   {#if !isCar}
+    <!-- "See all tracks" sits on the first section: it is the way out of the
+         index, and it must not fall below the fold. -->
+    {#if categoryTiles.length}
+      <section class="sect">
+        <div class="sh">
+          <h2 class="lbl">{t("index.byCategory")}</h2>
+          <!-- Same warning as the families: a track can be a circuit AND a
+               drift track, the counts do not add up. -->
+          <span class="s">{t("index.categoriesOverlap")}</span>
+          <button type="button" class="more" onclick={onshowall}>{t("index.allTracks")}</button>
+        </div>
+        <div class="tiles families">
+          {#each categoryTiles as tl (tl.value)}{@render tile("category", tl, "category")}{/each}
+        </div>
+      </section>
+    {/if}
     <section class="sect">
       <div class="sh">
         <h2 class="lbl">{t("index.byCountry")}</h2>
         <span class="s">{t("index.countries", { count: countries.filter((c) => !c.unset).length })}</span>
-        <button type="button" class="more" onclick={onshowall}>{t("index.allTracks")}</button>
+        {#if !categoryTiles.length}
+          <button type="button" class="more" onclick={onshowall}>{t("index.allTracks")}</button>
+        {/if}
       </div>
       <div class="tiles countries">
         {#each countries as tl (tl.value)}{@render tile("country", tl, "flag")}{/each}
@@ -325,6 +348,19 @@
   .ico :global(.cut) {
     fill: var(--tile-bg);
     transition: fill 0.12s;
+  }
+  /* A track category's pictogram: the same 34 px and the same greys as the
+     families' silhouettes. */
+  .cat {
+    display: flex;
+    color: var(--txt2);
+    transition: color 0.12s;
+  }
+  .tile:hover .cat {
+    color: var(--txt);
+  }
+  .tile.unset .cat {
+    color: var(--faint);
   }
   .ico :global(.smoke) {
     fill: none;

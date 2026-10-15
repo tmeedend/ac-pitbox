@@ -2001,6 +2001,8 @@
     "addKeyword": "Ajouter un mot-clé"
   },
   "index": {
+    "byCategory": "Parcourir par catégorie",
+    "categoriesOverlap": "Un circuit peut avoir plusieurs catégories",
     "byCountry": "Parcourir par pays",
     "byFamily": "Parcourir par famille",
     "byBrand": "Parcourir par marque",

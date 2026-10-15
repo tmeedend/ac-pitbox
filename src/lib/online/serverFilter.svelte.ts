@@ -18,6 +18,7 @@ import { serverKey, type ServerSummary } from "./online";
 import { measureAll, pingOf, pingsLeft, stopMeasuring } from "./pings.svelte";
 import { filterCategories, serverCategories } from "./categories";
 import { trackCategories } from "./trackCategories.svelte";
+import { withTrackCategoryLabels } from "$lib/library/trackCategoryTable.svelte";
 import {
   asksPing,
   BOOL_KEYS,
@@ -80,14 +81,16 @@ export class ServerFilter {
    * servers stay listed full, locked or empty — that is when one looks for
    * them. */
   readonly defs = $derived.by(() =>
-    withCountryLabels(
-      onlineTokenDefs(
-        {
-          track: (v) => this.#trackNames[v] ?? v,
-          car: (v) => carName(this.#host.looks, v),
-          ping: (v) => t("online.pingUnder", { ms: v }),
-        },
-        this.#host.tab === "all",
+    withTrackCategoryLabels(
+      withCountryLabels(
+        onlineTokenDefs(
+          {
+            track: (v) => this.#trackNames[v] ?? v,
+            car: (v) => carName(this.#host.looks, v),
+            ping: (v) => t("online.pingUnder", { ms: v }),
+          },
+          this.#host.tab === "all",
+        ),
       ),
     ),
   );

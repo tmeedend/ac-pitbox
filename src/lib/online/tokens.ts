@@ -81,7 +81,7 @@ export function onlineTokenDefs(labels: TokenLabels = {}, bools = true): FilterD
     // A server carries several cars and a track several categories: the
     // operator is offered where an AND can match.
     { key: CAR_KEY, labelKey: "online.filterCar", type: "val", operator: true, labelOf: labels.car },
-    { key: CATEGORY_KEY, labelKey: "online.filterTrackCategory", type: "val", operator: true },
+    { key: CATEGORY_KEY, labelKey: "online.filterTrackCategory", type: "val", operator: true, categoryIcons: true },
     {
       key: CONTENT_KEY,
       labelKey: "online.filterContent",

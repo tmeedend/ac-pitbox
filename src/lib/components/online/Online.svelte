@@ -28,6 +28,7 @@
   import { pendingOnlineIntent, takeOnlineIntent, type OnlineIntent } from "$lib/online/intent.svelte";
   import { ServerFilter } from "$lib/online/serverFilter.svelte";
   import { loadTrackCategories } from "$lib/online/trackCategories.svelte";
+  import { loadTrackCategoryLooks } from "$lib/library/trackCategoryTable.svelte";
   import { FriendsScan } from "$lib/online/friendsScan.svelte";
   import OnlineToolbar from "./OnlineToolbar.svelte";
   import ServerTable from "./ServerTable.svelte";
@@ -144,8 +145,10 @@
   }
 
   onMount(async () => {
-    // Not awaited: the list filters on the library until it answers.
+    // Not awaited: the list filters on the library until it answers, and
+    // names the categories as shipped until their names come.
     void loadTrackCategories();
+    void loadTrackCategoryLooks();
     const [savedFilters, savedTab, savedGrouped, savedColumns] = await Promise.all([
       getUiPref(StorageKey.onlineFilters),
       getUiPref(StorageKey.onlineTab),

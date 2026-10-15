@@ -47,3 +47,12 @@ export function trackCategoryIconId(tag: string): string {
 export function trackCategoryGlyph(tag: string): string {
   return trackCategoryIcon(trackCategoryIconId(tag));
 }
+
+/** Names the values of the filters that carry track categories (the
+ * library's Category, the Online page's Track category), like
+ * `withCountryLabels` names countries. The stored value stays the tag. */
+export function withTrackCategoryLabels<D extends { categoryIcons?: boolean; labelOf?: (v: string) => string }>(
+  defs: D[],
+): D[] {
+  return defs.map((d) => (d.categoryIcons ? { ...d, labelOf: trackCategoryName } : d));
+}

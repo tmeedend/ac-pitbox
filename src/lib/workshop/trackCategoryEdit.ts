@@ -1,4 +1,4 @@
-// Families › Tracks (TAXO§6.3): what the tab computes and what its gestures
+// Families › Tracks (TAXO§6.4): what the tab computes and what its gestures
 // decide, as pure functions - the component only lays them out.
 //
 // A track category lives in three places, and each gesture writes to the one
