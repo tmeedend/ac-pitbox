@@ -352,7 +352,7 @@
     <div class="foot">
       <input
         class="input"
-        placeholder={t("categories.newPlaceholder")}
+        placeholder={t("trackCats.newPlaceholder")}
         bind:value={newName}
         onkeydown={(e) => e.key === "Enter" && create()}
       />
