@@ -26,6 +26,7 @@
   // Saving re-applies to the whole library, like the Countries tab: the brand
   // is decided at write time. Same write queue, failures shown and logged
   // (CLAUDE.md rule 6).
+  import Switch from "$lib/components/ui/Switch.svelte";
   import { onMount, tick } from "svelte";
   import { brandFocus } from "$lib/workshop/brandFocus.svelte";
   import { scrollIntoContainer } from "$lib/shell/shellScroll";
@@ -479,17 +480,13 @@
                   <div class="name-rules">
                     {#each rulesHere as nr (nr.rule.id)}
                       <div class="name-rule" class:off={nr.disabled}>
-                        <button
-                          type="button"
-                          class="switch"
-                          role="switch"
-                          aria-checked={!nr.disabled}
-                          aria-label={t("rules.enabled")}
+                        <Switch
+                          on={!nr.disabled}
+                          label={t("rules.enabled")}
                           disabled={busy || !rulesView}
                           onclick={() =>
                             rulesView && commitRules(setEnabled(rulesView.overlay, "brand_fix", nr.rule.id ?? "", nr.disabled))}
-                          ><span></span></button
-                        >
+                        />
                         <span class="tok">{nr.rule.name_contains}</span>
                         {#if nr.origin !== "own"}<span class="badge">{t("rules.badgeCatalog")}</span>{/if}
                         <span class="nr-count mono">{nr.effect ? carsText(nr.effect) : "—"}</span>
@@ -860,35 +857,6 @@
     color: var(--muted);
   }
   /* The Rules screen's switch and badge (REGLES§12), same values. */
-  .switch {
-    flex: none;
-    width: 26px;
-    height: 14px;
-    padding: 0;
-    border: 1px solid var(--faint);
-    border-radius: 8px;
-    background: var(--panel2);
-    position: relative;
-    cursor: pointer;
-  }
-  .switch span {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--muted2);
-    transition: left 0.12s;
-  }
-  .switch[aria-checked="true"] {
-    border-color: var(--muted);
-    background: var(--mat);
-  }
-  .switch[aria-checked="true"] span {
-    left: 14px;
-    background: var(--txt);
-  }
   .badge {
     font-size: 9px;
     letter-spacing: 0.12em;
