@@ -51,9 +51,16 @@ pub struct Looks {
 
 impl Looks {
     /// Reads the looks of `cars` and `tracks` (lowercase ids) that the library
-    /// holds. A library that cannot be read gives no looks, logged: the list
+    /// holds, and CSP's name of every track of `named` the library does not
+    /// hold. A library that cannot be read gives no looks, logged: the list
     /// still works on ids.
-    pub fn scan(conn: &Connection, cfg: &AppConfig, cars: &HashSet<String>, tracks: &HashSet<String>) -> Self {
+    pub fn scan(
+        conn: &Connection,
+        cfg: &AppConfig,
+        cars: &HashSet<String>,
+        tracks: &HashSet<String>,
+        named: &HashSet<String>,
+    ) -> Self {
         let mut looks = Self::default();
         let mods = match crate::overlay::list_mods(conn) {
             Ok(mods) => mods,
@@ -100,12 +107,49 @@ impl Looks {
         }
         if let Some(ac) = cfg.ac_install_path.as_deref() {
             let mut names = crate::sun::track_names(ac);
-            for id in tracks.iter().filter(|id| !looks.tracks.contains_key(*id)) {
+            for id in named.iter().filter(|id| !looks.tracks.contains_key(*id)) {
                 if let Some(name) = names.remove(id) {
                     looks.track_names.insert(id.clone(), name);
                 }
             }
         }
         looks
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // SPEC-play-online, "Vignette d'un circuit non installé": a track the
+    // library does not hold is named by CSP's table - whether it can be
+    // driven or not -, never given a picture here.
+    #[test]
+    fn a_track_the_library_lacks_takes_csp_name() {
+        let base = crate::testutil::temp_dir("looks-csp");
+        let config = base.join("ac").join("extension").join("config");
+        std::fs::create_dir_all(&config).unwrap();
+        std::fs::write(
+            config.join("data_track_params.ini"),
+            "[pk_akina]
+LATITUDE=36.4
+NAME=PK Akina
+",
+        )
+        .unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            ac_install_path: Some(base.join("ac")),
+            ..Default::default()
+        };
+        let none = HashSet::new();
+        let named = HashSet::from(["pk_akina".to_string(), "nohesi_415".to_string()]);
+        let looks = Looks::scan(&conn, &cfg, &none, &none, &named);
+        assert_eq!(looks.track_names.get("pk_akina").map(String::as_str), Some("PK Akina"));
+        assert!(
+            !looks.track_names.contains_key("nohesi_415"),
+            "a track no table names keeps its id"
+        );
+        assert!(looks.tracks.is_empty(), "no picture without the library");
     }
 }

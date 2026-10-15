@@ -54,7 +54,10 @@ pub fn judge_list(conn: &Connection, cfg: &AppConfig, mut servers: Vec<lobby::Se
         installed.judge(server);
     }
     let (cars, tracks) = referenced(&servers);
-    let looks = Looks::scan(conn, cfg, &cars, &tracks);
+    // Every track gets a name, the ones that cannot be driven included: a
+    // name costs no folder, only a line of CSP's table.
+    let named: HashSet<String> = servers.iter().map(|s| s.track.id.to_lowercase()).collect();
+    let looks = Looks::scan(conn, cfg, &cars, &tracks, &named);
     ServerList {
         servers,
         looks,
