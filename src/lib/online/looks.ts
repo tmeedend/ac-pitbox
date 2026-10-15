@@ -51,12 +51,15 @@ export function trackName(looks: Looks, track: TrackRef): string {
  * `main_layout`. A layout's `ui_track.json` usually repeats the track
  * ("Shutoko Revival Project 0.9.3 - Main Layout"): the repetition goes. A
  * single-layout track has none; a layout the library does not know keeps its
- * folder, the only name there is.
+ * folder, the only name there is - unless the folder is the track's own.
  */
 export function layoutName(looks: Looks, track: TrackRef): string | null {
   if (!track.layout) return null;
   const name = layoutLook(looks, track)?.name;
-  if (!name) return track.layout;
+  // A layout folder named like its track (`mtn_saudi_streets/mtn_saudi_streets`)
+  // says nothing the track's name does not: shown, it repeated the folder
+  // under the name CSP gives the track.
+  if (!name) return track.layout.toLowerCase() === track.id.toLowerCase() ? null : track.layout;
   const prefix = trackName(looks, track);
   if (!name.toLowerCase().startsWith(prefix.toLowerCase())) return name;
   const rest = name.slice(prefix.length).replace(/^[\s\-–—:·|]+/, "");

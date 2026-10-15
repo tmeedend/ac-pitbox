@@ -39,6 +39,13 @@ describe("online looks (SPEC-play-online, Liste des serveurs)", () => {
     );
   });
 
+  // A layout folder named like its track repeated the folder under the
+  // track's name (`MTN Saudi arabia streets` / `mtn_saudi_streets`).
+  it("drops a layout folder that only repeats the track's", () => {
+    expect(layoutName(looks, track("mtn_saudi_streets", "MTN_Saudi_Streets"))).toBeNull();
+    expect(layoutName(looks, track("ek_myogi", "freeroam")), "a layout of its own stays").toBe("freeroam");
+  });
+
   it("reads car ids without case, and falls back on the id", () => {
     expect(carName(looks, "KS_Mazda_Miata")).toBe("Mazda MX-5 NA");
     expect(carName(looks, "rss_gtm_lanzo_v8")).toBe("rss_gtm_lanzo_v8");
