@@ -29,6 +29,7 @@
   import Switch from "$lib/components/ui/Switch.svelte";
   import { onMount, tick } from "svelte";
   import { brandFocus } from "$lib/workshop/brandFocus.svelte";
+  import { showRule } from "$lib/workshop/rulesFocus.svelte";
   import { scrollIntoContainer } from "$lib/shell/shellScroll";
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
@@ -49,7 +50,6 @@
     type TaxonomyView,
   } from "$lib/workshop/rules";
   import { addRule, removeRule, setEnabled } from "$lib/workshop/rulesEdit";
-  import { requestSection } from "$lib/shell/nav.svelte";
   import { open as openFile } from "@tauri-apps/plugin-dialog";
   import Emblem from "$lib/components/ui/Emblem.svelte";
   import Seg from "$lib/components/ui/Seg.svelte";
@@ -500,7 +500,10 @@
                             >×</button
                           >
                         {:else}
-                          <button type="button" class="link" onclick={() => void requestSection("rules")}
+                          <button
+                            type="button"
+                            class="link"
+                            onclick={() => void showRule("brand_fix", nr.rule.id ?? "")}
                             >{t("brandsTab.editInRules")}</button
                           >
                         {/if}
