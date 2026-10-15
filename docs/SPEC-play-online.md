@@ -515,6 +515,41 @@ et la couverture cumulée. Mesuré le 2026-10-11 (8 996 serveurs, 876 occupés,
 3 763 joueurs) : les **30** premiers ids couvrent 67 % des joueurs et 52 % des
 serveurs occupés, les **50** premiers 75 % et 60 %.
 
+**Vignette d'un circuit non installé (livré, 2026-10-15).** Dans la liste et
+dans la bannière du panneau, l'image d'un circuit se résout dans cet ordre, la
+première source qui répond l'emporte :
+
+1. **la bibliothèque** : circuit installé ou en vitrine, comme avant ;
+2. ~~l'image fournie par le serveur ou par CUP~~ — **écartée, mesurée** : une
+   fiche CUP de circuit ne porte aucune image (version, journal, auteur, lien),
+   et CUP ne connaît que 120 circuits dont aucun des dix premiers du lobby ;
+   le `loadingImageUrl` des détails étendus d'un serveur existe (141 serveurs
+   sur 236 sondés le 2026-10-15), mais c'est l'affiche de la communauté qui
+   tient le serveur — 53 images seulement, dont 11 sur plusieurs circuits
+   (la même image No Hesi sur Shutoko et sur `nohesi_110`) ;
+3. **Wikimedia Commons**, par l'appariement Wikipédia des circuits : le lien
+   livré de l'id du circuit (`wiki-links.json`), sinon un appariement par les
+   coordonnées et le nom que la table de CSP (`data_track_params.ini`, 445
+   circuits) donne à cet id. L'image de l'élément Wikidata (`P18`) n'est
+   gardée que si son auteur et sa licence sont connus. Le crédit (« Photo :
+   auteur · licence · Wikimedia Commons ») est en infobulle sur la vignette de
+   la ligne et en clair sous la bannière, un clic menant à la page du fichier.
+   Le réglage Wikipédia `wiki_online` décide : coupé, aucune requête, seul le
+   cache sert ;
+4. **une vignette dessinée** : le pictogramme de la catégorie du circuit
+   (TAXO§3.3 — la sienne, sinon celle que son id annonce, `ek_myogi-freeroam`)
+   et le drapeau de son pays (`P17` de Wikidata, quand l'élément est connu —
+   jamais le pays du serveur), sur le fond neutre des cartes. **Jamais
+   l'image d'un autre circuit.**
+
+Les images sont demandées une à une — celle du serveur ouvert d'abord, puis
+celles des lignes visibles —, gardées dans le cache des miniatures avec leur
+crédit ; un circuit sans image est redemandé après trente jours. Mesuré : les
+routes (Akagi, Myogi, Akina) n'ont pas d'image, l'appariement automatique ne
+retenant que les circuits (WIKI§1) ; Monza, Salzburgring et Shutoko en ont
+une. Interdits : embarquer des `preview.png` de mods, chercher des images sur
+les sites de mods.
+
 **Restent** (2026-10-06) — la spec, v1 et v2, est faite ; ce qui suit est soit
 à voir à l'écran, soit écarté, soit une limite connue :
 

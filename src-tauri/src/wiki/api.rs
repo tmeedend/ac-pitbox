@@ -96,6 +96,17 @@ pub struct EntityFacts {
     pub parent_fallback: Option<String>,
 }
 
+/// The few claims a picture needs (`entity_picture`): the entity's image, its
+/// country, and - on a country item - the ISO code its flag is found by.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PictureFacts {
+    /// A Commons file name, without `File:`.
+    pub image: Option<String>,
+    /// A Q-id.
+    pub country: Option<String>,
+    pub iso2: Option<String>,
+}
+
 /// Everything the matching of WIKI§4 reads off one candidate entity.
 ///
 /// Fetched in batches: `wbgetentities` takes up to 50 ids at once, so a whole
@@ -264,6 +275,34 @@ impl WikiClient {
             Fetched::Absent => Fetched::Absent,
             Fetched::Unavailable => Fetched::Unavailable,
         }
+    }
+
+    /// The image, the country and the ISO code of an entity, in one
+    /// `wbgetentities` call - claims only, no sitelinks: an entity without
+    /// any article may still have a picture.
+    pub fn entity_picture(&self, entity_id: &str) -> Fetched<PictureFacts> {
+        if !is_entity_id(entity_id) {
+            log::warn!("wiki/api: {entity_id:?} is not a Wikidata id");
+            return Fetched::Absent;
+        }
+        let path = format!(
+            "/w/api.php?action=wbgetentities&ids={}&props=claims&format=json&formatversion=2",
+            http::encode_query_value(entity_id)
+        );
+        match self.get_json(WIKIDATA_HOST, &path) {
+            Fetched::Found(root) => parse_picture(&root, entity_id),
+            Fetched::Absent => Fetched::Absent,
+            Fetched::Unavailable => Fetched::Unavailable,
+        }
+    }
+
+    /// Author, licence and a thumbnail of one Commons file, under the same
+    /// rules as an article's images (`image_credits`): a file whose author or
+    /// licence is unknown is not shown. Asked through the English wiki, the
+    /// host that reports a Commons file as `shared` - the test those rules
+    /// start with.
+    pub fn commons_credit(&self, file: &str) -> Option<ImageCredit> {
+        self.image_credits("en", &[file.to_string()]).into_iter().next()
     }
 
     /// One article **in full**, in one `action=query` call (WIKI§6.1): plain text,
@@ -606,6 +645,32 @@ fn claim_ids(claims: &Value, property: &str) -> Vec<String> {
         }
     }
     found
+}
+
+/// The first non-deprecated string value of a property: a file name, a code.
+fn claim_string(claims: &Value, property: &str) -> Option<String> {
+    claims
+        .get(property)
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|st| st.get("rank").and_then(Value::as_str) != Some("deprecated"))
+        .filter(|st| st["mainsnak"].get("snaktype").and_then(Value::as_str) == Some("value"))
+        .find_map(|st| st["mainsnak"]["datavalue"]["value"].as_str().map(str::to_string))
+}
+
+/// Reads a `wbgetentities` answer for `entity_picture`. Pure.
+fn parse_picture(root: &Value, entity_id: &str) -> Fetched<PictureFacts> {
+    let entity = &root["entities"][entity_id];
+    if entity.is_null() || entity.get("missing").is_some() {
+        return Fetched::Absent;
+    }
+    let claims = &entity["claims"];
+    Fetched::Found(PictureFacts {
+        image: claim_string(claims, ids::IMAGE),
+        country: claim_ids(claims, ids::COUNTRY).into_iter().next(),
+        iso2: claim_string(claims, ids::ISO_ALPHA_2),
+    })
 }
 
 /// The year of a time-valued property. Wikidata writes `+1986-00-00T00:00:00Z`
@@ -1233,5 +1298,31 @@ mod tests {
         });
         let credit = parse_image_credit(&page).expect("licence and author are there");
         assert_eq!((credit.width, credit.height), (180, 240), "the original's own size");
+    }
+
+    /// SPEC-play-online, "Vignette d'un circuit non installé": the image, the
+    /// country and the ISO code are read off the claims, a deprecated
+    /// statement never - the shape of a real answer (Q171417, 2026-10-15).
+    #[test]
+    fn picture_claims_are_read_and_deprecated_ones_skipped() {
+        let snak = |v: Value| serde_json::json!({ "mainsnak": { "snaktype": "value", "datavalue": { "value": v } }, "rank": "normal" });
+        let mut old = snak(serde_json::json!("Old.jpg"));
+        old["rank"] = serde_json::json!("deprecated");
+        let root = serde_json::json!({ "entities": { "Q171417": { "claims": {
+            "P18": [old, snak(serde_json::json!("1975 Italian GP.jpg"))],
+            "P17": [snak(serde_json::json!({ "entity-type": "item", "id": "Q38" }))]
+        } } } });
+        let Fetched::Found(facts) = parse_picture(&root, "Q171417") else {
+            panic!("an entity with claims is found");
+        };
+        assert_eq!(
+            facts.image.as_deref(),
+            Some("1975 Italian GP.jpg"),
+            "the deprecated image is skipped"
+        );
+        assert_eq!(facts.country.as_deref(), Some("Q38"));
+        assert_eq!(facts.iso2, None, "a circuit has no ISO code");
+        let missing = serde_json::json!({ "entities": { "Q1": { "missing": "" } } });
+        assert!(matches!(parse_picture(&missing, "Q1"), Fetched::Absent));
     }
 }

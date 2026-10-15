@@ -15,7 +15,7 @@
 // (`tokens.ts`): most of the lobby's tracks are not in the library, and
 // letting them all through made "Drift" list whatever ran anywhere.
 import type { Looks } from "./looks";
-import type { ServerSummary } from "./online";
+import type { ServerSummary, TrackRef } from "./online";
 
 /** What the backend knows beyond the library (`online/categories.rs`). */
 export interface CategoryKnowledge {
@@ -106,6 +106,15 @@ function trackBase(
   const catalog = k.catalog[id];
   if (catalog?.length) return { base: catalog, source: "catalog" };
   return { base: [], source: null };
+}
+
+/** The categories a track is drawn with, where no picture of it exists
+ * (`TrackThumb`): its own, else what its id announces (`ek_myogi-freeroam`) -
+ * never a server's name or description, which speak of the server, and a
+ * group of servers has as many as it has servers. */
+export function trackGlyphCategories(track: TrackRef, looks: Looks, k: CategoryKnowledge): string[] {
+  const { base } = trackBase(track.id, looks, k);
+  return base.length ? base : keywordHints(track.kunos_id, "track", k.keywords).map((h) => h.category);
 }
 
 /** Everything a server says of its category. `description` is its details'

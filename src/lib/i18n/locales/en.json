@@ -1558,6 +1558,7 @@
     "unknownCategoryShown": "{count} servers on tracks of unknown category, shown",
     "unknownCategoryShow": "Show",
     "unknownCategoryHide": "Hide",
+    "photoCredit": "Photo: {artist} · {licence} · Wikimedia Commons",
     "category": "Category",
     "categoryUnknown": "unknown",
     "categoryChoose": "Choose",

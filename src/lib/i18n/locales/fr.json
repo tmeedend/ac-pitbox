@@ -1558,6 +1558,7 @@
     "unknownCategoryShown": "{count} serveurs sur des circuits de catégorie inconnue, affichés",
     "unknownCategoryShow": "Afficher",
     "unknownCategoryHide": "Masquer",
+    "photoCredit": "Photo : {artist} · {licence} · Wikimedia Commons",
     "category": "Catégorie",
     "categoryUnknown": "inconnue",
     "categoryChoose": "Choisir",

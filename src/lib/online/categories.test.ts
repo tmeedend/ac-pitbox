@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { keywordHints, serverCategories, words, type CategoryKnowledge } from "./categories";
+import { keywordHints, serverCategories, trackGlyphCategories, words, type CategoryKnowledge } from "./categories";
 import type { Looks } from "./looks";
 import { testServer } from "./testServer";
 
@@ -71,5 +71,14 @@ describe("keywords (SPEC-play-online.md)", () => {
   it("match a phrase of several words as one", () => {
     expect(keywordHints("NoHesi | No Hesi traffic", "name", { "no hesi": "#freeroam" })).toHaveLength(1);
     expect(keywordHints("no idea, hesi", "name", { "no hesi": "#freeroam" })).toEqual([]);
+  });
+  // The drawn thumbnail of a track without a picture: its own categories,
+  // else its id's words - never the server's name.
+  it("draws a track with its own categories, else with what its id announces", () => {
+    const none: Looks = { cars: {}, tracks: {} };
+    const myogi = { id: "ek_myogi", layout: "freeroam", kunos_id: "ek_myogi-freeroam", csp_min_build: null };
+    expect(trackGlyphCategories(myogi, none, knowledge({ keywords: { freeroam: "#freeroam" } }))).toEqual(["#freeroam"]);
+    const chosen = knowledge({ keywords: { freeroam: "#freeroam" }, chosen: { ek_myogi: ["#touge"] } });
+    expect(trackGlyphCategories(myogi, none, chosen), "its own first").toEqual(["#touge"]);
   });
 });

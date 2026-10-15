@@ -23,6 +23,7 @@ pub mod join;
 pub mod lobby;
 pub mod lobby_cache;
 mod looks;
+pub mod picture;
 pub mod ping;
 pub mod readiness;
 pub mod server;

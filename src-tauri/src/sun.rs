@@ -142,6 +142,10 @@ pub struct TrackLocation {
     pub latitude: f64,
     pub longitude: f64,
     pub timezone: Option<String>,
+    /// The track's name as the table writes it (`NAME=Imola`): what the
+    /// Online page matches a track it does not hold by, on Wikipedia. Not in
+    /// every entry, and never in geotags.
+    pub name: Option<String>,
     pub source: CoordSource,
 }
 
@@ -195,6 +199,7 @@ fn locate(
                 latitude,
                 longitude,
                 timezone: ini_value(&text, track_id, "TIMEZONE").filter(|s| !s.is_empty()),
+                name: ini_value(&text, track_id, "NAME").filter(|s| !s.is_empty()),
                 source: *source,
             });
         }
@@ -203,6 +208,7 @@ fn locate(
         latitude,
         longitude,
         timezone: None,
+        name: None,
         source: CoordSource::Geotags,
     })
 }
