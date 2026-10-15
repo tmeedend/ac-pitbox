@@ -33,8 +33,10 @@ export function categoryIconId(tag: string, looks: Record<string, CategoryLook>)
   return looks[categoryTag(tag)]?.icon ?? (bare in TRACK_CATEGORY_ICONS ? bare : DEFAULT_TRACK_ICON);
 }
 
-/** The name of a category: the user's, else the app's translation, else the
- * tag without its `#` - a category the catalogue added after this build. */
+/** The name of a category: the user's, else the app's, else the tag without
+ * its `#` - a category the catalogue added after this build. The app's name
+ * is English in every locale (`trackCategories.*`, TAXO§3.3): it is the tag
+ * the `ui_track.json` files write, Assetto Corsa jargon like *skin*. */
 export function categoryName(
   tag: string,
   looks: Record<string, CategoryLook>,

@@ -98,6 +98,8 @@ Trait uniforme, remplissage `#d4d5d7`, hauteur de rendu 34 px dans les tuiles d'
 
 Même grille (120 × 52) et même poids que les silhouettes de voitures, pour que les deux index se lisent comme un seul jeu : circuit, ville, ovale, drift, touge, spéciale de rallye, rallycross, course de côte, drag, autoroute / freeroam, karting, A2B, test, et le circuit en demi-teinte pour `Non classé` (`src/lib/library/trackCategoryIcons.ts`). Une icône par catégorie livrée — un test le vérifie sur la liste blanche des règles ; une catégorie créée par l'utilisateur prend le circuit tant qu'il n'en a pas choisi une autre.
 
+Le nom livré d'une catégorie est **anglais dans toutes les langues** (`Street`, `Hillclimb`, `Rally`) : c'est le tag que les `ui_track.json` écrivent et que les pilotes emploient, du jargon Assetto Corsa au même titre que *skin* ou *layout*. Seul un nom donné par l'utilisateur dans Familles › Circuits le remplace.
+
 Le pictogramme dessine aussi la vignette d'un circuit non installé sur la page Online.
 
 ---
