@@ -545,7 +545,8 @@ première source qui répond l'emporte :
 Le **nom** d'un circuit non installé suit le même esprit : celui que donne la
 table de CSP (ou sa copie dans Content Manager) — `Imola`, `Mt. Akina` —
 plutôt que son dossier, qui reste le repli ; le nom de la bibliothèque passe
-toujours avant.
+toujours avant. La puce Circuit le nomme de même, suivi du dossier de son
+layout quand il en a un à lui (`EK Myogi Touge - freeroam`).
 
 Les images sont demandées une à une — celle du serveur ouvert d'abord, puis
 celles des lignes visibles —, gardées dans le cache des miniatures avec leur

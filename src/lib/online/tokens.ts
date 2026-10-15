@@ -23,7 +23,7 @@ import {
   type FilterOption,
 } from "$lib/library/filters";
 import { isJoinable } from "./filters";
-import { trackTitle, type Looks } from "./looks";
+import { layoutName, trackTitle, type Looks } from "./looks";
 import type { ServerSummary, TrackRef } from "./online";
 
 export const TRACK_KEY = "track";
@@ -137,10 +137,15 @@ export function trackValue(track: TrackRef): string {
   return track.kunos_id.toLowerCase();
 }
 
-/** A track as a token shows it: its name here, else the lobby's id — the
- * folder alone would not tell two layouts of an unknown track apart. */
+/** A track as a token shows it: its name here; else CSP's name for it with
+ * the layout's folder after it - the name alone would not tell two layouts of
+ * the track apart -; else the lobby's id, for the same reason. */
 export function trackLabel(looks: Looks, track: TrackRef): string {
-  return looks.tracks[track.id.toLowerCase()] ? trackTitle(looks, track) : track.kunos_id;
+  if (looks.tracks[track.id.toLowerCase()]) return trackTitle(looks, track);
+  const named = looks.track_names?.[track.id.toLowerCase()];
+  if (!named) return track.kunos_id;
+  const layout = layoutName(looks, track);
+  return layout ? `${named} - ${layout}` : named;
 }
 
 /** Values a server carries for a token, `null` when they are unknown. */

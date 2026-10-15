@@ -157,6 +157,16 @@ describe("online tokens (SPEC-play-online, Filtres de base)", () => {
     expect(trackLabel(looks, track("monza"))).toBe("Monza");
   });
 
+  // A track the library lacks is named as CSP names it, its layout after it
+  // when it has one of its own.
+  it("names a track the library lacks by CSP's name, layout included", () => {
+    const csp: Looks = { ...NO_LOOKS, track_names: { ek_myogi: "EK Myogi Touge", mtn_saudi_streets: "MTN Saudi" } };
+    expect(trackLabel(csp, track("ek_myogi-freeroam", "ek_myogi", "freeroam"))).toBe("EK Myogi Touge - freeroam");
+    expect(trackLabel(csp, track("mtn_saudi_streets-mtn_saudi_streets", "mtn_saudi_streets", "mtn_saudi_streets"))).toBe(
+      "MTN Saudi",
+    );
+  });
+
   it("asks yes or no of a server, and the opposite in the negative", () => {
     const list = [
       server({ name: "full", clients: 24 }),
