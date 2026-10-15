@@ -22,6 +22,8 @@ export interface TrackLook {
 export interface Looks {
   cars: Record<string, string>;
   tracks: Record<string, TrackLook>;
+  /** Names of the tracks the library does not hold, from CSP's table. */
+  track_names?: Record<string, string>;
 }
 
 export const NO_LOOKS: Looks = { cars: {}, tracks: {} };
@@ -31,15 +33,17 @@ export function layoutLook(looks: Looks, track: TrackRef): LayoutLook | null {
   return t?.layouts[(track.layout ?? "").toLowerCase()] ?? null;
 }
 
-/** The layout's own name ("Nordschleife - Tourist"), else the track's, else
- * the folder. */
+/** The layout's own name ("Nordschleife - Tourist"), else the track's
+ * (`trackName`). */
 export function trackTitle(looks: Looks, track: TrackRef): string {
-  return layoutLook(looks, track)?.name ?? looks.tracks[track.id.toLowerCase()]?.name ?? track.id;
+  return layoutLook(looks, track)?.name ?? trackName(looks, track);
 }
 
-/** The track's own name, else its folder. */
+/** The track's own name in the library, else CSP's name for it, else its
+ * folder. */
 export function trackName(looks: Looks, track: TrackRef): string {
-  return looks.tracks[track.id.toLowerCase()]?.name ?? track.id;
+  const id = track.id.toLowerCase();
+  return looks.tracks[id]?.name ?? looks.track_names?.[id] ?? track.id;
 }
 
 /**

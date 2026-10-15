@@ -29,6 +29,16 @@ describe("online looks (SPEC-play-online, Liste des serveurs)", () => {
     expect(trackTitle(looks, track("rt_suzuka", null))).toBe("rt_suzuka");
   });
 
+  // A track the library does not hold is named as CSP's table names it,
+  // before its folder; the library's own name still comes first.
+  it("names a track the library does not hold by CSP's name", () => {
+    const withCsp: Looks = { ...looks, track_names: { pk_akina: "Mt. Akina", ks_nordschleife: "Nordschleife" } };
+    expect(trackTitle(withCsp, track("PK_Akina", null))).toBe("Mt. Akina");
+    expect(trackTitle(withCsp, track("ks_nordschleife", "endurance")), "the library first").toBe(
+      "Nürburgring Nordschleife",
+    );
+  });
+
   it("reads car ids without case, and falls back on the id", () => {
     expect(carName(looks, "KS_Mazda_Miata")).toBe("Mazda MX-5 NA");
     expect(carName(looks, "rss_gtm_lanzo_v8")).toBe("rss_gtm_lanzo_v8");

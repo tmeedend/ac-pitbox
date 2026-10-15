@@ -117,9 +117,8 @@ de reprendre. En cas d'écart, la spec fait foi.
         ignoré par défaut : Monza, Salzburgring, Shutoko ont une image ;
         Valencia, Akina, `nohesi_415` non) et à l'écran pour la vignette
         dessinée ; **reste à voir à l'écran** une image Commons et son crédit
-        sous la bannière. Le nom d'un circuit non installé reste son dossier
-        (`ek_myogi`) alors que la table de CSP donne le vrai (`NAME=`) :
-        piste repérée, hors de cette demande.
+        sous la bannière. Le nom d'un circuit non installé vient désormais
+        de la table de CSP (`NAME=`), son dossier en repli.
       Ce qui est fait et ce qui reste : `SPEC-play-online.md`, section Lots.
       **Pièges déjà payés** (`online-join-research.md`), à relire avant de
       toucher au lancement :

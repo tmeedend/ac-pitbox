@@ -5,7 +5,8 @@
 //! Only what the servers reference is read: the lobby names a few hundred
 //! tracks, and reading the layouts of every track of the library to show
 //! twenty rows would be work for nothing. What the library does not hold has
-//! no look — the screen falls back on the id.
+//! no picture here (`picture.rs` looks for one), only the name CSP's table
+//! gives it — else the screen falls back on the id.
 
 use std::collections::{HashMap, HashSet};
 
@@ -42,6 +43,10 @@ pub struct TrackLook {
 pub struct Looks {
     pub cars: HashMap<String, String>,
     pub tracks: HashMap<String, TrackLook>,
+    /// Names of the tracks the library does not hold, from CSP's table and
+    /// Content Manager's copy (`sun::track_names`): `Imola` rather than
+    /// `imola`, `Mt. Akina` rather than `pk_akina`.
+    pub track_names: HashMap<String, String>,
 }
 
 impl Looks {
@@ -91,6 +96,14 @@ impl Looks {
                     );
                 }
                 _ => {}
+            }
+        }
+        if let Some(ac) = cfg.ac_install_path.as_deref() {
+            let mut names = crate::sun::track_names(ac);
+            for id in tracks.iter().filter(|id| !looks.tracks.contains_key(*id)) {
+                if let Some(name) = names.remove(id) {
+                    looks.track_names.insert(id.clone(), name);
+                }
             }
         }
         looks

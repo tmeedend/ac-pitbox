@@ -542,6 +542,11 @@ première source qui répond l'emporte :
    jamais le pays du serveur), sur le fond neutre des cartes. **Jamais
    l'image d'un autre circuit.**
 
+Le **nom** d'un circuit non installé suit le même esprit : celui que donne la
+table de CSP (ou sa copie dans Content Manager) — `Imola`, `Mt. Akina` —
+plutôt que son dossier, qui reste le repli ; le nom de la bibliothèque passe
+toujours avant.
+
 Les images sont demandées une à une — celle du serveur ouvert d'abord, puis
 celles des lignes visibles —, gardées dans le cache des miniatures avec leur
 crédit ; un circuit sans image est redemandé après trente jours. Mesuré : les
