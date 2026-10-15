@@ -18,7 +18,7 @@
   // always starts from it.
   import Tabs from "$lib/components/ui/Tabs.svelte";
   import RulesEditor from "./RulesEditor.svelte";
-  import CarFamilies from "./CarFamilies.svelte";
+  import Families from "./Families.svelte";
   import Countries from "./Countries.svelte";
   import Brands from "./Brands.svelte";
   import CatalogBanner from "./CatalogBanner.svelte";
@@ -57,7 +57,7 @@
     {#if nav.section === "rules"}
       <RulesEditor />
     {:else if nav.section === "categories"}
-      <CarFamilies />
+      <Families />
     {:else if nav.section === "brands"}
       <Brands />
     {:else if nav.section === "countries"}

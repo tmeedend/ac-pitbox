@@ -1138,9 +1138,6 @@
     "tagMerge": "Merge / deduction",
     "addRule": "Rule",
     "tagMergeHint": "Synonyms → canonical tag(s), comma-separated. A # tag marks the category.",
-    "trackCategoriesTitle": "Track categories (allowlist)",
-    "trackCategoriesHint": "Allowed categories, in priority order (the 1st is the primary one). A track takes those of its tags listed here.",
-    "addCategoryPlaceholder": "add a category, e.g. #hillclimb (Enter)…",
     "moveUp": "Move up (higher priority)",
     "moveDown": "Move down (lower priority)",
     "brandFixTitle": "Brand correction",
@@ -1992,6 +1989,16 @@
     "karting": "Karting",
     "a2b": "A2B",
     "test": "Test"
+  },
+  "trackCats": {
+    "main": "A track's main category",
+    "tagTitle": "The category's identifier, stored on tracks: it does not change when the category is renamed",
+    "producedBy": "Rules that produce it",
+    "openInRules": "Show in Rules",
+    "noRule": "No rule",
+    "keywords": "Online server keywords",
+    "noKeyword": "No keyword",
+    "addKeyword": "Add a keyword"
   },
   "index": {
     "byCountry": "Browse by country",

@@ -1138,9 +1138,6 @@
     "tagMerge": "Fusion / déduction",
     "addRule": "Règle",
     "tagMergeHint": "Synonymes → tag(s) canonique(s), séparés par des virgules. Un tag # marque la catégorie.",
-    "trackCategoriesTitle": "Catégories de circuit (liste blanche)",
-    "trackCategoriesHint": "Catégories autorisées, par ordre de priorité (la 1ʳᵉ est la principale). Un circuit prend celles de ses tags présentes ici.",
-    "addCategoryPlaceholder": "ajouter une catégorie, ex. #hillclimb (Entrée)…",
     "moveUp": "Monter (plus prioritaire)",
     "moveDown": "Descendre (moins prioritaire)",
     "brandFixTitle": "Correction de marque",
@@ -1992,6 +1989,16 @@
     "karting": "Karting",
     "a2b": "A2B",
     "test": "Test"
+  },
+  "trackCats": {
+    "main": "Catégorie principale d'un circuit",
+    "tagTitle": "L'identifiant de la catégorie, enregistré dans les circuits : il ne change pas quand on la renomme",
+    "producedBy": "Règles qui la produisent",
+    "openInRules": "Voir dans Règles",
+    "noRule": "Aucune règle",
+    "keywords": "Mots-clés des serveurs en ligne",
+    "noKeyword": "Aucun mot-clé",
+    "addKeyword": "Ajouter un mot-clé"
   },
   "index": {
     "byCountry": "Parcourir par pays",

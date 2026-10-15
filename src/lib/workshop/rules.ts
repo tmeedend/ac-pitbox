@@ -146,7 +146,10 @@ export interface CategoryRow {
   shipped: boolean;
   /** `false`: a shipped category the user removed. */
   on: boolean;
+  /** Tracks that carry it, measured on the library. */
   effect: number;
+  /** Its place in the shipped allowlist; `null` for one of the user's. */
+  shipped_rank: number | null;
 }
 
 export interface RulesView {
