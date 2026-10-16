@@ -44,6 +44,7 @@
   import { libraryVersion } from "$lib/library/libraryVersion.svelte";
   import { cardImage, getPreferredSkin, getPreferredLayout } from "$lib/preferred";
   import { isPlayable } from "$lib/library/showcase.svelte";
+  import { sessionFallback } from "$lib/library/sessionFallback";
   import { enqueueGridThumbs, gridThumb, requestGridThumb } from "$lib/gridthumbs/gridThumbs.svelte";
   import { gridThumbsOn, presetForDensity, renderTemplate } from "$lib/gridthumbs/gridThumbPrefs.svelte";
   import { buildModContextItems } from "$lib/library/modContextActions";
@@ -461,22 +462,28 @@
   const effectiveId = $derived(selectedId ?? sessionId);
   // Défaut si aucune session n'a jamais été choisie (premier lancement) :
   // établit une vraie sélection de session plutôt que de laisser le panneau
-  // vide indéfiniment. Même repli si le mod affiché a été SUPPRIMÉ entre-temps
-  // (§6.3bis) : sans lui, `selectedId`/la session continuaient de désigner un
-  // id qui n'existe plus, et la fiche de droite comme le bloc SESSION
-  // restaient bloqués dessus. L'existence se vérifie sur `typed` — la
+  // vide indéfiniment. Même repli si le mod de session a été SUPPRIMÉ entre-temps
+  // (§6.3bis), vérifié pour lui-même et non à travers le dernier mod cliqué :
+  // les cas sont dans `sessionFallback`. L'existence se vérifie sur `typed` — la
   // bibliothèque de ce type SANS le filtre/la recherche courants — jamais sur
   // `sorted` : un mod simplement masqué par un filtre ne doit pas faire
   // sauter la session sur un autre mod.
   $effect(() => {
+    // Every dependency read before the guard (CLAUDE.md: an effect only
+    // subscribes to what it read before returning).
+    const input = {
+      existing: typed.map((c) => c.id_interne),
+      playable: sorted.filter(isPlayable).map((c) => c.id_interne),
+      session: sessionId,
+      selected: selectedId,
+    };
     if (!sorted.length) return;
-    if (!sessionId && !selectedId) {
-      select(sorted[0]);
-      return;
-    }
-    if (effectiveId && !typed.some((c) => c.id_interne === effectiveId)) {
-      select(sorted[0]);
-    }
+    const { clearSelected, pick } = sessionFallback(input);
+    untrack(() => {
+      if (clearSelected) selectedId = null;
+      const card = pick ? sorted.find((c) => c.id_interne === pick) : undefined;
+      if (card) select(card);
+    });
   });
   /**
    * Ce qui empêche de **jouer** cette voiture, ou `null`.
