@@ -2050,7 +2050,8 @@
     "ENG": "Angleterre",
     "SCT": "Écosse",
     "WLS": "Pays de Galles",
-    "NIR": "Irlande du Nord"
+    "NIR": "Irlande du Nord",
+    "fictional": "Fictif"
   },
   "countriesTab": {
     "subtitle": "Les pays des voitures et des circuits : le nom sous lequel chacun est rangé, et les orthographes qui y mènent.",

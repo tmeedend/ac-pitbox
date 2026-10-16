@@ -21,6 +21,7 @@
   import { onMount } from "svelte";
   import { errorText } from "$lib/errors";
   import { countryLabel, flagFor, gameCountries, gameCountry, loadFlags } from "$lib/flags.svelte";
+  import { FICTIONAL, isFictional } from "$lib/flags";
   import { t } from "$lib/i18n/index.svelte";
   import { listLibrary } from "$lib/library/library";
   import { bumpLibraryVersion } from "$lib/library/libraryVersion.svelte";
@@ -133,20 +134,24 @@
   const emptyCount = $derived(rows.length - rows.filter((r) => r.cars + r.tracks > 0).length);
   const unset = $derived(mods.filter((c) => !c.country).length);
 
-  /** Every game country, in the user's language — the targets of a merge. */
-  const choices = $derived(
+  /** Every game country, in the user's language — the targets of a merge —
+   * after Fictional, the one country the game does not have (TAXO§7.5). */
+  const gameChoices = $derived(
     gameCountries()
       .map((n) => ({ name: n.name, label: countryLabel(n.name) }))
       .sort((a, b) => a.label.localeCompare(b.label)),
   );
+  const choices = $derived([{ name: FICTIONAL, label: countryLabel(FICTIONAL) }, ...gameChoices]);
 
   /** Values the game does not know, not yet ignored (TAXO§3.1): they get no
    * flag, and each is proposed for a merge, with the closest game country
-   * pre-selected when there is a close one (TAXO§7.2). */
+   * pre-selected when there is a close one (TAXO§7.2). Fictional is known —
+   * to the app. Never pre-selected for a value either: "fictional" is a
+   * judgement on a place, which closeness of spelling says nothing about. */
   const proposals = $derived(
     rows
-      .filter((r) => r.cars + r.tracks > 0 && !gameCountry(r.name) && !ignored.includes(r.name))
-      .map((r) => ({ ...r, closest: closestCountry(r.name, choices.map((c) => c.name)) })),
+      .filter((r) => r.cars + r.tracks > 0 && !gameCountry(r.name) && !isFictional(r.name) && !ignored.includes(r.name))
+      .map((r) => ({ ...r, closest: closestCountry(r.name, gameChoices.map((c) => c.name)) })),
   );
 
   function targetOf(value: string, fallback: string | null): string {
@@ -263,7 +268,9 @@
               <div class="field">
                 <span class="lbl-key">{t("countriesTab.code")}</span>
                 <span class="mono code">
-                  {#if entry}{entry.code}{#if entry.iso2} · {entry.iso2}{/if}{:else}{t("countriesTab.unknown")}{/if}
+                  {#if entry}{entry.code}{#if entry.iso2} · {entry.iso2}{/if}{:else if isFictional(r.name)}—{:else}{t(
+                      "countriesTab.unknown",
+                    )}{/if}
                 </span>
               </div>
 

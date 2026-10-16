@@ -12,7 +12,7 @@
 // pas de la table —, et la faire descendre en prop depuis l'écran
 // bibliothèque jusqu'à la puce et à son popover traverserait trois composants
 // pour une ligne de lecture. D'où ce cache, chargé à la demande.
-import { countryDisplayName, countryKey } from "$lib/flags";
+import { countryDisplayName, countryKey, FICTIONAL_FLAG, isFictional } from "$lib/flags";
 import { i18n, t } from "$lib/i18n/index.svelte";
 import { invoke } from "@tauri-apps/api/core";
 import { readOnce } from "$lib/readOnce";
@@ -60,6 +60,7 @@ export const loadFlags = readOnce(
  */
 export function flagFor(name: string | null | undefined): string | null {
   if (!name) return null;
+  if (isFictional(name)) return FICTIONAL_FLAG;
   const key = countryKey(name, (k) => table.byName.has(k));
   return previewSrc(key ? (table.byName.get(key)?.flag ?? null) : null);
 }
@@ -92,6 +93,7 @@ export function gameCountries(): Nationality[] {
  * either changes.
  */
 export function countryLabel(name: string): string {
+  if (isFictional(name)) return t("countryNames.fictional");
   return countryDisplayName(name, gameCountry(name), i18n.locale, (code) => {
     const key = `countryNames.${code}`;
     const s = t(key);

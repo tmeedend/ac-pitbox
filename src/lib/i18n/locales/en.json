@@ -2050,7 +2050,8 @@
     "ENG": "England",
     "SCT": "Scotland",
     "WLS": "Wales",
-    "NIR": "Northern Ireland"
+    "NIR": "Northern Ireland",
+    "fictional": "Fictional"
   },
   "countriesTab": {
     "subtitle": "Countries of cars and tracks: the name each is stored under, and the spellings that lead to it.",

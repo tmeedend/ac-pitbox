@@ -290,6 +290,12 @@ const ISO2: &[(&str, &str)] = &[
     ("ZWE", "ZW"),
 ];
 
+/// The country of a place that exists nowhere — Grand Valley, Trial Mountain,
+/// the tracks of a game rather than of a map (TAXO§7.5). Not in the game's
+/// table, so no AI ever gets it as a nationality; stored in English like the
+/// game's own names, and translated on screen.
+pub const FICTIONAL: &str = "Fictional";
+
 /// The alpha-2 code of an alpha-3 one, when ISO has one.
 pub fn iso2_of(code3: &str) -> Option<&'static str> {
     ISO2.iter().find(|(c3, _)| *c3 == code3).map(|(_, c2)| *c2)

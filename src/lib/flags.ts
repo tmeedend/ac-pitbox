@@ -24,6 +24,26 @@ export function countryKey(name: string, isKnown: (key: string) => boolean): str
   return isKnown(key) ? key : null;
 }
 
+/** The country of a place that exists nowhere (TAXO§7.5) — Grand Valley,
+ * Trial Mountain. A country of the app, not of the game: the backend stores it
+ * under this English name (`nationalities::FICTIONAL`), like the game's own. */
+export const FICTIONAL = "Fictional";
+
+export function isFictional(name: string | null | undefined): boolean {
+  return !!name && name.trim().toLowerCase() === FICTIONAL.toLowerCase();
+}
+
+/** Its flag: no country's, a neutral field with a star — drawn here, since the
+ * game ships none. Fixed colours, as a flag is an image in both themes. */
+export const FICTIONAL_FLAG =
+  "data:image/svg+xml," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 20">' +
+      '<rect width="30" height="20" fill="#5b5d66"/>' +
+      '<path d="M15 4.2l1.65 3.9 4.2.35-3.2 2.75.97 4.1L15 13.1l-3.62 2.2.97-4.1-3.2-2.75 4.2-.35z" fill="#e8e8ec"/>' +
+      "</svg>",
+  );
+
 /** Regions whose long name carries an administrative status nobody says out
  * loud: "R.A.S. chinoise de Hong Kong" on a tile of 124 px. Their short form
  * is the plain name - and only theirs: the short form of the others

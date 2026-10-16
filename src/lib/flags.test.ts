@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countryDisplayName, countryKey } from "./flags";
+import { countryDisplayName, countryKey, isFictional } from "./flags";
 
 /** Un extrait fidèle de la table du jeu : les noms utiles aux cas ci-dessous,
  * dont les deux qui portent une virgule. */
@@ -58,5 +58,15 @@ describe("countryDisplayName", () => {
     expect(countryDisplayName("Scotland", { code: "SCT", iso2: null }, "fr", byKey)).toBe("Écosse");
     expect(countryDisplayName("Wales", { code: "WLS", iso2: null }, "fr", byKey)).toBe("Wales");
     expect(countryDisplayName("Freedonia", undefined, "fr", byKey)).toBe("Freedonia");
+  });
+});
+
+// TAXO§7.5: Fictional is recognised however the stored value is cased.
+describe("isFictional", () => {
+  it("reads the stored name, case and edge spaces aside", () => {
+    expect(isFictional("Fictional")).toBe(true);
+    expect(isFictional(" fictional ")).toBe(true);
+    expect(isFictional("Fiction")).toBe(false);
+    expect(isFictional(null)).toBe(false);
   });
 });

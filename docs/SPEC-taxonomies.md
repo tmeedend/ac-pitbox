@@ -260,6 +260,16 @@ Une fusion acceptée produit, d'un seul coup :
 
 ---
 
+## 7.5 Le pays « Fictif »
+
+Un circuit peut se situer **nulle part** : Grand Valley, Trial Mountain, les circuits d'un jeu plutôt que d'une carte. Leurs auteurs écrivent ce qu'ils peuvent dans le champ pays — `Somewhere`, `blank`, `GT Sport` —, et la table du jeu n'offre rien pour eux.
+
+**« Fictif » est un pays de l'app, pas du jeu.** Rangé sous le nom anglais `Fictional`, comme les noms du jeu, traduit à l'écran ; un drapeau neutre (une étoile sur fond gris) dessiné par l'app, puisque le jeu n'en livre pas. Il n'entre pas dans la liste des nationalités d'IA du plateau : aucune ne peut l'avoir.
+
+- Un auteur qui écrit déjà `Fictional` y arrive seul, casse et espaces repliés (§7.1).
+- Les autres valeurs s'y **rattachent** depuis le bandeau des pays inconnus, où « Fictif » est en tête des cibles. **Jamais présélectionné** : dire qu'un lieu est imaginaire est un jugement, que la proximité d'orthographe ne porte pas.
+- Il n'est jamais proposé comme « inconnu du jeu » : il est connu, de l'app.
+
 # 8. Migration depuis `Règles`
 
 La correction des marques quitte `Règles` pour l'onglet Marques. **Même chose pour toute correction de pays ou de catégorie qui y figurerait.**

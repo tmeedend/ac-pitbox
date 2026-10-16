@@ -46,7 +46,9 @@ pub const DEFAULT_RULES: &str = include_str!("../rules/default-tag-rules.json");
 /// 9 — countries merge without their spaces and without the game's braced
 ///     qualifier (TAXO§7.1): `Vietnam` → `Viet Nam`, `Venezuela` →
 ///     `Venezuela, {Bolivarian Republic of}`, with their flags.
-pub const ENGINE_VERSION: u32 = 9;
+/// 10 — `Fictional` is a country of the app (TAXO§7.5): `fictional`, however
+///     written, lands on it.
+pub const ENGINE_VERSION: u32 = 10;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Rules {
@@ -170,7 +172,13 @@ pub fn canonical_country_in(
             || (upper.len() == 3 && n.code == upper)
             || (upper.len() == 2 && n.iso2.as_deref() == Some(upper.as_str()))
     });
-    Some(hit.map(|n| n.name.clone()).unwrap_or(cleaned))
+    match hit {
+        Some(n) => Some(n.name.clone()),
+        // Fictional is a country of the app, not of the game: an author who
+        // already wrote it gets it the same way, case and spaces folded.
+        None if folded == compact(crate::nationalities::FICTIONAL) => Some(crate::nationalities::FICTIONAL.into()),
+        None => Some(cleaned),
+    }
 }
 
 /// [`fold`], spaces dropped altogether: TAXO§7.1 merges on spaces, not only on
@@ -221,7 +229,7 @@ pub struct CarRules {
     pub extraction_specs: ExtractionSpecs,
     #[serde(default)]
     pub extraction_country: ExtractionCountry,
-    /// Category families (INDEX§6.1, TAXO§7.3): which tags make a
+    /// Category families (INDEX§6.1, TAXO§7.5): which tags make a
     /// car a "Race" or a "Classic". **Read by the library, never by this
     /// engine** — a family is an index over tags, not a rule, so it has no
     /// output to write into the overlay and no reason to bump `ENGINE_VERSION`.
@@ -915,6 +923,32 @@ mod tests {
             canonical_country_in("Virgin Islands", &a, &known).as_deref(),
             Some("Virgin Islands"),
             "a comma without braces is part of the name: two countries, no guess"
+        );
+    }
+
+    /// TAXO§7.5: Fictional is a country of the app, reached like a game one —
+    /// and only by its own name, or by an alias the user chose.
+    #[test]
+    fn fictional_is_a_country_of_its_own() {
+        let a = CountryAliases::default();
+        for written in ["Fictional", "FICTIONAL", " fictional "] {
+            assert_eq!(
+                canonical_country_in(written, &a, &[]).as_deref(),
+                Some("Fictional"),
+                "{written}"
+            );
+        }
+        assert_eq!(
+            canonical_country_in("Somewhere", &a, &[]).as_deref(),
+            Some("Somewhere"),
+            "a made-up place is attached by the user, never guessed"
+        );
+        let mut aliases = CountryAliases::default();
+        aliases.map.insert("somewhere".into(), "Fictional".into());
+        assert_eq!(
+            canonical_country_in("Somewhere", &aliases, &[]).as_deref(),
+            Some("Fictional"),
+            "attached in the Countries tab, it follows"
         );
     }
 
