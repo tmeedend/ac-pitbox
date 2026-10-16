@@ -2674,6 +2674,7 @@ fn exec_one(
 /// Résout un conflit flou (§4.2) selon le choix utilisateur.
 /// `keep_both` : conserve les deux mods séparément.
 /// `replace`   : supprime l'ancien mod (fichiers + overlay) au profit du nouveau.
+/// `layer`     : the new one was meant to go into the old one (§4.3bis).
 pub fn resolve_conflict(
     conn: &Connection,
     cfg: &AppConfig,
@@ -2723,6 +2724,9 @@ pub fn resolve_conflict(
                 &serde_json::json!({ "key": "replaced", "old": old_id }).to_string(),
             )
             .map_err(|e| e.to_string())?;
+        }
+        "layer" => {
+            crate::layers::mod_into_layer(conn, cfg, new_id, old_id)?;
         }
         _ => return Err(format!("action inconnue : {action}")),
     }

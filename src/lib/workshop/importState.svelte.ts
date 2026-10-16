@@ -19,6 +19,7 @@ import {
   splitDroppedPaths,
   type ArchiveResult,
   type BulkExecItem,
+  type ConflictAction,
   type ImportProgress,
   type ImportDecision,
   type ModKind,
@@ -355,11 +356,23 @@ async function resumeWithDecision(
   });
 }
 
-export async function resolvePendingConflict(
-  c: PendingConflict,
-  action: "keep_both" | "replace",
-): Promise<void> {
+/** Rejects when the backend refuses (a mod that cannot become a layer): the
+ * conflict then stays on screen, for the dialog to say why. */
+export async function resolvePendingConflict(c: PendingConflict, action: ConflictAction): Promise<void> {
   await resolveConflict(c.newId, c.oldId, action);
+  if (action === "layer") {
+    // The mod the report announced no longer exists: its line now says what
+    // it became, and leads to the host instead of a fiche that is gone.
+    for (const entry of importState.reports) {
+      for (const m of entry.report.flatMap((a) => a.mods)) {
+        if (m.id_interne !== c.newId) continue;
+        m.source_name = c.newId;
+        m.id_interne = c.oldId;
+        m.outcome = "EXTENSION";
+        m.conflict = null;
+      }
+    }
+  }
   importState.pendingConflicts = importState.pendingConflicts.filter((p) => p !== c);
   bumpLibraryVersion();
 }

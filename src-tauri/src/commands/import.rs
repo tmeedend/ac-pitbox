@@ -158,7 +158,7 @@ pub fn split_dropped_paths(paths: Vec<String>) -> DroppedPaths {
     DroppedPaths { archives, folders }
 }
 
-/// Résout un conflit flou (§4.2) : action = "keep_both" | "replace".
+/// Résout un conflit flou (§4.2) : action = "keep_both" | "replace" | "layer".
 #[tauri::command]
 pub fn resolve_conflict(
     app: AppHandle,

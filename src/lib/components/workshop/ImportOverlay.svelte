@@ -8,8 +8,24 @@
     resolvePendingConflict,
     resolveAmbiguous,
     resolveFragment,
+    type PendingConflict,
   } from "$lib/workshop/importState.svelte";
   import { t } from "$lib/i18n/index.svelte";
+  import { errorText } from "$lib/errors";
+  import type { ConflictAction } from "$lib/library/library";
+
+  /** Why the backend refused the last answer, shown in the dialog itself:
+   * the conflict stays, and another answer is still possible. */
+  let conflictError = $state<string | null>(null);
+
+  async function answerConflict(c: PendingConflict, action: ConflictAction) {
+    conflictError = null;
+    try {
+      await resolvePendingConflict(c, action);
+    } catch (e) {
+      conflictError = errorText(e);
+    }
+  }
 </script>
 
 {#if importState.pendingConflicts.length}
@@ -20,11 +36,22 @@
       <p>
         {t("importOverlay.modalBodyOpen")}<b>{c.newName}</b>{t("importOverlay.modalBodyMid")}<span class="mono">{c.oldId}</span>{t("importOverlay.modalBodyArrow")}<span class="mono">{c.newId}</span>{t("importOverlay.modalBodyEnd")}
       </p>
+      {#if conflictError}
+        <div class="errbox">{conflictError}</div>
+      {/if}
       <div class="modal-actions">
-        <button class="btn" type="button" onclick={() => resolvePendingConflict(c, "keep_both")}>
+        <button class="btn" type="button" onclick={() => answerConflict(c, "keep_both")}>
           {t("importOverlay.keepBoth")}
         </button>
-        <button class="btn btn-primary" type="button" onclick={() => resolvePendingConflict(c, "replace")}>
+        <button
+          class="btn"
+          type="button"
+          title={t("importOverlay.layerOnOldHint")}
+          onclick={() => answerConflict(c, "layer")}
+        >
+          {t("importOverlay.layerOnOld")}
+        </button>
+        <button class="btn btn-primary" type="button" onclick={() => answerConflict(c, "replace")}>
           {t("importOverlay.replaceOld")}
         </button>
       </div>

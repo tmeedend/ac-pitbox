@@ -501,10 +501,14 @@ export function executeBulkImport(items: BulkExecItem[], copy: boolean): Promise
   return invoke<ArchiveResult[]>("execute_bulk_import", { items, copy });
 }
 
+/** The answer to a fuzzy conflict (§4.2); `layer` turns the new mod into a
+ * layer of the old one (§4.3bis). */
+export type ConflictAction = "keep_both" | "replace" | "layer";
+
 export function resolveConflict(
   newId: string,
   oldId: string,
-  action: "keep_both" | "replace",
+  action: ConflictAction,
 ): Promise<void> {
   return invoke<void>("resolve_conflict", { newId, oldId, action });
 }

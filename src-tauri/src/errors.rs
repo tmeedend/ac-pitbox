@@ -112,6 +112,9 @@ pub const BUNDLED_NOT_REMOVABLE: &str = "errors.bundledNotRemovable";
 pub const STOCK_NOT_ACTIVATABLE: &str = "errors.stockNotActivatable";
 pub const UNMANAGED_NOT_ACTIVATABLE: &str = "errors.unmanagedNotActivatable";
 pub const UNMANAGED_NO_LAYER: &str = "errors.unmanagedNoLayer";
+// Only a freshly imported mod — one complete version, no layers of its own —
+// can become a layer of another mod of the same kind (§4.3bis).
+pub const NOT_LAYERABLE: &str = "errors.notLayerable";
 pub const INCONSISTENT_STOCK: &str = "errors.inconsistentStock";
 pub const EMPTY_STOCK_BACKUP: &str = "errors.emptyStockBackup";
 pub const REAL_FOLDER_IN_CONTENT: &str = "errors.realFolderInContent";

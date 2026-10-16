@@ -58,7 +58,7 @@ Le fichier du mod est une **entrée** du pipeline (lu), jamais une **sortie** (j
 
 Chaque mod a une **empreinte composite** stable. À l'import, l'app la compare à la bibliothèque :
 - **Même identité** → mise à jour (voir §4.3 pour la distinction mise à jour / couche).
-- **Match flou** (marque+nom proches, dossier différent) → demande explicite à l'utilisateur.
+- **Match flou** (marque+nom proches, dossier différent) → demande explicite à l'utilisateur, trois réponses : **garder les deux**, **remplacer l'ancien**, ou **l'ajouter en couche à l'ancien** — le filet de §4.3bis quand la détection a manqué un contenu conçu pour être extrait dans le dossier de l'autre. Le mod tout juste importé sort du jeu, ses fichiers deviennent une couche de l'ancien (dont la base n'est pas touchée), ses ressources rejoignent celles de l'hôte, et son entrée disparaît. Seul un mod sans passé s'y prête — une seule version complète, aucune couche à lui, ni livrée ou son rattaché, ni ajout hors de son dossier, qu'une couche ne saurait porter — ce qui est toujours le cas d'un import qui vient de finir ; un autre est refusé, avec la raison dans la fenêtre. L'import en masse garde ses deux réponses.
 - **Aucun match** → nouvel import.
 
 Avant tout cela, une question qui ne porte pas sur l'identité mais sur la nature : **ce dossier tient-il debout seul ?** Sans géométrie, il ne peut pas être un mod, quel que soit son nom — voir §4.3bis.

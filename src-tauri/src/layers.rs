@@ -217,6 +217,138 @@ pub fn refill_layer(
     .map_err(|e| e.to_string())
 }
 
+/// Turns a mod into a layer of another mod of the same kind (§4.3bis), and
+/// returns the layer's id.
+///
+/// The way out of the fuzzy conflict of §4.2 when detection missed: real case,
+/// `grandvalleyspeedway2010.rar`, 2010 layouts meant to be extracted **into**
+/// `grand_valley_speedway_LL`, imported as a track of their own, and only
+/// "keep both" or "replace" on offer. Neither was right: one leaves a track
+/// the game cannot load, the other throws away the base it needs.
+///
+/// Only a freshly imported mod qualifies — one complete version, no layers of
+/// its own, nothing attached, no additions outside its folder — which is what
+/// the conflict hands over. Anything richer (a
+/// history of versions, layers stacked on it) would lose something in the
+/// move, so it is refused rather than half-converted.
+///
+/// In order: out of the game by the normal path, files moved into the layer
+/// (the base of the host is never touched), resources handed to the host,
+/// the mod's library folder and row removed, the host recomposed.
+pub fn mod_into_layer(
+    conn: &Connection,
+    cfg: &crate::config::AppConfig,
+    mod_id: &str,
+    host_id: &str,
+) -> Result<String, String> {
+    let library = cfg
+        .library_path
+        .as_deref()
+        .ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
+    let m = overlay::get_mod(conn, mod_id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::MOD_NOT_FOUND)?;
+    let host = overlay::get_mod(conn, host_id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::MOD_NOT_FOUND)?;
+    if mod_id == host_id || m.kind != host.kind || m.is_stock || m.is_unmanaged {
+        return Err(crate::errors::NOT_LAYERABLE.into());
+    }
+    // `store_layer` refuses it too, but only once the mod is out of the game:
+    // asked first, a refusal leaves everything as it was.
+    if host.is_unmanaged {
+        return Err(crate::errors::UNMANAGED_NO_LAYER.into());
+    }
+    let kind = ModKind::from_column(&m.kind);
+    let versions = overlay::get_versions(conn, mod_id).map_err(|e| e.to_string())?;
+    let [version] = versions.as_slice() else {
+        return Err(crate::errors::NOT_LAYERABLE.into());
+    };
+    let own_layers = overlay::list_layers(conn, mod_id, kind.into()).map_err(|e| e.to_string())?;
+    let subs = overlay::list_subs_for_parent(conn, mod_id).map_err(|e| e.to_string())?;
+    // What a layer cannot carry is refused, never dropped: skins or sounds
+    // attached to the mod (their projections are junctions inside the version
+    // folder, which the move would walk through into the stored skin), and
+    // additions laid outside its folder (a layer composes `content/<type>/<id>`
+    // only).
+    let attached = subs.iter().any(|s| s.removable);
+    let extras = crate::extras::dir(library, kind.into(), mod_id).exists();
+    if version.is_skeleton() || !own_layers.is_empty() || attached || extras {
+        return Err(crate::errors::NOT_LAYERABLE.into());
+    }
+    let src = crate::libpath::resolve(Some(library), &version.library_path).ok_or(crate::errors::NOT_LAYERABLE)?;
+    // Our own version folder, and nothing else: it is moved, then its
+    // parent removed below.
+    let mod_dir = library.join(kind.content_folder()).join(mod_id);
+    if !src.starts_with(&mod_dir) || !src.is_dir() {
+        return Err(crate::errors::NOT_LAYERABLE.into());
+    }
+
+    if crate::activation::is_mod_active(cfg, kind, mod_id) {
+        crate::activation::deactivate(conn, cfg, mod_id)?;
+    }
+    let diff = crate::submods::parent_content_dir(conn, cfg, host_id)
+        .filter(|base| base.is_dir())
+        .map(|base| crate::identity::diff_content(&src, &base))
+        .unwrap_or_default();
+    // The archive name is the layer's identity (`as_layer`): importing the
+    // same archive again replaces this layer instead of stacking a second.
+    let archive = version.source_archive.clone().unwrap_or_else(|| mod_id.to_string());
+    let mode = ExtractionMode::parse(&cfg.prefs.resource_extraction_mode);
+    let (layer_id, _) = store_layer(
+        conn,
+        library,
+        host_id,
+        kind.into(),
+        mod_id,
+        &src,
+        false,
+        &diff,
+        &archive,
+        mode,
+    )?;
+
+    hand_over_resources(
+        &resources::resources_dir(library, kind, mod_id),
+        &resources::resources_dir(library, kind, host_id),
+    );
+    if let Err(e) = std::fs::remove_dir_all(&mod_dir) {
+        log::warn!("mod_into_layer: {} left behind: {e}", mod_dir.display());
+    }
+    // The skins delivered with the mod moved with its files: their rows
+    // would point into a folder that no longer exists.
+    for sub in subs.iter().filter(|s| !s.removable) {
+        overlay::delete_sub_mod(conn, &sub.id).map_err(|e| e.to_string())?;
+    }
+    overlay::delete_mod(conn, mod_id).map_err(|e| e.to_string())?;
+    if let Err(e) = crate::compose::recompose(conn, cfg, host_id) {
+        log::warn!("recompose {host_id} after {mod_id} became its layer: {e}");
+    }
+    Ok(layer_id)
+}
+
+/// Moves what a mod's resources folder holds into its host's, where a layer's
+/// resources live (§4.5.2). Best-effort: a resource left behind is a notice
+/// that stays readable in the explorer, never content the game misses.
+fn hand_over_resources(from: &Path, to: &Path) {
+    let Ok(entries) = std::fs::read_dir(from) else {
+        return;
+    };
+    if let Err(e) = std::fs::create_dir_all(to) {
+        log::warn!("hand_over_resources: {}: {e}", to.display());
+        return;
+    }
+    for entry in entries.flatten() {
+        let target = importer::unique_dir(&to.join(entry.file_name()));
+        if let Err(e) = std::fs::rename(entry.path(), &target) {
+            log::warn!("hand_over_resources: {}: {e}", entry.path().display());
+        }
+    }
+    if let Err(e) = std::fs::remove_dir(from) {
+        log::warn!("hand_over_resources: {} not empty: {e}", from.display());
+    }
+}
+
 /// Un fichier apporté par une couche (§4.4).
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct LayerFile {
@@ -531,6 +663,162 @@ mod tests {
         assert!(
             library.join("layers").join("apps").join("shuto").join("pack").is_dir(),
             "celle de l'app sous apps/, sans se mêler à la précédente"
+        );
+    }
+
+    /// A track `<root>/<id>` with one layout, one kn5 and a notice beside it.
+    fn make_track(root: &Path, id: &str, layout: &str, kn5: &str) -> PathBuf {
+        let dir = root.join(id);
+        let ui = dir.join("ui").join(layout);
+        std::fs::create_dir_all(&ui).unwrap();
+        std::fs::write(
+            ui.join("ui_track.json"),
+            format!(r#"{{"name":"Grand Valley {layout}"}}"#),
+        )
+        .unwrap();
+        std::fs::write(dir.join(kn5), b"FAKE_KN5_DATA").unwrap();
+        std::fs::write(root.join(format!("{id}_readme.pdf")), b"PDF").unwrap();
+        root.to_path_buf()
+    }
+
+    /// Rule (§4.3bis): "lay it on the existing one", the third answer to the
+    /// fuzzy conflict, turns the mod just imported into a layer of the old one
+    /// — out of the game, files in the layer, no entry left — and the base of
+    /// the host is never touched. Real case: `grandvalleyspeedway2010.rar`,
+    /// offered only "keep both" or "replace" against the track it completes.
+    #[test]
+    fn a_mod_just_imported_becomes_a_layer_of_the_existing_one() {
+        let base = crate::testutil::temp_dir("mod-into-layer");
+        let ac = base.join("ac");
+        let library = base.join("library");
+        std::fs::create_dir_all(ac.join("content").join("tracks")).unwrap();
+        std::fs::create_dir_all(&library).unwrap();
+        let db = overlay::Db(std::sync::Mutex::new(
+            overlay::open(&base.join("overlay.sqlite")).unwrap(),
+        ));
+        let mut cfg = crate::config::AppConfig {
+            ac_install_path: Some(ac.clone()),
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        cfg.prefs.resource_extraction_mode = "all".into();
+        let rules = crate::rules::default_rules();
+        let import = |src: PathBuf| {
+            let path = src.to_string_lossy().into_owned();
+            importer::import_folders(
+                &crate::import_progress::ImportCtx::silent(),
+                &db,
+                &cfg,
+                &rules,
+                &[path],
+                true,
+                &[],
+            )
+            .unwrap()
+        };
+        import(make_track(&base.join("src1"), "gv_base", "full_layout", "gv_base.kn5"));
+        let r = import(make_track(
+            &base.join("src2"),
+            "gv2010",
+            "full_layout_2010",
+            "gv_2010.kn5",
+        ));
+        assert_eq!(
+            r[0].mods[0].id_interne, "gv2010",
+            "imported as a track of its own first"
+        );
+        let conn = db.0.lock().unwrap();
+        assert!(
+            crate::activation::is_mod_active(&cfg, ModKind::Track, "gv2010"),
+            "precondition: in the game, as every import"
+        );
+
+        importer::resolve_conflict(&conn, &cfg, "gv2010", "gv_base", "layer").unwrap();
+
+        assert!(overlay::get_mod(&conn, "gv2010").unwrap().is_none(), "no entry left");
+        assert!(
+            !ac.join("content").join("tracks").join("gv2010").exists(),
+            "taken out of the game"
+        );
+        assert!(
+            !library.join("tracks").join("gv2010").exists(),
+            "its library folder gone"
+        );
+        let layers = overlay::list_layers(&conn, "gv_base", HostKind::Track).unwrap();
+        assert_eq!(layers.len(), 1, "one layer on the host");
+        let layer_dir = crate::libpath::resolve(Some(&library), &layers[0].library_path).unwrap();
+        assert!(
+            layer_dir.join("gv_2010.kn5").is_file(),
+            "the files moved into the layer"
+        );
+        assert!(
+            layer_dir
+                .join("ui")
+                .join("full_layout_2010")
+                .join("ui_track.json")
+                .is_file(),
+            "its layout with them"
+        );
+        let host_dir = crate::submods::parent_content_dir(&conn, &cfg, "gv_base").unwrap();
+        assert!(
+            host_dir.join("gv_base.kn5").is_file() && !host_dir.join("gv_2010.kn5").exists(),
+            "the base of the host untouched"
+        );
+        let resources = resources::resources_dir(&library, ModKind::Track, "gv_base");
+        assert!(
+            resources.join("gv2010_readme.pdf").is_file(),
+            "its notice handed to the host"
+        );
+        assert!(
+            !resources::resources_dir(&library, ModKind::Track, "gv2010").exists(),
+            "no resources folder left for a mod that is gone"
+        );
+    }
+
+    /// Rule (§4.3bis): a mod with a past — several versions — is refused
+    /// whole rather than converted with part of it lost.
+    #[test]
+    fn a_mod_with_several_versions_is_not_turned_into_a_layer() {
+        let base = crate::testutil::temp_dir("mod-into-layer-refused");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = crate::config::AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        for id in ["host", "guest"] {
+            overlay::upsert_mod(&conn, id, "Track", None, Some(id), id, None, "now").unwrap();
+        }
+        for (v, label) in [("v1", "1.0"), ("v2", "2.0")] {
+            let dir = library.join("tracks").join("guest").join(label);
+            std::fs::create_dir_all(&dir).unwrap();
+            let rel = crate::libpath::to_relative(Some(&library), &dir);
+            overlay::insert_version(
+                &conn,
+                v,
+                "guest",
+                Some(label),
+                None,
+                "now",
+                &rel,
+                None,
+                "sig",
+                &[],
+                &[],
+                &[],
+                &[],
+                None,
+            )
+            .unwrap();
+        }
+
+        let err = mod_into_layer(&conn, &cfg, "guest", "host").unwrap_err();
+        assert_eq!(err, crate::errors::NOT_LAYERABLE, "refused, with a reason");
+        assert!(overlay::get_mod(&conn, "guest").unwrap().is_some(), "nothing removed");
+        assert!(
+            library.join("tracks").join("guest").join("1.0").is_dir(),
+            "no file moved"
         );
     }
 }
