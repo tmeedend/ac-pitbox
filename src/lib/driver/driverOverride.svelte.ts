@@ -50,21 +50,20 @@ export type Piece = "suit" | "gloves" | "helmet";
 // --- Ce qui est choisi pour une voiture donnée ------------------------------
 
 /**
- * La tenue que l'utilisateur a choisie **pour cette voiture**, ou `null`.
- * Une tenue vide non nulle veut dire « l'origine, choisie exprès » : la tenue
- * par défaut ne s'y applique pas (`parseEntry`).
+ * The outfit the user chose **for this car**, or `null`. An empty outfit,
+ * not `null`, means "the original, chosen on purpose": the default outfit
+ * keeps off it (`parseEntry`).
  *
- * Lecture synchrone (`peekUiPref`) : la bibliothèque l'appelle une fois par
- * carte, potentiellement des centaines de fois par rendu.
+ * Synchronous read (`peekUiPref`): the library calls it once per card,
+ * possibly hundreds of times per render.
  */
 export function driverOwn(carId: string): DriverOutfit | null {
   return parseEntry(peekUiPref(StorageKey.driverOutfit(carId)));
 }
 
-/** Cette voiture porte-t-elle autre chose que son pilote d'origine, par un
- * choix fait sur elle ? Le drapeau du filtre de la bibliothèque. Une voiture
- * rendue exprès à son origine n'y figure pas : elle porte ce qu'elle portait
- * avant qu'on y touche. */
+/** Does this car wear something other than its original driver, by a choice
+ * made on it? The flag of the library filter. A car put back to its origin on
+ * purpose is not in it: it wears what it wore before anyone touched it. */
 export function hasOwnDriver(carId: string): boolean {
   const own = driverOwn(carId);
   return own != null && !isEmpty(own);
@@ -123,8 +122,8 @@ export function setDriverOutfit(carId: string, kind: CarClass, outfit: DriverOut
   write(carId, kind, outfit);
 }
 
-/** Rend cette voiture à sa livrée (PILOTE§5.6) — y compris quand une tenue
- * par défaut l'habillerait, sans quoi le bouton la ramènerait aussitôt. */
+/** Puts this car back on its livery (PILOTE§5.6) — also when a default outfit
+ * would dress it, which the button would otherwise bring straight back. */
 export function resetDriverOutfit(carId: string, kind: CarClass): void {
   write(carId, kind, EMPTY_OUTFIT);
 }
