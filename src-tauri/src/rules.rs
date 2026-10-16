@@ -43,7 +43,10 @@ pub const DEFAULT_RULES: &str = include_str!("../rules/default-tag-rules.json");
 /// 8 — invisible characters are no difference in a brand (`brands::clean`):
 ///     the bump files the "No Hesi Traffic" cars, stored as "\u{1d17a}BMW",
 ///     back under "BMW".
-pub const ENGINE_VERSION: u32 = 8;
+/// 9 — countries merge without their spaces and without the game's braced
+///     qualifier (TAXO§7.1): `Vietnam` → `Viet Nam`, `Venezuela` →
+///     `Venezuela, {Bolivarian Republic of}`, with their flags.
+pub const ENGINE_VERSION: u32 = 9;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Rules {
@@ -159,14 +162,36 @@ pub fn canonical_country_in(
     if let Some(canonical) = aliases.map.get(&cleaned.to_lowercase()) {
         return Some(canonical.clone());
     }
-    let folded = fold(&cleaned);
+    let folded = compact(&cleaned);
     let upper = cleaned.to_uppercase();
     let hit = known.iter().find(|n| {
-        fold(&n.name) == folded
+        compact(&n.name) == folded
+            || short_form(&n.name).is_some_and(|short| compact(short) == folded)
             || (upper.len() == 3 && n.code == upper)
             || (upper.len() == 2 && n.iso2.as_deref() == Some(upper.as_str()))
     });
     Some(hit.map(|n| n.name.clone()).unwrap_or(cleaned))
+}
+
+/// [`fold`], spaces dropped altogether: TAXO§7.1 merges on spaces, not only on
+/// their number. The game writes `Viet Nam` where every author writes
+/// `Vietnam`, and only collapsing the spaces kept the two apart — the country
+/// stood in the tab as "unknown to the game", flagless, with the game's own
+/// spelling proposed beside it.
+fn compact(s: &str) -> String {
+    fold(s).chars().filter(|c| !c.is_whitespace()).collect()
+}
+
+/// The name the game writes before its braced qualifier, if it has one:
+/// `Venezuela, {Bolivarian Republic of}` → `Venezuela`. The braces are the
+/// game's own notation for the part nobody says (`Moldova, {Republic of}`,
+/// `Tanzania, {United Republic of}`) — taking the rest is reading its table,
+/// not guessing. A comma without braces is part of the name: `Virgin
+/// Islands, British` and `Virgin Islands, U.S.` must stay two countries.
+/// Measured on the game table: no short form or compacted name collides with
+/// another entry.
+fn short_form(name: &str) -> Option<&str> {
+    name.find(", {").map(|i| name[..i].trim())
 }
 
 /// The value cut at its first quote and trimmed, `None` when nothing is left.
@@ -855,6 +880,41 @@ mod tests {
             canonical_country_in("SC", &a, &known).as_deref(),
             Some("SC"),
             "no ISO code, no code merge"
+        );
+    }
+
+    /// TAXO§7.1: spaces merge, not only their number, and the game's braced
+    /// qualifier is optional. Real case: `Vietnam` and `Venezuela` declared by
+    /// two tracks stood as countries unknown to the game, flagless, with
+    /// `Viet Nam` and `Venezuela, {Bolivarian Republic of}` proposed beside.
+    #[test]
+    fn a_country_matches_the_game_without_its_spaces_or_its_braced_qualifier() {
+        let known = [
+            nat("VNM", Some("VN"), "Viet Nam"),
+            nat("VEN", Some("VE"), "Venezuela, {Bolivarian Republic of}"),
+            nat("VGB", Some("VG"), "Virgin Islands, British"),
+            nat("VIR", Some("VI"), "Virgin Islands, U.S."),
+        ];
+        let a = CountryAliases::default();
+        for (written, want) in [
+            ("Vietnam", "Viet Nam"),
+            ("VIET NAM", "Viet Nam"),
+            ("Venezuela", "Venezuela, {Bolivarian Republic of}"),
+            (
+                "venezuela, {bolivarian republic of}",
+                "Venezuela, {Bolivarian Republic of}",
+            ),
+        ] {
+            assert_eq!(
+                canonical_country_in(written, &a, &known).as_deref(),
+                Some(want),
+                "{written}"
+            );
+        }
+        assert_eq!(
+            canonical_country_in("Virgin Islands", &a, &known).as_deref(),
+            Some("Virgin Islands"),
+            "a comma without braces is part of the name: two countries, no guess"
         );
     }
 

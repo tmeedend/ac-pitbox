@@ -218,6 +218,8 @@ Mécanique identique pour les trois taxonomies.
 
 **Exception pays :** un code ISO valide fusionne aussi automatiquement avec le nom du pays correspondant. `JP` → `Japon` n'est pas un jugement, c'est une table normalisée.
 
+**Les espaces comptent pour rien, pas seulement leur nombre** : le jeu écrit `Viet Nam` là où tous les auteurs écrivent `Vietnam`. Et **la forme courte que le jeu écrit lui-même** vaut son nom : la table d'AC met entre accolades la partie que personne ne dit (`Venezuela, {Bolivarian Republic of}`, `Moldova, {Republic of}`, `Tanzania, {United Republic of}`), donc `Venezuela` est `Venezuela, {Bolivarian Republic of}` — c'est lire sa table, pas deviner. Une virgule sans accolades fait partie du nom (`Virgin Islands, British` et `Virgin Islands, U.S.` restent deux pays). Mesuré sur les 220 noms du jeu : aucune collision. Le reste — `Syria` pour `Syrian Arab Republic`, `Taiwan` pour `Taiwan, China` — est une décision, donc une orthographe du catalogue (§7.2).
+
 ## 7.2 Ce qui est proposé
 
 Tout le reste. Pit Box classe les candidats par proximité — préfixe commun, inclusion, distance d'édition faible — et affiche un bandeau en tête de l'onglet :
