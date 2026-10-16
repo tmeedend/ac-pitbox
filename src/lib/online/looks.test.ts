@@ -29,6 +29,23 @@ describe("online looks (SPEC-play-online, Liste des serveurs)", () => {
     expect(trackTitle(looks, track("rt_suzuka", null))).toBe("rt_suzuka");
   });
 
+  // A track the library does not hold is named as CSP's table names it,
+  // before its folder; the library's own name still comes first.
+  it("names a track the library does not hold by CSP's name", () => {
+    const withCsp: Looks = { ...looks, track_names: { pk_akina: "Mt. Akina", ks_nordschleife: "Nordschleife" } };
+    expect(trackTitle(withCsp, track("PK_Akina", null))).toBe("Mt. Akina");
+    expect(trackTitle(withCsp, track("ks_nordschleife", "endurance")), "the library first").toBe(
+      "Nürburgring Nordschleife",
+    );
+  });
+
+  // A layout folder named like its track repeated the folder under the
+  // track's name (`MTN Saudi arabia streets` / `mtn_saudi_streets`).
+  it("drops a layout folder that only repeats the track's", () => {
+    expect(layoutName(looks, track("mtn_saudi_streets", "MTN_Saudi_Streets"))).toBeNull();
+    expect(layoutName(looks, track("ek_myogi", "freeroam")), "a layout of its own stays").toBe("freeroam");
+  });
+
   it("reads car ids without case, and falls back on the id", () => {
     expect(carName(looks, "KS_Mazda_Miata")).toBe("Mazda MX-5 NA");
     expect(carName(looks, "rss_gtm_lanzo_v8")).toBe("rss_gtm_lanzo_v8");

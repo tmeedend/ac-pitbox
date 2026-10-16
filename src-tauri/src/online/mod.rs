@@ -13,6 +13,7 @@ use serde::Serialize;
 
 use crate::config::AppConfig;
 
+pub mod categories;
 pub mod content;
 pub mod drivers;
 pub mod extended;
@@ -22,6 +23,7 @@ pub mod join;
 pub mod lobby;
 pub mod lobby_cache;
 mod looks;
+pub mod picture;
 pub mod ping;
 pub mod readiness;
 pub mod server;
@@ -52,7 +54,10 @@ pub fn judge_list(conn: &Connection, cfg: &AppConfig, mut servers: Vec<lobby::Se
         installed.judge(server);
     }
     let (cars, tracks) = referenced(&servers);
-    let looks = Looks::scan(conn, cfg, &cars, &tracks);
+    // Every track gets a name, the ones that cannot be driven included: a
+    // name costs no folder, only a line of CSP's table.
+    let named: HashSet<String> = servers.iter().map(|s| s.track.id.to_lowercase()).collect();
+    let looks = Looks::scan(conn, cfg, &cars, &tracks, &named);
     ServerList {
         servers,
         looks,

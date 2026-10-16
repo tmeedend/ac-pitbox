@@ -15,11 +15,12 @@
   import Slider from "$lib/components/ui/Slider.svelte";
   import { flagFor } from "$lib/flags.svelte";
   import Emblem from "$lib/components/ui/Emblem.svelte";
+  import TrackCategoryIcon from "$lib/components/library/TrackCategoryIcon.svelte";
   import { logoOf } from "$lib/library/brandLogos.svelte";
   import { previewSrc } from "$lib/library/library";
   import { t } from "$lib/i18n/index.svelte";
   import { clampPerfPct, formatRatio, perfBand, PERF_MAX_PCT, PERF_MIN_PCT, PERF_STEP } from "$lib/detail/carSpecs";
-  import { valueLabel, type FilterDef, type FilterOption, type FilterState, type PerfRef, type Sign } from "$lib/library/filters";
+  import { UNSET_VALUE, valueLabel, type FilterDef, type FilterOption, type FilterState, type PerfRef, type Sign } from "$lib/library/filters";
 
   interface Props {
     def: FilterDef;
@@ -196,6 +197,10 @@
             {@const logo = logoOf(opt.value)}
             {@const src = logo ? previewSrc(logo.path) : null}
             {#if logo && src}<Emblem {src} plaque={logo.plaque} size={18} />{:else}<span class="logo-none"></span>{/if}
+          {:else if def.categoryIcons}
+            <span class="cat"
+              ><TrackCategoryIcon icon={opt.value === UNSET_VALUE ? "" : undefined} tag={opt.value} size={14} /></span
+            >
           {/if}
           <span class="oname" title={opt.label}>{opt.label}</span>
           <span class="ocount mono">{opt.count}</span>
@@ -238,6 +243,8 @@
                 {@const logo = logoOf(tk.value)}
                 {@const src = logo ? previewSrc(logo.path) : null}
                 {#if logo && src}<Emblem {src} plaque={logo.plaque} size={14} />{/if}
+              {:else if def.categoryIcons}
+                <TrackCategoryIcon icon={tk.value === UNSET_VALUE ? "" : undefined} tag={tk.value} size={11} />
               {/if}
               <span class="label">{valueLabel(def, tk.value)}</span>
             </button>
@@ -579,6 +586,16 @@
     height: 18px;
     border-radius: 50%;
     background: var(--raised);
+  }
+  /* A category's pictogram, in a box of fixed width so the names stay
+     aligned from one row to the next, like the flags. */
+  .cat {
+    --tile-bg: var(--panel);
+    flex: none;
+    width: 34px;
+    display: flex;
+    justify-content: center;
+    color: var(--txt2);
   }
 
   .grouplbl {

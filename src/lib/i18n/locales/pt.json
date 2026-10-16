@@ -733,8 +733,6 @@
     "tabTracks": "Pistas",
     "tagMerge": "Fusão / dedução",
     "addRule": "Regra",
-    "trackCategoriesTitle": "Categorias de pista (lista permitida)",
-    "addCategoryPlaceholder": "adicionar uma categoria, ex.: #hillclimb (Enter)…",
     "moveUp": "Subir (prioridade maior)",
     "moveDown": "Descer (prioridade menor)",
     "brandFixTitle": "Correção da marca",

@@ -96,6 +96,22 @@ pub struct Prefs {
     /// itself reveals nothing of the library (one list for everyone, compared
     /// locally); only a download names a mod.
     pub mod_updates_online: bool,
+    /// How often the startup backup is taken (§10). Seven are kept: at one per
+    /// start, a morning of development restarts left them half an hour deep
+    /// (measured 2026-10-10, seven copies between 14:12 and 14:40).
+    pub backup_frequency: BackupFrequency,
+}
+
+/// How often the startup backup is taken (§10). A new build's first start on
+/// the base takes one whatever this says (`version_guard`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BackupFrequency {
+    Startup,
+    Daily,
+    /// Asked at use, as the default: seven weeks of copies.
+    #[default]
+    Weekly,
 }
 
 impl Default for Prefs {
@@ -139,6 +155,7 @@ impl Default for Prefs {
             wiki_track_radius_m: 10_000,
             wiki_track_tie_margin_m: 150.0,
             mod_updates_online: true,
+            backup_frequency: BackupFrequency::Weekly,
         }
     }
 }
@@ -486,6 +503,17 @@ pub fn validate(cfg: &AppConfig) -> ConfigValidation {
 
 #[cfg(test)]
 mod tests {
+    /// §10: a `config.json` written before the backup frequency existed reads
+    /// back with the weekly default, the rest of it untouched.
+    #[test]
+    fn an_older_config_reads_the_weekly_backup_default() {
+        let cfg: super::AppConfig = serde_json::from_str(r#"{"prefs": {"language": "fr"}}"#).unwrap();
+        assert_eq!(cfg.prefs.backup_frequency, super::BackupFrequency::Weekly);
+        assert_eq!(cfg.prefs.language.as_deref(), Some("fr"), "the rest is read");
+        let daily: super::Prefs = serde_json::from_str(r#"{"backup_frequency": "daily"}"#).unwrap();
+        assert_eq!(daily.backup_frequency, super::BackupFrequency::Daily);
+    }
+
     use super::*;
 
     #[test]

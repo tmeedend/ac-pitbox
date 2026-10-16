@@ -267,6 +267,8 @@ pub fn merge_taxonomy(mine: &mut TaxonomyOverlay, theirs: &TaxonomyOverlay, st: 
     merge_map(&mut mine.country_tags, &theirs.country_tags, st);
     merge_map(&mut mine.brand_aliases, &theirs.brand_aliases, st);
     merge_set(&mut mine.not_brands, &theirs.not_brands, st);
+    merge_map(&mut mine.track_categories, &theirs.track_categories, st);
+    merge_map(&mut mine.server_keywords, &theirs.server_keywords, st);
     for m in &theirs.ignored_brand_merges {
         if mine.ignored_brand_merges.contains(m) {
             st.already += 1;

@@ -118,6 +118,16 @@ fn fixture() -> Fixture {
     );
     // An accented name, for the search (DOSSIER§7.2).
     extra(&library, "rss_lanzo", "extension/textures/Clément.dds", "c", RECENT);
+    // Already in the game before Pit Box, with the mod's own content: the
+    // deployment finds it there, not older, and claims nothing. The library
+    // copy is written first, so the one in the game is (barely) newer - the
+    // bytes decide, not the date.
+    extra(&library, "rss_lanzo", "content/fonts/same.png", "font", OLD);
+    write_aged(&ac.join("content/fonts/same.png"), "font", OLD);
+    // The same content under a much newer date: an archive repacked by a
+    // third party (measured on the dev install, 2026-10).
+    extra(&library, "rss_lanzo", "content/fonts/repacked.png", "glyph", OLD);
+    write_aged(&ac.join("content/fonts/repacked.png"), "glyph", RECENT);
     // A game file the mod replaces, after backup (§4.5.4).
     write_aged(&ac.join("system/shaders/pitbox_test.fx"), "original", OLD);
     extra(&library, "rss_lanzo", "system/shaders/pitbox_test.fx", "modded", RECENT);
@@ -335,6 +345,8 @@ fn every_case_of_the_tables_is_classified() {
         ("extension/config/cars/rss/gone.ini", P::Extra, S::Drift, Some(Missing)),
         ("system/shaders/pitbox_test.fx", P::Extra, S::ReplacesGame, None),
         ("extension/config/tracks/loaded/spa.ini", P::Extra, S::Waiting, None),
+        ("content/fonts/same.png", P::Extra, S::Nobody, None),
+        ("content/fonts/repacked.png", P::Extra, S::Nobody, None),
         // 5, 6, 7
         (
             "content/cars/ks_ferrari_f2004/ui/ui_car.json",
@@ -388,6 +400,19 @@ fn every_case_of_the_tables_is_classified() {
     let summary = idx.summary();
     assert!(summary.replaces_game >= 2, "the shader and the sound replace the game");
     assert_eq!(summary.waiting, 1, "one copy waits");
+    for rel in ["content/fonts/same.png", "content/fonts/repacked.png"] {
+        let c = &idx.class[node(&idx, rel) as usize];
+        assert!(c.same_as_copy, "{rel}: the mod's content is in place, nothing waits");
+        assert_eq!(
+            owner_at(&idx, rel).as_deref(),
+            Some("rss_lanzo"),
+            "{rel}: still the Lanzo's"
+        );
+    }
+    assert!(
+        !idx.class[node(&idx, "extension/config/tracks/loaded/spa.ini") as usize].same_as_copy,
+        "a foreign file with other content still makes the copy wait"
+    );
     assert!(summary.drift >= 5, "modified, missing twice, broken, orphans");
 }
 

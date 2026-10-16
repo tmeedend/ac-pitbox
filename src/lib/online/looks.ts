@@ -22,6 +22,8 @@ export interface TrackLook {
 export interface Looks {
   cars: Record<string, string>;
   tracks: Record<string, TrackLook>;
+  /** Names of the tracks the library does not hold, from CSP's table. */
+  track_names?: Record<string, string>;
 }
 
 export const NO_LOOKS: Looks = { cars: {}, tracks: {} };
@@ -31,15 +33,17 @@ export function layoutLook(looks: Looks, track: TrackRef): LayoutLook | null {
   return t?.layouts[(track.layout ?? "").toLowerCase()] ?? null;
 }
 
-/** The layout's own name ("Nordschleife - Tourist"), else the track's, else
- * the folder. */
+/** The layout's own name ("Nordschleife - Tourist"), else the track's
+ * (`trackName`). */
 export function trackTitle(looks: Looks, track: TrackRef): string {
-  return layoutLook(looks, track)?.name ?? looks.tracks[track.id.toLowerCase()]?.name ?? track.id;
+  return layoutLook(looks, track)?.name ?? trackName(looks, track);
 }
 
-/** The track's own name, else its folder. */
+/** The track's own name in the library, else CSP's name for it, else its
+ * folder. */
 export function trackName(looks: Looks, track: TrackRef): string {
-  return looks.tracks[track.id.toLowerCase()]?.name ?? track.id;
+  const id = track.id.toLowerCase();
+  return looks.tracks[id]?.name ?? looks.track_names?.[id] ?? track.id;
 }
 
 /**
@@ -47,12 +51,15 @@ export function trackName(looks: Looks, track: TrackRef): string {
  * `main_layout`. A layout's `ui_track.json` usually repeats the track
  * ("Shutoko Revival Project 0.9.3 - Main Layout"): the repetition goes. A
  * single-layout track has none; a layout the library does not know keeps its
- * folder, the only name there is.
+ * folder, the only name there is - unless the folder is the track's own.
  */
 export function layoutName(looks: Looks, track: TrackRef): string | null {
   if (!track.layout) return null;
   const name = layoutLook(looks, track)?.name;
-  if (!name) return track.layout;
+  // A layout folder named like its track (`mtn_saudi_streets/mtn_saudi_streets`)
+  // says nothing the track's name does not: shown, it repeated the folder
+  // under the name CSP gives the track.
+  if (!name) return track.layout.toLowerCase() === track.id.toLowerCase() ? null : track.layout;
   const prefix = trackName(looks, track);
   if (!name.toLowerCase().startsWith(prefix.toLowerCase())) return name;
   const rest = name.slice(prefix.length).replace(/^[\s\-–—:·|]+/, "");

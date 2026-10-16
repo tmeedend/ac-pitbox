@@ -84,7 +84,7 @@ export interface ClaimView {
   provided: boolean;
   forced: boolean;
   copyDate: string | null;
-  reason: "older" | "sameDate" | "waiting" | null;
+  reason: "older" | "sameDate" | "waiting" | "identical" | null;
 }
 
 export interface Detail {
@@ -97,6 +97,8 @@ export interface Detail {
   state: State;
   drift: { kind: Drift; expectedSize: number | null; actualSize: number | null } | null;
   cmZone: boolean;
+  /** Nobody laid it, but it holds a deployed mod's content: nothing waits. */
+  sameAsCopy: boolean;
   mechanism: Mechanism | null;
   owner: Owner | null;
   claims: ClaimView[];

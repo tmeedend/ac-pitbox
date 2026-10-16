@@ -87,7 +87,8 @@ pub struct ClaimView {
     /// Date of its library copy.
     pub copy_date: Option<String>,
     /// Why it does not win: `older`, `sameDate` (the last installed wins),
-    /// `waiting` (a foreign file holds the path), or none for the provider.
+    /// `waiting` (a foreign file holds the path), `identical` (the file in
+    /// place already has its content), or none for the provider.
     pub reason: Option<&'static str>,
 }
 
@@ -137,6 +138,8 @@ pub struct Detail {
     pub state: State,
     pub drift: Option<DriftView>,
     pub cm_zone: bool,
+    /// Nobody laid it, but it holds a deployed mod's content: nothing waits.
+    pub same_as_copy: bool,
     pub mechanism: Option<Mechanism>,
     /// The element the path belongs to.
     pub owner: Option<Owner>,
@@ -441,6 +444,7 @@ impl Index {
             state: c.state,
             drift,
             cm_zone: c.cm_zone,
+            same_as_copy: c.same_as_copy,
             mechanism,
             owner: c.owner.map(|o| self.owner_of(o)),
             claims,
@@ -460,6 +464,7 @@ impl Index {
         };
         let date = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
         let provider_date = claims.iter().find(|c| c.provided).and_then(|c| date(&c.copy));
+        let identical = self.class[id as usize].same_as_copy;
         let mut views: Vec<ClaimView> = claims
             .iter()
             .map(|cl| {
@@ -468,6 +473,7 @@ impl Index {
                     None
                 } else {
                     match (provider_date, d) {
+                        (None, _) if identical => Some("identical"),
                         (None, _) => Some("waiting"),
                         (Some(p), Some(mine)) if mine < p => Some("older"),
                         _ => Some("sameDate"),

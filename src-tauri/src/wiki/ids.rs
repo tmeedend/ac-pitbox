@@ -49,6 +49,20 @@ pub const MANUFACTURER: &str = "P176";
 pub const START_TIME: &str = "P580";
 pub const END_TIME: &str = "P582";
 
+/// `image` / « image ». A Commons file name, not an item: the picture of a
+/// track the Online page cannot take from the library (SPEC-play-online,
+/// "Vignette d'un circuit non installé"). Seen on Q171417 (Monza Circuit) and
+/// Q1369525 (Shuto Expressway).
+pub const IMAGE: &str = "P18";
+
+/// `country` / « pays ». An item. Seen on Q171417 → Q38 (Italy) and Q1369525
+/// → Q17 (Japan).
+pub const COUNTRY: &str = "P17";
+
+/// `ISO 3166-1 alpha-2 code`, on a country item: the key the game's flags are
+/// found by (`gameCountryByIso2`). Seen on Q38 → `IT`, Q17 → `JP`.
+pub const ISO_ALPHA_2: &str = "P297";
+
 // --- Classes: cars ----------------------------------------------------------
 
 /// `car model` / « modèle d'automobile ».

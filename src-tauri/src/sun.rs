@@ -142,6 +142,10 @@ pub struct TrackLocation {
     pub latitude: f64,
     pub longitude: f64,
     pub timezone: Option<String>,
+    /// The track's name as the table writes it (`NAME=Imola`): what the
+    /// Online page matches a track it does not hold by, on Wikipedia. Not in
+    /// every entry, and never in geotags.
+    pub name: Option<String>,
     pub source: CoordSource,
 }
 
@@ -172,6 +176,43 @@ fn params_tables(ac_install_path: &Path) -> Vec<(PathBuf, CoordSource)> {
     tables
 }
 
+/// The `NAME=` of every section of a table, by lowercase track id.
+fn names_in(text: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    let mut section: Option<String> = None;
+    for line in text.lines().map(str::trim) {
+        if let Some(name) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
+            section = Some(name.trim().to_lowercase());
+            continue;
+        }
+        let (Some(id), Some((k, v))) = (&section, line.split_once('=')) else {
+            continue;
+        };
+        let v = v.split(';').next().unwrap_or("").trim();
+        if k.trim().eq_ignore_ascii_case("NAME") && !v.is_empty() {
+            out.push((id.clone(), v.to_string()));
+        }
+    }
+    out
+}
+
+/// The names the tables give tracks (`NAME=Imola`), by lowercase id - the
+/// most authoritative table winning, as for coordinates. What the Online
+/// page names a track the library does not hold by: 417 of CSP's 445
+/// entries carry one.
+pub fn track_names(ac_install_path: &Path) -> std::collections::HashMap<String, String> {
+    let mut names = std::collections::HashMap::new();
+    for (path, _) in params_tables(ac_install_path) {
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        for (id, name) in names_in(&text) {
+            names.entry(id).or_insert(name);
+        }
+    }
+    names
+}
+
 /// A track's coordinates: the tables first, the mod's `ui_track.json` last.
 pub fn track_location(ac_install_path: &Path, track_id: &str, layout: Option<&str>) -> Option<TrackLocation> {
     locate(&params_tables(ac_install_path), ac_install_path, track_id, layout)
@@ -194,6 +235,7 @@ fn locate(
                 latitude,
                 longitude,
                 timezone: ini_value(&text, track_id, "TIMEZONE").filter(|s| !s.is_empty()),
+                name: ini_value(&text, track_id, "NAME").filter(|s| !s.is_empty()),
                 source: *source,
             });
         }
@@ -202,6 +244,7 @@ fn locate(
         latitude,
         longitude,
         timezone: None,
+        name: None,
         source: CoordSource::Geotags,
     })
 }
@@ -711,6 +754,24 @@ mod tests {
 
     // The shipped CSP files document every value inline; a comment left in the
     // parsed value would make every number unparseable.
+    #[test]
+    fn a_table_names_its_tracks_by_lowercase_id() {
+        let text = "[Imola]
+LATITUDE=44.3
+NAME=Imola ; the Kunos one
+
+[nohesi]
+LATITUDE=1
+[ks_spa]
+NAME=
+";
+        assert_eq!(
+            names_in(text),
+            vec![("imola".to_string(), "Imola".to_string())],
+            "a section without a name, or an empty one, names nothing"
+        );
+    }
+
     #[test]
     fn ini_value_reads_sections_and_strips_comments() {
         let text = "[SEASONS]\nALLOW_ADJUSTMENTS=0.5 ; Use seasons; more prose\n\n[OTHER]\nALLOW_ADJUSTMENTS=2\n";

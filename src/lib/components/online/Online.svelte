@@ -27,6 +27,8 @@
   import { onLibraryChange } from "$lib/library/libraryVersion.svelte";
   import { pendingOnlineIntent, takeOnlineIntent, type OnlineIntent } from "$lib/online/intent.svelte";
   import { ServerFilter } from "$lib/online/serverFilter.svelte";
+  import { loadTrackCategories } from "$lib/online/trackCategories.svelte";
+  import { loadTrackCategoryLooks } from "$lib/library/trackCategoryTable.svelte";
   import { FriendsScan } from "$lib/online/friendsScan.svelte";
   import OnlineToolbar from "./OnlineToolbar.svelte";
   import ServerTable from "./ServerTable.svelte";
@@ -143,6 +145,10 @@
   }
 
   onMount(async () => {
+    // Not awaited: the list filters on the library until it answers, and
+    // names the categories as shipped until their names come.
+    void loadTrackCategories();
+    void loadTrackCategoryLooks();
     const [savedFilters, savedTab, savedGrouped, savedColumns] = await Promise.all([
       getUiPref(StorageKey.onlineFilters),
       getUiPref(StorageKey.onlineTab),
@@ -296,6 +302,19 @@
         />
       </div>
     {/if}
+    {#if filter.unknownCount > 0}
+      <!-- What an included category leaves out for want of knowing the
+           track's: one click from being shown, rather than lost in silence. -->
+      <p class="unknown">
+        {filter.showUnknownCategories
+          ? t("online.unknownCategoryShown", { count: filter.unknownCount })
+          : t("online.unknownCategoryHidden", { count: filter.unknownCount })}
+        ·
+        <button class="link" type="button" onclick={() => (filter.showUnknownCategories = !filter.showUnknownCategories)}>
+          {filter.showUnknownCategories ? t("online.unknownCategoryHide") : t("online.unknownCategoryShow")}
+        </button>
+      </p>
+    {/if}
   </section>
 
   {#if selected}
@@ -351,5 +370,20 @@
     color: var(--muted);
     text-align: center;
     padding: 50px 0;
+  }
+  .unknown {
+    margin: 0;
+    padding: 8px 24px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .link {
+    background: none;
+    border: 0;
+    padding: 0;
+    color: var(--blue);
+    font: inherit;
+    cursor: pointer;
   }
 </style>

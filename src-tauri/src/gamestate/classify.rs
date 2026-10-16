@@ -446,14 +446,20 @@ impl Classifier<'_> {
             let id = match node {
                 Some(id) => {
                     let abs = self.tree.root.join(&rel);
+                    let identical =
+                        provider.is_none() && claims.iter().any(|c| crate::extras::same_content(&c.copy, &abs));
                     let (state, drift) = match provider {
                         Some(p) if crate::extras::is_still_ours(&p.copy, &abs) => (State::Posed, None),
                         Some(_) => (State::Posed, Some(Drift::Modified)),
+                        // Claimed, provided by nobody, and occupied by the very
+                        // content claimed: nothing waits.
+                        None if identical => (State::Nobody, None),
                         // Claimed, provided by nobody, and yet occupied: a
                         // foreign file holds the place (§4.5.4).
                         None => (State::Waiting, None),
                     };
                     self.decide(id, Population::Extra, state, drift, owner);
+                    self.class[id as usize].same_as_copy |= identical && !taken;
                     id
                 }
                 None => match self.missing(&rel) {
@@ -505,12 +511,14 @@ impl Classifier<'_> {
         }
     }
 
-    /// The library copies no claim covers, crossed with the disk. Two cases,
-    /// the ones `extras::list` already tells apart on a mod's sheet:
+    /// The library copies no claim covers, crossed with the disk. Three cases:
     ///
-    /// - the owner is deployed and a file occupies the path: its copy **waits**.
-    ///   A foreign file holds the place and won the date arbitration (§4.5.4),
-    ///   so the deployment recorded no claim;
+    /// - the owner is deployed and the file in place has its content
+    ///   (`extras::same_content`): laid before Pit Box or by an earlier install, so the
+    ///   deployment found it there and claimed nothing - but **nothing waits**;
+    /// - the owner is deployed and another file occupies the path: its copy
+    ///   **waits**. A foreign file holds the place and won the date arbitration
+    ///   (§4.5.4), so the deployment recorded no claim;
     /// - the owner is not deployed and the file on the disk is identical to its
     ///   copy (relative path, size, date): laid by Pit Box, then left behind -
     ///   an **orphan**.
@@ -518,8 +526,10 @@ impl Classifier<'_> {
         let Some(library) = self.snap.library.clone() else {
             return;
         };
+        // Every stored copy of every undecided game file, all owners together:
+        // several packs ship the same font, and the decision is about the path.
+        let mut copies: Vec<(NodeId, ExtraOwner, String, PathBuf)> = Vec::new();
         for (kind, owner_id) in crate::extras::stored_owners(&library) {
-            let active = self.owner_active(kind, &owner_id);
             let root = crate::extras::library_copy(&library, kind, &owner_id, Path::new(""));
             for entry in walkdir::WalkDir::new(&root).into_iter().flatten() {
                 if !entry.file_type().is_file() {
@@ -535,25 +545,64 @@ impl Classifier<'_> {
                 if self.decided(id) || self.tree.node(id).kind != EntryKind::File {
                     continue;
                 }
-                let owner = self.extra_owner(kind.category(), &owner_id);
-                if active {
-                    self.decide(id, Population::Extra, State::Waiting, None, owner);
-                    // Its copy is the claim that waits: the panel says so.
-                    if let Some(owner) = owner {
-                        self.class[id as usize].claimants = 1;
-                        self.claims.entry(id).or_default().push(ClaimInfo {
-                            owner,
-                            provided: false,
-                            forced: false,
-                            copy: entry.path().to_path_buf(),
-                        });
-                    }
-                } else if crate::extras::is_still_ours(entry.path(), &self.tree.root.join(rel)) {
-                    self.decide(id, Population::Rest, State::Posed, Some(Drift::Orphan), owner);
-                    self.sources.insert(id, entry.path().to_path_buf());
-                }
+                copies.push((id, kind, owner_id.clone(), entry.path().to_path_buf()));
             }
         }
+        let mut by_node: HashMap<NodeId, Vec<(ExtraOwner, String, PathBuf)>> = HashMap::new();
+        for (id, kind, owner_id, copy) in copies {
+            by_node.entry(id).or_default().push((kind, owner_id, copy));
+        }
+        let mut nodes: Vec<_> = by_node.into_iter().collect();
+        nodes.sort_by_key(|(id, _)| *id);
+        for (id, copies) in nodes {
+            self.stored_copy(id, &copies);
+        }
+    }
+
+    /// One game file and the stored copies of it nobody claims.
+    fn stored_copy(&mut self, id: NodeId, copies: &[(ExtraOwner, String, PathBuf)]) {
+        let in_game = self.tree.abs_path(id);
+        let active: Vec<&(ExtraOwner, String, PathBuf)> =
+            copies.iter().filter(|(k, o, _)| self.owner_active(*k, o)).collect();
+        if active.is_empty() {
+            if let Some((kind, owner_id, copy)) = copies
+                .iter()
+                .find(|(_, _, copy)| crate::extras::is_still_ours(copy, &in_game))
+            {
+                let owner = self.extra_owner(kind.category(), owner_id);
+                self.decide(id, Population::Rest, State::Posed, Some(Drift::Orphan), owner);
+                self.sources.insert(id, copy.clone());
+            }
+            return;
+        }
+        // A deployed owner whose content is already in place: nothing waits,
+        // whoever laid it (DOSSIER§4.2). Pit Box did not, so it is nobody's -
+        // it stays if the mod goes.
+        if let Some((kind, owner_id, _)) = active
+            .iter()
+            .find(|(_, _, copy)| crate::extras::same_content(copy, &in_game))
+        {
+            let owner = self.extra_owner(kind.category(), owner_id);
+            self.decide(id, Population::Extra, State::Nobody, None, owner);
+            self.class[id as usize].same_as_copy = true;
+            return;
+        }
+        let first = active[0];
+        let owner = self.extra_owner(first.0.category(), &first.1);
+        self.decide(id, Population::Extra, State::Waiting, None, owner);
+        // Their copies are the claims that wait: the panel says so.
+        for (kind, owner_id, copy) in active {
+            if let Some(owner) = self.extra_owner(kind.category(), owner_id) {
+                self.claims.entry(id).or_default().push(ClaimInfo {
+                    owner,
+                    provided: false,
+                    forced: false,
+                    copy: copy.clone(),
+                });
+            }
+        }
+        let n = self.claims.get(&id).map_or(0, Vec::len);
+        self.class[id as usize].claimants = n.min(u16::MAX as usize) as u16;
     }
 
     // --- 5 and 6. Official content, unmanaged mods ---------------------------

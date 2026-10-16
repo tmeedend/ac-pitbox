@@ -9,8 +9,9 @@
   // measured from the same pass (REGLES§8.3). No "save" bar any more - there
   // is nothing pending to save. Modifying a SHIPPED rule is the one gesture
   // that asks first, because it freezes the rule (REGLES§8.2).
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import Tabs from "$lib/components/ui/Tabs.svelte";
+  import Switch from "$lib/components/ui/Switch.svelte";
   import ContextMenu from "$lib/components/ui/ContextMenu.svelte";
   import { open, save } from "@tauri-apps/plugin-dialog";
   import {
@@ -24,17 +25,13 @@
   } from "$lib/workshop/rules";
   import {
     CAR_SECTIONS,
-    addCategory,
     addRule,
     describe,
     editRule,
     fromForm,
-    moveCategory,
-    removeCategory,
     removeRule,
     restoreDefault,
     setCatalogOn,
-    setCategoryOn,
     setEnabled,
     toForm,
     type AnyRule,
@@ -42,6 +39,8 @@
     type Section,
   } from "$lib/workshop/rulesEdit";
   import { bumpLibraryVersion } from "$lib/library/libraryVersion.svelte";
+  import { rulesFocus } from "$lib/workshop/rulesFocus.svelte";
+  import { scrollIntoContainer } from "$lib/shell/shellScroll";
   import { errorText } from "$lib/errors";
   import { OVERTAKE_URL, newIssueUrl, openExternal } from "$lib/links";
   import { t } from "$lib/i18n/index.svelte";
@@ -59,10 +58,12 @@
   let menu = $state<{ x: number; y: number; items: { label: string; onclick: () => void; danger?: boolean }[] } | null>(
     null,
   );
-  let catInput = $state("");
   /** What the last export or import did - a report, not a toast: it stays
    * until the next one. */
   let shareMsg = $state("");
+
+  /** The rule another tab asked to see (`rulesFocus`), lit for a moment. */
+  let focused = $state<string | null>(null);
 
   onMount(async () => {
     try {
@@ -71,7 +72,24 @@
       console.error("get_rules_view", e);
       error = errorText(e);
     }
+    await focusRequested();
   });
+
+  /** Arriving from a tab that shows this rule: its tab opened, the rule
+   * brought into view and lit. */
+  async function focusRequested() {
+    const { section, id } = rulesFocus;
+    rulesFocus.section = null;
+    rulesFocus.id = null;
+    if (!section || !id) return;
+    tab = CAR_SECTIONS.includes(section) ? "car" : "track";
+    mineOnly = false;
+    focused = id;
+    await tick();
+    const el = document.querySelector<HTMLElement>(`[data-rule="${CSS.escape(id)}"]`);
+    if (el) scrollIntoContainer(el, "center");
+    setTimeout(() => (focused = null), 2500);
+  }
 
   /** Writes a decision and takes back the view the backend measured after
    * re-applying it. A WRITE: the failure is shown, never swallowed. */
@@ -252,10 +270,6 @@
 
   const carTop = CAR_SECTIONS.filter((s) => !SPEC_SECTIONS.has(s));
   const carSpecs = CAR_SECTIONS.filter((s) => SPEC_SECTIONS.has(s));
-
-  const shippedCategories = $derived(view?.track_categories.filter((c) => c.shipped).map((c) => c.name) ?? []);
-  const effectiveCategories = $derived(view?.track_categories.filter((c) => c.on).map((c) => c.name) ?? []);
-  const shownCategories = $derived(view?.track_categories.filter((c) => !mineOnly || !c.shipped) ?? []);
 </script>
 
 <svelte:window
@@ -314,16 +328,8 @@
           {@render editor(s)}
         {:else}
           {@const d = describe(s, row.rule)}
-          <div class="row" class:off={row.disabled}>
-            <button
-              type="button"
-              class="switch"
-              role="switch"
-              aria-checked={!row.disabled}
-              aria-label={t("rules.enabled")}
-              disabled={busy}
-              onclick={() => toggle(s, row)}
-            ><span></span></button>
+          <div class="row" class:off={row.disabled} class:focused={focused === idOf(row)} data-rule={idOf(row)}>
+            <Switch on={!row.disabled} label={t("rules.enabled")} disabled={busy} onclick={() => toggle(s, row)} />
             <span class="badge-cell">
               {#if row.origin !== "own"}<span class="badge">{t("rules.badgeCatalog")}</span>{/if}
               {#if row.origin === "fork"}<span class="forked" title={t("rules.forkedTitle")}>✎</span>{/if}
@@ -364,15 +370,12 @@
       {:else}
         <!-- REGLES§7: the global switch belongs to the screen it governs. -->
         <div class="catalog">
-          <button
-            type="button"
-            class="switch"
-            role="switch"
-            aria-checked={view.catalog_on}
-            aria-labelledby="catalog-switch-label"
+          <Switch
+            on={view.catalog_on}
+            labelledby="catalog-switch-label"
             disabled={busy}
             onclick={() => view && void commit(setCatalogOn(view.overlay, !view.catalog_on))}
-          ><span></span></button>
+          />
           <span id="catalog-switch-label" class="c-label">{t("rules.catalogSwitch")}</span>
           <span class="c-meta mono">
             {t("rules.catalogMeta", { version: view.catalog_version, count: view.catalog_count })}
@@ -411,64 +414,6 @@
           </section>
         {:else}
           {@render section("track_tag_merge", false)}
-
-          <!-- The allowlist is an ordered list of names, not rules with ids:
-               a shipped category is switched off (removed), his own deleted. -->
-          <section>
-            <div class="s-head">
-              <h3>{t("rules.trackCategoriesTitle")} <span class="cnt">{shownCategories.length}</span></h3>
-            </div>
-            <p class="hint">{t("rules.trackCategoriesHint")}</p>
-            <input
-              class="input add-input"
-              placeholder={t("rules.addCategoryPlaceholder")}
-              bind:value={catInput}
-              disabled={busy}
-              onkeydown={(e) => {
-                if (e.key === "Enter" && view) {
-                  void commit(addCategory(view.overlay, catInput, shippedCategories));
-                  catInput = "";
-                }
-              }}
-            />
-            <ol class="cat-list">
-              {#each shownCategories as c (c.name)}
-                {@const i = effectiveCategories.indexOf(c.name)}
-                <li class:off={!c.on}>
-                  {#if c.shipped}
-                    <button
-                      type="button"
-                      class="switch"
-                      role="switch"
-                      aria-checked={c.on}
-                      aria-label={t("rules.enabled")}
-                      disabled={busy}
-                      onclick={() => view && void commit(setCategoryOn(view.overlay, c.name, !c.on))}
-                    ><span></span></button>
-                  {:else}
-                    <span class="switch-gap"></span>
-                  {/if}
-                  <span class="cat-rank mono">{c.on ? i + 1 : ""}</span>
-                  <span class="badge-cell">
-                    {#if c.shipped}<span class="badge">{t("rules.badgeCatalog")}</span>{/if}
-                  </span>
-                  <span class="cat-name mono">{c.name}</span>
-                  <span class="effect" class:none={c.effect === 0}>{effectText(c.effect)}</span>
-                  {#if c.on}
-                    <button class="btn-ghost" type="button" disabled={busy || i === 0} title={t("rules.moveUp")}
-                      onclick={() => view && void commit(moveCategory(view.overlay, effectiveCategories, i, -1))}>↑</button>
-                    <button class="btn-ghost" type="button" disabled={busy || i === effectiveCategories.length - 1}
-                      title={t("rules.moveDown")}
-                      onclick={() => view && void commit(moveCategory(view.overlay, effectiveCategories, i, 1))}>↓</button>
-                  {/if}
-                  {#if !c.shipped}
-                    <button class="btn-ghost" type="button" disabled={busy} title={t("common.delete")}
-                      onclick={() => view && void commit(removeCategory(view.overlay, c.name))}>✕</button>
-                  {/if}
-                </li>
-              {/each}
-            </ol>
-          </section>
         {/if}
       {/if}
     </div>
@@ -614,46 +559,14 @@
     padding: 2px 0;
     border-bottom: 1px solid var(--line);
   }
-  .row.off,
-  .cat-list li.off {
+  .row.off {
     opacity: 0.55;
   }
-  /* The switch: a plain track and knob, grey off, light on - no red here. */
-  .switch {
-    flex: none;
-    width: 26px;
-    height: 14px;
-    padding: 0;
-    border: 1px solid var(--faint);
-    border-radius: 8px;
-    background: var(--panel2);
-    position: relative;
-    cursor: pointer;
-  }
-  .switch span {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--muted2);
-    transition: left 0.12s;
-  }
-  .switch[aria-checked="true"] {
-    border-color: var(--muted);
-    background: var(--mat);
-  }
-  .switch[aria-checked="true"] span {
-    left: 14px;
-    background: var(--txt);
-  }
-  .switch:disabled {
-    cursor: default;
-  }
-  .switch-gap {
-    flex: none;
-    width: 26px;
+  /* Arriving from another tab (`rulesFocus`): the rule asked for, lit a
+     moment - the dimmed red of the scale, never a red at rest. */
+  .row.focused {
+    background: var(--rosso-dim);
+    transition: background 0.4s;
   }
   .badge-cell {
     flex: none;
@@ -757,42 +670,6 @@
   .empty {
     color: var(--muted);
     padding: 40px 0;
-  }
-  .add-input {
-    margin-bottom: 10px;
-    max-width: 420px;
-  }
-  .cat-list {
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    max-width: 620px;
-  }
-  .cat-list li {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 30px;
-    border-bottom: 1px solid var(--line);
-  }
-  .cat-rank {
-    color: var(--faint);
-    font-size: 10px;
-    width: 18px;
-    text-align: right;
-    flex: none;
-  }
-  .cat-name {
-    flex: 1;
-    color: var(--txt);
-    font-size: 12px;
-  }
-  .cat-list .btn-ghost {
-    padding: 2px 7px;
-    font-size: 12px;
-  }
-  .cat-list .btn-ghost:disabled {
-    opacity: 0.3;
   }
   .backdrop {
     position: fixed;

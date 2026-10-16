@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { FilterMap, SignedValue } from "$lib/library/filters";
 import { NO_LOOKS, type Looks } from "./looks";
+import { filterCategories, NO_KNOWLEDGE, serverCategories } from "./categories";
 import type { ServerSummary } from "./online";
 import {
   DEFAULT_PINNED,
@@ -13,32 +14,14 @@ import {
   trackLabel,
   type TokenContext,
 } from "./tokens";
+import { testServer } from "./testServer";
 
 // The chip model labels its values through i18n, which needs the Svelte
 // runtime; `vi.mock` is hoisted above the imports.
 vi.mock("$lib/i18n/index.svelte", () => ({ t: (key: string) => key }));
 
 function server(over: Partial<ServerSummary>): ServerSummary {
-  return {
-    ip: "1.2.3.4",
-    port: 9600,
-    http_port: 8081,
-    name: "Server",
-    country: "DE",
-    clients: 0,
-    max_clients: 24,
-    password: false,
-    booking: false,
-    track: { kunos_id: "monza", id: "monza", layout: null, csp_min_build: null },
-    cars: ["ks_mazda_miata"],
-    session: "practice",
-    sessions: ["practice"],
-    time_left: 600,
-    track_available: true,
-    cars_available: 1,
-    official: true,
-    ...over,
-  };
+  return testServer(over);
 }
 
 const track = (kunos_id: string, id = kunos_id, layout: string | null = null) => ({
@@ -59,6 +42,7 @@ const looks: Looks = {
 function context(over: Partial<TokenContext> = {}): TokenContext {
   return {
     looks,
+    categoriesOf: (s) => filterCategories(serverCategories(s, looks, NO_KNOWLEDGE)),
     pingOf: () => undefined,
     countryName: (iso2) => ({ DE: "Germany", JP: "Japan" })[iso2] ?? null,
     ...over,
@@ -97,19 +81,32 @@ describe("online tokens (SPEC-play-online, Filtres de base)", () => {
     expect(names(list, val("car", "ks_mazda_miata", "ks_toyota_ae86"))).toEqual(["both"]);
   });
 
-  // The spec: a track missing from the library has no category, and counts as
-  // unknown — neither included nor excluded.
-  it("never hides a server whose track category is unknown", () => {
+  // The spec (2026-10): an unknown category is left out of an included
+  // category, kept under an excluded one, and shown on demand. It used to pass
+  // both ways, and "Drift" listed the whole lobby's unknown tracks.
+  it("leaves an unknown category out of an included one, and keeps it under an excluded one", () => {
     const list = [
       server({ name: "shutoko", track: track("shuto_revival_project_beta") }),
       server({ name: "no category here", track: track("monza") }),
       server({ name: "not in the library", track: track("lac_canyons") }),
     ];
-    expect(names(list, val("trackCategory", "Freeroam"))).toEqual(["shutoko", "not in the library"]);
+    expect(names(list, val("trackCategory", "Freeroam"))).toEqual(["shutoko"]);
     expect(names(list, val("trackCategory", { value: "freeroam", sign: -1 }))).toEqual([
       "no category here",
       "not in the library",
     ]);
+    expect(
+      names(list, val("trackCategory", "Freeroam"), context({ showUnknownCategories: true })),
+      "the toggle under the list shows them",
+    ).toEqual(["shutoko", "no category here", "not in the library"]);
+  });
+
+  it("keeps a server that announces the category in its name", () => {
+    const list = [server({ name: "Drift kings | no ghosting", track: track("lac_canyons") })];
+    const ctx = context({
+      categoriesOf: (s) => filterCategories(serverCategories(s, looks, { ...NO_KNOWLEDGE, keywords: { drift: "#drift" } })),
+    });
+    expect(names(list, val("trackCategory", "#drift"), ctx)).toEqual(["Drift kings | no ghosting"]);
   });
 
   it("tells Kunos servers from mod servers, and does not judge an old snapshot", () => {
@@ -158,6 +155,16 @@ describe("online tokens (SPEC-play-online, Filtres de base)", () => {
       "ks_nordschleife-endurance",
     );
     expect(trackLabel(looks, track("monza"))).toBe("Monza");
+  });
+
+  // A track the library lacks is named as CSP names it, its layout after it
+  // when it has one of its own.
+  it("names a track the library lacks by CSP's name, layout included", () => {
+    const csp: Looks = { ...NO_LOOKS, track_names: { ek_myogi: "EK Myogi Touge", mtn_saudi_streets: "MTN Saudi" } };
+    expect(trackLabel(csp, track("ek_myogi-freeroam", "ek_myogi", "freeroam"))).toBe("EK Myogi Touge - freeroam");
+    expect(trackLabel(csp, track("mtn_saudi_streets-mtn_saudi_streets", "mtn_saudi_streets", "mtn_saudi_streets"))).toBe(
+      "MTN Saudi",
+    );
   });
 
   it("asks yes or no of a server, and the opposite in the negative", () => {

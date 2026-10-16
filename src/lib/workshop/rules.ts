@@ -146,7 +146,10 @@ export interface CategoryRow {
   shipped: boolean;
   /** `false`: a shipped category the user removed. */
   on: boolean;
+  /** Tracks that carry it, measured on the library. */
   effect: number;
+  /** Its place in the shipped allowlist; `null` for one of the user's. */
+  shipped_rank: number | null;
 }
 
 export interface RulesView {
@@ -241,6 +244,17 @@ export interface TaxonomyOverlay {
   /** Brand merges answered "Ignore", as `from → to` (TAXO§7.2). */
   ignored_brand_merges?: string[];
   not_brands?: SetOverlay;
+  /** Online: track id → categories, and server word → category. */
+  track_categories?: MapOverlay;
+  server_keywords?: MapOverlay;
+  /** Names and icons given to track categories, by `#tag` - display only. */
+  track_category_looks?: Record<string, CategoryLook>;
+}
+
+/** A name or an icon given to a family or a track category. */
+export interface CategoryLook {
+  name?: string;
+  icon?: string;
 }
 
 /** Overlay of a set of names: added by the user, catalogue ones removed. */
@@ -258,6 +272,8 @@ export interface TaxonomyTables {
   /** Brand-field values that are no brand (a pack, a series), lowercased:
    * the brand is read from the car's name. */
   not_brands?: string[];
+  /** Online: server word (lowercased) → the category it announces. */
+  server_keywords?: Record<string, string>;
 }
 
 /** What the catalogue ships, what the user decided, what applies. */
@@ -276,6 +292,18 @@ export function getTaxonomy(): Promise<TaxonomyView> {
  * disk. */
 export function saveFamilyOverlay(families: FamilyOverlay): Promise<TaxonomyView> {
   return invoke<TaxonomyView>("save_family_overlay", { families });
+}
+
+/** Writes the names and icons of the track categories - display only, no
+ * re-harmonisation. A WRITE: `invoke`, never `invokeSafe`. */
+export function saveTrackCategoryLooks(looks: Record<string, CategoryLook>): Promise<TaxonomyView> {
+  return invoke<TaxonomyView>("save_track_category_looks", { looks });
+}
+
+/** Writes the decisions on the Online page's keywords (server word →
+ * category). A WRITE: `invoke`, never `invokeSafe`. */
+export function saveServerKeywords(keywords: MapOverlay): Promise<TaxonomyView> {
+  return invoke<TaxonomyView>("save_server_keywords", { keywords });
 }
 
 /** Writes the brand decisions and re-applies them to the library: the brand

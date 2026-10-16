@@ -90,6 +90,7 @@ L'export produit une copie de `overlay.sqlite` (`VACUUM INTO`, lecture seule, co
 | `wiki_cache` | oui | du texte ; évite de refaire toutes les requêtes, et marche hors ligne |
 | `import_decisions` | oui | le journal des décisions d'import (ce que l'app a décidé seule, et pourquoi) : de l'histoire, comme `history` |
 | `forced_extras` | oui | autorisations de remplacer un fichier du jeu : une décision, qui doit survivre comme elle survit à une désactivation |
+| `online_track_categories` | oui | catégories de circuit choisies sur la page Online, par id de circuit : une décision, que l'export emporte et qui l'emporte à l'import |
 | `profiles`, `profile_entries`, `profile_extra_entries` | partie Profils | vidées sinon |
 | `media_links` | **non** | rattachements de captures et replays à des fichiers de la machine d'origine, par chemin ; ces fichiers ne voyagent pas |
 | `extra_links`, `game_backups` | **non** | état du dossier du jeu de la machine d'origine (R2) |

@@ -102,6 +102,23 @@ de reprendre. En cas d'écart, la spec fait foi.
         1,3 à 4,1 s du démarrage de CM au jeu sur trois joins. Un compteur de
         génération fait renoncer la garde d'un join remplacé par un plus
         récent ; l'état du jeu vient du même sondage que la musique.
+      - **Catégorie des circuits hors bibliothèque (2026-10-14)** : choix
+        dans le panneau, catalogue et mots-clés du serveur. **Reste** à
+        remplir la table `track_categories` de `taxonomy-catalog.json`, livrée
+        vide : `npm run online:tracks` donne les ids qui pèsent (les 50
+        premiers couvrent 75 % des joueurs), le reste est un classement à faire
+        à la main. Les choix faits dans l'app se promeuvent ensuite comme les
+        autres décisions (`npm run rules:diff` / `rules:promote`) — mais ils
+        vivent dans `overlay.sqlite`, pas dans la surcouche du catalogue :
+        les promouvoir demande de les recopier, aucun outil ne le fait.
+      - **Vignette d'un circuit non installé (2026-10-15)** : Commons par
+        l'appariement Wikipédia, sinon pictogramme et drapeau. Vérifié par un
+        essai réseau réel (`online::picture::tests::what_lobby_tracks_get`,
+        ignoré par défaut : Monza, Salzburgring, Shutoko ont une image ;
+        Valencia, Akina, `nohesi_415` non) et à l'écran pour la vignette
+        dessinée ; **reste à voir à l'écran** une image Commons et son crédit
+        sous la bannière. Le nom d'un circuit non installé vient désormais
+        de la table de CSP (`NAME=`), son dossier en repli.
       Ce qui est fait et ce qui reste : `SPEC-play-online.md`, section Lots.
       **Pièges déjà payés** (`online-join-research.md`), à relire avant de
       toucher au lancement :
@@ -223,6 +240,17 @@ de reprendre. En cas d'écart, la spec fait foi.
         la copie n'est réclamée par aucune ligne : quand un fichier étranger
         gagne l'arbitrage, `extras::deploy` n'enregistre pas de
         réclamation — la base seule ne le verrait jamais.
+        **Piège payé (2026-10)** : la date seule en faisait trop. Mesuré sur
+        l'install de dev, 38 des 39 « en attente » avaient exactement le
+        contenu du mod — posés avant Pit Box, ou repackés avec une autre
+        date ; un seul était un vrai fichier étranger. Le contenu décide
+        désormais (taille et date, puis les octets si seule la date diffère),
+        sur ces seuls candidats — à l'écran comme sur la fiche du mod
+        (`extras::same_content`, partagé).
+      - *Compteur de génération* : `sync_track_skins` le bougeait à tort (il
+        n'écrit que dans la base) ; la colonne de session l'appelant à chaque
+        démarrage, l'index était périmé avant d'être regardé, et chaque retour
+        sur l'écran rescannait. Retiré (2026-10).
       - *Fiche d'une livrée* : « Ouvrir la fiche » ouvre sa fiche dans
         Compléments ; celle d'un pack n'est pas proposée.
       - *Compteur de génération* : bougé par les façades qui écrivent dans le
@@ -1039,6 +1067,38 @@ de reprendre. En cas d'écart, la spec fait foi.
       bibliothèque et des fusions ; sur une petite bibliothèque, un
       « Benetton B191 » reste sous son pack faute de Benetton connu. Une liste
       livrée de marques connues lèverait la limite — à faire si ça gêne.
+
+- [ ] **Son d'une voiture Kunos — solution provisoire (B), à reconsidérer
+      (2026-10-14).** Pour une voiture Kunos, activer un son écrit dans le
+      `sfx/` **du jeu**, hors de `gamebackup.rs`, que la règle d'or n°5 dit
+      pourtant de toujours emprunter. L'original est à l'abri dans
+      `<lib>/sounds/<voiture>/__original__` (copie unique, avant la première
+      bascule) ; le seul défaut concret était la fenêtre où une app tuée entre
+      l'effacement du `sfx/` et la copie du mod laissait la voiture sans son,
+      rien ne la réparant hors « son d'origine » à la main.
+      - **Fait (B)** : bascule d'un seul geste (préparé dans
+        `sfx.pitbox-new`, deux renommages, base écrite avant le nettoyage de
+        `sfx.pitbox-old`) et filet au démarrage
+        (`submods::recover_interrupted_swaps`, étape `setup.sound_swaps`), qui
+        donne à la voiture le son que dit la base. Tout dans `sounds.rs`.
+      - **Écarté pour l'instant (A)** : tout faire passer par `gamebackup.rs`,
+        fichier par fichier. Ce qu'il faudrait : (1) son balayage de démarrage
+        (`restore_orphans`) remet l'original de **toute** sauvegarde que plus
+        rien ne réclame — aujourd'hui seuls les ajouts au jeu et les « autres
+        mods » réclament —, donc un son actif devrait devenir un troisième
+        réclamant, sinon le balayage annulerait le son à chaque démarrage ;
+        (2) l'écoute « Origine » (`enginesound::sound_dir`) lit `__original__`
+        et lirait la sauvegarde de `game_backup/` ; (3) l'écran Dossier du jeu
+        (`gamestate/classify.rs`, `sounds`) classe le `sfx/` par la même
+        copie ; (4) reprendre l'existant : les voitures Kunos qui ont déjà un
+        son actif avec l'ancienne copie `__original__`. Une session, zone des
+        règles d'or, tests d'abord.
+      - **Ce qui ferait changer d'avis** : un second mécanisme hors
+        `gamebackup.rs` qui écrirait dans le jeu (deux font un motif), un
+        bug où `__original__` ne suffit pas (bibliothèque supprimée alors
+        qu'un son Kunos est actif : `clean-ac-footprint.ps1` ne le voit pas,
+        pas plus qu'il ne verrait `game_backup/`), ou l'envie d'un seul
+        registre de ce que Pit Box a changé dans le jeu.
 
 - [ ] **Corrections par mod — à faire, chantier à part.** Aujourd'hui on
       corrige d'un mod son nom, sa description, ses tags (couche 4 de

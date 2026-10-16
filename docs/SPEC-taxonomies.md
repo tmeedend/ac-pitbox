@@ -94,6 +94,14 @@ L'utilisateur **choisit** l'icône d'une famille dans ce jeu ; il n'en fournit p
 
 Trait uniforme, remplissage `#d4d5d7`, hauteur de rendu 34 px dans les tuiles d'index.
 
+## 3.3 Catégories de circuit — pictogrammes embarqués
+
+Même grille (120 × 52) et même poids que les silhouettes de voitures, pour que les deux index se lisent comme un seul jeu : circuit, ville, ovale, drift, touge, spéciale de rallye, rallycross, course de côte, drag, autoroute / freeroam, karting, A2B, test, et le circuit en demi-teinte pour `Non classé` (`src/lib/library/trackCategoryIcons.ts`). Une icône par catégorie livrée — un test le vérifie sur la liste blanche des règles ; une catégorie créée par l'utilisateur prend le circuit tant qu'il n'en a pas choisi une autre.
+
+Le nom livré d'une catégorie est **anglais dans toutes les langues** (`Street`, `Hillclimb`, `Rally`) : c'est le tag que les `ui_track.json` écrivent et que les pilotes emploient, du jargon Assetto Corsa au même titre que *skin* ou *layout*. Seul un nom donné par l'utilisateur dans Familles › Circuits le remplace.
+
+Le pictogramme dessine aussi la vignette d'un circuit non installé sur la page Online.
+
 ---
 
 # 4. Sélection automatique du logo canonique
@@ -177,6 +185,26 @@ Cliquer une ligne la déplie :
 **Obligatoire pour les marques.** L'éditeur montre le logo retenu aux tailles d'usage — 13, 18, 20 et 32 px — et sur les deux fonds, sombre et pastille claire.
 
 Un logo choisi sur une grande prévisualisation se révèle illisible à 13 px une fois sur trois. Il faut voir la vraie taille au moment de choisir, pas après.
+
+## 6.4 Familles › Circuits — les catégories de circuit
+
+L'onglet Familles a un interrupteur **Voitures · Circuits**, le même que l'onglet Règles. Voitures, ce sont les familles, inchangées. Circuits, c'est la liste des catégories de circuit, **sortie de l'onglet Règles** : c'est un vocabulaire fermé, pas une heuristique — la même raison qui a donné leur onglet aux marques et aux pays. Règles garde les fusions qui produisent ces catégories.
+
+Une ligne par catégorie, dans l'ordre de la liste : pictogramme (§3.3), nom affiché, badge `PIT BOX` si elle est livrée, nombre de circuits qui la portent, fanion ⚑ si elle diffère de la version livrée (nom, icône, désactivée, ajoutée, ou déplacée), rang et flèches d'ordre — le rang 1 reste la catégorie principale d'un circuit.
+
+Ligne dépliée :
+
+| Champ | Où c'est rangé | Réapplique les règles |
+|---|---|---|
+| Nom affiché ; l'identifiant reste le tag `#drift`, écrit une fois pour toutes | surcouche des taxonomies (`track_category_looks`) | non |
+| Icône, choisie dans le jeu embarqué | idem | non |
+| Activation (catégorie livrée) ; suppression (catégorie de l'utilisateur) | surcouche des règles (`track_categories`) | oui |
+| Règles qui la produisent : les fusions de Règles dont la sortie contient le tag, avec leur bascule, leur compteur et un lien qui ouvre Règles sur la règle | surcouche des règles | oui (la bascule) |
+| Mots-clés des serveurs en ligne : la table mot-clé → catégorie de la page Online | surcouche des taxonomies (`server_keywords`) | non |
+
+L'ordre, l'activation, l'ajout et la suppression changent la catégorie qu'un circuit enregistre : ils réappliquent les règles à la bibliothèque, comme l'onglet Règles. Renommer ou changer l'icône ne réapplique rien.
+
+« Nouvelle catégorie » crée un tag tiré du nom (`Côte d'Azur` → `#cote_d_azur`), figé à la création comme l'id d'une famille, et range le nom saisi comme nom affiché. « Tout rétablir » remet la liste, les noms et les icônes tels que livrés ; les mots-clés de la page Online, édités mot par mot, ne sont pas touchés.
 
 ---
 

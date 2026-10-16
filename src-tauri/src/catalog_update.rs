@@ -285,6 +285,13 @@ pub fn changes(old: &Rules, new: &Rules) -> Changes {
         &mut out,
     );
     map_changes("brand_alias", &old.brand_aliases, &new.brand_aliases, &mut out);
+    map_changes(
+        "online_track_category",
+        &old.online_track_categories,
+        &new.online_track_categories,
+        &mut out,
+    );
+    map_changes("server_keyword", &old.online_keywords, &new.online_keywords, &mut out);
     let set = |k: &String| Change {
         list: "not_brand".into(),
         key: k.clone(),

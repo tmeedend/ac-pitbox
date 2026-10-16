@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ServerSummary } from "./online";
 import { NO_LOOKS } from "./looks";
+import { testServer } from "./testServer";
 
 // `groups.ts` reads the track key from the tokens module, which labels its
 // values through i18n; `vi.mock` is hoisted above the imports.
@@ -10,25 +11,19 @@ const { arrangeRows } = await import("./groups");
 const { nextSort } = await import("./columns");
 
 function server(name: string, track: string, over: Partial<ServerSummary> = {}): ServerSummary {
-  return {
+  return testServer({
     ip: name,
-    port: 9600,
-    http_port: 8081,
     name,
     country: null,
     clients: 1,
     max_clients: 10,
-    password: false,
-    booking: false,
     track: { kunos_id: track, id: track, layout: null, csp_min_build: null },
     cars: [],
     session: null,
     sessions: [],
     time_left: 0,
-    track_available: true,
-    cars_available: 1,
     ...over,
-  };
+  });
 }
 
 const ctx = { looks: NO_LOOKS, pingOf: (s: ServerSummary) => (s.name === "fast" ? 20 : undefined) };

@@ -11,7 +11,13 @@ use std::path::{Path, PathBuf};
 
 use tauri::{AppHandle, Manager};
 
+use crate::config::BackupFrequency;
+
 const BACKUP_KEEP: usize = 7;
+
+/// A backup's folder name, which is also when it was taken: lexicographic
+/// order is time order (`prune`), and `due` reads the last one's date back.
+const STAMP_FORMAT: &str = "%Y-%m-%d_%H-%M-%S";
 
 /// Tout ce qui vit directement dans `app_config_dir` et n'est pas
 /// régénérable automatiquement (le cache de miniatures ou les logs, par
@@ -70,11 +76,19 @@ fn backups_root(base: &Path) -> PathBuf {
 /// permission) ne doit jamais empêcher le démarrage de l'app, seulement
 /// laisser une trace pour rester diagnosticable sur une install packagée
 /// (règle d'or n°… du CLAUDE.md).
-pub fn run_startup_backup(app: &AppHandle) {
+///
+/// Only when due by the frequency the user set (§10, weekly by default) -
+/// or when `new_build`: a build's first start on the base is when it is about
+/// to migrate it, the moment a copy of the previous state is worth most.
+pub fn run_startup_backup(app: &AppHandle, new_build: bool) {
     let Ok(base) = app.path().app_config_dir() else {
         log::warn!("backup: app_config_dir indisponible, sauvegarde de démarrage ignorée");
         return;
     };
+    let frequency = crate::config::load(app).prefs.backup_frequency;
+    if !new_build && !due(&backups_root(&base), frequency, chrono::Local::now().naive_local()) {
+        return;
+    }
     let presets = crate::sessionpreset::own_dir(app);
     if let Err(e) = backup_now(&base, presets.as_deref()) {
         log::warn!("backup: sauvegarde de démarrage échouée : {e}");
@@ -85,7 +99,7 @@ pub fn run_startup_backup(app: &AppHandle) {
 /// import (EXPORT§7.3), even into an empty installation.
 pub(crate) fn backup_now(base: &Path, presets: Option<&Path>) -> Result<(), String> {
     let root = backups_root(base);
-    let stamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
+    let stamp = chrono::Local::now().format(STAMP_FORMAT).to_string();
     let dest = root.join(&stamp);
     std::fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
 
@@ -209,6 +223,30 @@ fn copy_presets(presets: Option<&Path>, dest: &Path) -> Result<usize, String> {
     Ok(copied)
 }
 
+/// Whether the startup backup is due: always at every start; once a calendar
+/// day for daily (the first start of the day); seven days after the last one
+/// for weekly. No backup yet, it is due.
+fn due(root: &Path, frequency: BackupFrequency, now: chrono::NaiveDateTime) -> bool {
+    let Some(last) = latest(root) else {
+        return true;
+    };
+    match frequency {
+        BackupFrequency::Startup => true,
+        BackupFrequency::Daily => last.date() < now.date(),
+        BackupFrequency::Weekly => now - last >= chrono::Duration::days(7),
+    }
+}
+
+/// When the newest backup was taken, read from its folder's name.
+fn latest(root: &Path) -> Option<chrono::NaiveDateTime> {
+    std::fs::read_dir(root)
+        .ok()?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_dir())
+        .filter_map(|e| chrono::NaiveDateTime::parse_from_str(&e.file_name().to_string_lossy(), STAMP_FORMAT).ok())
+        .max()
+}
+
 /// Garde les `BACKUP_KEEP` sauvegardes les plus récentes — le format
 /// horodaté (`%Y-%m-%d_%H-%M-%S`) est lexicographiquement croissant, un tri
 /// de noms suffit, pas besoin de reparser les dates.
@@ -231,6 +269,48 @@ fn prune(root: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Rule (§10): the startup backup is taken at every start, at the first
+    /// start of a day, or seven days after the last one - and always when
+    /// there is none yet.
+    #[test]
+    fn the_startup_backup_follows_the_frequency() {
+        let root = crate::testutil::temp_dir("backup-due");
+        let at = |s: &str| chrono::NaiveDateTime::parse_from_str(s, STAMP_FORMAT).unwrap();
+        for f in [
+            BackupFrequency::Startup,
+            BackupFrequency::Daily,
+            BackupFrequency::Weekly,
+        ] {
+            assert!(due(&root, f, at("2026-10-11_09-00-00")), "{f:?}: no backup yet");
+        }
+        std::fs::create_dir_all(root.join("2026-10-04_08-00-00")).unwrap();
+        std::fs::create_dir_all(root.join("2026-10-10_14-40-21")).unwrap();
+        std::fs::create_dir_all(root.join("not a backup")).unwrap();
+        assert_eq!(
+            latest(&root),
+            Some(at("2026-10-10_14-40-21")),
+            "the newest, by its name"
+        );
+
+        assert!(due(&root, BackupFrequency::Startup, at("2026-10-10_14-41-00")));
+        assert!(
+            !due(&root, BackupFrequency::Daily, at("2026-10-10_23-59-00")),
+            "same day"
+        );
+        assert!(
+            due(&root, BackupFrequency::Daily, at("2026-10-11_00-01-00")),
+            "next day"
+        );
+        assert!(
+            !due(&root, BackupFrequency::Weekly, at("2026-10-17_14-40-00")),
+            "six days and change"
+        );
+        assert!(
+            due(&root, BackupFrequency::Weekly, at("2026-10-17_14-40-21")),
+            "seven days"
+        );
+    }
 
     /// Règle protégée : les sessions enregistrées sont sauvegardées elles
     /// aussi, alors qu'elles ne vivent plus dans `app_config_dir` mais chez

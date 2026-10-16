@@ -13,6 +13,7 @@
   import { getUiPrefs, setUiPref } from "$lib/uiPrefs.svelte";
   import { requestSection } from "$lib/shell/nav.svelte";
   import FilterBar from "$lib/components/filters/FilterBar.svelte";
+  import Tooltip from "$lib/components/ui/Tooltip.svelte";
   import { parseFilters, serializeFilters, type FilterMap, type FilterOption } from "$lib/library/filters";
   import GameFolderTree from "./GameFolderTree.svelte";
   import GameFolderResults from "./GameFolderResults.svelte";
@@ -344,7 +345,7 @@
   const DOT: Record<string, string> = {
     posed: "var(--green)",
     replacesGame: "var(--rosso-bright)",
-    waiting: "var(--yellow)",
+    waiting: "var(--orange)",
     drift: "var(--yellow)",
     cmZone: "var(--blue)",
     nobody: "var(--muted)",
@@ -396,19 +397,30 @@
 
     {#if index}
       <div class="summary" class:pending={!index.classified}>
-        {#each SUMMARY as v (v)}
-          <button
-            type="button"
-            class="bt"
-            class:on={stateOn(filters, v)}
-            style="--c: {DOT[v]}"
-            disabled={!index.classified}
-            aria-pressed={stateOn(filters, v)}
-            onclick={() => (filters = toggleState(filters, v))}
+        {#each SUMMARY as v, i (v)}
+          <!-- What each state means, on hover and on keyboard focus: the
+               names alone ("waiting", "CM zone", "drift") do not say it. Below
+               the band, where the tree leaves room; the end cells keep their
+               bubble inside the screen. -->
+          <Tooltip
+            fill
+            side="bottom"
+            align={i === 0 ? "left" : i === SUMMARY.length - 1 ? "right" : "center"}
+            text={t(`gamefolder.stateHelp.${v}`)}
           >
-            <span class="k"><span class="dot"></span>{t(`gamefolder.state.${v}`)}</span>
-            <span class="v mono">{index.classified ? countOf(index.summary, v).toLocaleString() : t("gamefolder.classifying")}</span>
-          </button>
+            <button
+              type="button"
+              class="bt"
+              class:on={stateOn(filters, v)}
+              style="--c: {DOT[v]}"
+              disabled={!index.classified}
+              aria-pressed={stateOn(filters, v)}
+              onclick={() => (filters = toggleState(filters, v))}
+            >
+              <span class="k"><span class="dot"></span>{t(`gamefolder.state.${v}`)}</span>
+              <span class="v mono">{index.classified ? countOf(index.summary, v).toLocaleString() : t("gamefolder.classifying")}</span>
+            </button>
+          </Tooltip>
         {/each}
       </div>
     {/if}
@@ -514,24 +526,25 @@
     justify-content: space-between;
     gap: 12px;
   }
+  /* The separators are the 1px gap showing the band's background: each cell
+     sits in its own tooltip wrapper, so a `:last-child` border rule would
+     match every one of them. */
   .summary {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
     border: 1px solid var(--line);
-    background: var(--panel2);
+    background: var(--line);
   }
   .bt {
+    flex: 1;
     padding: 9px 12px;
-    border-right: 1px solid var(--line);
-    background: none;
+    background: var(--panel2);
     text-align: left;
     display: flex;
     flex-direction: column;
     gap: 2px;
     min-width: 0;
-  }
-  .bt:last-child {
-    border-right: 0;
   }
   .bt:hover:not(:disabled) {
     background: var(--panel);

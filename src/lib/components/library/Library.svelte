@@ -12,6 +12,7 @@
   import { isPlaque, logoOf } from "$lib/library/brandLogos.svelte";
   import Emblem from "$lib/components/ui/Emblem.svelte";
   import { categoryFamilies, loadFamilies } from "$lib/library/familyTable.svelte";
+  import { loadTrackCategoryLooks, withTrackCategoryLabels } from "$lib/library/trackCategoryTable.svelte";
   import { countryLabel, flagFor, withCountryLabels } from "$lib/flags.svelte";
   import ContextMenu from "$lib/components/ui/ContextMenu.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
@@ -88,7 +89,9 @@
   /** Catalogue des filtres de CE type (§6.3) : marque, année, classe et
    * pilote n'existent que côté voitures. Dérivé et non figé : le filtre
    * Famille n'existe qu'une fois la table des familles lue (`familyTable`). */
-  const defs = $derived(withCountryLabels(filterDefs(kind, isCar ? categoryFamilies() : [])));
+  const defs = $derived(
+    withTrackCategoryLabels(withCountryLabels(filterDefs(kind, isCar ? categoryFamilies() : []))),
+  );
 
   let cards = $state<ModCard[]>([]);
   // Distinct de « bibliothèque vide » : sans lui, la liste encore vide au
@@ -290,6 +293,10 @@
     // drops every key the catalogue does not know, and without the table the
     // catalogue has no Family filter - a family chip left posed would vanish
     // at each restart.
+    // The names of the track categories are not awaited: a chip parses
+    // without them, and a renamed category is named late rather than the
+    // screen opened late.
+    if (!isCar) void loadTrackCategoryLooks();
     const [colPrefs, saved] = await Promise.all([
       loadColumnsPrefs(kind),
       getUiPrefs([FKEY, KEYS.pinned, KEYS.view, KEYS.sortKey, KEYS.sortDir, KEYS.hideBrand, StorageKey.tableHideBrand]),

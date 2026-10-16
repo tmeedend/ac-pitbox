@@ -23,6 +23,7 @@
   import FilterEditor from "./FilterEditor.svelte";
   import { flagFor, loadFlags } from "$lib/flags.svelte";
   import Emblem from "$lib/components/ui/Emblem.svelte";
+  import TrackCategoryIcon from "$lib/components/library/TrackCategoryIcon.svelte";
   import { logoOf } from "$lib/library/brandLogos.svelte";
   import { previewSrc } from "$lib/library/library";
   import { t } from "$lib/i18n/index.svelte";
@@ -31,6 +32,7 @@
     chipSummary,
     ariaSummary,
     isBlank,
+    UNSET_VALUE,
     type ChipValue,
     type FilterDef,
     type FilterMap,
@@ -239,6 +241,10 @@
       {@const logo = logoOf(v.value)}
       {@const src = logo ? previewSrc(logo.path) : null}
       {#if logo && src}<span class="logo"><Emblem {src} plaque={logo.plaque} size={13} /></span>{/if}
+    {:else if def.categoryIcons && values.length === 1}
+      <!-- One category only, as for logos: pictograms side by side would
+           crowd the chip. -->
+      <span class="cat"><TrackCategoryIcon icon={v.value === UNSET_VALUE ? "" : undefined} tag={v.value} size={11} /></span>
     {/if}{v.label}
   {/each}
 {/snippet}
@@ -585,6 +591,15 @@
     display: inline-flex;
     vertical-align: -2px;
     margin-right: 4px;
+  }
+  /* A category's pictogram (`TrackCategoryIcon`): its holes take the chip's
+     background. */
+  .chip .cat {
+    --tile-bg: var(--panel2);
+    display: inline-flex;
+    vertical-align: -1px;
+    margin-right: 5px;
+    color: var(--txt2);
   }
   .chip .x {
     width: 18px;

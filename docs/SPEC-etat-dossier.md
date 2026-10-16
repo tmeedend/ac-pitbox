@@ -144,7 +144,7 @@ Un **état principal** par fichier, parmi cinq, plus **deux marques** qui s'y aj
 |---|---|---|---|
 | **Posé** | vert `--green` | fourni par un mod, conforme | population 1–4, et le fichier sur disque est celui du fournisseur (§4.3) |
 | **Remplace le jeu** | rouge `--rosso-bright` | un fichier d'origine a été remplacé ; l'original est sauvegardé | ligne dans `game_backups` pour ce chemin, ou `sfx/` d'un son actif |
-| **En attente** | jaune `--yellow` | un fichier étranger occupe la place ; l'exemplaire du mod attend en bibliothèque | réclamé, non fourni, `held_by_foreign_file` |
+| **En attente** | orange `--orange` | un fichier étranger occupe la place ; l'exemplaire du mod attend en bibliothèque | réclamé (ou d'un mod actif), non fourni, et le fichier en place **n'a pas le contenu** de l'exemplaire — même taille et même date, ou mêmes octets quand seule la date diffère : il est alors « à personne », rattaché au mod, et rien n'attend |
 | **Dérive** | jaune `--yellow`, glyphe ≠ | le disque ne correspond plus à ce que Pit Box a posé | §4.3 |
 | **À personne** | gris `--muted` | Pit Box n'y est pour rien et n'y touche pas | population 5–7 sans dérive |
 
@@ -153,7 +153,7 @@ Un **état principal** par fichier, parmi cinq, plus **deux marques** qui s'y aj
 | **Partagé** | aucune, texte « +N » | plusieurs mods réclament le chemin ; un seul exemplaire gagne (arbitrage par date, `SPEC.md` §4.5.4) |
 | **Zone Content Manager** | bleu `--blue` | le chemin est dans une zone que CM resynchronise (`acpath.rs`) ; CM peut remplacer l'exemplaire du mod |
 
-**Pas de couleur nouvelle.** Ce sont exactement celles de l'onglet Ajouts au jeu : rouge = remplace le jeu, jaune = alerte, bleu = information, vert = acquis. Dérive et en attente partagent le jaune et se distinguent par leur libellé et leur glyphe. Le rouge employé ici est un **état**, pas un accent : il ne tombe pas sous le barème de `SPEC.md` §7.2ter, comme les marques rouges de l'onglet Ajouts au jeu n'y tombent pas.
+**Pas de couleur nouvelle.** Ce sont celles de l'onglet Ajouts au jeu : rouge = remplace le jeu, jaune = alerte, bleu = information, vert = acquis — plus l'orange, le neutre-négatif de l'app (un mod inactif), pour « en attente » : rien n'est cassé, l'exemplaire n'est simplement pas posé. Dérive et en attente partageaient d'abord le jaune ; à l'usage, les deux se lisaient comme un seul état (2026-10). Le rouge employé ici est un **état**, pas un accent : il ne tombe pas sous le barème de `SPEC.md` §7.2ter, comme les marques rouges de l'onglet Ajouts au jeu n'y tombent pas.
 
 **« Remplace le jeu » l'emporte sur « posé »** : un fichier fourni par un mod **et** qui a remplacé un original est « remplace le jeu ». C'est le seul état qui touche toutes les sessions, il doit se voir en premier.
 

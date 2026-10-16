@@ -6,7 +6,9 @@ use std::path::{Path, PathBuf};
 
 use rusqlite::Connection;
 
-use super::{destination, gated, host_exists, parent_subdir, record_sub, SubGate, SubImported, SubProgress};
+use super::{
+    destination, gated, host_exists, parent_subdir, record_sub, try_redeploy_host, SubGate, SubImported, SubProgress,
+};
 use crate::config::AppConfig;
 use crate::modscan::FoundSub;
 use crate::resources::{self, ExtractionMode};
@@ -278,6 +280,9 @@ pub fn activate_sound(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Resul
     crate::skeleton::guard_mod(conn, &sub.parent_id)?;
     let sfx = parent_subdir(conn, cfg, &sub.parent_id, "sfx").ok_or(crate::errors::TARGET_CAR_UNKNOWN)?;
     let backup = sound_backup_dir(cfg, &sub.parent_id)?;
+    // An interrupted swap may have set the car's `sfx/` aside: put it back
+    // before the first backup reads it, or the backup would be of nothing.
+    settle_leftovers(&sfx)?;
 
     // Sauvegarde du son d'origine, une seule fois (préserve le vrai original).
     if !backup.exists() {
@@ -289,20 +294,27 @@ pub fn activate_sound(conn: &Connection, cfg: &AppConfig, sub_id: &str) -> Resul
 
     let sound_dir = crate::libpath::resolve(cfg.library_path.as_deref(), &sub.library_path)
         .ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
-    replace_dir_contents(&sound_dir, &sfx)?;
-    overlay::set_active_sound(conn, &sub.parent_id, Some(sub_id)).map_err(|e| e.to_string())?;
-    Ok(())
+    swap_sfx(&sfx, &sound_dir, || {
+        overlay::set_active_sound(conn, &sub.parent_id, Some(sub_id)).map_err(|e| e.to_string())
+    })?;
+    // The game's `content/cars/<id>` is a hardlink mirror of the library
+    // folder just rewritten: its names still hold the OLD sound until the car
+    // is laid again (real bug — "active" on screen, stock sound in game).
+    try_redeploy_host(conn, cfg, &sub.parent_id)
 }
 
 /// Restaure le son d'origine d'une voiture (désactive le mod de son actif).
 pub fn restore_sound(conn: &Connection, cfg: &AppConfig, parent_id: &str) -> Result<(), String> {
     let backup = sound_backup_dir(cfg, parent_id)?;
+    let record = || overlay::set_active_sound(conn, parent_id, None).map_err(|e| e.to_string());
     if backup.is_dir() {
         let sfx = parent_subdir(conn, cfg, parent_id, "sfx").ok_or(crate::errors::TARGET_CAR_UNKNOWN)?;
-        replace_dir_contents(&backup, &sfx)?;
+        swap_sfx(&sfx, &backup, record)?;
+    } else {
+        record()?;
     }
-    overlay::set_active_sound(conn, parent_id, None).map_err(|e| e.to_string())?;
-    Ok(())
+    // Same gap as on activation, the other way round.
+    try_redeploy_host(conn, cfg, parent_id)
 }
 
 /// `<lib>/sounds/<parent>/__original__` : sauvegarde du son d'origine.
@@ -314,13 +326,126 @@ pub(crate) fn sound_backup_dir(cfg: &AppConfig, parent_id: &str) -> Result<PathB
     Ok(lib.join("sounds").join(parent_id).join("__original__"))
 }
 
-/// Remplace le contenu de `dst` par celui de `src`. `dst` est toujours un vrai
-/// dossier (sous-dossier `sfx/` de la voiture), jamais une junction.
-fn replace_dir_contents(src: &Path, dst: &Path) -> Result<(), String> {
-    if dst.exists() {
-        std::fs::remove_dir_all(dst).map_err(|e| format!("nettoyage de {}: {e}", dst.display()))?;
+// --- One-move swap, and its recovery (§8.3) -----------------------------
+//
+// A stock car's `sfx/` is the GAME's own folder (golden rule 5). Emptying it
+// and then copying the new sound into it left a window where an app killed in
+// between left the car silent, with nothing to put it right but the user's
+// own "stock sound". So the new sound is prepared beside it, then swapped in
+// with two renames, and the base is written between the swap and the
+// clean-up: a transient folder still there at startup means a swap that did
+// not finish, and `recover_interrupted_swaps` lays again what the base says.
+//
+// Not `gamebackup.rs`, on purpose (2026-10-14, docs/CHANTIERS.md, "Son d'une
+// voiture Kunos"): its startup sweep restores every backup no mod claims, and
+// an active sound would have to become a third claimant, with the "stock"
+// audition and the game folder screen moved over too. The original stays in
+// `sound_backup_dir`, as before.
+
+/// The incoming sound, prepared beside `sfx/`. Ours by name: neither AC nor
+/// CM writes it.
+const SFX_INCOMING: &str = "sfx.pitbox-new";
+/// The outgoing sound, between the two renames and the clean-up.
+const SFX_OUTGOING: &str = "sfx.pitbox-old";
+
+fn transient(sfx: &Path, name: &str) -> PathBuf {
+    sfx.with_file_name(name)
+}
+
+/// Replaces `sfx` by a copy of `src` in one move, calling `record` once the
+/// new sound is in place and before the outgoing one is deleted. `sfx` is
+/// always a real folder (a car's `sfx/`), never a junction.
+fn swap_sfx(sfx: &Path, src: &Path, record: impl FnOnce() -> Result<(), String>) -> Result<(), String> {
+    settle_leftovers(sfx)?;
+    let incoming = transient(sfx, SFX_INCOMING);
+    let outgoing = transient(sfx, SFX_OUTGOING);
+    if let Err(e) = archive::copy_dir(src, &incoming) {
+        let _ = std::fs::remove_dir_all(&incoming);
+        return Err(format!("sound copy: {e}"));
     }
-    archive::copy_dir(src, dst).map_err(|e| format!("copie du son : {e}"))
+    if sfx.exists() {
+        if let Err(e) = std::fs::rename(sfx, &outgoing) {
+            let _ = std::fs::remove_dir_all(&incoming);
+            return Err(format!("setting {} aside: {e}", sfx.display()));
+        }
+    }
+    if let Err(e) = std::fs::rename(&incoming, sfx) {
+        // Put the outgoing sound back: the car must not stay without one.
+        if outgoing.exists() {
+            if let Err(back) = std::fs::rename(&outgoing, sfx) {
+                log::warn!("sound swap {}: outgoing not put back — {back}", sfx.display());
+            }
+        }
+        return Err(format!("laying the sound in {}: {e}", sfx.display()));
+    }
+    record()?;
+    if outgoing.exists() {
+        if let Err(e) = std::fs::remove_dir_all(&outgoing) {
+            // Harmless to the game, which reads `sfx/` only; the next swap or
+            // startup clears it.
+            log::warn!("sound swap {}: outgoing left — {e}", outgoing.display());
+        }
+    }
+    Ok(())
+}
+
+/// Clears what an interrupted swap left beside `sfx`: the outgoing sound goes
+/// back when `sfx` is missing, and both transient folders go.
+fn settle_leftovers(sfx: &Path) -> Result<(), String> {
+    let incoming = transient(sfx, SFX_INCOMING);
+    let outgoing = transient(sfx, SFX_OUTGOING);
+    if !sfx.exists() && outgoing.is_dir() {
+        std::fs::rename(&outgoing, sfx).map_err(|e| format!("putting {} back: {e}", sfx.display()))?;
+    }
+    for dir in [incoming, outgoing] {
+        if dir.exists() {
+            std::fs::remove_dir_all(&dir).map_err(|e| format!("clearing {}: {e}", dir.display()))?;
+        }
+    }
+    Ok(())
+}
+
+/// Startup safety net: a car whose sound swap did not finish gets the sound
+/// the base says it has — the active sound mod, or the original when none is.
+/// A managed car is laid again in the game, its `sfx/` being the library's.
+/// Returns how many cars were put right.
+pub fn recover_interrupted_swaps(conn: &Connection, cfg: &AppConfig) -> usize {
+    let subs = match overlay::list_subs_by_type(conn, "SOUND") {
+        Ok(subs) => subs,
+        Err(e) => {
+            log::warn!("sound recovery: cannot list the sounds — {e}");
+            return 0;
+        }
+    };
+    let mut parents: Vec<&str> = subs.iter().map(|s| s.parent_id.as_str()).collect();
+    parents.dedup();
+    let mut recovered = 0;
+    for parent in parents {
+        let Some(sfx) = parent_subdir(conn, cfg, parent, "sfx") else {
+            continue;
+        };
+        if !transient(&sfx, SFX_INCOMING).exists() && !transient(&sfx, SFX_OUTGOING).exists() {
+            continue;
+        }
+        let active = subs.iter().find(|s| s.parent_id == parent && s.is_active);
+        let source = match active {
+            Some(sub) => crate::libpath::resolve(cfg.library_path.as_deref(), &sub.library_path),
+            None => sound_backup_dir(cfg, parent).ok().filter(|b| b.is_dir()),
+        };
+        let result = match source {
+            Some(src) => swap_sfx(&sfx, &src, || Ok(())),
+            None => settle_leftovers(&sfx),
+        };
+        match result {
+            Ok(()) => {
+                log::warn!("sound recovery: interrupted swap of {parent} finished");
+                super::redeploy_host(conn, cfg, parent);
+                recovered += 1;
+            }
+            Err(e) => log::warn!("sound recovery {parent}: {e}"),
+        }
+    }
+    recovered
 }
 
 #[cfg(test)]
@@ -329,19 +454,21 @@ mod tests {
     use crate::modscan;
     use crate::submods::import_subs;
     use chrono::Local;
-    #[test]
-    fn sound_swap_and_restore() {
-        let base = crate::testutil::temp_dir("snd");
+    /// A managed car `snd_car` (version `v1`, original sound in its `sfx/`)
+    /// and a sound mod `s1` for it, stored apart in the library. The AC
+    /// install is configured, the car is not deployed.
+    fn car_with_sound(tag: &str) -> (crate::testutil::TempDir, PathBuf, Connection, AppConfig) {
+        let base = crate::testutil::temp_dir(tag);
         let library = base.join("library");
         std::fs::create_dir_all(&library).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
         let cfg = AppConfig {
             library_path: Some(library.clone()),
+            ac_install_path: Some(base.join("ac")),
             ..Default::default()
         };
         let now = Local::now().to_rfc3339();
 
-        // Voiture (mod) avec son d'origine dans sfx/.
         let carv = library.join("cars").join("snd_car").join("v1");
         let sfx = carv.join("sfx");
         std::fs::create_dir_all(&sfx).unwrap();
@@ -367,7 +494,6 @@ mod tests {
         .unwrap();
         overlay::set_active_version(&conn, "snd_car", "v1").unwrap();
 
-        // Mod de son stocké à part.
         let snd = library.join("sounds").join("snd_car").join("v8");
         std::fs::create_dir_all(&snd).unwrap();
         std::fs::write(snd.join("GUIDs.txt"), b"MOD").unwrap();
@@ -383,6 +509,13 @@ mod tests {
             &now,
         )
         .unwrap();
+        (base, library, conn, cfg)
+    }
+
+    #[test]
+    fn sound_swap_and_restore() {
+        let (_base, library, conn, cfg) = car_with_sound("snd");
+        let sfx = library.join("cars").join("snd_car").join("v1").join("sfx");
 
         // Activation : sfx remplacé, original sauvegardé, sub actif.
         activate_sound(&conn, &cfg, "s1").unwrap();
@@ -404,6 +537,174 @@ mod tests {
         restore_sound(&conn, &cfg, "snd_car").unwrap();
         assert_eq!(std::fs::read_to_string(sfx.join("GUIDs.txt")).unwrap(), "ORIG");
         assert!(!overlay::get_sub_mod(&conn, "s1").unwrap().unwrap().is_active);
+    }
+
+    // Real bug (§8.3): the swap rewrote the car's `sfx/` in the library, but
+    // `content/cars/<id>` is laid by hardlinks — its files are other names for
+    // the ORIGINAL data, which deleting the library's names does not touch.
+    // The screen said "active", the game kept playing the stock sound until
+    // the car happened to be deployed again. The game must hear the switch at
+    // once, both ways.
+    #[test]
+    fn a_deployed_car_plays_the_sound_switched_on_and_off() {
+        let (base, _library, conn, cfg) = car_with_sound("sndgame");
+        crate::activation::activate(&conn, &cfg, "snd_car", None).unwrap();
+        let bank = base
+            .join("ac")
+            .join("content")
+            .join("cars")
+            .join("snd_car")
+            .join("sfx")
+            .join("car.bank");
+        assert_eq!(
+            std::fs::read_to_string(&bank).unwrap(),
+            "ORIGBANK",
+            "the car is in the game"
+        );
+
+        activate_sound(&conn, &cfg, "s1").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&bank).unwrap(),
+            "MODBANK",
+            "the game plays the mod's sound as soon as it is active"
+        );
+
+        restore_sound(&conn, &cfg, "snd_car").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&bank).unwrap(),
+            "ORIGBANK",
+            "the game plays the stock sound again as soon as it is restored"
+        );
+    }
+
+    // The other side of the same rule: a car that is not in the game stays
+    // out of it — switching its sound must not deploy it.
+    #[test]
+    fn switching_the_sound_of_an_inactive_car_does_not_deploy_it() {
+        let (base, _library, conn, cfg) = car_with_sound("sndoff");
+        activate_sound(&conn, &cfg, "s1").unwrap();
+        restore_sound(&conn, &cfg, "snd_car").unwrap();
+        assert!(
+            !base.join("ac").join("content").join("cars").join("snd_car").exists(),
+            "an inactive car stays out of content/"
+        );
+    }
+
+    /// A stock car `ks_snd` living in the game's own `content/cars/`, with
+    /// its original sound, and a sound mod `s1` for it in the library.
+    /// Returns the game's `sfx/` folder.
+    fn stock_car_with_sound(tag: &str) -> (crate::testutil::TempDir, PathBuf, Connection, AppConfig) {
+        let base = crate::testutil::temp_dir(tag);
+        let library = base.join("library");
+        let sfx = base.join("ac").join("content").join("cars").join("ks_snd").join("sfx");
+        std::fs::create_dir_all(&sfx).unwrap();
+        std::fs::write(sfx.join("GUIDs.txt"), b"ORIG").unwrap();
+        std::fs::write(sfx.join("ks_snd.bank"), b"ORIGBANK").unwrap();
+        let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ac_install_path: Some(base.join("ac")),
+            ..Default::default()
+        };
+        let now = Local::now().to_rfc3339();
+        overlay::upsert_stock_mod(&conn, "ks_snd", "Car", None, Some("Snd"), &now, false).unwrap();
+        let snd = library.join("sounds").join("ks_snd").join("v8");
+        std::fs::create_dir_all(&snd).unwrap();
+        std::fs::write(snd.join("GUIDs.txt"), b"MOD").unwrap();
+        std::fs::write(snd.join("ks_snd.bank"), b"MODBANK").unwrap();
+        overlay::insert_sub_mod(&conn, "s1", "SOUND", "ks_snd", "v8", &snd.to_string_lossy(), None, &now).unwrap();
+        (base, sfx, conn, cfg)
+    }
+
+    // §8.3: a stock car's `sfx/` is the game's own folder. The swap writes
+    // there, the original kept aside once, and comes back on restore.
+    #[test]
+    fn a_stock_car_plays_the_sound_switched_on_and_off() {
+        let (_base, sfx, conn, cfg) = stock_car_with_sound("sndstock");
+        activate_sound(&conn, &cfg, "s1").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(sfx.join("ks_snd.bank")).unwrap(),
+            "MODBANK",
+            "mod laid in the game"
+        );
+        restore_sound(&conn, &cfg, "ks_snd").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(sfx.join("ks_snd.bank")).unwrap(),
+            "ORIGBANK",
+            "original back"
+        );
+        assert_eq!(
+            std::fs::read_to_string(sfx.join("GUIDs.txt")).unwrap(),
+            "ORIG",
+            "original back, whole"
+        );
+    }
+
+    /// The game's `sfx/` holds exactly these files, and nothing was left beside it.
+    fn assert_sound(sfx: &Path, bank: &str, why: &str) {
+        assert_eq!(std::fs::read_to_string(sfx.join("ks_snd.bank")).unwrap(), bank, "{why}");
+        assert!(!transient(sfx, SFX_INCOMING).exists(), "{why}: no incoming folder left");
+        assert!(!transient(sfx, SFX_OUTGOING).exists(), "{why}: no outgoing folder left");
+    }
+
+    // An app killed after the incoming sound was prepared, the car's `sfx/`
+    // already set aside, and the base not yet written: the startup net lays
+    // what the base says — here, still the original.
+    #[test]
+    fn a_swap_killed_halfway_gives_the_car_back_the_sound_of_the_base() {
+        let (_base, sfx, conn, cfg) = stock_car_with_sound("sndkill");
+        activate_sound(&conn, &cfg, "s1").unwrap();
+        restore_sound(&conn, &cfg, "ks_snd").unwrap(); // the original is now kept aside
+
+        // The state a kill leaves between the two renames.
+        std::fs::rename(&sfx, transient(&sfx, SFX_OUTGOING)).unwrap();
+        let incoming = transient(&sfx, SFX_INCOMING);
+        std::fs::create_dir_all(&incoming).unwrap();
+        std::fs::write(incoming.join("ks_snd.bank"), b"MODB").unwrap(); // half copied
+        assert!(!sfx.exists(), "the car has no sound at this point");
+
+        assert_eq!(recover_interrupted_swaps(&conn, &cfg), 1, "one car put right");
+        assert_sound(&sfx, "ORIGBANK", "no sound active in the base: the original");
+    }
+
+    // Killed after the new sound went in and the base was written, before the
+    // clean-up: the mod stays, and only the leftover goes.
+    #[test]
+    fn a_swap_killed_before_its_clean_up_keeps_the_sound_of_the_base() {
+        let (_base, sfx, conn, cfg) = stock_car_with_sound("sndkill2");
+        activate_sound(&conn, &cfg, "s1").unwrap();
+        let outgoing = transient(&sfx, SFX_OUTGOING);
+        std::fs::create_dir_all(&outgoing).unwrap();
+        std::fs::write(outgoing.join("ks_snd.bank"), b"ORIGBANK").unwrap();
+
+        assert_eq!(recover_interrupted_swaps(&conn, &cfg), 1, "one car put right");
+        assert_sound(&sfx, "MODBANK", "the mod is active in the base");
+    }
+
+    // Without any leftover, the net touches nothing: a startup must not
+    // rewrite every car's sound.
+    #[test]
+    fn a_finished_swap_is_left_alone_at_startup() {
+        let (_base, sfx, conn, cfg) = stock_car_with_sound("sndclean");
+        activate_sound(&conn, &cfg, "s1").unwrap();
+        std::fs::write(sfx.join("ks_snd.bank"), b"EDITED").unwrap();
+        assert_eq!(recover_interrupted_swaps(&conn, &cfg), 0, "nothing to put right");
+        assert_eq!(
+            std::fs::read_to_string(sfx.join("ks_snd.bank")).unwrap(),
+            "EDITED",
+            "untouched"
+        );
+    }
+
+    // Without a copy kept aside, nothing can be laid: the outgoing sound, the
+    // only one there is, goes back in place rather than be cleared away.
+    #[test]
+    fn without_a_kept_original_the_outgoing_sound_goes_back() {
+        let (_base, sfx, conn, cfg) = stock_car_with_sound("sndnoback");
+        std::fs::rename(&sfx, transient(&sfx, SFX_OUTGOING)).unwrap();
+        std::fs::create_dir_all(transient(&sfx, SFX_INCOMING)).unwrap();
+        assert_eq!(recover_interrupted_swaps(&conn, &cfg), 1, "one car put right");
+        assert_sound(&sfx, "ORIGBANK", "the outgoing sound is the car's");
     }
 
     /// Fabrique un décor : bibliothèque, base, et les voitures données.

@@ -25,6 +25,10 @@
   import { previewSrc } from "$lib/library/library";
   import type { ColumnsPrefs } from "$lib/tableColumns";
   import ServerCountry from "./ServerCountry.svelte";
+  import TrackThumb from "./TrackThumb.svelte";
+  import { trackGlyphCategories } from "$lib/online/categories";
+  import { trackCategories } from "$lib/online/trackCategories.svelte";
+  import { wantPictures } from "$lib/online/trackPictures.svelte";
   import LevelTag from "./LevelTag.svelte";
 
   interface Props {
@@ -102,6 +106,8 @@
     <span class="thumb">
       {#if look?.preview && !nested}
         <img src={previewSrc(look.preview)} alt="" loading="lazy" decoding="async" />
+      {:else if !nested}
+        <TrackThumb trackId={track.id} categories={trackGlyphCategories(track, looks, trackCategories.knowledge)} size="row" />
       {/if}
     </span>
     <span class="track">
@@ -134,7 +140,12 @@
   {onsort}
   onrowclick={(r) => onrowclick(r)}
   rowHeight={ROW_H}
-  onvisible={(shown) => requestPings(shown.flatMap((r) => (r.kind === "server" ? [r.server] : [])))}
+  onvisible={(shown) => {
+    requestPings(shown.flatMap((r) => (r.kind === "server" ? [r.server] : [])));
+    // The pictures of the tracks in view the library cannot show.
+    const tracks = shown.map((r) => (r.kind === "group" ? r.track : r.server.track));
+    wantPictures(tracks.filter((tr) => !layoutLook(looks, tr)?.preview).map((tr) => tr.id));
+  }}
 >
   {#snippet cell(r: ListRow, col: OnlineColumn)}
     {#if r.kind === "group"}

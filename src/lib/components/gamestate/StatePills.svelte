@@ -1,9 +1,11 @@
 <script lang="ts">
-  // The pills of a line (DOSSIER§4.2, DOSSIER§4.4): a file says its state, a folder
-  // the counts of its two gravest states. Exactly the colours of the sheet's
-  // "Game additions" tab - red replaces the game, yellow is an alert, blue an
-  // information, green acquired; drift and waiting share the yellow and part by
-  // their label and glyph. No new colour.
+  // The pills of a line (DOSSIER§4.2, DOSSIER§4.4): a file says its state, a
+  // folder the counts of its two gravest states. Red replaces the game, yellow
+  // is an alert (drift), blue an information (CM zone), green acquired, and
+  // orange - the app's neutral-negative, an inactive mod's - a copy that waits:
+  // nothing is wrong, it is just not laid. Waiting used to share the yellow of
+  // drift, and the two read as one at a glance (reported 2026-10).
+  // No new colour: every one is a token of `global.css`.
   import { t } from "$lib/i18n/index.svelte";
   import { folderPills } from "$lib/gamestate/display";
   import type { Row, StateValue } from "$lib/gamestate/gamestate";
@@ -13,9 +15,9 @@
   const TONE: Record<StateValue, string> = {
     posed: "pill-ok",
     replacesGame: "pill-err",
-    waiting: "pill-warn",
+    waiting: "pill-idle",
     drift: "pill-warn",
-    cmZone: "pill-cm",
+    cmZone: "pill-info",
     nobody: "",
     shared: "",
   };
@@ -39,7 +41,7 @@
       <span class="pill {TONE[row.state]}">{t(`gamefolder.state.${row.state}`)}</span>
     {/if}
     {#if row.cmZone}
-      <span class="pill pill-cm" title={t("gamefolder.state.cmZone")}>{t("gamefolder.cmShort")}</span>
+      <span class="pill pill-info" title={t("gamefolder.state.cmZone")}>{t("gamefolder.cmShort")}</span>
     {/if}
   {/if}
 </span>
@@ -55,11 +57,5 @@
     font-size: 10.5px;
     padding: 1px 6px;
     font-variant-numeric: tabular-nums;
-  }
-  /* The blue of information - the same as the sheet's CM zone mark. */
-  .pill-cm {
-    color: var(--blue);
-    border-color: var(--blue-border);
-    background: var(--blue-dim);
   }
 </style>

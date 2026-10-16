@@ -173,6 +173,9 @@ pub struct CategoryRow {
     pub shipped: bool,
     pub on: bool,
     pub effect: usize,
+    /// Its place in the shipped allowlist: what tells a category the user
+    /// moved from one the catalogue placed (Families › Tracks, the ⚑).
+    pub shipped_rank: Option<usize>,
 }
 
 /// Everything the Rules screen shows: the overlay it edits, and each section
@@ -229,6 +232,7 @@ pub fn view(o: &RulesOverlay, catalog: &Rules, effects: &Effects, version: Strin
             shipped: allow.contains(&name),
             on: true,
             effect: effects.get(&category_key(&name)).copied().unwrap_or(0),
+            shipped_rank: allow.iter().position(|a| a == &name),
             name,
         })
         .collect();
@@ -241,6 +245,7 @@ pub fn view(o: &RulesOverlay, catalog: &Rules, effects: &Effects, version: Strin
                 shipped: true,
                 on: false,
                 effect: 0,
+                shipped_rank: allow.iter().position(|a| a == name),
             }),
     );
     let (k, ks) = (&catalog.car, &catalog.car.extraction_specs);

@@ -7,10 +7,13 @@
 // means the same thing on both screens. Pure, for Vitest.
 //
 // One rule the library does not have: a value the page cannot know is
-// **unknown**, and an unknown value neither matches nor fails. The spec says
-// it for the track category ("ni inclus ni exclu, sinon on masque en silence
-// les serveurs qu'on cherche justement à découvrir"): a track missing from the
-// library has no category, and most of the lobby's tracks are missing.
+// **unknown**. For most tokens an unknown value neither matches nor fails. The
+// track category is the exception (`categories.ts` resolves it): an unknown
+// category is left out of an INCLUDED category and kept under an EXCLUDED
+// one. Letting it through both ways - the first rule of the spec - made
+// "Drift" list whatever ran on the many tracks nobody knows; the servers it
+// leaves out are counted under the list, one click from being shown
+// (`showUnknownCategories`).
 import {
   optionsFrom,
   sanitizeFilterMap,
@@ -20,7 +23,7 @@ import {
   type FilterOption,
 } from "$lib/library/filters";
 import { isJoinable } from "./filters";
-import { trackTitle, type Looks } from "./looks";
+import { layoutName, trackTitle, type Looks } from "./looks";
 import type { ServerSummary, TrackRef } from "./online";
 
 export const TRACK_KEY = "track";
@@ -78,7 +81,7 @@ export function onlineTokenDefs(labels: TokenLabels = {}, bools = true): FilterD
     // A server carries several cars and a track several categories: the
     // operator is offered where an AND can match.
     { key: CAR_KEY, labelKey: "online.filterCar", type: "val", operator: true, labelOf: labels.car },
-    { key: CATEGORY_KEY, labelKey: "online.filterTrackCategory", type: "val", operator: true },
+    { key: CATEGORY_KEY, labelKey: "online.filterTrackCategory", type: "val", operator: true, categoryIcons: true },
     {
       key: CONTENT_KEY,
       labelKey: "online.filterContent",
@@ -116,6 +119,11 @@ export function onlineTokenDefs(labels: TokenLabels = {}, bools = true): FilterD
 /** What the tokens read about a server that the server itself does not say. */
 export interface TokenContext {
   looks: Looks;
+  /** A server's track categories (`categories.ts`), `null` when unknown. */
+  categoriesOf: (s: ServerSummary) => string[] | null;
+  /** The servers an included category leaves out for an unknown category
+   * are shown anyway — the toggle under the list. */
+  showUnknownCategories?: boolean;
   /** The measured round trip, `undefined` until measured — or when the
    * server did not answer. */
   pingOf: (s: ServerSummary) => number | undefined;
@@ -129,10 +137,15 @@ export function trackValue(track: TrackRef): string {
   return track.kunos_id.toLowerCase();
 }
 
-/** A track as a token shows it: its name here, else the lobby's id — the
- * folder alone would not tell two layouts of an unknown track apart. */
+/** A track as a token shows it: its name here; else CSP's name for it with
+ * the layout's folder after it - the name alone would not tell two layouts of
+ * the track apart -; else the lobby's id, for the same reason. */
 export function trackLabel(looks: Looks, track: TrackRef): string {
-  return looks.tracks[track.id.toLowerCase()] ? trackTitle(looks, track) : track.kunos_id;
+  if (looks.tracks[track.id.toLowerCase()]) return trackTitle(looks, track);
+  const named = looks.track_names?.[track.id.toLowerCase()];
+  if (!named) return track.kunos_id;
+  const layout = layoutName(looks, track);
+  return layout ? `${named} - ${layout}` : named;
 }
 
 /** Values a server carries for a token, `null` when they are unknown. */
@@ -143,7 +156,7 @@ function valuesOf(key: string, ctx: TokenContext): (s: ServerSummary) => string[
     case CAR_KEY:
       return (s) => s.cars.map((c) => c.toLowerCase());
     case CATEGORY_KEY:
-      return (s) => ctx.looks.tracks[s.track.id.toLowerCase()]?.categories ?? null;
+      return ctx.categoriesOf;
     case CONTENT_KEY:
       // A snapshot saved before servers were judged on it does not say.
       return (s) => (s.official === undefined ? null : [s.official ? "kunos" : "mods"]);
@@ -199,9 +212,13 @@ export function tokenPredicate(
     const test = valTest(def, st);
     if (!test) continue;
     const get = valuesOf(def.key, ctx);
+    // An unknown value passes, but for an unknown category under an included
+    // one (module docs).
+    const unknownPasses =
+      def.key !== CATEGORY_KEY || !!ctx.showUnknownCategories || !st.values.some((v) => v.sign > 0);
     tests.push((s) => {
       const values = get(s);
-      return values === null || test(values);
+      return values === null ? unknownPasses : test(values);
     });
   }
   return (s) => tests.every((test) => test(s));

@@ -128,6 +128,18 @@ fn describe(before: &TaxonomyTables, after: &TaxonomyTables) -> Vec<String> {
     );
     maps("country tag", &before.country_tags, &after.country_tags, &mut out);
     maps("brand alias", &before.brand_aliases, &after.brand_aliases, &mut out);
+    maps(
+        "track category",
+        &before.track_categories,
+        &after.track_categories,
+        &mut out,
+    );
+    maps(
+        "server keyword",
+        &before.server_keywords,
+        &after.server_keywords,
+        &mut out,
+    );
     for k in after.not_brands.difference(&before.not_brands) {
         out.push(format!("+ not a brand {k}"));
     }

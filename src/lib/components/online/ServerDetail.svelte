@@ -22,6 +22,12 @@
   import NotifyMe from "./NotifyMe.svelte";
   import ServerCountry from "./ServerCountry.svelte";
   import LevelTag from "./LevelTag.svelte";
+  import TrackCategory from "./TrackCategory.svelte";
+  import TrackThumb from "./TrackThumb.svelte";
+  import { trackGlyphCategories } from "$lib/online/categories";
+  import { trackCategories } from "$lib/online/trackCategories.svelte";
+  import { pictureOf, wantPictures } from "$lib/online/trackPictures.svelte";
+  import { openExternal } from "$lib/links";
   import { onlineStore, toggleFavouriteServer, toggleFriendName } from "$lib/online/store.svelte";
   import { previewSrc } from "$lib/library/library";
   import { shareLink } from "$lib/online/link";
@@ -126,6 +132,12 @@
   /** The lobby geolocates servers; a server's own /INFO often cannot. */
   const country = $derived(live.country ?? server.country);
   const banner = $derived(layoutLook(looks, live.track));
+  /** Not in the library: its picture is asked first, before the rows'. */
+  const picture = $derived(banner?.preview ? null : pictureOf(live.track.id));
+  $effect(() => {
+    const id = live.track.id;
+    if (!banner?.preview) untrack(() => wantPictures([id], true));
+  });
   /** The cars one can drive first, each group in the server's order. */
   const cars = $derived(detail ? [...detail.cars.filter((c) => c.available), ...detail.cars.filter((c) => !c.available)] : []);
 
@@ -179,10 +191,25 @@
   <!-- Where first, in large: the track's photo is what one recognises. A
        track that is not here gets the empty frame, dimmed by `missing`. -->
   <div class="banner" class:missing={!live.track_available}>
-    {#if banner?.preview}<img src={previewSrc(banner.preview)} alt="" />{/if}
+    {#if banner?.preview}<img src={previewSrc(banner.preview)} alt="" />{:else}<TrackThumb
+        trackId={live.track.id}
+        categories={trackGlyphCategories(live.track, looks, trackCategories.knowledge)}
+        size="banner"
+      />{/if}
     {#if banner?.outline}<img class="outline" src={previewSrc(banner.outline)} alt="" />{/if}
     <span class="banner-name">{trackTitle(looks, live.track)}</span>
   </div>
+  {#if picture?.file && picture.artist && picture.licence}
+    <!-- The credit a Commons picture owes its author, in clear (CC BY-SA). -->
+    <button
+      class="credit"
+      type="button"
+      title={picture.page ?? undefined}
+      disabled={!picture.page}
+      onclick={() => picture?.page && openExternal(picture.page)}
+      >{t("online.photoCredit", { artist: picture.artist, licence: picture.licence })}</button
+    >
+  {/if}
   <header class="head">
     <div class="title">
       <h3 title={server.name}>{server.name}</h3>
@@ -229,6 +256,8 @@
       </span>
     {/if}
   </div>
+
+  <TrackCategory server={live} {looks} description={detail?.extended?.description ?? null} />
 
   <SessionTimeline server={live} />
 
@@ -365,6 +394,27 @@
   }
   .banner.missing img {
     opacity: 0.35;
+  }
+  .credit {
+    display: block;
+    width: 100%;
+    padding: 3px 16px 0;
+    background: none;
+    border: 0;
+    color: var(--muted2);
+    font: inherit;
+    font-size: 10px;
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+  }
+  .credit:hover:not(:disabled) {
+    color: var(--muted);
+  }
+  .credit:disabled {
+    cursor: default;
   }
   .banner-name {
     position: absolute;

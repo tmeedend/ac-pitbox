@@ -60,6 +60,9 @@ pub(super) const TABLES: &[(&str, Out, In)] = &[
     ("wiki_cache", Out::Keep, In::Ignore),
     ("import_decisions", Out::Keep, In::Append),
     ("forced_extras", Out::Keep, In::Ignore),
+    // Track categories chosen on the Online page, by track id: a decision of
+    // the user's, which no file of either machine could compute again.
+    ("online_track_categories", Out::Keep, In::Replace),
     ("profiles", Out::Profiles, In::Replace),
     ("profile_entries", Out::Profiles, In::Append),
     ("profile_extra_entries", Out::Profiles, In::Append),

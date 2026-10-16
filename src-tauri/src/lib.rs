@@ -92,6 +92,7 @@ mod transfer;
 mod ui_prefs;
 mod uijson;
 mod usermeta;
+mod version_guard;
 mod weather;
 mod wiki;
 
@@ -328,6 +329,9 @@ pub fn run() {
             commands::addons::open_app_resource,
             commands::addons::open_app_folder,
             commands::online::online_servers,
+            commands::online::online_track_categories,
+            commands::online::choose_online_track_category,
+            commands::online::online_track_picture,
             commands::online::online_server_detail,
             commands::online::online_join,
             commands::online::online_server_drivers,
@@ -370,6 +374,8 @@ pub fn run() {
             commands::rules::export_folder_survey,
             commands::rules::get_taxonomy,
             commands::rules::save_family_overlay,
+            commands::rules::save_track_category_looks,
+            commands::rules::save_server_keywords,
             commands::rules::save_country_overlay,
             commands::rules::save_brand_overlay,
             commands::logos::get_brand_logos,

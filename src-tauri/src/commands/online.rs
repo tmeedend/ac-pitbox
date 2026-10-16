@@ -203,6 +203,68 @@ fn config_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
     app.path().app_config_dir().map_err(|e| e.to_string())
 }
 
+/// What the page knows of track categories beyond the library
+/// (`online/categories.rs`): the vocabulary, the user's choices, the
+/// catalogue's tracks and keywords.
+#[tauri::command]
+pub fn online_track_categories(app: AppHandle, db: State<Db>) -> Result<online::categories::CategoryKnowledge, String> {
+    let rules = crate::rules::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    Ok(online::categories::knowledge(&conn, &rules))
+}
+
+/// Records the categories chosen for a track on the panel (none forgets the
+/// choice), and returns what the page now knows.
+#[tauri::command]
+pub fn choose_online_track_category(
+    app: AppHandle,
+    db: State<Db>,
+    track_id: String,
+    categories: Vec<String>,
+) -> Result<online::categories::CategoryKnowledge, String> {
+    let rules = crate::rules::load(&app);
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    online::categories::choose(&conn, &rules, &track_id, &categories)?;
+    Ok(online::categories::knowledge(&conn, &rules))
+}
+
+/// The picture of a track the library does not hold (`online/picture.rs`):
+/// from the cache, or asked of Wikipedia when its setting allows - switched
+/// off, nothing leaves the machine and only what the cache holds is shown.
+/// `async`: the network must not run on the window's thread.
+#[tauri::command]
+pub async fn online_track_picture(
+    app: AppHandle,
+    track_id: String,
+) -> Result<Option<online::picture::TrackPicture>, String> {
+    let cfg = crate::config::load(&app);
+    let dir = crate::thumbnails::cache_dir(&app);
+    if !cfg.prefs.wiki_online {
+        return Ok(online::picture::cached(&dir, &track_id));
+    }
+    let config_dir = config_dir(&app)?;
+    let thresholds = crate::wiki::matching::Thresholds::from_prefs(&cfg.prefs);
+    tauri::async_runtime::spawn_blocking(move || {
+        let matching = crate::wiki::clean::load(&config_dir);
+        let cleaner = crate::wiki::clean::Cleaner::new(&matching);
+        let curated = crate::wiki::curated::shipped()
+            .links
+            .into_iter()
+            .map(|(id, q)| (id.to_lowercase(), q))
+            .collect();
+        let sources = online::picture::Sources {
+            ac_install: cfg.ac_install_path.as_deref(),
+            curated: &curated,
+            cleaner: &cleaner,
+            thresholds: &thresholds,
+        };
+        let net = crate::wiki::api::WikiClient::new();
+        online::picture::picture(&dir, &net, &sources, &track_id, chrono::Utc::now().timestamp())
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 /// Favourites and recent joins (`online/store.rs`); an empty object when
 /// there are none yet.
 #[tauri::command]

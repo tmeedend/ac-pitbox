@@ -19,7 +19,9 @@ use std::path::{Path, PathBuf};
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Manager};
 
-fn cache_dir(app: &AppHandle) -> PathBuf {
+/// `pub(crate)`: the Online page keeps the pictures of tracks it cannot take
+/// from the library here too (`online/picture.rs`) - one cache of thumbnails.
+pub(crate) fn cache_dir(app: &AppHandle) -> PathBuf {
     app.path().app_cache_dir().unwrap_or_default().join("thumbnails")
 }
 

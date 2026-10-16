@@ -316,6 +316,11 @@
     "bigpictureZoomHint": "Zoom supplémentaire appliqué uniquement en mode Big Picture (plein écran) — pratique pour lire l'interface de loin, manette en main.",
     "showroomScene": "Décor de l'aperçu 3D",
     "showroomSceneDefault": "Studio blanc (le plus rapide)",
+    "backupFrequency": "Sauvegarde de la bibliothèque",
+    "backupStartup": "À chaque démarrage",
+    "backupDaily": "Une fois par jour",
+    "backupWeekly": "Une fois par semaine",
+    "backupHint": "Une copie de la base et des réglages, prise au démarrage. Les 7 dernières sont gardées. Une nouvelle version de Pit Box en prend toujours une à son premier démarrage.",
     "showroomSceneHint": "Décor chargé par acShowroom quand on clique « Aperçu 3D » sur une fiche voiture, parmi ceux installés dans Assetto Corsa. Le studio blanc se charge quasi instantanément et sans musique ; les autres décors pèsent plusieurs centaines de Mo.",
     "resourceExtraction": "Extraction des fichiers annexes",
     "resourceExtractionNone": "Aucun",
@@ -1133,9 +1138,6 @@
     "tagMerge": "Fusion / déduction",
     "addRule": "Règle",
     "tagMergeHint": "Synonymes → tag(s) canonique(s), séparés par des virgules. Un tag # marque la catégorie.",
-    "trackCategoriesTitle": "Catégories de circuit (liste blanche)",
-    "trackCategoriesHint": "Catégories autorisées, par ordre de priorité (la 1ʳᵉ est la principale). Un circuit prend celles de ses tags présentes ici.",
-    "addCategoryPlaceholder": "ajouter une catégorie, ex. #hillclimb (Entrée)…",
     "moveUp": "Monter (plus prioritaire)",
     "moveDown": "Descendre (moins prioritaire)",
     "brandFixTitle": "Correction de marque",
@@ -1552,6 +1554,21 @@
     "filterTrack": "Circuit",
     "filterCar": "Voiture",
     "filterTrackCategory": "Catégorie de circuit",
+    "unknownCategoryHidden": "+ {count} serveurs sur des circuits de catégorie inconnue",
+    "unknownCategoryShown": "{count} serveurs sur des circuits de catégorie inconnue, affichés",
+    "unknownCategoryShow": "Afficher",
+    "unknownCategoryHide": "Masquer",
+    "photoCredit": "Photo : {artist} · {licence} · Wikimedia Commons",
+    "category": "Catégorie",
+    "categoryUnknown": "inconnue",
+    "categoryChoose": "Choisir",
+    "categoryChange": "Modifier",
+    "categoryFromChoice": "Ton choix, retenu pour ce circuit",
+    "categoryFromLibrary": "D'après ta bibliothèque",
+    "categoryFromCatalog": "D'après le catalogue Pit Box",
+    "categoryHintName": "≈ {category}, d'après le nom du serveur (« {word} »)",
+    "categoryHintDescription": "≈ {category}, d'après la description du serveur (« {word} »)",
+    "categoryHintTrack": "≈ {category}, d'après l'identifiant du circuit (« {word} »)",
     "filterContent": "Contenu",
     "contentKunos": "Kunos",
     "contentMods": "Mods",
@@ -1959,7 +1976,35 @@
     "rally": "Rallye",
     "traffic": "Trafic"
   },
+  "trackCategories": {
+    "circuit": "Circuit",
+    "street": "Street",
+    "oval": "Oval",
+    "drift": "Drift",
+    "touge": "Touge",
+    "rally": "Rally",
+    "rallycross": "Rallycross",
+    "hillclimb": "Hillclimb",
+    "drag": "Drag",
+    "freeroam": "Freeroam",
+    "karting": "Karting",
+    "a2b": "A2B",
+    "test": "Test"
+  },
+  "trackCats": {
+    "main": "Catégorie principale d'un circuit",
+    "tagTitle": "L'identifiant de la catégorie, enregistré dans les circuits : il ne change pas quand on la renomme",
+    "producedBy": "Règles qui la produisent",
+    "openInRules": "Voir dans Règles",
+    "noRule": "Aucune règle",
+    "keywords": "Mots-clés des serveurs en ligne",
+    "noKeyword": "Aucun mot-clé",
+    "newPlaceholder": "Nouvelle catégorie",
+    "addKeyword": "Ajouter un mot-clé"
+  },
   "index": {
+    "byCategory": "Parcourir par catégorie",
+    "categoriesOverlap": "Un circuit peut avoir plusieurs catégories",
     "byCountry": "Parcourir par pays",
     "byFamily": "Parcourir par famille",
     "byBrand": "Parcourir par marque",
@@ -2027,6 +2072,10 @@
     "tags": "Tags qui le désignent",
     "addTag": "Ajouter un tag…",
     "removeTag": "Retirer ce tag"
+  },
+  "startupGuard": {
+    "title": "Pit Box ne peut pas démarrer",
+    "body": "Ta bibliothèque a déjà été ouverte par une version plus récente de Pit Box : {newer}.\n\nCelle-ci, {ours}, est plus ancienne : elle pourrait mal lire ou abîmer ce que la plus récente a enregistré. Elle s'arrête donc sans rien toucher.\n\nLance la version la plus récente, ou réinstalle-la."
   },
   "logoSearch": {
     "title": "Un logo pour {brand}",
@@ -2126,7 +2175,9 @@
       "country_alias": "Orthographe de pays",
       "country_tag": "Tag de pays",
       "brand_alias": "Orthographe de marque",
-      "not_brand": "Pas une marque"
+      "not_brand": "Pas une marque",
+      "online_track_category": "Catégorie d'un circuit (Online)",
+      "server_keyword": "Mot-clé de serveur (Online)"
     },
     "disable": "Désactiver",
     "enable": "Réactiver"
@@ -2271,7 +2322,18 @@
     "andOthers": "et {count} autres",
     "openSheet": "Ouvrir la fiche",
     "filterOn": "Filtrer sur ce mod",
-    "showInExplorer": "Afficher dans l'Explorateur"
+    "showInExplorer": "Afficher dans l'Explorateur",
+    "saySameAsCopy": "Le fichier en place a le même contenu que l'exemplaire de {name} : rien n'attend. Pit Box ne l'a pas posé, et ne le retirera pas si {name} est désactivé.",
+    "reasonIdentical": "même contenu que le fichier en place",
+    "stateHelp": {
+      "posed": "Posé par Pit Box depuis la bibliothèque, et identique à l'exemplaire du mod. Il est retiré quand le mod est désactivé.",
+      "replacesGame": "Un fichier d'origine d'Assetto Corsa qu'un mod a remplacé. L'original est sauvegardé dans la bibliothèque et revient dès qu'aucun mod ne réclame plus ce chemin.",
+      "waiting": "Un mod actif veut poser ce fichier, mais un autre fichier, au contenu différent, occupe déjà la place. L'exemplaire du mod reste en bibliothèque ; sa fiche permet de le poser quand même.",
+      "cmZone": "Dans un dossier que Content Manager met à jour tout seul (configs CSP téléchargées, vao-patches). CM peut y remplacer un fichier sans prévenir, même s'il vient d'un mod.",
+      "drift": "Le disque ne correspond plus à ce que Pit Box a posé : fichier modifié par un autre outil, fichier manquant, reste d'un mod supprimé, ou junction dont la cible a disparu. La réparation générale (Maintenance) remet en ordre.",
+      "nobody": "Ni Pit Box ni un mod de la bibliothèque ne l'a posé : contenu d'origine du jeu, mods installés hors de Pit Box, fichiers de CSP ou de Content Manager. Pit Box n'y touche jamais.",
+      "shared": "Plusieurs mods réclament ce même fichier (une texture commune à toute une série, par exemple). Un seul exemplaire est posé : le plus récent."
+    }
   },
   "techsheet": {
     "edit": "Modifier la fiche technique",

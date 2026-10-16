@@ -316,6 +316,11 @@
     "bigpictureZoomHint": "Extra zoom applied only in Big Picture mode (fullscreen) — handy for reading the interface from a distance, controller in hand.",
     "showroomScene": "3D preview showroom",
     "showroomSceneDefault": "White studio (fastest)",
+    "backupFrequency": "Library backup",
+    "backupStartup": "At every start",
+    "backupDaily": "Once a day",
+    "backupWeekly": "Once a week",
+    "backupHint": "A copy of the database and the settings, taken at startup. The last 7 are kept. A new version of Pit Box always takes one at its first start.",
     "showroomSceneHint": "Showroom loaded by acShowroom when you click \"3D preview\" on a car sheet, among those installed in Assetto Corsa. The white studio loads almost instantly and without music; the other showrooms weigh several hundred MB.",
     "resourceExtraction": "Ancillary file extraction",
     "resourceExtractionNone": "None",
@@ -1133,9 +1138,6 @@
     "tagMerge": "Merge / deduction",
     "addRule": "Rule",
     "tagMergeHint": "Synonyms → canonical tag(s), comma-separated. A # tag marks the category.",
-    "trackCategoriesTitle": "Track categories (allowlist)",
-    "trackCategoriesHint": "Allowed categories, in priority order (the 1st is the primary one). A track takes those of its tags listed here.",
-    "addCategoryPlaceholder": "add a category, e.g. #hillclimb (Enter)…",
     "moveUp": "Move up (higher priority)",
     "moveDown": "Move down (lower priority)",
     "brandFixTitle": "Brand correction",
@@ -1552,6 +1554,21 @@
     "filterTrack": "Track",
     "filterCar": "Car",
     "filterTrackCategory": "Track category",
+    "unknownCategoryHidden": "+ {count} servers on tracks of unknown category",
+    "unknownCategoryShown": "{count} servers on tracks of unknown category, shown",
+    "unknownCategoryShow": "Show",
+    "unknownCategoryHide": "Hide",
+    "photoCredit": "Photo: {artist} · {licence} · Wikimedia Commons",
+    "category": "Category",
+    "categoryUnknown": "unknown",
+    "categoryChoose": "Choose",
+    "categoryChange": "Change",
+    "categoryFromChoice": "Your choice, kept for this track",
+    "categoryFromLibrary": "From your library",
+    "categoryFromCatalog": "From the Pit Box catalogue",
+    "categoryHintName": "≈ {category}, from the server's name (“{word}”)",
+    "categoryHintDescription": "≈ {category}, from the server's description (“{word}”)",
+    "categoryHintTrack": "≈ {category}, from the track's id (“{word}”)",
     "filterContent": "Content",
     "contentKunos": "Kunos",
     "contentMods": "Mods",
@@ -1959,7 +1976,35 @@
     "rally": "Rally",
     "traffic": "Traffic"
   },
+  "trackCategories": {
+    "circuit": "Circuit",
+    "street": "Street",
+    "oval": "Oval",
+    "drift": "Drift",
+    "touge": "Touge",
+    "rally": "Rally",
+    "rallycross": "Rallycross",
+    "hillclimb": "Hillclimb",
+    "drag": "Drag",
+    "freeroam": "Freeroam",
+    "karting": "Karting",
+    "a2b": "A2B",
+    "test": "Test"
+  },
+  "trackCats": {
+    "main": "A track's main category",
+    "tagTitle": "The category's identifier, stored on tracks: it does not change when the category is renamed",
+    "producedBy": "Rules that produce it",
+    "openInRules": "Show in Rules",
+    "noRule": "No rule",
+    "keywords": "Online server keywords",
+    "noKeyword": "No keyword",
+    "newPlaceholder": "New category",
+    "addKeyword": "Add a keyword"
+  },
   "index": {
+    "byCategory": "Browse by category",
+    "categoriesOverlap": "A track can have several categories",
     "byCountry": "Browse by country",
     "byFamily": "Browse by family",
     "byBrand": "Browse by brand",
@@ -2027,6 +2072,10 @@
     "tags": "Tags that name it",
     "addTag": "Add a tag…",
     "removeTag": "Remove this tag"
+  },
+  "startupGuard": {
+    "title": "Pit Box cannot start",
+    "body": "Your library has already been opened by a newer version of Pit Box: {newer}.\n\nThis one, {ours}, is older: it could misread or damage what the newer one saved. So it stops without touching anything.\n\nStart the newer version, or reinstall it."
   },
   "logoSearch": {
     "title": "A logo for {brand}",
@@ -2126,7 +2175,9 @@
       "country_alias": "Country spelling",
       "country_tag": "Country tag",
       "brand_alias": "Brand spelling",
-      "not_brand": "Not a brand"
+      "not_brand": "Not a brand",
+      "online_track_category": "Track category (Online)",
+      "server_keyword": "Server keyword (Online)"
     },
     "disable": "Disable",
     "enable": "Enable again"
@@ -2271,7 +2322,18 @@
     "andOthers": "and {count} more",
     "openSheet": "Open the sheet",
     "filterOn": "Filter on this mod",
-    "showInExplorer": "Show in Explorer"
+    "showInExplorer": "Show in Explorer",
+    "saySameAsCopy": "The file in place has the same content as the copy of {name}: nothing waits. Pit Box did not lay it, and will not remove it if {name} is deactivated.",
+    "reasonIdentical": "same content as the file in place",
+    "stateHelp": {
+      "posed": "Laid by Pit Box from the library, and identical to the mod's copy. It is removed when the mod is deactivated.",
+      "replacesGame": "An original Assetto Corsa file a mod replaced. The original is kept in the library and comes back as soon as no mod claims this path any more.",
+      "waiting": "An active mod wants to lay this file, but another file, with different content, already holds the place. The mod's copy stays in the library; its sheet can lay it anyway.",
+      "cmZone": "In a folder Content Manager keeps up to date on its own (downloaded CSP configs, vao-patches). CM may replace a file there without warning, even one from a mod.",
+      "drift": "The disk no longer matches what Pit Box laid: a file changed by another tool, a missing file, the remains of a deleted mod, or a junction whose target is gone. The general repair (Maintenance) puts it right.",
+      "nobody": "Neither Pit Box nor a mod of the library laid it: the game's own content, mods installed outside Pit Box, CSP or Content Manager files. Pit Box never touches it.",
+      "shared": "Several mods claim this same file (a texture common to a whole series, for example). Only one copy is laid: the most recent."
+    }
   },
   "techsheet": {
     "edit": "Edit the tech sheet",

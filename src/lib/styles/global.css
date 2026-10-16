@@ -503,3 +503,17 @@ a {
   border-color: #4a4426;
   background: #1a1708;
 }
+/* Information, not an alert: a zone another tool keeps in sync. */
+.pill-info {
+  color: var(--blue);
+  border-color: var(--blue-border);
+  background: var(--blue-dim);
+}
+/* Neutral-negative, `--orange`'s own meaning: not laid, nothing wrong - a copy
+   that waits. Mixed from the token rather than two more shades: the app has no
+   orange surface, and one pill does not justify a pair of new greys. */
+.pill-idle {
+  color: var(--orange);
+  border-color: color-mix(in srgb, var(--orange) 35%, transparent);
+  background: color-mix(in srgb, var(--orange) 8%, transparent);
+}

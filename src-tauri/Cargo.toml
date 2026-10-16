@@ -149,4 +149,8 @@ windows = { version = "0.61", features = [
     # Sert aussi aux mises à jour de mods (`cup.rs`, §4.7) : registre et
     # téléchargement de l'archive, par le même module.
     "Win32_Networking_WinHttp",
+    # The refusal of a base a newer Pit Box opened (`version_guard.rs`, §10):
+    # a native box before the window exists, in the user's language.
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Globalization",
 ] }
