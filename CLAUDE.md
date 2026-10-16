@@ -816,7 +816,7 @@ là pour se vider, et il est vide.
   en même temps que lui.
 - **`docs/SPEC-import.md`** — l'import sur une page : une seule question
   (« où va ce fichier ? »), un arbre de décision, la table des mécanismes de
-  pose, et les cinq archives réelles qui servent de tests. À lire **avant**
+  pose, et les six archives réelles qui servent de tests. À lire **avant**
   de toucher à une règle d'import — le §4 du SPEC les décrit une par une,
   celui-ci les montre *ensemble*, ce qui est la seule façon de voir qu'une
   règle en contredit une autre. **Les deux ne se fusionnent pas** : un arbre de

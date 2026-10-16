@@ -360,7 +360,7 @@ impl Filing<'_> {
             _ => class,
         };
         // Sauf pour un fragment (§4.3bis) : **jamais** de mise à jour. Il n'a
-        // pas de géométrie — remplacer la base par lui la rendrait injouable,
+        // pas de géométrie, ou pas toute — remplacer la base par lui la rendrait injouable,
         // et c'est le seul cas où le décompte de fichiers peut mentir (un
         // fragment qui ne fait que retoucher des `ui/` recouvre proportionnellement
         // beaucoup d'un circuit qui en a peu). Même règle absolue que `is_stock`.

@@ -63,7 +63,10 @@ la **géométrie** (`modscan::has_geometry`) : un `.kn5` à la racine, ou un
 `models*.ini` pour un circuit. Sans elle, le jeu ne peut rien charger, et
 `fragment::resolve` va chercher l'hôte au lieu de créer une entrée de plus
 (§4.3bis du SPEC). Mesuré sans exception sur 224 circuits et 123 voitures : un
-vrai mod porte toujours sa géométrie.
+vrai mod porte toujours sa géométrie. **L'inverse ne tient pas** : un circuit
+dont les `models*.ini` chargent au moins trois `.kn5` qu'il n'a pas, tous chez
+un seul autre circuit, est une couche de celui-ci malgré ses propres `.kn5`
+(`grandvalleyspeedway2010.rar`, §4.3bis).
 
 **Un filtre après coup** : un pack de skins dont la voiture cible est inconnue
 **et** dont les livrées portent les noms de celles d'un contenu de la même
@@ -273,7 +276,7 @@ masse**, et **arbitrage groupé en fin de lot**. Ce qui a coûté cher n'a jamai
 
 ## 9. Les archives de référence
 
-Cinq archives réelles, chacune tombée sur un défaut différent. Elles sont la
+Six archives réelles, chacune tombée sur un défaut différent. Elles sont la
 matière des tests d'import : toute règle qui change doit être rejouée contre
 elles.
 
@@ -284,6 +287,7 @@ elles.
 | **Ferrari 599 GTO** | `driver/` livré à nu à côté de la voiture | préfixé `content/driver/` sans rien demander, décision journalisée |
 | **_RSS_Settings** | notice d'une app devenue un « autre mod » à nom absurde, dossier introuvable | l'app est propriétaire : la notice est sa ressource, lisible sur sa fiche |
 | **LA Canyons 1.2** | `MODS/<variante>/` posé dans un `<AC>\MODS\` inerte | `mods/` n'est plus un dossier de jeu ; les variantes se choisissent |
+| **grandvalleyspeedway2010** | layouts 2010 livrés à plat avec leur propre `.kn5`, mais chargeant dix `.kn5` de `grand_valley_speedway_LL` → circuit à part, « endommagé » pour CSP | couche du circuit dont il charge les modèles, sans question |
 
 ---
 

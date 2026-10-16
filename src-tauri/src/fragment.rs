@@ -19,6 +19,10 @@
 //! update-vs-layer arbitration at all. The result is a library entry the game
 //! can never load, and a base track that never receives what was meant for it.
 //!
+//! Geometry is necessary, not sufficient: a track can ship kn5 of its own and
+//! still load most of its models from another one (`borrowed_models_host`).
+//! It is a layer just the same, only better disguised.
+//!
 //! The cascade below follows the shape of `submods::sounds::resolve_sound_parent`:
 //! ordered sources, surest first, each one documented with what it was measured
 //! to be worth on the reference library.
@@ -39,7 +43,8 @@ pub enum Host {
     /// Carries its own geometry: a mod, imported as one. The overwhelming
     /// majority — 224 of the 224 real mods in the reference corpus.
     SelfStanding,
-    /// Fragment whose host is in the library (or is stock content).
+    /// Fragment whose host is in the library (or is stock content) — or a
+    /// track that loads that host's models.
     Known(String),
     /// Fragment that names a host which is **not** installed. Nothing can be
     /// composed today, but the id is known, so the content can wait for it.
@@ -57,10 +62,17 @@ const MAX_PROBED_PATHS: usize = 400;
 ///
 /// Returns [`Host::SelfStanding`] for anything that carries its geometry — the
 /// gate is checked first and on its own, so a real mod can never be demoted to
-/// a fragment by a coincidence in the signals below.
+/// a fragment by a coincidence in the signals below. The one exception is a
+/// track that loads at least `MIN_BORROWED_MODELS` kn5 of a single other
+/// track (`borrowed_models_host`).
 pub fn resolve(conn: &Connection, cfg: &AppConfig, kind: ModKind, dir: &Path) -> Host {
     if crate::modscan::has_geometry(kind, dir) {
-        return Host::SelfStanding;
+        // Geometry of its own, but maybe not all of it: a track that loads a
+        // host's models is a layer of that host however many kn5 it brings.
+        return match borrowed_models_host(conn, cfg, kind, dir) {
+            Some(id) => Host::Known(id),
+            None => Host::SelfStanding,
+        };
     }
 
     let hosts = known_hosts(conn, cfg, kind);
@@ -115,6 +127,124 @@ pub fn resolve(conn: &Connection, cfg: &AppConfig, kind: ModKind, dir: &Path) ->
         Some(stem) => Host::Missing(stem),
         None => Host::Unknown,
     }
+}
+
+/// Fewest kn5 a track must borrow from one host to be read as its layer.
+///
+/// A models ini naming a kn5 the folder does not ship is common in complete,
+/// playable tracks — AC skips it. Measured on the reference corpus (124 library
+/// track versions, 142 tracks of the AC install): 7 complete tracks do it,
+/// Kunos' own `drift` and `spa` among them, and **never for more than 2 kn5**
+/// (`11.kn5`/`12.kn5`, a leftover `bal_cocacola.kn5`…). One of those leftovers
+/// is owned by exactly one other track (`nurburgring1967` → `willow_springs`),
+/// so a unique owner alone is not proof. The layer this exists for borrows 10.
+const MIN_BORROWED_MODELS: usize = 3;
+
+/// The host a track with geometry of its own still depends on (§4.3bis).
+///
+/// Real case this exists for: `grandvalleyspeedway2010.rar`, four 2010
+/// layouts meant to be extracted **into** `grand_valley_speedway_LL`. It ships
+/// its own main kn5, so it passed the geometry gate and became a track of its
+/// own; but every one of its `models_*.ini` also loads ten kn5 of the base
+/// track (`cubes_normal.kn5`, `full layout.kn5`…). Launched alone, CSP
+/// reports each of them as "KN5 file is damaged or empty".
+///
+/// A folder already named after a known mod is left to the historical
+/// arbitration (update or layer from the file counts): this only catches the
+/// content that would otherwise create a new, broken entry.
+fn borrowed_models_host(conn: &Connection, cfg: &AppConfig, kind: ModKind, dir: &Path) -> Option<String> {
+    if kind != ModKind::Track {
+        return None;
+    }
+    // Read first and alone: the overwhelming majority stops here, without
+    // listing the library.
+    let missing = missing_models(dir);
+    if missing.len() < MIN_BORROWED_MODELS {
+        return None;
+    }
+    let hosts = known_hosts(conn, cfg, kind);
+    let name = dir.file_name().and_then(|n| n.to_str());
+    if hosts.iter().any(|(id, _)| Some(id.as_str()) == name) {
+        return None;
+    }
+    lender_host(&missing, &hosts)
+}
+
+/// The single host that owns every one of the `missing` models.
+fn lender_host(missing: &[String], hosts: &[(String, PathBuf)]) -> Option<String> {
+    only(
+        hosts
+            .iter()
+            .filter(|(_, host_dir)| missing.iter().all(|m| host_dir.join(m).is_file()))
+            .map(|(id, _)| id.clone())
+            .collect(),
+    )
+}
+
+/// The kn5 named by the `models*.ini` of a track that the track does not ship,
+/// once each, as written in the ini.
+///
+/// The ini sits at the root or, for some authors, in the layout folder (same
+/// two places as `modscan::has_geometry`); a path is looked up from both the
+/// track root and the ini's own folder before being called missing.
+fn missing_models(dir: &Path) -> Vec<String> {
+    let mut inis: Vec<PathBuf> = models_inis(dir);
+    for sub in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        if sub.path().is_dir() {
+            inis.extend(models_inis(&sub.path()));
+        }
+    }
+    let mut out: Vec<String> = Vec::new();
+    for ini in inis {
+        let ini_dir = ini.parent().unwrap_or(dir);
+        for file in model_files(&read_ini(&ini)) {
+            let present = dir.join(&file).is_file() || ini_dir.join(&file).is_file();
+            if !present && !out.iter().any(|o| o.eq_ignore_ascii_case(&file)) {
+                out.push(file);
+            }
+        }
+    }
+    out
+}
+
+/// `models.ini` / `models_<layout>.ini` directly in `dir`.
+fn models_inis(dir: &Path) -> Vec<PathBuf> {
+    std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            p.is_file()
+                && p.file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(crate::modscan::is_models_ini)
+        })
+        .collect()
+}
+
+/// An ini as text. Not every author writes UTF-8, and a kn5 name is where the
+/// accents are (`señales y cajones normales.kn5`): a Windows-1252 file read
+/// lossily would name a file that exists nowhere. Latin-1 is Windows-1252
+/// for every letter a file name uses.
+fn read_ini(path: &Path) -> String {
+    let bytes = std::fs::read(path).unwrap_or_default();
+    match String::from_utf8(bytes) {
+        Ok(text) => text,
+        Err(e) => e.into_bytes().iter().map(|&b| char::from(b)).collect(),
+    }
+}
+
+/// The `FILE=` values of a models ini, comments skipped.
+fn model_files(ini: &str) -> Vec<String> {
+    ini.lines()
+        .filter_map(|line| {
+            let line = line.trim_start_matches('\u{feff}').split(';').next().unwrap_or("");
+            let (key, value) = line.split_once('=')?;
+            let value = value.trim().replace('\\', "/");
+            (key.trim().eq_ignore_ascii_case("FILE") && !value.is_empty()).then_some(value)
+        })
+        .collect()
 }
 
 /// The single element of a candidate list, or `None` if there is not exactly
@@ -341,6 +471,78 @@ mod tests {
         assert!(
             crate::modscan::has_geometry(ModKind::Track, &dir),
             "models_<layout>.ini names the kn5 the track loads"
+        );
+    }
+
+    /// Rule: a models ini line names a kn5 whatever its spelling — comments,
+    /// a BOM, backslashes and spaces in the name (§4.3bis).
+    #[test]
+    fn model_files_reads_every_file_line() {
+        let ini = "\u{feff}[MODEL_0]\nFILE=main.kn5\n; FILE=old.kn5\n[MODEL_1]\nfile = full layout.kn5 ; tunnel\n\
+                   [MODEL_2]\nFILE=sub\\cubes.kn5\nPOSITION=0,0,0\nFILE=\n";
+        assert_eq!(
+            model_files(ini),
+            vec!["main.kn5", "full layout.kn5", "sub/cubes.kn5"],
+            "commented lines and empty values name nothing"
+        );
+    }
+
+    /// Rule: a Windows-1252 ini still names its accented kn5 (§4.3bis).
+    #[test]
+    fn a_windows_1252_ini_names_its_accented_models() {
+        let base = temp_dir("frag-cp1252");
+        let dir = base.join("t");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut ini = b"[MODEL_0]\nFILE=se".to_vec();
+        ini.push(0xF1); // « ñ » in Windows-1252: invalid UTF-8 on purpose
+        ini.extend_from_slice(b"ales.kn5\n");
+        std::fs::write(dir.join("models_gp.ini"), ini).unwrap();
+        std::fs::write(dir.join("señales.kn5"), b"k").unwrap();
+        assert!(missing_models(&dir).is_empty(), "the file exists under its real name");
+    }
+
+    /// Rule: a model is missing only if neither the track root nor the ini's
+    /// own folder has it (§4.3bis).
+    #[test]
+    fn a_model_beside_its_layout_ini_is_not_missing() {
+        let base = temp_dir("frag-ini-in-layout");
+        let dir = base.join("t");
+        std::fs::create_dir_all(dir.join("gp")).unwrap();
+        std::fs::write(dir.join("root.kn5"), b"k").unwrap();
+        std::fs::write(dir.join("gp").join("local.kn5"), b"k").unwrap();
+        std::fs::write(
+            dir.join("gp").join("models_gp.ini"),
+            "FILE=root.kn5\nFILE=local.kn5\nFILE=gone.kn5\nFILE=GONE.kn5\n",
+        )
+        .unwrap();
+        assert_eq!(missing_models(&dir), vec!["gone.kn5"], "listed once, case aside");
+    }
+
+    /// Rule: borrowed models name a host only when one track owns them all.
+    #[test]
+    fn borrowed_models_need_a_single_owner() {
+        let base = temp_dir("frag-lender");
+        let owns = |name: &str, files: &[&str]| {
+            let d = base.join(name);
+            std::fs::create_dir_all(&d).unwrap();
+            for f in files {
+                std::fs::write(d.join(f), b"k").unwrap();
+            }
+            (name.to_string(), d)
+        };
+        let missing: Vec<String> = ["a.kn5", "b.kn5", "c.kn5"].map(String::from).to_vec();
+        let full = owns("full_owner", &["a.kn5", "b.kn5", "c.kn5"]);
+        let partial = owns("partial_owner", &["a.kn5", "b.kn5"]);
+        assert_eq!(
+            lender_host(&missing, &[full.clone(), partial.clone()]),
+            Some("full_owner".to_string()),
+            "owning only some of them is no claim"
+        );
+        let twin = owns("twin_owner", &["a.kn5", "b.kn5", "c.kn5"]);
+        assert_eq!(
+            lender_host(&missing, &[full, partial, twin]),
+            None,
+            "two owners are never decided between"
         );
     }
 

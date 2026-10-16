@@ -5700,6 +5700,116 @@ mod tests {
         );
     }
 
+    /// A track `<root>/<id>` with one layout and the given kn5 at its root,
+    /// plus a `models_<layout>.ini` loading `loads`.
+    fn make_track_loading(root: &Path, id: &str, layout: &str, ships: &[&str], loads: &[&str]) {
+        make_track_with_layouts(root, id, &[layout], false);
+        let dir = root.join(id);
+        for kn5 in ships {
+            std::fs::write(dir.join(kn5), b"FAKE_KN5_DATA").unwrap();
+        }
+        let ini: String = loads
+            .iter()
+            .enumerate()
+            .map(|(i, f)| format!("[MODEL_{i}]\nFILE={f}\nPOSITION=0,0,0\n\n"))
+            .collect();
+        std::fs::write(dir.join(format!("models_{layout}.ini")), ini).unwrap();
+    }
+
+    #[test]
+    fn a_track_that_loads_another_tracks_models_lands_on_it_as_a_layer() {
+        // Rule (§4.3bis): a track whose models ini lean on the kn5 of another
+        // track cannot be driven alone, even though it ships kn5 of its own.
+        // Real bug: `grandvalleyspeedway2010.rar`, 2010 layouts meant to be
+        // extracted into `grand_valley_speedway_LL`. Its own main kn5 got it
+        // past the geometry gate, it became a track of its own — offered only
+        // "keep both" or "replace" against the base — and CSP refused to load
+        // it, ten kn5 of the base track being "damaged or empty".
+        let base = crate::testutil::temp_dir("import-borrowed-models");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+
+        let shared = ["cubes_normal.kn5", "full layout.kn5", "señales y cajones normales.kn5"];
+        let mut host_ships = vec!["grand_valley_speedway_LL.kn5"];
+        host_ships.extend(shared);
+        let src1 = base.join("src1");
+        make_track_loading(
+            &src1,
+            "grand_valley_speedway_LL",
+            "full_layout",
+            &host_ships,
+            &host_ships,
+        );
+        let r1 = import_folder_for_test(&conn, &cfg, &rules, &src1, true, &[]);
+        assert_eq!(r1.mods[0].outcome, "IMPORT", "the base track imports normally");
+
+        let mut loads = vec!["grand_valley_speedway_LL_2010.kn5"];
+        loads.extend(shared);
+        let src2 = base.join("src2");
+        make_track_loading(
+            &src2,
+            "grandvalleyspeedway2010",
+            "full_layout_2010",
+            &["grand_valley_speedway_LL_2010.kn5"],
+            &loads,
+        );
+        let r2 = import_folder_for_test(&conn, &cfg, &rules, &src2, true, &[]);
+        assert_eq!(r2.mods.len(), 1, "one content filed");
+        assert_eq!(r2.mods[0].outcome, "EXTENSION", "a layer, not one more track");
+        assert_eq!(
+            r2.mods[0].id_interne, "grand_valley_speedway_LL",
+            "attached to the track whose models it loads"
+        );
+        assert!(r2.mods[0].conflict.is_none(), "no keep-both/replace question");
+        assert!(r2.mods[0].fragment, "reported as a layer disguised as a mod");
+        assert!(
+            crate::overlay::get_mod(&conn, "grandvalleyspeedway2010")
+                .unwrap()
+                .is_none(),
+            "no phantom track created"
+        );
+    }
+
+    #[test]
+    fn a_complete_track_with_a_stale_model_line_stays_a_track() {
+        // Rule (§4.3bis): a models ini naming a kn5 the track does not ship is
+        // common in complete tracks — AC skips it. Measured: `nurburgring1967`
+        // names a `bal_cocacola.kn5` that only `willow_springs` owns; it must
+        // not become a layer of it. Below the threshold, nothing is borrowed.
+        let base = crate::testutil::temp_dir("import-stale-model");
+        let library = base.join("library");
+        std::fs::create_dir_all(&library).unwrap();
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        let cfg = AppConfig {
+            library_path: Some(library.clone()),
+            ..Default::default()
+        };
+        let rules = crate::rules::default_rules();
+
+        let src1 = base.join("src1");
+        let lender = ["willow.kn5", "bal_cocacola.kn5", "11.kn5"];
+        make_track_loading(&src1, "willow_springs", "big", &lender, &lender);
+        import_folder_for_test(&conn, &cfg, &rules, &src1, true, &[]);
+
+        let src2 = base.join("src2");
+        make_track_loading(
+            &src2,
+            "nurburgring1967",
+            "nordschleife",
+            &["nordschleife.kn5"],
+            &["nordschleife.kn5", "bal_cocacola.kn5", "11.kn5"],
+        );
+        let r2 = import_folder_for_test(&conn, &cfg, &rules, &src2, true, &[]);
+        assert_eq!(r2.mods[0].outcome, "IMPORT", "a complete track stays a track");
+        assert_eq!(r2.mods[0].id_interne, "nurburgring1967");
+    }
+
     #[test]
     fn a_fragment_whose_track_is_absent_is_never_imported_silently() {
         // Règle (§4.3bis) : hôte absent = rien n'est écrit et on demande. Poser

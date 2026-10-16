@@ -66,7 +66,7 @@ chose qui rendait jusqu'ici une renumérotation invisible au code.
   règle en contredit une autre. C'est ainsi que `mods/` a pu figurer des mois
   dans la liste des dossiers qu'AC lit : personne ne pouvait voir la liste et
   ses conséquences en même temps. À lire **avant** de toucher à une règle
-  d'import, et à rejouer contre les cinq archives de référence qu'il liste.
+  d'import, et à rejouer contre les six archives de référence qu'il liste.
   En cas d'écart, `SPEC.md` fait foi, et la relecture se fait en même temps que
   la modification de la règle — jamais après. Le code y renvoie par `IMPORT§`.
 
