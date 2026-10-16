@@ -360,15 +360,19 @@ fn has_ext_at_root(dir: &Path, ext: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Whether a file name is a track's `models.ini` / `models_<layout>.ini`.
+pub(crate) fn is_models_ini(name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    name.starts_with("models") && name.ends_with(".ini")
+}
+
 /// `models.ini` / `models_<layout>.ini` at the root of `dir`.
 fn has_models_ini(dir: &Path) -> bool {
     std::fs::read_dir(dir)
         .map(|entries| {
-            entries.flatten().any(|e| {
-                e.file_name().to_str().is_some_and(|n| {
-                    n.to_ascii_lowercase().starts_with("models") && n.to_ascii_lowercase().ends_with(".ini")
-                })
-            })
+            entries
+                .flatten()
+                .any(|e| e.file_name().to_str().is_some_and(is_models_ini))
         })
         .unwrap_or(false)
 }
