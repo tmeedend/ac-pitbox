@@ -110,7 +110,7 @@
 
   function apply(outfit: SavedOutfit) {
     if (!carId) return;
-    setDriverOutfit(carId, {
+    setDriverOutfit(carId, kind, {
       body: outfit.body,
       helmet: outfit.helmet,
       suit: outfit.suit,

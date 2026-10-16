@@ -396,10 +396,10 @@
   function adopt(id: string) {
     if (!carId) return;
     if (lane === "body") {
-      setDriverBody(carId, id || null);
+      setDriverBody(carId, carKind, id || null);
       noticeSeen = false;
     } else {
-      setDriverPiece(carId, lane, id || null);
+      setDriverPiece(carId, carKind, lane, id || null);
       noticeSeen = true;
     }
     remember(tag(id));
@@ -423,10 +423,10 @@
   function exit() {
     if (!carId) return;
     if (substituted) {
-      setDriverBody(carId, null);
+      setDriverBody(carId, carKind, null);
       noticeSeen = false;
     } else {
-      resetDriverOutfit(carId);
+      resetDriverOutfit(carId, carKind);
     }
   }
 

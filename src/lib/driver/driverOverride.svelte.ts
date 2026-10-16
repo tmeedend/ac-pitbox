@@ -27,6 +27,7 @@ import { outfitByName } from "./driverOutfits.svelte";
 import { StorageKey } from "$lib/storage";
 import type { DriverView } from "$lib/preview3d/preview";
 import { getUiPrefs, peekUiPref, removeUiPref, setUiPref } from "$lib/uiPrefs.svelte";
+import { EMPTY_OUTFIT, entryFor, isEmpty, parseEntry, type DriverOutfit } from "./outfitEntry";
 
 /** Nom de la tenue enregistrée qui sert de tenue par défaut, ou vide.
  *
@@ -42,54 +43,31 @@ const FALLBACK_KEYS: Record<"race" | "street", string> = {
  * deux classes puis effacé (voir `ensureLoaded`). */
 const LEGACY_FALLBACK_KEY = "pitbox.driver.fallback";
 
-/** Les quatre pièces. `null` = ce que la voiture ou sa livrée décide. */
-export interface DriverOutfit {
-  /** Corps substitué à celui de la voiture. Aperçu seulement, par nature :
-   * le corps est nommé dans `data.acd`, que le serveur de course vérifie. */
-  body: string | null;
-  suit: string | null;
-  gloves: string | null;
-  helmet: string | null;
-}
-
-export const EMPTY_OUTFIT: DriverOutfit = { body: null, suit: null, gloves: null, helmet: null };
+export { EMPTY_OUTFIT, isEmpty, type DriverOutfit };
 
 export type Piece = "suit" | "gloves" | "helmet";
-
-/** Vrai quand rien n'est choisi — la voiture et sa livrée décident de tout. */
-export function isEmpty(outfit: DriverOutfit): boolean {
-  return !outfit.body && !outfit.suit && !outfit.gloves && !outfit.helmet;
-}
 
 // --- Ce qui est choisi pour une voiture donnée ------------------------------
 
 /**
  * La tenue que l'utilisateur a choisie **pour cette voiture**, ou `null`.
+ * Une tenue vide non nulle veut dire « l'origine, choisie exprès » : la tenue
+ * par défaut ne s'y applique pas (`parseEntry`).
  *
  * Lecture synchrone (`peekUiPref`) : la bibliothèque l'appelle une fois par
  * carte, potentiellement des centaines de fois par rendu.
  */
 export function driverOwn(carId: string): DriverOutfit | null {
-  const raw = peekUiPref(StorageKey.driverOutfit(carId));
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as Partial<DriverOutfit>;
-    const outfit: DriverOutfit = {
-      body: parsed.body ?? null,
-      suit: parsed.suit ?? null,
-      gloves: parsed.gloves ?? null,
-      helmet: parsed.helmet ?? null,
-    };
-    return isEmpty(outfit) ? null : outfit;
-  } catch {
-    return null;
-  }
+  return parseEntry(peekUiPref(StorageKey.driverOutfit(carId)));
 }
 
-/** Cette voiture a-t-elle une tenue à elle ? Le drapeau du filtre de la
- * bibliothèque, et la seule chose qu'elle ait besoin de savoir. */
+/** Cette voiture porte-t-elle autre chose que son pilote d'origine, par un
+ * choix fait sur elle ? Le drapeau du filtre de la bibliothèque. Une voiture
+ * rendue exprès à son origine n'y figure pas : elle porte ce qu'elle portait
+ * avant qu'on y touche. */
 export function hasOwnDriver(carId: string): boolean {
-  return driverOwn(carId) != null;
+  const own = driverOwn(carId);
+  return own != null && !isEmpty(own);
 }
 
 /** La tenue effectivement portée par le pilote de cette voiture, cascade
@@ -106,22 +84,22 @@ export function wearsFallback(carId: string | null, kind: CarClass): boolean {
   return !!carId && driverOwn(carId) == null && applyFallback(kind) && !isEmpty(fallbackOutfit(kind));
 }
 
-function write(carId: string, outfit: DriverOutfit): void {
+/** Writes the choice made on this car. The class is needed for an empty
+ * choice only: it is kept rather than removed when the default outfit of
+ * that class would otherwise dress the car (`entryFor`). */
+function write(carId: string, kind: CarClass, outfit: DriverOutfit): void {
   const key = StorageKey.driverOutfit(carId);
-  // Une entrée vide est **retirée**, pas écrite : c'est ce qui fait la
-  // différence entre « cette voiture est réglée sur la tenue de sa livrée » et
-  // « cette voiture n'est pas réglée », donc entre paraître dans le filtre
-  // « pilote modifié » ou non.
-  if (isEmpty(outfit)) removeUiPref(key);
-  else setUiPref(key, JSON.stringify(outfit));
+  const entry = entryFor(outfit, applyFallback(kind) && !isEmpty(fallbackOutfit(kind)));
+  if (entry == null) removeUiPref(key);
+  else setUiPref(key, entry);
 }
 
-export function setDriverPiece(carId: string, piece: Piece, id: string | null): void {
+export function setDriverPiece(carId: string, kind: CarClass, piece: Piece, id: string | null): void {
   // Le choix **propre** à la voiture, jamais la cascade : partir de la tenue
   // par défaut inscrirait celle-ci en dur sur cette voiture au premier clic,
   // et la détacherait du réglage qu'elle est censée suivre.
   const current = driverOwn(carId) ?? EMPTY_OUTFIT;
-  write(carId, { ...current, [piece]: id });
+  write(carId, kind, { ...current, [piece]: id });
 }
 
 /**
@@ -131,20 +109,24 @@ export function setDriverPiece(carId: string, piece: Piece, id: string | null): 
  * livrée est nommée d'après l'ancien corps, donc changer de corps ne casse pas
  * trois choix — il supprime l'option par défaut elle-même (§D6).
  */
-export function setDriverBody(carId: string, id: string | null): void {
-  const current = driverOwn(carId) ?? EMPTY_OUTFIT;
-  if (current.body === id) return;
-  write(carId, { ...EMPTY_OUTFIT, body: id });
+export function setDriverBody(carId: string, kind: CarClass, id: string | null): void {
+  // Only the car's own choice can make this a no-op. A body worn through the
+  // default outfit is not chosen here, and asking for the car's own must
+  // still take it off — it once returned early on `null === null`.
+  const own = driverOwn(carId);
+  if (own != null && own.body === id) return;
+  write(carId, kind, { ...EMPTY_OUTFIT, body: id });
 }
 
 /** Pose une tenue complète sur une voiture, en un seul enregistrement. */
-export function setDriverOutfit(carId: string, outfit: DriverOutfit): void {
-  write(carId, outfit);
+export function setDriverOutfit(carId: string, kind: CarClass, outfit: DriverOutfit): void {
+  write(carId, kind, outfit);
 }
 
-/** Rend cette voiture à sa livrée : l'entrée disparaît (PILOTE§5.6). */
-export function resetDriverOutfit(carId: string): void {
-  removeUiPref(StorageKey.driverOutfit(carId));
+/** Rend cette voiture à sa livrée (PILOTE§5.6) — y compris quand une tenue
+ * par défaut l'habillerait, sans quoi le bouton la ramènerait aussitôt. */
+export function resetDriverOutfit(carId: string, kind: CarClass): void {
+  write(carId, kind, EMPTY_OUTFIT);
 }
 
 // --- Les tenues par défaut, une par classe de voiture ------------------------
