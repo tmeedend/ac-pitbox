@@ -360,6 +360,43 @@ export function onAcRunning(handler: (running: boolean) => void): Promise<() => 
   return listen<boolean>("ac://running", (event) => handler(event.payload));
 }
 
+/** One car's line in a session's classification (SESSION§2.6). */
+export interface Standing {
+  position: number;
+  /** Index in the entry list; 0 is the player. */
+  car: number;
+  driver_name: string;
+  car_id: string;
+  skin: string;
+  laps: number;
+  best_lap_ms: number | null;
+  total_ms: number;
+  /** Did not take the chequered flag — only ever true in a race. */
+  dnf: boolean;
+}
+
+export interface SessionOutcome {
+  name: string;
+  kind: "practice" | "qualifying" | "race" | "hotlap" | "other";
+  /** Race distance in laps; 0 for a session run against the clock. */
+  race_laps: number;
+  duration_minutes: number;
+  standings: Standing[];
+}
+
+export interface SessionResult {
+  track: string;
+  /** In the order they ran: practice, qualifying, race. */
+  sessions: SessionOutcome[];
+}
+
+/** What the game wrote at the end of the session launched at `sinceMs`
+ * (`Date.now()` taken at launch), or `null` while it has written nothing newer
+ * — an older file belongs to a previous session (SESSION§2.6). */
+export function readSessionResult(sinceMs: number): Promise<SessionResult | null> {
+  return invoke<SessionResult | null>("read_session_result", { sinceMs });
+}
+
 /** Ouvre Content Manager sans argument (§7.2). */
 export function openContentManager(): Promise<void> {
   return invoke<void>("open_content_manager");

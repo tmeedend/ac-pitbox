@@ -63,6 +63,7 @@ mod preview;
 mod profiles;
 mod quickdrive;
 mod raceini;
+mod raceresult;
 mod resources;
 mod rule_overlay;
 mod rules;
@@ -211,6 +212,7 @@ pub fn run() {
             commands::session::launch_session,
             commands::session::is_steam_running,
             commands::session::is_game_running,
+            commands::session::read_session_result,
             commands::session::open_content_manager,
             commands::session::launch_replay,
             commands::session::open_native_showroom,

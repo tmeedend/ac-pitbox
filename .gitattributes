@@ -5,3 +5,7 @@
 # "modified" with an empty diff, which then blocked merges. Binary files are
 # still detected and left untouched by text=auto.
 * text=auto eol=lf
+
+# Real result files of the game, kept byte for byte: the game writes CRLF and
+# tabs, and the test that parses them "as written" must see exactly that.
+src-tauri/src/raceresult/samples/*.json -text

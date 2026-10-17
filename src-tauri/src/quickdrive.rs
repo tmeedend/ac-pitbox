@@ -320,9 +320,15 @@ fn build_grid(s: &RaceSetup) -> Value {
             None => AUTO_NUMBER.to_string(),
         })
         .collect();
-    // Aucune colonne d'agressivité par ligne (§4.2 n'en demande pas) : toutes
-    // les lignes sont donc `Auto`, et c'est la valeur globale qui décide.
-    let aggressions: Vec<String> = opponents.iter().map(|_| AUTO_NUMBER.to_string()).collect();
+    // A line without its own aggression is `Auto`: the global band decides.
+    // CM's cursor runs from 0 to 100, like the global one.
+    let aggressions: Vec<String> = opponents
+        .iter()
+        .map(|o| match o.aggression {
+            Some(a) => a.min(100).to_string(),
+            None => AUTO_NUMBER.to_string(),
+        })
+        .collect();
     let ballasts: Vec<String> = opponents.iter().map(|o| o.ballast.min(100).to_string()).collect();
     let restrictors: Vec<String> = opponents.iter().map(|o| o.restrictor.min(100).to_string()).collect();
     let names: Vec<Value> = opponents
@@ -1021,6 +1027,33 @@ mod tests {
         // Pas d'Auto sur ces deux-là : « aucun lest » se dit par 0.
         assert_eq!(grid["Ballasts"], serde_json::json!(["0", "40"]));
         assert_eq!(grid["Restrictors"], serde_json::json!(["0", "15"]));
+    }
+
+    /// Each named driver carries their own aggression to the grid, an explicit
+    /// 0 included (it is not `Auto`); a line without one stays `"-1"`, and a
+    /// value past CM's cursor is brought back to 100 — SESSION§3.2.
+    #[test]
+    fn a_driver_aggression_reaches_the_grid_and_auto_stays_minus_one() {
+        let mut s = base_setup(SessionType::Race);
+        s.opponents = ["a", "b", "c", "d"]
+            .into_iter()
+            .zip([None, Some(0), Some(65), Some(140)])
+            .map(|(car, aggression)| Opponent {
+                car_id: car.into(),
+                aggression,
+                ..Default::default()
+            })
+            .collect();
+        let grid = grid_of(&s);
+        assert_eq!(grid["AiAggressions"], serde_json::json!(["-1", "0", "65", "100"]));
+    }
+
+    /// A grid saved before the per-driver aggression existed has no such key
+    /// on its lines: they read back as `Auto`, not as zero.
+    #[test]
+    fn an_opponent_saved_without_aggression_reads_back_as_auto() {
+        let o: Opponent = serde_json::from_str(r#"{"car_id":"ks_lotus_25","ai_level":92,"car_skin":"green"}"#).unwrap();
+        assert_eq!(o.aggression, None);
     }
 
     /// Règle protégée : la fourchette réglée à l'écran atteint le preset.

@@ -35,10 +35,33 @@ de reprendre. En cas d'écart, la spec fait foi.
       livré), l'entrée Story du rail, un hub vide chargé paresseusement, la
       règle `story-isolation` de `check-conventions.mjs`.
       **Reste, dans l'ordre** :
-      - **L0, hors drapeau** : le téléchargement automatique des configs de
-        circuit par CSP qui ne se déclenche pas sur une session lancée par
-        Pit Box, la lecture du fichier de résultat, la grille avec un niveau
-        par pilote. C'est du code de session partagé : testé comme tel.
+      - **L0, hors drapeau — fait sauf une vérification en jeu
+        (2026-10-17).** Code de session partagé, testé comme tel :
+        - *Configs CSP* : **le problème n'existe plus** depuis juillet, quand
+          le lancement est passé de `race/config` à `race/quick`
+          (`docs/L4-cm-launch-research.md`). Revérifié sur le journal de CM
+          d'un lancement Pit Box du 2026-10-17 : `TriggerAutoLoadAsync` pour le
+          circuit et la voiture, `ID to install` sur les patchs VAO. Le
+          « Prerequisite » de la spec Story est donc périmé.
+        - *Résultat de session* : `raceresult.rs` et `read_session_result`
+          (SESSION§2.6), testés sur quatre fichiers réels. Aucun écran ne s'en
+          sert encore.
+        - *Grille par pilote* : force, nom et nationalité par ligne existaient
+          déjà ; l'agressivité par ligne est ajoutée (`Opponent.aggression`,
+          `Auto` par défaut, sans colonne à l'écran).
+        - **Reste** : prouver en jeu que la force **par pilote** est
+          respectée sur la version de CSP visée (installée : 0.3.0-preview622,
+          build 4157 ; la spec ne nomme pas de version). L'historique de CM
+          va dans ce sens sans le prouver : sur deux sessions (Zandvoort 2024,
+          Imola 2026), sept paires de voitures identiques à forces
+          différentes sur huit ont la plus forte devant — mais sur peu de
+          tours, dont un track day de deux tours dans le trafic. Protocole : six voitures identiques à
+          70, 76, 82, 88, 94 et 100, cinq tours, le joueur garé sur la
+          grille, puis comparer les temps au tour dans le résultat.
+        - **Repéré, non traité** : `cmimport.rs` et `sessionpreset.rs` ne
+          relisent pas `AiAggressions` par ligne. Sans effet aujourd'hui
+          (aucun écran ne pose cette valeur) ; à reprendre si une grille
+          enregistrée doit un jour la porter.
       - **L1** : le moteur dans une crate pure (`crates/story-engine/` :
         format, flux, conditions, temps, sauvegardes) et une CLI jamais
         livrée (`crates/story-tool/`), comme `kn5-tool` et `rules-tool`. La

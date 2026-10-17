@@ -39,6 +39,10 @@ export interface Opponent {
    * et le jeu tire dans la fourchette globale. Ce n'est donc pas une valeur
    * qu'on tire nous-mêmes — c'est son absence, et le format la connaît déjà. */
   ai_level: number | null;
+  /** Aggression of this driver, 0 to 100, or `null`/absent for `Auto` (the
+   * global band decides). No column of the screen sets it: it is for a grid
+   * built by code, where each named driver has a character (SESSION§3.2). */
+  aggression?: number | null;
   /** Skin de l'adversaire, choisi (auto ou via la popup de sélection). */
   car_skin: string | null;
   /** Nom de pilote et nationalité repris à la main, ou `null` pour `Auto` — le

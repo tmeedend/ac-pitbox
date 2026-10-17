@@ -101,6 +101,13 @@ pub struct Opponent {
     /// tirage.
     #[serde(default)]
     pub ai_level: Option<u32>,
+    /// Aggression of this driver, 0 to 100, or `None` for `Auto` — the global
+    /// band then decides, as for `ai_level`. The grid of the session screen
+    /// (SESSION§3.2) has no column for it; it exists for a grid built by code,
+    /// where each named driver has a character (Story Mode).
+    /// Absent from every grid saved before it, hence `Auto` there.
+    #[serde(default)]
+    pub aggression: Option<u32>,
     /// Skin de l'adversaire (SESSION§3 : plateau réglable finement depuis la popup
     /// de sélection). `None` → le jeu applique son skin par défaut.
     #[serde(default)]

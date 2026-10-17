@@ -245,6 +245,38 @@ Le `lods.ini` d'une voiture nomme le `.kn5` de chaque niveau de détail, par un 
 
 Une erreur destinée à l'utilisateur peut donc porter des valeurs : `errors.clé{"name":"…"}` (`errors::with_values`), relu par `$lib/errorKey` avant traduction. Une clé seule reste la forme normale.
 
+### 2.6 Le résultat d'une session
+
+À la fin d'une session, Assetto Corsa écrit `Documents\Assetto Corsa\out\race_out.json`.
+`raceresult.rs` le lit en un classement par session jouée (essais, qualification,
+course, dans l'ordre), et la commande `read_session_result(since_ms)` le rend à
+l'écran — **seulement s'il est plus récent que le lancement** : le fichier est
+réécrit à chaque session, un fichier plus ancien est celui d'une autre, et le
+rendre attribuerait au joueur un résultat qu'il n'a pas eu. Aucun écran ne s'en
+sert encore ; Story Mode en sera le premier.
+
+Le format est relevé, pas deviné : sur le fichier du jeu lui-même, et sur les
+copies que Content Manager garde de chaque session
+(`%LOCALAPPDATA%\AcTools Content Manager\Progress\Sessions\`, le même fichier
+plus deux clés à lui). Quatre d'entre elles servent de tests. Pour chaque voiture :
+position, tours bouclés, meilleur tour valide, temps cumulé, et **abandon**.
+
+- **La voiture 0 est le joueur** ; tous les tableaux du fichier indexent la liste
+  des engagés.
+- **L'ordre d'une course est celui du jeu** (`raceResult`). Hors course, c'est le
+  meilleur tour, les voitures sans tour valide après, dans l'ordre d'engagement.
+- **Le meilleur tour est celui du jeu** (`bestLaps`), qui écarte de lui-même un
+  tour coupé.
+- **L'abandon se déduit, le fichier ne le dit pas.** Quand le joueur quitte une
+  course, le jeu la finit pour les IA (des tours extrapolés : chaque secteur
+  décalé des mêmes quelques millisecondes) et range le joueur dernier. La règle
+  retenue : **un pilote qui finit passe la ligne après le vainqueur**, attardé
+  compris, donc son temps cumulé est au moins celui du vainqueur. Un temps plus
+  court veut dire arrêté avant le drapeau. Elle vaut pour une course aux tours
+  comme au temps, sans supposer de combien de tours un attardé peut être en
+  retard. Une voiture sans aucun tour n'a pas fini — ce qui couvre une course
+  quittée sur la grille, où même le premier classé n'a rien bouclé.
+
 ## 3. Écran de réglages
 
 Pas de rappel du duo en haut (déjà dans la barre latérale). Le titre **suit la
@@ -564,6 +596,16 @@ codés en dur sur 95/85 : le réglage de l'écran n'atteignait jamais le jeu —
 une ligne `Auto` n'aurait rien voulu dire, puisque c'est précisément dedans que
 le jeu tire. `AiLevel` est le **haut** de la fourchette et `AiLevelMin` le bas,
 relevé sur un preset réel.
+
+**Une agressivité par pilote existe aussi, sans colonne à l'écran.** Le
+plateau d'un adversaire porte `aggression` (0-100, `Auto` par défaut), qui part
+dans le `AiAggressions` du preset comme la force part dans `AiLevels` — `-1`
+pour `Auto`, un `0` explicite restant un zéro. Personne ne la pose depuis
+l'écran : elle sert aux grilles construites par le code, où chaque pilote nommé
+a son caractère (Story Mode). Une grille enregistrée avant elle se relit en
+`Auto` partout. CM écrit l'une et l'autre par voiture dans `race.ini`
+(`[CAR_n] AI_LEVEL=`, `AI_AGGRESSION=`), relevé sur ses propres copies de
+session.
 
 **Colonnes : toutes, tout le temps, et aucune abréviation.** Le menu de
 colonnes est parti, et avec lui la préférence qu'il gardait. Il existait parce

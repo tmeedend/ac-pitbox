@@ -88,6 +88,18 @@ pub fn is_game_running() -> bool {
     crate::launch::game_running()
 }
 
+/// The result of the session that ended after `since_ms` (milliseconds since
+/// the Unix epoch, taken when the session was launched) — SESSION§2.6.
+/// `None` while the game has written nothing newer.
+#[tauri::command]
+pub fn read_session_result(since_ms: u64) -> Result<Option<crate::raceresult::SessionResult>, String> {
+    let Some(path) = crate::raceresult::result_path() else {
+        return Ok(None);
+    };
+    let since = std::time::UNIX_EPOCH + std::time::Duration::from_millis(since_ms);
+    crate::raceresult::read_since(&path, since)
+}
+
 /// Ouvre Content Manager sans argument (§7.2).
 #[tauri::command]
 pub fn open_content_manager(app: AppHandle) -> Result<(), String> {
