@@ -23,6 +23,7 @@ import { listen } from "@tauri-apps/api/event";
 import { bumpLibraryVersion } from "$lib/library/libraryVersion.svelte";
 import { loadTechSheetReport } from "$lib/detail/techSheetReport.svelte";
 import { startOnlineWatch } from "$lib/online/watch.svelte";
+import { applyStudioSwitch } from "$lib/story/access";
 
 /** Starts every shell-wide service; the returned function stops them all. */
 export function startShellServices(): () => void {
@@ -59,6 +60,9 @@ export function startShellServices(): () => void {
   // whatever screen is open, so started with the shell.
   stops.push(startOnlineWatch());
   stops.push(reloadLibraryAfterTechBackfill());
+  // `--enable-story-studio` / `--disable-story-studio`, read once: the rail
+  // follows `ui_prefs.json` from then on, on this launch and the next ones.
+  void applyStudioSwitch();
 
   // Navigation manette dans toute l'app (croix/stick = déplace le focus,
   // A/Croix = valide, B/Rond = ferme la fiche pleine page). Un seul scrutin

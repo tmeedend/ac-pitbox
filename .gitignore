@@ -24,3 +24,9 @@ vite.config.ts.timestamp-*
 # Mesures de `npm run bench:startup` : propres à une machine et à sa
 # bibliothèque, comparées d'une fois sur l'autre en local, jamais versionnées.
 /.bench/
+
+# Story Mode : ce qui appartient à l'histoire elle-même (spec complète, maquettes
+# pleines de personnages et de dialogues) reste sur la machine, jamais dans ce
+# dépôt public. La version générique de la spec vit à côté, versionnée
+# (CLAUDE.md, « Chantiers longs derrière un drapeau »).
+/docs/story/private/

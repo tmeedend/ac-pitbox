@@ -407,6 +407,8 @@ src-tauri/src/          Backend Rust — un module par domaine
   cardata.rs acd.rs     La physique d'une voiture : `data/` puis `data.acd`
   techsheet/            La fiche technique : faits par source, saisies,
                         valeur effective et cache des colonnes (FICHE§)
+  story/                Story Mode, chantier long derrière un drapeau
+                        (docs/story/) : rien d'autre n'en dépend
 src-tauri/crates/       Crates du workspace (aperçu 3D, docs/SPEC-preview-3d-kn5.md)
   kn5/                  Parsing du format KN5 — pur, sans I/O ni Tauri
   kn5-gltf/             Textures et export glTF (touche au disque : skins)
@@ -429,6 +431,8 @@ src/lib/                Modules : un dossier par domaine, comme le backend
   workshop/             Classement et Fichiers, l'ancien Atelier : règles,
                         taxonomies, import, profils, maintenance
   gamestate/            Le dossier du jeu : pont, filtres, portes d'entrée
+  story/                Story Mode : l'allumage (`access.ts`), puis le reste
+                        du chantier — importé par trois coutures seulement
   *.ts                  Ce qui ne relève d'aucun domaine : `config`, `errors`,
                         `features`, `format`, `invokeSafe`, `storage`,
                         `uiPrefs`, `preferred`
@@ -558,15 +562,16 @@ partagent `commands::prelude`.
 
 Elles ne cassent rien quand on les ignore — elles produisent un bug silencieux.
 
-**Dix d'entre elles sont désormais vérifiées** par `scripts/check-conventions.mjs`,
+**Onze d'entre elles sont désormais vérifiées** par `scripts/check-conventions.mjs`,
 dans `npm run check` : `scrollIntoView`, écriture dans `localStorage`, mesure de
 fenêtre écrite dans un style sans `zoomFactor()`, composant `.svelte` importé
 nulle part, `#[tauri::command]` absente d'`invoke_handler`, clé i18n devenue
 inatteignable, **clé i18n utilisée mais absente d'`en.json`** — `library.filterModel`
 s'est affichée des semaines en libellé de filtre —, **renvoi de spec dans une chaîne visible** — « non activable
 (§12bis.1) » s'affichait tel quel à l'utilisateur, en pointant vers une section
-disparue —, **secret sur le point d'être versionné**, et **fichier de `docs/`
-absent de l'index**. Une exception légitime se déclare sur la ligne ou juste
+disparue —, **secret sur le point d'être versionné**, **fichier de `docs/`
+absent de l'index**, et **import du chantier Story hors de ses coutures**
+(`story-isolation`, voir « Chantiers longs derrière un drapeau »). Une exception légitime se déclare sur la ligne ou juste
 au-dessus : `// conventions: allow <règle>` — rare, et visible en revue.
 
 Deux choses à savoir avant d'y toucher. **Une règle ajoutée se prouve** :
@@ -838,6 +843,15 @@ là pour se vider, et il est vide.
   découverte sur le format s'écrit là, pas seulement dans un commentaire.
 - **`docs/windows-code-signing.md`** — signature Authenticode de l'installateur
   (SmartScreen). À lire **avant** d'acheter un certificat.
+- **`docs/story/`** — **Story Mode et Create Your Own**, un chantier long
+  (voir « Chantiers longs derrière un drapeau ») : la spec générique du moteur
+  et de l'éditeur, en anglais. **Rien de ce qui appartient à une histoire n'y
+  entre** (personnages, intrigue, dialogues, réglages choisis par un auteur) :
+  le dépôt est public, une histoire reste secrète jusqu'à sa sortie. Le
+  document de conception complet et les maquettes, qui en sont pleins,
+  restent en local dans `docs/story/private/`, exclu par `.gitignore`. Un
+  exemple dans le code ou la doc est toujours neutre (« a character »,
+  « Race 01 »), jamais tiré d'une histoire en cours.
 - `docs/README-livrables.md` — doc d'amorçage historique, partiellement
   périmée : `SPEC.md` fait foi en cas d'écart.
 
@@ -869,6 +883,59 @@ compilation plus longue après un `cargo clean`.
 `src-tauri/rustfmt.toml` fixe le style (`max_width = 120`) et `cargo fmt --all
 --check` est dans la CI. Un reformatage massif se fait dans un commit isolé, jamais
 mélangé à un changement fonctionnel : sinon `git blame` devient inexploitable.
+## Chantiers longs derrière un drapeau
+
+Un chantier de plusieurs mois ne vit **pas sur une branche** : une branche
+qu'on fusionne au bout d'un an ne se fusionne plus, et chaque mois d'écart
+rend la relecture du diff final plus illusoire. Il vit **sur `main`**, éteint,
+et grandit par petits commits ordinaires. Le premier concerné est **Story
+Mode** (`docs/story/`).
+
+C'est une **deuxième catégorie** d'interrupteur, distincte de celle de
+`src/lib/features.ts` : là-bas, du code **fini** qui attend d'être montré ;
+ici, du code **en construction** qu'on ne montre pas encore. La seconde n'a
+pas les garanties de la première — rien n'y est fini — donc elle se paie par
+des contreparties, et ce sont elles qui empêchent un chantier caché de
+provoquer des régressions visibles :
+
+- **Un domaine à lui, des deux côtés** : `src/lib/<chantier>/` et
+  `src/lib/components/<chantier>/` ; `src-tauri/src/<chantier>/` et
+  `commands/<chantier>.rs`. Ce qui peut être pur (moteur, format de fichier)
+  va dans une crate de `src-tauri/crates/`, qui ne voit pas l'app et ne peut
+  donc pas la casser.
+- **La dépendance va dans un seul sens.** Le chantier utilise l'app ; l'app
+  n'importe jamais le chantier, sauf par des **coutures** listées une fois —
+  pour Story : le rail, l'aiguillage d'`AppShell` et `shellServices`. Ajouter
+  une couture est un changement visible et assumé, pas un import de passage.
+- **Aucun format persisté partagé ne bouge pour lui** tant qu'il est caché :
+  pas de table ni de colonne dans `overlay.sqlite`, pas de champ dans
+  `config.json`. Ses données vivent dans **son** dossier
+  (`app_config_dir/<chantier>/`), et un utilisateur qui ne l'a jamais vu
+  allumé n'en a aucune trace sur disque.
+- **Ce qui touche au code partagé sort du drapeau.** Un drapeau cache un
+  écran, il ne protège pas `launch.rs`. Une évolution dont le chantier a
+  besoin dans un module commun (pour Story : le lancement, la lecture du
+  résultat d'une session) se fait **comme un changement normal**, testé,
+  visible dans le compte rendu — c'est là, et pas derrière le drapeau, qu'est
+  le vrai risque de régression.
+- **Le chargement est paresseux** : l'aiguillage importe l'écran par
+  `import()`, si bien qu'un utilisateur qui ne l'ouvre jamais ne charge ni son
+  code ni ses dépendances.
+- **Le drapeau ne protège rien de secret.** Le dépôt est public : n'importe
+  qui peut lire le code et allumer l'entrée. Ce qui doit rester secret (le
+  texte d'une histoire) vit **hors du dépôt**.
+
+**L'allumage de Story.** Toujours visible sous `npm run tauri dev`. Dans un
+build livré, l'entrée du rail n'apparaît que si `ui_prefs.json` porte
+`pitbox.story.studio` à `1`, ce que pose un lancement unique avec
+`--enable-story-studio` (et `--disable-story-studio` le retire). Pas de build
+séparé pour qui écrit une histoire : la version publiée suffit, et l'histoire
+elle-même n'est ni dans le build ni dans le dépôt.
+
+**À la sortie**, le drapeau ne reste pas : l'entrée devient visible pour tous,
+et seul ce qui doit rester réservé (Create Your Own, tant qu'il n'est pas
+ouvert à tous) garde un interrupteur à lui.
+
 ## Chantiers en cours
 
 **Le détail vit dans `docs/CHANTIERS.md`** : avancement, écarts assumés, et les
@@ -891,6 +958,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Règles de tags divergentes** | deux fichiers décrivent la même ontologie, un seul est chargé | `docs/CHANTIERS.md` |
 | **Export / import de la bibliothèque** | construit, visible sous `tauri dev` seulement (`FEATURE_LIBRARY_TRANSFER`) ; reste l'essai sur de vraies bibliothèques, puis allumer | `docs/SPEC-export-bibliotheque.md`, `docs/CHANTIERS.md` |
 | **Dossier du jeu** | lot 1 livré (lecture seule) ; reste le lot 2, les tailles | `docs/SPEC-etat-dossier.md`, `docs/CHANTIERS.md` |
+| **Story Mode et Create Your Own** | phase 0 : drapeau, entrée cachée, hub vide ; le moteur et l'éditeur restent à faire, lot par lot (L0 à L8) | `docs/story/SPEC-story-mode.md`, `docs/CHANTIERS.md` |
 | **Page Online** | v1 et v2 de la spec livrées (tableau, tokens, rejoindre via `race/online`, préparation et contenu récupéré, carte de la fiche circuit, notifications, « Me prévenir ») ; restent des vérifications à l'écran et des limites connues (SPEC-play-online, « Restent ») | `docs/SPEC-play-online.md`, `docs/online-join-research.md` |
 | **Performances** | première passe faite (cartes à 0,66 s au lieu de 1,15 s), banc `npm run bench:startup` en place ; restent une mesure sur une plus grosse bibliothèque, le premier lancement après une mise à jour (3,4 s), deux lectures de ressources et le saut « initiales → logo » des marques | `docs/CHANTIERS.md` |
 | **Son d'une voiture Kunos** | solution provisoire en place (bascule d'un seul geste et filet au démarrage, hors `gamebackup.rs`) ; le passage par `gamebackup.rs` est étudié et écarté pour l'instant | `docs/CHANTIERS.md` |

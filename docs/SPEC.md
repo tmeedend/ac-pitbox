@@ -1067,6 +1067,14 @@ c'est le panneau de détail du serveur qui le fait — avec son propre bouton
 Rejoindre. Afficher la colonne y proposerait un circuit et un lancement qui ne
 seraient pas ceux du serveur.
 
+**Story, sous Online, n'existe pas encore pour les utilisateurs.** C'est
+l'entrée de Story Mode et de Create Your Own (`docs/story/`), un chantier long
+construit sur `main` derrière un drapeau : visible sous `tauri dev`, et dans
+un build livré seulement après un lancement avec `--enable-story-studio`
+(`--disable-story-studio` la retire). Elle ouvre pour l'instant un hub vide,
+masque la colonne de session comme Online, et l'app ne se rouvre jamais
+dessus — l'écran de démarrage retombe sur la bibliothèque.
+
 **La colonne de session est une zone, pas du mobilier permanent.** Elle n'est
 affichée que sur les écrans qui choisissent ce qu'on lance — Voitures,
 Circuits, Pilote, et l'écran de réglages de la session — et sa largeur est

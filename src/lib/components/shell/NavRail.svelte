@@ -16,6 +16,7 @@
   import { openContentManager } from "$lib/launch/launch";
   import { bigPictureState, exitBigPicture } from "$lib/shell/bigpicture.svelte";
   import { t } from "$lib/i18n/index.svelte";
+  import { storyUnlocked } from "$lib/story/access";
 
   type Entry = {
     /** Section ouverte par un clic. */
@@ -61,6 +62,11 @@
     // drive, not an installation screen (SPEC-play-online.md). It keeps the
     // session column hidden — its own panel picks the car and joins.
     { target: "online", labelKey: "nav.online" },
+    // Story, the third way to drive: stories told between races. A long
+    // work in progress, hidden in a built installer until it is turned on
+    // from the command line (CLAUDE.md, « Chantiers longs derrière un
+    // drapeau »).
+    { target: "story", labelKey: "nav.story", when: storyUnlocked },
     // Les deux écrans d'add-ons ont disparu : ils classaient par mécanique de
     // pose, et leur contenu est dans l'inventaire (REFONTE§3.1).
     { target: "apps", labelKey: "nav.apps", sep: true },
@@ -162,6 +168,10 @@
             <circle cx="10" cy="10" r="7.4" />
             <path d="M2.6 10h14.8" />
             <path d="M10 2.6c2.1 2.2 3 4.7 3 7.4s-.9 5.2-3 7.4c-2.1-2.2-3-4.7-3-7.4s.9-5.2 3-7.4z" />
+          {:else if e.target === "story"}
+            <!-- An open book: a story, whatever frame tells it. -->
+            <path d="M10 5.2C8.4 4 6 3.5 2.8 3.6v11.6c3.2-.1 5.6.4 7.2 1.6 1.6-1.2 4-1.7 7.2-1.6V3.6C14 3.5 11.6 4 10 5.2z" />
+            <path d="M10 5.2v11.6" />
           {:else if e.target === "apps"}
             <path d="M3.2 3.2h5.4v5.4H3.2zM11.4 3.2h5.4v5.4h-5.4zM3.2 11.4h5.4v5.4H3.2z" />
             <path d="M14.1 11.4v5.4M11.4 14.1h5.4" />

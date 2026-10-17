@@ -25,6 +25,40 @@ de reprendre. En cas d'écart, la spec fait foi.
 
 ---
 
+- [ ] **Story Mode et Create Your Own — phase 0 (2026-10-17).** Spec générique
+      dans `docs/story/` ; le document complet et les maquettes restent en
+      local (`docs/story/private/`, hors dépôt). Premier chantier long derrière un
+      drapeau (`CLAUDE.md`, « Chantiers longs derrière un drapeau ») : tout
+      sur `main`, rien de visible pour un utilisateur.
+      **Fait** : le drapeau (toujours allumé sous `tauri dev`,
+      `--enable-story-studio` / `--disable-story-studio` dans un build
+      livré), l'entrée Story du rail, un hub vide chargé paresseusement, la
+      règle `story-isolation` de `check-conventions.mjs`.
+      **Reste, dans l'ordre** :
+      - **L0, hors drapeau** : le téléchargement automatique des configs de
+        circuit par CSP qui ne se déclenche pas sur une session lancée par
+        Pit Box, la lecture du fichier de résultat, la grille avec un niveau
+        par pilote. C'est du code de session partagé : testé comme tel.
+      - **L1** : le moteur dans une crate pure (`crates/story-engine/` :
+        format, flux, conditions, temps, sauvegardes) et une CLI jamais
+        livrée (`crates/story-tool/`), comme `kn5-tool` et `rules-tool`. La
+        sauvegarde est un format persisté : versionnée dès le premier jour.
+      - **L2 à L8** : dans l'ordre du plan de livraison de la spec. Avant
+        l'éditeur de contenu (L2), trancher **Ink ou un
+        format à identifiants de ligne** (Yarn) : une histoire s'écrit en
+        plusieurs langues, et Ink n'a rien pour la traduction.
+      **Écarts assumés par rapport au document de conception** (la spec
+      publique les reprend déjà) :
+      - Le drapeau qu'il plaçait dans la base SQLite est dans
+        `ui_prefs.json` (règle d'or n°6), et il allume toute l'entrée
+        Story, pas seulement l'éditeur. La séparation Story Mode / Create
+        Your Own ne se fera qu'à l'ouverture de l'éditeur à tous.
+      - Une histoire déclare ses propres langues (`story.yaml`) ;
+        l'interface du studio, elle, suit la langue de l'app comme tout
+        écran de Pit Box : `t()`, clés `story.*` en `fr` et `en`.
+      - L'app ne se rouvre pas sur l'écran Story (`KNOWN_SECTIONS`) : un
+        drapeau retiré entre deux démarrages laisserait sinon un écran vide.
+
 - [ ] **Page Online — la spec est faite, v1 et v2 (2026-10-04).** Lister,
       rejoindre, noms et vignettes, favoris, récents et amis, niveaux de
       préparation (toutes les voitures du serveur comptent), couches

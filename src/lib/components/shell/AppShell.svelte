@@ -27,6 +27,7 @@
   import { loadBrandLogos } from "$lib/library/brandLogos.svelte";
   import { listOtherMods } from "$lib/inventory/others";
   import { getConfig, validateConfig } from "$lib/config";
+  import { storyUnlocked } from "$lib/story/access";
 
   // Three watertight territories (SPEC §7.2): the RAIL carries what does not
   // belong to the session (`NavRail.svelte`), the TITLE BAR the shape of the
@@ -183,6 +184,13 @@
           <Apps />
         {:else if nav.section === "others"}
           <Inventory />
+        {:else if nav.section === "story" && storyUnlocked()}
+          <!-- Loaded on demand: a long work in progress behind a switch
+               (CLAUDE.md, « Chantiers longs derrière un drapeau ») costs
+               nothing to whoever never opens it. -->
+          {#await import("$lib/components/story/StoryHub.svelte") then hub}
+            <hub.default />
+          {/await}
         {/if}
       </main>
     </div>

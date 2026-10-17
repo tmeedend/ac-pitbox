@@ -80,6 +80,10 @@ export const StorageKey = {
    * `ui_prefs.json`. */
   navSection: `${PREFIX}.nav.section`,
   navLibrary: `${PREFIX}.nav.library`,
+  /** `"1"` when the Story entry is turned on in a built installer
+   * (`$lib/story/access.ts`). Absent everywhere else: a user who never saw
+   * the entry has no trace of it. Born in `ui_prefs.json`. */
+  storyStudio: `${PREFIX}.story.studio`,
   preferredSkin: (carId: string) => `${PREFIX}.skin.${carId}`,
   preferredLayout: (trackId: string) => `${PREFIX}.layout.${trackId}`,
   /** Tenue de pilote choisie pour cette voiture (PILOTE§1.4).

@@ -1,21 +1,26 @@
-// Interrupteurs de fonctionnalité — des constantes de source, pas des réglages.
+// Feature switches — source constants, not settings.
 //
-// **La distinction est le point de ce fichier.** Un réglage appartient à
-// l'utilisateur : il vit dans `ui_prefs.json`, il se change dans un écran, et
-// l'app doit rester cohérente dans les deux positions. Un interrupteur de ce
-// fichier appartient au projet : il décide si une fonctionnalité **existe** dans
-// une version livrée, il se change en éditant cette ligne et en recompilant, et
-// personne d'autre que nous ne le voit.
+// **The distinction is the point of this file.** A setting belongs to the
+// user: it lives in `ui_prefs.json`, it changes from a screen, and the app
+// must stay consistent in both positions. A switch of this file belongs to
+// the project: it decides whether a feature **exists** in a shipped build, it
+// changes by editing its line and rebuilding, and nobody but us sees it.
 //
-// D'où la règle : un interrupteur à `false` ne doit laisser **aucune trace à
-// l'écran** — pas d'onglet vide, pas de case grisée, pas de question posée dans
-// l'assistant. Une fonctionnalité désactivée qui laisse son bouton derrière elle
-// n'est pas désactivée, elle est cassée.
+// Hence the rule: a switch at `false` leaves **no trace on screen** — no
+// empty tab, no greyed-out box, no question asked in the setup wizard. A
+// disabled feature that leaves its button behind is not disabled, it is
+// broken.
 //
-// À n'utiliser que pour ce qui est **fini mais pas prêt à être vu**. Ce n'est ni
-// un dossier de brouillons ni un remplaçant de branche : du code mort derrière
-// un drapeau qu'on ne rallume jamais pourrit exactement comme ailleurs, en
-// moins visible.
+// Only for what is **finished but not ready to be seen**. This file is
+// neither a drafts folder nor a substitute for a branch: dead code behind a
+// switch nobody turns back on rots exactly as anywhere else, only less
+// visibly.
+//
+// **Work still being built** is the other category, and it does not live
+// here: a long-running work in progress (Story Mode, `$lib/story/access.ts`)
+// grows on `main` behind its own switch, and pays for it with an isolated
+// domain that nothing else depends on (`CLAUDE.md`, « Chantiers longs
+// derrière un drapeau », held by the `story-isolation` convention).
 
 /**
  * **Vignettes régénérées de la grille** (GRILLE§5 à §8, §11).

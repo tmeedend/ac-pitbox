@@ -78,6 +78,7 @@ mod skeleton;
 mod startup;
 mod steering;
 mod stock;
+mod story;
 mod submods;
 mod sun;
 mod survey;
@@ -153,6 +154,7 @@ pub fn run() {
             commands::import::execute_bulk_import,
             commands::import::resolve_conflict,
             commands::import::cancel_import,
+            commands::story::story_studio_switch,
             commands::updates::check_mod_updates,
             commands::updates::recheck_mod_updates,
             commands::updates::mod_update_details,

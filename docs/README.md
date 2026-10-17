@@ -259,6 +259,24 @@ dans un commentaire de code.
   démarrage. Les deux ont divergé — celui-ci porte un groupe de règles de plus.
   L'éditer ne change rien au comportement de l'app.
 
+## Story Mode — un chantier long, dans son propre dossier
+
+- **`story/`** — **Story Mode et Create Your Own** : jouer des histoires
+  entre deux courses, et l'éditeur qui sert à les écrire. Un chantier de
+  plusieurs mois, développé sur `main` derrière un drapeau (`CLAUDE.md`,
+  « Chantiers longs derrière un drapeau »). Le dossier a son propre
+  `README.md`, qui dit ce qui y est et surtout **ce qui n'y est pas** :
+  - **`story/SPEC-story-mode.md`** — la spec du moteur et de l'éditeur,
+    **générique et en anglais** : ce que Pit Box doit faire pour n'importe
+    quelle histoire. Ses titres ne sont pas numérotés, d'où l'absence
+    d'étiquette `§` : le code y renvoie par le nom du fichier et le titre de
+    la section (« SPEC-story-mode.md, *Events, retries and failure* »).
+  - **Rien de ce qui appartient à une histoire n'entre dans ce dépôt
+    public** — personnages, intrigue, dialogues, lieux, réglages choisis par
+    un auteur. Le document de conception complet et les maquettes d'écran,
+    qui en sont pleins, restent sur la machine dans `story/private/`, exclu
+    par `.gitignore`.
+
 ## Maquettes et captures
 
 - **`maquettes/`** — les maquettes HTML, **datées**, avec leur propre index

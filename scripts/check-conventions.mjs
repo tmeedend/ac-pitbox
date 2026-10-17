@@ -338,6 +338,56 @@ for (const locale of ["fr", "en", "it", "de", "es", "pt"]) {
   }
 }
 
+// --- 10. Story ne fuit pas dans le reste de l'app -----------------------------
+// Story Mode est un chantier long, construit sur `main` derrière un drapeau
+// plutôt que sur une branche (`CLAUDE.md`, « Chantiers longs derrière un
+// drapeau »). Le drapeau cache un écran, pas du code : ce qui empêche le
+// chantier de casser ce que les utilisateurs voient, c'est que **rien d'autre
+// ne dépend de lui**. Story peut importer l'app ; l'app n'importe Story que par
+// les coutures listées ici. En ajouter une est permis, mais se voit dans le
+// diff de ce fichier — jamais un import de passage au milieu d'un écran.
+{
+  const FRONT_SEAMS = [
+    "src/lib/components/shell/AppShell.svelte", // l'aiguillage, chargement paresseux
+    "src/lib/components/shell/NavRail.svelte", // l'entrée du rail et son `when`
+    "src/lib/shell/shellServices.ts", // l'option de ligne de commande, lue au démarrage
+  ];
+  const RUST_SEAMS = [
+    "src-tauri/src/lib.rs", // `mod story;` et `invoke_handler`
+    "src-tauri/src/commands/mod.rs",
+    "src-tauri/src/commands/story.rs",
+  ];
+  const inStory = (f) =>
+    f.startsWith("src/lib/story/") ||
+    f.startsWith("src/lib/components/story/") ||
+    f.startsWith("src-tauri/src/story/");
+  // Le code seul, pas ses commentaires : nommer `$lib/story/access.ts` dans
+  // une doc n'est pas en dépendre — le premier jet a crié sur `storage.ts`.
+  const check = (files, seams, re, message) => {
+    for (const f of files) {
+      if (inStory(f) || seams.includes(f)) continue;
+      const lines = read(f).split("\n");
+      for (let i = 0; i < lines.length; i++) {
+        const code = lines[i].replace(/\/\/.*$/, "");
+        if (re.test(code) && !allowed(lines, i, "story-isolation")) report("story-isolation", f, i + 1, message);
+      }
+    }
+  };
+  check(
+    front,
+    FRONT_SEAMS,
+    // `from "…"`, `import("…")` et l'import nu `import "…"`.
+    /(\bfrom\s*|\bimport\s*\(?\s*)["']\$lib\/(components\/)?story\//,
+    "l'app n'importe pas Story hors de ses coutures (`CLAUDE.md`, « Chantiers longs derrière un drapeau »)",
+  );
+  check(
+    rust,
+    RUST_SEAMS,
+    /\b(crate|super|commands)::story\b/,
+    "le backend n'appelle pas `story` hors de ses coutures (`CLAUDE.md`, « Chantiers longs derrière un drapeau »)",
+  );
+}
+
 // --- Rapport ----------------------------------------------------------------
 
 if (!violations.length) {

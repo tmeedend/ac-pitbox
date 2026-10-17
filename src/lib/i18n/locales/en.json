@@ -19,7 +19,8 @@
     "openCmShort": "Content Manager",
     "brands": "Brands",
     "gamefolder": "Game folder",
-    "online": "Online"
+    "online": "Online",
+    "story": "Story"
   },
   "titlebar": {
     "bigPicture": "Big Picture mode (fullscreen)",
@@ -2562,5 +2563,12 @@
     "presetsRenamed": "{count} sessions had a name already taken here: a number was added to it.",
     "activeAtExport": "{count} were active at export.",
     "openLibrary": "Open the library"
+  },
+  "story": {
+    "title": "Story",
+    "modeTitle": "Story Mode",
+    "noStory": "No story installed.",
+    "createTitle": "Create Your Own",
+    "noOwnStory": "No story written yet."
   }
 }

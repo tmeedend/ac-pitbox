@@ -100,6 +100,18 @@ const cases = [
     create: "pas une vraie clé, juste un nom de fichier\n",
   },
   {
+    // Un écran ordinaire qui se met à dépendre du chantier caché.
+    rule: "story-isolation",
+    file: "src/lib/format.ts",
+    inject: (s) => `${s}\nimport { storyUnlocked as _probe } from "$lib/story/access";\n`,
+  },
+  {
+    // Et côté Rust : un module métier qui appelle le domaine Story.
+    rule: "story-isolation",
+    file: "src-tauri/src/timing.rs",
+    inject: (s) => `${s}\nfn _probe() -> Option<bool> { crate::story::studio_switch_from_args(["x"]) }\n`,
+  },
+  {
     rule: "docs-index-incomplete",
     file: "docs/zz-selftest-orphan.md",
     create: "# Document que l'index ne connaît pas\n",
