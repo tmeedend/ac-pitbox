@@ -108,14 +108,20 @@ jobs:
       # v7 : la v4 ciblait Node 20, que les runners forcent désormais sur
       # Node 24 avec un avertissement de dépréciation. La v5 ne suffisait pas —
       # elle ne fait que *supporter* Node 24, elle tourne encore sur Node 20 par
-      # défaut ; c'est la v6 qui bascule, et la v7 y ajoute l'ESM. Les quatre
-      # entrées ci-dessous n'ont pas changé de sens depuis la v4. La borne de
+      # défaut ; c'est la v6 qui bascule, et la v7 y ajoute l'ESM. `path`,
+      # `if-no-files-found` et `retention-days` n'ont pas changé de sens depuis
+      # la v4. La borne de
       # version de runner qu'exige la v7 ne concerne que l'auto-hébergé.
+      #
+      # Seul le zip part : il contient déjà l'installateur, et le joindre à côté
+      # doublait le poids de chaque artefact. `archive: false` le dépose tel
+      # quel — sans lui, GitHub l'enveloppe dans un second zip au
+      # téléchargement. Dans ce mode l'artefact prend le nom du fichier
+      # (`Pit.Box_<version>_x64-setup.zip`) et un seul fichier est admis :
+      # un runner neuf n'en produit qu'un.
       - uses: actions/upload-artifact@v7
         with:
-          name: pitbox-installers-unsigned
-          path: |
-            src-tauri/target/release/bundle/nsis/*.exe
-            src-tauri/target/release/bundle/nsis/*.zip
+          path: src-tauri/target/release/bundle/nsis/*.zip
+          archive: false
           if-no-files-found: error
           retention-days: 7
