@@ -2,7 +2,7 @@
 
 ## Spécification UX/UI
 
-*Sélection du corps et de la tenue du pilote. Fait suite au brief de conception et aux deux passes de maquette. Les chiffres proviennent de l'installation de référence de 312 voitures.*
+*Choisir le pilote qu'on voit au volant : son corps (le mannequin 3D) et sa tenue en trois pièces. Ce document est la seule description de l'écran ; ce que l'aperçu 3D fait du pilote (assise, bras, braquage) est au PREVIEW§4.6 et PREVIEW§4.6bis, et la façon de le poser en jeu dans `csp-driver-research.md`. Maquette : `maquettes/pitbox-ecran-pilote.html`.*
 
 ---
 
@@ -10,47 +10,50 @@
 
 ## 1.1 Ce que l'écran permet
 
-Choisir le pilote que l'on voit au volant : son **corps** (le mannequin 3D) et sa **tenue** en trois pièces — casque, combinaison, gants.
+Choisir le pilote que l'on voit au volant : son **corps** (le mannequin 3D) et sa **tenue** en trois pièces — casque, combinaison, gants —, l'essayer avant de l'adopter, l'enregistrer sous un nom, et le **poser en jeu**.
 
 ## 1.2 Ce qu'il ne permet pas
 
-La position dans l'habitacle et l'animation des bras ne sont pas modifiables. Elles ne sont pas représentées dans l'interface, pas même sous forme désactivée.
+La position dans l'habitacle et l'animation des bras viennent de la voiture (PREVIEW§4.6bis) : elles ne se règlent pas, et ne sont pas représentées, même désactivées.
 
 ## 1.3 Asymétrie fondatrice
 
-Deux natures d'objet, deux comportements :
-
-| | Nature | Effet en course | Effet dans l'aperçu |
+| | Nature | Ce qui le choisit | Comment on le remplace |
 |---|---|---|---|
-| **Corps** | modèle 3D désigné par la physique de la voiture | **immuable** — un serveur en ligne vérifie ce fichier | remplaçable |
-| **Casque, combinaison, gants** | images posées sur le corps | modifiables via la livrée | modifiables |
+| **Corps** | modèle 3D | la voiture, dans `data.acd` — le conteneur qu'un serveur vérifie | une surcharge CSP posée à côté, sans toucher `data.acd` (§13) |
+| **Casque, combinaison, gants** | images posées sur le corps | la livrée (`skin.ini`) | le `skin.ini` de la livrée |
 
-Cette asymétrie n'est pas un détail d'implémentation à masquer : elle **structure l'écran**. Le corps est au-dessus, séparé, et il commande les trois autres.
+Cette asymétrie **structure l'écran** : le corps au-dessus, séparé, et il commande les trois autres.
 
 ## 1.4 Conditions d'accès
 
-- Voitures de **rue** uniquement. Sur une voiture de course, la tenue vient de l'écurie via la livrée — voir §10.2.
-- Le choix est **global** — « mon pilote », pas « le pilote de cette livrée » — et persistant.
+**Le choix se fait par voiture**, résolu en cascade :
+
+1. **la tenue choisie pour cette voiture** gagne toujours ;
+2. sinon **la tenue par défaut de sa classe** — l'une des tenues enregistrées (§8.4), désignée par l'utilisateur ; il y en a **deux, une pour les voitures de rue et une pour les voitures de course**, parce que sur une voiture de course la tenue fait souvent partie de la livrée. « Aucune » d'un côté rend ces voitures à leur livrée. Tout ce qui n'est pas annoncé `race` compte comme rue ;
+3. sinon **la livrée**.
+
+Activer une tenue par défaut n'écrase jamais un choix fait à la main, et la désactiver ne perd rien. **Rendre une voiture à son origine est un choix comme un autre** : « le corps de la voiture » ou « tout remettre sur la livrée » s'enregistre sur cette voiture dès qu'une tenue par défaut l'habillerait — et une telle voiture ne compte pas dans le filtre « Pilote choisi ». **Aucune voiture n'est mise à part** : une voiture de course s'habille comme une autre.
+
+Sans voiture choisie, l'écran le dit et propose d'en choisir une.
 
 ---
 
 # 2. Décisions structurantes
 
-Sept décisions dont tout le reste découle. Elles sont arrêtées ; le reste de la spec les applique.
+**D1 — Écran dédié**, dans la zone session, au même rang que les bibliothèques : la hauteur de la colonne de session est la ressource rare.
 
-**D1 — Écran dédié.** Le choix quitte la colonne de session et prend le statut d'une rubrique de la zone principale, au même titre que la bibliothèque de voitures et celle de circuits. *Motif : la hauteur de la colonne est la ressource rare, l'arrivée du corps porte le nombre de listes à quatre, et la fonction est trop rare pour peser sur le trajet quotidien.*
+**D2 — Survol = essai, clic = adoption.** Parcourir la galerie applique chaque option en direct sur le pilote affiché ; c'est la seule façon de juger une tenue, une texture à plat ne disant rien du résultat.
 
-**D2 — Survol = essai, clic = adoption.** Parcourir la galerie applique chaque option en direct sur le pilote affiché. *Motif : l'échange de texture coûte quelques millisecondes ; c'est le seul geste qui résout le problème du brief — une texture à plat ne dit rien du résultat — sans construire un second pipeline de rendu.*
+**D3 — La vignette est l'image plate d'AC, assumée comme telle** : elle sert de repère, le survol fait le jugement (§7).
 
-**D3 — La vignette est l'image plate d'AC, assumée comme telle.** Elle ne cherche pas à ressembler à un casque. *Motif : le survol fait le jugement, donc la case n'a plus qu'un métier — servir de repère. L'image plate le fait mieux qu'un rendu 3D, qui cacherait la moitié de la livrée. Voir §7.*
+**D4 — Le cadrage suit la piste active** : corps → plan large ; casque → tête ; combinaison → buste ; gants → mains.
 
-**D4 — Le cadrage suit la piste active.** Corps → plan large ; casque → tête ; combinaison → buste ; gants → mains. *Motif : gratuit techniquement, supprime le zoom manuel, rend le changement de piste visible sans texte.*
+**D5 — Aucun volant n'est dessiné.** Le pilote est posé comme sa voiture le pose (§5.1) ; un tore générique entre les mains a été essayé deux fois et abandonné.
 
-**D5 — Les gants s'essaient sur un volant générique dessiné par l'application.** Ni mains dans le vide, ni volant de la voiture. *Motif : coût nul et constant, indépendant du nommage des mods, et honnête — on essaie une tenue, on ne prévisualise pas un habitacle.*
+**D6 — Substituer le corps est un mode, pas un réglage** (§10).
 
-**D6 — Substituer le corps est un mode, pas un réglage.** Tant que le corps est celui de la voiture, la livrée est la référence de tout. Dès qu'il est substitué, cette référence disparaît et l'écran change d'état. *Motif : la tenue de la livrée est nommée d'après l'ancien corps ; substituer ne casse pas trois choix, il supprime l'option par défaut elle-même.*
-
-**D7 — Le regroupement se nomme selon l'époque.** « Grouper par couleur / par motif / par pilote / par pack », pas « par famille ». *Motif : le filtre par époque garantit qu'on n'en voit jamais deux sortes à la fois, donc l'axe peut être nommé — et un contrôle qui dit ce qu'il fait vaut mieux qu'un contrôle générique.*
+**D7 — Pas de bascule de regroupement** : les règles de regroupement sont fixes (§6.3).
 
 ---
 
@@ -58,55 +61,41 @@ Sept décisions dont tout le reste découle. Elles sont arrêtées ; le reste de
 
 ## 3.1 Rang dans la navigation
 
-L'écran Pilote rejoint Voitures et Circuits comme rubrique de la zone principale. Même largeur, même comportement de défilement, même barre d'outils en tête.
+L'écran Pilote est l'un des quatre écrans de la zone session, avec Voitures, Circuits et les réglages de la session (`SPEC.md`, « Trois territoires »).
 
 ## 3.2 Points d'entrée
 
-**Colonne de session — ligne « Mon pilote ».** Sous le sélecteur de livrée, une ligne unique de 34 px. Elle porte une icône de casque aux couleurs du casque retenu, le libellé « Mon pilote », et un badge d'état à droite :
+**La ligne `PILOTE` de la colonne de session**, sous la livrée : elle dit ce que le pilote porte — *Tenue d'origine* quand rien n'est touché, le **nom de la tenue enregistrée** quand on en porte une, *Tenue personnalisée* sinon —, plus un badge *Substitué* quand le corps n'est pas celui de la voiture. Un clic ouvre l'écran, jamais plus. Quand l'écran est ouvert, cette ligne porte le filet rouge de la zone active.
 
-| Badge | Condition |
-|---|---|
-| *(aucun)* | tout est sur la livrée |
-| `MODIFIÉ` | au moins une pièce choisie, corps d'origine |
-| `SUBSTITUÉ` | le corps n'est pas celui de la voiture |
-| `DÉSACTIVÉ` | voiture de course |
-
-Cliquer la ligne ouvre l'écran Pilote. Un clic, jamais plus.
-
-**Navigation principale.** L'écran est atteignable directement, sans passer par la colonne.
+**La bibliothèque des voitures** porte un filtre à trois états « Pilote choisi ».
 
 ## 3.3 Coût en hauteur
 
-La colonne perd les trois menus déroulants de la version actuelle et gagne une ligne. **Bilan : −68 px.** La bascule de la version actuelle disparaît, absorbée par la ligne.
+Une ligne dans la colonne de session, à la place d'une bascule et de trois menus.
 
 ---
 
 # 4. Anatomie de l'écran
 
 ```
-┌─────────────┬──────────────────────────────────────────────────────────┐
-│  COLONNE    │  BARRE D'OUTILS                                          │
-│  SESSION    │  recherche · regroupement · favoris · récents · compteur │
-│  (328 px)   ├──────────────────┬───────────────────────────────────────┤
-│             │  ESSAYAGE        │  GALERIE                              │
-│  voiture    │  (392 px, fixe)  │  (fluide, défilante)                  │
-│  livrée     │                  │                                       │
-│  ▸ pilote   │  ┌────────────┐  │  bannière d'invalidation (si besoin)  │
-│             │  │  plateau   │  │                                       │
-│  circuit    │  │     3D     │  │  ── Red · HELMET_BASE_Red · 7 ──────  │
-│             │  └────────────┘  │  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨                      │
-│  boutons    │  ligne d'état    │                                       │
-│             │  ─────────────   │  ── Blue · HELMET_BASE_Blue · 5 ────  │
-│             │  ▸ CORPS         │  ▨ ▨ ▨ ▨ ▨                            │
-│             │  ─────────────   │                                       │
-│             │  ▸ CASQUE        │                                       │
-│             │  ▸ COMBINAISON   │                                       │
-│             │  ▸ GANTS         │                                       │
-│             │  sortie          │                                       │
-└─────────────┴──────────────────┴───────────────────────────────────────┘
+┌──────────────────┬───────────────────────────────────────┐
+│  ESSAYAGE        │  BARRE D'OUTILS                       │
+│  (fixe)          │  recherche · favoris · récents · compteur
+│  ┌────────────┐  ├───────────────────────────────────────┤
+│  │  plateau   │  │  GALERIE (défilante)                  │
+│  │     3D     │  │  bannière d'invalidation (si besoin)  │
+│  └────────────┘  │  ── Red · HELMET_BASE_Red · 7 ──────  │
+│  ligne d'état    │  ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨                      │
+│  ▸ CORPS         │                                       │
+│  ▸ CASQUE        │                                       │
+│  ▸ COMBINAISON   │                                       │
+│  ▸ GANTS         │                                       │
+│  sortie          │                                       │
+│  MES TENUES      │                                       │
+└──────────────────┴───────────────────────────────────────┘
 ```
 
-Le panneau d'essayage est **fixe** ; seule la galerie défile. Le pilote ne quitte jamais le champ de vision, exactement comme la voiture ne quitte pas la colonne de session.
+Le panneau d'essayage est **fixe** ; seule la galerie défile. Le pilote ne quitte jamais le champ de vision.
 
 ---
 
@@ -114,46 +103,36 @@ Le panneau d'essayage est **fixe** ; seule la galerie défile. Le pilote ne quit
 
 ## 5.1 Plateau 3D
 
-Largeur 392 px, hauteur minimale 380 px, fond en dégradé radial du gris panneau vers le noir de fond. Le pilote est présenté en buste, mains sur le volant générique.
+Le pilote est montré **seul, sans habitacle, mais posé comme sa voiture le pose** : sa hiérarchie d'assise et son animation de braquage sont appliquées, seul l'ancrage sur les yeux tombe. **Les gestes sont ceux de l'aperçu d'une voiture** (les mêmes contrôles d'orbite) : glisser fait tourner autour du pilote sur les deux axes, le clic droit déplace dans le plan de l'écran, la molette rapproche et éloigne, le double-clic rend la vue de face et le cadrage d'origine. Le zoom s'applique par-dessus le cadrage de la piste et lui survit.
 
-**Rotation.** Glisser horizontalement fait tourner le pilote autour de son axe vertical. Pas de zoom manuel — le cadrage est piloté par la piste active (§5.2). Double-clic remet la vue de face.
-
-**Éclairage.** Fixe, trois-quarts avant-gauche. Une livrée sombre doit rester lisible : le contraste du plateau prime sur le réalisme.
+**Éclairage fixe** : une livrée sombre doit rester lisible.
 
 ## 5.2 Cadrage par piste
 
-Changer de piste déplace la caméra. Transition de 220 ms, courbe d'accélération douce.
+Changer de piste déplace la caméra, en douceur.
 
 | Piste active | Cadrage |
 |---|---|
-| Corps | plan large — pilote entier, volant compris |
+| Corps | plan large, le pilote entier |
 | Casque | tête et haut des épaules |
-| Combinaison | buste, du col à la taille |
-| Gants | mains et avant-bras sur le volant |
+| Combinaison | buste |
+| Gants | mains et avant-bras |
 
-La caméra ne recadre **que** sur changement de piste, jamais au survol d'une vignette. Un cadrage qui bouge pendant qu'on compare des options rendrait la comparaison impossible.
+**La caméra ne recadre que sur changement de piste, jamais au survol** : une caméra qui bouge pendant qu'on compare rend la comparaison impossible.
 
 ## 5.3 Volant générique
 
-Un tore sombre et mat, sans rayons ni moyeu, dans la matière du plateau. **Identique pour toutes les voitures.** Il donne aux doigts une géométrie de contact sans prétendre représenter l'habitacle.
-
-Il est visible sur toutes les pistes, pas seulement sur Gants : le retirer et le remettre créerait un clignotement à chaque changement de piste.
+Abandonné (D5).
 
 ## 5.4 Ligne d'état
 
-Bande de 28 px en pied de plateau, sur fond semi-opaque.
+Une bande en pied de plateau : la pastille `ESSAYAGE` ; au repos *« Survolez une vignette pour essayer · cliquez pour garder »*, au survol *« Essai — `<identifiant>` »* ; l'aide des gestes. **Nommer l'essai en cours est obligatoire** : sans cela rien ne distingue ce qu'on survole de ce qu'on a retenu.
 
-| Zone | Contenu |
-|---|---|
-| Gauche | pastille `ESSAYAGE` en accent |
-| Centre | au repos : *« Survolez une vignette pour essayer · cliquez pour garder »* — au survol : *« Essai — `<identifiant>` »* |
-| Droite | affordance de rotation |
-
-Nommer l'essai en cours est **obligatoire**. Sans cela, rien ne distingue visuellement ce qu'on survole de ce qu'on a retenu, et l'utilisateur perd son choix de vue.
+**Adopter se voit** : le survol échange une texture, instantané, mais adopter redemande le modèle au backend, une bonne seconde pendant laquelle le mannequin précédent reste affiché, avec un badge discret (« Mise à jour… »). Sans lui, le clic ne produirait rien de visible et on cliquerait deux fois.
 
 ## 5.5 Les pistes
 
-Quatre lignes sous le plateau, séparées en deux blocs par des intertitres qui portent la hiérarchie :
+Quatre lignes sous le plateau, en deux blocs :
 
 ```
 ─── LE CORPS COMMANDE ──────────────
@@ -164,24 +143,18 @@ Quatre lignes sous le plateau, séparées en deux blocs par des intertitres qui 
   ▸ GANTS            Ceux de la livrée             69
 ```
 
-Deux lignes de texte remplacent une convention visuelle à apprendre. Elles sont traduites.
-
-**Anatomie d'une piste.** Icône (20 px) · libellé en capitales espacées (9,5 px) · valeur retenue (12,5 px, mono si c'est un identifiant de dossier, italique gris si c'est une valeur par défaut) · compteur d'options à droite.
-
-**État actif.** Fond légèrement éclairci, bordure gauche de 2 px en accent. Une seule piste active à la fois ; elle détermine le contenu de la galerie et le cadrage.
-
-**Le bloc Corps** a en plus un sélecteur de corps replié (§9.1).
+Une piste : icône, libellé, **valeur retenue** (mono pour un identifiant de dossier, italique gris pour un défaut), compteur d'options. **Une seule piste active** à la fois, marquée par un fond éclairci et un filet gauche rouge ; elle décide du contenu de la galerie et du cadrage. La piste ouverte à l'arrivée est le **Casque**. **Une pièce retenue qui ne s'applique pas au corps courant est gardée, pas effacée** : la piste la marque ⚠ (« sans effet sur ce corps »), et elle revient sur une voiture compatible.
 
 ## 5.6 Sortie
 
-Un lien centré sous les pistes, séparé par un filet. Son intitulé dépend du mode :
+Un lien sous les pistes, dont le sens change avec le mode :
 
 | Mode | Intitulé | Effet |
 |---|---|---|
 | Corps d'origine | `TOUT REMETTRE SUR LA LIVRÉE` | les trois pièces reviennent au défaut |
 | Corps substitué | `REVENIR AU CORPS DE LA VOITURE` | rétablit le corps, puis les trois pièces au défaut |
 
-En mode substitué, la livrée n'est pas une destination atteignable sans d'abord rétablir le corps. Un seul bouton, un seul chemin de retour.
+Un seul bouton, un seul chemin de retour.
 
 ---
 
@@ -189,63 +162,21 @@ En mode substitué, la livrée n'est pas une destination atteignable sans d'abor
 
 ## 6.1 Contenu
 
-La galerie affiche les options de la **piste active**, groupées, précédées le cas échéant de la bannière d'invalidation.
-
-| Piste | Options | Contraintes |
-|---|---|---|
-| Corps | 19 modèles | 2 écartés automatiquement (squelette non standard, fichier illisible) |
-| Casque | 176 au catalogue, filtrés par époque du corps | voir §6.2 |
-| Combinaison | 53 | compatibles tous corps |
-| Gants | 69 | compatibles tous corps |
+Les options de la **piste active**, groupées, précédées au besoin de la bannière d'invalidation (§10.2). **Ce qu'on peut porter n'est ni deviné ni codé en dur** : un dossier de garde-robe est retenu s'il contient une texture que le corps échantillonne comme couleur de base. Cette règle unique donne la bonne réponse pour les trois listes : combinaisons et gants passent partout (les mannequins Kunos réclament les mêmes fichiers), les casques se filtrent d'eux-mêmes par époque.
 
 ## 6.2 Filtrage des casques par époque
 
-Le filtre est **automatique et non désactivable** — un casque hors époque ne s'appliquerait pas.
-
-| Époque du corps | Casques proposés | Voitures concernées |
-|---|---|---|
-| Moderne | 100 | 195 / 312 |
-| Années 70 | 44 | 17 |
-| Années 60 | 21 | 13 |
-| Années 80 | 11 | 40 |
-| Mod à nommage propre | 0 | le reste |
-
-Le compteur de la barre d'outils énonce la cause du filtrage, jamais le filtre seul (§8.3).
+**Automatique et non désactivable** : un casque hors époque ne s'appliquerait pas. Le compteur en dit toujours la cause (§8.3). Un corps de mod qui nomme ses images à lui n'a aucun casque à proposer (§11.1).
 
 ## 6.3 Regroupement
 
 **Deux règles, selon la piste, et aucune commande pour en changer.**
 
-**Les tenues** (casque, combinaison, gants) se rangent par **premier niveau de
-dossier** : les identifiants ont la forme `driver_helmet/<FAMILLE>/<variante>`,
-et ce premier niveau porte déjà le sens — une couleur (`HELMET_BASE_Red`), un
-motif (`HELMET_1975_Blue` → plain, checkered, stripe1), un pilote
-(`HELMET_1969` → amon, bandini, clark…), un pack de mod.
+**Les tenues** se rangent par **premier niveau de dossier** (`driver_helmet/<FAMILLE>/<variante>`) : une couleur, un motif, un pilote, un pack.
 
-**Les corps** se rangent par **pack** : ce que le nom de fichier porte avant le
-premier `_`. C'est le seul regroupement que les données portent réellement — un
-mannequin n'a ni `ui_*.json`, ni marque, ni catégorie, son nom de fichier est
-toute son identité, et les packs s'y annoncent : `rss_` (13 corps sur
-l'installation de référence), `rh_` (5), `gt-m_` (5), `mp-h_` (3).
-**`driver`, `drivers` et `pilote` sont écartés** parce qu'ils ne disent rien —
-tous les mannequins sont des pilotes, et les quinze fichiers ainsi nommés sont
-la famille livrée avec le jeu. Ceux-là retombent sur leur **époque** (§6.2), qui
-les sépare utilement là où « driver » les entasserait sous une étiquette vide.
+**Les corps** se rangent par **pack** : ce que le nom de fichier porte avant le premier `_` (`rss_`, `rh_`, `gt-m_`…), seul regroupement que les données portent. `driver`, `drivers` et `pilote` sont écartés, parce qu'ils ne disent rien : ces corps-là — la famille livrée avec le jeu — retombent sur leur **époque**.
 
-**Trois replis, dans cet ordre.** Un pack sous le seuil de trois cases rend la
-main à l'époque ; un groupe qui reste sous ce seuil rejoint **Autres**, lequel
-n'apparaît que s'il contient quelque chose ; et **un groupe unique repasse en
-grille plate**, parce qu'une bannière qui coiffe tout ne sépare rien. Mesuré sur
-l'installation de référence : `HELMET_1969` porte ses vingt et un casques à lui
-seul, 1985 aussi ; 1975 et les modernes non.
-
-**Il n'y a pas de bascule**, et c'est un abandon assumé. Une commande
-`Grouper par <axe>` / `Tout` — avec un intitulé qui changeait selon l'époque,
-« par couleur », « par motif », « par pilote » — a été essayée puis retirée,
-décidé avec l'utilisateur : la grille plate n'est pas praticable passé quelques
-dizaines de cases, donc le second cran ne servait jamais, et une bascule qu'on
-ne rouvre pas prend la place de la recherche et des filtres dans une barre déjà
-dense.
+**Trois replis, dans cet ordre** : un pack de moins de trois cases rend la main à l'époque ; un groupe qui reste sous ce seuil rejoint **Autres** (absent s'il est vide) ; **un groupe unique repasse en grille plate**.
 
 ## 6.4 En-tête de groupe
 
@@ -254,24 +185,18 @@ Chris Amon    HELMET_1969/amon    1    ─────────────�
 Red           HELMET_BASE_Red     7    ────────────────────
 ```
 
-Nom lisible en tête, en typographie courante et en couleur de texte secondaire. Identifiant de dossier ensuite, en mono, 10 px, gris tertiaire. Compteur. Filet horizontal jusqu'au bord.
-
-Cette forme vaut pour **toutes** les époques, pas seulement 1969. Elle donne une place naturelle à la traduction du nom de couleur, tout en gardant l'identifiant visible pour ceux qui le connaissent.
-
-**Cas 1969.** Amon, Bandini, Clark, Hill, Ickx s'affichent en toutes lettres. C'est le seul endroit du produit où le catalogue raconte quelque chose ; c'est aussi du contenu qui ne se traduit pas, donc sans risque de localisation. La correspondance identifiant → nom complet est une table statique de cinq entrées.
+Nom lisible en tête, identifiant de dossier ensuite en mono, compteur, filet jusqu'au bord. Les casques de 1969 portent le nom complet de leur pilote (Amon, Bandini, Clark, Hill, Ickx), par une table statique.
 
 ## 6.5 Case par défaut
 
-Première position du premier groupe, toujours.
+Première position du premier groupe, toujours :
 
-| Mode | Contenu de la case | Libellé |
+| Mode | Contenu | Libellé |
 |---|---|---|
-| Corps d'origine | trame diagonale + « Celui de la livrée » | *Par défaut* |
+| Corps d'origine | trame diagonale + « Celui de la livrée » (« Celui de la voiture » pour le corps) | *Par défaut* |
 | Corps substitué | trame diagonale + « La livrée ne prévoit rien pour ce corps » | *Aucun* |
 
-Elle se sélectionne et se désélectionne comme n'importe quelle autre case. Le défaut est **un choix parmi les autres**, pas une case à cocher à part.
-
-Survolée, elle applique le défaut sur le plateau comme les autres appliquent leur texture — en mode substitué, elle retire simplement la pièce.
+**Le défaut est un choix parmi les autres**, qui se survole et se sélectionne comme une case ; en mode substitué, il retire la pièce.
 
 ---
 
@@ -279,38 +204,19 @@ Survolée, elle applique le défaut sur le plateau comme les autres appliquent l
 
 ## 7.1 Nature
 
-**L'image plate fournie par Assetto Corsa**, affichée entière, sans découpe ni mise en scène. 173 casques sur 176 en disposent.
+**L'image plate fournie par Assetto Corsa**, entière, sans découpe — le `.jpg` qu'AC range à côté de chaque `.dds` de garde-robe. C'est aussi elle qui sert au survol (§12.1).
 
 ## 7.2 Pourquoi pas un rendu 3D
 
-Trois raisons, dans l'ordre :
-
-1. **Le survol fait le jugement.** La case n'a plus à prouver le résultat ; elle sert de repère pour retrouver, comparer grossièrement, revenir.
-2. **Un casque en 3D cache la moitié de sa livrée.** L'image plate montre tout d'un coup. Elle est illisible comme promesse de résultat, excellente comme empreinte.
-3. **Le rendu paresseux au défilement produit un scintillement** au moment précis où l'utilisateur balaie la grille et a besoin de stabilité.
-
-Le rendu 3D en galerie est **écarté**, y compris dans sa variante « seulement les cases visibles ».
+Le survol fait le jugement ; un casque en 3D cache la moitié de sa livrée ; et un rendu paresseux au défilement scintille au moment où l'on balaie la grille. Le rendu 3D est réservé aux **corps** (§9.1), faute d'image plate qui veuille dire quelque chose.
 
 ## 7.3 Traitement visuel
 
-L'échantillon doit être **lisiblement autre chose** qu'un aperçu du résultat. Deux langages pour deux métiers.
-
-| Propriété | Valeur | Raison |
-|---|---|---|
-| Forme | carré plein, pleine largeur de case | c'est une image, pas un objet |
-| Bord | filet 1 px, gris de ligne | franc, pas de rayon |
-| Ombre | aucune | pas de plateau, pas de mise en scène |
-| Repos | `saturate(.86) brightness(.94)` | cent cases ne doivent pas crier ensemble |
-| Survol | saturation pleine, bord en accent atténué | l'attention suit le curseur |
-| Retenu | saturation pleine, bord en accent, liseré intérieur | |
-
-**Taille.** Case de 104 px minimum, grille en `auto-fill`, gouttière de 9 px. Le nom de dossier en mono 10 px sous l'image, tronqué par ellipse.
-
-**Favoris.** Étoile en accent atténué en préfixe du nom. Pas de bouton flottant sur l'image — l'image est le contenu, on ne pose rien dessus.
+L'échantillon est **lisiblement autre chose** qu'un aperçu du résultat : carré plein, filet d'un pixel, aucune ombre, saturation atténuée au repos, pleine au survol et quand il est retenu (bord rouge, §15). Le nom de dossier en mono sous l'image, tronqué. Rien n'est posé sur l'image : l'étoile de favori préfixe le nom.
 
 ## 7.4 Les trois casques sans image
 
-Case neutre : trame diagonale, nom seul, aucun rendu de substitution. Trois exceptions ne justifient pas un second pipeline. Elles restent survolables et sélectionnables — le plateau, lui, montre bien le résultat.
+Case neutre : trame diagonale, nom seul. Survolable et sélectionnable : le plateau montre le résultat.
 
 ---
 
@@ -318,28 +224,26 @@ Case neutre : trame diagonale, nom seul, aucun rendu de substitution. Trois exce
 
 ## 8.1 Composition
 
-`RECHERCHE` · `AFFICHAGE` (bascule de regroupement) · `Favoris` · `Récents` · compteur aligné à droite.
+Recherche · Favoris · Récents · compteur.
 
 ## 8.2 Recherche
 
-Filtre sur le nom de dossier **et** sur le nom lisible de famille — taper « clark » comme taper « amon » doit fonctionner. Filtrage instantané, sans validation. Les groupes vides disparaissent.
+Sur le nom de dossier **et** le nom lisible de famille (« clark » comme « amon »), instantanée ; les groupes vides disparaissent.
 
 ## 8.3 Compteur
-
-Deux lignes, alignées à droite :
 
 ```
 100 casques compatibles
 corps driver · époque moderne
 ```
 
-Il porte trois choses : le nombre, la cause du filtrage, et implicitement l'avertissement que changer de corps changera ce nombre. En cas vide : `Aucun casque applicable`.
-
-**Localisation.** Le risque est la largeur en allemand, pas le sens. Le bloc a une largeur maximale de 240 px et se replie sur trois lignes si nécessaire ; il ne tronque jamais.
+Le nombre et la **cause** du filtrage ; vide : `Aucun casque applicable`. Il se replie sur plusieurs lignes plutôt que de tronquer.
 
 ## 8.4 Favoris et récents
 
-Deux cases à cocher, cumulables avec la recherche. « Récents » retient les douze derniers essais **adoptés**, pas survolés. La distinction est importante : le survol est exploratoire par nature et polluerait l'historique.
+**Deux filtres à trois états** (uniquement, sauf, sans filtre), cumulables avec la recherche. « Récents » retient les **douze derniers essais adoptés**, jamais survolés.
+
+**Mes tenues** : sous la sortie du panneau d'essayage, enregistrer le corps et les trois pièces sous un nom, pour les reposer d'un clic ; c'est parmi elles qu'on désigne les tenues par défaut (§1.4).
 
 ---
 
@@ -347,21 +251,19 @@ Deux cases à cocher, cumulables avec la recherche. « Récents » retient les d
 
 ## 9.1 Sélection
 
-Le bloc Corps de la piste porte un sélecteur replié : la valeur courante et une mention d'état (`celui de la voiture` / `substitué`). Cliquer la piste Corps ouvre la **galerie des corps** dans la zone de droite, au même format que les autres pistes — même geste, même grammaire.
+La piste Corps ouvre la **galerie des corps**, au même format que les autres. **Ses vignettes sont des rendus 3D** — un buste, du haut du casque à la poitrine, dans l'éclairage du plateau :
 
-Les 19 corps se présentent en échantillons : ici, faute d'image plate signifiante, la case porte un **rendu 3D du corps**, généré une fois et conservé. Le coût est mesuré à 19 × 4,2 Mo, soit 80 Mo au pire pour un cache de 2 Gio.
+- **produites à la demande, une à la fois, seulement pour ce qui entre dans le champ de vision** ; une vignette ne retarde jamais le plateau ni une autre vignette ;
+- **le PNG est conservé hors du plafond du cache d'aperçus**, sous le nom de l'entrée de cache du mannequin : il se périme quand le mod change, sans invalidation à écrire ;
+- **elle ne dépend que du corps** : assis par une voiture de référence du jeu de base (l'Abarth 500), dans ses propres textures, jamais par la voiture de session — sans quoi chaque voiture choisie reconvertirait la galerie. Sans Abarth 500, le corps garde sa pose de modélisation.
 
 ## 9.2 Chargement
 
-C'est le seul endroit du produit où le changement n'est pas instantané : environ 0,4 s à la première visite d'un corps.
-
-**Comportement obligatoire :** le corps précédent reste affiché jusqu'à ce que le nouveau soit prêt. Un filet de progression en accent, de 2 px, court en pied de plateau, et la ligne d'état affiche *« Chargement du corps… »*.
-
-**Jamais de plateau vide.** Un mannequin qui disparaît puis réapparaît coûte plus cher en perception que 0,4 s d'attente sur une image stable.
+Changer de corps demande une conversion complète. **Le corps précédent reste affiché jusqu'à ce que le nouveau soit prêt. Jamais de plateau vide.**
 
 ## 9.3 Corps écartés
 
-Deux modèles sur les dix-neuf sont détectés comme inutilisables — squelette non standard, fichier illisible. Ils **n'apparaissent pas** dans la galerie. Aucun message : une option qu'on ne peut pas prendre n'a pas à être montrée.
+Un mannequin illisible ou sans squelette (les variantes de LOD basse, par exemple) **n'apparaît pas** dans la galerie. L'écran annonce, en une ligne discrète, combien de `.kn5` de `content/driver` il a ainsi écartés — sans quoi l'absence d'un mannequin importé resterait inexpliquée.
 
 ---
 
@@ -369,34 +271,21 @@ Deux modèles sur les dix-neuf sont détectés comme inutilisables — squelette
 
 ## 10.1 Ce qui change
 
-Dès que le corps n'est plus celui de la voiture, la référence « livrée » disparaît — elle est nommée d'après l'ancien corps et n'a plus de destinataire. **Six changements simultanés :**
+Dès que le corps n'est plus celui de la voiture, **la référence « livrée » disparaît** : la tenue de la livrée est nommée d'après l'ancien corps et n'a plus de destinataire.
 
 | Élément | Corps d'origine | Corps substitué |
 |---|---|---|
-| Bandeau de plateau | absent | `CORPS SUBSTITUÉ · APERÇU SEULEMENT`, angle supérieur gauche, en teinte d'alerte |
 | Case par défaut | « Celui de la livrée » | « La livrée ne prévoit rien pour ce corps » |
 | Pistes non choisies | *Celle de la livrée* | *Aucune* |
-| Mention de piste Corps | *celui de la voiture* | *substitué* |
+| Mention de la piste Corps | *celui de la voiture* | *choisi par vous* |
 | Bouton de sortie | remise sur la livrée | retour au corps de la voiture |
-| Badge de colonne | `MODIFIÉ` | `SUBSTITUÉ` |
+| Ligne de la colonne de session | — | badge *Substitué* |
 
-Le bandeau de plateau est **permanent** tant que dure le mode. Il tranche du même coup la question non résolue de l'application en course : quoi qu'il advienne côté jeu pour la tenue, un corps substitué ne suivra jamais.
+Le corps substitué **est posé en jeu** comme le reste (§13).
 
 ## 10.2 Bannière d'invalidation
 
-Elle apparaît **au moment du changement**, en tête de galerie, et non en modale. Le regard y va naturellement après l'action.
-
-```
-⚠  Ce corps n'est pas celui de la voiture. Ce qui tombe :
-   • Le casque retenu — il est daté et ne s'applique pas à ce corps.
-   • La tenue de la livrée — elle est nommée d'après « driver » et n'a plus de référent.
-   • L'application en course — un corps substitué ne vit que dans cet aperçu.
-                                    [ Choisir une tenue ]  [ Revenir à driver ]
-```
-
-**Une bannière unique** listant ce qui tombe, jamais trois messages séparés. Le premier bouton est l'action réparatrice, le second la marche arrière. Elle se referme au premier choix effectué, ou par le second bouton.
-
-Si le casque retenu se trouve compatible avec le nouveau corps, la première puce est retirée — la bannière n'annonce que ce qui est réellement perdu.
+Elle apparaît **au moment du changement**, en tête de galerie, jamais en modale : **une bannière unique** qui énonce ce qui tombe — le casque, s'il n'est pas de l'époque du nouveau corps ; la tenue de la livrée — avec « Choisir une tenue » et « Revenir au corps de la voiture ». Elle n'annonce que ce qui est réellement perdu, et se referme au premier choix ou par son second bouton.
 
 ---
 
@@ -404,156 +293,84 @@ Si le casque retenu se trouve compatible avec le nouveau corps, la première puc
 
 ## 11.1 Corps sans casque applicable
 
-Mannequin de mod à nommage propre : aucun casque du jeu ne s'y pose.
-
-```
-              Ce corps porte son propre casque.
-
-  « yk2_kana » nomme ses images autrement : aucun casque du jeu
-  ne peut s'y poser. La combinaison et les gants, eux, restent
-  modifiables.
-
-        [ Passer à la combinaison ]   [ Changer de corps ]
-```
-
-Ce n'est pas une erreur, c'est une propriété du mod. Le texte l'énonce sans s'excuser, et propose les deux sorties utiles. On ne propose jamais un choix sans effet.
+Un mannequin de mod qui nomme ses images à lui : *« Ce corps porte son propre casque. »*, avec « Passer à la combinaison » et « Changer de corps ». Une propriété du mod, pas une erreur ; on ne propose jamais un choix sans effet.
 
 ## 11.2 Voiture de course
 
-L'écran reste **accessible**, jamais grisé sans explication.
-
-```
-          Ce pilote porte les couleurs de son écurie.
-
-  Sur une voiture de course, la tenue fait partie de la livrée.
-  Votre pilote reprendra sa tenue dès que vous choisirez une
-  voiture de rue.
-
-                 [ Voir mon pilote quand même ]
-```
-
-Le choix reste enregistré : rien n'est perdu, seulement suspendu. Le bouton ouvre le panneau d'essayage en lecture, sur un corps neutre, sans galerie.
+**Rien de particulier** : le corps et la tenue se posent comme sur une voiture de rue (§1.4). C'est la tenue par défaut de la classe qui permet de laisser leur livrée aux voitures de course.
 
 ## 11.3 Recherche sans résultat
 
-Message d'une ligne sous la barre d'outils, avec le terme cherché et un lien d'effacement. Pas d'illustration, pas de bloc vide de 200 px.
-
----
+Une ligne sous la barre d'outils, avec le terme et un lien d'effacement.
 
 ## 11.4 Mannequin à pièces statiques
 
-**Un seul mannequin de l'installation de référence est dans ce cas**, et son
-casque se pose de travers : `rh_schuberth_helmet_driver_19` porte cinq maillages
-**statiques** — casque, visière, HANS, prise d'air, visage — accrochés au nœud
-`DRIVER:RIG_Head`, là où tous les autres sont entièrement skinnés. Or la pose
-appliquée au mannequin ne remplace la transformation **que des nœuds `Dummy`** :
-un maillage nommé par la hiérarchie n'est pas déplacé, et la tête part sans son
-casque.
-
-**Accepté tel quel** (2026-09-16, décidé avec l'utilisateur) : un mannequin sur
-quarante-cinq, dans un panneau d'essayage qui sert à choisir une tenue et non à
-juger un modèle. Le corriger demanderait d'étendre l'application de pose aux
-maillages nommés, sur la foi d'un seul cas — et il faudrait d'abord établir
-lequel des deux bouge, le casque ou la tête.
+Un mannequin dont le casque est fait de maillages **statiques** accrochés à l'os de tête, et non skinnés (`rh_schuberth_helmet_driver_19`, le seul de l'installation de référence), garde son casque de travers sur le plateau : **accepté tel quel** (2026-09-16), pour un cas sur quarante-cinq.
 
 ---
+
 # 12. Interaction et accessibilité
 
 ## 12.1 Souris
 
 | Geste | Effet |
 |---|---|
-| Survol d'une case | applique la texture au plateau, met à jour la ligne d'état |
-| Sortie du survol | rétablit la texture retenue |
+| Survol d'une case | applique la pièce au plateau (texture échangée sur place), met à jour la ligne d'état |
+| Sortie du survol | rétablit la pièce retenue, après un court délai pour éviter le clignotement entre deux cases |
 | Clic sur une case | adopte, met à jour la piste, marque la case |
-| Clic sur une piste | active la piste, recadre, remplace le contenu de la galerie |
-| Glisser sur le plateau | rotation |
+| Clic sur une piste | active la piste, recadre, remplace la galerie |
+| Gestes sur le plateau | §5.1 |
 
-**Latence.** L'application au survol doit être perçue comme immédiate. Aucune temporisation d'entrée ; à la sortie, 80 ms de délai avant rétablissement pour éviter le clignotement entre deux cases adjacentes.
+**Deux vitesses** : le survol ne passe jamais par le backend — la texture est échangée sur place avec l'image plate —, l'adoption, si, et rétablit le rendu exact. Le corps fait exception : seul son adoption le change, par une conversion.
 
 ## 12.2 Clavier
 
-Le survol n'est pas accessible au clavier : le **focus vaut survol**. Parcourir la grille aux flèches applique chaque option au plateau, exactement comme la souris. `Entrée` adopte. `Échap` rétablit le choix retenu et rend le focus à la piste. `Tab` circule entre barre d'outils, pistes et grille.
-
-Focus visible en permanence, jamais supprimé.
+**Le focus vaut survol** : parcourir la grille aux flèches applique chaque option au plateau ; la case visée est choisie **par sa géométrie**, ce qui traverse les groupes comme le fait l'œil. `Entrée` adopte, `Échap` rétablit le choix retenu et rend le focus à la piste, `Tab` circule entre barre d'outils, pistes et grille. Le focus reste visible.
 
 ## 12.3 Mouvement réduit
 
-Le recadrage de caméra devient instantané. L'application au survol, elle, reste — ce n'est pas une animation décorative mais le mécanisme central de l'écran.
+Le recadrage devient instantané ; l'application au survol reste — c'est le mécanisme central de l'écran.
 
 ## 12.4 Rendu indisponible
 
-Si le moteur 3D ne peut pas démarrer, le panneau d'essayage affiche l'échantillon plat de la pièce retenue à grande taille, avec une mention d'une ligne. La galerie et la sélection restent pleinement fonctionnelles. **L'écran ne se bloque jamais sur l'absence de 3D.**
+Si la 3D ne démarre pas, le panneau affiche en grand l'échantillon plat de la pièce retenue, avec une ligne d'explication. La galerie et la sélection restent pleinement fonctionnelles : **l'écran ne se bloque jamais sur l'absence de 3D.**
 
 ---
 
 # 13. Persistance
 
-| Donnée | Portée | Note |
-|---|---|---|
-| Casque, combinaison, gants | globale | survivent au changement de voiture |
-| Corps substitué | globale | mais sans effet en course, par nature |
-| Favoris | globale | |
-| Récents | globale, 12 entrées | adoptions seulement |
-| Piste active | session | retour sur Casque à l'ouverture |
-| Mode de regroupement | globale | |
+| Donnée | Portée |
+|---|---|
+| Corps, casque, combinaison, gants | **par voiture** (`ui_prefs.json`, une clé par voiture) |
+| Tenues enregistrées et tenues par défaut (rue, course) | globales |
+| Favoris | globaux |
+| Récents | globaux, 12 adoptions |
+| Piste active | session — l'écran rouvre sur le Casque |
 
-Choix incompatible avec la voiture courante : **conservé, pas effacé**. Il s'applique de nouveau dès qu'une voiture compatible est chargée. C'est le principe même du choix global.
+**Le pilote choisi est posé en jeu au lancement de la session**, et retiré dès qu'on ne le choisit plus (`driverapply.rs`). Deux fichiers, aucun dans `data.acd` : **le corps** par une section `[DRIVER3D_MODEL]` dans l'`ext_config.ini` de la voiture — CSP surcharge une section de `data.acd` sans toucher au conteneur —, **la tenue** par le `skin.ini` de la livrée, **sous le nom du mannequin**, donc réécrite sous le nom du nouveau corps quand il change. Trois disciplines, chacune obligatoire :
+
+- **l'original est sauvegardé avant écriture et rendu à la reprise** (règle d'or n°5, `gamebackup.rs`) ;
+- **seule la section concernée est remplacée**, le reste du fichier conservé au caractère près ;
+- **le fichier est effacé avant d'être réécrit**, sans quoi on modifierait la copie de bibliothèque à travers le hardlink.
+
+**Le retour en arrière ne touche que ce qu'on a écrit** : un fichier sauvegardé revient de sa sauvegarde, un fichier créé (il porte notre en-tête) est supprimé, et tout autre fichier est laissé tel quel — le nom d'une section n'est pas à nous seuls, une livrée et un auteur emploient les mêmes.
 
 ---
 
 # 14. Textes et localisation
 
-**Aucun texte en dur.** Six langues.
-
-Ne se traduisent pas : les identifiants de dossier (`HELMET_BASE_Red / 7`), les noms de corps (`driver_60`), les noms propres de pilotes historiques.
-
-Se traduisent : libellés de piste, intertitres de hiérarchie, noms lisibles de famille (« Red » → « Rouge »), intitulés de regroupement, tous les messages d'état.
-
-**Points de vigilance en allemand :** le compteur (§8.3), les intitulés de bascule (`Grouper par couleur`), le bouton de sortie. Tous trois disposent d'un repli sur deux lignes plutôt que d'une troncature.
-
-**Registre.** Actif, phrase capitalisée, pas de filler. Un bouton nomme ce qui se passe : « Revenir au corps de la voiture », pas « Réinitialiser ». Les états vides donnent une direction, pas une humeur.
+**Aucun texte en dur.** Ne se traduisent pas : les identifiants de dossier, les noms de corps, les noms propres de pilotes historiques. Se traduisent : libellés de piste, intertitres, noms lisibles de famille, messages d'état. Un bouton nomme ce qui se passe (« Revenir au corps de la voiture », pas « Réinitialiser ») ; un état vide donne une direction. Le compteur et le bouton de sortie se replient sur deux lignes plutôt que de tronquer.
 
 ---
 
 # 15. Repères visuels
 
-Le langage existant s'applique sans exception : fond quasi noir, panneaux gris très foncés, Rosso Corsa en accent unique, typographie petite et serrée, rayons de 2 px.
-
-| Rôle | Valeur |
-|---|---|
-| Fond | `#0b0b0d` |
-| Panneau | `#141416` |
-| Case de galerie | `#1a1b1e` |
-| Filet | `#26272b` / `#1f2023` (atténué) |
-| Texte | `#dcdcdd` / `#8d8e92` / `#5c5d62` |
-| Accent | `#c9331f`, atténué `#7e2415` |
-| Alerte | `#c88a2a` sur `#1b1811`, filet `#4a3a1c` |
-
-**Discipline d'accent.** Dans cet écran, le rouge saturé est réservé à trois usages : la pastille `ESSAYAGE`, la bordure gauche de la piste active, le bord de la case retenue. Le filet de chargement l'emploie aussi, brièvement. Rien d'autre.
-
-| Mesure | Valeur |
-|---|---|
-| Colonne de session | 328 px |
-| Panneau d'essayage | 392 px |
-| Plateau, hauteur mini | 380 px |
-| Case de galerie, mini | 104 px |
-| Gouttière de grille | 9 px |
-| Hauteur de piste | 34 px |
-| Transition de cadrage | 220 ms |
-| Délai de sortie de survol | 80 ms |
-| Chargement de corps | ~400 ms |
+Le design system de l'app s'applique sans exception (jetons de `global.css`, barème du rouge, §7.2ter de `SPEC.md`). **Dans cet écran, le rouge est réservé à** la pastille `ESSAYAGE`, le filet de la piste active et le bord de la case retenue. Rien d'autre.
 
 ---
 
 # 16. Ce qui reste ouvert
 
-**L'application en course — livrée.** Le choix ne valait que dans l'aperçu quand cette spec a été écrite ; il est désormais posé en jeu au lancement et retiré dès qu'on ne le choisit plus (`driverapply.rs`, appelé par `launch()`), corps par `[DRIVER3D_MODEL]` dans l'`ext_config.ini` de la voiture et tenue par le `skin.ini` de la livrée — voir SESSION§5 et `csp-driver-research.md`. **Ce qui reste ouvert** est ce que la question traînait avec elle : un corps substitué ne suivra jamais en course, par nature, donc le bandeau « corps substitué » distingue bien les deux moitiés de l'écran et sa place est à revoir.
+**Le nom lisible des familles modernes.** « Red » → « Rouge » suppose une table de correspondance des couleurs : faisable pour les familles `HELMET_BASE`, à confirmer pour les packs de mods.
 
-**Le nom lisible des familles modernes.** « Red » → « Rouge » suppose une table de correspondance couleur. Faisable pour les douze familles `HELMET_BASE`, à confirmer pour les packs de mods, où le premier niveau n'est pas toujours un mot traduisible.
-
-**La galerie des combinaisons et des gants.** Cette spec les traite par symétrie avec les casques. Elles n'ont ni époque ni contrainte de compatibilité, donc pas de filtrage — mais leurs identifiants suivent-ils la même structure à deux niveaux ? Si non, le regroupement typé ne s'y applique pas et elles passent en grille plate.
-
----
-
-*Pit Box · spécification UX/UI · écran Pilote · à lire avec les deux maquettes HTML associées*
+**La galerie des combinaisons et des gants** suit la structure à deux niveaux des casques ; une famille de mod qui ne la suit pas passerait en grille plate.
