@@ -1229,6 +1229,12 @@ de reprendre. En cas d'écart, la spec fait foi.
       par se séparer à nouveau. L'avertissement est écrit dans
       `docs/README.md` et au §14 de `SPEC.md` en attendant.
 
+- [ ] **Focus rouge sur les tuiles de l'index — à trancher.** Les tuiles et le
+      lien de section de l'index (`BrowseIndex.svelte`) dessinent leur focus en
+      rouge, comme le voulait INDEX§9, alors que le focus est jaune partout
+      ailleurs (`:focus-visible` de `global.css`, §7.2ter de `SPEC.md`). Relevé
+      en reprenant les specs (2026-10-18) ; les deux specs disent ce que fait
+      l'app, l'incohérence est dans l'app.
 - [ ] **Points à vérifier en conditions réelles** (repris de `SPEC.md` §15,
       où ils vivaient sans qu'aucun chantier ne les porte).
       - **Détection de la stack météo** (Pure / Sol / CSP / rien) et la

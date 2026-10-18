@@ -537,7 +537,7 @@ Spec : `SPEC-index-bibliotheque.md` (`INDEX§`). **Sans puce active et sans text
 
 **La tuile pose une puce, et rien d'autre** (INDEX§2), dans le même état de filtre que l'éditeur (`poseValue`) : croiser, exclure, « Tout effacer », l'épinglage marchent sans rien de plus. Retirer la dernière puce ramène à l'index. **L'index n'est pas mémorisé, les filtres le sont** : une bibliothèque laissée filtrée se rouvre sur sa liste.
 
-- **Circuits : un index par pays**, par ordre alphabétique du nom affiché (`Non renseigné` en dernier), drapeau et nom traduit ; « Voir tous les circuits » mène à la liste sans puce.
+- **Circuits : deux index, catégories puis pays** (INDEX§5.2). Les catégories par nombre de circuits, avec leur pictogramme ; les pays par ordre alphabétique du nom affiché (`Non renseigné` en dernier), drapeau et nom traduit. « Voir tous les circuits », en tête de la première section, mène à la liste sans puce.
 - **Voitures : deux index, familles puis marques**, pas de pays (INDEX§6.3).
 - **La tuile de valeur absente** (« Non renseigné », « Non classé ») ferme la grille, en pointillés, et pose une valeur comme les autres (`UNSET_VALUE`).
 - **Les marques significatives seulement** : celles qui couvrent 80 % de la bibliothèque par nombre décroissant, bornées à [8, 24]. « Toutes les marques » déplie la liste entière **par ordre alphabétique**, sans mémoriser le dépli. L'emblème est le logo élu de la marque (§7.2quater).

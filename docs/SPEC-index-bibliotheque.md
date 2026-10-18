@@ -12,7 +12,7 @@
 
 Les puces de filtre servent à **réduire** : je sais à peu près ce que je cherche, je resserre. Il manque l'autre moitié — **parcourir** : je ne sais pas ce que je veux, montre-moi ce que je possède.
 
-Aujourd'hui, arriver sur Circuits ou Voitures sans filtre affiche un mur de deux à trois cents vignettes, classées alphabétiquement. C'est un état par défaut qui ne sert à rien.
+Arriver sur Circuits ou Voitures sans filtre afficherait un mur de deux à trois cents vignettes, classées alphabétiquement : un état par défaut qui ne sert à rien.
 
 Il devient un **index** : une grille de tuiles emblématiques qui donne une vue d'ensemble de la collection, et qui sert de porte d'entrée vers le filtre.
 
@@ -65,22 +65,15 @@ Retirer la dernière puce ramène à l'index. « Tout effacer » aussi. Il n'y a
 └──────────────┘
 ```
 
-| Élément | Valeur |
-|---|---|
-| Emblème | §4.1 |
-| Nom | 12 px, `--txt`, centré, deux lignes possibles |
-| Compteur | 10,5 px, `--txt-3` |
-| Fond | `--cell` `#1a1b1e`, bordure `--line-soft` |
-| Survol | bordure `--accent-dim`, fond `#212227` |
-| Rayon | 2 px |
+Un emblème (§4.1), le nom (deux lignes possibles) et le compteur, centrés. Fond, bordure, survol et rayon : ceux du design system.
 
 ## 4.1 Emblème par taxonomie
 
 | Taxonomie | Emblème | Taille |
 |---|---|---|
-| Pays | drapeau embarqué | 44 × 29 px, ombre portée légère |
-| Catégorie | silhouette embarquée | 34 px de haut, remplissage `#d4d5d7`, `#fff` au survol |
-| Marque | logo canonique curé | 32 px dans une pastille ronde `#2c2d33` |
+| Pays | drapeau du jeu (TAXO§3.1) | 44 × 29 px |
+| Catégorie | silhouette ou pictogramme embarqué (TAXO§3.2, TAXO§3.3) | 34 px de haut |
+| Marque | logo élu de la marque (TAXO§4) | 32 px |
 
 Les emblèmes viennent de la spec taxonomies. Une marque sans logo reçoit ses initiales dans la pastille ; jamais une case vide.
 
@@ -101,7 +94,7 @@ Dernière position, bordure **pointillée**, emblème neutre :
 - `Non renseigné` sur l'index des pays ;
 - `Non classé` sur l'index des catégories.
 
-Elle rend le trou de données visible au lieu de le cacher, et c'est l'entrée naturelle vers la curation. Ces mods existent déjà aujourd'hui — ils sont simplement introuvables par cet axe.
+Elle rend le trou de données visible au lieu de le cacher, et c'est l'entrée naturelle vers la curation : ces mods existent, ils sont seulement introuvables par cet axe.
 
 Elle se comporte comme les autres : elle pose une puce.
 
@@ -211,14 +204,7 @@ Pour combiner des catégories en `OU` plutôt qu'en `ET`, l'utilisateur passe pa
 
 # 8. Les deux index et les taxonomies
 
-L'index **dépend** de la spec taxonomies mais ne la bloque pas.
-
-| Sans curation | Avec curation |
-|---|---|
-| Les tuiles montrent les valeurs brutes — `Alfa` et `Alfa Romeo` côte à côte, `Japan` et `japan` | Les tuiles montrent les termes canoniques |
-| Les catégories n'existent pas encore : la section est masquée, seule celle des marques s'affiche | Les familles apparaissent |
-
-**Livrable possible en deux temps :** l'index par pays des circuits et par marque des voitures fonctionne sur les données brutes, avec un résultat déjà utile mais sali par les doublons. L'index par catégorie, lui, **exige** la table famille → tags : sans elle il n'y a rien à afficher.
+Les tuiles montrent les **termes canoniques** des taxonomies (`SPEC-taxonomies.md`) : `Alfa` et `Alfa Romeo` fusionnés en une tuile, `Japan` et `japan` aussi. L'index par famille repose sur la table famille → tags.
 
 ---
 
@@ -226,7 +212,7 @@ L'index **dépend** de la spec taxonomies mais ne la bloque pas.
 
 - Chaque tuile est un `<button>`, atteignable au `Tab`, activable à `Entrée` et `Espace`.
 - Flèches directionnelles pour circuler dans une grille de tuiles, comme dans une grille de cartes.
-- Focus visible : `outline: 2px solid #c9331f; outline-offset: 2px` (niveau 2 du barème d'accent).
+- Focus visible, en **rouge de trait** (niveau 2 du barème d'accent) — une exception au focus jaune du reste de l'app (§7.2ter de `SPEC.md`), signalée dans `CHANTIERS.md`.
 - L'`aria-label` porte le nom **et** le compteur : *« Japon, 34 circuits »*. Le compteur est une information, pas une décoration.
 - Les sections d'index sont des `<section>` avec un titre de niveau approprié, pour que la navigation par en-têtes fonctionne.
 
@@ -234,21 +220,7 @@ L'index **dépend** de la spec taxonomies mais ne la bloque pas.
 
 # 10. Repères visuels
 
-| Rôle | Valeur |
-|---|---|
-| Fond de tuile | `--cell` `#1a1b1e` |
-| Bordure de tuile | `--line-soft` `#1f2023` |
-| Survol | bordure `--accent-dim` `#7e2415`, fond `#212227` |
-| Tuile de valeur absente | bordure pointillée `--line`, emblème `--txt-4` |
-| Filet de section | `--line-soft`, en tête de section |
-| Lien de section (`Voir tous…`, `Toutes les marques…`) | 11,5 px, `--txt-2`, bordure `--line` |
-
-| Mesure | Valeur |
-|---|---|
-| Gouttière de grille de tuiles | 9 px |
-| Padding de tuile | 13–14 px haut, 10 px côtés, 11 px bas |
-| Écart entre deux sections d'index | 24 px |
-| Rayon | 2 px |
+Les valeurs (fonds, bordures, gouttières, écarts, liens de section) sont celles du design system.
 
 **Aucun accent rouge dans l'index au repos.** Le survol monte au rouge éteint, le focus au rouge de trait. Le barème de la spec accent s'applique sans exception.
 
