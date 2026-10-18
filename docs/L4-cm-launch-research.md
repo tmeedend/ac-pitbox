@@ -245,3 +245,58 @@ les `.cmpreset` sauvegardés par l'utilisateur lui-même) et invoque
   `GameWrapper.cs` (pipeline `StartAsync`).
 - Fichiers `.cmpreset` réels sauvegardés par CM (Practice/Hotlap/Weekend), lus et
   comparés champ par champ pour reconstruire le schéma `SaveableData`.
+
+## État de piste, aides et position de départ : ce que disent les fichiers du jeu et de CM (2026-09)
+
+Repris de `SPEC-session.md`, qui n'en garde que les règles.
+
+**L'évolution du grip, elle, part bien** — elle ne partait pas, et le champ existait pourtant. Les dix presets de référence portent tous le même `TrackPropertiesData`, ce qui avait été lu comme « pas de champ dédié » alors qu'ils avaient simplement tous été sauvegardés sur une piste optimale. Ce qui a tranché est la table de presets **que le jeu embarque**, `cfg/templates/tracks.ini` : son entrée `OPTIMUM` (`SESSION_START=100`, `SESSION_TRANSFER=100`, `RANDOMNESS=0`, `LAP_GAIN=1`, « Perfect track for hotlapping. ») reproduit exactement le `{"s":1.0,"t":1.0,"r":0.0,"g":1,"d":…}` des presets. D'où la lecture des clés abrégées : `s` et `t` sont des pourcentages divisés par 100, `g` le `LAP_GAIN` brut, `d` une description que CM affiche et que le jeu ne lit pas — son `[DYNAMIC_TRACK]` n'a pas de clé correspondante.
+
+**L'écran offre « Auto » puis les six états du jeu**, ceux de `tracks.ini`, avec ses noms et dans son ordre — la même liste que propose Content Manager. « Auto » est le `WeatherDefined` de CM (`w` du preset) : la météo décide, et les quatre nombres partent quand même, aux valeurs de Verte — `ToProperties()` les écrit dans tous les cas, donc une météo muette sur la piste la laisse verte, ce que la description de CM énonce mot pour mot. Côté `RaceSetup`, c'est la sentinelle `grip = 0` : l'écran n'offre qu'un choix parmi sept, et deux champs pour une seule décision finissent par se contredire.
+
+**Le nom de l'état ne part jamais, seuls les nombres comptent.** « Green » est un libellé d'interface pour une combinaison de quatre valeurs ; rien dans le preset ne le transporte, et le `d` qui l'accompagne est une description libre que CM affiche et qu'AC ne lit pas. Le panneau « Track state » de CM n'est donc pas une information mais **le paramétrage lui-même** : `TrackStateViewModelBase.SaveableData` sérialise `s`/`t`/`r`/`g` en *GripStart / GripTransfer / GripRandomness / LapGain*, et `ToProperties()` fait `SessionStart = GripStart * 100` avant que CM n'écrive `SESSION_START=95` dans le `[DYNAMIC_TRACK]` du `race.ini`. Le grip de départ **est** l'identifiant de l'état : c'est le seul des quatre paramètres que l'écran retienne, `quickdrive.rs` retrouve les trois autres à partir de lui et les envoie tous. Un preset antérieur à cet alignement peut porter une valeur qui n'y figure plus (92 % a existé, inventé) : il est recalé sur l'état le plus proche, le plus adhérent l'emportant à égale distance — pas de migration à écrire.
+
+**L'échelle de `r` est tranchée, et c'est le panneau de CM qui l'a fait.** Elle ne pouvait pas l'être depuis les presets de référence, dont le `RANDOMNESS` nul donne `0.0` dans les deux hypothèses. Sur l'état `GREEN`, CM affiche « Grip at the start 95 % », « Grip transfer 90 % » et « Randomness 2 % », là où le fichier du jeu écrit `95`, `90` et `2` : les trois sont donc le même pourcentage divisé par cent, l'aléa compris. Seul `LAP_GAIN` reste brut — et il n'est d'ailleurs pas affiché en pourcentage.
+
+**Écart assumé avec Content Manager, à ne pas « corriger » par mégarde.**
+Une qualification non nulle neutralise la position de départ — la grille vient alors
+des résultats de qualif. Chez CM le contrôle est purement **absent** dans ce
+cas : relevé dans son binaire, il n'est lié que dans la vue `QuickDrive_Race`,
+et `QuickDrive_Weekend` — celle qui porte la qualification — n'en a aucune
+trace. Pit Box l'**éteint** au lieu de le retirer, et c'est délibéré : chez CM
+la qualification et la position vivent dans deux vues, chez nous dans le même
+écran, à quelques centimètres l'une de l'autre. Un réglage qui disparaît quand
+on coche une case voisine se lit comme un bug ; éteint, il dit ce qui le
+neutralise. C'est la règle des dépendances internes ci-dessus, et elle prime
+ici sur l'alignement sur CM.
+
+**Les aides au pilotage ont trois états, pas deux** — elles vivent depuis le
+lot 5 dans le repli `PERFORMANCE` de la carte voiture (SESSION§1.2), leur règle
+restant celle-ci : `Off` / `Factory` / `On`,
+le vocabulaire d'Assetto Corsa lui-même — et ses valeurs, relevées sur un
+fichier livré par le jeu (`launcher/themes/default/index.html` :
+`data-slidervalues="0,1,2"` en face de `data-slidertextvalues="Off,Factory,On"`,
+lié à la clé `ABS` de `cfg/assists.ini`, celle que porte l'`AssistsData` d'un
+preset Quick Drive). Une case à cocher n'en portait que deux, et « cochée »
+envoyait `1`, c'est-à-dire `Factory` — le réglage avait donc trois états en jeu
+et deux à l'écran, dont aucun ne s'appelait par son nom. `Factory` garde
+l'équipement réel de la voiture, ce qui veut dire que **`On` ne peut rien
+ajouter à une voiture qui n'en a pas** : c'est le piège que les deux
+info-bulles expliquent. La ligne idéale reste une case — elle n'a que deux
+états.
+
+
+- **Ce n'est pas `drivetrain.ini`**, qui porte la boîte et le différentiel.
+- **La présence du fichier ne prouve rien** : il existe sur toutes les voitures
+  de l'install de référence, y compris celles qui n'ont aucune aide, où il dit
+  simplement `0`. Seul son contenu répond.
+- **La lecture est bornée à la section.** `PRESENT` apparaît aussi sous
+  `[EDL]` : une lecture à plat créditerait d'un antipatinage toute voiture
+  ayant l'ABS.
+
+Mesuré sur les 311 voitures de l'install : 142 ont les deux, 31 l'ABS seul, 17
+l'antipatinage seul, 111 ni l'un ni l'autre, et **10 ne déclarent aucune des
+deux sections**. Ces dix-là n'affichent **aucune ligne** — jamais une ligne au
+conditionnel ni un « inconnu » : aucune donnée inventée présentée comme un
+fait. Les 48 asymétriques sont la raison pour laquelle la phrase nomme *quelle*
+aide la voiture possède au lieu de répondre oui ou non.
