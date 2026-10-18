@@ -320,6 +320,19 @@ pub fn save_chapter(folder: &Path, file: &str, expected: Option<&str>, chapter: 
     if !is_chapter_path(file) {
         return Err(format!("not a chapter file: {file}"));
     }
+    write_guarded(folder, file, expected, || story_engine::write::chapter(file, chapter))
+}
+
+/// Writes `file` with the text `render` gives, only if the file still holds
+/// what the editor read (`expected`, its stamp; `None`: the file must not
+/// exist yet). The text is rendered after the check, so a refused write costs
+/// nothing. Returns the new stamp.
+fn write_guarded(
+    folder: &Path,
+    file: &str,
+    expected: Option<&str>,
+    render: impl FnOnce() -> Result<String, String>,
+) -> Result<String, String> {
     let path = folder.join(file);
     let on_disk = std::fs::read_to_string(&path).ok();
     let unchanged = match (expected, &on_disk) {
@@ -330,7 +343,7 @@ pub fn save_chapter(folder: &Path, file: &str, expected: Option<&str>, chapter: 
     if !unchanged {
         return Err(errors::STORY_FILE_CHANGED.into());
     }
-    let text = story_engine::write::chapter(file, chapter)?;
+    let text = render()?;
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }

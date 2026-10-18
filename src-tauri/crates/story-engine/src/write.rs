@@ -22,17 +22,23 @@ fn options() -> serde_saphyr::SerializerOptions {
     }
 }
 
-/// `flow/<nn>-<name>.yaml` for `chapter`, read back to be sure it loads. `path`
-/// only names the file in the error.
-pub fn chapter(path: &str, chapter: &Chapter) -> Result<String, String> {
-    let text = serde_saphyr::to_string_with_options(chapter, options()).map_err(|e| e.to_string())?;
+/// `value` in canonical form, read back as the file at `path` to be sure it
+/// loads: `path` decides how it is read (`load::draft`), so it must be the
+/// file's real place in the story.
+fn yaml<T: Serialize>(path: &str, value: &T) -> Result<String, String> {
+    let text = serde_saphyr::to_string_with_options(value, options()).map_err(|e| e.to_string())?;
     let back = draft(vec![SourceFile::new(path, &text)]);
     match back.errors.into_iter().next() {
         // Not the author's mistake: the model let through a value its own
         // reader refuses. Reported rather than written.
-        Some(e) => Err(format!("the written chapter does not read back: {}", e.message)),
+        Some(e) => Err(format!("the written {path} does not read back: {}", e.message)),
         None => Ok(text),
     }
+}
+
+/// `flow/<nn>-<name>.yaml` for `chapter`, read back to be sure it loads.
+pub fn chapter(path: &str, chapter: &Chapter) -> Result<String, String> {
+    yaml(path, chapter)
 }
 
 /// The files of a new story: the smallest one that validates clean, so the
