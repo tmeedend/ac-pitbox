@@ -1,0 +1,28 @@
+id: ch01
+title: Chapter 1
+nodes:
+  - id: intro
+    beat: { clock: "09:00" }
+  - id: invite
+    message: invite_01
+    wait_reply: true
+  - id: answer
+    branch:
+      - if: ["content.invite_01.reply == accept"]
+        goto: race_01
+    otherwise: second_ask
+  - id: second_ask
+    message: invite_02
+  - id: race_01
+    event: race_01
+  - id: congrats
+    message: congrats_01
+  - id: garage
+    action: visit_garage
+  - id: count_visit
+    beat: { effects: ["counter.garage_visits += 1"] }
+  - id: enough_visits
+    branch:
+      - if: ["counter.garage_visits >= 2"]
+        goto: chapter_2
+    otherwise: garage

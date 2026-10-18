@@ -62,10 +62,42 @@ de reprendre. En cas d'écart, la spec fait foi.
           relisent pas `AiAggressions` par ligne. Sans effet aujourd'hui
           (aucun écran ne pose cette valeur) ; à reprendre si une grille
           enregistrée doit un jour la porter.
-      - **L1** : le moteur dans une crate pure (`crates/story-engine/` :
-        format, flux, conditions, temps, sauvegardes) et une CLI jamais
-        livrée (`crates/story-tool/`), comme `kn5-tool` et `rules-tool`. La
-        sauvegarde est un format persisté : versionnée dès le premier jour.
+      - **L1 — fait (2026-10-18).** `crates/story-engine/` (pur, sans
+        Tauri, que rien dans l'app n'importe encore) et `crates/story-tool/`
+        (`check`, `play`, résultats tapés « P3 1:18.2 », « dnf »,
+        « failed »). Une histoire d'exemple neutre, `story-engine/sample/`,
+        se joue de bout en bout, en test comme dans la CLI. Le format
+        réellement lu est décrit dans la spec (« Engine file format »).
+        **Décidé avec l'utilisateur** : l'échelle des relations est un
+        réglage de l'histoire (cinq crans par défaut, la sauvegarde retient
+        le *nom* du cran) ; des compteurs libres en plus des drapeaux ; une
+        action du joueur se calcule **dans le moteur** — les règles d'achat
+        y viendront avec les catalogues (L6), parce que le simulateur
+        d'équilibrage joue sans écran. **Choisi en route** : YAML lu par
+        `serde-saphyr` (Rust pur, sans `unsafe`, conçu pour ne pas
+        paniquer ; `serde_yaml` est abandonné) ; conditions et effets en
+        courtes phrases ; sauvegarde en JSON, `format: 1`, figée par
+        `save_v1_still_reads` ; tirage des pools par un générateur dont
+        l'état est sauvegardé (recharger ne relance pas le tirage) ; frais
+        d'inscription payés au lancement, pas au résultat ; une entrée
+        refusée ne change rien à l'état ; un événement repris par un second
+        nœud déclenche un avertissement (ils partageraient tentatives et
+        frais : une revanche a son propre fichier d'événement) ; une
+        sauvegarde reprise après une mise à jour de l'histoire reçoit les
+        personnages et compteurs ajoutés depuis.
+        **Laissé pour plus tard, à savoir** :
+        - le moteur a son propre type de résultat (`EventResult`) : le pont
+          de L3 le remplira depuis `raceresult` (L0), sans que le moteur
+          dépende du format de session de l'app ;
+        - les identifiants de voiture et de pilote (`car.<id>`,
+          `ahead_of`) ne sont pas vérifiés : le paquet et le plateau
+          n'existent pas encore ;
+        - `wealth`, `economy` et `garage_slots` attendent l'économie (L6) ;
+        - le conteneur `.story` sépare ses éléments par des lignes `---` :
+          compatible avec Ink, pas avec Yarn, qui en utilise dans le corps.
+          Choisir Yarn en L2 obligerait à revoir ce conteneur ;
+        - un contenu à réponses porte ses effets dans son en-tête
+          (`replies`) : avec Ink, ils pourraient migrer dans le texte.
       - **L2 à L8** : dans l'ordre du plan de livraison de la spec. Avant
         l'éditeur de contenu (L2), trancher **Ink ou un
         format à identifiants de ligne** (Yarn) : une histoire s'écrit en

@@ -1,0 +1,25 @@
+id: ch02
+title: Chapter 2
+nodes:
+  - id: chapter_2
+    side_events: { open: [track_day_01] }
+  - id: money_check
+    branch:
+      - if: ["money >= 100"]
+        goto: race_02
+    otherwise: short_of_money
+  - id: short_of_money
+    message: broke_01
+  - id: earn
+    action: check_funds
+    next: money_check
+  - id: race_02
+    event: race_02
+    on_failure: after_defeat
+  - id: finale
+    side_events: { close: [track_day_01] }
+  - id: the_end
+    end: finished
+  - id: after_defeat
+    beat: { effects: ["rel.rival += 1"] }
+    next: money_check

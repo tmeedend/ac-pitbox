@@ -99,8 +99,11 @@ event.
   when the story has an economy, money, wealth level (derived from money and
   assets), economy state and garage slots.
 - **Relations**: one per character, on a closed scale (enemy → close), easier
-  for an author than a number.
+  for an author than a number. The scale is a story setting: five steps by
+  default, any ordered list of names otherwise.
 - **Flags**: free true/false values.
+- **Counters**: free whole numbers ("third visit to the garage"), each with
+  its starting value.
 - **Automatic facts**: every event exposes attempts, finished, position, best
   lap and DNF; every content item exposes whether it was seen and which reply
   was chosen.
@@ -386,6 +389,47 @@ my-story/
 A `.story` file is a small header (id, content type, sender, placement or
 conditions, delay) followed by the text of that content.
 
+### Engine file format
+
+What the engine (`src-tauri/crates/story-engine/`) reads today; the sample
+story in `story-engine/sample/` uses every part of it. Unknown keys are
+errors, so a misspelt field never changes a story silently.
+
+- **`story.yaml`**: `format` (1), `id`, `title`, `authors`, `version`,
+  `languages` (the first is the source), `requires`, `start` (`node`, and
+  optionally `date`, `clock`, `reputation`, `followers`, `money`, `cars`) and
+  `settings` (`date`, `failure: retry | final`, `max_attempts`,
+  `retry_cost: free | paid`, `adaptive_difficulty: { every, cap }`, `saves`,
+  `money`, `protagonist`, `relations: { scale, start }`). Without a `date`, a
+  story starts on 0001-01-01, "year 1".
+- **`world/variables.yaml`**: `flags: [..]`, `counters: { name: start }`.
+  **`world/characters.yaml`**: `characters: [{ id, name, relation }]`.
+- **`flow/<nn>-<name>.yaml`**: a chapter, `id`, `title`, `nodes`. Chapters
+  follow the order of their file names. A node has an `id` and exactly one
+  kind key: `beat: { effects, advance, clock }`, `message: <content>` (with
+  `wait_reply`), `event: <event>` (with `on_failure: <node>`),
+  `branch: [{ if: [..], goto }]` with `otherwise`, `action: <name>`,
+  `side_events: { open, close }`, `end: <ending>`. Without `next`, a node
+  leads to the one written after it, then to the next chapter.
+- **`content/**/*.story`**: one or more items, each a YAML header between two
+  `---` lines, then its text up to the next `---`. Header: `id`, `type`,
+  `from`, `clock`, `replies: [{ id, effects }]`, and the placement: nothing
+  (flow content), `when` (reactive, with `delay`, `priority`,
+  `repeat: once | each_time`), or `pool` (a failure-pool variant, with an
+  optional `when`). The text is opaque until the dialogue format is chosen.
+- **`events/<id>.yaml`**: `id`, `type`, `session` (passed to the launcher),
+  `success: [..]`, `on_success: { effects, advance }`,
+  `on_failure: { effects, pool, pick }`, `entry_fee`.
+- **Conditions** are short sentences, `[not] <variable> [<op> <value>]`:
+  `reputation >= 10`, `not flag.met`, `rel.friend >= warm`,
+  `event.race_01.position <= 3`, `content.invite_01.reply == accept`,
+  `chapter >= ch02`, `date >= 2001-06-01`. **Effects**: `reputation += 2`,
+  `money -= 500`, `flag.met = true`, `rel.friend = cold`, `car.<id> = true`,
+  `send <content>`. **Success criteria**: `position <= 3`, `finished`,
+  `ahead_of <driver>`, `best_lap < 1:18.200`.
+- **Saves** are JSON, with a `format` number read before anything else: a
+  save from a newer Pit Box is refused, and an older one is migrated.
+
 ### Dialogue text: Ink, or a format with line ids
 
 **Open question, to settle before the content editor is written.** Rather than
@@ -540,6 +584,7 @@ follow:
 | Drivers | Fictional or real roster with careers, a small roster, or none (filler names only) |
 | Calendar | Northern or southern seasons; holidays and birthdays, or none |
 | Languages | One or several |
+| Relations | The default five-step scale, or the story's own ordered steps |
 
 The settings live in the `settings` part of each story's `story.yaml`.
 

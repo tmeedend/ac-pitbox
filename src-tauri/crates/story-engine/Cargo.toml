@@ -1,0 +1,21 @@
+[package]
+name = "story-engine"
+version = "0.1.0"
+edition = "2021"
+description = "Pit Box Story Mode engine - reads a story folder, validates it, runs its flow and saves the player's state"
+license = "MIT"
+
+# Pure: no Tauri, no access to the application. The app will depend on this
+# crate (Story Mode, L2), never the reverse - so nothing in here can break a
+# screen that does not use it (CLAUDE.md, « Chantiers longs derrière un
+# drapeau »). Its only I/O is reading a story folder (`load::read_dir`).
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Story files are YAML (docs/story/SPEC-story-mode.md, File format).
+# `serde_yaml` is deprecated; `serde_yaml_ng` continues it on the C-to-Rust
+# translation of libyaml. `serde-saphyr` is pure Rust, forbids `unsafe`, is
+# fuzzed not to panic on malformed input - an imported story is untrusted
+# data - and reports line and column. Deserializer only: the editor (L2) is
+# what will write these files.
+serde-saphyr = { version = "2", default-features = false, features = ["deserialize"] }

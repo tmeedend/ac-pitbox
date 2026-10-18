@@ -1,0 +1,20 @@
+# A neutral sample story: it exercises the engine, nothing more. Every
+# character, event and line is a placeholder - the repository is public, and
+# a real story never enters it (docs/story/README.md).
+format: 1
+id: sample
+title: Sample story
+authors: [Pit Box]
+version: "1"
+languages: [en]
+start:
+  node: intro
+  date: 2001-03-01
+  clock: "09:00"
+  money: 300
+settings:
+  date: real
+  failure: retry
+  retry_cost: paid
+  adaptive_difficulty: { every: 2, cap: 2 }
+  money: true

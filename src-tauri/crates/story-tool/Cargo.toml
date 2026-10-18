@@ -1,0 +1,13 @@
+[package]
+name = "story-tool"
+version = "0.1.0"
+edition = "2021"
+description = "Developer CLI for the Story Mode engine: check a story folder, play it with typed event results - not shipped to users"
+license = "MIT"
+publish = false
+
+[dependencies]
+story-engine = { path = "../story-engine" }
+
+# No other dependency: two subcommands and two options fit in a few lines,
+# as for `kn5-tool` and `rules-tool`.

@@ -1,0 +1,11 @@
+characters:
+  - id: friend
+    name: A friend
+  - id: parent
+    name: A parent
+    relation: warm
+  - id: sponsor
+    name: A sponsor
+  - id: rival
+    name: A rival
+    relation: cold

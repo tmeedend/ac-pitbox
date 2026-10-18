@@ -1,0 +1,10 @@
+id: race_01
+type: race
+session: { track: some_track, car: some_car, laps: 8, grid: 12 }
+success: ["position <= 3"]
+on_success:
+  effects: ["reputation += 2", "money += 200"]
+  advance: 1 month
+on_failure:
+  pool: fail_01
+entry_fee: 50
