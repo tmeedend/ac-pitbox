@@ -131,6 +131,10 @@ fonctionner à l'écran » ne puissent jamais se confondre :
   réel, dépend de CM, rendu visuel à regarder…).
 - **Décidé à ta place** — les choix non triviaux faits sans demander : une
   valeur par défaut, un cas limite, un libellé, pour pouvoir les contester.
+  Un tel choix qui fixe un **comportement** est aussi écrit dans la spec du
+  domaine, dans le même commit (étape 1 de « Fin de tâche ») : le compte
+  rendu se lit une fois, la spec reste. Seul un détail d'implémentation (le
+  choix d'une bibliothèque) peut ne vivre que dans `docs/CHANTIERS.md`.
 - **Refactoring** — ce qui a été refactorisé en passant (et dans quel commit),
   ce qui a été repéré sans être traité, chaque point avec sa taille estimée et
   le risque qu'il y a à le laisser.
@@ -970,8 +974,14 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 ## Fin de tâche — dans cet ordre
 
 1. **Mettre à jour `docs/SPEC.md`** dès qu'une évolution change le
-   comportement de l'app. Le SPEC décrit ce que l'app *est* : il doit rester
-   synchrone avec le code. Une simple correction de bug ne s'y écrit pas.
+   comportement de l'app — ou la spec du domaine quand il en a une
+   (`docs/story/`, `SPEC-session.md`…). Le SPEC décrit ce que l'app *est* : il
+   doit rester synchrone avec le code. Une simple correction de bug ne s'y
+   écrit pas. **Les règles choisies sans demander y vont aussi** : une règle
+   qui n'est que dans le journal ou dans un compte rendu ne peut plus être
+   relue ni contestée. Constaté sur Story Mode L1 : une dizaine de règles du
+   moteur (frais payés au lancement, tirage conservé dans la sauvegarde…)
+   n'étaient que dans `docs/CHANTIERS.md`.
    Si le travail avance un chantier, **`docs/CHANTIERS.md` dans la foulée** —
    et son entrée se retire quand il est fini, ici comme dans le tableau des
    chantiers. Les deux fichiers ne disent pas la même chose : le SPEC dit ce
