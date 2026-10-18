@@ -4,11 +4,7 @@
 
 *Un écran qui montre le dossier Assetto Corsa tel qu'il est sur le disque et, pour chaque chemin, d'où il vient. Lecture seule. Ne remplace rien : il rend visible ce que `SPEC.md` §4.5.3 à §4.5.5 et IMPORT§6 à IMPORT§7 décrivent.*
 
-> **Lot 1 livré (2026-09-26).** Les écarts assumés avec ce texte sont notés dans `CHANTIERS.md`, entrée « Dossier du jeu ».
-
-> **Une maquette accompagne cette spec** : `maquettes/pitbox-etat-dossier.html`. Elle sert à juger la disposition, l'ordre de lecture et les gestes, **pas de référence graphique** : couleurs, polices et hauteurs viennent de `styles/global.css`. Ses chiffres et ses noms sont plausibles mais inventés. En cas de divergence, la spec gagne.
->
-> **Étiquette de renvoi : `DOSSIER§`.** À ajouter à la table de `scripts/check-refs.mjs` en même temps que le premier renvoi du code.
+> **Étiquette de renvoi : `DOSSIER§`.** Lot 1 livré (lecture seule) ; le lot 2, les tailles, reste à faire (§10, `CHANTIERS.md`, entrée « Dossier du jeu », qui garde aussi les écarts assumés). Maquette : `maquettes/pitbox-etat-dossier.html` — disposition et gestes, pas l'UI.
 
 ---
 
@@ -55,23 +51,9 @@ Le contenu intact de Kunos et les fichiers que personne ne réclame **restent da
 
 ## 3.1 Place dans le rail : l'Atelier se partage en deux
 
-L'écran est le quatrième onglet d'une nouvelle entrée de rail, **Fichiers**. Il vient avec un découpage de l'Atelier décidé en même temps (2026-09-26) :
+L'écran est le quatrième onglet de **Fichiers** (Importer · Profils · Maintenance · Dossier du jeu), l'entrée de rail qui gère ce qui est sur le disque, à côté de **Classement** (`SPEC.md` §7.2quater). L'onglet **est** la section (`gamefolder`), sans sous-onglets : ses filtres et sa recherche sont des contrôles, pas une navigation. Hors zone session, il prend toute la largeur.
 
-| Entrée de rail | Onglets | Ce qu'elle gère |
-|---|---|---|
-| **Classement** | Règles · Marques · Familles · Pays | comment la bibliothèque se range : règles de tags, termes, correctifs |
-| **Fichiers** | Importer · Profils · Maintenance · **Dossier du jeu** | ce qui est sur le disque : entrée des mods, activation en masse, réparation, état du jeu |
-
-Le rail devient : Session, puis Apps · Compléments · Classement · Fichiers, puis en pied Réglages · Content Manager · À propos. **L'Atelier disparaît.**
-
-- **Pourquoi ce découpage.** L'Atelier réunissait deux métiers sans rapport : ranger la bibliothèque (des règles, aucune écriture sur le disque) et gérer les fichiers (import, profils, réparation). L'écran Dossier du jeu aurait été un huitième onglet, au-delà de la limite de sept (`SPEC.md` §7.2quater). Deux entrées de quatre onglets chacune règlent les deux problèmes.
-- **Mécanique inchangée.** Chaque entrée est un écran à onglets comme l'était l'Atelier : l'onglet **est** la section (`rules`, `brands`, `categories`, `countries` d'un côté ; `import`, `profiles`, `maintenance`, `gamefolder` de l'autre), les `requestSection("import")` existants atterrissent toujours au bon endroit, l'entrée de rail repart du premier onglet, l'onglet actif n'est pas mémorisé.
-- **Pas de double niveau d'onglets.** L'écran Dossier du jeu n'a pas de sous-onglets : ses filtres et sa recherche sont des contrôles, pas une navigation (`SPEC.md` §7.2quater).
-- **À reporter ailleurs en même temps que le code** : `SPEC.md` §7.2 et §7.2quater (le rail, l'Atelier), la carte des écrans de `CLAUDE.md`, les libellés du rail. Les libellés « Classement » et « Fichiers » sont une proposition : à trancher avant de toucher aux fichiers de langue.
-- **Hors zone session** : la colonne de session est masquée hors de la zone session, l'écran prend toute la largeur.
-- **Pas de pastille d'alerte au lot 1.** Une dérive n'est connue qu'après un scan, et le scan ne tourne qu'à l'ouverture de l'écran. Une pastille qui s'allume seulement quand on est déjà dessus ne sert à rien. À reconsidérer si le scan devient périodique (§11).
-
-**Icônes** : un dossier pour Fichiers, une étiquette pour Classement, pris dans le jeu d'icônes du rail. La clé de l'Atelier se retire avec lui.
+**Pas de pastille d'alerte sur le rail** : une dérive n'est connue qu'après un scan, qui ne tourne qu'à l'ouverture de l'écran (§11).
 
 ## 3.2 Autres portes d'entrée
 
@@ -153,7 +135,7 @@ Un **état principal** par fichier, parmi cinq, plus **deux marques** qui s'y aj
 | **Partagé** | aucune, texte « +N » | plusieurs mods réclament le chemin ; un seul exemplaire gagne (arbitrage par date, `SPEC.md` §4.5.4) |
 | **Zone Content Manager** | bleu `--blue` | le chemin est dans une zone que CM resynchronise (`acpath.rs`) ; CM peut remplacer l'exemplaire du mod |
 
-**Pas de couleur nouvelle.** Ce sont celles de l'onglet Ajouts au jeu : rouge = remplace le jeu, jaune = alerte, bleu = information, vert = acquis — plus l'orange, le neutre-négatif de l'app (un mod inactif), pour « en attente » : rien n'est cassé, l'exemplaire n'est simplement pas posé. Dérive et en attente partageaient d'abord le jaune ; à l'usage, les deux se lisaient comme un seul état (2026-10). Le rouge employé ici est un **état**, pas un accent : il ne tombe pas sous le barème de `SPEC.md` §7.2ter, comme les marques rouges de l'onglet Ajouts au jeu n'y tombent pas.
+**Pas de couleur nouvelle.** Ce sont celles de l'onglet Ajouts au jeu : rouge = remplace le jeu, jaune = alerte, bleu = information, vert = acquis — plus l'orange, le neutre-négatif de l'app (un mod inactif), pour « en attente » : rien n'est cassé, l'exemplaire n'est simplement pas posé. Le rouge employé ici est un **état**, pas un accent : il ne tombe pas sous le barème de `SPEC.md` §7.2ter, comme les marques rouges de l'onglet Ajouts au jeu n'y tombent pas.
 
 **« Remplace le jeu » l'emporte sur « posé »** : un fichier fourni par un mod **et** qui a remplacé un original est « remplace le jeu ». C'est le seul état qui touche toutes les sessions, il doit se voir en premier.
 
@@ -397,49 +379,30 @@ Rien ne se lit au seul survol (règle de l'app) : tout ce qu'une ligne ne montre
 
 ## 9.1 Backend
 
-Un module **`gamestate.rs`**, qui ne dépend que de lectures :
-
-| Fonction | Rôle |
-|---|---|
-| `scan(cfg, db) -> Index` | §5, en deux phases (disque, puis classement) avec événements de progression |
-| `Index::children(node, filters) -> Vec<Row>` | les enfants d'un nœud, regroupements (§4.5) appliqués, décomptes filtrés |
-| `Index::detail(node) -> Detail` | tout le panneau (§8.2) |
-| `Index::search(query, filters) -> Results` | §7, chemins et éléments de bibliothèque |
-| `Index::reveal(path) -> Vec<NodeId>` | la chaîne des ancêtres, pour déplier jusqu'à un nœud |
-
-Façades dans `commands/gamestate.rs`, inscrites dans `invoke_handler![…]`, bindings dans `src/lib/gamestate.ts` (CLAUDE.md, « trois endroits »).
-
-**Réutiliser, ne pas recopier** : la liste des dossiers de jeu et des zones CM (`acpath.rs`), la table officielle (`kunos_dates::is_official`), le plan de composition (`deploy.rs`, `compose.rs`, sans écriture), la détection de junction (`activation.rs`), la lecture des réclamations (`extras.rs`), des sauvegardes (`gamebackup.rs`). S'il faut exposer une fonction de ces modules en lecture seule, l'exposer ; ne pas réécrire sa logique ici, sinon l'écran finira par dire autre chose que ce que fait le moteur.
-
-**Garde-fou de lecture seule** : le module n'importe aucune fonction qui écrit. Un test le vérifie en listant ses `use`.
-
-**Compteur de génération** (§5.4) : un `AtomicU64` dans l'état de l'app, incrémenté par les opérations qui écrivent dans le jeu. L'index retient la génération à laquelle il a été construit.
+Le module `gamestate/` ne fait que lire : il scanne en deux phases (disque, puis classement), sert les enfants d'un nœud, le détail du panneau, la recherche et la chaîne des ancêtres d'un chemin, à la demande. **Il réutilise les jugements du moteur sans les recopier** — dossiers de jeu et zones CM (`acpath.rs`), table officielle (`kunos_dates::is_official`), plan de composition sans écriture (`deploy.rs`, `compose.rs`), détection de junction (`activation.rs`), réclamations (`extras.rs`), sauvegardes (`gamebackup.rs`) — sans quoi l'écran finirait par dire autre chose que ce que fait le moteur. **Il n'importe aucune fonction qui écrit**, et un test le vérifie. Le **compteur de génération** (§5.4) est incrémenté par les opérations qui écrivent dans le jeu ; l'index retient celle de sa construction.
 
 ## 9.2 Frontend
 
-- Composant `gamestate/GameFolder.svelte`, section `gamefolder` dans `nav.svelte.ts`, quatrième onglet de l'écran Fichiers (issu de `Workshop.svelte`, §3.1).
-- Arbre virtualisé ; enfants chargés à la demande par `children`, jamais l'arbre entier côté webview.
-- La barre de filtres est **le composant de la bibliothèque**, pas une copie (CLAUDE.md, composants partagés).
-- Libellés dans les fichiers de langue ; `npm run check` vérifie les clés.
+`gamestate/GameFolder.svelte`, un arbre virtualisé dont les enfants sont demandés au backend, jamais l'arbre entier côté webview ; la barre de filtres est **celle de la bibliothèque**, pas une copie.
 
 ## 9.3 Tests
 
-Un dossier de jeu de fixture, construit par le test, qui contient au moins un cas de chaque ligne des tables §4.1, §4.2 et §4.3, plus : un fichier partagé par deux mods, une junction cassée, un dossier de 600 enfants (tranches), un nom accentué (recherche). Le test vérifie la population, l'état et la sorte de dérive de chaque chemin, et que le disque est **identique octet pour octet** avant et après scan.
+Un dossier de jeu de fixture couvre chaque ligne des tables du §4 (population, état, sorte de dérive), un fichier partagé, une junction cassée, un très gros dossier et un nom accentué ; **le disque est identique octet pour octet avant et après le scan**.
 
 ---
 
 # 10. Lot 2 — les tailles
 
-Hors du lot 1, mais préparé par lui (§5.3). À spécifier en détail le moment venu ; ce qui est déjà tranché :
+Préparé par le lot 1, qui collecte déjà les tailles (§5.3). Ce qui est tranché :
 
-- **Deux poids, jamais un seul.** Un hardlink ne coûte rien de plus sur le disque. Le **poids apparent** (ce que l'Explorateur affiche, la somme des tailles) et le **poids réel** (ce que le dossier du jeu coûte en plus de la bibliothèque : fichiers réels, copies de repli, originaux remplacés) sont deux chiffres différents, et les confondre ferait croire que Pit Box duplique 300 Go.
-- Le poids réel d'un fichier se décide par sa **population** (§4.1) : hardlink de bibliothèque et junction comptent zéro ; copie de repli, fichier réel et « à personne » comptent leur taille. Le nombre de liens NTFS n'est pas nécessaire.
-- Colonne de poids dans l'arbre, tri par poids, et poids dans le bilan : « Pit Box a posé 38 204 fichiers, 212 Go apparents, 0,4 Go réels ».
+- **Deux poids, jamais un seul.** Un hardlink ne coûte rien de plus : le **poids apparent** (la somme des tailles, ce que montre l'Explorateur) et le **poids réel** (ce que le dossier du jeu coûte en plus de la bibliothèque : fichiers réels, copies de repli, originaux remplacés) sont deux chiffres, et les confondre ferait croire que Pit Box duplique la bibliothèque.
+- Le poids réel d'un fichier se décide par sa **population** (§4.1) : hardlink de bibliothèque et junction comptent zéro ; copie de repli, fichier réel et « à personne » comptent leur taille.
+- Colonne de poids dans l'arbre, tri par poids, et poids dans le bilan.
 
 # 11. Hors périmètre, à rediscuter plus tard
 
-- **Toute action d'écriture** : désactiver depuis l'arbre, poser quand même, restaurer un original, nettoyer une dérive. Si elles arrivent, elles réutiliseront les commandes existantes de la fiche et de la Maintenance, jamais une logique propre à cet écran.
-- **Scan périodique** ou surveillance du dossier (`ReadDirectoryChangesW`), et la pastille de rail qui irait avec.
+- **Toute action d'écriture** : si elles arrivent, elles réutiliseront les commandes de la fiche et de la Maintenance, jamais une logique propre à cet écran.
+- **Scan périodique** ou surveillance du dossier, et la pastille de rail qui irait avec.
 - **Index persisté** entre deux lancements.
 - **Filtre Population** (§6.3).
 - **Comparaison par hachage** (§4.3).
