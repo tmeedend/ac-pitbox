@@ -755,6 +755,25 @@ Svelte. Les deux sont documentées comme écartées, en tête du script.
 
 ## Documentation
 
+**Une spec dit ce que fait l'app, pas comment.** Elle porte le comportement et
+les règles qu'il faut connaître pour modifier l'app sans la casser — une phrase
+par règle, le pourquoi seulement quand il ne se devine pas. Le test d'une
+phrase : **en a-t-on besoin pour savoir si un comportement est un bug ?** Si
+non, elle va ailleurs, et chaque niveau de détail a sa place :
+
+| Quoi | Où |
+| --- | --- |
+| Comportement et règles | la spec |
+| Les cas précis, un par test, nommé en phrase | les tests — c'est la spec détaillée, et elle ne peut pas devenir fausse sans échouer |
+| Le comment, les pièges déjà payés | les commentaires du code |
+| Historique, reste à faire, choix d'implémentation | `docs/CHANTIERS.md` |
+| Un format de fichier complet | un exemple vivant et testé, pas une liste de clés |
+
+Trois signes qu'une spec descend trop bas : une liste qui reprend un à un les
+champs du code ; un paragraphe qui décrit un cas que seul un test peut vérifier ;
+une phrase qui changerait si l'on renommait une variable. Une spec que personne
+ne relit en entier ne protège plus rien : c'est la lisibilité qui la garde vraie.
+
 **Un renvoi `§` dit de quel document il parle.** Le code en porte près de
 2 800, et le numéro seul ne suffit pas : `§5.3` désigne `SPEC-grille.md` dans
 `gridthumbs.rs` et `SPEC.md` dans `importer.rs`. Donc : **`§4.5` nu = `SPEC.md`**
@@ -977,7 +996,8 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
    comportement de l'app — ou la spec du domaine quand il en a une
    (`docs/story/`, `SPEC-session.md`…). Le SPEC décrit ce que l'app *est* : il
    doit rester synchrone avec le code. Une simple correction de bug ne s'y
-   écrit pas. **Les règles choisies sans demander y vont aussi** : une règle
+   écrit pas. **Les règles choisies sans demander y vont aussi**, au niveau
+   de la règle et pas du cas (voir « Documentation ») : une règle
    qui n'est que dans le journal ou dans un compte rendu ne peut plus être
    relue ni contestée. Constaté sur Story Mode L1 : une dizaine de règles du
    moteur (frais payés au lancement, tirage conservé dans la sauvegarde…)

@@ -72,16 +72,9 @@ Branches can split the flow and join it again later, so a story can stay
 authored and mostly linear while still reacting to choices.
 
 **The engine computes, the frame shows.** What a player action does to the
-state (pay for a car, add it to the garage, check there is a free slot) is
-computed by the engine, never by the frame: the frame only reports what the
-player chose. The balance simulator and the command-line tool play a story
-with no frame at all, so a rule that lived in the frame would have to be
-written twice and would drift. Purchase rules arrive with the catalogues (L6);
-until then a Player action node just waits for the frame to say "done".
-
-**What the player does is all or nothing.** An input the engine refuses (a
-reply that does not exist, a result with no session launched) leaves the state
-exactly as it was, so the player can be told and try again.
+state (pay for a car, add it to the garage) is computed by the engine; the
+frame only reports what the player chose. The balance simulator plays with no
+frame at all, so a rule kept in the frame would have to be written twice.
 
 ### Reactive content
 
@@ -91,22 +84,10 @@ email from a sponsor once reputation passes a threshold; an article about a
 driver in a given year. A variant (a character reacting badly when the
 relation is poor) is simply another item with opposite conditions.
 
-- **When it is checked.** After every change of state: each flow step, each
-  reply, each event result. A delivery can make another item true, so the
-  check repeats until nothing more arrives.
-- **Delay.** Counted in story time from the moment the conditions became true.
-  Story time only moves at beats, so a delayed item arrives at the first time
-  move past its delay. When the delay runs out, its conditions are checked
-  again: an item whose conditions no longer hold is dropped, and can be
-  scheduled again if they come back.
-- **Priority.** When several items arrive at once, higher priority first; equal
-  priorities keep the order of the files.
-- **Repeat.** `once` (the default) delivers an item at most once. `each_time`
-  delivers it again each time its conditions become true after having been
-  false in between, never twice in a row while they stay true.
-- **A value not known yet** (the position in a race never driven) makes any
-  test on it false, so its `not` is true: `not event.race_01.finished` holds
-  before the race.
+Reactive content is checked after every change of state. A delay counts in
+story time, so a delayed item arrives at the first time move past it, if its
+conditions still hold then. An item arrives once, or, if the author says so,
+again each time its conditions become true anew.
 
 ### Story time
 
@@ -206,32 +187,16 @@ repeated until the pool is used up. Whether story time freezes and the event
 can be retried, or the result is final and the story carries on, is a story
 setting.
 
-- **Which way the story goes.** A failure exit written on the event's node
-  always wins (a consolation scene that leads back to the event, a different
-  path). Without one, the story's setting decides: *retry* keeps the event
-  waiting, time frozen; *final* carries on along the success exit, but
-  without the success effects or the time move. *Retry* can be limited to a
-  number of attempts, after which the result becomes final.
-- **The result is recorded first**, then the pool is drawn, so a variant's
-  conditions can read the attempt that just failed ("so close" after a P2).
-- **The draw is kept in the save.** The order in which variants are drawn is
-  fixed by the save itself: reloading a game does not offer a different line.
-- **One event, one place in the flow.** An event's attempts, fees and failures
-  in a row belong to it, so two nodes driving the same event would share them.
-  A rematch is its own event; the editor warns when two nodes share one.
+A failure exit written by the author always wins. Without one, the setting
+decides: *retry* (time frozen, attempts possibly limited) or *final* (the story
+goes on, without what a success would have brought). A rematch is its own
+event: every node using an event shares its attempts and fees.
 
 **Retry cost.** A story can make each attempt pay the entry fee again and
 damage cost repairs, or make retries free. **Side events** (repeatable, paid,
 no story progress) let a player who runs short earn money without leaving the
-story. A side event always pays its fee, and never moves story time or the
-flow, even if its success would.
-
-- **The fee is paid at launch**, before the player drives: a player who cannot
-  afford it is told before the game starts, never after the race. With free
-  retries, only the first attempt pays.
-- **One session at a time.** While a session runs, no other event can be
-  launched; a game that closed without a result is ended by submitting one
-  (a DNF), so the fee already paid is never lost without a trace.
+story. The entry fee is paid at launch, so a player who cannot afford it
+knows before driving.
 
 **Hard events.** A story can help after repeated failures, automatically (for
 example, lowering the opponents' skill by a step every few failures in a row,
@@ -442,44 +407,16 @@ conditions, delay) followed by the text of that content.
 
 ### Engine file format
 
-What the engine (`src-tauri/crates/story-engine/`) reads today; the sample
-story in `story-engine/sample/` uses every part of it. Unknown keys are
-errors, so a misspelt field never changes a story silently.
+The reference is the sample story, `src-tauri/crates/story-engine/sample/`: it
+uses every part of the format and the tests play it to its end. What is not
+visible in it:
 
-- **`story.yaml`**: `format` (1), `id`, `title`, `authors`, `version`,
-  `languages` (the first is the source), `requires`, `start` (`node`, and
-  optionally `date`, `clock`, `reputation`, `followers`, `money`, `cars`) and
-  `settings` (`date`, `failure: retry | final`, `max_attempts`,
-  `retry_cost: free | paid`, `adaptive_difficulty: { every, cap }`, `saves`,
-  `money`, `protagonist`, `relations: { scale, start }`). Without a `date`, a
-  story starts on 0001-01-01, "year 1".
-- **`world/variables.yaml`**: `flags: [..]`, `counters: { name: start }`.
-  **`world/characters.yaml`**: `characters: [{ id, name, relation }]`.
-- **`flow/<nn>-<name>.yaml`**: a chapter, `id`, `title`, `nodes`. Chapters
-  follow the order of their file names. A node has an `id` and exactly one
-  kind key: `beat: { effects, advance, clock }`, `message: <content>` (with
-  `wait_reply`), `event: <event>` (with `on_failure: <node>`),
-  `branch: [{ if: [..], goto }]` with `otherwise`, `action: <name>`,
-  `side_events: { open, close }`, `end: <ending>`. Without `next`, a node
-  leads to the one written after it, then to the next chapter.
-- **`content/**/*.story`**: one or more items, each a YAML header between two
-  `---` lines, then its text up to the next `---`. Header: `id`, `type`,
-  `from`, `clock`, `replies: [{ id, effects }]`, and the placement: nothing
-  (flow content), `when` (reactive, with `delay`, `priority`,
-  `repeat: once | each_time`), or `pool` (a failure-pool variant, with an
-  optional `when`). The text is opaque until the dialogue format is chosen.
-- **`events/<id>.yaml`**: `id`, `type`, `session` (passed to the launcher),
-  `success: [..]`, `on_success: { effects, advance }`,
-  `on_failure: { effects, pool, pick }`, `entry_fee`.
-- **Conditions** are short sentences, `[not] <variable> [<op> <value>]`:
-  `reputation >= 10`, `not flag.met`, `rel.friend >= warm`,
-  `event.race_01.position <= 3`, `content.invite_01.reply == accept`,
-  `chapter >= ch02`, `date >= 2001-06-01`. **Effects**: `reputation += 2`,
-  `money -= 500`, `flag.met = true`, `rel.friend = cold`, `car.<id> = true`,
-  `send <content>`. **Success criteria**: `position <= 3`, `finished`,
-  `ahead_of <driver>`, `best_lap < 1:18.200`.
-- **Saves** are JSON, with a `format` number read before anything else: a
-  save from a newer Pit Box is refused, and an older one is migrated.
+- Unknown keys are errors, so a misspelt field never changes a story silently.
+- A flow node without `next` leads to the one written after it, then to the
+  next chapter, in file-name order.
+- Conditions and effects are short sentences (`reputation >= 10`,
+  `rel.friend += 1`, `send conv_06`), checked against the story as it loads.
+- Saves are JSON with a format number: a save from a newer Pit Box is refused.
 
 ### Dialogue text: Ink, or a format with line ids
 
@@ -522,12 +459,9 @@ Friend: [line]
   (good for prototyping, not made to be embedded); articy:draft X and Arcweave
   (visual, but they know nothing of races, money or drivers, and would tie
   community stories to a third-party tool, often paid).
-- **What the engine already assumes.** Until the choice is made, the text of
-  a content item is opaque, and its replies and their effects are declared in
-  its header (`replies`). With Ink, those effects could move into the script.
-  The `.story` container separates its items with lines made of `---` alone:
-  Ink never writes such a line, but Yarn uses `---` inside a node, so choosing
-  Yarn means revisiting the container along with it.
+- **What the engine already assumes.** The text is opaque and replies are
+  declared in the item's header. Items are separated by lines made of `---`,
+  which Yarn also uses inside a node: choosing Yarn means revisiting that.
 
 ## Balance simulator
 
@@ -574,13 +508,9 @@ The player side follows each story's settings. What the engine needs:
 - **Saves** follow the story's settings (autosave, manual saves, reload or
   not). A save holds the state and the full history of what was seen, so the
   frame stays the record of the character's life. Reloading replays the same
-  draws (failure pools), so it is not a way to fish for another line.
-- **A story updated under a running game.** A save keeps relation steps by
-  name, so a step added to the scale does not shift what an old save meant. A
-  character or a counter the story gained since the save starts at its
-  starting value. A save that stands on something the update removed (its
-  node, the event it waits for, a step no longer on the scale) is refused
-  with the reason, rather than misplayed.
+  draws, so it is no way to fish for another line. A save resumes a story
+  updated since: what the story gained starts at its starting value, and a
+  save standing on something removed is refused with the reason.
 - **The frame evolves.** Skins change at chosen beats.
 
 ## Scenes, frame and sound
