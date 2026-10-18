@@ -1229,6 +1229,21 @@ de reprendre. En cas d'écart, la spec fait foi.
       par se séparer à nouveau. L'avertissement est écrit dans
       `docs/README.md` et au §14 de `SPEC.md` en attendant.
 
+- [ ] **Points à vérifier en conditions réelles** (repris de `SPEC.md` §15,
+      où ils vivaient sans qu'aucun chantier ne les porte).
+      - **Détection de la stack météo** (Pure / Sol / CSP / rien) et la
+        correspondance preset → backend.
+      - **Table Kunos** (`kunos_content_dates.json`) : noms de dossiers et
+        années à valider contre une installation réelle, ligne par ligne.
+      - **Musique (§16)** : testée sur ses parties pures, jamais validée à
+        l'oreille. Le premier scan d'un dossier (décodage complet pour le RMS)
+        bloque le fil du moteur quelques secondes : à confirmer que ce silence
+        à la première entrée en Big Picture ne gêne pas, avant d'investir dans
+        un scan progressif.
+      - **Détection `AC_LIVE` (§16.2) et plein écran (§16.6)** : offsets repris
+        d'une implémentation tierce, jamais essayés avec une vraie session. La
+        musique GRID doit tenir pendant le chargement et se couper quand la
+        voiture devient pilotable ; le plein écran doit couvrir l'écran entier.
 - [ ] **Refactorings repérés, reportés (2026-09-25, revus le 2026-10-04 et le
       2026-10-10).**
       Classés par bénéfice sur risque ; aucun ne change le comportement,
