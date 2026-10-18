@@ -1,11 +1,12 @@
 # SPEC — Refonte de la navigation et des fiches de détail
 
-> Complément à SPEC.md. Ce document ne réécrit pas la spec principale : il énonce ce qui
-> change, ce qui reste, et ce qui devient caduc. Chaque section indique les §§ de SPEC.md
-> qu'elle amende.
->
-> Statut : décisions arrêtées en session de conception. Les points listés en §14 sont
-> explicitement non tranchés et ne doivent pas être implémentés par défaut.
+> **Livrée — ce document est une archive.** Il a énoncé, à la conception, ce qui
+> changeait dans `SPEC.md`, ce qui restait et ce qui devenait caduc. **Ce que l'app
+> fait aujourd'hui est décrit dans `SPEC.md`** (coquille de fiche, trois territoires, inventaire des
+> compléments), qui fait
+> foi en cas d'écart. On le garde parce que le code y renvoie (`REFONTE§`) et pour
+> les arguments derrière les choix. Les questions encore ouvertes sont au §14 ; leur
+> suivi est dans `CHANTIERS.md`.
 
 ---
 
@@ -510,14 +511,7 @@ réservée.
 
 ## 13. Impacts techniques à prévoir
 
-- Colonnes overlay : `notes_user` (toutes entités), `display_name_user` (étendu à toutes
-  les entités), `rattachement_user`.
-- Calcul et stockage du rattachement déduit, avec traçabilité du **signal** utilisé (pour
-  pouvoir dégrader la confiance affichée si besoin).
-- Calcul de la nature.
-- Vues épinglées = filtres enregistrés, à brancher sur le système de jetons existant.
-- Refonte des routes de navigation : la disparition de trois écrans touche l'historique
-  (§7.2bis), les liens depuis les fiches et la mémorisation de vue par écran.
+Réalisés (colonnes d'overlay, rattachement et nature, routes de navigation) : le code fait foi.
 
 ---
 
@@ -566,20 +560,7 @@ et s'il est cliquable.
 
 ## 15. Lots de livraison suggérés
 
-| Lot | Contenu | Dépend de |
-|---|---|---|
-| 1 | Notes : colonne overlay, UI sur toutes les fiches, recherche, indicateur, export | — |
-| 2 | Coquille de fiche unique : en-tête, tuile, vocabulaire d'état, nom éditable partout | — |
-| 3 | Fiche voiture et circuit : trois onglets, sélecteur compact, bloc textuel à sous-onglets, CSP démotées | 2 |
-| 4 | Fiche de couche + fin du déversement de fichiers | 2 |
-| 5 | Rattachement et nature : calcul, stockage, correction | — |
-| 6 | Écran des compléments : fusion des trois écrans, facettes | 5 |
-| 7 | Écran Pilote fusionné, écran Apps dédié, rail à deux rangs | 6 |
-| 8 | Fiches de mods greffés simples : emplacements, conflits | 5 |
-| 9 | Onglet Médias et documents : fusion des quatre blocs existants | 3 |
-| 10 | Détection des extensions CSP pour les voitures (n'existe aujourd'hui que pour les circuits) | — |
-
-Les lots 1 à 4 n'exigent pas la refonte de la navigation et peuvent être livrés seuls.
+Les dix lots sont livrés ; le plan et ses mesures préalables sont dans `PLAN-refonte-navigation.md`.
 
 ---
 

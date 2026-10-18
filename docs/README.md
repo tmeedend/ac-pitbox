@@ -107,8 +107,9 @@ Chacun porte en plus sa propre spec, et c'est elle qui décrit ce que l'app
 fait — en cas d'écart, la spec fait foi.
 
 - **`SPEC-refonte-navigation-et-fiches.md`** — rail à deux rangs, inventaire
-  unique des compléments, anatomie de fiche commune. Énonce ce qui change, ce
-  qui reste et ce qui devient caduc, section par section. **Point d'entrée.**
+  unique des compléments, anatomie de fiche commune. **Livrée, gardée en
+  archive** pour ses arguments et parce que le code y renvoie : ce que l'app
+  fait est dans `SPEC.md`. Ses questions encore ouvertes sont à son §14.
 - **`PLAN-refonte-navigation.md`** — le plan de livraison en lots, et surtout
   les **mesures faites sur la bibliothèque réelle avant de commencer** : elles
   ont supprimé un lot entier (la détection CSP des voitures existait déjà) et
