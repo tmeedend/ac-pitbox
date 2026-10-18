@@ -4,13 +4,7 @@
 
 *Supprimer un mod libère son espace disque, et le garde par défaut dans la bibliothèque, « en vitrine », avec tout ce qu'on sait de lui. Premier lot du chantier import / export de la bibliothèque (`EXPORT§`), qui repose entièrement sur cet état.*
 
-> **Étiquette de renvoi : `ESPACE§`.** Aucune maquette : les écrans touchés existent déjà, et cette spec dit ce qui change sur chacun (§6).
->
-> **Mesures et relevés de code du 2026-09-26**, sur `D:\AC-Library` et `src-tauri/src`. Chiffres en §3.2, points de code en §9. Le fichier garde son nom d'origine (`sans-fichiers`) ; le vocabulaire a changé depuis (§4.4).
->
-> **Livrée du 2026-09-27 au 2026-09-29** : `src-tauri/src/skeleton.rs` (ce qu'est un squelette, le garde-fou), `src-tauri/src/showcase/` (la mise en vitrine, sa reprise, la réhydratation), `src/lib/library/showcase.svelte.ts` et `recovery.svelte.ts` (la confirmation, la récupération en masse). Tranché avec l'utilisateur le 2026-09-28 : le squelette reste dans la bibliothèque plutôt que tout en base (R3), toutes les versions partent ensemble ou aucune (§5.4), la taille d'origine est gardée (§4.1), pas de vitrine pour les autres types (§5.4). Ce que l'implémentation a appris, ses écarts assumés et les pièges déjà payés sont au §10.
->
-> **Étendue le 2026-10-09**, pour l'export (`EXPORT§`) : les apps et les autres mods peuvent exister sans leurs fichiers (§5.6), et une couche de voiture ou de circuit garde le squelette de son hôte (§5.4).
+> **Étiquette de renvoi : `ESPACE§`.** Livrée (`skeleton.rs`, `showcase/`, `library/showcase.svelte.ts`, `recovery.svelte.ts`), étendue aux apps et aux autres mods pour l'export (§5.6). Le fichier garde son nom d'origine (`sans-fichiers`) ; le mot de l'interface est « vitrine » (§4.4).
 
 ---
 
@@ -18,9 +12,7 @@
 
 Une bibliothèque de 300 Go est faite à plus de 99 % de modèles 3D, de textures et de banques de son. Ce qui fait qu'on la **parcourt** (le nom, la marque, une image, la fiche technique, les tags, les notes, le favori) tient en quelques dizaines de Ko par mod.
 
-Aujourd'hui, supprimer un mod efface tout : ses fichiers **et** ce que l'utilisateur y avait mis. La ligne du mod part de la base (`overlay::delete_mod`), et avec elle le nom repris, la description, la note, les tags manuels, le favori.
-
-Cette spec change le sens de « Supprimer ». Par défaut, le mod passe **en vitrine** : ses fichiers lourds sont supprimés, mais il reste dans les listes avec son image, sa fiche technique et tout ce qu'on lui a ajouté. Il ne peut plus aller dans le jeu tant qu'on n'a pas **récupéré ses fichiers**. La suppression complète reste possible, en choix explicite.
+« Supprimer » met d'abord le mod **en vitrine** : ses fichiers lourds sont supprimés, mais il reste dans les listes avec son image, sa fiche technique et tout ce qu'on lui a ajouté — nom repris, description, note, tags manuels, favori. Il ne peut plus aller dans le jeu tant qu'on n'a pas **récupéré ses fichiers**. La suppression complète reste possible, en choix explicite.
 
 C'est aussi la brique de l'export de bibliothèque (`EXPORT§`) : une installation neuve qui importe un export ne contient que des mods en vitrine.
 
@@ -40,7 +32,7 @@ La vitrine **ne supprime aucune ligne en base**. Seuls des fichiers partent. Tou
 
 La version garde son `library_path`, son dossier existe toujours, et on y laisse le strict nécessaire aux **listes** (§3.1). Tout ce qui résout le dossier d'un mod (`library::entity_dir`, `overlay::get_version_path`) continue de répondre, et ce qui lit `ui/` continue de lire.
 
-Le squelette vit dans la **bibliothèque de Pit Box**, jamais dans `content/` : le mod est désactivé avant (§5.5), et rien ne le repose (R5). Content Manager et Assetto Corsa ne lisent que `content/` : ils ne voient pas un mod en vitrine, ni cassé ni autrement. Le choix de garder ces quelques dizaines de Ko sur disque plutôt que tout copier en base a été reconfirmé le 2026-09-28 : une dizaine d'endroits lisent `ui/`, et l'export (`EXPORT§`) réutilise le squelette tel quel.
+Le squelette vit dans la **bibliothèque de Pit Box**, jamais dans `content/` : le mod est désactivé avant (§5.5), et rien ne le repose (R5). Content Manager et Assetto Corsa ne lisent que `content/` : ils ne voient pas un mod en vitrine, ni cassé ni autrement. Garder ces quelques dizaines de Ko sur disque plutôt que tout copier en base laisse fonctionner tout ce qui lit `ui/`, et l'export (`EXPORT§`) réutilise le squelette tel quel.
 
 ## R4 — La fiche d'un mod en vitrine est dégradée, et le dit
 
@@ -88,14 +80,7 @@ La liste vit dans le code en **un seul endroit** (`skeleton.rs`, §9.1), avec se
 
 ## 3.2 Ce que ça pèse
 
-Mesuré sur deux mods réels, estimé pour les images réduites :
-
-| Mod | Complet | Squelette | Part |
-|---|---|---|---|
-| `rss_gtm_lanzo_v10` (6 livrées) | ≈ 551 Mo | ≈ 15 Ko de `ui/` + ≈ 60 Ko d'image de vitrine ≈ **75 Ko** | 0,01 % |
-| `shannonville` (4 tracés) | ≈ 130 Mo | ≈ 240 Ko de contours et logos + 4 aperçus réduits ≈ **0,4 Mo** | 0,3 % |
-
-À ces tailles, mille mods en vitrine tiennent dans **100 à 200 Mo**. C'est ce qui rend acceptable que la vitrine soit le choix par défaut de toute suppression : elles vont s'accumuler, et c'est voulu.
+Un squelette pèse quelques dizaines de Ko pour une voiture, moins d'un Mo pour un circuit à plusieurs tracés (mesuré : 75 Ko pour une voiture de 551 Mo). Mille mods en vitrine tiennent dans 100 à 200 Mo : c'est ce qui rend acceptable que la vitrine soit le choix par défaut, et qu'elles s'accumulent.
 
 Les logos et contours de tracé ne sont pas réduits : ce sont déjà de petits PNG, et un contour recompressé perdrait sa netteté pour quelques Ko.
 
@@ -103,7 +88,7 @@ Les logos et contours de tracé ne sont pas réduits : ce sont déjà de petits 
 
 **Une image par mod, figée au moment de la mise en vitrine**, et c'est celle que la carte affiche ensuite.
 
-- **Laquelle** : exactement celle que la carte montre à cet instant. Si une **vignette de grille régénérée** existe (fond transparent, GRILLE§5), c'est elle ; sinon l'aperçu de la livrée que la carte prend. Le choix est fait par **la fonction de la carte**, exposée pour l'occasion, pas par une règle recopiée.
+- **Laquelle** : exactement celle que la carte montre à cet instant. Si une **vignette de grille régénérée** existe (GRILLE§5, aujourd'hui éteinte), c'est elle ; sinon l'aperçu de la livrée que la carte prend. Le choix est fait par **la fonction de la carte**, exposée pour l'occasion, pas par une règle recopiée.
 - **Pourquoi la figer** : l'identité d'une vignette régénérée est calculée sur le `.kn5` (nom, date, livrée, configuration CSP, `gridthumbs.rs`). Le `.kn5` parti, la carte ne retrouverait plus sa vignette. L'image doit donc être copiée dans le squelette avant la suppression, pas cherchée après.
 - **Format** : 480 px de large. PNG si elle a de la transparence (vignette régénérée), JPEG qualité 80 sinon. Quelques dizaines de Ko.
 - **Circuit** : l'image de vitrine est l'aperçu du tracé par défaut, réduit de la même façon ; les `preview.png` de chaque tracé sont réduits en place.
@@ -112,18 +97,7 @@ Les logos et contours de tracé ne sont pas réduits : ce sont déjà de petits 
 
 ## 3.4 Ce qui reste, et ne coûte rien
 
-**Tout ce qui est en base reste**, puisque aucune ligne n'est supprimée (R2). Pour mémoire, et pour les tests :
-
-| Famille | Données | Où |
-|---|---|---|
-| Saisies de l'utilisateur | nom repris, description, note, tags manuels, favori, classe éditée, livrée pilotée | `mods`, colonnes `*_user`, `tags_manual`, `is_favorite`, `car_class` ; préférences de session |
-| Décisions de l'utilisateur | lien Wikipédia (manuel ou accepté), rattachements manuels de médias, autorisations de remplacer un fichier du jeu | `wiki_link`, `media_links`, `forced_extras` |
-| Ce que l'app a déduit | marque, pays, année, catégories, champs techniques extraits (transmission, moteur, aspiration…), tags de règles | `mods` |
-| Ce qu'elle a relevé à l'import | version, auteur, fonctionnalités CSP, noms des livrées et des tracés, date de publication estimée, taille, archive d'origine | `versions` |
-| Usage | « déjà essayé », nombre de lancements | `usage` |
-| Histoire | frise des versions, historique du mod, journal des décisions d'import | `versions`, `history`, `import_decisions` |
-| Enrichissement | article Wikipédia en cache | `wiki_cache` |
-| Couches, livrées, sons rattachés | leurs lignes, noms repris et notes | `layers`, `sub_mods` |
+**Tout ce qui est en base reste**, puisque aucune ligne n'est supprimée (R2) : les saisies de l'utilisateur (nom, description, note, tags, favori, classe, livrée pilotée), ses décisions (lien Wikipédia, médias rattachés à la main, autorisations de remplacer un fichier du jeu), ce que l'app a déduit ou relevé à l'import (marque, pays, année, catégories, version, auteur, fonctionnalités CSP, noms des livrées et des tracés, taille, archive d'origine), l'usage, l'historique et le journal d'import, l'article Wikipédia en cache, et les lignes des couches et sous-éléments.
 
 **La fiche technique entière est en base** (`FICHE§`) : chiffres, courbes, mécanique lue dans la physique, électronique, et les saisies de l'utilisateur. Rien n'est donc à copier au moment de la mise en vitrine, pourvu que la fiche ait été remplie ; le déroulé le vérifie (§5.5) et la remplit si ce n'est pas le cas, **avant** de supprimer `data.acd`. **Règle générale** : toute donnée que la fiche tire d'un fichier hors de la liste blanche est écrite en base à l'import, jamais relue sur disque.
 
@@ -135,18 +109,7 @@ La **distance parcourue** n'est pas chez Pit Box : elle vit dans le journal de C
 
 ## 4.1 En base
 
-Sur la table `versions` :
-
-| Colonne | Valeurs | Sens |
-|---|---|---|
-| `content_state` | `'full'` (défaut) · `'skeleton'` | la version a-t-elle ses fichiers |
-| `freed_at` | date | quand elle est passée en vitrine |
-| `freed_bytes` | entier | ce que ça a libéré |
-| `source_site`, `source_file_name` | texte | l'origine de l'archive (§8) |
-
-`size_bytes` **n'est pas réécrit** : il garde la taille du mod avant la mise en vitrine. C'est ce qu'on veut savoir d'un mod en vitrine (ce que coûtera sa récupération), et c'est sur elle que trie la colonne Taille ; les quelques Ko du squelette ne méritent pas de colonne. Une réindexation qui recalcule les tailles saute les squelettes.
-
-Migration par ajout de colonnes, défaut `'full'` : toutes les versions existantes restent complètes, sans rien réécrire. Le nom technique reste `skeleton` dans le code ; « vitrine » est le mot de l'interface.
+Une version porte `content_state` (`full` par défaut, ou `skeleton`), la date et le volume libérés, et l'origine de l'archive (§8). **Sa taille n'est pas réécrite** : elle reste celle d'avant la mise en vitrine — ce que coûtera la récupération —, et c'est sur elle que trie la colonne Taille ; une réindexation saute les squelettes. Les colonnes s'ajoutent avec leur défaut : les versions existantes restent complètes sans rien réécrire. « Vitrine » est le mot de l'interface, `skeleton` celui du code.
 
 **Le statut d'un mod se déduit, il ne se stocke pas.** Un mod est **en vitrine** quand sa version active est `skeleton`. Une ancienne version peut être en vitrine alors que l'active ne l'est pas.
 
@@ -252,10 +215,10 @@ La corbeille d'une **ancienne version**, dans la frise de la fiche, reste ce qu'
 
 ## 5.3 Supprimer complètement
 
-C'est la suppression d'aujourd'hui (`overlay::delete_mod` et ses appelants), avec deux ajouts :
+La suppression complète (`overlay::delete_mod`) :
 
-- **elle efface aussi** les rattachements manuels de médias (`media_links`), le journal des décisions d'import (`import_decisions`), et la fiche technique du mod, faits et saisies (`tech_facts`, `tech_user`, `FICHE§`). Ils restaient jusqu'ici en base après la suppression, sans rien pour les relier à quoi que ce soit ;
-- **elle garde ses trois exceptions volontaires**, qui existent pour qu'un réimport sous le même id retrouve ce qu'il avait : le marqueur « déjà essayé » (`usage`), les livrées et sons rattachés (`sub_mods`), et l'appariement Wikipédia (`wiki_link`, sans clé étrangère **délibérément**, selon le commentaire du schéma). La confirmation ne les cite pas : ce ne sont pas des saisies que l'utilisateur penserait perdre.
+- **efface aussi** les rattachements manuels de médias, le journal des décisions d'import et la fiche technique du mod, faits et saisies (`FICHE§`) ;
+- **garde trois exceptions volontaires**, qui existent pour qu'un réimport sous le même id retrouve ce qu'il avait : le marqueur « déjà essayé » (`usage`), les livrées et sons rattachés (`sub_mods`), et l'appariement Wikipédia (`wiki_link`, sans clé étrangère **délibérément**, selon le commentaire du schéma). La confirmation ne les cite pas : ce ne sont pas des saisies que l'utilisateur penserait perdre.
 
 Sur un mod en vitrine, elle supprime le squelette et la ligne.
 
@@ -265,13 +228,13 @@ Sur un mod en vitrine, elle supprime le squelette et la ligne.
 |---|---|---|
 | Toutes ses versions | vitrine, **toutes ou aucune** | une ancienne version sans la nouvelle n'a pas de sens pour le jeu ; si une seule résiste (fichier verrouillé), aucune ne perd ses fichiers et la suppression échoue en le disant. La confirmation annonce le nombre de versions (§5.2) |
 | Ses couches | vitrine, avec **le squelette de leur hôte** (§3.1) : ligne et manifeste gardés, et ce que la liste blanche garde pour une voiture ou un circuit | elles ne composent rien sans leur base ; mais un layout qu'une couche apporte doit rester sur la fiche du circuit (voir ci-dessous) |
-| Ses ajouts au jeu (`extras/`) | supprimés, listés dans le manifeste | retirés du jeu à la désactivation |
-| Ses livrées et sons rattachés (`sub_mods`) | vitrine, sans squelette | inutilisables sans la voiture ; leurs noms restent |
+| Ses ajouts au jeu (`extras/`) | supprimés, **sans manifeste** dans leur dossier (il serait posé dans le jeu) | retirés du jeu à la désactivation |
+| Ses livrées et sons rattachés (`sub_mods`) | vitrine, sans squelette ; un son actif est d'abord remis à l'original ; les livrées fournies avec le mod partent avec sa version | inutilisables sans la voiture ; leurs noms restent |
 | Ses ressources | supprimées, sauf les fichiers texte de moins de 64 Ko (`.txt`, `.md`, `.nfo`, `.url`) | une notice dit souvent **où télécharger** le mod, et pèse quelques Ko |
 
-**Le squelette d'une couche** (2026-10-09). Une couche de circuit apporte souvent un layout entier (`spa2022` sur le Spa de Kunos) : sans rien garder, ce layout disparaissait de la fiche du circuit en vitrine, nom, contour et aperçu compris. Une couche garde donc ce que garde son hôte (§3.1), aperçus réduits, et **la fiche d'un hôte en vitrine lit ses couches en vitrine** comme elle lit son propre squelette. Sur un hôte qui a ses fichiers, en revanche, une couche en vitrine reste hors de la lecture : un layout qu'on ne peut pas lancer n'a rien à faire dans la liste des layouts. Elle reste dans le bloc Couches de la fiche, « En vitrine », avec le nom de son archive et une recherche sur le web — c'est le seul endroit d'où récupérer une couche posée sur du contenu d'origine, qui n'a jamais de bandeau de vitrine. Une couche d'app n'a pas de squelette.
+**Le squelette d'une couche.** Une couche de circuit apporte souvent un layout entier (`spa2022` sur le Spa de Kunos) : sans rien garder, ce layout disparaissait de la fiche du circuit en vitrine, nom, contour et aperçu compris. Une couche garde donc ce que garde son hôte (§3.1), aperçus réduits, et **la fiche d'un hôte en vitrine lit ses couches en vitrine** comme elle lit son propre squelette. Sur un hôte qui a ses fichiers, en revanche, une couche en vitrine reste hors de la lecture : un layout qu'on ne peut pas lancer n'a rien à faire dans la liste des layouts. Elle reste dans le bloc Couches de la fiche, « En vitrine », avec le nom de son archive et une recherche sur le web — c'est le seul endroit d'où récupérer une couche posée sur du contenu d'origine, qui n'a jamais de bandeau de vitrine. Une couche d'app n'a pas de squelette.
 
-**Pas de geste « Garder en vitrine » pour les autres types** (décidé le 2026-09-28) : une app, un « autre mod », un mannequin de pilote, une livrée d'une voiture d'origine se suppriment comme aujourd'hui. Les supprimer ne fait presque rien perdre. Les apps et les autres mods ont en revanche, depuis le 2026-10-09, l'**état** sans fichiers, pour que l'export les emporte (§5.6).
+**Pas de geste « Garder en vitrine » pour les autres types** : une app, un « autre mod », un mannequin de pilote, une livrée d'une voiture d'origine se suppriment comme aujourd'hui. Les supprimer ne fait presque rien perdre. Les apps et les autres mods ont en revanche l'**état** sans fichiers, pour que l'export les emporte (§5.6).
 
 ## 5.5 Le déroulé
 
@@ -280,17 +243,17 @@ En fond (`spawn_blocking`, progression dans la pile de notifications, comme la r
 1. **Désactiver** si actif, par le chemin normal (`activation::deactivate`), qui retire aussi les ajouts au jeu et restaure les originaux remplacés. Si la désactivation échoue, **on s'arrête** : ne jamais supprimer la source d'un mod encore posé dans le jeu.
 2. **Vérifier que la fiche technique est en base** (`FICHE§`), la remplir sinon, et **figer l'image de vitrine** (§3.3).
 3. **Écrire le manifeste** de chaque version, couche et sous-élément, **avant** toute suppression. Une app tuée au milieu laisse un manifeste qui décrit plus que ce qui manque, jamais moins.
-4. **Supprimer** tout ce qui n'est pas dans la liste blanche, **réduire** les aperçus de tracé gardés : corbeille d'abord, définitif sinon (R8). Élaguer les dossiers devenus vides, **sauf** la racine de la version. En deux temps, pour que ce soit **toutes les versions ou aucune** (§5.4) : les fichiers de chaque version sont d'abord mis de côté à côté d'elle (un déplacement sur le même disque, qui se défait) ; la première version qui résiste remet tout en place ; alors seulement l'ensemble part à la corbeille.
+4. **Supprimer** tout ce qui n'est pas dans la liste blanche (le dossier envoyé à la corbeille garde une copie de `ui/` : un mod complet qu'on peut restaurer et réimporter), **réduire** les aperçus de tracé gardés : corbeille d'abord, définitif sinon (R8). Élaguer les dossiers devenus vides, **sauf** la racine de la version. En deux temps, pour que ce soit **toutes les versions ou aucune** (§5.4) : les fichiers de chaque version sont d'abord mis de côté à côté d'elle (un déplacement sur le même disque, qui se défait) ; la première version qui résiste remet tout en place ; alors seulement l'ensemble part à la corbeille.
 5. **Marquer** en base (`content_state`, `freed_at`, `freed_bytes`), dans une transaction.
 6. **Journaliser** : « Mis en vitrine, 550 Mo libérés ». C'est un événement de cycle de vie, il a sa place dans la frise.
 
-**Au démarrage**, un manifeste présent sur une version encore marquée `full` veut dire « interrompu entre 3 et 5 » : la suppression est reprise et le marquage terminé.
+**Au démarrage**, un manifeste présent sur une version encore marquée `full` veut dire « interrompu entre 3 et 5 » : la suppression est reprise et le marquage terminé — **seulement si le manifeste porte l'id du mod** et ce que la ligne sait de son contenu. **Un retour arrière ne supprime jamais un fichier** : il remet ce que contient le dossier d'attente, et s'il ne peut pas tout remettre, il garde manifeste et dossier d'attente pour que le démarrage suivant finisse.
 
 ## 5.6 Les apps et les autres mods
 
-Décidé le 2026-10-09, pour l'export (`EXPORT§`). Une app et un « autre mod » (mannequins et tenues de pilote compris, §7.3 du SPEC) portent un nom repris, une note, une priorité, une place dans les profils : une bibliothèque exportée doit les emporter, et leur ligne arrive alors sur l'autre machine **sans dossier**. Rien ne savait ce qu'est une telle ligne : l'activer aurait posé une junction vers un dossier vide, la réimporter l'aurait ignorée.
+Pour l'export (`EXPORT§`) : une app et un « autre mod » (mannequins et tenues de pilote compris, §7.3 du SPEC) portent un nom repris, une note, une priorité, une place dans les profils : une bibliothèque exportée doit les emporter, et leur ligne arrive alors sur l'autre machine **sans dossier**.
 
-**L'état, pas le geste.** Leur suppression ne propose toujours pas « Garder en vitrine » (§5.4) : aujourd'hui, seul l'import d'un export produit une app ou un autre mod en vitrine. Leur ajouter ce choix ne coûterait plus que la confirmation, le jour où le besoin s'en présente.
+**L'état, pas le geste.** Leur suppression ne propose pas « Garder en vitrine » (§5.4) : seul l'import d'un export produit une app ou un autre mod en vitrine.
 
 | Point | Comportement |
 |---|---|
@@ -306,7 +269,7 @@ Décidé le 2026-10-09, pour l'export (`EXPORT§`). Une app et un « autre mod �
 
 # 6. Ce que chaque écran fait d'un mod en vitrine
 
-Relevé sur le code (§9.2). **Défaut pour tout ce qui n'est pas listé : le traiter comme un mod inactif.**
+**Défaut pour tout ce qui n'est pas listé : le traiter comme un mod inactif.**
 
 | Écran, geste | Comportement |
 |---|---|
@@ -318,11 +281,11 @@ Relevé sur le code (§9.2). **Défaut pour tout ce qui n'est pas listé : le tr
 | Fiche : fonctionnalités CSP | lues en base (`versions.csp_features`) |
 | Fiche : aperçu 3D | remplacé par l'image, avec « Le modèle 3D reviendra avec les fichiers » |
 | Fiche : écoute du moteur | clé de contact désactivée, même phrase |
-| Fiche : onglets Ressources et Ajouts au jeu | Ressources : la notice gardée, s'il y en a une ; Ajouts au jeu : la liste du manifeste, en gris, « reviendront avec le mod » |
+| Fiche : Ressources et Ajouts au jeu | Ressources : la notice gardée, s'il y en a une ; Ajouts au jeu : vide |
 | Fiche : activer, choix de version | désactivés, remplacés par « Récupérer les fichiers » |
 | Fiche : showroom Content Manager, régénérer la vignette, exporter le mod | désactivés |
 | Colonne de session, choix de voiture ou de circuit | **exclu**. Si le choix retenu passe en vitrine, la carte le dit et « Démarrer la session » est désactivé avec la raison |
-| Sélecteur d'adversaires, grilles enregistrées | exclu du vivier ; une grille qui en contient le signale et lance sans lui |
+| Sélecteur d'adversaires, grilles enregistrées | exclu du vivier ; une grille qui en contient lance sans lui, sans le signaler. La voiture ou le circuit du joueur, eux, refusent la session (`launch::launch`, en filet derrière l'écran) |
 | Mise à jour disponible (CUP) | **affichée normalement** : « Mettre à jour » est le moyen le plus simple de récupérer les fichiers |
 | Activation en masse, profils | le mod est sauté, compté à part : « 3 mods en vitrine ignorés » |
 | Réparation générale | sautée, **jamais comptée comme un échec ni comme cassé** |
@@ -347,7 +310,7 @@ Relevé sur le code (§9.2). **Défaut pour tout ce qui n'est pas listé : le tr
 | **Page enregistrée** | `mods.source_url` (adresse d'un pack) | « Ouvrir la page » |
 | **Adresse de l'auteur** | champ `url` du `ui_*.json`, quand il est rempli | « Ouvrir la page » |
 | **Recherche sur le site d'origine** | `source_site` connu (§8) | « Chercher sur overtake.gg » : le nom du fichier d'origine, restreint à ce site |
-| **Recherche** | toujours | « Chercher sur le web » : le nom du fichier d'origine, ou le nom du mod |
+| **Recherche** | toujours | « Chercher sur le web » (DuckDuckGo, **sans guillemets** — la recherche exacte d'un nom de fichier ne trouvait rien) : le nom du fichier d'origine, ou le nom du mod |
 
 En pied de panneau, toujours : le **nom exact du fichier d'origine**, sélectionnable, et « ou glissez l'archive dans Pit Box ». Les sources absentes ne sont pas affichées. Rien ne se télécharge sans clic.
 
@@ -359,9 +322,7 @@ Pour chaque mod, la source qui ne demande rien à l'utilisateur d'abord : l'**ar
 
 ## 7.3 La réhydratation à l'import
 
-**Le point de code qui décide tout.** Aujourd'hui, `importer::classify` compare la signature de contenu entrante à celle de la version active ; égales, le mod est un **doublon** et l'import le saute. Une version en vitrine garde sa signature d'origine (§4.2) : sans changement, réimporter l'archive exacte ne ramènerait rien.
-
-Nouvelle classification, avant `duplicate` :
+**Le point de code qui décide tout** : une version en vitrine garde sa signature d'origine (§4.2), donc réimporter l'archive exacte serait classé **doublon** sans la classe `rehydrate`, qui passe avant `duplicate` (`importer::classify`) :
 
 | Situation | Classe | Ce qui se passe |
 |---|---|---|
@@ -370,7 +331,7 @@ Nouvelle classification, avant `duplicate` :
 | Id connu, signature inconnue, version active `skeleton` | `update` | inchangé : une nouvelle version devient l'active, l'ancienne reste en vitrine dans la frise |
 | Id inconnu | inchangé | |
 
-La comparaison porte sur **toutes** les versions du mod. La réhydratation **ne réactive pas** le mod ; une case « Activer après récupération », cochée si le mod était actif au moment de la mise en vitrine, évite de le refaire à la main. Le rapport d'import dit « Fichiers récupérés ».
+La comparaison porte sur **toutes** les versions du mod, et **sur le manifeste, pas sur le squelette** (`skeleton::original_files`) : à côté du squelette, une couche paraîtrait entièrement neuve. La réhydratation **ne réactive pas** le mod : la ligne du rapport d'import (« Fichiers récupérés ») porte un bouton « Activer », sauf pour une couche, dont l'hôte peut être encore en vitrine. **Les dossiers sont échangés avant que la base passe à `full`**, jamais l'inverse.
 
 Les saisies de l'utilisateur ne sont pas touchées : le chemin de mise à jour les respecte déjà (colonnes `*_user` à côté des champs dérivés), et la réhydratation ne réécrit que les champs relevés sur les fichiers.
 
@@ -401,12 +362,12 @@ On ne garde donc **jamais** `HostUrl` comme adresse de téléchargement.
 
 | Colonne (`versions`) | Tirée de |
 |---|---|
-| `source_site` | `ReferrerUrl`, réduit à son origine. Pour un téléchargement CUP, l'adresse `/cup/<type>/<id>`, durable |
+| `source_site` | `ReferrerUrl`, réduit à son origine |
 | `source_file_name` | le `filename` de `response-content-disposition` ; à défaut, le dernier segment du chemin de `HostUrl` ; à défaut, le nom du fichier importé |
 
 - `mods.source_url` garde son rôle (l'adresse d'un pack) et n'est pas écrasé.
 - **Les paramètres de requête ne sont jamais stockés** : ce sont des jetons signés, sans valeur une minute plus tard.
-- Le flux peut manquer (fichier extrait d'une autre archive, copié d'un autre disque, navigateur réglé autrement) : ce n'est pas une erreur, et rien ne s'affiche.
+- L'origine n'est lue que sur un fichier d'archive importé tel quel — ni sur un dossier, ni sur une archive imbriquée, ni sur un téléchargement du registre, que le panneau de récupération interroge par l'id du mod. Le flux peut manquer : ce n'est pas une erreur, et rien ne s'affiche.
 
 Le nom de fichier d'origine est la meilleure clé de recherche qui existe ; avec le site, il donne une recherche restreinte qui tombe presque toujours sur la bonne page. La **page exacte**, seule l'extension de navigateur prévue au lot L7 pourra la fournir.
 
@@ -416,61 +377,15 @@ Le nom de fichier d'origine est la meilleure clé de recherche qui existe ; avec
 
 ## 9.1 Backend
 
-**Un module `skeleton.rs`** :
-
-| Fonction | Rôle |
-|---|---|
-| `is_kept(kind, rel_path) -> bool` | la liste blanche de §3.1, seule source de vérité, pour la vitrine comme pour l'export |
-| `freeze_card_image(conn, cfg, mod_id, dest)` | §3.3, par la fonction de choix de la carte (`library.rs`) et le magasin des vignettes (`gridthumbs.rs`) |
-| `techsheet::store` (FICHE§) | appelé au besoin avant la suppression (§3.4) |
-| `plan(conn, cfg, ids) -> DeletePlan` | ce qui sera supprimé, par version, couche, sous-élément, avec les tailles et les sources connues ; sert la confirmation |
-| `to_showcase(conn, cfg, plan, keep_archive) -> Report` | le déroulé de §5.5 |
-| `read_manifest(dir)`, `verify(dir, manifest)` | §4.2, §7.4 |
-| `resume_interrupted(conn, cfg)` | le filet de démarrage de §5.5 |
-| `guard(conn, version_id) -> Result<(), String>` | **le garde-fou unique de R5** : `Err(errors::CONTENT_FREED)` pour une version `skeleton` |
-
-La suppression complète garde son chemin (`overlay::delete_mod`), complété des deux tables de §5.3.
-
-**Le garde-fou s'appelle en tête de** : `activation::activate`, `compose::recompose`, `extras::deploy` (pour un propriétaire mod), `submods::activate_sound`, `showroom::open_native_showroom`, `export::export_mod`, `preview::prepare` (voiture). `bulk::activate`, `profiles::apply` et `maintenance::repair_all` héritent du refus par `activation::activate` et **transforment cette erreur-là** en « ignoré » dans leur rapport.
-
-**`maintenance::broken_reason`** teste `content_state` en premier et renvoie `None` pour un squelette.
-
-**`importer::classify`** gagne la classe `rehydrate` (§7.3), et le chemin d'écriture de l'import une branche qui copie dans le dossier existant.
-
-**`launch::launch`** refuse un `RaceSetup` qui contient un mod en vitrine, joueur ou adversaire. Le frontend doit l'avoir déjà empêché ; c'est le filet.
-
-**`library.rs`** : pour une version `skeleton`, l'image de carte est l'image de vitrine, sans passer par le magasin des vignettes.
-
-**Le lecteur `Zone.Identifier`** (§8), dans `archive.rs` : ouverture du flux par son nom, analyse de `[ZoneTransfer]`, extraction du `filename` de `response-content-disposition` (décodage URL, guillemets, forme `filename*=UTF-8''…`).
-
-## 9.2 Ce que le relevé du code a montré
-
-Le chemin de bibliothèque est résolu dans **28 modules**, dont `importer.rs` (67 occurrences), `overlay.rs` (48), `submods.rs` (28), `maintenance.rs` (27), `extras.rs` (22), `others.rs` (16), `compose.rs` (15). La plupart **lisent** et n'ont rien à changer grâce au squelette en place. Ceux qui posent, lancent ou exploitent le contenu lourd sont la dizaine de points d'entrée de §9.1.
-
-Trois points qui auraient fait échouer le concept sans bruit :
-
-- **`importer::classify`** aurait rangé la réimportation de la même archive en doublon (§7.3) ;
-- **l'identité des vignettes régénérées** repose sur le `.kn5` : sans image figée, les cartes auraient perdu leur image à la mise en vitrine (§3.3) ;
-- **`overlay::delete_mod`** laisse aujourd'hui en base les médias rattachés et le journal d'import d'un mod supprimé (§5.3).
+**La liste blanche** (`skeleton::is_kept`) est la seule définition d'un squelette, pour la vitrine comme pour l'export. **Un seul garde-fou** (`skeleton::guard`, `errors::CONTENT_FREED`) refuse de poser, composer, lancer, écouter, ouvrir dans le showroom, exporter en archive ou prévisualiser en 3D un mod en vitrine ; activation en masse, profils et réparation générale le comptent comme « ignoré ». `maintenance::broken_reason` teste `content_state` avant tout.
 
 ## 9.3 Frontend
 
-- La confirmation de suppression à deux choix, la notification de suite, la pastille, le filtre, le bandeau, l'encart « Comment ça marche », le panneau de récupération.
-- La phrase de référence est **une seule clé de langue**.
-- **Un seul prédicat** partagé (`isPlayable(mod)`) pour exclure les mods en vitrine de la colonne de session et du vivier d'adversaires.
+La phrase de référence (§4.4) est **une seule clé de langue**, et un seul prédicat (`isPlayable`) exclut les mods en vitrine de la colonne de session et du vivier d'adversaires.
 
 ## 9.4 Tests
 
-- **Liste blanche** : dossiers de voiture et de circuit de fixture ; après la mise en vitrine, exactement les fichiers attendus restent (**aucun** `.acd`, **aucun** aperçu de livrée), l'image de vitrine fait moins de 100 Ko, et le manifeste liste exactement le reste avec les tailles.
-- **Rien ne se perd** : un mod avec nom repris, note, tags manuels, favori, lien Wikipédia et rattachement de média ; après mise en vitrine, chaque valeur est identique. Après suppression complète, aucune ne reste, sauf `usage`, `sub_mods` et `wiki_link`.
-- **Fiche technique** : après la mise en vitrine, `techsheet::effective` rend exactement la même fiche qu'avant, courbe, électronique et corrections de l'utilisateur (`tech_user`) comprises (`FICHE§9.4`).
-- **Image de carte** : une voiture avec vignette régénérée garde **cette** image en vitrine.
-- **Aller-retour** : importer, mettre en vitrine, réimporter la même archive → `rehydrate`, même `version_id`, fichiers identiques octet pour octet, saisies intactes.
-- **Version différente** : réimporter une autre version → `update`, l'ancienne reste en vitrine.
-- **Garde-fou** : chaque fonction de §9.1 renvoie `CONTENT_FREED` ; profils et réparation comptent le mod comme ignoré.
-- **Interruption** : manifeste écrit, suppression à moitié, base en `full` → `resume_interrupted` termine.
-- **Mod actif** : il est retiré de `content/`, ses ajouts au jeu retirés, les originaux restaurés, avant toute suppression en bibliothèque.
-- **Origine** : le `Zone.Identifier` relevé en §8.1 donne `source_site = https://www.overtake.gg/` et `source_file_name = camtool-v3.0.0-beta.3.zip`, et aucun paramètre signé n'est écrit en base.
+Les tests de `skeleton` et de `showcase` portent les cas : la liste blanche exacte, rien de perdu après la mise en vitrine (fiche technique comprise, `FICHE§9.4`), l'image de carte gardée, l'aller-retour (réimporter → `rehydrate`, même version, fichiers identiques), la version différente (`update`), le garde-fou, l'interruption reprise au démarrage, le mod actif retiré du jeu avant toute suppression, et l'origine lue dans un `Zone.Identifier` réel sans paramètre signé en base. Ils ne passent jamais par la corbeille.
 
 ---
 
@@ -478,31 +393,11 @@ Trois points qui auraient fait échouer le concept sans bruit :
 
 ## 10.1 Écarts assumés
 
-À reprendre s'ils gênent ; aucun ne met en jeu un fichier du jeu.
-
-- **« Activer après récupération »** (§7.3) est un bouton « Activer » sur la ligne du rapport d'import, pas une case cochée d'avance : le rapport arrive après l'import, une case n'y piloterait plus rien. Une couche récupérée (`LAYER_REHYDRATED`) n'a pas ce bouton : son hôte peut être encore en vitrine.
-- **Une grille enregistrée** qui contient un mod en vitrine ne le **signale** pas (§6) : le vivier l'exclut, et le lancement retire l'adversaire de la grille. La voiture ou le circuit du joueur, eux, refusent la session : §6 et §9.1 se contredisaient là-dessus.
-- **La vignette de grille régénérée** n'est pas figée (§3.3) : la fonction est éteinte (`FEATURE_GRID_THUMBS`), c'est l'aperçu préféré de la carte qui l'est.
-- **Les ajouts au jeu** ne sont pas listés dans le manifeste de la version (§5.4), et l'onglet Ajouts au jeu d'un mod en vitrine est vide au lieu de les montrer en gris (§6).
-- **L'origine** (§8) n'est lue que sur un fichier d'archive importé tel quel — ni sur un dossier, ni sur une archive imbriquée, ni sur un téléchargement du registre CUP, dont l'adresse `/cup/<type>/<id>` n'est pas notée : le panneau de récupération interroge déjà le registre par l'id du mod.
-- **Les livrées fournies avec le mod** (`removable = false`) partent avec sa version, pas comme compléments : elles vivent dans son dossier.
-- **Un son actif** est remis à l'original avant la mise en vitrine, pour que la base ne dise pas « ce son est actif » d'une voiture qui reviendra avec le sien.
-- **La recherche** du panneau passe par DuckDuckGo, **sans guillemets** : la recherche exacte d'un nom de fichier ne trouvait rien sur un cas réel, les mêmes mots sans guillemets trouvaient la page.
+Les écarts au plan d'origine sont dans le texte ci-dessus (§5.4, §5.5, §6, §7.3, §8.2), qui décrit ce que l'app fait.
 
 ## 10.2 Pièges payés
 
-- **La réindexation et la relecture de la fiche technique relisent le disque et remplacent ce qui est en base** : sur un squelette, elles auraient effacé livrées, fonctionnalités CSP et physique. Coupées dans `maintenance::reindex_mod` et `techsheet::active_stack`.
-- **`compose::recompose` réindexe à chaque activation** : une fixture de test qui annonce en base une fonctionnalité CSP que ses fichiers ne portent pas la perd dès l'activation — ce n'est pas un bug de la vitrine.
-- **Les livrées projetées sont des junctions dans le dossier de la version** : `removable_files` ne les voit pas (WalkDir ne suit pas les liens). Elles sont retirées à part, lien seul, **après** avoir figé l'image : la carte montre très souvent une livrée d'un pack rattaché, atteinte par l'une d'elles.
-- **Un manifeste n'est cru au démarrage que s'il porte l'id du mod** et ce que la ligne sait du contenu (signature d'une version, archive d'une couche ou d'un sous-élément) : un dossier importé qui en contiendrait un ne doit jamais être vidé sur sa foi.
-- **La réhydratation échange les dossiers avant de marquer la base complète**, jamais l'inverse : une interruption laisse un dossier complet marqué squelette, que la prochaine importation réhydrate, jamais un dossier marqué complet avec un manifeste qu'une reprise viderait.
-- **Un retour arrière ne supprime jamais un fichier** : il remet tout ce que contient le dossier d'attente, y compris ce qu'une exécution interrompue y avait déjà déplacé. S'il ne peut pas tout remettre, il garde manifeste et dossier d'attente, et le démarrage suivant finit la mise en vitrine. Trouvé en revue de code : la première version effaçait le dossier d'attente.
-- **L'import d'une archive visant un mod en vitrine se compare au manifeste**, pas au squelette (`skeleton::original_files`) : à côté du squelette, une couche (un tracé ajouté) paraissait entièrement neuve et devenait une nouvelle version sans le reste du circuit.
-- **Pas de manifeste dans les dossiers des ajouts au jeu ni des ressources** : les ajouts se reposent fichier par fichier à la racine du jeu, et un `.pitbox-vitrine.json` y aurait atterri ; dans les ressources, il se serait montré sur la fiche.
-- **`active_layers` filtre les couches en vitrine** : c'est le seul endroit où toute composition lit ses couches, et une couche réduite à son manifeste l'aurait posé dans `content/` dès le retour de son hôte.
-
-## 10.3 Décisions prises sans la spec
-
-- Le dossier envoyé à la corbeille contient aussi une copie du `ui/` : c'est un dossier de mod complet, qu'on peut restaurer et réimporter.
-- Les tests ne passent jamais par la corbeille (`maintenance::trash_or_delete`), pour ne pas la remplir à chaque exécution ; la suppression définitive qu'ils prennent est l'autre branche de la même fonction.
-- Supprimer un mod cassé depuis l'écran Maintenance passe par la même confirmation : la vitrine fonctionne même quand le dossier du mod a disparu.
+- **La réindexation et la relecture de la fiche technique relisent le disque et remplacent ce qui est en base** : elles sautent les squelettes (`maintenance::reindex_mod`, `techsheet::active_stack`), sans quoi livrées, fonctionnalités CSP et physique seraient effacées.
+- **Les livrées projetées sont des junctions dans le dossier de la version**, qu'un parcours de fichiers ne voit pas : elles sont retirées à part, lien seul, **après** avoir figé l'image de la carte, qui passe souvent par l'une d'elles.
+- **`active_layers` filtre les couches en vitrine** : c'est le seul endroit où une composition lit ses couches, et une couche réduite à son manifeste l'aurait posé dans `content/`.
+- **Pas de manifeste dans les dossiers des ajouts au jeu ni des ressources** : il serait posé dans le jeu, ou montré sur la fiche.
