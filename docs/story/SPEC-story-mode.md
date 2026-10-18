@@ -71,6 +71,18 @@ it can, and re-checks the conditions of all reactive content.
 Branches can split the flow and join it again later, so a story can stay
 authored and mostly linear while still reacting to choices.
 
+**The engine computes, the frame shows.** What a player action does to the
+state (pay for a car, add it to the garage, check there is a free slot) is
+computed by the engine, never by the frame: the frame only reports what the
+player chose. The balance simulator and the command-line tool play a story
+with no frame at all, so a rule that lived in the frame would have to be
+written twice and would drift. Purchase rules arrive with the catalogues (L6);
+until then a Player action node just waits for the frame to say "done".
+
+**What the player does is all or nothing.** An input the engine refuses (a
+reply that does not exist, a result with no session launched) leaves the state
+exactly as it was, so the player can be told and try again.
+
 ### Reactive content
 
 Each item has a content type, a sender, conditions (all must be true, some can
@@ -78,6 +90,23 @@ be exclusions), an optional delay, a priority and a repeat rule. Examples: an
 email from a sponsor once reputation passes a threshold; an article about a
 driver in a given year. A variant (a character reacting badly when the
 relation is poor) is simply another item with opposite conditions.
+
+- **When it is checked.** After every change of state: each flow step, each
+  reply, each event result. A delivery can make another item true, so the
+  check repeats until nothing more arrives.
+- **Delay.** Counted in story time from the moment the conditions became true.
+  Story time only moves at beats, so a delayed item arrives at the first time
+  move past its delay. When the delay runs out, its conditions are checked
+  again: an item whose conditions no longer hold is dropped, and can be
+  scheduled again if they come back.
+- **Priority.** When several items arrive at once, higher priority first; equal
+  priorities keep the order of the files.
+- **Repeat.** `once` (the default) delivers an item at most once. `each_time`
+  delivers it again each time its conditions become true after having been
+  false in between, never twice in a row while they stay true.
+- **A value not known yet** (the position in a race never driven) makes any
+  test on it false, so its `not` is true: `not event.race_01.finished` holds
+  before the race.
 
 ### Story time
 
@@ -177,10 +206,32 @@ repeated until the pool is used up. Whether story time freezes and the event
 can be retried, or the result is final and the story carries on, is a story
 setting.
 
+- **Which way the story goes.** A failure exit written on the event's node
+  always wins (a consolation scene that leads back to the event, a different
+  path). Without one, the story's setting decides: *retry* keeps the event
+  waiting, time frozen; *final* carries on along the success exit, but
+  without the success effects or the time move. *Retry* can be limited to a
+  number of attempts, after which the result becomes final.
+- **The result is recorded first**, then the pool is drawn, so a variant's
+  conditions can read the attempt that just failed ("so close" after a P2).
+- **The draw is kept in the save.** The order in which variants are drawn is
+  fixed by the save itself: reloading a game does not offer a different line.
+- **One event, one place in the flow.** An event's attempts, fees and failures
+  in a row belong to it, so two nodes driving the same event would share them.
+  A rematch is its own event; the editor warns when two nodes share one.
+
 **Retry cost.** A story can make each attempt pay the entry fee again and
 damage cost repairs, or make retries free. **Side events** (repeatable, paid,
 no story progress) let a player who runs short earn money without leaving the
-story.
+story. A side event always pays its fee, and never moves story time or the
+flow, even if its success would.
+
+- **The fee is paid at launch**, before the player drives: a player who cannot
+  afford it is told before the game starts, never after the race. With free
+  retries, only the first attempt pays.
+- **One session at a time.** While a session runs, no other event can be
+  launched; a game that closed without a result is ended by submitting one
+  (a DNF), so the fee already paid is never lost without a trace.
 
 **Hard events.** A story can help after repeated failures, automatically (for
 example, lowering the opponents' skill by a step every few failures in a row,
@@ -471,6 +522,12 @@ Friend: [line]
   (good for prototyping, not made to be embedded); articy:draft X and Arcweave
   (visual, but they know nothing of races, money or drivers, and would tie
   community stories to a third-party tool, often paid).
+- **What the engine already assumes.** Until the choice is made, the text of
+  a content item is opaque, and its replies and their effects are declared in
+  its header (`replies`). With Ink, those effects could move into the script.
+  The `.story` container separates its items with lines made of `---` alone:
+  Ink never writes such a line, but Yarn uses `---` inside a node, so choosing
+  Yarn means revisiting the container along with it.
 
 ## Balance simulator
 
@@ -516,7 +573,14 @@ The player side follows each story's settings. What the engine needs:
   reactions, success or failure.
 - **Saves** follow the story's settings (autosave, manual saves, reload or
   not). A save holds the state and the full history of what was seen, so the
-  frame stays the record of the character's life.
+  frame stays the record of the character's life. Reloading replays the same
+  draws (failure pools), so it is not a way to fish for another line.
+- **A story updated under a running game.** A save keeps relation steps by
+  name, so a step added to the scale does not shift what an old save meant. A
+  character or a counter the story gained since the save starts at its
+  starting value. A save that stands on something the update removed (its
+  node, the event it waits for, a step no longer on the scale) is refused
+  with the reason, rather than misplayed.
 - **The frame evolves.** Skins change at chosen beats.
 
 ## Scenes, frame and sound
