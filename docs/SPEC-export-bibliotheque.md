@@ -4,11 +4,9 @@
 
 *Refaire une installation de Pit Box à l'identique sur une autre machine, ou après une réinstallation : les mods (en vitrine), le classement, les sessions, les profils et les préférences, dans un fichier de quelques Mo.*
 
-> **Étiquette de renvoi : `EXPORT§`.** Repose entièrement sur la vitrine (`ESPACE§`) : **un export est une bibliothèque dont tous les mods sont en vitrine.** Rien ici ne se construit avant ESPACE lot 1. Les apps et les autres mods, qui n'ont pas le geste de la vitrine, en ont l'état depuis le 2026-10-09 (ESPACE§5.6) : ils sont exportés comme le reste (§9).
+> **Étiquette de renvoi : `EXPORT§`.** Repose entièrement sur la vitrine (`ESPACE§`) : **un export est une bibliothèque dont tous les mods sont en vitrine**, apps et autres mods compris (ESPACE§5.6).
 >
-> Relevés de code du 2026-09-27 (`overlay.rs`, `backup.rs`, `config.rs`, `saved_grids.rs`, `ui_prefs.rs`).
->
-> **Construit le 2026-10-09, derrière un interrupteur** (`FEATURE_LIBRARY_TRANSFER`, `src/lib/features.ts`) : visible sous `tauri dev`, absent d'un installateur tant qu'il n'a pas été essayé sur de vraies bibliothèques. `src-tauri/src/transfer/` (les deux parcours, le classement des tables, les fichiers), `ExportDialog`, `ImportDialog` et l'étape de l'assistant. Ses écarts assumés et ce que l'implémentation a appris sont au §10.
+> **Construit, derrière un interrupteur** (`FEATURE_LIBRARY_TRANSFER`, `src/lib/features.ts`) : visible sous `tauri dev`, absent d'un installateur tant qu'il n'a pas été essayé sur de vraies bibliothèques (`CHANTIERS.md`). Code : `src-tauri/src/transfer/`, `ExportDialog`, `ImportDialog`, l'étape de l'assistant.
 
 ---
 
@@ -39,11 +37,13 @@ Un export décrit une **bibliothèque**, pas une installation. Il ne contient :
 - **rien qui décrit le dossier du jeu** de la machine d'origine : fichiers posés, réclamations, sauvegardes d'originaux, mods actifs ;
 - **rien de ce qui est en cours** : imports en attente d'arbitrage, état de la session en préparation.
 
+**Aucun chemin absolu ne part, à aucune profondeur** : chaque fichier JSON qui part (classement, grilles, presets, `ui_prefs.json`, colonnes, musique, préférences) perd toute chaîne qui est un chemin absolu, y compris dans un JSON stocké en chaîne, et elle devient `null` ; un fichier sans chemin part octet pour octet, un fichier illisible ne part pas. La base est compactée (`VACUUM`) avant d'être emballée : sans quoi ce qu'on en efface resterait lisible dans ses pages libres.
+
 Sur la machine d'arrivée, ces informations se reconstituent d'elles-mêmes : le contenu d'origine est réindexé, et un mod est posé dans le jeu quand l'utilisateur récupère ses fichiers et l'active.
 
 ## R3 — Importer sur une installation vide
 
-La v1 n'importe **que dans une installation sans bibliothèque** : base sans mod géré, dossier de bibliothèque vide. Fusionner deux bibliothèques veut dire arbitrer des conflits d'ids, de règles et de décisions, pour un cas rare ; c'est un autre chantier (§9). Cette règle rend l'import simple et sûr : il n'écrase jamais rien.
+La v1 n'importe **que dans une installation sans bibliothèque** — base sans mod géré, dossier de bibliothèque vide — **et dont les chemins du jeu et de la bibliothèque sont réglés**. Fusionner deux bibliothèques veut dire arbitrer des conflits d'ids, de règles et de décisions, pour un cas rare ; c'est un autre chantier (§9). Cette règle rend l'import simple et sûr : il n'écrase jamais rien.
 
 ## R4 — Le format se lit sans Pit Box, et se migre avec lui
 
@@ -81,13 +81,13 @@ L'export produit une copie de `overlay.sqlite` (`VACUUM INTO`, lecture seule, co
 |---|---|---|
 | `mods` | oui | toutes les lignes, contenu d'origine compris (§4.2) ; `active_version_id` gardé |
 | `versions` | oui | `content_state` forcé à `skeleton`, `freed_at` à la date d'export ; `library_path` relatif gardé ; signature, archive et origine gardées |
-| `layers`, `sub_mods` | oui | `content_state` forcé à `skeleton` ; `is_active` à 0. Une couche de voiture ou de circuit part avec le squelette de son hôte (ESPACE§5.4) |
+| `layers`, `sub_mods` | oui | `content_state` forcé à `skeleton`. **Une couche garde son interrupteur** (`is_active` dit si elle entre dans la composition, un choix de l'utilisateur) ; un son ou un habillage de circuit passe à 0 (son `is_active` dit qu'il est posé). Une couche de voiture ou de circuit part avec le squelette de son hôte (ESPACE§5.4). Les livrées fournies avec un mod restent `full` : elles reviennent avec lui |
 | `apps`, `other_mods` | oui | `content_state` forcé à `skeleton` (ESPACE§5.6), `is_active` à 0 et `junctions` vidé pour un autre mod ; leur dossier ne part qu'avec son manifeste, écrit par l'export. Nom repris, note, priorité et rattachement corrigé suivent |
 | `usage` | oui | « déjà essayé », nombre de lancements |
 | `tech_facts`, `tech_user` | oui | la fiche technique (`FICHE§`) : c'est elle qui garde, sans aucun fichier, les chiffres, la mécanique lue dans la physique et l'électronique ; et les corrections de l'utilisateur |
-| `history` | oui | plus une ligne « Exporté depuis une autre installation » à l'import |
+| `history` | oui | plus une ligne « Transfert — exporté depuis une autre installation » à l'import |
 | `wiki_link`, `wiki_no_match` | oui | décisions et résultats de rapprochement |
-| `wiki_cache` | oui | du texte ; évite de refaire toutes les requêtes, et marche hors ligne |
+| `wiki_cache` | oui | repris seulement si l'export porte la même version de contenu que l'application qui importe (`wiki_content_version`) ; sinon il se refait au réseau |
 | `import_decisions` | oui | le journal des décisions d'import (ce que l'app a décidé seule, et pourquoi) : de l'histoire, comme `history` |
 | `forced_extras` | oui | autorisations de remplacer un fichier du jeu : une décision, qui doit survivre comme elle survit à une désactivation |
 | `online_track_categories` | oui | catégories de circuit choisies sur la page Online, par id de circuit : une décision, que l'export emporte et qui l'emporte à l'import |
@@ -97,17 +97,19 @@ L'export produit une copie de `overlay.sqlite` (`VACUUM INTO`, lecture seule, co
 | `pending_folders`, `pending_answers` | **non** | imports en cours |
 | `meta` | **non** | les versions de moteur (harmonisation, règles) se recalculent à l'arrivée : en leur absence, la réharmonisation se déclenche d'elle-même au premier démarrage |
 
-**Tout mod exporté est inactif à l'arrivée.** Les mods actifs au moment de l'export sont notés dans le manifeste (§6) : c'est ce qui permet de proposer, une fois leurs fichiers récupérés, de les réactiver en masse.
+**Une ligne dont le dossier est hors de la bibliothèque ne part pas** (les livrées que le jeu livre avec son contenu, que l'autre machine retrouve), ni les versions synthétiques du contenu d'origine.
+
+**Tout mod exporté est inactif à l'arrivée, et rien ne se réactive de lui-même** une fois récupéré. Les mods actifs au moment de l'export sont notés dans le manifeste (§6), sans autre usage.
 
 ## 4.2 Le contenu d'origine et les mods non gérés
 
-**Contenu d'origine (`is_stock`).** Ses lignes partent, parce qu'elles portent des saisies (une note sur la Ferrari F2004, un favori) et des décisions. À l'import, le contenu d'origine de la nouvelle machine est indexé d'abord, par le chemin normal ; puis les lignes de l'export **ne rapportent que les champs de l'utilisateur** sur les ids qui existent. Un id absent (DLC non possédé sur la nouvelle machine) est laissé de côté et compté dans le rapport : « 12 voitures d'origine absentes de cette installation (DLC ?) : leurs notes n'ont pas été reprises. » Les ids sont listés.
+**Contenu d'origine (`is_stock`).** Ses lignes partent, parce qu'elles portent des saisies (une note sur la Ferrari F2004, un favori) et des décisions. À l'import, le contenu d'origine de la nouvelle machine est indexé d'abord, par le chemin normal ; puis les lignes de l'export **ne rapportent que les champs de l'utilisateur** sur les ids qui existent. Pour les lignes où l'utilisateur a écrit quelque chose, la catégorie, la classe et le pays suivent aussi. Un id absent (DLC non possédé sur la nouvelle machine) est laissé de côté — sa ligne ne part pas dans la base d'arrivée — et compté dans le rapport : « 12 voitures d'origine absentes de cette installation (DLC ?) : leurs notes n'ont pas été reprises. » Les ids sont listés.
 
-**Mods non gérés (`is_unmanaged`).** Ils n'ont pas de dossier en bibliothèque : ils vivent dans le `content/` de la machine d'origine. L'export leur **fabrique une version en vitrine** : squelette tiré de leur dossier dans le jeu, signature de contenu calculée sur leurs vrais fichiers au moment de l'export, `is_unmanaged` remis à 0. À l'arrivée, ce sont des mods en vitrine comme les autres, et **ils deviennent gérés** au premier import de leur archive. C'est le seul chemin, dans Pit Box, par lequel un mod non géré passe sous gestion sans que l'utilisateur ait à déplacer son dossier.
+**Mods non gérés (`is_unmanaged`).** Ils n'ont pas de dossier en bibliothèque : ils vivent dans le `content/` de la machine d'origine. L'export leur **fabrique une version en vitrine** : squelette tiré de leur dossier dans le jeu, signature de contenu calculée sur leurs vrais fichiers au moment de l'export, `is_unmanaged` remis à 0. À l'arrivée, ce sont des mods en vitrine comme les autres, et **ils deviennent gérés** au premier import de leur archive. C'est le seul chemin, dans Pit Box, par lequel un mod non géré passe sous gestion sans que l'utilisateur ait à déplacer son dossier. **Un mod installé à la main des deux côtés** (aussi dans le `content/` de la machine d'arrivée) garde sa ligne locale et ne reçoit que ce que l'utilisateur avait écrit dessus ; le rapport le nomme.
 
 ## 4.3 Les images de vitrine
 
-Pour un mod déjà en vitrine, l'image de vitrine existe : elle part telle quelle. Pour un mod complet, l'export la fabrique par la même fonction (`skeleton::freeze_card_image`, `ESPACE§3.3`), vignette régénérée comprise. Aucune image n'est tirée de la galerie de livrées.
+Pour un mod déjà en vitrine, l'image de vitrine existe : elle part telle quelle. Pour un mod complet, l'export la fabrique par la même fonction (`ESPACE§3.3`) : l'image que montre la carte, c'est-à-dire l'aperçu de la livrée ou du layout préféré, lu dans `ui_prefs.json` avant le nettoyage des chemins.
 
 ---
 
@@ -151,16 +153,14 @@ Repris de la liste de la sauvegarde de démarrage (`backup.rs`), fichier par fic
 | Fichier | Partie | Traitement |
 |---|---|---|
 | `config.json` | Préférences | **seul l'objet `prefs`** part, dans `prefs.json` ; les six chemins (jeu, bibliothèque, Content Manager, 7-Zip, QuickBMS, script) jamais |
-| `ui_prefs.json` | Préférences | tel quel. Contient aussi les filtres enregistrés et les annonces de mises à jour déjà faites : sans conséquence sur une autre machine |
+| `ui_prefs.json` | Préférences | tel quel, chemins retirés : les livrées et layouts préférés gardent leur choix sans leur aperçu |
 | `library_columns.json` | Préférences | tel quel |
-| `music.json` | Préférences | **les listes de lecture en ligne** partent ; les dossiers et fichiers d'ambiance locaux, non (chemins de la machine) |
+| `music.json` | Préférences | ses dossiers d'ambiance à `null` : l'autre machine joue son pack embarqué |
 | `taxonomy.json`, `rules-overlay.json`, `brand_logos.json`, `tag-rules.json` | Classement | tels quels ; les logos à soi (`logos/`) avec eux |
 | `saved_grids.json` | Sessions et grilles | tel quel |
-| presets `.cmpreset` du dossier `Pit Box\` de Content Manager | Sessions et grilles | tels quels |
+| presets `.cmpreset` du dossier `Pit Box\` de Content Manager | Sessions et grilles | tels quels, sans les chemins de leurs presets voisins (ils gardent la copie de leur contenu) |
 | `session.json`, `launch_state.json` | **non** | état de la session en préparation (R2) |
 | `saved_sessions.json` | **non** | ancien format, migré en presets (`SESSION§3.6`) |
-
-**Trouvé en passant :** `saved_grids.json` **n'est pas** dans la liste de la sauvegarde de démarrage (`backup.rs`). Les grilles enregistrées sont donc aujourd'hui hors du filet, contrairement aux sessions. À corriger indépendamment de ce chantier : une ligne dans la liste.
 
 ---
 
@@ -182,6 +182,7 @@ Repris de la liste de la sauvegarde de démarrage (`backup.rs`), fichier par fic
 ```
 
 - `format` est celui du conteneur ; `app_version` décide si l'export est importable (R4). Deux numéros, parce que le conteneur changera bien moins souvent que l'application.
+- `active_at_export` n'a pas d'usage à l'arrivée.
 - `library_bytes_at_export` sert une seule phrase, à l'import : « Cette bibliothèque pesait 312 Go ; ce fichier en fait 4 Mo. »
 
 ---
@@ -197,7 +198,7 @@ Repris de la liste de la sauvegarde de démarrage (`backup.rs`), fichier par fic
 ## 7.2 Exporter
 
 1. **Les parties**, cochables, avec pour chacune ce qu'elle contient en une ligne et un décompte (« 152 mods, 11 couches, 17 voitures d'origine annotées »).
-2. **La taille estimée**, calculée avant d'écrire : « environ 4 Mo ».
+2. **La taille estimée**, calculée avant d'écrire, sans préparer l'export : les décomptes viennent de la base, le poids des seuls fichiers d'un squelette, avec des taux de compression mesurés.
 3. **Ce qui ne partira pas**, en clair : « Le contenu des mods ne part pas : ils arriveront en vitrine, apps et compléments compris. »
 4. **Le fichier** : boîte d'enregistrement, nom proposé `Pit Box - <date>.pitbox`.
 5. **En fond**, progression dans la pile de notifications, comme le relevé anonyme. Rapport à la fin, avec « Ouvrir le dossier ».
@@ -210,17 +211,17 @@ Repris de la liste de la sauvegarde de démarrage (`backup.rs`), fichier par fic
 2. **Vérifier** : format connu et version de l'application pas plus récente (R4), installation vide (R3). Un refus dit **pourquoi** et **quoi faire** : « Cette installation contient déjà 146 mods. L'import d'une bibliothèque ne se fait que dans une installation vide. » ; « Cet export vient de Pit Box 0.45. Mettez Pit Box à jour pour l'importer. »
 3. **Montrer ce qui arrive** : parties présentes (cochables, pour n'en reprendre qu'une partie), décomptes, date d'export, « pesait 312 Go ».
 4. **Importer**, en fond, dans cet ordre :
-   1. sauvegarde de la base courante (même vide), par le mécanisme de `backup.rs` ;
-   2. indexation du contenu d'origine de cette machine ;
-   3. la base de l'export remplace la base, puis `overlay::migrate` la met à niveau (R4) ;
-   4. report des champs de l'utilisateur sur le contenu d'origine (§4.2) ;
-   5. écriture des squelettes dans la bibliothèque, aux chemins relatifs ;
-   6. fichiers de classement, sessions et préférences ; les presets `.cmpreset` rejoignent le dossier `Pit Box\` de Content Manager, **sans écraser** un preset de même nom (suffixe « (importé) ») ;
-   7. `prefs.json` fusionné dans `config.json` de cette machine : les préférences sont reprises, **les chemins de cette machine ne bougent pas** ;
-   8. réharmonisation, déclenchée d'elle-même par l'absence des versions de moteur (§4.1).
-5. **Le rapport**, puis la suite logique : « 152 mods sont en vitrine. 118 peuvent être téléchargés depuis le registre de Content Manager. » avec **« Récupérer les fichiers… »**, qui ouvre la bibliothèque filtrée sur « En vitrine » et la sélection faite (`ESPACE§7.2`). Et, pour les mods actifs à l'export : « Réactiver les 23 mods qui étaient actifs, une fois leurs fichiers récupérés », une case qui se rappelle d'elle-même à chaque réhydratation.
+   1. la sauvegarde de démarrage, même sur une installation vide ;
+   2. l'indexation du contenu d'origine de cette machine ;
+   3. la base de l'export est attachée à la base vivante et recopiée **dans une transaction**, puis `overlay::migrate` la met à niveau (R4) ;
+   4. le report des champs de l'utilisateur sur le contenu d'origine (§4.2) ;
+   5. les squelettes, aux chemins relatifs de la bibliothèque ;
+   6. les fichiers de classement, sessions et préférences — **seuls les fichiers que l'import connaît** reviennent dans `app_config_dir`, et aucune entrée du zip ne peut sortir du dossier où elle atterrit : un `.pitbox` se transmet, un fichier fabriqué ne doit rien pouvoir remplacer. Les presets rejoignent le dossier `Pit Box\` de Content Manager **sans écraser** un preset de même nom (`Nom (2).cmpreset`) ;
+   7. `prefs.json` fusionné dans `config.json` : les préférences sont reprises, **les chemins de cette machine ne bougent pas** ;
+   8. la réharmonisation, déclenchée d'elle-même par l'absence des versions de moteur (§4.1).
+5. **Le rapport** : combien de mods sont en vitrine et combien étaient actifs, et « Ouvrir la bibliothèque », qui **recharge l'application** — préférences, colonnes et musique viennent d'être réécrites. **Rien n'est filtré ni sélectionné, rien ne se réactive** : sur une autre machine, la plupart des mods restent en vitrine, et on récupère ceux dont on a l'archive quand on veut (`ESPACE§7`).
 
-**Un import qui échoue en route** restaure la base sauvegardée à l'étape 1 et supprime les squelettes écrits. L'installation revient vide, et le rapport dit à quelle étape ça s'est arrêté.
+**Un import qui échoue en route** se défait : la transaction est annulée, chaque fichier écrit est retiré, chaque fichier remplacé retrouve ses octets. L'installation revient vide, et le rapport dit à quelle étape ça s'est arrêté.
 
 ---
 
@@ -228,24 +229,11 @@ Repris de la liste de la sauvegarde de démarrage (`backup.rs`), fichier par fic
 
 ## 8.1 Backend
 
-Un module **`transfer.rs`** :
-
-| Fonction | Rôle |
-|---|---|
-| `estimate(conn, cfg, parts) -> Estimate` | décomptes et taille, sans écrire (§7.2) |
-| `export(app, conn, cfg, parts, dest) -> Report` | §4, §5, §6, en fond |
-| `inspect(path) -> Manifest` | lecture du manifeste seul (§7.3, étape 1) |
-| `check_importable(conn, cfg, &Manifest) -> Result<(), Refusal>` | R3, R4 |
-| `import(app, conn, cfg, path, parts) -> Report` | §7.3, étape 4, avec retour arrière |
-
-**Réutiliser, ne pas recopier** : `skeleton::is_kept` et `skeleton::freeze_card_image` (`ESPACE§9.1`) pour les squelettes ; `backup.rs` pour la copie de base (`VACUUM INTO` depuis une connexion en lecture seule) et la liste des fichiers de préférences ; l'indexation du contenu d'origine (`stock.rs`) ; les migrations d'`overlay/schema.rs` (`overlay::migrate`).
-
-**L'écriture du zip se fait en flux**, fichier par fichier : jamais toute l'archive en mémoire.
+Le module `transfer/` **réutilise sans recopier** la liste blanche et l'image figée de la vitrine (`ESPACE§9.1`), la copie de base de la sauvegarde de démarrage (`VACUUM INTO` depuis une connexion en lecture seule), l'indexation du contenu d'origine et les migrations d'`overlay::migrate`. **Le zip s'écrit en flux**, jamais en mémoire, et le manifeste se lit sans rien extraire.
 
 ## 8.2 Frontend
 
-- La rubrique « Transférer la bibliothèque » de Fichiers › Maintenance, et l'étape de l'assistant.
-- Les deux parcours de §7.2 et §7.3, avec leurs refus en toutes lettres.
+La rubrique « Transférer la bibliothèque » de Fichiers › Maintenance, l'étape de l'assistant, et les deux parcours de §7.2 et §7.3 avec leurs refus en toutes lettres.
 
 ## 8.3 La table de §4.1 est une porte
 
@@ -253,27 +241,13 @@ Un test liste les tables de la base (`sqlite_master`) et **échoue** si l'une d'
 
 ## 8.4 Tests
 
-- **Aller-retour** : une bibliothèque de fixture (mods complets et en vitrine, contenu d'origine annoté, un mod non géré, couches, une app et un mannequin renommés et annotés, profils, grilles, règles de l'utilisateur) ; export ; import dans une installation vide ; toutes les saisies et décisions sont identiques, tous les mods sont en vitrine, aucun `.kn5` ni `.acd` n'est dans le zip.
-- **Fiche technique** : après l'import, `techsheet::effective` rend pour chaque voiture exactement la même fiche qu'avant l'export, courbe, électronique et corrections comprises, sans lire aucun fichier (`FICHE§9.4`).
-- **Rien de la machine** : le zip ne contient aucune chaîne égale à un chemin absolu de la configuration d'origine.
-- **Refus** : installation non vide ; export d'une version plus récente de Pit Box ; zip sans manifeste.
-- **Export ancien** : une base de fixture privée des colonnes récentes s'importe, et les migrations les ajoutent.
-- **Contenu d'origine** : une note sur un id absent de la machine d'arrivée est comptée et listée, pas perdue en silence.
-- **Mod non géré** : exporté, importé, puis son archive importée → réhydraté et géré.
-- **Retour arrière** : un échec provoqué à l'étape 5 laisse l'installation vide.
-- **Porte des tables** : ajouter une table non classée fait échouer le test de §8.3.
+Les tests de `transfer` portent les cas : l'aller-retour d'une bibliothèque de fixture (saisies et décisions identiques, tout en vitrine, aucun `.kn5` ni `.acd` dans le zip), la fiche technique rendue à l'identique sans lire de fichier (`FICHE§9.4`), **aucun chemin absolu dans le zip, à aucune profondeur d'échappement**, les refus, l'export ancien mis à niveau, le contenu d'origine absent compté, le mod non géré réhydraté et géré, le retour arrière, et la porte des tables (§8.3).
 
 ---
 
 # 9. Ordre de livraison et hors périmètre
 
-| Lot | Contenu | Dépend de |
-|---|---|---|
-| ESPACE lot 1 | vitrine des voitures et circuits, suppression à deux choix, réhydratation, origine des archives | — |
-| ESPACE§5.6 | l'état sans fichiers des apps et des autres mods, le squelette des couches | ESPACE lot 1 |
-| **EXPORT lot 1** | ce document, tous types | ESPACE§5.6 |
-
-Le 2026-09-28, la vitrine des autres types avait été abandonnée, et l'export avec elle. Rouverte le 2026-10-09 pour l'export seul : une bibliothèque qu'on transfère doit emporter ses apps, ses mannequins et ses autres mods, avec leurs noms et leurs notes. Ce qui en est fait est l'**état** (ESPACE§5.6), pas le geste « Garder en vitrine » à leur suppression.
+Livré après la vitrine (ESPACE lot 1) et l'état sans fichiers des apps et des autres mods (ESPACE§5.6), qui existe pour lui.
 
 **Hors périmètre, à rediscuter** :
 
@@ -288,34 +262,10 @@ Le 2026-09-28, la vitrine des autres types avait été abandonnée, et l'export 
 
 ## 10.1 Écarts assumés
 
-À reprendre s'ils gênent ; aucun ne touche au dossier du jeu.
-
-- **Une couche garde son interrupteur** (`layers.is_active`), au lieu du 0 du §4.1 : il dit si elle entre dans la composition, un choix de l'utilisateur, pas si elle est posée. `active_layers` écarte déjà une couche en vitrine. Le `is_active` d'un son ou d'un habillage de circuit, lui, dit qu'il est posé, et passe à 0.
-- **Aucun chemin absolu dans les réglages qui partent**, pas seulement ceux du §5.2 : chaque fichier JSON (classement, grilles, presets, `ui_prefs.json`, colonnes, musique, `prefs`) perd toute chaîne qui est un chemin absolu, à toute profondeur, y compris dans le JSON stocké en chaîne ; elle devient `null`, et un fichier sans chemin part octet pour octet. `music.json` n'a pas de listes de lecture en ligne : il part avec ses deux dossiers à `null`, et l'autre machine joue son pack embarqué. Les livrées et layouts préférés de `ui_prefs.json` gardent leur choix (identifiant, nom) sans leur aperçu : la carte d'arrivée montre l'image figée. Un preset de Content Manager perd le chemin de ses presets voisins (`AssistsPresetFilename`…) et garde la copie de leur contenu qu'il porte à côté. Un fichier JSON illisible ne part pas.
-- **L'image figée** est celle que montre la carte : l'aperçu de la livrée ou du layout préféré, lu dans `ui_prefs.json` avant le nettoyage ; le choix du backend à défaut.
-- **Un mod installé à la main des deux côtés** (dans le `content/` de la machine d'arrivée aussi) garde sa ligne locale : il reste ce qu'il est là, un vrai dossier, et ne reçoit que ce que l'utilisateur avait écrit dessus. Sa version, ses couches, ses livrées et son squelette ne viennent pas ; le rapport le nomme. Le remplacer par une version en vitrine laissait son vrai dossier dans le jeu, et sa récupération y aurait buté.
-- **L'estimation** (§7.2) ne prépare pas l'export : les décomptes viennent de la base, le poids des seuls fichiers qu'un squelette garde, avec les taux de compression mesurés sur un export réel (la base au cinquième, le JSON sous le tiers, une image figée vers 20 Ko). Sur la bibliothèque réelle : 13,7 Mo annoncés en moins d'une seconde pour un fichier de 16,1 Mo.
-- **Un preset de même nom** devient `Nom (2).cmpreset`, pas « (importé) » : le backend ne connaît pas la langue de l'utilisateur, et un nom de fichier n'a pas de traduction.
-- **Pas de suite à l'import** (§7.3, étape 5 ; décidé avec l'utilisateur le 2026-10-10). Le rapport dit combien de mods sont en vitrine et combien étaient actifs, et « Ouvrir la bibliothèque » recharge l'application ; rien n'y est filtré ni sélectionné, et aucun mod ne se réactive de lui-même une fois récupéré. Sur une autre machine, la plupart des mods ne se retéléchargent pas : ils restent en vitrine, et on récupère ceux dont on a l'archive, quand on veut. `active_at_export` reste dans le manifeste, sans usage.
-- **Un mod non géré** reçoit le dossier de version `<cars|tracks>/<id>/export` : la réhydratation copie dans le dossier existant de la version, quel que soit son nom.
-- **Une ligne dont le dossier est hors de la bibliothèque ne part pas** (`relativize`) : ce sont les livrées que le jeu livre avec son contenu, trouvées dans `content/`, et que l'autre machine retrouve. Les versions synthétiques du contenu d'origine non plus (§4.2) : l'autre machine indexe le sien.
-- **Les livrées fournies avec un mod** (`removable = 0`) restent `full` en base : elles vivent dans le dossier de sa version et reviennent avec lui, comme en vitrine (ESPACE§10.1).
-- **Le cache Wikipédia** n'est repris que si le manifeste porte la même version de contenu que l'application qui importe (`wiki_content_version`) ; sinon il se refait au réseau.
-- **Le contenu d'origine** reçoit aussi sa catégorie, sa classe et son pays, en plus des saisies du §4.2 : l'écran les édite. Seulement pour les lignes où l'utilisateur a écrit quelque chose (nom, description, note, tags, favori).
-- **Un refus de plus** : les chemins du jeu et de la bibliothèque non réglés. L'assistant les règle avant de proposer l'import ; l'écran Maintenance n'y mène que réglé.
-- **L'import se termine en rechargeant l'application** : les préférences, les colonnes et la musique viennent d'être réécrites, et chaque écran garde sa copie en mémoire. La copie de `ui_prefs.json` est relue dès la fin de l'import (`reloadUiPrefs`), avant que quoi que ce soit puisse l'écrire par-dessus.
+Les écarts au plan d'origine sont dans le texte ci-dessus (§2, §4, §5.2, §7.3), qui décrit ce que l'app fait.
 
 ## 10.2 Pièges payés
 
-- **Une base copiée garde ce qu'on en efface.** Après `VACUUM INTO`, les lignes supprimées et les chemins réécrits restent lisibles dans les pages libres du fichier tant qu'on ne l'a pas compacté : le test « rien de la machine » a trouvé le chemin du dossier du jeu dans la base de l'export. Un `VACUUM` final avant d'emballer.
-- **Deux tables ont une clé étrangère vers `mods`** (`versions`, `tech_facts`) : une ligne sur un contenu d'origine absent de l'autre machine (un DLC) faisait échouer tout l'import. Ces lignes ne partent pas dans la base d'arrivée ; ce que l'utilisateur y avait écrit est compté dans `stock_missing`.
-- **Une entrée de zip est une donnée.** Seuls les fichiers que `files.rs` nomme reviennent dans `app_config_dir`, et aucun chemin d'entrée ne peut sortir du dossier où il atterrit (`..`, chemin absolu) : un `.pitbox` se transmet, et un fichier fabriqué ne doit pas pouvoir remplacer la base ou `config.json`.
-
-- **Des chemins encodés deux fois passaient inaperçus.** `ui_prefs.json` stocke ses valeurs en JSON sérialisé dans une chaîne : un chemin y a ses `\` quadruplés. Le premier export de la bibliothèque réelle emportait ainsi 76 chemins du dossier du jeu, et un preset de Content Manager le nom d'utilisateur Windows, alors que le test « rien de la machine » passait : il cherchait les chemins de la machine sous deux écritures seulement. Il cherche maintenant n'importe quel chemin absolu, à toute profondeur d'échappement.
-
-## 10.3 Décisions prises sans la spec
-
-- La dépendance **`zip`** (2.x, compression deflate seule) : lire le manifeste sans tout extraire et écrire en flux le demandaient. 7-Zip, déjà configuré pour l'import, aurait exigé d'extraire l'archive entière pour en lire une page.
-- L'import refait la **sauvegarde de démarrage** (`backup::backup_now`) avant tout, même dans une installation vide.
-- L'import se fait **dans** la base vivante (`ATTACH` puis une transaction), pas en remplaçant le fichier : la connexion de l'application reste ouverte, et un échec se défait par un `ROLLBACK`. Chaque fichier écrit est noté et retiré s'il échoue, chaque fichier remplacé retrouve ses octets.
-- Chaque mod importé reçoit dans son historique une ligne **« Transfert — exporté depuis une autre installation »** (§4.1, `history`).
+- **Une base copiée garde ce qu'on en efface** dans ses pages libres : un `VACUUM` final avant d'emballer (R2).
+- **Deux tables ont une clé étrangère vers `mods`** (`versions`, `tech_facts`) : une ligne sur un contenu d'origine absent de l'autre machine faisait échouer tout l'import ; elle ne part pas (§4.2).
+- **Des chemins encodés deux fois passaient inaperçus** : `ui_prefs.json` stocke ses valeurs en JSON sérialisé dans une chaîne, où un chemin a ses `\` quadruplés. Le test « rien de la machine » cherche donc n'importe quel chemin absolu, à toute profondeur d'échappement.

@@ -272,7 +272,7 @@ de reprendre. En cas d'écart, la spec fait foi.
         bibliothèque suffit), regarder les cartes, les fiches, les notes, les
         Compléments, puis récupérer quelques mods par leur archive. Ensuite
         seulement, `FEATURE_LIBRARY_TRANSFER = true`.
-      - **Pas de suite à l'import, décidé le 2026-10-10** (EXPORT§10.1) : ni
+      - **Pas de suite à l'import, décidé le 2026-10-10** (EXPORT§7.3) : ni
         bibliothèque filtrée pour tout récupérer, ni réactivation automatique.
         Sur une autre machine, la plupart des mods ne se retéléchargent pas ;
         ils restent en vitrine, et on récupère ceux dont on a l'archive. Ne
