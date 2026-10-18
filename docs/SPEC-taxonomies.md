@@ -2,40 +2,19 @@
 
 ## Spécification d'implémentation
 
-*Marques, pays et catégories deviennent des entités du produit, de forme identique. **Remplace intégralement la spec « marques et logos »**, dont le contenu est repris et généralisé.*
+*Marques, pays et catégories sont des termes du produit, de forme identique, curés dans les onglets Marques, Pays et Familles de **Classement** (`SPEC.md` §7.2quater). Les tables livrées et les décisions de l'utilisateur suivent le modèle catalogue + surcouche de `SPEC-regles.md` (REGLES§2).*
 
 ---
 
 # 1. Objet
 
-Trois informations sont aujourd'hui des **chaînes de caractères** extraites des mods : la marque d'une voiture, le pays d'un circuit, les tags de catégorie. Trois conséquences identiques :
-
-- `Alfa` et `Alfa Romeo`, `Japan` et `japan`, sont des valeurs distinctes dans les filtres ;
-- rien ne peut leur être attaché — notamment pas un emblème ;
-- rien ne les regroupe : `#LMP1`, `#group-c` et `#LMH` ne se savent pas parents.
-
-Elles deviennent des **termes** : un nom canonique, une liste d'alias, un emblème.
+La marque d'une voiture, le pays d'un circuit ou d'une voiture, les tags de catégorie arrivent comme des **chaînes** écrites par les auteurs : `Alfa` et `Alfa Romeo`, `Japan` et `japan` seraient des valeurs distinctes, rien n'y serait attaché (un emblème), rien ne les regrouperait (`#LMP1`, `#group-c` et `#LMH` sont parents). Elles deviennent des **termes** : un nom canonique, des orthographes rattachées (alias), un emblème.
 
 ---
 
 # 2. Une seule forme, trois usages
 
-```ts
-type TaxonomyKind = 'brand' | 'country' | 'category';
-
-interface Term {
-  kind:    TaxonomyKind;
-  id:      string;        // slug canonique, stable — 'alfa-romeo', 'jp', 'prototype'
-  name:    string;        // nom affiché — 'Alfa Romeo', 'Japon', 'Prototype'
-  aliases: string[];      // chaînes brutes rencontrées dans les mods
-  emblem:  Emblem;
-  hidden?: boolean;       // retiré des index, conservé en base
-}
-```
-
-**Résolution, commune aux trois :** une chaîne brute est cherchée dans les `aliases` de tous les termes du même `kind`. Trouvée → le terme canonique. Non trouvée → un nouveau terme est créé, avec cette chaîne comme nom et comme premier alias.
-
-C'est un **index, pas un moteur de règles** (§8). Un mod importé demain trouve ses termes par simple recherche, sans réévaluation, et hérite de leurs emblèmes au passage.
+**Résolution, commune aux trois** : une chaîne brute est cherchée parmi les orthographes rattachées aux termes de même nature ; trouvée, elle donne le terme canonique, sinon elle reste son propre terme. C'est un **index, pas un moteur de règles** (§8) : un mod importé demain trouve ses termes par simple recherche, et hérite de leurs emblèmes. Un terme sans mod rattaché reste en base, masqué.
 
 ## 2.1 Ce qui diffère d'un usage à l'autre
 
@@ -44,7 +23,7 @@ C'est un **index, pas un moteur de règles** (§8). Un mod importé demain trouv
 | Source des chaînes | champ `brand` | champ `country` | tags commençant par `#` |
 | Cardinalité par mod | 1 | 1 | **N** |
 | **Partitionne la bibliothèque** | oui | oui | **non** |
-| Emblème | logo issu des mods, **curé** (§4) | drapeau **embarqué** | icône **embarquée** |
+| Emblème | logo issu des mods, **curé** (§4) | drapeau **du jeu** | icône **embarquée** |
 | Variants à départager | oui | non | non |
 | Deux niveaux d'emblème | oui (§3) | non | non |
 | S'applique à | voitures | voitures **et** circuits | voitures |
@@ -76,15 +55,11 @@ Au niveau voiture, la variation d'époque est signifiante et l'application n'a r
 
 Au niveau marque, il n'y a pas d'année à représenter : la marque est une catégorie, pas un millésime.
 
-**Pays et catégories n'ont qu'un niveau.** Leur emblème est embarqué dans l'application, identique partout, sans curation d'image possible.
+**Pays et catégories n'ont qu'un niveau** : leur emblème est fixe, identique partout, sans curation d'image possible.
 
-## 3.1 Pays — drapeaux embarqués
+## 3.1 Pays — drapeaux du jeu
 
-Jeu de drapeaux SVG livré avec l'application, indexé par code ISO 3166-1 alpha-2. Contrairement aux logos de marque, **les drapeaux nationaux ne sont pas des marques déposées** : les embarquer ne pose aucun problème (§13).
-
-La curation d'un pays ne porte donc que sur **le nom et les alias**, jamais sur l'image. Le terme porte son code ISO ; le drapeau en découle.
-
-Un pays sans code ISO reconnu (`Nürburgring Land`, valeur fantaisiste d'un mod) reçoit un emblème neutre et apparaît dans les propositions de fusion.
+Le drapeau d'un pays est celui qu'Assetto Corsa livre (`content/gui/NationFlags/`), trouvé par le nom du pays dans la table du jeu — la même que la colonne Nationalité du plateau (`nationalities.rs`). La curation d'un pays ne porte donc que sur **le nom et les orthographes**, jamais sur l'image. Un pays inconnu de la table du jeu n'a pas de drapeau (jamais un drapeau approché) et apparaît dans les propositions de rattachement (§7.2). Seul « Fictif » (§7.5) a un drapeau dessiné par l'app.
 
 ## 3.2 Catégories — icônes embarquées
 
@@ -92,7 +67,7 @@ Jeu d'une douzaine de silhouettes SVG livrées avec l'application : berline de r
 
 L'utilisateur **choisit** l'icône d'une famille dans ce jeu ; il n'en fournit pas. Une famille inventée par l'utilisateur reçoit le glyphe neutre tant qu'il n'en a pas assigné une.
 
-Trait uniforme, remplissage `#d4d5d7`, hauteur de rendu 34 px dans les tuiles d'index.
+
 
 ## 3.3 Catégories de circuit — pictogrammes embarqués
 
@@ -143,11 +118,9 @@ Sans objet pour les pays et les catégories, dont les emblèmes sont embarqués 
 
 ---
 
-# 6. Les trois onglets de l'Atelier
+# 6. Les trois onglets de Classement
 
-`Marques`, `Pays` et `Catégories` rejoignent Règles, Importer, Profils et Maintenance. **L'Atelier passe à sept onglets, à plat, sans sous-rubrique** — la contrainte de la spec navigation, REFONTE§3, est respectée.
-
-> **Seuil.** Sept onglets restent lisibles. C'est la limite : le prochain outil ajouté impose de passer à une liste latérale dans l'écran plutôt qu'à un huitième onglet.
+`Marques`, `Familles` et `Pays` sont trois des quatre onglets de **Classement**, à côté de `Règles`, à plat et sans sous-rubrique (REFONTE§3). L'Atelier qui les portait d'abord s'est partagé en Classement et Fichiers (`SPEC.md` §7.2quater).
 
 ## 6.1 Liste — structure commune
 
@@ -161,7 +134,7 @@ Une ligne par terme :
 
 Colonnes : emblème, nom canonique, nombre de mods rattachés, nombre de variants (marques seulement), fanion de curation manuelle, chevron.
 
-Tri par nombre de mods décroissant : les termes qui comptent sont ceux qu'on voit le plus.
+Tri : **les pays et les familles par nombre de mods décroissant** (les termes qui comptent sont ceux qu'on voit le plus), **les marques par nom** — on y cherche une marque comme dans un répertoire ; l'ordre par nombre reste celui de l'index.
 
 **Colonne supplémentaire pour les catégories :** le nombre de tags rattachés à la famille.
 
@@ -276,9 +249,7 @@ La correction des marques quitte `Règles` pour l'onglet Marques. **Même chose 
 
 **Raison :** ce n'est pas la même mécanique. `Règles` est un moteur *conditions → actions*, appliqué à des critères flous — « si le dossier contient *drift*, alors tag drift ». Une correction de terme est une **table de correspondance exacte** : une chaîne, un terme canonique. Ce n'est pas une règle, c'est un index.
 
-**Conversion au premier lancement de la version qui introduit les onglets :** chaque correction existante devient un alias du terme canonique cible. Les règles correspondantes sont retirées de `Règles`, et un message unique, non bloquant, signale le déplacement.
-
-**Rien ne doit être perdu.** Si une correction ne peut pas être convertie — cible ambiguë, condition composite — elle reste dans `Règles` et est listée dans le message.
+**La migration** a converti chaque correction exacte en orthographe du terme cible, à diff nul et en transportant sa couche (catalogue ou utilisateur, REGLES§13.7). **Rien ne se perd** : une correction qui ne se convertit pas (cible ambiguë, condition composite) reste une règle.
 
 ---
 
@@ -330,12 +301,12 @@ Google Images, la source de Playnite pour les icônes de jeu, a été écarté :
 | Tuile d'index par pays | pays | — | 44 × 29 px |
 | Tuile d'index par catégorie | catégorie | — | 34 px de haut |
 | Éditeur d'un filtre — suggestions et jetons | toutes | **terme** | 18 px |
-| Onglets de l'Atelier | toutes | **terme** | 20 px |
+| Onglets de Classement | toutes | **terme** | 20 px |
 | **Résumé d'une puce de filtre** | toutes | **terme** | 16 × 11 px, **une seule valeur** |
 
 **L'emblème dans une puce n'apparaît que si la puce porte une valeur unique.** Dès qu'elle en porte plusieurs (`Catégorie : ET Prototype, Race`), les emblèmes sont omis : ils rendraient la puce illisible et casseraient sa hauteur de 26 px.
 
-**Chemin vers l'éditeur :** sur la fiche de détail, le nom de la marque porte une action discrète qui ouvre `Atelier › Marques` positionné dessus. La fiche n'affiche pourtant pas le logo canonique — mais c'est là qu'on pense à la marque, donc c'est un point de départ naturel.
+**Chemin vers l'éditeur :** sur la fiche d'une voiture, le menu ⋮ propose « Éditer la marque … », qui ouvre `Classement › Marques` déplié sur elle.
 
 **Pas d'édition dans le filtre.** Le popover porte déjà l'inclusion et l'exclusion ; y ajouter de la curation mélangerait deux modes dans un espace étroit, et obligerait à dupliquer le même éditeur.
 
@@ -367,12 +338,12 @@ Les familles de catégorie livrées avec l'application sont traduites ; une fami
 
 # 13. Hors périmètre
 
-**Un catalogue de logos de marque embarqué** est exclu : ce sont des marques déposées, et les redistribuer est un risque que le produit n'a pas à prendre. Tous les logos viennent des mods de l'utilisateur ou de ses propres fichiers — y compris un logo qu'il est allé chercher en ligne et a choisi lui-même (§9.1), qui devient l'un d'eux. Les drapeaux et les icônes de catégorie, eux, sont embarqués sans difficulté (§3.1, §3.2).
+**Un catalogue de logos de marque embarqué** est exclu : ce sont des marques déposées, et les redistribuer est un risque que le produit n'a pas à prendre. Tous les logos viennent des mods de l'utilisateur ou de ses propres fichiers — y compris un logo qu'il est allé chercher en ligne et a choisi lui-même (§9.1), qui devient l'un d'eux. Les icônes de catégorie, elles, sont embarquées sans difficulté (§3.2), et les drapeaux viennent du jeu (§3.1).
 
 **La normalisation des noms de modèle** — au-delà du retrait du préfixe de marque et de pack (GRILLE§3.4) — n'est pas couverte.
 
-**Les catégories de circuits.** Cette spec rattache les tags aux familles pour les voitures. Les circuits ont aussi des tags ; le même mécanisme s'y appliquerait, mais la valeur est moindre puisque le pays y suffit comme axe de parcours. À évaluer séparément.
+**Des familles pour les circuits.** Les circuits ont leurs catégories (§6.4), sans regroupement en familles : le pays suffit comme axe de parcours.
 
 ---
 
-*Pit Box · spécification taxonomies · remplace la spec « marques et logos » · à lire avec les specs index, grille, filtres et navigation*
+*Pit Box · spécification taxonomies · à lire avec les specs index, grille, règles et navigation*
