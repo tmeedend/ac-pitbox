@@ -2,7 +2,7 @@
 
 > Gestionnaire de mods desktop pour Assetto Corsa. Remplace Mod Organizer 2, utilise Content Manager (CM) comme moteur de lancement.
 > Application Tauri (frontend web + backend Rust), base SQLite. Thème Rosso Corsa.
-> Ce document décrit l'application telle qu'elle fonctionne, par domaine. Il sert de référence de conception ; les consignes d'implémentation ponctuelles sont données séparément à Claude Code.
+> Ce document décrit l'application telle qu'elle fonctionne, par domaine : le comportement et les règles qu'il faut connaître pour la modifier sans la casser. Les cas précis vivent dans les tests, le comment dans les commentaires du code, l'historique et le reste à faire dans `CHANTIERS.md`.
 
 ---
 
@@ -17,38 +17,35 @@ L'app prend en charge tout le cycle de vie : importer (analyse, détection de ty
 ## 2. Architecture
 
 **Quatre couches** :
-1. **Bibliothèque** — source de vérité des fichiers. Disque dédié (~300 Go). Tous les mods rangés proprement.
+1. **Bibliothèque** — source de vérité des fichiers, sur un disque dédié. Tous les mods rangés proprement.
 2. **Application** — import, identité, tags, activation, lancement.
-3. **`content/` d'Assetto Corsa** — peuplé dynamiquement par des hardlinks par fichier vers la bibliothèque (`content/cars/<id>`, `content/tracks/<id>`).
-4. **Content Manager** — moteur conservé (graphismes CSP/Sol/Pure, FFB, presets), invoqué par l'app pour lancer une session.
+3. **`content/` d'Assetto Corsa** — une **projection** de la bibliothèque, jamais l'original (`content/cars/<id>`, `content/tracks/<id>`).
+4. **Content Manager** — moteur conservé (graphismes CSP/Sol/Pure, FFB, presets), invoqué par l'app pour lancer une session. On contourne son UI, pas son moteur.
 
 **Décisions structurantes** :
-- **Activation par hardlinks par fichier** (comme Vortex) : zéro duplication (critique à 300 Go), instantané, pas de droits admin. Le `content/` d'AC est une projection, jamais l'original.
-  - ⚠️ **Changement par rapport aux junctions de dossier** (`mklink /J`) : testées, elles échouent pour les circuits (AC/CSP semble filtrer ou mal traverser ce type de reparse point sur l'arborescence complexe d'un circuit — plusieurs layouts, `ai/`, `data/`, `extension/`). Les **symlinks** (`mklink /D`) fonctionnent mais exigent les droits admin/mode développeur. Solution retenue : **un hardlink par fichier**, à l'intérieur d'une vraie arborescence de dossiers dans `content/`. Un hardlink n'est **pas** un reparse point — le fichier lié est indiscernable d'un fichier normal pour AC, aucune indirection à mal interpréter. Ni droits admin, ni duplication.
-  - **Contrainte** : les hardlinks exigent le **même volume** (contrairement aux junctions, qui peuvent traverser les disques). Chez l'utilisateur, bibliothèque et jeu sont sur le même disque. **Repli en copie physique** si bibliothèque et jeu se retrouvent sur des disques différents (détection automatique, comme pour le déplacement adaptatif à l'import, §4.2).
-  - **Composition par couches (§4.3)** : entièrement en hardlinks elle aussi, y compris pour les fichiers qu'une couche écrase — pas de copie de fusion nécessaire, juste un hardlink vers le fichier réellement gagnant (base ou couche de plus haute priorité) à chaque chemin. Pas de dossier de composition intermédiaire : `content/<type>s/<id>` **est** directement le résultat composé.
-  - **Implémenté et testé** (`src-tauri/src/deploy.rs`) : moteur générique de déploiement/composition par hardlinks, avec repli en copie physique par fichier si le hardlink échoue (disques différents). Garde-fou : un marqueur caché (`.pitbox-deployed.json`) à la racine de chaque dossier déployé, seule preuve qu'il a été créé par l'app (une arborescence de hardlinks est un vrai dossier, indiscernable d'un dossier Kunos par ses seuls attributs — contrairement à une junction/symlink, détectable par son type de reparse point). **Compat ascendante** : les mods déjà actifs sous l'ancien mécanisme (`mklink /D`) restent inoffensifs indéfiniment, migrés vers les hardlinks seulement à leur prochaine (ré)activation — jamais de migration forcée.
-  - **Mode de déploiement au choix** (réglage `deploy_mode`, §11) : hardlinks (défaut, décrit ci-dessus) ou symlink (`mklink /D`, l'ancien mécanisme, redevenu un choix explicite plutôt qu'un vestige de compatibilité). Chaque mode a son prérequis, vérifié dans l'écran de réglages (`config::validate`) : hardlinks exige que le dossier Assetto Corsa et la bibliothèque soient sur le **même disque** (sinon repli silencieux en copie physique — techniquement fonctionnel mais double l'espace disque et recopie à chaque activation, donc traité comme un prérequis bloquant plutôt qu'un simple avertissement) ; symlink exige le **mode développeur Windows** activé, ou l'app lancée en administrateur (déconseillé — un lien dédié ouvre directement `ms-settings:developers`). Un mod à couche(s) active(s) (§4.3) reste **toujours** déployé par hardlinks quel que soit ce réglage : une junction/symlink ne peut pointer que vers une seule cible, elle ne peut pas fusionner base + couches — seule une base sans couche suit le mode choisi (`activation::deploy_base`).
-- **Content Manager conservé** comme moteur + launcher : reproduire son moteur de config serait énorme et fragile. On contourne son UI, pas son moteur.
-- **Stack Tauri** : binaire léger, Rust à l'aise avec les opérations filesystem/hardlinks/process, frontend web pour la richesse visuelle.
-- **SQLite** : placée dans `app_data_dir` (pas en chemin relatif, pour survivre aux rebuilds).
-- **Chemins de bibliothèque stockés relatifs, pas absolus** (`src-tauri/src/libpath.rs`) : `library_path` (versions, couches, sous-éléments, apps, autres mods) et `kept_archive_path` sont enregistrés **relatifs à la racine de bibliothèque**, jamais en chemin absolu figé sur la machine d'import. Sans ça, migrer la bibliothèque vers un autre disque ou un autre PC (robocopy + copie du dossier de config) laisse chaque ligne pointer vers un chemin qui n'existe plus, même quand tous les fichiers sont bien arrivés — la copie de fichiers ne suffit pas si les métadonnées restent figées. Un seul changement de `library_path` dans les Réglages suffit alors à tout refaire résoudre. **Compat ascendante** : une ligne écrite avant ce format reste en absolu, reconnue et utilisée telle quelle (`libpath::resolve`) — jamais cassée.
+- **Activation par hardlinks, un par fichier**, dans une vraie arborescence de dossiers (`deploy.rs`) : zéro duplication, instantané, sans droits admin. Les junctions de dossier ont été écartées parce qu'AC/CSP les traverse mal sur un circuit, et les symlinks exigent le mode développeur. Un hardlink n'est pas un point d'analyse : le jeu ne le distingue pas d'un fichier ordinaire.
+  - **Même volume obligatoire** : si bibliothèque et jeu sont sur deux disques, un fichier dont le hardlink échoue est copié. C'est un prérequis vérifié par l'écran de réglages (`config::validate`), traité comme bloquant : la copie double l'espace et se refait à chaque activation.
+  - **Un marqueur caché (`.pitbox-deployed.json`)** à la racine de chaque dossier déployé est la seule preuve qu'il a été créé par l'app : une arborescence de hardlinks est indiscernable d'un dossier Kunos par ses attributs.
+  - **Composition par couches (§4.3)**, en hardlinks elle aussi : à chaque chemin, un lien vers le fichier gagnant (base ou couche de plus haute priorité). `content/<type>s/<id>` **est** le résultat composé, sans dossier intermédiaire.
+  - **Mode de déploiement au choix** (`deploy_mode`, §11) : hardlinks (défaut) ou symlink (`mklink /D`, qui exige le mode développeur de Windows — un lien ouvre `ms-settings:developers`). **Un mod à couche(s) active(s) reste toujours en hardlinks** : un lien ne pointe que vers une cible, il ne sait pas fusionner (`activation::deploy_base`). Un mod déployé par l'ancien mécanisme `mklink /D` reste valable, et passe aux hardlinks à sa prochaine activation — jamais de migration forcée.
+- **Stack Tauri**, **SQLite** dans `app_data_dir`.
+- **Chemins de bibliothèque stockés relatifs à la racine de la bibliothèque** (`libpath.rs`), jamais en absolu : déplacer la bibliothèque sur un autre disque ou une autre machine demande seulement de changer `library_path` dans les Réglages. Une ligne écrite en absolu par une version antérieure reste lue telle quelle (`libpath::resolve`).
 
 ---
 
 ## 3. Modèle de données : overlay non destructif
 
-**Le fichier `ui_car.json` / `ui_track.json` d'un mod n'est JAMAIS modifié.** Règle absolue. Réécrire le travail d'un moddeur casse les signatures d'intégrité et rend les modifications indissociables du mod.
+**Le fichier `ui_car.json` / `ui_track.json` d'un mod n'est JAMAIS modifié.** Règle absolue : réécrire le travail d'un moddeur casse les signatures d'intégrité et rend les modifications indissociables du mod.
 
 **Deux sources de vérité séparées** :
-- La **bibliothèque** = source de vérité des *fichiers* (contenu des mods, lecture seule).
-- La **base d'overlay** (SQLite) = source de vérité des *métadonnées produites par l'app* : tags ajoutés/déduits, catégorie, année, specs complémentaires, favori, historique, profils, presets. Indexée sur l'empreinte du mod.
+- La **bibliothèque** = les *fichiers* (contenu des mods, lecture seule).
+- La **base d'overlay** (SQLite) = les *métadonnées produites par l'app* : tags ajoutés/déduits, catégorie, année, specs complémentaires, favori, historique, profils, presets. Indexée sur l'empreinte du mod.
 
-Le fichier du mod est une **entrée** du pipeline (lu), jamais une **sortie** (jamais écrit). Conséquence : désinstaller l'app laisse les mods intacts ; un badge « fichier du mod jamais modifié » rassure l'utilisateur.
+Le fichier du mod est une **entrée** du pipeline, jamais une **sortie**. Désinstaller l'app laisse les mods intacts.
 
 **Entités** : Mod (identité stable, indépendante du nom de dossier), Tag (issu de l'ontologie), Profile (ensemble nommé de mods activés), HistoryEntry (événement horodaté), plus les sous-éléments et couches décrits plus bas.
 
-**Historique d'un mod** : trace les événements avec le nom de l'archive/fichier source — « import initial », « mise à jour », « extension ajoutée ». **Ne trace PAS** les activations/désactivations (bruit sans valeur). Pas de compteur de nombre de mises à jour. Contenu de base Kunos exclu de cette frise (`is_stock`) : pas de vraie notion de version ni d'import à raconter, la fiche affiche une simple ligne « Contenu de base ».
+**Historique d'un mod** : les événements avec le nom de l'archive source — « import initial », « mise à jour », « extension ajoutée ». **Pas les activations/désactivations** (du bruit). Le contenu de base Kunos (`is_stock`) n'a pas de frise : la fiche affiche « Contenu de base ».
 
 ---
 
