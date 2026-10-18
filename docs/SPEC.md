@@ -737,83 +737,19 @@ WebView2 donne ces boutons à **son** historique, qui quitterait la page : ils s
 
 ## 7bis. Écran Compléments — l'inventaire (REFONTE§4)
 
-**Tout ce qui n'est pas un contenu autonome**, dans une seule liste : livrées,
-sons, habillages de circuit, couches, mods « autres », et tout ce que Pit Box
-n'a pas su reconnaître. Les quatre contenus autonomes — voitures, circuits,
-modèles de pilote, apps — ont leur écran et n'y figurent pas.
-
-Trois écrans le précédaient (Add-ons voiture, Add-ons circuit, Compléments) :
-ils classaient par **mécanique d'installation**, c'est-à-dire par la complexité
-que l'app existe pour absorber, et un même mod pouvait y figurer deux fois sans
-que rien ne le dise.
+**Tout ce qui n'est pas un contenu autonome, dans une seule liste** : livrées, sons, habillages de circuit, couches, mods « autres », et ce que Pit Box n'a pas su reconnaître. Voitures, circuits, mannequins et apps ont leur écran ; les mannequins figurent **aussi** ici, parce que l'écran Pilote sert à choisir et l'inventaire à gérer (désactiver, supprimer, ouvrir, annoter).
 
 **Deux axes, indépendants du type** (`attach.rs`) :
+- **le rattachement** — une voiture, un circuit, une app, le jeu, autonome —, déduit par force décroissante, **le signal voyageant avec la réponse** : chemin posé, hôte écrit dans la ligne, nom de config formé sur une entité, même archive. Corrigeable à la main ; seule la correction est stockée ;
+- **la nature** — apparence, comportement, dépendance, non reconnu —, déduite des zones du jeu touchées (§7.3), la plus conséquente l'emportant.
 
-- **le rattachement** — une voiture, un circuit, une app, le jeu, autonome —
-  déduit par ordre de force décroissante, le **signal voyageant avec la
-  réponse** : chemin posé (quasi certain), hôte écrit dans la ligne (certain),
-  nom de config formé sur une entité (fort), même archive (conjecture).
-  Corrigeable à la main, et seule la correction est stockée ;
-- **la nature** — apparence, comportement, dépendance, non reconnu — déduite
-  des zones du jeu touchées, la plus conséquente l'emportant.
+**Facettes tri-état** (un clic inclut, un deuxième exclut), chaque valeur avec un compteur calculé sur la recherche, pas sur le résultat filtré. **Le contexte de recherche survit à l'écran** : champ, facettes, regroupement et tri sont dans `ui_prefs.json`, et une facette que le code ne connaît plus est écartée à la relecture.
 
-**Facettes tri-état**, chaque valeur avec son compteur : un clic inclut, un
-deuxième exclut. Les décomptes se calculent sur la recherche et non sur le
-résultat filtré — un chiffre qui bouge à chaque facette posée ne sert à rien
-pour décider de la suivante.
+**Une ligne à deux niveaux** (nom lisible, identifiant en dessous), **sans bouton exposé** : les actions sont dans le ⋮. Restent visibles le rattachement (un lien vers l'hôte), la nature, l'étoile de priorité, le marqueur de note, l'état. **Le type d'une ligne se dit par ce qu'elle touche** : Livrée, Son, Habillage, Couche, Mannequin, Document, et pour un mod « autre » ses zones du jeu (« Polices · Interface ») — « Mod » seulement quand aucune n'est reconnue.
 
-**Le contexte de recherche survit à l'écran.** Champ libre, facettes,
-regroupement et tri sont enregistrés (`ui_prefs.json`, règle §6.2) et
-restaurés au montage, comme les filtres de bibliothèque. Sans cela, cliquer une
-ligne — le geste même auquel la recherche sert — démontait l'inventaire, et
-« précédent » le ramenait vierge : on venait de poser trois facettes pour
-trouver la ligne qu'on est allé voir, et il fallait les reposer. Le grief ne
-visait pas seulement le retour : changer d'écran et revenir faisait la même
-chose. Une facette enregistrée qui n'existe plus dans le code est **écartée à
-la relecture** — laissée en place, elle filtrerait sur une clé que plus aucune
-ligne ne porte, c'est-à-dire un écran vide que rien n'explique.
+**Une livrée a sa fiche** (`SkinDetail.svelte`) : ses fichiers, son poids, sa provenance, son nom déclaré, sa note, et **si le jeu la voit** — une livrée stockée mais non projetée (§8.3) se répare par la réparation générale. Le titre de la ligne y mène, le lien de rattachement mène à l'hôte. Une **couche** n'a pas de fiche à elle dans l'inventaire : le lien mène à son hôte.
 
-**Une livrée a sa fiche** (`SkinDetail.svelte`), voiture ou circuit, comme un
-son et un mod « autre ». Le titre de la ligne y mène ; le lien de rattachement,
-à droite, continue de mener à l'hôte. Les deux mènaient au même endroit, si
-bien qu'un des deux gestes était perdu et que rien nulle part ne parlait de la
-livrée elle-même. Elle porte ce qu'une ligne ne peut pas porter : ses fichiers,
-son poids, sa provenance, son nom déclaré par `ui_skin.json`, sa note — et
-**si le jeu la voit**, seul fait de la fiche qui demande une action. Une livrée
-stockée mais non projetée (§8.3) est parfaitement normale partout ailleurs
-dans l'app et n'existe pas pour le jeu ; la réparation générale la rebranche.
-Une **couche** n'a toujours pas de fiche à elle : elle vit sur celle de son
-hôte, où le lien mène.
-
-**Le type d'une ligne se dit par ce qu'elle touche.** Livrée, Son, Habillage,
-Couche, Mannequin et Document se nomment d'eux-mêmes ; il restait « Mod », qui
-est le mot qu'on écrit quand on n'a rien de plus précis à dire. Une ligne issue
-d'un mod « autre » affiche donc **les zones du jeu qu'elle touche** (§7.3) —
-« Polices », « Interface », « Extensions », plusieurs séparées par un point
-médian — et ne retombe sur « Mod » que lorsque aucune n'est reconnue, ce qui
-est exactement ce que ce mot veut dire. Ce n'est pas une classification de
-plus : c'est la donnée dont la **nature** est déjà tirée, remontée d'un cran, et
-c'est le vocabulaire de la fiche, pas un second.
-
-**La ligne est à deux niveaux** (nom lisible, identifiant technique en
-dessous), ce qui est la condition pour renommer sans rien perdre, et **aucun
-bouton n'y est exposé** : ouvrir, prioriser, désactiver, supprimer passent par
-le ⋮. Reste visible ce qui se *lit* — le rattachement (lien vers l'hôte), la
-nature, l'étoile de priorité quand elle est posée, le marqueur de note, l'état.
-
-**Les mannequins de pilote y figurent**, comme les livrées — et pour la même
-raison : la galerie de l'écran Pilote (SESSION§5) et le sélecteur d'une fiche
-voiture servent à **choisir**, l'inventaire à **gérer** (désactiver, supprimer,
-ouvrir le dossier, annoter). Deux gestes, deux écrans. Les retirer d'ici, essayé
-puis annulé, supprimait le seul endroit d'où on pouvait agir sur eux.
-
-L'écran Pilote annonce de son côté le nombre de `.kn5` qu'il a **écartés**
-(illisibles ou sans squelette) : ceux-là n'apparaissent pas dans sa galerie, et
-sans ce décompte rien n'expliquait leur absence.
-
-**Groupement par archive ou par hôte.** Le second remplace le regroupement par
-voiture des anciennes vues transversales : sans lui, « voir toutes les livrées
-de cette voiture » se perdait.
+**Groupement par archive ou par hôte.** L'écran Pilote annonce de son côté le nombre de `.kn5` qu'il a écartés.
 
 ---
 
@@ -821,94 +757,50 @@ de cette voiture » se perdait.
 
 ### 8.1 Indexation du contenu de base
 
-**Base Kunos indexée** en lecture seule (`is_stock`), non désactivable, pour que skins/sons puissent s'attacher à une voiture/circuit de base comme à un mod.
+**La base Kunos est indexée en lecture seule** (`is_stock`), non désactivable, pour que skins et sons s'attachent à une voiture ou un circuit de base comme à un mod. Le nom d'un circuit multi-layouts s'y calcule comme partout (§5bis.3).
 
-**Le nom d'un circuit multi-layouts s'y calcule comme partout ailleurs** : la racine commune des noms de ses layouts (§5bis.3), pas celui du premier trouvé. Le correctif n'existait que pour la relecture des mods ; l'indexation du contenu de base rendait encore « Highlands Drift » pour un circuit qui s'appelle « Highlands », au gré de l'ordre alphabétique des dossiers. Deux chemins qui nomment la même chose doivent la nommer pareil.
-
-**Quand l'index est (re)construit** — deux déclencheurs, et il a fallu les deux : à l'**enregistrement de la configuration**, dès que le dossier du jeu est désigné ou qu'il change (`stock::needs_reindex`) ; et au **démarrage**, si rien n'est indexé alors qu'un dossier est connu. Le second seul ne suffisait pas : au tout premier lancement, la config n'existe pas encore quand l'app démarre, l'assistant l'écrit après — la bibliothèque restait donc vide jusqu'au lancement **suivant**. Même angle mort en changeant de dossier de jeu depuis les Réglages, où l'index continuait de décrire l'ancienne install. Un bouton « Indexer le contenu de base » reste disponible en Maintenance pour forcer la reconstruction.
+**L'index est (re)construit** à l'enregistrement de la configuration dès que le dossier du jeu est désigné ou change (`stock::needs_reindex`), et au démarrage si rien n'est indexé alors qu'un dossier est connu. « Indexer le contenu de base » en Maintenance force la reconstruction.
 
 ### 8.2 Mods installés hors Pit Box — « non géré »
 
-**Deux populations vivent dans `content/`, et les confondre était dangereux.** Pit Box s'installe souvent sur une install **déjà moddée** : les vrais dossiers de `content/cars` et `content/tracks` sont alors, en majorité, des mods posés à la main avant lui. L'indexation les prenait tous pour du contenu de jeu — auteur « Kunos » d'office, libellé « Jeu de base » dans la fiche, et surtout **le chemin de couche ouvert dessus**, qui sauvegarde puis efface le vrai dossier pour le remplacer par un composé (§4.3). L'utilisateur voyait son mod déplacé sans l'avoir demandé.
+Sur une install déjà moddée, les vrais dossiers de `content/` sont en majorité des mods posés à la main. **Le critère est la table du contenu officiel** (`kunos_content_dates.json`, `kunos_dates::is_official`) : un id qu'elle ne connaît pas est un mod — `is_unmanaged`, affiché « Non géré ». Une entrée qui manquerait à la table ne ferait que **déclasser** du contenu officiel en non géré, le sens sûr. Angle mort assumé : un mod qui écrase un dossier Kunos garde l'id officiel.
 
-**Le critère est la table du contenu officiel**, `docs/kunos_content_dates.json` (`kunos_dates::is_official`) — les 178 voitures et 21 circuits du jeu de base et de ses DLC, la même table qui sert déjà aux années et dates de publication. Un id qu'elle ne connaît pas est un mod : drapeau `is_unmanaged`, affiché « Non géré ». Le champ `author` du `ui_*.json` ne pouvait pas jouer ce rôle — il est facultatif, et un mod dérivé d'une voiture Kunos garde l'auteur d'origine — alors qu'aucun moddeur n'appelle son dossier `ks_porsche_911_gt3_rs`. Le contenu d'AC1 ne bouge plus depuis 2019, la table est donc stable ; et une entrée qui y manquerait ne ferait que **déclasser** du contenu officiel en mod non géré, jamais l'inverse — le sens sûr, puisqu'un mod non géré est protégé de toute écriture. Angle mort assumé : un mod qui **écrase un dossier Kunos** garde l'id officiel et reste classé contenu de base.
+**`is_unmanaged` affine `is_stock`, il ne s'y substitue pas** : tout ce que `is_stock` protège ou résout s'applique encore (lecture depuis `content/`, refus d'activation, pas de date d'ajout). Ce qui change : pas d'auteur « Kunos » inventé, pas de « Jeu de base » en provenance, **aucune couche ni mise à jour** (§4.3), et un message de refus qui lui est propre.
 
-**`is_unmanaged` affine `is_stock`, il ne s'y substitue pas.** Les deux sont vrais ensemble : un mod non géré vit dans `content/` exactement comme le contenu de jeu, et tout ce que `is_stock` protège ou résout doit continuer de s'appliquer à lui (vignettes et skins lus depuis `content/`, refus d'activation, absence de date d'ajout/MAJ). Ce qui change tient en quatre points : pas d'auteur « Kunos » inventé, pas de libellé « Jeu de base » en provenance, aucune couche possible (§4.3), et un message de refus d'activation qui lui est propre — dire « contenu de base Kunos » à quelqu'un qui regarde son propre mod ne lui apprend rien.
+**Pit Box n'adopte pas un mod en place.** Pour le faire passer sous gestion, l'utilisateur retire lui-même son dossier du jeu, puis importe le mod — ce que disent l'infobulle de la pastille, la fiche, les refus et le rapport d'import. L'app n'écrit pas dans un dossier qu'elle n'a pas posé.
 
-**Pit Box n'adopte pas un mod en place, et c'est délibéré.** La seule façon de faire passer un mod non géré sous gestion est que **l'utilisateur retire lui-même son dossier du jeu, puis importe le mod** — ce que les libellés lui disent (infobulle de la pastille, note du bloc Source de la fiche, messages de refus, note du rapport d'import). Une « prise en charge » automatique était possible sans rien déplacer (hardlinks de `content/` vers la bibliothèque, puis marqueur de déploiement), mais elle faisait écrire l'app dans un dossier qu'elle n'a pas posé, pour un résultat que le réimport donne sans aucun risque ni surface de test. Décision prise avec l'utilisateur : l'app ne touche pas, elle explique.
-
-**La reclassification se fait sur place, à la réindexation.** Les bases écrites avant cette distinction ont ces mods en `is_stock` : le premier réindex bascule le seul drapeau `is_unmanaged`, sans toucher à ce que l'utilisateur a saisi dessus (nom repris à la main, description, tags manuels, favori).
+**La reclassification se fait à la réindexation**, sur place : seul le drapeau bascule, sans toucher à ce que l'utilisateur a saisi.
 
 ### 8.3 Livrées et sons — des sous-éléments rattachés à une entité
 
-**Skins — sélection, pas activation filesystem.** Un skin est un sous-dossier dans `skins/` ; AC les charge tous. Aucune activation/désactivation. Seules actions : prévisualiser, et désigner le **skin piloté** (étoile) pour le lancement. Import via l'import général (rattachement automatique via le dossier `skins/<voiture>/`). **Miniature `livery.png`** (couleurs/motif du skin seul, convention AC reprise par CM) affichée quand présente : dans la liste déroulante compacte de sélection du skin de session (barre latérale, SESSION§1 — bien plus lisible que la photo de la voiture entière écrasée à 20px) et en médaillon dans le coin supérieur droit de chaque vignette de la grille de skins (fiche détail, §6.3) ; jamais sur la grande photo du skin sélectionné.
-- **Vue Skins** : sélection multiple (Ctrl/Alt) pour supprimer plusieurs skins d'un coup. **Regroupement par archive d'origine** (pour supprimer d'un coup tous les skins d'une même archive) ou, au choix, **par voiture**.
+**Skins — sélection, pas activation.** AC charge toutes les livrées d'un `skins/`. Seules actions : prévisualiser, et désigner le **skin piloté** pour le lancement. Import par l'import général, rattachement par le dossier `skins/<voiture>/`. **La miniature `livery.png`** est affichée quand elle existe : dans la liste déroulante de la colonne de session et en médaillon sur les vignettes de la grille de skins, jamais sur la grande photo. La vue Skins de l'inventaire permet la sélection multiple, et le regroupement par archive ou par voiture.
 
-**Un skin stocké à part fait deux sauts pour arriver dans le jeu, et le second se perdait.** Le premier est la **projection** : une junction dans le `skins/` de l'entité cible (§8.3). Pour du contenu de base, ce dossier *est* celui du jeu et tout est dit. Pour un **mod géré**, c'est le dossier de **bibliothèque** — et `content/<type>s/<id>` n'en est qu'une copie en hardlinks figée au dernier déploiement (§2). D'où le second saut, le **redéploiement de l'hôte**, désormais fait à la fin de l'import d'un pack, au retrait d'une livrée, et après chaque recomposition de `skins/default/` d'un circuit. Il n'a lieu que pour un mod géré : recomposer du contenu de base reconstruirait l'arbre depuis `stock_base/` et effacerait la junction qu'on vient de poser. Best-effort — ce qui est stocké sans être déployé est rattrapé par la réparation générale (SESSION§3).
+**Un skin stocké à part arrive dans le jeu en deux sauts** : la **projection** (une junction dans le `skins/` de l'entité cible), puis, pour un **mod géré**, le **redéploiement de l'hôte** (fin d'import d'un pack, retrait d'une livrée, recomposition d'un `skins/default/` de circuit) — `content/` n'étant qu'une copie en hardlinks de la bibliothèque. Pas de redéploiement pour le contenu de base, dont le dossier *est* celui du jeu. **Le déploiement suit les junctions de la bibliothèque** (les nôtres) : une junction n'est ni fichier ni dossier pour `symlink_metadata`, et serait sinon perdue en silence. Ce qui reste stocké sans être déployé est rattrapé par la réparation générale (§10).
 
-Deux bugs réels tenaient là, et le second rendait le premier invisible. Les 20 livrées d'un pack F1 étaient stockées, projetées, listées dans la fiche et rendues dans l'aperçu 3D — tout cela lit la bibliothèque — et n'existaient **nulle part dans le jeu**, sans un mot dans le rapport puisque, du point de vue de la bibliothèque, rien n'avait échoué. Réactiver le mod à la main n'y changeait rien non plus : **une junction n'est ni un fichier ni un dossier** pour `symlink_metadata` (`is_dir()` et `is_file()` tous deux faux), donc le parcours de déploiement la rejetait des deux côtés et la livrée disparaissait du déploiement en silence. Le déploiement **suit** désormais les junctions rencontrées dans la bibliothèque — les seules qui s'y trouvent sont nos propres projections, une archive n'en porte jamais — et `content/` continue de ne contenir aucun point d'analyse.
+**Sons — exclusifs** (un seul actif par voiture), vrai remplacement de `.bank` + `GUIDs.txt`, **original toujours restaurable** : copié une fois dans `<lib>/sounds/<voiture>/__original__` avant la première bascule. Pour un mod géré, c'est le `sfx/` de la **bibliothèque** qui change, et la voiture est redéployée si elle est dans le jeu ; pour une voiture Kunos, celui **du jeu**. **La bascule se fait d'un seul geste** : le nouveau son est préparé à côté (`sfx.pitbox-new`), puis échangé par deux renommages, la base écrite entre l'échange et le nettoyage ; un dossier de bascule retrouvé au démarrage fait remettre le son que dit la base. Ce n'est pas `gamebackup.rs` — choix assumé, `CHANTIERS.md`, « Son d'une voiture Kunos ».
 
-**Sons** — exclusifs (un seul actif par voiture), vrai remplacement de fichiers (`.bank` + `GUIDs.txt`), original toujours restaurable. L'original est copié une fois dans `<lib>/sounds/<voiture>/__original__` avant la première bascule. Le `sfx/` remplacé est celui de la **bibliothèque** pour un mod géré — la voiture est alors redéployée aussitôt si elle est dans le jeu, sans quoi le jeu, posé en hardlinks, garderait l'ancien son —, et celui **du jeu** pour une voiture Kunos. La bascule se fait **d'un seul geste** : le nouveau son est préparé à côté (`sfx.pitbox-new`), puis échangé avec l'ancien par deux renommages, la base écrite entre l'échange et le nettoyage de `sfx.pitbox-old`. Un de ces dossiers encore là au démarrage trahit une bascule interrompue : la voiture reçoit le son que dit la base, le mod actif ou l'original. Ce n'est pas `gamebackup.rs` (§4.5.4) — choix assumé, voir `CHANTIERS.md`, « Son d'une voiture Kunos ».
+**Écouter sans lancer le jeu** : chaque ligne du cadre « Son du moteur » porte une **clé de contact**. Exclusif, et **l'écoute ne déploie rien** : le bouton radio de la ligne active, la clé n'est qu'un lecteur. « Origine » lit la sauvegarde `__original__` dès qu'elle existe.
 
-**Sons — écoute sans lancer le jeu.** Chaque ligne du cadre « Son du moteur » de la fiche voiture porte une **clé de contact** qui fait entendre le moteur : comparer deux mods sonores demandait jusqu'ici d'en activer un, démarrer une session, écouter, revenir et recommencer. Exclusif (un seul moteur à la fois), et **l'écoute ne déploie rien** — c'est le bouton radio de la ligne qui active, la clé n'est qu'un lecteur. Les deux gestes sont deux boutons distincts, faute de quoi on installerait un mod en croyant l'auditionner. « Origine » lit la sauvegarde `__original__` dès qu'elle existe, jamais le `sfx/` du jeu, qui contient le mod actif.
+**Ce qui joue est le moteur audio du jeu** (`SPEC-engine-sound-fmod.md`) : les DLL FMOD de l'installation, l'événement `engine_ext` mélangé comme en course. La clé démarre le moteur quand le bank a un démarreur ; un **curseur de régime** va du ralenti au rupteur **de cette voiture**, lus dans sa physique (FMOD§4.4) ; un bouton **« Coups d'accélérateur »** fait jouer le moteur tout seul (FMOD§6bis) — toucher le curseur l'arrête, et pendant qu'il tourne le curseur s'efface. **Le son suit l'aperçu 3D** : l'angle d'écoute est celui de la caméra **dans le repère de la voiture**, plateau compris ; c'est le timbre qui change, pas la direction. Sans ce chemin (pas d'installation, DLL absentes, bank refusé), l'écoute retombe **silencieusement** sur le décodeur maison, une boucle de ralenti lue dans le `.bank`, sans curseur.
 
-**Ce qui joue, c'est le moteur audio du jeu lui-même** (`docs/SPEC-engine-sound-fmod.md`). Pit Box charge les DLL FMOD livrées avec Assetto Corsa — celles que l'utilisateur possède déjà, rien n'est redistribué — et joue l'événement `engine_ext` que le jeu jouerait, avec ses couches mélangées comme en course. La clé s'accompagne alors d'un **curseur de régime**, du ralenti au rupteur : entendre un mod monter en régime sans lancer une session est exactement ce qu'on veut comparer entre deux mods. La plage du curseur vient de la **courbe de puissance de la voiture**, lue en clair dans son `ui_car.json`, et non de l'événement : une F1 monte à 19 500 tr/min là où un utilitaire diesel plafonne à 5 000.
-
-**Le son suit l'aperçu 3D.** Tourner autour de la voiture change ce qu'on entend : l'événement moteur d'AC est spatialisé et calcule lui-même l'angle sous lequel on l'écoute, si bien que le bank fournit déjà la différence de timbre entre le capot et l'échappement — l'app ne fait que dire où se trouve l'oreille. Le plateau qui tourne compte autant que la caméra qu'on fait glisser : c'est l'angle **dans le repère de la voiture** qui est envoyé. Ce qui change est le timbre, pas la direction — la source reste devant, comme pour quelqu'un qui garde les yeux sur la voiture.
-
-**Un bouton « Coups d'accélérateur »** fait jouer le moteur tout seul : quelques secondes de ralenti, puis une rafale de brefs coups de gaz, quelques-uns jusque près du rupteur, en boucle et sans régularité — quelqu'un qui fait écouter sa voiture. Les sommets se tirent au sort par rapport au régime maximal de **cette** voiture, jamais en valeur absolue. Le curseur et ce bouton pilotent le même paramètre : toucher le curseur arrête la démonstration, et pendant qu'elle tourne le curseur s'efface.
-
-Quand ce chemin n'est pas disponible — pas d'installation configurée, DLL absentes, bank refusé — l'écoute retombe **silencieusement** sur le décodeur maison, qui joue une boucle de ralenti lue directement dans le `.bank`. Aucune erreur à l'écran : c'est le seul chemin qui fonctionne sans jeu installé, et il reste par ailleurs ce qui alimente la fiche d'un mod de son. Le curseur, lui, n'apparaît pas : un échantillon figé n'a rien à régler.
-
-**Un mod de son a sa fiche**, ouverte d'un clic sur son nom dans la vue Sons — même raison que pour une app : les listes de fichiers y vivent, pas dans un dépliant au milieu d'une liste. Elle porte la voiture visée, la taille sur disque, l'archive d'origine, la date d'import, la clé d'écoute, les **ressources** (la notice livrée avec le mod), et **ce que le bank contient réellement** : encodage, nombre d'échantillons, fréquence, durée totale, présence ou non de la table des noms. Cette dernière ligne n'est affichable que parce que l'app sait décoder le conteneur. L'**auteur** est un champ **saisi à la main** (colonne `author` de `sub_mods`) : aucun fichier de mod ne le porte, et le lire dans une notice serait une devinette sur du texte libre.
-
-Le format des banks FMOD (conteneur FSB5, codecs PCM16 et FADPCM) est consigné dans `docs/fsb5-format.md`, avec la méthode qui a établi chaque fait et les hypothèses écartées. Deux points structurent le reste : la moitié du corpus n'a **pas de table de noms** (les mods la suppriment), donc le ralenti se trouve par le nom quand il existe et **par la mesure** sinon — autocorrélation sur une fraction de seconde, ce qui écarte portes, klaxon et bruit de vent, puis la fondamentale la plus basse. Cette mesure ne tombe juste que 40 fois sur 91, et **ce n'est pas réparable** : rien dans le signal ne distingue un ralenti extérieur d'un bas régime en lâcher de gaz. C'est la raison d'être du chemin FMOD ci-dessus, qui aboutit lui sur 299 voitures sur 299 — l'heuristique ne sert plus que de repli, et **ne doit pas être retouchée**. Et **Vorbis n'est pas décodé** (4 voitures sur 297), le codec étant nommé dans l'erreur plutôt que de rendre du silence.
+**Un mod de son a sa fiche** : la voiture visée, la taille, l'archive, la date, la clé d'écoute, les ressources, et **ce que le bank contient** (encodage, nombre d'échantillons, fréquence, durée, table des noms). L'**auteur** se saisit à la main (`sub_mods.author`) : aucun fichier ne le porte. Le format des banks est dans `fsb5-format.md` ; l'heuristique de ralenti du décodeur maison **ne doit pas être retouchée**, et Vorbis n'est pas décodé (le codec est nommé dans l'erreur).
 
 ### 8.4 Apps
 
-**Apps** — type autonome, vue propre, activables (par défaut dès l'import, comme les mods voiture/circuit et les « autres mods »). Détection Python (`<id>/<id>.py`) et Lua/CSP (`<id>/<id>.lua`) ; activation par junction vers `apps/python/<id>` ou `apps/lua/<id>` selon le langage constaté. Ressources annexes (§4.5.2, ex. manuel PDF fourni avec l'app) listées et ouvrables depuis la vue, comme sur une fiche voiture/circuit.
+**Type autonome, vue propre, activables** (par défaut dès l'import). Détection Python (`<id>/<id>.py`) et Lua/CSP (`<id>/<id>.lua`) ; activation par junction vers `apps/python/<id>` ou `apps/lua/<id>`. **Une app a sa fiche**, page pleine : nom, langage, archive, date, puis **ce qu'elle met sur le disque** — Ressources et Ajouts au jeu, les mêmes composants que pour un mod —, et ses couches. La liste ne garde que ce qui se décide sans ouvrir.
 
-**Une app a sa fiche**, ouverte d'un clic sur son nom dans la vue. Page pleine, comme celle d'une voiture et pour la même raison (§4.5.5) : les listes de fichiers y vivent, pas dans un dépliant au milieu d'une liste — une app qui pose trente configs CSP ferait déborder la vue. Sans tags ni fiche technique, qu'une app n'a pas : ce qui la décrit tient sur une ligne (nom, convention Python ou Lua/CSP, archive d'origine, date d'import), et le reste de la page est **ce qu'elle met sur le disque** — deux onglets **Ressources** et **Ajouts au jeu**, les mêmes composants que la fiche d'un mod, pas des copies. La liste, elle, ne garde que ce qui se décide sans ouvrir : état, activation, dossier, suppression.
-
-**Une app possède aussi des ajouts au jeu** (§4.5.3). Elle en a pour la même raison qu'une voiture : ce qu'une archive livre **à côté** de son dossier lui appartient — config CSP, textures, fichiers de `cfg/`. Elle est donc un propriétaire de restes au même titre (`extras::OwnerKind::App`), avec toutes les propriétés qui vont avec : arbre `extras/apps/<id>/`, pose fichier par fichier à l'activation, retrait à la désactivation, suppression avec l'app. Sans ça, ces fichiers devenaient des « autres mods » anonymes que plus rien ne reliait à l'app — ils lui survivaient donc, très exactement le défaut que les ajouts au jeu existent pour éviter.
-
-**Pas de notion de mise à jour.** Contrairement aux voitures/circuits (§4.3), réimporter une app dont l'id existe déjà **remplace intégralement** ses fichiers, sans comparaison ni choix — pas de diff, pas d'historique de versions. Une app est un script autonome, elle n'a pas les enjeux de versions d'un mod de contenu.
-
-**Mais une app reçoit des couches** (§4.3), et le même attirail : ordre de priorité, activation par couche, `LayersBlock` repris tel quel en troisième onglet de sa fiche. Parce que des mods de contenu **ajoutent des fichiers dans le dossier d'une app** — cas réels : une voiture RSS livrant son `.lua` de réglages à `RSS_Settings`, un circuit livrant ses caméras à `CamTool_2`. C'est très exactement une couche, et la traiter comme un « ajout au jeu » (§4.5.3) produisait deux défauts : le dossier de l'app était **créé en vrai dossier** quand elle n'était pas installée (bloquant définitivement son installation ultérieure, §8.2), et une fois l'app active, les fichiers étaient écrits **à travers la junction**, donc dans son dossier de bibliothèque, qu'un réimport de l'app effaçait.
-
-**Une couche est rangée sous le type de son hôte** : `<lib>/layers/<type>/<hôte>/<nom>`, aligné sur `extras/` et `resources/`. Les couches rangées **avant** ce segment gardent leur chemin — il est lu en base, jamais recalculé — et continuent donc de fonctionner là où elles sont : pas de migration, pas de risque, au prix d'un arbre mixte le temps que les anciennes disparaissent.
-
-**Une couche s'identifie par son hôte *et* l'espace de noms de celui-ci** (`overlay::LAYER_HOST`). `parent_id` seul suffisait tant que seuls des mods recevaient des couches : voitures et circuits vivent dans la **même** table, dont `id_interne` est la clé primaire, donc deux d'entre eux ne peuvent pas porter le même id. Une app vit dans `apps`, avec sa propre clé — rien n'empêche un circuit et une app de s'appeler pareil. Sans ce filtre, les couches de l'un remonteraient sur l'autre, et `recompose` composerait celles de l'app dans le dossier du circuit. Seule la distinction app / pas-app est nécessaire, et c'est tout ce que le filtre fait.
-
-**Déploiement : junction tant que l'app est nue, composition par hardlinks dès qu'une couche est active.** Exactement la règle du §2 pour les mods, et pour la même raison physique — une junction ne pointe que vers *une* cible, elle ne sait rien fusionner. `compose::recompose` est donc **un seul point d'entrée pour les trois types d'hôte** : l'id est cherché parmi les mods puis parmi les apps, ce qui fait que les actions de couche (activer, réordonner, supprimer) n'ont pas eu à connaître la différence. Corollaire à ne pas oublier : « active » veut dire *junction **ou** arbre composé marqué* (`apps::is_app_active`) — ne tester que la junction faisait passer pour inactive toute app à couche.
-
-**Le langage (`apps/python/` ou `apps/lua/`) se lit toujours sur la base**, jamais sur le composé : il décide de la cible, et une couche apportant un `<id>.lua` à une app Python ferait autrement bouger le dossier de destination alors que la junction est déjà posée ailleurs.
-
-**Une couche peut remplacer le script principal de l'app** (`<id>.py` / `<id>.lua`) — c'est autorisé, mais **signalé**, parce que cela change ce que l'app *est*. Pas de sauvegarde à prévoir pour autant, contrairement à un fichier du jeu de base (§4.5.4) : la base reste intacte dessous, retirer la couche la restitue.
-
-**À l'import, c'est le chemin qui décide** (`apps::app_layer_target`) : un reste dont le chemin de jeu est `apps/<lang>/<AppId>/…` vise l'intérieur d'une app, donc c'est une couche de cette app et non un ajout au jeu du mod qui le livre. Le test passe **avant** la recherche de propriétaire — la cible est écrite dans le chemin, elle ne dépend pas de qui livre le fichier ; le propriétaire ne sert ensuite qu'à **nommer** la couche, ce qui rend « les caméras de tel circuit » identifiable et supprimable à la main.
-
-Deux précautions dans ce classement :
-
-- **Une couche par app, pas une par fichier.** Un circuit qui livre neuf fichiers de caméras à CamTool doit produire une seule couche. Les restes concernés sont donc accumulés puis vidés en fin de balayage, groupés par app, chacun reconstitué dans un dossier temporaire qui rejoue les chemins **relatifs au dossier de l'app** — `data/x.json`, jamais `apps/python/<id>/data/x.json`, qui donnerait `apps/python/<id>/apps/python/<id>/data/x.json` à la composition.
-- **Le balayage ramasse les restes en bloc.** Un `apps/` livré à côté d'un circuit arrive comme un seul dossier nommé `apps`, pas comme ses fichiers : tester le seul chemin du reste ne voyait rien (`apps` n'a pas assez de composants pour désigner une app). C'est donc chaque **fichier** sous le reste qui est testé. Et un reste **mixte** — des chemins d'app mêlés à d'autres — n'est pas touché du tout : en consommer la moitié dupliquerait les fichiers en import « copie » et ferait ranger un dossier amputé en « déplacement ».
-
-**Reprise des bibliothèques existantes** (`extras::migrate_app_extras_to_layers`, au démarrage). Les ajouts au jeu rangés avant que les couches d'app n'existent sont convertis. **Idempotente par construction** : plus aucun chemin `apps/<lang>/…` ne subsiste dans l'arbre des ajouts après coup, donc un second démarrage ne trouve rien — pas de drapeau à mémoriser. **Sans risque de perte** : l'arbre des ajouts est la source et n'est touché qu'après un `undeploy` réussi ; un exemplaire posé dans le jeu étant un *hardlink* de celui du magasin, le retirer ne fait que décrémenter le compteur de liens, y compris dans le cas tordu où le chemin de jeu traversait la junction d'une app et pointait donc dans la bibliothèque. Ce qui restait d'ajouts légitimes est reposé ensuite, et seulement si le mod est actif.
+- **Une app possède des ajouts au jeu** (§4.5.3, `extras::OwnerKind::App`) : ce qu'une archive livre à côté de son dossier lui appartient, posé et retiré avec elle.
+- **Pas de notion de mise à jour** : réimporter une app remplace intégralement ses fichiers.
+- **Une app reçoit des couches** (§4.3) — des mods de contenu ajoutent des fichiers dans le dossier d'une app (le `.lua` de réglages d'une voiture RSS dans `RSS_Settings`, des caméras dans `CamTool_2`). **À l'import, c'est le chemin qui décide** (`apps::app_layer_target`) : un reste dont le chemin de jeu est `apps/<lang>/<AppId>/…` est une couche de cette app, testé **avant** la recherche de propriétaire, qui ne sert qu'à **nommer** la couche. **Une couche par app**, pas une par fichier, reconstituée relativement au dossier de l'app ; un reste **mixte** n'est pas touché.
+- **Une couche est rangée sous le type de son hôte** (`<lib>/layers/<type>/<hôte>/<nom>`) ; une couche rangée avant ce segment garde son chemin, lu en base.
+- **Une couche s'identifie par son hôte et l'espace de noms de celui-ci** (`overlay::LAYER_HOST`) : un circuit et une app peuvent porter le même id.
+- **Déploiement : junction tant que l'app est nue, composition par hardlinks dès qu'une couche est active** (`compose::recompose`, point d'entrée unique pour les trois types d'hôte). « Active » veut dire junction **ou** arbre composé marqué (`apps::is_app_active`). **Le langage se lit toujours sur la base**, jamais sur le composé.
+- **Une couche peut remplacer le script principal de l'app** : autorisé, mais **signalé**.
+- **Reprise des bibliothèques existantes** (`extras::migrate_app_extras_to_layers`, au démarrage) : les ajouts au jeu rangés avant les couches d'app sont convertis, **de façon idempotente** et sans risque de perte (l'arbre des ajouts n'est touché qu'après un retrait réussi du jeu).
 
 ### 8.5 Accès transversal : l'inventaire des compléments
 
-**Accès transversal : l'inventaire des compléments** (§7bis). Les écrans
-« Add-ons voiture » et « Add-ons circuit » (`Transversal.svelte`) **ont
-disparu** : ils classaient par mécanique d'installation, et leurs trois
-rubriques — skins, sons, couches — sont devenues trois valeurs de facette dans
-une liste unique, qui porte en plus les mods « autres ». Le regroupement **par
-hôte** y remplace leur regroupement par voiture : sans lui, « voir toutes les
-livrées de cette voiture » se perdait. L'accès par la fiche du mod, lui, n'a
-pas bougé.
-
-**Les skins de circuit fournis avec le mod ne sont pas listés dans l'inventaire.** Reconnus sur disque dans `cm_skins/` (§8 ci-dessus), jamais importés séparément, donc sans archive d'origine : ils remplissaient à eux seuls la rubrique « Origine inconnue ». Et rien dans cette vue ne s'applique à eux — ni sélection, ni suppression (seul le mod entier les emporte), ni activation (elle se fait depuis la barre latérale ou la fiche du circuit). Les lister n'apprenait donc rien et noyait ce qui se gère vraiment. Conséquence : la rubrique « Origine inconnue » n'apparaît plus que si un skin réellement importé n'a pas d'archive connue. Les skins **de voiture** fournis avec le mod restent listés : là, parcourir l'ensemble des livrées d'une voiture est un usage légitime.
-
-**Analyse des extensions CSP** : poussée plus loin (détection fine des fonctionnalités CSP d'un mod).
+Skins, sons et couches sont trois valeurs de facette de l'inventaire (§7bis), regroupables **par hôte** ; l'accès par la fiche du mod n'a pas bougé. **Les skins de circuit fournis avec le mod** (reconnus dans `cm_skins/`, jamais importés à part) ne sont pas listés : rien de l'inventaire ne s'applique à eux, ils s'activent depuis la colonne de session ou la fiche du circuit. Les skins de voiture fournis avec le mod, eux, restent listés.
 
 ---
 
