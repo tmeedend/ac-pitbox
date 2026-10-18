@@ -616,7 +616,7 @@ de reprendre. En cas d'écart, la spec fait foi.
 - [ ] **Aperçu 3D natif des voitures** (fusionné dans `main` ; la branche
       d'origine `feature/3dpreview` ne subsiste que sur `origin`).
       **L'avancement détaillé, les écarts assumés vis-à-vis de la spec et le
-      reste à faire sont dans `docs/SPEC-preview-3d-kn5.md` PREVIEW§13 à PREVIEW§15** — c'est
+      reste à faire sont dans `docs/preview3d-research.md`, et les règles dans `docs/SPEC-preview-3d-kn5.md`** — c'est
       là qu'il faut lire en reprenant, pas ici.
       En bref : **lots 0 à 6 faits et validés à l'écran** — la voiture
       s'affiche dans la fiche, tourne sur son socle, se manipule à la souris,

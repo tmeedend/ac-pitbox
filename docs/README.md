@@ -181,7 +181,9 @@ fait — en cas d'écart, la spec fait foi.
   jamais fusionné avec la description, jamais reformulé ni traduit.
 - **`SPEC-preview-3d-kn5.md`** — le rendu 3D natif : parsing KN5 en Rust →
   glTF → three.js dans la webview. Décision d'architecture, layout binaire du
-  format, plan par lots. L'avancement et le reste à faire sont à ses §13 à §15.
+  format, et ce que l'aperçu fait : greffes CSP, pilote, braquage, cache,
+  réglages. Les mesures et les pistes écartées sont dans
+  `preview3d-research.md`.
 - **`SPEC-engine-sound-fmod.md`** — écouter le vrai moteur d'une voiture en
   passant par les DLL FMOD livrées avec Assetto Corsa, au lieu de deviner le
   ralenti par analyse du signal. Contient la position prise sur la licence
@@ -222,6 +224,10 @@ dans un commentaire de code.
 - **`csp-driver-research.md`** — appliquer le pilote en jeu : ce qui marche
   (`[DRIVER3D_MODEL]` d'un `ext_config.ini` pour le corps, le `skin.ini` de la
   livrée pour la tenue), ce qui ne marche pas, et les quatre pistes écartées.
+- **`preview3d-research.md`** — l'aperçu 3D intégré, au fil de sa
+  construction : diagnostics, bancs de mesure (anticrénelage, reflet,
+  scintillement, poids du cache), et les pistes essayées puis retirées (sol
+  brillant, VSM, SMAA, WebP sans perte…). À lire avant d'y retoucher.
 - **`showroom-3d-preview-research.md`** — les trois pistes explorées pour
   l'aperçu 3D (fenêtre Content Manager, parser maison, `acShowroom.exe`), et
   pourquoi l'intégration de la fenêtre native a été abandonnée.

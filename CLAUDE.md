@@ -863,7 +863,8 @@ là pour se vider, et il est vide.
   (lancement CM, aperçu 3D). Contiennent le *pourquoi* de choix non évidents et
   la trace des pistes abandonnées. À lire avant de retenter quelque chose.
 - **`docs/SPEC-preview-3d-kn5.md`** — spécification du chantier « aperçu 3D
-  natif » (parser KN5 → glTF → three.js), avec son plan par lots. Accompagnée
+  natif » (parser KN5 → glTF → three.js). Ses mesures et pistes écartées sont
+  dans **`docs/preview3d-research.md`**. Accompagnée
   de **`docs/kn5-format.md`**, qui consigne ce que le format fait *réellement*
   quand il s'écarte de la spec, avec la méthode de vérification. Toute
   découverte sur le format s'écrit là, pas seulement dans un commentaire.
@@ -974,7 +975,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Texture updates** | rien d'implémenté ; la règle de détection est mesurée et nette | `docs/SPEC-texture-update.md` |
 | **Harmonisation des libellés** | libellés et barème du rouge faits ; restent le bleu, le vert et le jaune, sans barème | `docs/CHANTIERS.md` |
 | **Vignettes de la grille** | fusionné mais **éteint** (`FEATURE_GRID_THUMBS`) ; reste à figer les valeurs des trois presets | `docs/SPEC-grille.md` |
-| **Aperçu 3D natif** | lots 0 à 6 validés à l'écran ; reste le choix du LOD | `docs/SPEC-preview-3d-kn5.md` PREVIEW§13 à §15 |
+| **Aperçu 3D natif** | lots 0 à 6 validés à l'écran ; reste le choix du LOD | `docs/SPEC-preview-3d-kn5.md`, `docs/CHANTIERS.md` |
 | **Enrichissement Wikipédia** | livré et nettoyé ; reste la seule mesure des seuils, sur tes corrections manuelles | `docs/SPEC-wikipedia-fiche-detail.md` |
 | **Signature Authenticode** | le workflow est prêt, il attend un certificat | `docs/windows-code-signing.md` |
 | **Refonte navigation et fiches** | livrée et fusionnée ; restent trois questions ouvertes, dont le markdown dans les notes | `docs/PLAN-refonte-navigation.md` |
