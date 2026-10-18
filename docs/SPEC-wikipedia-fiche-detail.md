@@ -4,9 +4,7 @@
 
 Afficher, sur la fiche de détail d'un mod (voiture ou circuit), l'article Wikipédia
 correspondant au véhicule ou au circuit réel, dans un onglet distinct de la
-description fournie par l'auteur du mod. *(Rédigé pour un extrait d'introduction ;
-l'article est affiché en entier depuis la révision du §7.3 — le reste de ce
-document emploie encore « extrait » par endroits.)*
+description fournie par l'auteur du mod. L'article est affiché **en entier** (§7.3).
 
 **Cette fonctionnalité est décorative.** Elle sert le plaisir de lecture, pas la
 constitution d'un référentiel. Ce cadrage a trois conséquences qui doivent guider chaque
@@ -15,10 +13,8 @@ arbitrage d'implémentation :
 - **La précision prime sur le rappel.** En cas d'ambiguïté, on n'affiche rien. Un mauvais
   article coûte beaucoup plus cher que pas d'article.
 - **L'absence n'est pas une erreur.** Aucune icône d'avertissement, aucun encart grisé,
-  aucun ton d'échec. *(Cette ligne disait d'abord « l'onglet est simplement absent » ;
-  révisé à l'usage — voir §7.1. L'onglet reste, l'absence y est dite en une phrase et
-  s'accompagne d'une proposition d'agir. Ce qui ne change pas : rien ici n'a le droit de
-  ressembler à une panne.)*
+  aucun ton d'échec : l'absence se dit en une phrase et s'accompagne d'une proposition
+  d'agir (§7.1).
 - **Rien ne dépend de cette donnée.** Elle n'alimente ni les filtres, ni le scoring, ni
   aucune autre fonctionnalité. Elle peut échouer silencieusement sans conséquence.
 
@@ -27,8 +23,7 @@ arbitrage d'implémentation :
 - Pré-remplir la bibliothèque : la résolution se fait à l'ouverture d'une fiche, jamais en
   masse.
 - Extraire des caractéristiques techniques pour les comparer à celles du mod.
-- Afficher des images issues de Wikipédia ou de Commons (voir §9).
-- Implémenter le partage communautaire des appariements (préparé en §10, non implémenté).
+- Importer les appariements d'un tiers : seuls ceux que livre l'application sont repris (§10).
 
 ---
 
@@ -46,53 +41,23 @@ Règles impératives :
 - **Ne jamais reformuler, résumer, traduire ou faire passer le texte par un modèle de
   langage.** L'extrait est affiché tel que fourni par l'API.
 - Le bloc Wikipédia est **visuellement distinct** et porte son attribution (§7.4).
+- Les images ne sont affichées que créditées et sous licence connue (§9).
 
 ---
 
 ## 3. Modèle de données
 
-Trois tables (ou équivalent selon le stockage existant du projet).
-
 ### 3.1 `wiki_link` — l'appariement
 
-| Champ         | Type     | Notes |
-|---------------|----------|-------|
-| `mod_key`     | TEXT PK  | Nom du dossier du mod (`ks_toyota_ae86`, `ks_nordschleife`). Choisi pour sa stabilité entre installations. |
-| `entity_id`   | TEXT     | Identifiant Wikidata (`Q123456`). **Jamais une URL.** |
-| `source`      | ENUM     | `auto` \| `manual` \| `import` |
-| `resolved_at` | DATETIME | |
-
-**Ne stocker en aucun cas une URL d'article.** Le Q-id est indépendant de la langue et
-survit aux renommages d'articles. Les URL saisies par l'utilisateur sont résolues en Q-id
-à la saisie, puis jetées.
-
-**Précédence :** `manual` > `import` > `auto`. Une entrée `manual` n'est jamais écrasée
-automatiquement. Cette précédence doit être respectée dès maintenant même si l'import
-n'est pas implémenté.
+Un appariement relie un mod, **par le nom de son dossier** (stable d'une installation à l'autre), à un **identifiant Wikidata**. **Jamais une URL d'article** : le Q-id est indépendant de la langue et survit aux renommages ; une URL saisie est résolue en Q-id, puis jetée. Chaque appariement porte sa source, avec une **précédence stricte : `manual` > `import` > `auto`** — une entrée `manual` n'est jamais écrasée automatiquement.
 
 ### 3.2 `wiki_cache` — le contenu
 
-| Champ             | Type     | Notes |
-|-------------------|----------|-------|
-| `entity_id`       | TEXT     | PK composite avec `lang` |
-| `lang`            | TEXT     | Code de langue demandé |
-| `article_title`   | TEXT     | |
-| `article_url`     | TEXT     | Stockée avec le contenu, jamais reconstruite à l'affichage |
-| `revision_id`     | INTEGER  | Traçabilité d'attribution + fraîcheur |
-| `extract`         | TEXT     | Texte brut de l'introduction |
-| `parent_entity`   | TEXT     | Non nul si repli sur l'entité parente (§5.3) |
-| `available_langs` | TEXT     | Liste des langues où l'article existe, pour le sélecteur |
-| `fetched_at`      | DATETIME | |
+L'article d'une entité dans une langue (titre, URL **stockée avec le contenu**, numéro de révision pour l'attribution, rendu et texte brut, entité parente quand le repli de §5.3 a joué, langues où l'article existe), gardé **30 jours**.
 
 ### 3.3 `wiki_no_match` — le cache négatif
 
-| Champ          | Type     |
-|----------------|----------|
-| `mod_key`      | TEXT PK  |
-| `attempted_at` | DATETIME |
-
-**Indispensable.** Sans cette table, chaque ouverture d'une fiche sans correspondance
-relance une résolution complète. TTL : 90 jours (un article peut être créé entre-temps).
+**Indispensable** : sans lui, chaque ouverture d'une fiche sans correspondance relancerait une résolution complète. Gardé **90 jours** (un article peut être créé entre-temps).
 
 ---
 
@@ -125,9 +90,9 @@ Les coordonnées sont **nettement plus fiables que le nom** : Nordschleife → N
 Shutoko → Metropolitan Expressway, cols d'Initial D → nom réel de la montagne. Sur le nom
 seul, ces trois cas échouent.
 
-1. Si coordonnées disponibles : recherche géographique d'articles dans un rayon de ~5 km
-   (l'API MediaWiki expose une recherche par proximité, `list=geosearch`, plus simple à
-   mettre en œuvre qu'une requête SPARQL).
+1. Si coordonnées disponibles : recherche géographique d'articles (`list=geosearch`) dans un
+   rayon de **10 km**, le maximum de l'API — les coordonnées que CSP donne d'un circuit sont
+   parfois celles de la ville voisine ; une route garde un rayon bien plus court.
 2. Récupération du Q-id de chaque page trouvée, puis filtrage sur les types acceptés —
    **allowlist plus large que pour les voitures** : circuit automobile, route, autoroute,
    col de montagne.
@@ -141,15 +106,14 @@ seul, ces trois cas échouent.
 
 Avant toute recherche, retirer des chaînes : versions (`v1.2`, `1.05`), mentions de
 qualité (`[4K]`, `HD`, `Remaster`), tags de packs et crochets, préparateurs (`Rocket
-Bunny`, `Liberty Walk`), suffixes de conversion (`AC`, `Conversion`, `Fixed`). Cette liste
-doit vivre dans un fichier de configuration, pas dans le code.
+Bunny`, `Liberty Walk`), suffixes de conversion (`AC`, `Conversion`, `Fixed`). La liste et
+les poids du scoring vivent dans un fichier de données (`rules/wiki-matching.json`), pas
+dans le code.
 
 ### 4.4 Identifiants Wikidata
 
-Les identifiants de propriétés et de classes (nature de l'élément, sous-classe de, partie
-de, coordonnées, type « modèle d'automobile », type « circuit automobile ») doivent être
-**vérifiés sur Wikidata avant d'être câblés**, et regroupés dans un module de constantes
-unique et commenté. Ne pas les disperser dans le code.
+Les identifiants de propriétés et de classes Wikidata sont **vérifiés avant d'être câblés**,
+et regroupés dans un seul module de constantes commenté (`wiki/ids.rs`).
 
 ---
 
@@ -196,18 +160,11 @@ articles est disponible, mais **jamais de bascule automatique** sur cette base.
 
 ### 6.1 Choix d'API
 
-Utiliser l'**Action API** (`/w/api.php`) plutôt que les API REST. Motif : l'API Core sur
-`api.wikimedia.org` est en dépréciation progressive depuis juillet 2026 avec des routes de
-remplacement non encore annoncées, et RESTBase (`/api/rest_v1/`) est également en cours de
-retrait. L'Action API est la plus stable et permet de tout récupérer en une requête.
-
-Une seule requête suffisait pour l'extrait d'introduction en texte brut, les liens
-interlangues, l'identifiant Wikidata et le numéro de révision. **L'article entier en
-demande trois**, et c'est le prix de la révision du §7.3 : `action=query` pour ces
-métadonnées, `action=parse` pour le HTML rendu et le sommaire, puis un `imageinfo`
-groupé pour l'auteur et la licence de chaque image — celui-là n'est pas facultatif,
-c'est lui qui autorise l'affichage (§9). Elles restent **séquentielles** (§6.2) et
-le tout est mis en cache d'un bloc.
+L'**Action API** (`/w/api.php`), la plus stable (les API REST de Wikimédia sont en cours de
+retrait). **Un article demande trois requêtes**, séquentielles et mises en cache d'un bloc :
+`action=query` (métadonnées, langues, Wikidata, révision), `action=parse` (HTML rendu et
+sommaire), et un `imageinfo` groupé pour l'auteur et la licence de chaque image — qui
+n'est pas facultatif : c'est lui qui autorise l'affichage (§9).
 
 ### 6.2 Politesse
 
@@ -230,28 +187,19 @@ au-delà du backoff.
 
 ### 7.1 Structure
 
-Sur la fiche de détail, un jeu d'onglets au niveau du bloc textuel :
+Le bloc textuel de la fiche a trois sous-onglets : `Description`, `Notes`, et l'article —
+`Le modèle réel` (voitures) ou `Le circuit` (circuits).
 
-- `Description` — contenu actuel, inchangé
-- `Le modèle réel` (voitures) / `Le circuit` (circuits) — contenu Wikipédia
-
-**L'onglet est permanent** — révisé à l'usage, contre la première rédaction de cette
-section, qui le voulait entièrement masqué sans contenu.
-
-Ce qui a tranché : essayé sur la bibliothèque réelle, un onglet absent ne se distingue
-ni d'une recherche encore en cours, ni d'une fonctionnalité qui n'existe pas. Et il
-prive l'utilisateur de tout point d'entrée précisément dans le cas où il aurait le plus
-à faire — l'appariement raté ou ambigu, que la §7.6 lui permet justement de corriger.
-
-L'argument d'origine (« un onglet présent mais vide est pire que pas d'onglet ») reste
-vrai et devient une contrainte sur le **contenu** de l'état vide : jamais un cadre vide,
-jamais une alerte. Une phrase qui dit ce qui s'est passé, et une proposition d'agir.
-Les six états, tous non-erreurs :
+**L'onglet est permanent** : un onglet absent ne se distingue ni d'une recherche en cours,
+ni d'une fonctionnalité qui n'existe pas, et il priverait l'utilisateur de tout recours
+au moment où l'appariement est raté — ce que §7.6 lui permet de corriger. L'état vide n'est
+donc **jamais un cadre vide, jamais une alerte** : une phrase qui dit ce qui s'est passé,
+et une proposition d'agir. Six états, tous non-erreurs :
 
 | État | Ce que l'onglet dit |
 |---|---|
 | recherche en cours | qu'il cherche — le seul état qui n'est pas un verdict |
-| article trouvé | l'extrait (§7.3) |
+| article trouvé | l'article (§7.3) |
 | rien trouvé | ce qui a été cherché, et « Associer un article… » |
 | ambiguïté | que plusieurs articles se valaient, et la même proposition |
 | entité sans article lisible | qu'aucune langue lue n'a d'article |
@@ -259,20 +207,15 @@ Les six états, tous non-erreurs :
 
 ### 7.2 Onglet par défaut
 
-`Description`, **sauf si** la description du mod est vide ou très courte (seuil à calibrer,
-de l'ordre de 150 caractères), auquel cas l'onglet Wikipédia est ouvert par défaut. C'est
-le cas où il apporte le plus, et il est fréquent.
+`Description`, toujours, à chaque ouverture de fiche.
 
 ### 7.3 Contenu de l'onglet
 
 - Si repli parent actif : une ligne discrète en tête, `Article général : {titre}`.
   Affichée uniquement dans ce cas.
-- **L'article entier, rendu** — révisé deux fois : d'abord de l'introduction à l'article
-  complet, puis du texte brut au rendu HTML. On lit dans Pit Box, avec ses sections, ses
-  tableaux, son infobox et ses images (§9).
-- **Une table des matières**, construite sur l'arbre de sections que l'API rend tout
-  fait (`action=parse&prop=sections`). C'est ce qui manquait le plus à dix-sept mille
-  caractères.
+- **L'article entier, rendu** : on lit dans Pit Box, avec ses sections, ses tableaux, son
+  infobox et ses images (§9).
+- **Une table des matières**, construite sur l'arbre de sections que l'API rend.
 - **Le HTML n'est jamais injecté tel quel.** La webview a accès à `invoke`, et Wikipédia
   est éditable par n'importe qui : un arbre neuf est **reconstruit** à partir d'une liste
   blanche de balises et d'attributs (`src/lib/wiki/wikiHtml.ts`), plutôt que filtré. Ce qui
@@ -281,11 +224,10 @@ le cas où il apporte le plus, et il est fréquent.
 - **Le texte brut reste récupéré en plus du rendu**, et sert de repli quand celui-ci
   échoue. Un article dégradé vaut mieux qu'un onglet vide (§1).
 - Sélecteur de langue.
-- Lien **« Voir sur Wikipédia »** ouvrant le **navigateur système**. Il ne sert plus à
-  « lire la suite » puisque tout est là : ce qu'il apporte encore, c'est ce que le texte
-  brut perd — infobox, tableaux, images, références, historique. Pas de webview intégrée
-  pointant vers wikipedia.org : cela casse le mode hors ligne, impose leur CSP et fait
-  perdre l'identité visuelle de l'application.
+- Lien **« Voir sur Wikipédia »** ouvrant le **navigateur système** — ce qu'il apporte encore,
+  ce sont les références, la navigation et la version vivante de la page. Jamais une
+  webview pointant vers wikipedia.org : elle casserait le mode hors ligne, imposerait leur
+  CSP et ferait perdre l'identité visuelle de l'application.
 - Bloc d'attribution (§7.4).
 
 ### 7.4 Attribution
@@ -295,12 +237,9 @@ En pied d'onglet, obligatoire :
 > Article **{titre}** de Wikipédia — {lien} · Texte disponible sous licence
 > [CC BY-SA 4.0]({lien vers la licence})
 
-Le mot « extrait » a disparu **parce que l'article est désormais affiché en entier**
-(§7.3). Il était exigé pour la raison inverse : n'afficher qu'un fragment constitue une
-modification, qui doit être signalée. Reproduire le texte intégralement et tel quel, avec
-son attribution et sa licence, est ce que CC BY-SA autorise sans réserve — et c'est un
-régime **plus simple** que l'extrait, pas plus risqué. Si l'affichage redevenait partiel
-un jour, le mot devrait revenir avec lui.
+Pas de mot « extrait » : l'article est reproduit **intégralement et tel quel**, ce que
+CC BY-SA autorise sans réserve. Si l'affichage redevenait partiel un jour, il faudrait le
+dire (« extrait ») : n'afficher qu'un fragment est une modification.
 
 ### 7.5 Chargement
 
@@ -310,11 +249,10 @@ transition pour éviter tout décalage de mise en page à l'arrivée du contenu.
 
 ### 7.6 Correction manuelle
 
-**Dans l'onglet lui-même**, et non dans un menu contextuel — conséquence directe de
-l'onglet permanent (§7.1) : quand rien n'a été trouvé, l'onglet ne contient que ça, et
-quand un article est affiché, « Ce n'est pas le bon article ? » est en pied. Reste
-entier le principe d'origine : **pas un assistant, pas de validation au premier
-affichage**. L'utilisateur vient corriger s'il le veut, on ne lui demande rien.
+**Dans l'onglet lui-même** : quand rien n'a été trouvé, l'onglet ne contient que ça, et
+quand un article est affiché, « Ce n'est pas le bon article ? » est en pied. **Pas un
+assistant, pas de validation au premier affichage** : l'utilisateur vient corriger s'il le
+veut, on ne lui demande rien.
 
 Ouvre une recherche libre affichant les candidats avec leur description courte Wikidata
 (« modèle d'automobile Toyota, 1983–1987 »), qui lève l'ambiguïté d'un coup d'œil. Le
@@ -356,11 +294,8 @@ Le tout vit dans `Réglages › Wikipédia`.
 
 ## 9. Images
 
-**Les images sont affichées** — révisé, contre la première rédaction qui les excluait.
-Demandé par l'utilisateur : un article illustré se lit mieux qu'un mur de texte.
-
-Les trois objections d'origine restent **exactes**, et c'est précisément pourquoi elles
-sont traitées une par une plutôt que contournées :
+**Les images sont affichées**, et chacune des trois objections qu'elles soulèvent a sa
+réponse :
 
 | Objection | Réponse |
 |---|---|
@@ -371,13 +306,10 @@ sont traitées une par une plutôt que contournées :
 Une vignette est demandée au serveur (640 px), jamais l'original : une photo de Commons
 fait couramment vingt mégapixels, et rien ici n'en a l'usage.
 
-**La taille d'affichage voyage avec le crédit**, et l'image la porte en `width`/`height` :
-sans elle, une `<img>` n'occupe rien tant que le fichier n'est pas arrivé — l'article est
-mis en page bien trop court, le sommaire saute à côté de la section demandée, et chaque
-image qui se charge ensuite au-dessus du lecteur le repousse vers le bas. Mesuré sur
-Commons : `thumbwidth` est la largeur **demandée** (640), tandis que `thumburl` peut
-pointer un fichier plus dense (960 px) pour les écrans à haute résolution — c'est la
-première qu'on réserve, la seconde laisserait un trou sous chaque image.
+**La taille d'affichage voyage avec le crédit**, et l'image la réserve avant d'arriver :
+sans elle l'article se met en page trop court, et chaque image qui se charge repousse le
+lecteur. C'est la largeur **demandée** qu'on réserve, pas celle du fichier plus dense que
+Commons peut servir aux écrans à haute résolution.
 
 Ce que ça ne change pas : les previews du mod restent les images de la fiche. Celles de
 l'article illustrent un texte, elles ne prétendent pas montrer le mod.
@@ -386,66 +318,38 @@ l'article illustrent un texte, elles ne prétendent pas montrer le mod.
 
 ## 10. Préparation du partage communautaire
 
-Non implémenté dans cette version, mais le modèle de données doit le permettre sans
-migration.
+**Ce qui existe** : des appariements **livrés avec l'application** (`rules/wiki-links.json`),
+repris en source `import` — ils passent devant l'automatique et jamais devant une
+correction locale, et un fichier compilé dans l'application porte la confiance du binaire.
+L'export des corrections (§8) produit ce fichier. La clé qui circule est le nom du
+dossier du mod, jamais le nom affiché.
 
-- Le champ `source` avec ses trois valeurs est le mécanisme central : il permet qu'un
-  import futur n'écrase jamais les corrections locales, et rend possible un retour à
-  l'automatique.
-- La clé d'appariement (`mod_key` = nom du dossier) est ce qui circulera entre
-  installations. Ne pas indexer sur le nom affiché, trop variable.
-- Le format d'export doit prévoir dès maintenant un champ `entity_id` par mod, même
-  toujours vide côté import.
-
-**À l'implémentation future, la validation à l'import devra être stricte** — une donnée
-importée est du contenu tiers arbitraire :
-
-- Q-id : validation de format uniquement.
-- URL : **allowlist sur les sous-domaines de `wikipedia.org`**. Un homographe du type
-  `wikipedıa.org` passerait sinon inaperçu et ouvrirait un vecteur d'hameçonnage dans une
-  fonctionnalité purement décorative.
-- Import toujours explicite, jamais automatique.
+**Ce qui n'existe pas, et la règle qui l'attend** : importer le fichier d'un tiers. Ce
+jour-là, la validation sera stricte — Q-id par format, URL **sur une liste blanche des
+sous-domaines de `wikipedia.org`** (un homographe du type `wikipedıa.org` ouvrirait un
+hameçonnage), import toujours explicite.
 
 ---
 
 ## 11. Tests
 
-Le cœur logique doit vivre dans des fonctions pures, testables sans réseau ni interface.
-
-- **Choix de langue et chaîne de repli** : les cinq niveaux de §5.2, incluant le cas où
-  seule l'entité parente a un article dans la langue demandée.
-- **Nettoyage des noms** : jeu de noms de mods réels tirés de la bibliothèque.
-- **Scoring d'appariement** : rejet effectif en cas de candidats proches ; acceptation du
-  modèle générique quand la génération est absente.
-- **Précédence des sources** : `manual` non écrasée par `auto` ni par `import`.
-- **Validation d'URL** : rejet des domaines non-Wikipédia, y compris homographes.
-- **Cache négatif** : pas de nouvelle requête avant expiration du TTL.
-
-Les appels réseau sont mockés. Aucun test ne doit dépendre de la disponibilité de
-Wikipédia.
+Le cœur logique vit dans des fonctions pures, testées sans réseau : la chaîne de repli de
+langue (§5.2), le nettoyage des noms sur des noms réels, le rejet des candidats trop
+proches, la précédence des sources, la validation d'URL et le cache négatif. Aucun test ne
+dépend de la disponibilité de Wikipédia.
 
 ---
 
 ## 12. Découpage proposé
 
-1. **Socle** — modèle de données, client Action API avec User-Agent et backoff, cache et
-   cache négatif, résolution de langue avec repli parent. Sans interface.
-2. **Appariement voitures** — nettoyage des noms, recherche, filtrage par type, scoring.
-3. **Appariement circuits** — recherche géographique, allowlist élargie, appariement au
-   niveau du dossier parent.
-4. **Interface** — onglets, extrait, sélecteur de langue, attribution, états de chargement.
-5. **Correction manuelle** — recherche libre, collage d'URL, précédence.
-6. **Réglages** — interrupteur, langue, purge du cache.
-
-Les lots 2 et 3 sont indépendants et parallélisables une fois le lot 1 en place.
+Livré ; le reste à faire est dans `CHANTIERS.md`.
 
 ---
 
 ## 13. Points à trancher à l'implémentation
 
-- Seuil de longueur de description en dessous duquel l'onglet Wikipédia devient l'onglet
-  par défaut.
-- Seuil d'écart de score en dessous duquel un appariement est rejeté pour ambiguïté.
-- Rayon exact de la recherche géographique pour les circuits (5 km est un point de départ,
-  à ajuster sur les cas réels — les tracés urbains et les cols demandent peut-être plus).
-- TTL du cache positif (30 jours proposé) et du cache négatif (90 jours proposé).
+Tranchés, et réglables par la mesure plutôt qu'à l'écran (paramètres de `Prefs`,
+`wiki_match_*`, `wiki_track_*`, jamais à l'écran, §8) : score minimal 0,70,
+écart minimal 0,12 entre les deux premiers candidats, rayon de 10 km pour les circuits
+(§4.2), caches de 30 et 90 jours (§3). L'onglet par défaut est toujours la description
+(§7.2) : le basculement sur l'article quand la description est courte n'a pas été retenu.
