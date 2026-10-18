@@ -378,448 +378,128 @@ Code couleur : rouge = catégorie, vert = règle, gris = manuel, bleu = brut du 
 
 ## 6. Fiche technique et champs dédiés
 
-Les caractéristiques mécaniques ne sont **pas** des tags (un tag filtre/groupe, il ne décrit pas une fiche technique).
+Les caractéristiques mécaniques ne sont **pas** des tags : un tag filtre et groupe, il ne décrit pas une fiche technique.
 
-**La fiche technique d'une voiture est en base** (`SPEC-fiche-technique.md`, FICHE§) : chaque valeur y a ses sources, gardées toutes — la physique du mod (`data/` ou `data.acd`), son `ui_car.json`, la table du contenu d'origine pour l'année, les règles (§5) —, et la saisie de l'utilisateur dans une table à part que rien ne recalcule. L'affichage prend la première qui répond, **toujours dans l'ordre** : modifié par vous › physique › `ui_car.json` › déduit des tags (deux nuances mesurées : la boîte séquentielle, semi-automatique, à double embrayage ou automatique vient des tags, la physique ne sachant dire que « levier en H » ou non ; un compresseur aussi, la physique ne le modélisant pas en `[TURBO_n]`). La physique est lue à l'import, à la réindexation (§10) et à l'indexation du contenu d'origine, **à travers les couches actives de la voiture** (§4.3), comme le jeu la voit : une couche qui apporte un `engine.ini` passe devant celui de la base ; activer, désactiver, réordonner ou retirer une couche, ou changer de version active, relit la fiche (et, pour un changement de version, repasse ses tags aux règles) ; au premier démarrage d'une version qui l'introduit — ou qui en corrige la lecture —, un rattrapage lit en fond toutes les voitures qui ne l'ont pas été par les lecteurs du moment, puis la bibliothèque se recharge. **Ce qui a bougé se dit, en nombre** : une notification « Fiches techniques relues » donne, par colonne de la bibliothèque, combien de voitures ont gagné une valeur, en ont changé ou en ont perdu (« Admission : 287 renseignées · 1 modifiée »), et reste jusqu'à ce qu'on la ferme — même après un redémarrage. Une relecture qui ne change aucune colonne ne dit rien. **L'affichage ne lit plus aucun fichier** : c'est ce qui gardera la fiche entière pour un mod en vitrine (`ESPACE§`). Restent lus dans `ui_car.json` à chaque affichage : `description`, `author`, `version` — et la puissance et le poids des cartes, que le filtre de performance lit côté front (CIBLE§3.4).
+**La fiche technique d'une voiture est en base** (`SPEC-fiche-technique.md`, FICHE§), une source par valeur, toutes gardées, et l'affichage prend la première qui répond, **toujours dans l'ordre** : modifié par vous › physique du mod (`data/` ou `data.acd`) › `ui_car.json` › déduit des tags. La physique est lue à l'import, à la réindexation, à l'indexation du contenu de base, **à travers les couches actives** (une couche qui apporte un `engine.ini` passe devant la base), et relue quand une couche ou la version active change. Une version qui introduit ou corrige une lecture rattrape en fond toute la bibliothèque, et **dit ce qui a bougé, en nombre**, par une notification « Fiches techniques relues » qui reste jusqu'à ce qu'on la ferme (« Admission : 287 renseignées · 1 modifiée ») ; une relecture qui ne change rien ne dit rien. **L'affichage ne lit plus aucun fichier**, ce qui garde la fiche entière pour un mod en vitrine (ESPACE§). Restent lus dans `ui_car.json` à l'affichage : description, auteur, version, et la puissance et le poids des cartes.
 
-**Les specs de l'auteur sont lues comme des nombres quand elles en sont** : `--`, une chaîne vide ou un zéro de remplissage sont une absence (97 des 397 voitures de l'install de référence écrivent `--s 0-100`) ; `500+Nm` garde son `+` ; les unités sont ramenées à une orthographe (`kph` → `km/h`, `кг` → `kg`), jamais converties (`whp` reste `whp`) ; une chaîne qu'on ne sait pas lire (`(544+120)Bhp`) est affichée telle quelle. Le rapport poids/puissance absent du fichier est calculé quand puissance (bhp/hp) et poids (kg) le permettent.
+- **Les specs de l'auteur sont lues comme des nombres quand elles en sont** : `--`, une chaîne vide ou un zéro de remplissage sont une absence ; `500+Nm` garde son `+` ; les unités sont ramenées à une orthographe, jamais converties (`whp` reste `whp`) ; ce qui ne se lit pas est affiché tel quel. Le rapport poids/puissance absent est calculé quand puissance (bhp/hp) et poids (kg) le permettent.
+- **La fiche se lit en trois temps** (`TechSheet.svelte`) : les **chiffres clés** en grand (puissance, couple, poids, rapport P/P, vitesse max, 0-100) ; la **Mécanique** en phrases courtes (moteur, transmission, carburant avec autonomie **en km**, origine) ; l'**Électronique** en puces (FICHE§5). Un champ absent disparaît, une ligne ou un groupe vide aussi : jamais de « — » dans une case. Pas de bandeau de specs sur l'aperçu, pas de ligne « URL d'origine » tant que rien ne la remplit.
+- **La provenance se lit sans survol et sans couleur** : rien pour ce qui vient des fichiers du mod, « ≈ » en gris devant une valeur déduite des tags, « ✎ » en gris après une valeur modifiée, et une légende des seuls signes présents. Les colonnes Transmission, Boîte, Moteur, Position et Admission de la bibliothèque sont **le cache de la valeur affichée**, avec les mêmes mots et le même « ≈ » ; le tri se fait sur le mot.
+- **Les puces d'électronique**, lues dans la physique seule : ABS, antipatinage, EDL, DRS, KERS, ERS, roues arrière directrices, anti-roulis actif, répartiteur électronique. Présente : pleine ; absente : pointillés, nom barré ; inconnue : pas de puce. **Seuls ABS et antipatinage s'affichent absents.** L'écran de session lit ces deux aides dans la même fiche (SESSION§3).
+- **La fiche se corrige** (FICHE§8) : le crayon ouvre l'édition de toute la fiche — nombres à unité fixe, listes fermées (dont le pays, avec la liste du jeu et ses drapeaux), une puce à trois états par aide. Chaque champ dit sa source ; « ↺ revenir » rend la valeur du mod. Rien n'est écrit avant « Enregistrer », une valeur invalide n'enregistre rien. La correction survit à une mise à jour, une réindexation et une réharmonisation ; l'historique note « Fiche technique modifiée (boîte, rapports) », jamais les valeurs.
+- **L'odomètre est dans l'en-tête de la fiche voiture**, avec « essayée » ou « jamais essayée » (dans la carte de données pour un circuit, §6.3bis) ; la règle vit dans `odometer.ts`.
+- **Badge de marque** : `ui/badge.png`, sur fiches et vignettes, un repli quand il manque. Pas d'icône d'auteur : le nom en texte.
+- **Année** : `year` de `ui_car.json`, sinon pour le contenu de base la table `kunos_content_dates.json`, sinon « — ». Aucune dépendance à la base en ligne de CM.
+- **Champs structurés** remplis par l'Extraction, pour ce que les specs ne couvrent pas (transmission, position du moteur, admission, architecture, boîte) ; le tag technique extrait sort du vocabulaire. Même principe pour le **pays** : tag pays → champ `country` s'il est vide.
 
-**Le bandeau de specs en surimpression de l'aperçu a disparu** : puissance, couple, poids et vitesse max se lisaient à la fois sur la photo et dans la fiche technique juste à côté. Une donnée affichée deux fois au même endroit n'est pas une redondance utile, c'est une hésitation sur qui la porte — c'est la fiche.
+**Le pays est normalisé à l'écriture, à un seul endroit** (`harmonize::store`), et le `ui_*.json` n'est jamais touché :
 
-**Pas de ligne « URL d'origine » sur la fiche.** Le champ existe en base (`source_url`, §4.4) et attend l'extension de navigateur qui le remplira ; en attendant, la ligne n'affichait « inconnue » sur toutes les fiches de tout le monde. Une rubrique permanente qui ne peut rien dire n'est pas une promesse, c'est du bruit : elle réapparaîtra avec ce qui la remplit.
-
-**La fiche se lit en trois temps** (`components/detail/TechSheet.svelte`, dans la carte « Fiche technique » à droite de l'aperçu, la courbe à côté d'elle quand la place le permet, dessous sinon) : les **chiffres clés** en grand (puissance, couple, poids, rapport P/P, vitesse max, 0-100 — trois de front, deux quand la carte est étroite) ; la **Mécanique** en phrases courtes, une par ligne (Moteur : « V8 · atmosphérique · moteur central · 8 300 tr/min » ; Transmission : « propulsion · séquentielle · 6 rapports » ; Carburant : réservoir et autonomie ; Origine : drapeau, pays, année) ; l'**Électronique** en puces (FICHE§5). Un champ absent disparaît, une ligne ou un groupe vide aussi : jamais de « — » dans une case. **L'autonomie est écrite en km** : l'auteur n'écrit qu'un nombre, et mesuré sur 156 voitures il vaut 1,3 à 2,9 km par litre de réservoir, moins sur les versions plus puissantes d'une même voiture — des km à l'allure de course.
-
-**La provenance se lit sans survol, et sans couleur** (FICHE R5) : ce qui vient des fichiers du mod n'a pas de signe, ce qui est déduit des tags est précédé de « ≈ » en gris, ce que l'utilisateur a modifié est suivi de « ✎ » en gris ; une légende en pied de carte dit ce que veulent dire les signes présents, et seulement eux. Le vert des valeurs déduites et son infobulle ont disparu. Les colonnes Transmission, Boîte, Moteur, Position et Admission de la bibliothèque sont **le cache de la valeur affichée** (même tri, même filtre que la fiche), s'écrivent avec les mêmes mots (« Propulsion », « Biturbo », pas `RWD` ni `TWIN_TURBO`) et portent le même « ≈ » devant une valeur déduite ; le tri se fait sur le mot, jamais sur le signe.
-
-**Les puces d'électronique** : ABS, antipatinage, blocage électronique (EDL), DRS, KERS, ERS (« MGU-K + MGU-H » quand il y a les deux), roues arrière directrices, anti-roulis actif, répartiteur de freinage électronique — lus dans la physique seule (`electronics.ini`, `drs.ini` avec une section `[WING_n]`, `kers.ini`, `ers.ini`, `ctrl_*.ini`). Présente : puce pleine ; absente : pointillés, nom barré ; inconnue : pas de puce. **Seuls ABS et antipatinage s'affichent absents** — « pas d'ABS » sur une voiture de 1966 est une information, « pas de DRS » sur une citadine est du bruit. L'écran de session (SESSION§3) lit ces deux aides dans la même fiche : une correction y vaut aussi.
-
-**La fiche se corrige** (FICHE§8) : le crayon de son bandeau ouvre le mode édition, sur toute la fiche d'un coup — nombres à unité fixe pour les chiffres clés, le régime, le réservoir, l'autonomie, les rapports et l'année ; listes fermées pour l'architecture, la suralimentation, la position, les roues motrices, la boîte et le pays (la liste des pays du jeu, avec leur drapeau) ; puce à trois états par aide (un clic : présente → absente → inconnue). Chaque champ dit sa source en toutes lettres, et un champ corrigé propose « ↺ revenir », qui rend la valeur du mod. Rien n'est écrit avant « Enregistrer » ; « Annuler » laisse la fiche telle qu'elle était, et une valeur invalide n'enregistre rien. La correction survit à une mise à jour du mod, à une réindexation et à une réharmonisation ; l'année et le pays corrigés sont ceux de la liste, des filtres et de l'index par pays. L'historique du mod note « Fiche technique modifiée (boîte, rapports) », jamais les valeurs.
-
-**L'odomètre est dans l'en-tête de la fiche voiture**, sous le sous-titre, avec « essayée » ou « jamais essayée » : c'est l'usage que l'utilisateur fait de la voiture, pas une caractéristique de la voiture. Un odomètre vide est lui-même une réponse, d'où le marqueur plutôt qu'un tiret. **Les circuits le gardent dans leur carte de données** (§6.3bis). La règle vit dans `odometer.ts`, partagée par les deux.
-
-**Badge de marque** : `content/cars/<voiture>/ui/badge.png` (présent quasi partout, mod comme Kunos). Affiché sur fiches et vignettes. Source locale, pas de dépendance externe. Fallback (monogramme/générique) pour les rares voitures sans badge. **Pas d'icône d'auteur** (elle vient d'un pack externe communautaire, pas des fichiers du mod) : afficher le nom en texte.
-
-**Champ `year` — résolution à trois niveaux** : (1) lire `year` de `ui_car.json` s'il est présent ; (2) sinon, pour le contenu de base, chercher dans la table statique `kunos_content_dates.json` ; (3) sinon « — ». L'app ne dépend pas de la base en ligne d'AcTools/CM.
-
-**Champs structurés complémentaires** (overlay), remplis par la famille de règles Extraction, uniquement pour ce que `specs` ne couvre pas : `drivetrain` (RWD/FWD/AWD), `engine_pos` (FRONT/MID/REAR), `aspiration` (NA/TURBO/SUPERCHARGED), `engine_config` (V6/V8/…/ELECTRIC), `gearbox` (MANUAL/SEQUENTIAL/…). Une fois extraits, ces tags techniques sont retirés du vocabulaire. Même principe pour le **pays** (tag pays → champ `country` si vide, puis retrait du tag).
-
-**Les alias de pays sont une seconde table, et ne se confondent pas avec la première.** L'extraction **devine** un pays absent à partir d'un tag et ne joue que si le champ natif est vide ; les alias **normalisent** un pays déjà déclaré (« ce mod dit `U.S.A.`, c'est-à-dire United States ») et jouent toujours. Les fusionner laisserait un tag réécrire ce que l'auteur a pris la peine de déclarer. **Les deux s'éditent dans l'onglet Pays de Classement**, pas dans l'écran Règles (TAXO§8, REGLES§11 : une table de correspondance exacte n'est pas une heuristique). Chaque pays déplié y montre ses orthographes (alias) et les tags qui le désignent (extraction). Ils vivent **hors des deux familles** : un circuit déclare un pays comme une voiture, et l'écrit tout aussi librement.
-
-**Après les alias, deux fusions qui ne sont pas des décisions** (TAXO§7.1, moteur v5) : une valeur égale à un nom de la table du jeu une fois la casse, les espaces et les accents repliés prend l'orthographe du jeu (`JAPAN`, `japán` → `Japan`), et un code ISO valide prend le nom du pays (`JP`, `JPN` → `Japan`). Rien d'autre : rapprocher `Swizerland` de `Switzerland` est une **proposition** de l'onglet Pays, jamais une décision de l'harmonisation. La table du jeu est chargée une fois au démarrage (`nationalities::set_known`) ; absente, seuls les alias jouent. Mesuré sur 579 `ui_*.json` : aucune variante de casse ni aucun code ISO dans le corpus — la règle est là pour les bibliothèques qui en ont.
-
-**La normalisation a lieu à un seul endroit** (`harmonize::store`), et c'est ce qui la rend fiable : les deux chemins s'y rejoignent, le champ natif et le tag extrait. Normaliser plus haut, à la lecture du `ui_json`, aurait laissé passer le second — une voiture taguée `usa` se serait rangée à part d'une voiture déclarant `U.S.A.`, pour le même pays. Le `ui_*.json` du mod n'est jamais touché (règle d'or n°1) : c'est l'overlay qui porte la valeur normalisée.
-
-**Le jeu d'alias par défaut est mesuré, pas deviné.** Relevé sur les 575 `ui_*.json` d'une bibliothèque réelle : 17 orthographes de pays, dont cinq introuvables telles quelles dans la table du jeu, et à elles seules 82 des 395 mods qui en portent un — `U.S.A.`, `USA` et `United States of America` pour les États-Unis, `Great Britain` pour le Royaume-Uni, plus une valeur cassée. **Les nations britanniques n'y sont pas** : AC donne son propre drapeau à l'Écosse, à l'Angleterre, au pays de Galles et à l'Irlande du Nord, et les replier sur le Royaume-Uni remplacerait un drapeau juste par un autre drapeau juste.
-
-**Une valeur cassée se lit, elle ne se répare pas.** Le `ui_track.json` de `le_lancone` porte `"country": "France\", \"Corsica"` — son auteur a voulu écrire deux entrées et en a produit une seule, guillemets compris. Le nom retenu est ce qui précède le premier guillemet, qu'un nom de pays ne contient jamais. **Jamais à la virgule**, qui paraîtrait faire la même chose : la table du jeu en contient (`Tanzania, {United Republic of}`), et les couper les rendrait introuvables.
-
-**Un circuit déclare son pays comme une voiture, et le garde comme elle.** Ce n'était pas le cas : la réharmonisation relisait le pays natif par le lecteur de `ui_car.json` **quel que soit le type**. Un circuit n'en a pas, son pays revenait donc vide — et comme rien n'extrait de pays d'un tag de circuit, la valeur posée à l'import était **effacée**, sans un mot, dès qu'on touchait aux règles. Le défaut était dans la duplication : deux lecteurs, dont un seul branchait sur le type. Il n'y en a plus qu'un, qui rend le pays natif en même temps que l'harmonisation — ils viennent du même fichier.
-
-L'arrivée des alias fait passer le moteur en **version 3**, et cette correction en **version 4** : une bibliothèque indexée avant eux se réharmonise **toute seule au démarrage suivant**, sans rien demander — c'est le même rattrapage que la fermeture du vocabulaire en version 2, et c'est lui qui rend leur pays aux circuits qui l'avaient perdu.
+- **Les alias** normalisent un pays déclaré (`U.S.A.` → United States) et jouent toujours ; **l'extraction** devine un pays absent d'après un tag et ne joue que si le champ est vide. Les deux s'éditent dans **Classement › Pays** (TAXO§8), pas dans l'écran Règles, et valent pour voitures et circuits.
+- **Deux fusions qui ne sont pas des décisions** : un nom de la table du jeu, casse, espaces et accents repliés, prend l'orthographe du jeu ; un code ISO valide prend le nom du pays. Toute autre ressemblance (`Swizerland`) est une **proposition** de l'onglet Pays. La table du jeu est chargée au démarrage ; absente, seuls les alias jouent.
+- Le jeu d'alias livré est **mesuré** sur une bibliothèque réelle. **Les nations britanniques n'y sont pas** : AC leur donne leur propre drapeau.
+- **Une valeur cassée se lit, elle ne se répare pas** : le nom retenu est ce qui précède le premier guillemet ; **jamais une coupe à la virgule**, que des noms de la table contiennent.
+- Un circuit déclare et garde son pays comme une voiture : la réharmonisation le relit par le même lecteur que le reste du fichier. Une évolution de ces règles incrémente `ENGINE_VERSION` (§5) et se rattrape seule au démarrage.
 
 **Favori** : état personnel (cœur), ni tag ni caractéristique.
 
-**Onglets de premier niveau** en haut de la fiche (`DetailPage.svelte`, la
-page pleine — désormais la seule fiche : le panneau latéral compact qui la
-doublait dans la liste a été retiré) : **Fiche · Screenshots · Replays · Resources ·
-Ajouts au jeu · Backgrounds** (ce dernier affiché seulement pour un circuit).
-Ressources et Ajouts au jeu vivent dans leur propre onglet plutôt que dans la
-colonne de la fiche (§4.5.5). Les actions secondaires de l'en-tête (Activer/Désactiver, Exporter,
-Réinstaller, Supprimer, Aperçu 3D, Ouvrir le dossier) sont regroupées dans un
-menu **⋮** — seuls le cœur favori et le badge « Contenu de base » restent
-visibles en permanence, hors du menu.
+**La fiche pleine page (`DetailPage.svelte`) est la seule fiche.** Trois onglets (§6.3bis) : **La voiture / Le circuit**, **Médias et documents** — avec son décompte entre parenthèses dès qu'il est connu, récupéré en fond sans retarder l'affichage —, et **Installation**, sans décompte : c'est une section, pas une collection. Les actions secondaires de l'en-tête (activer/désactiver, exporter, réinstaller, supprimer, aperçu natif, ouvrir le dossier) sont dans un menu **⋮** ; le cœur et le badge « Contenu de base » restent visibles.
 
-**Un seul curseur pour toute l'app** (`src/lib/components/ui/Slider.svelte`) : réglages de session (dégâts, carburant, usure des pneus, heure), volume et fondu de Musique, cinq réglages de cadrage de l'aperçu 3D. Il y en avait quatre, tous faits main — les réglages de session dessinaient une poignée carrée rouge sur une piste de 3 px, Musique et Aperçu laissaient la poignée ronde du navigateur avec `accent-color`. Même contrôle, deux apparences. Le remplissage de la piste se calcule **dans** le composant, à partir des bornes : chaque appelant le recopiait à la main (`fuel_rate / 2` pour une échelle 0-200), donc une borne qui bouge laissait un remplissage faux. Le comportement manette « entrer dans le champ » (§7.4bis) vient avec, sans rien à déclarer : il porte sur le type `range` lui-même.
-
-**Un seul composant d'onglets pour toute l'app** (`src/lib/components/ui/Tabs.svelte`) : fiche détail, Réglages, Apps et Règles de tags. Ils avaient chacun leur `.tabs` local — trois tailles de police, trois façons de marquer l'onglet actif, trois fonds. Le CSS Svelte étant scopé par composant, chaque copie dérivait de son côté sans que personne ne le voie : le mécanisme même qui a produit 53 signatures visuelles pour 68 libellés (§chantier libellés). Une variante `flush` (bande pleine largeur sur fond de carte) pour la fiche, qui occupe tout le cadre ; partout ailleurs la bande est transparente et porte elle-même son écart au contenu — une valeur de plus qui divergeait d'un écran à l'autre. Le composant s'inscrit tout seul auprès de `screenActions` (§7.4bis), ce qui rend tout écran à onglets parcourable à la manette sans une ligne de code de sa part — **sauf** une bande imbriquée dans un onglet (les sous-onglets du bloc textuel, §6.3bis), qui s'en retire : le registre est une pile dont la dernière inscription gagne, et sans ce retrait « onglet suivant » ferait défiler Description/Notes en rendant les onglets de la fiche injoignables.
-
-**Chiffre entre parenthèses** sur Screenshots/Replays/Resources/Ajouts au jeu/Backgrounds
-(ex. « Replays (3) ») dès qu'il est connu, pour savoir s'il y a quelque chose
-avant de cliquer. Récupéré en tâche de fond à l'ouverture de la fiche (mêmes
-appels que ceux faits à l'ouverture de chaque onglet) : aucun chiffre tant que
-la réponse n'est pas là, jamais de blocage de l'affichage de la fiche pour
-l'attendre. Backgrounds se recalcule aussi à chaque changement de layout
-sélectionné (même filtrage que la sous-vue elle-même, §6.1).
+**Un seul curseur** (`ui/Slider.svelte`) et **un seul composant d'onglets** (`ui/Tabs.svelte`) pour toute l'app : le remplissage d'un curseur se calcule dans le composant, à partir de ses bornes ; un composant d'onglets s'inscrit tout seul auprès de la manette (§7.4bis), sauf une bande imbriquée dans un onglet (les sous-onglets du bloc textuel), qui s'en retire. Variante `flush` pour la fiche.
 
 ### 6.1 Onglet Médias et documents (fiche voiture/circuit)
 
-Quatre blocs réunis dans un seul onglet (REFONTE§7.8), en deux groupes : ce
-que **tu as produit** — **Screenshots**, **Replays** — puis ce qui est **livré
-avec le mod** — **Ressources**, **Backgrounds** (cette dernière réservée aux
-circuits). Le décompte de l'onglet est la somme des quatre. Aucun bloc n'est
-masqué quand il est vide : ses actions « Ouvrir le dossier » et « Lier un
-fichier… » sont la seule voie pour y ajouter quelque chose.
+Quatre blocs, en deux groupes : ce que **l'utilisateur a produit** — **Screenshots**, **Replays** — puis ce qui est **livré avec le mod** — **Ressources**, **Backgrounds** (circuits seulement). Le décompte de l'onglet est leur somme. **Aucun bloc n'est masqué quand il est vide** : « Ouvrir le dossier » et « Associer un fichier… » sont la seule voie pour y ajouter quelque chose.
 
-**Les documents livrés avec le mod mais rangés à part y figurent aussi** : une
-notice, un manuel, des notes de version que l'import a stockés comme des mods à
-eux (§4.5.2) parce qu'ils étaient hors du dossier du mod. Leurs fichiers ne sont
-donc pas dans les ressources de la voiture — mais c'est bien là qu'on les
-cherche. Ils rejoignent **la liste du bloc Ressources**, chacun marqué du nom de
-sa livraison, et non une carte par document : trois cartes au-dessus d'un bloc
-« Ressources » annonçant « aucun fichier annexe » disaient le contraire de la
-vérité. Ils restent par ailleurs gérables depuis « Posé sur ce mod » (§4.3) et
-depuis l'inventaire — lire et gérer sont deux gestes.
+**Les documents livrés à part rejoignent la liste Ressources** : une notice ou un manuel que l'import a rangés comme mods à eux (hors du dossier du mod, §4.5.2) y figurent, chacun marqué du nom de sa livraison — pas une carte par document. Ils restent gérables depuis « Posé sur ce mod » et l'inventaire.
 
-Rattachement par simple **`nom_de_fichier.contains(id)`**
-sur l'ensemble des id de la bibliothèque (voitures ∪ circuits, stock inclus) —
-pas de découpage voiture/circuit dans le nom : les deux espaces de noms ne se
-recoupent jamais (`content/cars/<id>` vs `content/tracks/<id>`), donc un id
-trouvé dans le nom désigne sans ambiguïté la bonne entité. Un faux positif
-occasionnel (id imbriqués, ex. « imola » contenu dans un mod
-« rt_imola_historic ») est accepté : ces médias sont un agrément (§6.1), pas
-une fonctionnalité critique — mieux vaut un média de trop qu'un rattachement
-manqué. Repli : **association manuelle** (bouton « Associer un fichier… »,
-dialogue de sélection natif) quand le rattachement automatique ne trouve rien
-— stocké dans `overlay.sqlite` (table `media_links`), jamais écrit par le
-matching automatique lui-même.
+**Rattachement des médias** par **`nom_de_fichier.contains(id)`** sur tous les ids de la bibliothèque (voitures ∪ circuits, contenu de base compris) : les deux espaces de noms ne se recoupent pas. Un faux positif occasionnel (id contenu dans un autre) est accepté — un média de trop vaut mieux qu'un rattachement manqué. Repli : **l'association manuelle** (`media_links`), jamais écrite par le rattachement automatique.
 
-**Mise à la corbeille** (Screenshots et Replays uniquement — les Backgrounds
-sont des fichiers posés par CSP, pas des médias de l'utilisateur) : bouton 🗑
-sur chaque vignette/ligne et dans la visionneuse, plus la touche **Suppr** sur
-l'élément focalisé (vignette, ligne de replay) et sur l'image affichée en
-visionneuse. Le fichier part dans la **corbeille Windows**, jamais en
-suppression définitive : `media::trash_file` s'appuie sur `IFileOperation` +
-`FOFX_RECYCLEONDELETE`, qui échoue quand le recyclage est impossible (partage
-réseau, fichier plus gros que le quota) au lieu de basculer silencieusement en
-effacement définitif. Récupérable, donc **aucune confirmation** — une boîte de
-dialogue par image rendrait le tri d'une galerie insupportable. Tout
-rattachement manuel (`media_links`) pointant sur le fichier est retiré dans la
-foulée, sinon la ligne survivrait au fichier et referait apparaître le média
-disparu. Supprimer l'image affichée en visionneuse enchaîne sur la suivante
-(sur la précédente pour la dernière de la liste), et ferme la visionneuse
-quand il ne reste plus rien.
+**Mise à la corbeille** (Screenshots et Replays — les Backgrounds sont des fichiers de CSP) : 🗑 sur chaque vignette, ligne et dans la visionneuse, et **Suppr** sur l'élément focalisé. **Corbeille Windows, jamais une suppression définitive** : quand le recyclage est impossible, l'opération échoue au lieu d'effacer (`media::trash_file`). Récupérable, donc **sans confirmation**. Un rattachement manuel vers le fichier est retiré avec lui. En visionneuse, on enchaîne sur l'image suivante (la précédente pour la dernière), et on ferme quand il ne reste rien.
 
-**Visionneuse plein écran** (`Lightbox.svelte`, générique aux deux galeries
-Screenshots/Backgrounds) : clic sur une vignette pour l'ouvrir en grand,
-précédent/suivant (boutons, flèches clavier, croix/stick manette), diaporama
-(bouton lecture/pause, avance automatique toutes les 4 s), fermeture par le
-bouton ✕ en haut à gauche, un clic sur le fond, Echap, ou le bouton B/annuler
-manette. Pose `nav.inputCapture = "lightbox"` tant qu'elle est ouverte (même
-drapeau que le panneau de périphérique, §7.4) : la navigation
-manette globale et le précédent/suivant de mod de la fiche pleine page
-(`Library.svelte::navigateFull`) cèdent gauche/droite/B pendant ce temps, pour
-qu'une même pression n'agisse jamais à la fois sur la visionneuse et sur ce
-qu'il y a en dessous.
+**Visionneuse plein écran** (`Lightbox.svelte`) : précédent/suivant (boutons, flèches, manette), diaporama (4 s), fermeture par ✕, clic sur le fond, Échap ou B. Ouverte, elle prend la manette pour elle (`nav.inputCapture = "lightbox"`) : une pression n'agit jamais sur ce qu'il y a dessous.
 
-**Miniatures mises en cache** (`src-tauri/src/thumbnails.rs`) : les captures AC sont en pleine résolution jeu — les grilles Screenshots/Backgrounds n'affichent jamais l'original, seulement une miniature JPEG générée au premier affichage puis persistée sur disque (`app_cache_dir()/thumbnails/`, clé = hash du chemin + date de modification + taille cible), réutilisée telle quelle même après redémarrage de l'app. Seule la visionneuse plein écran (Lightbox) charge l'image d'origine. Pas de politique d'éviction pour l'instant — le cache grossit avec les captures vues, jamais purgé automatiquement.
+**Miniatures en cache sur disque** (`thumbnails.rs`, `app_cache_dir()/thumbnails/`, clé = chemin + date + taille cible) : les grilles n'affichent jamais l'original ; seule la visionneuse charge l'image d'origine. Pas d'éviction.
 
-Formats réels vérifiés sur le poste avant implémentation (remplace la
-convention supposée) :
-- `Documents\Assetto Corsa\screens\Screenshot_<car_id>_<track_id>_<d>-<m>-<y>-<h>-<m>-<s>.jpg`
-  (capture en session) et `Showroom_<car_id>_<d>-<m>-<yyyy>-<h>-<m>-<s>.jpg`
-  (aperçu showroom, **pas de circuit** — le showroom n'a pas de piste). Le
-  format de l'année dans le nom n'est pas uniforme selon le mode de capture
-  (bug `tm_year` en session) : jamais parsé, seul le mtime du fichier est lu.
-- `Documents\Assetto Corsa\replay\AC_<ddmmyy>-<hhmmss>_<type>_<car_id>_<track_id[_layout]>_<suffixe?>.acreplay`,
-  `<type>` une lettre de session (`R` course, `Q` qualification, le reste
-  « autre »), suffixe final de longueur variable ou absent.
-  `replay\temp\` (fichiers de travail) n'est jamais scanné. **Ce nom-là est
-  celui d'un autosave du jeu** ; Content Manager renomme ceux qu'on conserve,
-  motif par défaut `<car_id>_<track_id>_<ddmmyy>-<hhmmss>`. La date se lit donc
-  en tête ou en fin de nom selon l'écrivain, et à défaut dans le mtime : un
-  replay a **toujours** un horodatage, sans quoi le tri par date renvoyait en
-  fin de liste, sans date affichée, le replay qu'on venait d'enregistrer.
-- `<ac_install>\extension\backgrounds\<track_id>[__<layout_id>]_<variant>.jpg`
-  (CSP) — convention propre, match par préfixe (double underscore avant le
-  layout).
-**Ce qu'une ligne de replay affiche** : le combo réellement piloté (voiture,
-circuit et layout), l'horodatage, la durée, le nombre de voitures en piste, le
-nom du pilote, la taille du fichier, et le nom du fichier lui-même en dessous.
-Les cinq premières viennent de l'**en-tête du `.acreplay`** (`acreplay.rs`),
-pas du nom : le nom ne distingue pas deux courses du même combo, et il ne dit
-rien du pilote ni de la durée. Le bloc de frames ayant un pas fixe
-(`frames × (4 + objets_de_piste × 12)` octets), les champs qui suivent sont
-atteints par un seek — lire l'en-tête d'un replay de 635 Mo coûte le même temps
-que celui d'un replay de 867 Ko, ce qui rend l'opération tenable pour chaque
-ligne de la liste. En-tête illisible (replay d'une version antérieure, fichier
-tronqué, replay en cours d'écriture) : la ligne s'affiche avec ce que le nom et
-le disque donnent, jamais d'erreur.
+**Les noms de fichiers lus** :
+- `Documents\Assetto Corsa\screens\` : `Screenshot_<car>_<track>_<date>.jpg` en session, `Showroom_<car>_<date>.jpg` (sans circuit). La date du nom n'est jamais lue (format irrégulier) : seule la date du fichier compte.
+- `Documents\Assetto Corsa\replay\` : l'autosave du jeu `AC_<ddmmyy>-<hhmmss>_<type>_<car>_<track[_layout]>_…`, ou le nom que CM donne à un replay gardé, `<car>_<track>_<ddmmyy>-<hhmmss>`. La date se lit dans le nom, à défaut dans le fichier : **un replay a toujours un horodatage**. `replay\temp\` n'est jamais lu.
+- `<AC>\extension\backgrounds\<track>[__<layout>]_<variante>.jpg` (CSP), par préfixe.
 
-**Autosave ou gardé** (badge sur chaque ligne). Il n'existe **aucun nettoyage
-par ancienneté** : ni Pit Box ni Content Manager ne suppriment un replay au bout
-de X jours. C'est Assetto Corsa qui fait tourner ses autosaves, et il les
-**compte** — `cfg/replay.ini`, section `[AUTOSAVE]`, `RACE`/`QUALIFY`/`OTHERS`
-(les réglages « Replays autosave » de CM écrivent ce fichier, ils n'ajoutent
-rien de leur côté). Une ligne porte donc soit **« Autosave rang/limite »** — son
-rang parmi les autosaves du même type de session, toutes voitures confondues, le
-plus récent en 1 —, soit **« Gardé »** quand le fichier a été renommé, ce qui le
-sort de la rotation. Le détail (quel type, combien AC en garde) est dans
-l'infobulle du badge, jamais en libellé.
+**Une ligne de replay** affiche le combo réellement piloté, l'horodatage, la durée, le nombre de voitures, le pilote, la taille et le nom du fichier. Les cinq premiers viennent de **l'en-tête du `.acreplay`** (`acreplay.rs`), atteint par un saut de taille fixe : lire un replay de 635 Mo coûte autant qu'un de 867 Ko. En-tête illisible : la ligne garde ce que le nom et le disque donnent, jamais d'erreur.
 
-**La liste se recharge à la fin d'une session**, sans qu'on ait à rouvrir la
-fiche : `onSessionEnd` (`detail/media.ts`) écoute la retombée de `ac://running`,
-le sondage du process du jeu qui sert déjà à couper la musique de Big Picture et
-à suspendre les vignettes de la grille (GRILLE§5.4) — pas un second sondage.
-Deux passages, à la fermeture puis six secondes après, parce qu'il y a deux
-écrivains : AC pose son autosave avant de rendre la main, Content Manager
-renomme ou recopie le fichier une fois le jeu parti. Le même signal rafraîchit
-les Screenshots et les décomptes des onglets.
+**Autosave ou gardé** : AC fait tourner ses autosaves par **nombre** (`cfg/replay.ini`, `[AUTOSAVE]`), personne ne les supprime par ancienneté. Une ligne porte **« Autosave rang/limite »** (son rang parmi les autosaves du même type de session, le plus récent en 1) ou **« Gardé »** (renommé, sorti de la rotation) ; le détail est en infobulle.
 
-- **Replays — bouton « Lire dans CM »** (`launch.rs::launch_replay`) : passe le
-  chemin du `.acreplay` en argument à l'exécutable Content Manager — même
-  mécanisme que l'association de fichier Windows au double-clic, et cohérent
-  avec la façon dont `launch()`/`open_content_manager` invoquent déjà CM (un
-  argument passé directement à `Command::new`, jamais via le gestionnaire de
-  protocole système). Pas de vérification empirique poussée (pas d'install AC
-  sur le poste de développement) — à confirmer à l'usage.
+**La liste se recharge à la fin d'une session**, sans rouvrir la fiche, sur le signal de fin du jeu (`ac://running`) : à la fermeture, puis six secondes après — AC pose l'autosave, CM le renomme ensuite. Screenshots et décomptes suivent.
+
+**« Lire dans CM »** (`launch.rs::launch_replay`) passe le chemin du `.acreplay` en argument à Content Manager, comme le double-clic de Windows. Pas pendant qu'un jeu tourne (SESSION§2.4).
 
 ### 6.2 Fond photo sur l'écran de réglages de session
 
-Sur l'écran de réglages (SESSION§3), image de fond assombrie/floutée derrière
-l'interface, avec ordre de repli :
-1. Screenshot personnel du **combo exact** (même voiture + même circuit sélectionnés).
-2. Screenshot personnel du **même circuit**, autre voiture (ambiance du lieu conservée).
-3. **Background officiel** du circuit (§6.1).
-4. Fond neutre actuel (aucun média disponible).
-
+Sur l'écran de réglages (SESSION§3), une image assombrie et floutée derrière l'interface, dans cet ordre de repli :
+1. un screenshot du **combo exact** (même voiture et même circuit) ;
+2. un screenshot du **même circuit**, autre voiture ;
+3. le **background officiel** du circuit (§6.1) ;
+4. le fond neutre.
 
 ### 6.3 Coquille de fiche unique (REFONTE§6.1, §12)
 
-**Les cinq fiches — voiture/circuit, app, mod « autre », son, pack — partagent
-un seul en-tête** (`FicheHeader.svelte`) : retour, tuile, nom, sous-titre, état,
-favori et menu ⋮. Avant lui, quatre d'entre elles affichaient un **nom de
-fichier en monospace** suivi d'une rangée de boutons ; le titre de la fiche
-était donc l'identifiant technique.
+**Les cinq fiches — voiture/circuit, app, mod « autre », son, pack — partagent un seul en-tête** (`FicheHeader.svelte`) : retour, tuile, nom, sous-titre, état, favori, menu ⋮.
 
-- **La tuile montre la chose réelle** quand elle existe — badge de marque d'une
-  voiture, vignette — et un **pictogramme de type** sinon. Jamais deux lettres
-  tirées du nom : « PO » pour `policeman` n'apprend rien et se lit comme un
-  badge de marque inexistant.
-- **Le nom d'affichage se reprend à la main sur tous les types** (§5bis.3
-  étendu), la saisie vivant dans l'overlay à côté du nom dérivé et jamais à sa
-  place. Quand un nom est repris, l'identifiant technique passe en sous-titre.
-- **L'auteur est dans le sous-titre** : c'est une propriété du mod.
-- **Les actions vivent dans le ⋮**, sauf un contrôle par fiche quand il en est
-  la raison d'être (la clé de contact d'un mod de son).
-- Variante `flush` pour la fiche qui déborde les marges de l'écran, comme le
-  `flush` de `Tabs.svelte`.
+- **La tuile montre la chose réelle** quand elle existe (badge de marque, vignette), un **pictogramme de type** sinon — jamais deux lettres tirées du nom.
+- **Le nom d'affichage se reprend à la main sur tous les types** (§5bis.3), à côté du nom dérivé ; un nom repris fait passer l'identifiant technique en sous-titre.
+- **L'auteur est dans le sous-titre.**
+- **Les actions vivent dans le ⋮**, sauf un contrôle par fiche quand il en est la raison d'être (la clé de contact d'un mod de son).
 
-**Un seul vocabulaire d'état** (`StateBadge.svelte`), rendu dans l'en-tête et
-dans la colonne « État » du tableau : **Actif** (vert), **Inactif** (orange),
-**En attente** (jaune), **De base** (bleu), **Non géré** (gris). « En attente »
-ne se fond pas dans « inactif » : un mod inactif a été désactivé, un mod en
-attente est actif mais perd l'arbitrage sur un emplacement disputé et reprendra
-sa place dès que l'autre partira.
+**Un seul vocabulaire d'état** (`StateBadge.svelte`), dans l'en-tête et dans la colonne « État » du tableau : **Actif** (vert), **Inactif** (orange), **En attente** (jaune — actif mais perdant l'arbitrage sur un emplacement disputé), **De base** (bleu), **Non géré** (gris), et **En vitrine** (ESPACE§).
 
 ### 6.3bis Les trois onglets de la fiche voiture/circuit (REFONTE§7)
 
 | Onglet | Contenu |
 |---|---|
-| **La voiture** / **Le circuit** | Aperçu, sélecteur, fiche technique, courbe, son, bloc textuel |
+| **La voiture** / **Le circuit** | aperçu, sélecteur, fiche technique, courbe, son, bloc textuel |
 | **Médias et documents** | Screenshots, Replays, Ressources, Backgrounds (§6.1) |
-| **Installation** | Ajouts au jeu, décisions d'import, origine, historique, couches, étiquettes, extensions CSP |
+| **Installation** | ajouts au jeu, décisions d'import, origine, historique, couches, étiquettes, extensions CSP |
 
-Six onglets exposaient auparavant la mécanique : Ressources et Ajouts au jeu
-étaient vides la plupart du temps et il fallait cliquer pour le découvrir.
+**Les étiquettes vivent dans Installation** : on les ouvre quand la dérivation de la catégorie s'est trompée ; le premier onglet montre le résultat, la **catégorie**, en puce près du titre. Les **extensions CSP** sont dans Installation : elles décrivent l'installation, pas le contenu.
 
-**Les étiquettes vivent dans Installation** : elles sont la matière
-première d'où la catégorie est dérivée, et on les ouvre au moment où cette
-dérivation s'est trompée — donc en même temps que l'origine et les décisions
-d'import. Ce que l'utilisateur consulte en premier onglet, c'est le résultat :
-la **catégorie**, remontée en puce près du titre. Les **extensions CSP**
-quittent les étiquettes pour Installation : elles décrivent l'installation, pas
-le contenu.
+**Le sélecteur de livrée ou de tracé est une carte de la colonne de droite** (`PickerBar`), avec en-tête et compteur (« SKINS 28 »), **au-dessus de la ligne de flottaison** — un contrôle n'exige jamais de défiler. Trois gestes : les **flèches** (défiler en gardant l'œil sur l'aperçu), le **nom** (liste déroulante) et **« Voir les N »** (grille de vignettes dépliée en place, repliée à chaque ouverture de fiche).
 
-**Le sélecteur de livrée/tracé est une carte de la colonne de droite**
-(`PickerBar`) : il y voisine avec la fiche technique, le son et les habillages,
-et en reprend le cadre, l'en-tête rouge et le compteur (« SKINS 28 »,
-« LAYOUTS 2 »). Il a d'abord été une barre nue collée sous l'aperçu ; ce qui
-comptait dans ce placement — **un contrôle ne doit jamais exiger de faire
-défiler** — est conservé, il reste au-dessus de la ligne de flottaison. Mais une
-barre sans cadre au milieu de cartes qui en ont détonnait sans rien dire de
-plus : ce qui désigne un contrôle, c'est qu'il agisse, pas qu'il se distingue de
-ses voisins. L'intitulé quitte le champ, l'en-tête le porte. Trois gestes pour trois façons de chercher : les **flèches** (défiler
-en gardant l'œil sur l'aperçu, geste le plus fréquent), le **nom** (liste
-déroulante, quand on le connaît) et **« Voir les N »**, qui déplie la grille de
-vignettes en place — beaucoup de livrées de mods s'appellent `skin_01`, et une
-liste de noms n'en dit alors rien. La grille est repliée à chaque ouverture de
-fiche, sans persistance.
+**Le premier onglet tient en deux zones.** Une rangée à deux colonnes **qui se referme sur la hauteur de l'aperçu** — l'aperçu à gauche, toutes les cartes à droite ; une colonne de droite plus haute que l'aperçu allonge la rangée, l'aperçu reste en haut ; sous ~1 100 px de largeur **disponible**, une colonne. Puis le **bloc de lecture**, pleine largeur, contenu centré sur des **paliers de largeur** (100 %, puis 540 / 720 / 960 / 1140 / 1320 px), sans hauteur minimale. **Tous les seuils de cette mise en page sont des requêtes de conteneur**, jamais de média.
 
-**Le premier onglet tient en deux zones empilées.** La première est une rangée
-à deux colonnes qui **se referme sur la hauteur de l'aperçu** : l'aperçu seul à
-gauche, toutes les cartes à droite (voiture : fiche technique et courbe côte à
-côte, son, livrées ; circuit : Circuit, habillages, tracés). Une colonne de
-grille s'étire par défaut à la hauteur de la plus haute, et le panneau de
-données — qui porte un fond — courait donc jusqu'en bas de la page alors qu'il
-n'avait de contenu que sur un tiers ; le vide se voyait surtout sur un circuit,
-dont la colonne est la plus maigre. Le cas inverse est réglé par la même règle :
-une colonne de droite plus haute que l'aperçu s'allonge, l'aperçu reste aligné
-en haut, la rangée ne casse pas. Sous ~1 100 px de largeur **disponible**, la
-rangée passe à une colonne.
+**Un circuit n'a que deux cartes de données** — « Circuit » (longueur, nombre de tracés et combien une couche en apporte, pays, odomètre) puis « Habillages » —, et la grille n'est pas dictée par le type le plus riche. **La longueur porte son unité** : un entier est en mètres, une valeur sous 100 est lue en **kilomètres**, une valeur qui porte déjà une unité est rendue telle quelle (`trackLength.ts`). Le nom du tracé n'entre pas dans la carte : le sélecteur le dit. Le sous-titre de l'en-tête : marque et année pour une voiture, longueur et nombre de tracés pour un circuit.
 
-La seconde zone est le **bloc de lecture**, sous un filet horizontal : pleine
-largeur, mais contenu centré sur des **paliers de largeur** (ceux du
-`.container` de Bootstrap — 100 % tant que la place manque, puis 540 / 720 /
-960 / 1140 / 1320 px). Un pourcentage donnerait une largeur différente à chaque
-résolution, donc un rendu qu'on ne peut régler pour personne ; une largeur fixe
-déborderait en fenêtre étroite. Les sous-onglets vivent dans le même conteneur
-centré, et le bloc n'a **plus de hauteur minimale** : il était dans la colonne
-de gauche, où une description de trois mots devait ne pas faire sauter la
-colonne voisine — il n'a plus de voisine, donc une ligne de texte occupe une
-ligne. L'article Wikipédia à venir se lira là, dans cette colonne.
-
-**Tous les seuils de cette mise en page sont des requêtes de conteneur, jamais
-de média** : ils doivent se mesurer sur la largeur qui reste à la fiche, rail et
-colonne de session déduits — et le zoom d'interface (§13) déplace un seuil de
-média sans déplacer cette largeur-là.
-
-**La colonne de droite n'a que deux cartes de données sur un circuit** —
-« Circuit » (longueur, nombre de tracés et combien sont apportés par une couche,
-pays, odomètre) puis « Habillages ». **La longueur porte son unité** (« 7 004 m »),
-et celle-ci se déduit : mesuré sur les 70 `ui_track.json` de l'installation de
-référence, le champ s'écrit en entier de mètres (61 fois), avec son unité déjà
-dedans (`165km`, `4456 m` — 7 fois) ou en décimal de **kilomètres** (`3.602`,
-Laguna Seca, une fois). Une valeur sous 100 est donc lue en kilomètres — le plus
-court tracé réel est une piste de drag de 200 m — et une valeur portant déjà une
-lettre est rendue telle quelle, l'auteur ayant dit ce qu'il voulait dire
-(`trackLength.ts`). C'est tout l'argument du *cas maigre* de la
-maquette : **la grille n'est plus dictée par le type le plus riche**. Un circuit
-n'a ni fiche technique ni courbe, donc la place existe, et une rangée basse
-d'une carte et demie sous l'aperçu rouvrait précisément le trou qu'on venait de
-fermer. Le **nom** du tracé n'entre pas dans la carte — le sélecteur le dit à
-quelques pixels au-dessus, et c'est lui qui le change ; la carte porte les
-chiffres, lui porte le choix. Le sous-titre de l'en-tête suit la même logique :
-une marque et une année pour une voiture, une longueur et un nombre de tracés
-pour un circuit, dont l'identité tient dans ces deux chiffres.
-
-**Le bloc textuel est à sous-onglets** (§7.4) : Description | Notes, c'est le
-contenu qui change, pas la mise en page — même boîte, même corps de texte. Notes n'est jamais l'onglet par défaut
-et porte une pastille quand une note existe.
-
-**Un troisième onglet porte l'article Wikipédia** — « Le modèle réel » sur une
-voiture, « Le circuit » sur un circuit
-(`docs/SPEC-wikipedia-fiche-detail.md`). Il est **toujours présent**, et c'est une
-révision née de l'usage : un onglet absent ne se distingue ni d'une recherche en
-cours, ni d'une fonctionnalité qui n'existe pas, et il prive l'utilisateur de
-tout recours au moment où il en aurait le plus besoin. L'article est cherché à
-l'ouverture de la fiche, jamais en masse, et la fiche s'affiche complète sans
-l'attendre.
-
-Quand il n'y a pas d'article, l'onglet **dit lequel des cinq cas s'applique** —
-recherche en cours, rien trouvé, ambiguïté, entité sans article lisible,
-enrichissement désactivé — et propose d'en associer un à la main : recherche
-libre pré-remplie avec ce qui a été cherché, candidats affichés avec leur
-description Wikidata, collage d'URL accepté. Aucun de ces états n'est une
-erreur : pas d'icône d'alerte, pas d'encart rouge. Un choix fait à la main est
-enregistré en `manual` et plus rien d'automatique ne l'écrase.
-
-L'article est affiché **en entier et rendu** — sections, table des matières,
-tableaux, infobox et images : on lit dans Pit Box, on n'y trouve pas un teaser.
-Le HTML de Wikipédia n'est jamais injecté tel quel : un arbre neuf est
-reconstruit à partir d'une liste blanche, la webview ayant accès à `invoke` et
-le wiki étant éditable par n'importe qui. Les images affichées sont **celles de
-Commons dont l'auteur et la licence sont connus**, chacune portant sa ligne de
-crédit — c'est ce que leur licence impose, et c'est ce qui permet de les
-afficher. Un clic sur l'une d'elles l'ouvre en grand **dans
-l'application**, par **la visionneuse de l'app** (§6.1) — celle des captures et
-des backgrounds, avec ses gestes déjà connus : souris, clavier, manette,
-précédent/suivant, Échap. Le **crédit et le lien vers Commons** l'accompagnent,
-et c'est ce qui autorise l'affichage, pas une mention de politesse. Les icônes
-(une étoile de notation, un drapeau) ne s'ouvrent pas : ce n'est pas du
-contenu. Deux choses ne sont pas négociables
-et viennent du droit d'auteur, pas du goût : le texte n'est **jamais fondu**
-dans la description du mod — ce sont deux sous-onglets, donc deux blocs
-distincts — et il est affiché **tel que l'API le rend**, sans reformulation,
-résumé ni traduction. L'attribution en pied (titre, lien, licence CC BY-SA) est
-obligatoire. Le lien « Voir sur Wikipédia » ouvre le **navigateur système**,
-jamais une webview interne : elle casserait le mode hors ligne, imposerait la
-CSP du site et ferait perdre l'identité visuelle de l'app. Ce qu'il apporte
-n'est plus l'infobox ni les images — la fiche les montre — mais ce que la
-reconstruction laisse volontairement de côté : les références et leurs notes,
-la navigation vers les autres articles, et la version vivante de la page.
-
-L'enrichissement est **désactivable** (`wiki_online`, §11) : l'app interroge
-Wikipédia à l'ouverture d'une fiche, ce qui révèle indirectement le contenu de
-la bibliothèque, et une partie du public joue délibérément hors ligne.
-Désactivé, aucune requête ne sort et le cache déjà constitué reste
-consultable.
+**Le bloc textuel est à sous-onglets** : Description | Notes | l'article Wikipédia (« Le modèle réel » sur une voiture, « Le circuit » sur un circuit). Notes n'est jamais l'onglet par défaut et porte une pastille quand une note existe. **L'onglet Wikipédia est toujours présent** : sans article, il dit lequel des cinq cas s'applique (recherche en cours, rien trouvé, ambiguïté, entité sans article lisible, enrichissement désactivé), sans ton d'erreur, et propose d'en associer un à la main — choix enregistré en `manual`, que rien d'automatique n'écrase. L'article est cherché à l'ouverture de la fiche, jamais en masse, affiché **en entier, reconstruit depuis une liste blanche** (jamais le HTML de Wikipédia injecté tel quel), avec les seules images de Commons dont l'auteur et la licence sont connus, chacune créditée, ouvertes dans la visionneuse de l'app. **Le texte n'est jamais fondu dans la description ni reformulé ou traduit**, et l'attribution en pied (titre, lien, CC BY-SA) est obligatoire ; « Voir sur Wikipédia » ouvre le navigateur du système. Détail : `SPEC-wikipedia-fiche-detail.md`. L'enrichissement se coupe (`wiki_online`, §11) : coupé, aucune requête ne sort, le cache reste consultable.
 
 ### 6.3bis (suite) Tracés apportés par une couche (REFONTE§7.7)
 
-La carte des tracés montre l'**état composé** — celui que l'utilisateur aura au
-lancement, couches comprises. Elle ne disait pas d'où venait chaque tracé : sur
-un circuit dont une extension ajoute une variante, « 2 tracés » est exact et
-trompeur à la fois.
-
-Un tracé porte donc une marque d'origine quand une couche **active** l'apporte,
-et le compteur du sélecteur ajoute « dont 1 ajouté ». Deux conditions, et la
-seconde compte autant que la première (`layers::layout_origins`) : la couche
-doit poser des fichiers sous ce tracé **et** la base ne doit pas déjà le
-connaître. Une couche qui remplace la texture d'un tracé existant l'habille,
-elle ne l'apporte pas — l'étiqueter reviendrait à présenter le contenu propre
-du circuit comme un add-on.
+La carte des tracés montre l'**état composé**, et marque l'origine d'un tracé qu'une couche **active** apporte ; le compteur ajoute « dont 1 ajouté ». Deux conditions (`layers::layout_origins`) : la couche pose des fichiers sous ce tracé **et** la base ne le connaît pas. Une couche qui habille un tracé existant ne l'apporte pas.
 
 ### 6.3ter Fiche d'une couche (REFONTE§8)
 
-Une couche a sa **fiche**, ouverte depuis la liste de l'hôte et posée
-par-dessus elle (la fermer y ramène). La liste de l'hôte ne fait plus que
-poser, activer et ordonner : la liste complète des fichiers — jusqu'à 392
-lignes en monospace — ne s'y déplie plus.
-
-Ordre des blocs, et il n'est pas neutre :
+Une couche a sa **fiche**, ouverte depuis la liste de l'hôte et posée par-dessus. La liste de l'hôte ne fait que poser, activer et ordonner. Dans l'ordre :
 
 1. **Trois chiffres** : ajoutés, remplacés (en rouge dès qu'il y en a), poids.
-2. **« Ce qui écrase la base »**, en clair et non en compteur — c'est le seul
-   endroit où une couche inquiète. La promesse du §4.4 (l'original est
-   sauvegardé avant d'être remplacé et revient dès qu'aucune couche ne le
-   réclame) y est écrite une fois, au lieu d'être répétée en bandeau partout.
-3. **« Ce qui s'ajoute »**, replié par dossier, avec compteur et poids **au
-   niveau du dossier** : le poids d'un fichier ne décide de rien.
-4. **Ordre**, seulement à partir de deux couches sur le même hôte.
+2. **« Ce qui écrase la base »**, en clair — avec, une fois, la promesse que l'original revient dès qu'aucune couche ne le réclame.
+3. **« Ce qui s'ajoute »**, replié par dossier, compteur et poids au niveau du dossier.
+4. **Ordre**, à partir de deux couches sur le même hôte.
 5. **Notes**.
 
-Le **nom affiché est dérivé** (`layerName.ts`) : extension d'archive retirée,
-séparateurs rendus à l'espace, préfixe de l'hôte retiré quand l'archive le
-répète. Dérivé donc faillible, donc repris à la main quand il se trompe. La
-dérivation réemploie `withoutBrand` (§7.4), qui porte déjà la règle délicate —
-comparaison insensible aux séparateurs, mais coupe seulement sur une espace,
-pour qu'un hôte `ks_nords` n'ampute pas `ks_nordschleife` en plein mot.
+Le **nom affiché est dérivé** (`layerName.ts`) : extension d'archive retirée, séparateurs rendus à l'espace, préfixe de l'hôte retiré quand l'archive le répète — en coupant sur une espace seulement (`withoutBrand`). Il se reprend à la main.
 
 ### 6.3quater Fiche d'un mod greffé simple (REFONTE§11)
 
-Une police, un fragment de config, un mannequin : leur fiche n'affichait qu'un
-titre, trois métadonnées et « aucun fichier annexe ». Deux blocs la comblent,
-sans rien inventer — le parcours de fichiers qui détecte les conflits produisait
-déjà tout ce qu'il fallait :
+Une police, un fragment de config, un mannequin :
 
-- **Où il atterrit** : les chemins réellement posés dans le jeu, groupés par
-  dossier de destination et **relatifs à la racine d'AC** — le chemin
-  d'installation de l'utilisateur ne dit rien et prend toute la largeur. Un
-  mod peut n'avoir rien posé sans être en panne : désactivé, ou porteur d'une
-  copie plus ancienne que ce qui tourne déjà (règle d'or n°5). Le bloc le dit
-  plutôt que d'afficher une liste vide.
-- **Conflits** : quels autres mods visent les mêmes fichiers, combien, et qui
-  gagne — la priorité marquée à la main, ou à défaut la date.
+- **Où il atterrit** : les chemins réellement posés, groupés par dossier de destination, **relatifs à la racine d'AC**. Un mod qui n'a rien posé (désactivé, ou porteur d'une copie plus ancienne que ce qui tourne) le dit au lieu d'afficher une liste vide.
+- **Conflits** : quels autres mods visent les mêmes fichiers, combien, et qui gagne — la priorité marquée à la main, ou à défaut la date.
 
-Ces fiches restent en **page pleine posée sur la liste** ; le panneau latéral
-du §6.2 de la refonte est écarté. Il avait déjà été retiré du projet pour cause
-de redondance, et la fiche posée par-dessus — dont le retour ramène à la liste
-d'où l'on vient — rend le même service sans ajouter un second contenant.
+Page pleine posée sur la liste, comme les autres fiches.
 
 ### 6.4 Notes (REFONTE§9)
 
-**Tout mod peut porter une note libre**, quel que soit son type — exclure un
-type créerait une règle à apprendre pour une économie nulle. Colonne
-`notes_user` de l'overlay, sur les cinq tables d'entités, écrite par la
-commande commune `set_entity_note` (`usermeta.rs`).
+**Tout mod peut porter une note libre**, quel que soit son type (`notes_user` sur les cinq tables d'entités, `set_entity_note`). **Une note n'est pas une description** : vider une description veut dire « reviens au fichier », vider une note veut dire vide. **Texte brut**, pas de markdown ; **sauvegarde à la perte du focus** ; la phrase « enregistré dans Pit Box » pendant la saisie.
 
-**Une note n'est pas une description**, et la différence porte sur un seul
-geste : effacer. La description surcharge ce que dit le fichier du mod, donc la
-vider veut dire « reviens au fichier » ; une note n'a pas de valeur d'origine,
-donc la vider veut dire vide. D'où deux champs, et deux colonnes.
-
-Comportement (`NoteBlock.svelte`) : **texte brut**, pas de markdown — un rendu à
-moitié interprété est pire que pas de rendu ; **sauvegarde à la perte du
-focus**, sans bouton ; phrase « enregistré dans Pit Box, pas dans les fichiers
-du mod » affichée **pendant** la saisie, comme pour le renommage.
-
-**Une note se retrouve**, sans quoi elle serait en écriture seule. Trois
-mécanismes, livrés ensemble : elle entre dans la **recherche plein texte** des
-écrans concernés ; la bibliothèque offre un filtre **« Note contient… »** et un
-filtre booléen **« A une note »**, plus une colonne Note optionnelle ; et un
-**marqueur ✎** apparaît sur la carte de grille et sur la ligne de liste, avec
-la note en infobulle.
+**Une note se retrouve** : elle entre dans la **recherche plein texte**, la bibliothèque offre « Note contient… », « A une note » et une colonne Note, et un **marqueur ✎** est sur la carte et la ligne, la note en infobulle.
 
 ---
 
