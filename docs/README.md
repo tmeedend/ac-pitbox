@@ -187,8 +187,9 @@ fait — en cas d'écart, la spec fait foi.
 - **`SPEC-engine-sound-fmod.md`** — écouter le vrai moteur d'une voiture en
   passant par les DLL FMOD livrées avec Assetto Corsa, au lieu de deviner le
   ralenti par analyse du signal. Contient la position prise sur la licence
-  FMOD, et les **écarts d'ABI mesurés** au FMOD§2bis — dont une structure dont la
-  disposition documentée est fausse d'une manière qui ressemble à un succès.
+  FMOD et les règles tirées des **écarts d'ABI mesurés** (FMOD§2bis) ; la
+  démonstration de chacun, les mesures et le journal des lots sont dans
+  `fmod-research.md`.
 
 ## Pistes instruites, pas encore ouvertes
 
@@ -212,6 +213,10 @@ dans un commentaire de code.
 
 - **`kn5-format.md`** — le format des modèles 3D d'Assetto Corsa : écarts
   constatés avec la spec, réponses à ses questions ouvertes.
+- **`fmod-research.md`** — l'écoute par FMOD au fil de sa construction : les
+  écarts d'ABI de la DLL 1.08 (dont une structure dont la disposition
+  documentée est fausse d'une manière qui ressemble à un succès), les mesures
+  au banc et sur le corpus, le déchiffrement de `data.acd`, les pièges payés.
 - **`fsb5-format.md`** — le format des banks de son FMOD (`.bank`) : conteneur
   FSB5, codec FADPCM, hypothèses écartées. **Son heuristique de ralenti est une
   impasse assumée** (40 sur 91) : elle ne sert plus que de repli et ne doit pas
