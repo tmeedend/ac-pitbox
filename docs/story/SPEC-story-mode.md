@@ -418,50 +418,63 @@ visible in it:
   `rel.friend += 1`, `send conv_06`), checked against the story as it loads.
 - Saves are JSON with a format number: a save from a newer Pit Box is refused.
 
-### Dialogue text: Ink, or a format with line ids
+### Dialogue text: Ink, in one language first
 
-**Open question, to settle before the content editor is written.** Rather than
-inventing our own syntax, the text inside each conversation, email or failure
-pool could be written in [Ink](https://github.com/inkle/ink), inkle's
-open-source narrative scripting language (MIT licence).
+**Decided (October 2026).** The text inside each conversation, email or
+failure pool is written in [Ink](https://github.com/inkle/ink), inkle's
+open-source narrative scripting language (MIT licence), and stories are
+written in **one language** until the whole concept is proven in it.
+Translation comes after; its format will be chosen then, between Ink with an
+id on every line and a format of Pit Box's own with line ids (the idea of
+Yarn Spinner).
 
 ```
-=== conv_06 ===
-Friend: [line]
-Friend: [line]
-* [Reply A]
-    ~ rel_friend += 1
-    Friend: [answer]
-* [Reply B]
-    ~ rel_friend -= 1
-    Friend: [answer]
+Friend: There is a race next weekend.
+Friend: Want to come?
+* [I'm in!]
+    ~ effect("rel.friend += 1")
+    Friend: Great, I'll pick you up at 8.
+* [Not this time.]
+    Friend: Your loss.
 - -> DONE
 ```
 
-- **Why Ink.** It is documented and proven, it has an editor with a live
-  preview (Inky), and maintained runtimes exist for both sides of Pit Box:
-  [inkjs](https://github.com/y-lohse/inkjs) in JavaScript for the webview, and
-  [blade-ink-rs](https://github.com/bladecoder/blade-ink-rs), a Rust runtime and
-  compiler (Apache-2.0).
-- **Bridge with Pit Box.** Pit Box passes the story state to Ink as variables
-  and reads back what changed; Ink's external functions let a script ask Pit
-  Box for a value (money, attempts).
-- **Scope.** Ink is used only for the text inside one content item. The flow,
-  events, drivers, reactive conditions and the package stay in Pit Box's
-  editor, so progression is decided in one place.
-- **Form and Script views.** The editor's Form view reads and writes a simple
-  subset (lines, choices, effects); the Script view shows the source itself.
-- **Against it: translation.** Ink has no built-in translation system, so each
-  language would need its own copy of the scripts. Yarn Spinner, by contrast,
-  tags every line with an id for translation (see Languages).
-- **Alternatives considered.** Yarn Spinner (writer-friendly, but its runtimes
-  centre on Unity and the JavaScript ports are community-maintained); Twine
-  (good for prototyping, not made to be embedded); articy:draft X and Arcweave
-  (visual, but they know nothing of races, money or drivers, and would tie
-  community stories to a third-party tool, often paid).
-- **What the engine already assumes.** The text is opaque and replies are
-  declared in the item's header. Items are separated by lines made of `---`,
-  which Yarn also uses inside a node: choosing Yarn means revisiting that.
+**Why it can be revisited cheaply.** Ink has no translation system: each
+language would be a full copy of the scripts, choices and effects included,
+so a reply added later would have to be added once per language. The switch
+to line ids must therefore stay a conversion run once on the scripts, not a
+rewrite. Three rules keep it so:
+
+- **Ink only inside one content item.** The flow, events, drivers, reactive
+  conditions and the package stay in Pit Box's editor, so progression is
+  decided in one place.
+- **A subset of Ink, the one the Form view writes**: lines (each starting
+  with who speaks), choices, what a choice changes, lines and choices shown
+  on a condition, and joining up again after a choice. Anything else in the
+  Script view is an error: the subset is what a later format must be able to
+  hold.
+- **No variables of Ink's own.** A script reads and changes the story's state
+  only through the story's own conditions and effects, the same sentences as
+  everywhere else (`check("rel.friend >= warm")`, `effect("money -= 50")`),
+  checked against the story like the others. An author learns one way to
+  write a condition, and the conversion has nothing to translate.
+
+**The engine runs the script, the frame shows the lines**, as for every rule
+of the story: the balance simulator plays conversations with no frame. The
+Rust compiler and runtime [blade-ink-rs](https://github.com/bladecoder/blade-ink-rs)
+(Apache-2.0) make that possible inside the pure engine crate. Inky, inkle's
+editor, can still be used to type a script; its preview knows nothing of the
+story's state.
+
+**Alternatives considered.** Yarn Spinner (line ids built in, but its Rust
+port is a work in progress built for the Bevy game engine, and it would add a
+third way of writing conditions); a format of Pit Box's own (kept for when
+translation comes); Twine (made for prototyping, not for being embedded);
+articy:draft X and Arcweave (visual, but they know nothing of races, money or
+drivers, and would tie community stories to a third-party tool, often paid).
+
+The `.story` container keeps separating its items with lines made of `---`,
+which the subset above never contains.
 
 ## Balance simulator
 
@@ -546,7 +559,8 @@ Each story declares its languages, and a story can be written in several:
   missing line falls back to it.
 - The editor shows each content item in any language, counts missing lines per
   language, and exports texts for translators and imports them back.
-- This weighs in the choice of dialogue format (see File format).
+- Not built yet: a story is written in one language until the concept is
+  proven, and the translation format is chosen then (see Dialogue text).
 
 ## Story settings
 
@@ -600,8 +614,9 @@ The settings live in the `settings` part of each story's `story.yaml`.
 
 ## Open questions
 
-- [ ] **Dialogue format**: Ink, or a format with built-in translation (line
-      ids, as in Yarn Spinner)?
+- [ ] **Translation format**: Ink with an id on every line, or a format of
+      Pit Box's own with line ids, once a story is proven in one language
+      (Dialogue text).
 - [ ] **Updates**: mechanism chosen at implementation, against the requirements
       listed in Content.
 - [ ] **Track evolution**: story layers per period (hidden objects, new
