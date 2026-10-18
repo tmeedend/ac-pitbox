@@ -6,6 +6,8 @@
 //! rest of the app never uses it — only `commands/story.rs` and `lib.rs` name
 //! it, and `check-conventions.mjs` (`story-isolation`) keeps it that way.
 
+pub mod studio;
+
 /// Turns the Story entry on in a built installer, where it is hidden by
 /// default. Passed once on the command line; the frontend then records it in
 /// `ui_prefs.json`, so later launches need nothing.

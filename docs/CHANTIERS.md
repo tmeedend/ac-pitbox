@@ -93,15 +93,55 @@ de reprendre. En cas d'écart, la spec fait foi.
           `ahead_of`) ne sont pas vérifiés : le paquet et le plateau
           n'existent pas encore ;
         - `wealth`, `economy` et `garage_slots` attendent l'économie (L6) ;
-        - le conteneur `.story` sépare ses éléments par des lignes `---` :
-          compatible avec Ink, pas avec Yarn, qui en utilise dans le corps.
-          Choisir Yarn en L2 obligerait à revoir ce conteneur ;
         - un contenu à réponses porte ses effets dans son en-tête
-          (`replies`) : avec Ink, ils pourraient migrer dans le texte.
-      - **L2 à L8** : dans l'ordre du plan de livraison de la spec. Avant
-        l'éditeur de contenu (L2), trancher **Ink ou un
-        format à identifiants de ligne** (Yarn) : une histoire s'écrit en
-        plusieurs langues, et Ink n'a rien pour la traduction.
+          (`replies`) : avec Ink, ils migreront dans le texte (L2.4).
+      - **Format des dialogues — décidé (2026-10-18)** : Ink, dans une
+        seule langue d'abord, pour valider tout le concept avant la
+        traduction (décision de l'utilisateur, à condition que la bascule
+        vers un format à identifiants de ligne reste peu coûteuse). D'où les
+        règles de la spec (« Dialogue text ») : un sous-ensemble d'Ink, sans
+        variables propres, conditions et effets écrits avec les phrases de
+        l'histoire. Ce qu'Ink coûtera, à savoir avant L2.4 :
+        `blade-ink-rs` (compilateur et moteur Rust, Apache-2.0) dans la crate
+        du moteur ; Yarn écarté parce que son portage Rust se dit « en
+        chantier, sans support » et vise Bevy.
+      - **L2, Create Your Own — découpé en six sous-lots (validé
+        2026-10-18)** : L2.1 ouvrir une histoire et construire son fil ;
+        L2.2 le monde et les réglages (personnages, drapeaux, compteurs,
+        échelle des relations, départ, `story.yaml`) ; L2.3 les événements
+        (circuit et voiture tirés de la bibliothèque) ; L2.4 les contenus en
+        Ink (vue Formulaire et vue Script, le moteur exécute Ink) ; L2.5
+        l'aperçu dans le téléphone (modèle fil de discussion d'abord) ;
+        L2.6 les pilotes (facultatif).
+        - **L2.1 — fait (2026-10-18).** Le hub liste « Mes histoires »
+          (`app_config_dir/story/studio.json`), en crée une dans un dossier
+          vide ou en ouvre une existante ; le studio montre les chapitres et
+          le fil de l'un d'eux, nœud par nœud, avec le panneau du nœud
+          sélectionné et la vérification du moteur relancée après chaque
+          enregistrement. Le moteur entre dans l'app par le seul domaine
+          Story (`src-tauri/src/story/studio.rs`, `commands/story.rs`,
+          `src/lib/story/`). Il sait désormais **écrire** un chapitre
+          (`write.rs`, forme canonique relue avant d'être rendue) et
+          rattache un diagnostic à son nœud. **Choisi en route, avec
+          l'accord de l'utilisateur** : une colonne disposée par l'ordre
+          plutôt qu'une toile (rien à enregistrer sur la place d'une boîte) ;
+          chaque changement écrit aussitôt, fichier réécrit en entier
+          (commentaires tapés à la main perdus dans ce fichier) ; messages
+          de vérification en anglais tant que l'éditeur est réservé.
+          **Choisi sans demander** : un nœud neuf porte toutes les clés de
+          son type, et ce qui reste à choisir (l'événement d'un nœud
+          Event, la cible d'une branche) est laissé vide pour que la
+          vérification le montre, plutôt qu'une valeur devinée ; la langue
+          d'une histoire neuve est celle de l'app ; l'identifiant du nœud
+          de départ ne se change pas dans le fil (il est dans `story.yaml`,
+          que L2.2 éditera).
+          **Limites connues** : un nœud Message ou Event ne vise que des
+          contenus et événements déjà écrits à la main (leurs écrans sont
+          L2.3 et L2.4) ; ouvrir une histoire puis changer d'écran ne laisse
+          pas d'entrée dans l'historique de navigation (le studio est un
+          état interne de l'écran Story, comme un onglet) ; un chapitre ne se
+          supprime pas encore dans l'éditeur.
+      - **L3 à L8** : dans l'ordre du plan de livraison de la spec.
       **Écarts assumés par rapport au document de conception** (la spec
       publique les reprend déjà) :
       - Le drapeau qu'il plaçait dans la base SQLite est dans

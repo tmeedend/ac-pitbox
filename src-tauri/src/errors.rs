@@ -164,3 +164,9 @@ pub const TRANSFER_NOT_AN_EXPORT: &str = "errors.transferNotAnExport";
 pub const TRANSFER_INCOMPATIBLE: &str = "errors.transferIncompatible";
 pub const TRANSFER_NOT_EMPTY: &str = "errors.transferNotEmpty";
 pub const TRANSFER_FOLDER_NOT_EMPTY: &str = "errors.transferFolderNotEmpty";
+// Create Your Own, the story editor (docs/story/SPEC-story-mode.md).
+pub const STORY_NOT_A_STORY: &str = "errors.storyNotAStory";
+pub const STORY_FOLDER_NOT_EMPTY: &str = "errors.storyFolderNotEmpty";
+/// A story file changed outside Pit Box since the editor read it: reloaded,
+/// never overwritten (`story::studio::save_chapter`).
+pub const STORY_FILE_CHANGED: &str = "errors.storyFileChanged";

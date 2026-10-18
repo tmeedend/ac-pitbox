@@ -141,7 +141,9 @@
       nav.section === "race" ||
       nav.section === "rules" ||
       nav.section === "gamefolder" ||
-      nav.section === "online",
+      nav.section === "online" ||
+      // The story studio lays out its own columns, each scrolling on its own.
+      nav.section === "story",
   );
 </script>
 

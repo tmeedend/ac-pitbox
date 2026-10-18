@@ -368,7 +368,41 @@ story can be checked in minutes without driving.
 
 **Validation** runs continuously: unknown variable, missing media, content
 never reached, contradictory conditions, event whose car or track is not in the
-package. Errors block the build.
+package. Errors block the build. A diagnostic about a flow node selects it;
+the others name their file. The messages are the engine's, in English, while
+the editor is reserved; they are translated when it opens to all.
+
+### Where a story lives, and how the editor writes it
+
+- **A story is a folder of the author's choosing**, often a private git
+  repository. Pit Box keeps only the list of those folders
+  (`app_config_dir/story/studio.json`); removing a story from the list leaves
+  its files where they are.
+- **A new story needs an empty folder**: the editor never mixes a story into
+  files it did not write. It starts as the smallest story with nothing to
+  fix, a chapter whose first node leads to an end, written in the app's
+  language.
+- **Every change is written at once**, the whole file, in one canonical form,
+  so a diff shows only what changed. Comments typed by hand in a file the
+  editor writes do not survive.
+- **A file changed outside Pit Box since the editor read it is never
+  overwritten**: the story is read again, and the author is told their last
+  change did not go through.
+- **A sentence the engine cannot read is not written**: the change stays on
+  screen, marked as not saved, until it reads.
+- **Renaming a node renames every link to it**, in every chapter. The start
+  node keeps its id in the flow: it is set in the story settings.
+- **A section appears with the lot that builds it**, never as an entry that
+  opens nothing. The first is the Story flow.
+
+### Story flow screen
+
+A chapter's nodes read top to bottom, in the order they play; an arrow appears
+only where a node goes elsewhere (a branch case, a failure exit, an explicit
+next). The column is laid out by that order: no box is placed by hand, so
+nothing about the layout is stored and the files change only when the story
+does. A freely arranged canvas, if a story needs one, belongs with the
+Timeline.
 
 ## File format
 
