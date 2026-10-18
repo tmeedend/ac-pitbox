@@ -14,16 +14,19 @@ use crate::expr::{Condition, ContentFact, Effect, EventFact, Literal, Var};
 use crate::load::Story;
 use crate::model::{NodeKind, Placement};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Severity {
     Error,
     Warning,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct Diagnostic {
     pub severity: Severity,
     pub file: String,
+    /// The flow node it is about, when there is one: the editor selects it.
+    pub node: Option<String>,
     pub message: String,
 }
 
@@ -53,10 +56,16 @@ enum VarType {
 struct Checker<'a> {
     story: &'a Story,
     out: Vec<Diagnostic>,
+    /// The node being checked, recorded on every diagnostic raised meanwhile.
+    node: Option<String>,
 }
 
 pub fn validate(story: &Story) -> Vec<Diagnostic> {
-    let mut c = Checker { story, out: Vec::new() };
+    let mut c = Checker {
+        story,
+        out: Vec::new(),
+        node: None,
+    };
     c.manifest_and_world();
     c.flow();
     c.content();
@@ -70,19 +79,27 @@ pub fn validate(story: &Story) -> Vec<Diagnostic> {
 
 impl Checker<'_> {
     fn error(&mut self, file: &str, message: String) {
+        self.push(Severity::Error, file, message);
+    }
+
+    fn warning(&mut self, file: &str, message: String) {
+        self.push(Severity::Warning, file, message);
+    }
+
+    fn push(&mut self, severity: Severity, file: &str, message: String) {
         self.out.push(Diagnostic {
-            severity: Severity::Error,
+            severity,
             file: file.into(),
+            node: self.node.clone(),
             message,
         });
     }
 
-    fn warning(&mut self, file: &str, message: String) {
-        self.out.push(Diagnostic {
-            severity: Severity::Warning,
-            file: file.into(),
-            message,
-        });
+    /// Runs `check` with diagnostics recorded against node `id`.
+    fn on_node(&mut self, id: &str, check: impl FnOnce(&mut Self)) {
+        self.node = Some(id.into());
+        check(self);
+        self.node = None;
     }
 
     fn manifest_and_world(&mut self) {
@@ -280,6 +297,7 @@ impl Checker<'_> {
         for chapter in &story.chapters {
             let file = chapter.file.as_str();
             for node in &chapter.nodes {
+                self.node = Some(node.id.clone());
                 let at = format!("node `{}`", node.id);
                 let target = |c: &mut Self, id: &str, what: &str| {
                     if story.node(id).is_none() {
@@ -344,6 +362,7 @@ impl Checker<'_> {
                 }
             }
         }
+        self.node = None;
     }
 
     fn content(&mut self) {
@@ -429,10 +448,12 @@ impl Checker<'_> {
         }
         for chapter in &story.chapters {
             for node in chapter.nodes.iter().filter(|n| !seen.contains(n.id.as_str())) {
-                self.warning(
-                    &chapter.file,
-                    format!("node `{}` is never reached from the start", node.id),
-                );
+                self.on_node(&node.id, |c| {
+                    c.warning(
+                        &chapter.file,
+                        format!("node `{}` is never reached from the start", node.id),
+                    )
+                });
             }
         }
     }
@@ -449,10 +470,12 @@ impl Checker<'_> {
             for node in &chapter.nodes {
                 if let NodeKind::Event { event, .. } = &node.kind {
                     if let Some(first) = seen.insert(event, &node.id) {
-                        self.warning(
-                            &chapter.file,
-                            format!("node `{}`: event `{event}` is already driven by node `{first}` - they share attempts and fees; give the rematch its own event", node.id),
-                        );
+                        self.on_node(&node.id, |c| {
+                            c.warning(
+                                &chapter.file,
+                                format!("node `{}`: event `{event}` is already driven by node `{first}` - they share attempts and fees; give the rematch its own event", node.id),
+                            )
+                        });
                     }
                 }
             }
@@ -546,6 +569,49 @@ mod tests {
         assert!(
             d.iter().all(|x| x.file == "flow/01-one.yaml"),
             "reported on the chapter file"
+        );
+    }
+
+    // The editor selects the node a diagnostic is about (Create Your Own,
+    // Validation): every diagnostic raised on a flow node names it, the
+    // others name none.
+    #[test]
+    fn a_diagnostic_on_a_flow_node_names_that_node() {
+        let flow = "id: ch01
+nodes:
+  - id: start
+    message: missing
+  - id: end
+    end: done
+  - id: lost
+    end: done
+";
+        let d = diagnostics(&[("flow/01-one.yaml", flow)]);
+        let on = |needle: &str| d.iter().find(|x| x.message.contains(needle)).map(|x| x.node.clone());
+        assert_eq!(
+            on("unknown content"),
+            Some(Some("start".into())),
+            "an error on a node: {d:#?}"
+        );
+        assert_eq!(
+            on("never reached"),
+            Some(Some("lost".into())),
+            "a warning on a node: {d:#?}"
+        );
+        let manifest = diagnostics(&[(
+            "story.yaml",
+            "format: 1
+id: s
+title: S
+version: \"1\"
+languages: []
+start:
+  node: start
+",
+        )]);
+        assert!(
+            manifest.iter().all(|x| x.node.is_none()),
+            "nothing about a node: {manifest:#?}"
         );
     }
 

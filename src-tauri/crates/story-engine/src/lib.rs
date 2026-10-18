@@ -1,7 +1,8 @@
 //! Pit Box Story Mode engine (docs/story/SPEC-story-mode.md, lot L1).
 //!
 //! Pure: no Tauri, no access to the application. Reads a story folder,
-//! validates it, runs its flow on a state and saves that state.
+//! validates it, runs its flow on a state and saves that state; and writes
+//! back the files the editor changes.
 
 /// Serde through the text form, for the types an author writes as a short
 /// sentence: dates, clock times and spans (`"1998-03-01"`, `"18:40"`,
@@ -33,6 +34,7 @@ pub mod save;
 pub mod state;
 pub mod time;
 pub mod validate;
+pub mod write;
 
 pub use load::{LoadError, SourceFile, Story};
 

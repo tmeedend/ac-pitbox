@@ -124,9 +124,9 @@ fn parse_yaml<T: DeserializeOwned>(file: &SourceFile) -> Result<T, LoadError> {
 /// The text, opaque to the engine.
 /// ```
 ///
-/// Hence the one constraint on the text: no line made of `---` alone. Ink has
-/// none; Yarn uses `---` inside a node, so choosing Yarn (L2) would mean
-/// revisiting this container along with it.
+/// Hence the one constraint on the text: no line made of `---` alone. The
+/// text is Ink (SPEC-story-mode, Dialogue text), and the subset of it a story
+/// may use has none.
 fn parse_story_file(file: &SourceFile) -> Result<Vec<ContentItem>, LoadError> {
     let err = |message: String| LoadError {
         file: file.path.clone(),
@@ -166,23 +166,35 @@ fn parse_story_file(file: &SourceFile) -> Result<Vec<ContentItem>, LoadError> {
     Ok(items)
 }
 
-/// Every file of a story parsed on its own, before ids are indexed.
-#[derive(Default)]
-struct Parsed {
-    manifest: Option<Manifest>,
-    variables: Variables,
-    characters: Characters,
-    chapters: Vec<Chapter>,
-    content: Vec<ContentItem>,
-    events: Vec<Event>,
-    errors: Vec<LoadError>,
+/// Every file of a story parsed on its own, before ids are indexed: what the
+/// editor can still show while the story as a whole does not load (a file
+/// that does not read, an id used twice). A file that does not read is in
+/// `errors` and nowhere else.
+#[derive(Debug, Default)]
+pub struct Draft {
+    pub manifest: Option<Manifest>,
+    pub variables: Variables,
+    pub characters: Characters,
+    /// In file-name order, which is the flow order.
+    pub chapters: Vec<Chapter>,
+    pub content: Vec<ContentItem>,
+    pub events: Vec<Event>,
+    pub errors: Vec<LoadError>,
 }
 
-/// Dispatches each file by its place in the folder; files outside what
-/// this lot reads are left alone.
-fn parse_files(files: &[SourceFile]) -> Parsed {
-    let mut p = Parsed::default();
-    for file in files {
+/// Parses each file on its own, dispatched by its place in the folder; files
+/// outside what this lot reads are left alone.
+pub fn draft(mut files: Vec<SourceFile>) -> Draft {
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+    for file in &mut files {
+        // Some Windows editors start a UTF-8 file with a BOM: it would
+        // hide the opening `---` of a .story file.
+        if let Some(rest) = file.text.strip_prefix('\u{feff}') {
+            file.text = rest.to_string();
+        }
+    }
+    let mut p = Draft::default();
+    for file in &files {
         let path = file.path.as_str();
         let result = if path == "story.yaml" {
             parse_yaml::<Manifest>(file).map(|m| p.manifest = Some(m))
@@ -244,16 +256,8 @@ impl Story {
 
     /// Parses a story from its files. Collects every error it can rather than
     /// stopping at the first, so that one run shows an author all of them.
-    pub fn from_sources(mut files: Vec<SourceFile>) -> Result<Story, Vec<LoadError>> {
-        files.sort_by(|a, b| a.path.cmp(&b.path));
-        for file in &mut files {
-            // Some Windows editors start a UTF-8 file with a BOM: it would
-            // hide the opening `---` of a .story file.
-            if let Some(rest) = file.text.strip_prefix('\u{feff}') {
-                file.text = rest.to_string();
-            }
-        }
-        let Parsed {
+    pub fn from_sources(files: Vec<SourceFile>) -> Result<Story, Vec<LoadError>> {
+        let Draft {
             manifest,
             variables,
             characters,
@@ -261,7 +265,7 @@ impl Story {
             content,
             events,
             mut errors,
-        } = parse_files(&files);
+        } = draft(files);
 
         let Some(manifest) = manifest else {
             errors.insert(

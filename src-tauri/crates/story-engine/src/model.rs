@@ -9,7 +9,7 @@
 
 use std::collections::BTreeMap;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::expr::{Condition, Criterion, Effect};
 use crate::time::{Clock, Span, StoryDate};
@@ -247,10 +247,13 @@ pub struct Character {
 // -------------------------------------------------------------------- flow/
 
 /// `flow/<nn>-<name>.yaml`: one chapter. Chapters are ordered by file name.
-#[derive(Debug, Clone, Deserialize)]
+/// Serialized the way it is read, for the editor that writes it back
+/// (`write.rs`).
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Chapter {
     pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
     pub nodes: Vec<Node>,
     /// Path inside the story folder, for diagnostics.
@@ -260,8 +263,8 @@ pub struct Chapter {
 
 /// A flow node (SPEC-story-mode, Flow nodes). Without `next`, a node leads to
 /// the one written after it, then to the first node of the next chapter.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(try_from = "RawNode")]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(try_from = "RawNode", into = "RawNode")]
 pub struct Node {
     pub id: NodeId,
     pub next: Option<NodeId>,
@@ -290,16 +293,19 @@ pub enum NodeKind {
     End { ending: String },
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Beat {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<Effect>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub advance: Option<Span>,
     /// In-story time of day after the beat.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub clock: Option<Clock>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Case {
     #[serde(rename = "if")]
@@ -307,30 +313,83 @@ pub struct Case {
     pub goto: NodeId,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct SideEvents {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub open: Vec<EventId>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub close: Vec<EventId>,
 }
 
 /// What a node looks like in YAML: one key names its kind (`beat:`,
 /// `message:`, `event:`…), a few others only make sense beside one kind.
-#[derive(Deserialize)]
+/// Fields in the order they are written: the id, the kind, then the way out.
+#[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct RawNode {
     id: NodeId,
-    next: Option<NodeId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     beat: Option<Beat>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     message: Option<ContentId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     wait_reply: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     event: Option<EventId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     on_failure: Option<NodeId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     branch: Option<Vec<Case>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     otherwise: Option<NodeId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     action: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     side_events: Option<SideEvents>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     end: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    next: Option<NodeId>,
+}
+
+impl From<Node> for RawNode {
+    fn from(node: Node) -> Self {
+        let mut raw = RawNode {
+            id: node.id,
+            next: node.next,
+            beat: None,
+            message: None,
+            wait_reply: None,
+            event: None,
+            on_failure: None,
+            branch: None,
+            otherwise: None,
+            action: None,
+            side_events: None,
+            end: None,
+        };
+        match node.kind {
+            NodeKind::Beat(beat) => raw.beat = Some(beat),
+            NodeKind::Message { content, wait_reply } => {
+                raw.message = Some(content);
+                // `false` is the default: written only when it says something.
+                raw.wait_reply = wait_reply.then_some(true);
+            }
+            NodeKind::Event { event, on_failure } => {
+                raw.event = Some(event);
+                raw.on_failure = on_failure;
+            }
+            NodeKind::Branch { cases, otherwise } => {
+                raw.branch = Some(cases);
+                raw.otherwise = Some(otherwise);
+            }
+            NodeKind::Action { action } => raw.action = Some(action),
+            NodeKind::SideEvents { open, close } => raw.side_events = Some(SideEvents { open, close }),
+            NodeKind::End { ending } => raw.end = Some(ending),
+        }
+        raw
+    }
 }
 
 impl TryFrom<RawNode> for Node {
@@ -421,8 +480,8 @@ pub struct ContentItem {
     pub clock: Option<Clock>,
     pub placement: Placement,
     pub replies: Vec<Reply>,
-    /// The text. **Opaque**: Ink or a format with line ids is still to be
-    /// chosen (SPEC-story-mode, Dialogue text), and it belongs to the editor.
+    /// The text, in Ink (SPEC-story-mode, Dialogue text). Opaque to the
+    /// engine until the content editor runs it.
     pub body: String,
     pub file: String,
     /// 1-based line of the item's header in `file`.

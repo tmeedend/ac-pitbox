@@ -16,6 +16,6 @@ serde_json = "1"
 # `serde_yaml` is deprecated; `serde_yaml_ng` continues it on the C-to-Rust
 # translation of libyaml. `serde-saphyr` is pure Rust, forbids `unsafe`, is
 # fuzzed not to panic on malformed input - an imported story is untrusted
-# data - and reports line and column. Deserializer only: the editor (L2) is
-# what will write these files.
-serde-saphyr = { version = "2", default-features = false, features = ["deserialize"] }
+# data - and reports line and column. Its serializer is what the editor
+# (Create Your Own, L2) writes the files back with (`write.rs`).
+serde-saphyr = { version = "2", default-features = false, features = ["deserialize", "serialize"] }
