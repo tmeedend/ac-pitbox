@@ -6,7 +6,7 @@
   // whether it reads them.
   import { confirm } from "@tauri-apps/plugin-dialog";
   import { t } from "$lib/i18n/index.svelte";
-  import { allNodeIds, hasNext, isNodeId, kindOf, moveNode, parseLines, renameNode } from "$lib/story/flow";
+  import { allNodeIds, hasNext, isNodeId, kindOf, moveItem, parseLines, renameNode } from "$lib/story/flow";
   import { saveChapterAt, studio } from "$lib/story/studioState.svelte";
   import { KIND_LABEL } from "$lib/story/labels";
   import type { FlowNode } from "$lib/story/studio";
@@ -61,7 +61,7 @@
   }
 
   function move(delta: number) {
-    chapter.nodes = moveNode(chapter.nodes, index, delta);
+    chapter.nodes = moveItem(chapter.nodes, index, delta);
     save();
   }
 

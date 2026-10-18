@@ -98,13 +98,14 @@ export function insertNode(nodes: FlowNode[], after: number | null, node: FlowNo
   return [[...nodes.slice(0, at), node, ...nodes.slice(at)], at];
 }
 
-/** `nodes` with the one at `index` moved by `delta`, clamped to the ends. */
-export function moveNode(nodes: FlowNode[], index: number, delta: number): FlowNode[] {
-  const to = Math.max(0, Math.min(nodes.length - 1, index + delta));
-  if (to === index) return nodes;
-  const out = [...nodes];
-  const [node] = out.splice(index, 1);
-  out.splice(to, 0, node);
+/** `items` with the one at `index` moved by `delta`, clamped to the ends:
+ * a node in its chapter, a step on the relation scale. */
+export function moveItem<T>(items: T[], index: number, delta: number): T[] {
+  const to = Math.max(0, Math.min(items.length - 1, index + delta));
+  if (to === index) return items;
+  const out = [...items];
+  const [item] = out.splice(index, 1);
+  out.splice(to, 0, item);
   return out;
 }
 

@@ -7,7 +7,7 @@ import {
   isNodeId,
   kindOf,
   linksOf,
-  moveNode,
+  moveItem,
   newNode,
   NODE_KINDS,
   nextChapterFile,
@@ -58,8 +58,8 @@ describe("flow nodes", () => {
 
   it("moving stops at the ends of the chapter", () => {
     const nodes = chapter().nodes;
-    expect(moveNode(nodes, 0, -1)).toBe(nodes);
-    expect(moveNode(nodes, 0, 1).map((n) => n.id)).toEqual(["race", "start", "pick", "again"]);
+    expect(moveItem(nodes, 0, -1)).toBe(nodes);
+    expect(moveItem(nodes, 0, 1).map((n) => n.id)).toEqual(["race", "start", "pick", "again"]);
   });
 
   // A rename that left a link behind would break the story silently far from
