@@ -54,8 +54,9 @@ chose qui rendait jusqu'ici une renumérotation invisible au code.
 
 - **`SPEC-session.md`** — **lancement de session** : la bibliothèque comme
   sélecteur, le pilotage par preset Quick Drive, l'écran de réglages avec le
-  plateau et les conditions, l'aperçu 3D, l'écran Pilote. Extrait du §9 de
-  `SPEC.md`, qui en portait 38 % à lui seul. Le code y renvoie par `SESSION§`.
+  plateau et les conditions, la coexistence des deux aperçus 3D. Extrait du §9
+  de `SPEC.md`. Le code y renvoie par `SESSION§`. Ce qu'on a lu dans le code de
+  CM pour en fixer les règles est dans `L4-cm-launch-research.md`.
 
 ## Import (le domaine le plus dense)
 
@@ -124,7 +125,8 @@ fait — en cas d'écart, la spec fait foi.
   une recherche qui couvre aussi la bibliothèque. **Lecture seule** au lot 1 ;
   les tailles sont collectées dès le lot 1 et affichées au lot 2. Porte la
   règle qui tient le reste : **un seul arbre, la provenance est un filtre**.
-  Maquette : `maquettes/pitbox-etat-dossier.html`. À construire.
+  Maquette : `maquettes/pitbox-etat-dossier.html`. Lot 1 livré ; le lot 2,
+  les tailles, reste.
 - **`SPEC-play-online.md`** — la page **Online** : rejoindre vite le bon
   serveur multijoueur, avec la bibliothèque qui juge chaque serveur (prêt,
   un clic, contenu à télécharger, bloqué). Organisée autour de deux cas —
@@ -153,29 +155,29 @@ fait — en cas d'écart, la spec fait foi.
   (transmission, turbo, rapports, réservoir), affiche l'**électronique**
   (ABS, antipatinage, EDL, DRS, KERS, ERS) et devient **éditable**. Mesures
   sur 104 voitures, refaites sur 397. Maquette :
-  `maquettes/pitbox-fiche-technique.html`. **Livrée** ; ses tests en vitrine et
-  à l'export attendent `ESPACE§` et `EXPORT§`.
+  `maquettes/pitbox-fiche-technique.html`. **Livrée.**
 - **`SPEC-taxonomies.md`** (`TAXO§`) — marques, pays et familles de catégorie
-  deviennent des **termes** (nom canonique, alias, emblème), curés dans trois
-  onglets de l'Atelier. **Seule la table des familles est livrée** (pour
-  l'index) ; le reste est un chantier ouvert (`CHANTIERS.md`).
+  sont des **termes** (nom canonique, alias, emblème), curés dans les onglets
+  Marques, Familles et Pays de Classement. **Livré** ; ce qui reste est dans
+  `CHANTIERS.md`.
 - **`SPEC-regles.md`** (`REGLES§`) — livrer des règles par défaut et les faire
   évoluer sans jamais écraser le travail de l'utilisateur : un **catalogue**
   en lecture seule, remplacé à chaque mise à jour, et une **surcouche** des
-  décisions de l'utilisateur. **Livré pour les trois tables de taxonomie**
-  (familles, alias et tags de pays, `taxonomy.rs`) ; le reste — identifiants
-  des règles, rapport de mise à jour, écran Règles refait — est un chantier
-  ouvert (`CHANTIERS.md`).
+  décisions de l'utilisateur. **Livré** : tables de taxonomie et règles en
+  liste, identifiants, rapport de mise à jour, écran Règles, export et import
+  des décisions.
 - **`SPEC-grille.md`** — lisibilité des cartes, affichage du nom, et
   **régénération des vignettes**. Porte la distinction qui structure le reste :
   « les voitures sombres sont indiscernables » recouvre deux problèmes — la
   carte qui ne se détache pas de la page (§2) et deux voitures sombres qui se
-  ressemblent (§5). Les confondre conduit à régler le mauvais.
+  ressemblent (§5). Les confondre conduit à régler le mauvais. La carte et le
+  nom sont livrés ; les vignettes régénérées, construites, sont éteintes.
 - **`SPEC-ecran-pilote.md`** — le corps (mannequin 3D) et la tenue en trois
-  pièces. Porte l'asymétrie fondatrice : le corps est imposé par la physique de
-  la voiture, la tenue tient à un fichier de skin.
-- **`SPEC-wikipedia-fiche-detail.md`** — un extrait de l'article Wikipédia du
-  véhicule ou du circuit réel, dans un onglet distinct de la description de
+  pièces, choisis par voiture et posés en jeu. Porte l'asymétrie fondatrice :
+  le corps est désigné par la physique de la voiture, la tenue par sa livrée.
+  La seule description de l'écran (SESSION§5 y renvoie).
+- **`SPEC-wikipedia-fiche-detail.md`** — l'article Wikipédia du
+  véhicule ou du circuit réel, en entier, dans un onglet distinct de la description de
   l'auteur. Deux contraintes commandent tout le reste : la fonctionnalité est
   **décorative** (l'ambiguïté n'affiche rien, l'absence n'est pas une erreur),
   et l'affichage doit rester une **collection** au sens du droit d'auteur —
