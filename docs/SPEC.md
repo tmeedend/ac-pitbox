@@ -918,7 +918,7 @@ Transposition de `spec-module-musique_2.md` (écrite pour C#/NAudio) vers Rust a
 
 ### 16.2 Détection de fin de chargement
 
-`acs.exe` vit du début du chargement jusqu'au retour aux stands : sa présence ne dit pas si la voiture est pilotable. `music/ac_status.rs` lit la **mémoire partagée officielle d'AC** (`Local\acpmf_graphics`), sans disque : `Status` vaut `AC_LIVE` (2) seulement quand la voiture est en piste. `watch.rs` scrute la présence du process toutes les 500 ms, et, une fois le process vu, le statut toutes les 1000 ms. Le moteur reçoit trois paires de signaux : process lancé ou arrêté (un repère d'état, sans effet sur la lecture), session entrée ou quittée (le fondu réel, sur la transition `AC_LIVE`) — et **l'arrêt du process force la reprise de la musique** si la mémoire partagée n'a pas signalé la sortie.
+`acs.exe` vit du début du chargement jusqu'au retour aux stands : sa présence ne dit pas si la voiture est pilotable. `music/ac_status.rs` lit la **mémoire partagée officielle d'AC** (`Local\acpmf_graphics`), sans disque : `Status` vaut `AC_LIVE` (2) seulement quand la voiture est en piste. `watch.rs` scrute la présence du process toutes les 500 ms, et, une fois le process vu, le statut toutes les 1000 ms. Le moteur reçoit deux paires de signaux : process lancé ou arrêté (un repère d'état, sans effet sur la lecture), session entrée ou quittée (le fondu réel, sur la transition `AC_LIVE`) — et **l'arrêt du process force la reprise de la musique** si la mémoire partagée n'a pas signalé la sortie.
 
 ### 16.3 Normalisation RMS + cache d'index
 
