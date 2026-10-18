@@ -2,7 +2,7 @@
 
 ## Spécification d'implémentation
 
-*Comment livrer des règles par défaut, les faire évoluer d'une version à l'autre, et ne jamais écraser le travail de l'utilisateur. Couvre l'écran `Atelier › Règles`.*
+*Comment livrer des règles par défaut, les faire évoluer d'une version à l'autre, et ne jamais écraser le travail de l'utilisateur. Couvre l'écran `Classement › Règles`. Livré : catalogue embarqué, surcouche, identifiants, rapport de mise à jour, export et import des décisions (`SPEC.md` §7.1bis).*
 
 ---
 
@@ -279,108 +279,51 @@ Aucun accent rouge dans cet écran hors focus clavier : rien n'y relève de la s
 
 # 13. Migration des installations existantes
 
-Sur une installation existante, règles livrées et règles utilisateur sont dans le même ensemble. Rien ne les distingue. C'est la première application du modèle de couches, sur des données qui n'en ont pas.
+Une installation d'avant ce modèle avait règles livrées et règles de l'utilisateur dans un même fichier (`tag-rules.json`). La migration les sépare **une fois**, sans rien reclasser.
 
 ## 13.1 Prérequis — le manifeste des catalogues passés
 
-**À embarquer dès maintenant, avant toute livraison.** Pour chaque version publiée de Pit Box, la liste des règles qu'elle livrait, avec identifiant et hash de contenu.
-
-```
-manifests/
-  v1.2.json   → [{ id: 'pitbox.country.jp-aliases', hash: 'a3f…' }, …]
-  v1.3.json
-  v1.4.json
-```
-
-C'est quelques kilo-octets, et c'est la **seule** chose qui rende la migration possible. Sans manifeste, elle est aveugle.
+La comparaison se fait contre un **manifeste figé** de ce que les versions publiées livraient (`rules/manifests/pre-layer-rules.json`, `pre-layer-tables.json`), avec les identifiants du catalogue — **jamais contre le catalogue courant**, sans quoi un utilisateur qui saute des versions verrait des améliorations qu'il n'a jamais reçues enregistrées comme ses propres décisions, et figées. Les règles en liste n'ayant pas changé de la première version publiée à v0.7.0, un seul manifeste les couvre. Il ne se met jamais à jour.
 
 ## 13.2 Classement
 
-Pour chaque règle trouvée chez l'utilisateur, comparée au manifeste de **sa** version :
+Chaque règle trouvée chez l'utilisateur, comparée au manifeste :
 
 | Ce qu'on trouve | Conclusion | Entrée de surcouche |
 |---|---|---|
-| Hash identique à une règle du manifeste | règle livrée intacte | **aucune** — simple référence au catalogue |
-| Identifiant connu, hash différent | **dérivation** | `{ ruleId, fork, forkedFrom }` |
-| Règle du manifeste **absente** chez l'utilisateur | **supprimée par lui** | `{ ruleId, disabled: true }` |
-| Aucune correspondance | règle à lui | règle utilisateur |
+| identique à une règle du manifeste | règle livrée intacte | **aucune** |
+| règle du manifeste **absente** chez l'utilisateur | **retirée par lui** | désactivée |
+| aucune correspondance | règle à lui | règle de l'utilisateur |
 
-**La ligne « absente » est la plus importante.** Si le système actuel permet de supprimer une règle livrée plutôt que de la désactiver, et que rien n'en garde trace, la migration la ressusciterait : quarante mods reclassés sans explication. Seule la comparaison au manifeste détecte une absence.
+**La ligne « absente » est la plus importante** : seule la comparaison au manifeste détecte une suppression, que la migration ressusciterait sinon.
 
-## 13.3 Si les règles actuelles n'ont pas d'identifiant stable
+## 13.3 Une règle livrée modifiée
 
-**À vérifier dans le code avant de chiffrer la migration.** Si les règles sont stockées avec un identifiant auto-incrémenté et aucun nom stable, l'appariement ne peut se faire que par hash de contenu. Conséquence : les règles intactes et les suppressions sont détectées, **les dérivations ne le sont pas**.
-
-Le cas non détecté est bénin, et la cascade le neutralise :
-
-- la dérivation est classée comme règle utilisateur — rien n'est perdu ;
-- la règle du catalogue correspondante est installée en plus — doublon ;
-- mais la règle utilisateur est prioritaire (§3), donc **elle gagne** ;
-- la règle du catalogue affiche `—` dans son compteur d'effet (§8.3) : le doublon est inerte et visible.
-
-Le rapport de migration peut alors proposer, sans rien imposer :
-
-```
-3 règles du catalogue n'ont aucun effet — vos propres règles les masquent.
-                                              [ Les désactiver ]   [ Laisser ]
-```
-
-## 13.4 Version inconnue du manifeste
-
-Installation trop ancienne, ou base modifiée à la main : aucun manifeste ne correspond.
-
-**Repli sûr :** toutes les règles existantes deviennent des règles utilisateur, et le catalogue est installé **entièrement désactivé**. La classification de la bibliothèque est préservée à l'identique, et l'utilisateur peut activer le catalogue quand il veut, avec le rapport d'effet de §6.
-
-Ne jamais installer le catalogue actif dans ce cas : ce serait soixante-huit doublons et une bibliothèque reclassée sans raison visible.
+Elle se lit comme **un retrait plus une règle à lui** : rien ne se perd, et sa version gagne (les règles de l'utilisateur passent devant, §3).
 
 ## 13.5 Règle d'or — diff nul
 
-**La bibliothèque doit être classée exactement pareil avant et après la restructuration.**
-
-C'est le test d'acceptation, et il est automatisable :
-
-1. instantané de la classification dérivée de tous les mods ;
-2. migration ;
-3. recalcul complet ;
-4. diff — **attendu vide**.
-
-Un diff non vide à cette étape est un bug de migration, pas une amélioration.
+**La bibliothèque est classée exactement pareil avant et après la migration** : instantané de la classification, migration, recalcul, diff **vide**. C'est un test, rejoué aussi sur une installation réelle. Un diff non vide est un bug de migration, pas une amélioration.
 
 ## 13.6 Deux temps, jamais un seul
 
-| Temps | Contenu | Diff attendu |
-|---|---|---|
-| **1 — restructuration** | passage en deux couches, avec le contenu de l'**ancien** catalogue | **vide** (§13.5) |
-| **2 — mise à jour** | nouvelles règles de la version, via le mécanisme ordinaire de §6 | non vide, **expliqué par le rapport** |
-
-Faire les deux d'un coup produit un diff que personne ne peut expliquer — ni l'utilisateur, ni toi en support.
+La restructuration se fait avec le contenu de l'**ancien** catalogue (diff vide) ; les nouvelles règles arrivent ensuite par le mécanisme ordinaire de mise à jour (§6), dont le diff est **expliqué par le rapport**. Les deux d'un coup produiraient un diff que personne ne peut expliquer.
 
 ## 13.7 Ordre avec la migration des taxonomies
 
-La spec taxonomies (TAXO§8) extrait les correspondances exactes de `Règles` vers les onglets `Marques`, `Pays` et `Catégories`.
-
-**Cette extraction vient après le classement en couches, et transporte la couche :**
-
-| Origine de la correction | Devient |
-|---|---|
-| Règle du catalogue | alias **catalogue** |
-| Règle de l'utilisateur, ou dérivation | alias **utilisateur** |
-
-Dans l'ordre inverse, tous les alias deviennent « utilisateur » — et l'utilisateur ne recevra plus jamais d'améliorations d'alias, sans que rien ne le signale.
+L'extraction des correspondances exactes vers les tables de taxonomie (TAXO§8) **transporte la couche** : une correction du catalogue devient une entrée du catalogue, une correction de l'utilisateur une décision de l'utilisateur. Dans l'autre sens, tout deviendrait « utilisateur », et plus aucune amélioration n'atteindrait ces tables.
 
 ## 13.8 Sauvegarde
 
-La base est copiée avant migration, et conservée jusqu'à la mise à jour suivante. C'est quelques méga-octets, et ça rend le `Revenir à v13` de §6.4 vrai pour la migration aussi.
-
-La migration est atomique : elle réussit entièrement ou ne s'applique pas.
+La migration est atomique, et l'ancien fichier n'est jamais supprimé : il est mis de côté sous `tag-rules.pre-overlay.json`, seulement une fois les deux fichiers de décisions écrits.
 
 ---
 
 # 14. Points ouverts
 
-**La couche de corrections manuelles** (niveau 4 de §3) existe-t-elle déjà dans l'application ? Si l'utilisateur peut aujourd'hui corriger la catégorie d'un mod précis sans passer par une règle, ces corrections doivent être identifiées et préservées par la migration, au même titre que les règles. Sinon la couche est à créer.
+**La couche de corrections mod par mod** (niveau 4 de §3) : la marque et la classe d'un mod précis ne se corrigent pas encore sans règle (pays et fiche technique, si : FICHE§8). C'est un chantier à part (`CHANTIERS.md`, « Corrections par mod »).
 
-**Le partage communautaire de règles** n'est pas couvert ici. Il utiliserait l'export de §9, mais poserait la question de la confiance : une règle importée est du code de classement écrit par un inconnu. À traiter séparément.
+**Le partage communautaire de règles** passe aujourd'hui par le développeur : un relevé ou un export de décisions, envoyé à la main, refait dans l'app puis promu (`SPEC.md` §7.1bis). Un import direct de règles venues d'un inconnu pose la question de la confiance, non traitée.
 
 **Décidé et écarté :** un catalogue téléchargeable hors des mises à jour de l'application. Le modèle de couches le permettrait sans rien changer, mais le besoin n'existe pas et il imposerait une politique réseau.
 
