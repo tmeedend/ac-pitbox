@@ -3,6 +3,28 @@
 //! Pure: no Tauri, no access to the application. Reads a story folder,
 //! validates it, runs its flow on a state and saves that state.
 
+/// Serde through the text form, for the types an author writes as a short
+/// sentence: dates, clock times and spans (`"1998-03-01"`, `"18:40"`,
+/// `"1 month"`), conditions, effects and success criteria
+/// (`"rel.friend += 1"`). Story files, saves and the editor all read and write
+/// that same text, so printing a parsed value must give the author's sentence
+/// back (tested in `expr.rs` and `time.rs`).
+macro_rules! serde_as_text {
+    ($t:ty) => {
+        impl serde::Serialize for $t {
+            fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+                s.collect_str(self)
+            }
+        }
+        impl<'de> serde::Deserialize<'de> for $t {
+            fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+                let text = String::deserialize(d)?;
+                text.parse().map_err(serde::de::Error::custom)
+            }
+        }
+    };
+}
+
 pub mod engine;
 pub mod expr;
 pub mod load;

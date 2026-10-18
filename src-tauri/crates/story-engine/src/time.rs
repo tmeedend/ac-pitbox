@@ -9,8 +9,6 @@
 use std::fmt;
 use std::str::FromStr;
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
 /// A calendar date. Field order makes the derived ordering chronological.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct StoryDate {
@@ -186,23 +184,6 @@ impl FromStr for Span {
     }
 }
 
-/// Serde through the text form, for the three types: story files and saves
-/// both read `"1998-03-01"`, `"18:40"`, `"1 month"`.
-macro_rules! serde_as_text {
-    ($t:ty) => {
-        impl Serialize for $t {
-            fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-                s.collect_str(self)
-            }
-        }
-        impl<'de> Deserialize<'de> for $t {
-            fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-                let text = String::deserialize(d)?;
-                text.parse().map_err(serde::de::Error::custom)
-            }
-        }
-    };
-}
 serde_as_text!(StoryDate);
 serde_as_text!(Clock);
 serde_as_text!(Span);

@@ -11,8 +11,6 @@
 use std::fmt;
 use std::str::FromStr;
 
-use serde::{Deserialize, Deserializer};
-
 use crate::time::StoryDate;
 
 /// Facts every event exposes on its own (SPEC-story-mode, Variables).
@@ -417,19 +415,9 @@ impl fmt::Display for Criterion {
     }
 }
 
-macro_rules! deserialize_from_text {
-    ($t:ty) => {
-        impl<'de> Deserialize<'de> for $t {
-            fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-                let text = String::deserialize(d)?;
-                text.parse().map_err(serde::de::Error::custom)
-            }
-        }
-    };
-}
-deserialize_from_text!(Condition);
-deserialize_from_text!(Effect);
-deserialize_from_text!(Criterion);
+serde_as_text!(Condition);
+serde_as_text!(Effect);
+serde_as_text!(Criterion);
 
 #[cfg(test)]
 mod tests {
