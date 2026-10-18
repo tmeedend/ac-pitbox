@@ -123,3 +123,76 @@ aucun AssettoServer ; pour 255, celle d'un admin sans mot de passe vaut
 `sha1("tgys3cqpcwpbssphb0j46tak8ykldaub" + mot de passe)` en base64 coupé
 (`EncryptedContentKey`) — pas utilisé à ce jour.
 
+
+## La page Online : relevés et pistes écartées
+
+Repris de la spec de la page (`SPEC-play-online.md`), qui ne garde que les
+règles. Ce qui suit est daté et sourcé : à relire avant de rouvrir l'une de
+ces questions.
+
+### Les cas d'usage, et d'où ils viennent
+
+Deux usages dominent, et ce ne sont pas des recherches : **rejoindre un serveur qu'on connaît déjà**, et **réussir à y entrer**. La recherche par critères existe, mais elle porte sur une ambiance (freeroam, drift, course) plus que sur des attributs fins de voiture. Tu avais raison : les filtres de bibliothèque ne répondent à aucun des deux premiers.
+
+| # | Cas d'usage | Ce qui le montre | Ce que la page optimise |
+| --- | --- | --- | --- |
+| 1 | **Rejoindre un serveur connu** : celui d'un ami, d'une communauté Discord, celui d'hier | CM permet de marquer des joueurs comme amis puis de n'afficher que les serveurs où ils roulent ([Steam](https://steamcommunity.com/app/244210/discussions/0/1458455461499678231/)). Les communautés partagent des liens de connexion directe ([OverTake](https://www.overtake.gg/threads/assetto-corsa-server-list.114178/)). Le launcher No Hesi met en avant l'invitation d'amis et un état « prêt » partagé par le groupe ([nohesi.gg](https://nohesi.gg/get-started)) ; Rorzone vend un code de connexion à partager ([ror.zone](https://ror.zone/)) | Favoris, Récents, Amis, coller un lien |
+| 2 | **Pouvoir entrer** : contenu manquant, mauvaise version, CSP, DLC | Sans le contenu, on ne rejoint pas ; les voitures manquantes s'affichent en rouge ([Steam](https://steamcommunity.com/app/244210/discussions/0/1742230617609308664)). Une voiture de version différente fait échouer le contrôle d'intégrité sur `data.acd` et le joueur est expulsé ([AssettoHosting](https://assettohosting.com/en/article/tutorial/fix-checksum-assetto-corsa)). Les serveurs Shutoko exigent le DLC japonais ([Steam](https://steamcommunity.com/app/244210/discussions/0/5312592706218870422)) ; No Hesi exige une version de CSP précise | Un statut de préparation lisible, et un bouton qui prépare tout |
+| 3 | **Choisir une ambiance** : freeroam avec trafic, drift/touge, course, trackday | Les listes publiques sont dominées par Shutoko, LA Canyons et les serveurs drift ([gs4u](https://www.gs4u.net/en/assettocorsa/)). Une seule communauté drift revendique plus de 400 serveurs ([ACS Drift](https://acsdrift.com/)) | Filtre par catégorie de circuit |
+| 4 | **Trouver du monde maintenant**, ou une course qui démarre | Courses publiques et ligues coexistent ; en ligue, on repère son serveur à son nom dans la liste de réservation ([ACRL](https://steamcommunity.com/groups/acrl/)) | Tri par joueurs, session en cours, temps restant |
+| 5 | **Rouler sur ses combos habituels** | Tu l'as dit : les circuits joués sont souvent les mêmes | Autocomplétion circuit / voiture, suggestions tirées de ton historique |
+
+La page s'organise donc autour des cas 1 et 2. Les cas 3 à 5 sont des filtres, pas la structure.
+
+Sources sur les données d'un serveur : [champs /INFO (assetto-server-manager)](https://pkg.go.dev/github.com/cj123/assetto-server-manager), [format du wrapper CM](https://github.com/JustaPenguin/assetto-server-manager/blob/v1.7.8/content_manager_wrapper.go), [ac-server-wrapper](https://github.com/gro-ove/ac-server-wrapper), [AssettoServer — Server Details](https://assettoserver.org/docs/misc/server-details/). Le bouton « Install missing content » de CM n'apparaît que si le serveur fournit des liens directs ([Emperor Servers](https://wiki.emperorservers.com/assetto-corsa-server-manager/share-content-with-content-manager-wrapper)) ; ce que le serveur contrôle : [JustaPenguin, FAQ](https://github-wiki-see.page/m/JustaPenguin/assetto-server-manager/wiki/2%29-Troubleshooting-FAQ).
+
+### Le miroir du lobby de Content Manager
+
+**Sur la source de la liste**, il y a deux choses distinctes, et aucune n'est une base de contenu. La liste officielle est le **lobby Kunos** : chaque serveur public s'y enregistre, et c'est lui que le jeu interroge. Content Manager tient en plus **son propre miroir en cache** de cette liste, hébergé par son auteur : plus rapide, et il a maintenu la liste visible quand le lobby Kunos est tombé ([OverTake](https://www.overtake.gg/threads/lobby-server-unavailable.272823/)). PitBox dépend déjà d'acstuff pour les mises à jour (CUP), donc s'en servir en repli ne changerait pas de principe. **Mais son adresse n'est pas publique** (vérifié le 2026-10-03 dans les sources de CM, `KunosApiProvider.TryToGetListAsync`) : elle vient d'`InternalUtils.GetKunosServerCompressedProxyUri()`, d'un module de CM qui n'est pas publié — comme la liste des autres serveurs de lobby Kunos que CM essaie à la suite (`MoveToNextKunosServer`). La prendre voudrait dire la tirer du binaire de CM, donc la deviner. **Le repli retenu est la dernière liste reçue** (`online/lobby_cache.rs`) : chaque réponse du lobby est écrite telle quelle dans le dossier de cache ; quand il ne répond pas, elle revient, gardée une minute avant de redemander, sous un bandeau qui la date (« Le lobby Kunos ne répond pas : voici la liste du … »). Elle mène encore quelque part : les serveurs répondent à leur `/INFO` et leur `/JSON` quoi que fasse le lobby, et le panneau les interroge en direct. La fiche d'un circuit ne compte rien dessus — une vieille liste ne dit pas qui roule maintenant. Sans Steam, pas de repli : la raison s'affiche, la cacher derrière une vieille liste n'aiderait pas.
+
+### Mesures
+
+- **Amis** (2026-10-03) : 341 serveurs occupés sur 9 000, interrogés 32 à la
+  fois, en 4,5 s.
+- **Liens de contenu** (2026-10-03) : 151 serveurs sur 254 interrogés publient
+  des liens, souvent directs (`.rar` d'une communauté, publications GitHub,
+  Google Drive) ; une `url` vide rend 404.
+- **Empreinte du mot de passe** (2026-10-03) : 837 serveurs verrouillés la
+  publient, tous par le wrapper ; voir « Empreinte du mot de passe » plus haut.
+- **Lancement** (2026-10-06) : du démarrage de CM à `acs.exe`, 1,3 à 4,1 s sur
+  trois joins réels — d'où le délai de garde de deux minutes des couches.
+- **Voitures nécessaires** (2026-10-04, constaté en jeu) : le jeu charge toutes
+  celles de la liste d'engagés ; un son seul (`sfx/`) ne fait pas échouer la
+  connexion.
+- **No Hesi** (2026-10-04) : le Join de CM est refusé autant que le nôtre
+  (`ACP_AUTH_FAILED`) ; le lien `nohesi.gg` désigne exactement les 31 serveurs
+  officiels du lobby.
+- **Catégories** (2026-10-11, 8 996 serveurs, 876 occupés, 3 763 joueurs) : la
+  bibliothèque connaît une petite partie des 1 726 ids de circuit du lobby ;
+  les 30 premiers ids couvrent 67 % des joueurs, les 50 premiers 75 %.
+  `npm run online:tracks` (outil de développement) classe les ids de la
+  dernière liste gardée pour remplir le catalogue.
+- **Vignettes** (2026-10-15) : une fiche CUP de circuit ne porte aucune image,
+  et CUP ne connaît que 120 circuits, aucun des dix premiers du lobby ; le
+  `loadingImageUrl` des détails étendus existe sur 141 serveurs sur 236, mais
+  c'est l'affiche de la communauté (53 images, dont 11 sur plusieurs
+  circuits). Les routes de touge (Akagi, Myogi, Akina) n'ont pas d'image
+  Commons, l'appariement ne retenant que les circuits.
+
+### Écarté
+
+- *Écarté* (2026-10-06) : donner à la liste les niveaux fins du panneau — un
+  manquant qui a un lien (« 1 clic » plutôt que « À télécharger »), une
+  version plus ancienne que celle du serveur. Il faudrait interroger
+  `/api/details` de chaque serveur : beaucoup de réseau, abusif envers les
+  serveurs, et ce que la liste dit aujourd'hui suffit — le panneau dit le
+  reste au moment de choisir. **Ne pas y revenir.**
+- *Écarté* (2026-10-05) : proposer le contenu d'un serveur verrouillé avec la
+  clé `EncryptedContentKey` de CM (`sha1("tgys3cqpcwpbssphb0j46tak8ykldaub" +
+  mot de passe)` en base64 coupé). La clé ne protège que les fichiers que le
+  serveur héberge lui-même (`/content/…`) ; les liens d'auteur restent en
+  clair et sont déjà proposés. Mesuré sur le vrai lobby : sur 1 764 serveurs
+  verrouillés, 1 399 répondent à `/api/details`, 65 déclarent
+  `"password": true`, et **aucun** n'héberge un fichier lui-même. À reprendre
+  le jour où l'un d'eux le fait — avec lui pour vérifier le format de la
+  requête, qu'aucun serveur ne permet d'essayer aujourd'hui.

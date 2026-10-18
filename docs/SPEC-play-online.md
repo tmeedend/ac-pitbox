@@ -1,598 +1,356 @@
 # PitBox — Page Online (serveurs multijoueur)
 
-Sep 30, 2026 · @Théo
+Ce que fait la page Online, et les règles qu'il faut connaître pour la
+modifier sans la casser. Le lancement par Content Manager a été vérifié en jeu
+avant de construire : `online-join-research.md`, qui porte aussi les relevés
+du lobby et les pistes écartées. Ce qui reste à voir à l'écran est dans
+`CHANTIERS.md`.
 
 ## Parti pris
 
-La page Online de PitBox répond à une seule question : **« rejoindre vite le bon serveur, avec tout ce qu'il faut »**. Tout le reste (config fine, assists, grip) passe au second plan ou dans le détail.
-
-Trois règles de lecture guident la maquette :
-
-- **Gros et visuel pour ce qui décide** : circuit (image), remplissage, session en cours, voitures. Pas de petits mots en gris.
-- **Ce que PitBox sait et que CM ne met pas en avant** : ton contenu installé. Chaque serveur est jugé contre ta bibliothèque (prêt / contenu manquant).
-- **Filtres en tokens**, dans la même grammaire que la bibliothèque PitBox, au lieu d'une barre de cases à cocher.
-
-Rappel design system : UI en anglais, mono pour les données, deux niveaux de gris, en-têtes de section rouges mono majuscules.
+La page répond à une seule question : **rejoindre vite le bon serveur, avec
+tout ce qu'il faut.** Ce qui décide (circuit, remplissage, session, voitures)
+est gros et visuel ; ce que Pit Box sait et que CM ne met pas en avant — le
+contenu installé — juge chaque serveur ; les filtres sont des tokens, dans la
+grammaire de la bibliothèque.
 
 ## Cas d'usage
 
-Deux usages dominent, et ce ne sont pas des recherches : **rejoindre un serveur qu'on connaît déjà**, et **réussir à y entrer**. La recherche par critères existe, mais elle porte sur une ambiance (freeroam, drift, course) plus que sur des attributs fins de voiture. Tu avais raison : les filtres de bibliothèque ne répondent à aucun des deux premiers.
+| # | Cas | Ce que la page optimise |
+| --- | --- | --- |
+| 1 | **Rejoindre un serveur connu** : un ami, une communauté, celui d'hier | Favoris, Récents, Amis, coller un lien |
+| 2 | **Pouvoir entrer** : contenu manquant, mauvaise version, CSP, DLC | un niveau de préparation lisible, et un bouton qui prépare tout |
+| 3 | **Choisir une ambiance** : freeroam, drift, touge, course | filtre par catégorie de circuit |
+| 4 | **Trouver du monde maintenant** | tri par joueurs, session en cours |
+| 5 | **Rouler sur ses combos habituels** | tokens circuit et voiture |
 
-| # | Cas d'usage | Ce qui le montre | Ce que la page optimise |
-| --- | --- | --- | --- |
-| 1 | **Rejoindre un serveur connu** : celui d'un ami, d'une communauté Discord, celui d'hier | CM permet de marquer des joueurs comme amis puis de n'afficher que les serveurs où ils roulent ([Steam](https://steamcommunity.com/app/244210/discussions/0/1458455461499678231/)). Les communautés partagent des liens de connexion directe ([OverTake](https://www.overtake.gg/threads/assetto-corsa-server-list.114178/)). Le launcher No Hesi met en avant l'invitation d'amis et un état « prêt » partagé par le groupe ([nohesi.gg](https://nohesi.gg/get-started)) ; Rorzone vend un code de connexion à partager ([ror.zone](https://ror.zone/)) | Favoris, Récents, Amis, coller un lien |
-| 2 | **Pouvoir entrer** : contenu manquant, mauvaise version, CSP, DLC | Sans le contenu, on ne rejoint pas ; les voitures manquantes s'affichent en rouge ([Steam](https://steamcommunity.com/app/244210/discussions/0/1742230617609308664)). Une voiture de version différente fait échouer le contrôle d'intégrité sur `data.acd` et le joueur est expulsé ([AssettoHosting](https://assettohosting.com/en/article/tutorial/fix-checksum-assetto-corsa)). Les serveurs Shutoko exigent le DLC japonais ([Steam](https://steamcommunity.com/app/244210/discussions/0/5312592706218870422)) ; No Hesi exige une version de CSP précise | Un statut de préparation lisible, et un bouton qui prépare tout |
-| 3 | **Choisir une ambiance** : freeroam avec trafic, drift/touge, course, trackday | Les listes publiques sont dominées par Shutoko, LA Canyons et les serveurs drift ([gs4u](https://www.gs4u.net/en/assettocorsa/)). Une seule communauté drift revendique plus de 400 serveurs ([ACS Drift](https://acsdrift.com/)) | Filtre par catégorie de circuit |
-| 4 | **Trouver du monde maintenant**, ou une course qui démarre | Courses publiques et ligues coexistent ; en ligue, on repère son serveur à son nom dans la liste de réservation ([ACRL](https://steamcommunity.com/groups/acrl/)) | Tri par joueurs, session en cours, temps restant |
-| 5 | **Rouler sur ses combos habituels** | Tu l'as dit : les circuits joués sont souvent les mêmes | Autocomplétion circuit / voiture, suggestions tirées de ton historique |
-
-La page s'organise donc autour des cas 1 et 2. Les cas 3 à 5 sont des filtres, pas la structure.
+La page s'organise autour des cas 1 et 2 ; les cas 3 à 5 sont des filtres.
 
 ## Ce qu'un serveur AC expose
 
-Un serveur AC donne trois niveaux d'information, du plus universel au plus riche. La liste doit tenir avec le niveau 1 seul ; le détail exploite les niveaux 2 et 3 quand ils existent.
-
-| Niveau | Source | Disponible sur | Données utiles |
+| Niveau | Source | Disponible sur | Ce que Pit Box en tire |
 | --- | --- | --- | --- |
-| 1 · Lobby / INFO | Lobby Kunos + endpoint HTTP `/INFO` du serveur | Tous les serveurs | Nom, IP/ports, pays, `clients`/`maxclients`, `track` (id + layout), `cars[]` (ids), mot de passe, session en cours, types et durées de sessions, temps restant, course au temps ou aux tours, arrêt au stand obligatoire, grille inversée, mode booking/pickup |
-| 2 · Entry list | Endpoint `/JSON` | Tous les serveurs | Un slot par voiture : modèle, skin, pilote, équipe, nation, **connecté ou libre**. Permet de calculer les slots libres **par voiture** |
-| 3 · Détails étendus | `/api/details` du wrapper CM, ou `EnableServerDetails` d'AssettoServer | Serveurs qui l'activent (fréquent sur les serveurs communautaires) | Description, météo actuelle, températures air/piste, vent, grip, assists autorisés (ABS, TC, ESC, embrayage auto, couvertures), usure pneus / carburant / dégâts, contacts max par km, **liens de téléchargement du contenu manquant**, checksum du mot de passe |
+| 1 · Lobby / INFO | lobby Kunos, `/INFO` du serveur | tous | nom, adresse, pays, joueurs, circuit et layout, voitures, mot de passe, sessions et temps restant |
+| 2 · Entry list | `/JSON` | tous | un slot par voiture : modèle, skin imposé, pilote, connecté ou libre |
+| 3 · Détails étendus | `/api/details` (wrapper de CM, AssettoServer) | serveurs qui l'activent | description, météo, températures, grip, vent, règles, **liens du contenu**, empreinte du mot de passe, CSP requis, versions |
 
-À noter :
+La liste tient avec le niveau 1 seul ; le panneau exploite les niveaux 2 et 3
+quand ils existent. **Le ping n'est pas fourni par le serveur** : Pit Box le
+mesure (§ Liste des serveurs).
 
-- Les types de session sont codés : booking, practice, qualify, race. Le serveur indique la session active et le temps restant.
-- Le **ping** n'est pas fourni par le serveur : PitBox doit le mesurer lui-même.
-- AssettoServer (serveurs freeroam, trafic IA) exige une version minimale de **CSP** : c'est une info bloquante à afficher.
-- Le checksum du mot de passe permet de **vérifier le mot de passe avant de lancer le jeu** : on évite le chargement de 40 s pour se faire refuser.
+## Source de la liste
 
-Sources : [champs /INFO (assetto-server-manager)](https://pkg.go.dev/github.com/cj123/assetto-server-manager), [format du wrapper CM](https://github.com/JustaPenguin/assetto-server-manager/blob/v1.7.8/content_manager_wrapper.go), [ac-server-wrapper](https://github.com/gro-ove/ac-server-wrapper), [AssettoServer — Server Details](https://assettoserver.org/docs/misc/server-details/).
+**Le lobby Kunos en direct.** Côté Rust (`online/lobby_cache.rs`), la liste
+brute est téléchargée une fois et gardée trois minutes pour tous ses lecteurs ;
+deux demandes simultanées n'en font qu'une, « Actualiser » passe outre. La page
+Online la juge contre la bibliothèque et garde ce jugement trois minutes —
+moins si la bibliothèque change (import, activation, contenu récupéré) : elle
+juge alors à nouveau, **sans retélécharger**.
+
+**Le repli est la dernière liste reçue**, écrite telle quelle dans le cache à
+chaque réponse : quand le lobby ne répond pas, elle revient sous un bandeau
+qui la date, et redemande au bout d'une minute. Les serveurs répondant à leur
+`/INFO` et leur `/JSON` quoi que fasse le lobby, le panneau reste juste. La
+fiche d'un circuit ne compte rien sur cette liste de secours. **Sans Steam,
+pas de repli** : la raison s'affiche.
 
 ## Liste des serveurs
 
-Recommandation : une ligne large par serveur (pas une grille de cartes), avec **quatre blocs lisibles d'un coup d'œil** — circuit, session, remplissage, ton état de préparation. Le reste passe en icônes.
+**Quatre onglets : `Tous` · `Favoris` · `Récents` · `Amis`**, avec leur
+décompte ; l'onglet ouvert est mémorisé. **Coller un lien de connexion**
+n'importe où sur la page (lien de partage CM `acstuff.club/s/q:race/online/join?…`,
+forme `acmanager://`) ouvre son serveur, même absent du lobby ; un mot de passe
+en clair dans le lien remplit le champ (celui, chiffré, de CM ne se lit pas).
 
-**Quatre onglets au-dessus de la liste : `ALL` · `FAVOURITES` · `RECENT` · `FRIENDS`.** Les trois derniers répondent au cas 1 sans aucun filtre, et ce sont eux qu'on ouvre le plus souvent. `RECENT` garde la voiture utilisée : rejoindre à l'identique est un clic. **Coller un lien de connexion** (lien de partage CM ou `acmanager://`) n'importe où sur la page ouvre directement le détail du serveur.
+**La liste est un tableau**, celui de la bibliothèque : colonnes choisies,
+déplacées, redimensionnées, mémorisées (`library_columns.json`, clé `online`).
+Colonnes : **Circuit** (fixe), Serveur, Session, Joueurs, Ping, Voitures, CSP,
+Pays, État ; IP:port et Mot de passe en option. Le tableau est virtuel.
 
-| Priorité | Info | Affichage recommandé |
-| --- | --- | --- |
-| 1 | **Circuit** | Vignette `preview.png` du circuit (ou son tracé `outline.png`) à gauche, nom + layout en gros. Le visuel reconnaissable remplace la lecture |
-| 1 | **Joueurs** | `14 / 24` en mono, gros, + barre de remplissage. Couleur : vide = gris, actif = normal, plein = rouge |
-| 1 | **Amis présents** | Pastille `★ Léo` (ou `★ 2`) sur la ligne dès qu'un joueur marqué ami est connecté |
-| 1 | **Session en cours** | Badge `RACE` / `QUALI` / `PRACTICE` + temps restant (`12 min` ou `8 laps`). Une course en cours = tu attendras la prochaine session : c'est décisif |
-| 1 | **État de préparation** (propre à PitBox) | `READY` · `1 CLICK` · `DOWNLOAD` · `BLOCKED`, détaillé plus bas (Contenu manquant) |
-| 2 | Voitures | 3 noms courts max + `+12`. Les voitures que tu possèdes en premier |
-| 2 | Nom du serveur | Titre de la ligne, tronqué proprement. Souvent bruité (« 24/7 \| discord.gg/... ») : on ne le laisse pas écraser le reste. Le lien Discord qu'il contient est extrait et rendu cliquable dans le détail |
-| 2 | Ping | Mono, coloré par seuil (vert < 60 ms, orange < 120 ms, rouge au-delà) |
-| 3 | Pays, mot de passe, CSP requis | Icônes seules : drapeau, cadenas, badge `CSP` |
+- **Circuit** : la vignette du layout (§ Vignette d'un circuit non installé), le
+  nom du circuit tel que la bibliothèque le connaît, sous lui le nom lisible du
+  layout (la répétition du nom du circuit ôtée), l'identifiant en infobulle.
+- **Nom du serveur** : tronqué proprement, sans écraser le reste ; le lien
+  Discord qu'il contient est rendu cliquable dans le panneau.
+- **Voitures** : leurs noms de bibliothèque, **celles qu'on possède en
+  premier**, `+N` toujours visible, la liste entière au survol. Les voitures
+  sans aucun slot joueur (le trafic IA d'AssettoServer) ne sont pas listées.
+- **Joueurs** : `14 / 24`, et la pastille `★ Léo` (ou `★ 3`) quand un ami est
+  connecté.
+- **Session** : le temps restant, « Ouvert » pour des essais de plus de 3 h,
+  « Réservation » écrit une seule fois.
+- **Ping** : une connexion TCP au port HTTP du serveur, mesurée sur les lignes
+  visibles une fois le défilement arrêté, gardée cinq minutes ; vert sous
+  60 ms, orange sous 120, gris au-delà — **jamais rouge**, réservé à la session
+  (§7.2ter).
+- **Pays** : le drapeau seul, le nom en infobulle (suivi du nom dans le
+  panneau) ; un code inconnu du jeu reste écrit.
+- **État** : discret quand tout est prêt ; `1 clic` en bleu, `À télécharger` en
+  orange, `Bloqué` en jaune ; la cause au survol.
 
-À **ne pas** montrer dans la liste : IP, ports, durées des sessions, assists, météo. Ils vont dans le détail.
+**La recherche** porte sur le nom du serveur et sur les noms de circuit et de
+voitures tels que la bibliothèque les connaît.
 
-Tri par défaut : serveurs avec amis, puis joignables (`READY`, puis `1 CLICK`), puis joueurs connectés décroissants. Un serveur vide mais prêt reste utile pour s'entraîner seul, il ne doit pas disparaître.
+**Tri par défaut** : serveurs avec amis, puis joignables (`Prêt`, puis
+`1 clic`), puis joueurs décroissants. Un serveur vide mais prêt reste listé. Un
+clic d'en-tête trie croissant, un deuxième décroissant, un troisième rend
+l'ordre par défaut ; ce qui n'a pas de valeur va toujours en dernier.
+
+**Regrouper par circuit** (menu d'affichage, sur `Tous`, mémorisé, éteint
+d'usine) : une ligne par layout, avec le nombre de serveurs, les amis et le
+total des joueurs ; les groupes viennent par joueurs. Trier sur une colonne à
+agrégat (Circuit, Serveur, Joueurs) ordonne les groupes, sur une autre les
+serveurs dans chaque groupe. Un layout tenu par un seul serveur garde sa ligne
+ordinaire.
 
 ## Détail d'un serveur
 
-Le détail est un **panneau à droite** de la liste (la liste reste visible), organisé dans l'ordre où l'on décide : où, quand, avec quoi, puis rejoindre.
+**Un panneau à droite de la liste, toujours là**, pour que la liste ne change
+pas de largeur. Il s'ouvre sur le dernier serveur rejoint, sinon sur le premier
+de la liste ; venu d'une fiche circuit, sur le premier serveur de ce circuit ;
+sans rien à montrer, il dit « Sélectionnez un serveur ». Dans l'ordre où l'on
+décide :
 
-1. **En-tête circuit** : bannière du circuit en grand, nom + layout, drapeau, ping, `14 / 24`. Si le circuit manque : bannière grisée + action de téléchargement.
-2. **Frise des sessions** : `PRACTICE 10 min → QUALI 10 min → RACE 15 laps`, la session active surlignée avec le temps restant. Pastilles pour `MANDATORY PIT` et `REVERSED GRID` si actifs.
-3. **Choix de la voiture** (le cœur de l'écran) : une carte par modèle avec vignette, nom, et **slots libres** `2 FREE / 4`. Trois états visuels : disponible et installée · installée mais complète (grisée) · non installée (badge `MISSING` + action de préparation, voir « Contenu manquant »). Clic = sélection ; skin du slot affichée sous la carte.
-4. **Pilotes connectés** : liste compacte nom + voiture + drapeau. Utile pour repérer des amis.
-5. **Conditions** (si détails étendus) : une bande d'icônes — météo, air `22°C`, piste `31°C`, grip `98%`, vent.
-6. **Règles** (si détails étendus) : assists autorisés, dégâts, usure pneus, conso, contacts max. Affichées comme **écarts** par rapport à la norme (« ABS forced off », « Damage 100% »), pas comme une liste de 12 valeurs.
-7. **Description** du serveur, repliée par défaut (souvent longue, liens Discord).
+1. **L'en-tête circuit** : bannière avec le tracé, nom et layout, drapeau,
+   ping, joueurs ; l'étoile des favoris ; `⧉`, qui copie le **lien de partage
+   de CM**, sans mot de passe.
+2. **La frise des sessions**, lues comme CM les lit (secondes, sauf une course
+   aux tours ; « +1 tour » pour une course au temps qui en ajoute un ; heures
+   au-delà de deux), la session en cours encadrée avec le temps restant,
+   `Arrêt obligatoire` / `Grille inversée` en pastilles.
+3. **Le choix de la voiture**, le cœur de l'écran : une carte par modèle, avec
+   la photo **du skin que le serveur imposera**, ses slots libres et son niveau
+   de préparation. Une voiture complète est grisée mais se choisit (pour
+   attendre une place, § v2). Les voitures sans place joueur s'affichent sous
+   « Aussi nécessaires », avec leur niveau. Rouvrir un serveur des Récents
+   présélectionne la voiture utilisée si elle est encore prenable.
+4. **Les pilotes connectés**. Un clic sur un nom le marque **ami** (☆ → ★, en
+   vert), un second le retire ; les noms se comparent sans casse ni espaces
+   autour, comme CM.
+5. **Conditions** (détails étendus) : météo telle que CSP la nomme, air, piste,
+   grip, vent.
+6. **Règles** (détails étendus), **en écarts** à ce qu'un serveur AC fait par
+   défaut : ABS ou antipatinage interdit ou imposé, ESC, embrayage auto,
+   couvertures, rétro virtuel, dégâts, consommation et usure s'ils ne sont pas
+   à 100 %, roues hors piste tolérées.
+7. **La description**, repliée, sans son BBCode ; les liens du nom et de la
+   description (images exclues, `discord.gg/…` sans `https` compris) s'ouvrent
+   dans le navigateur.
 
-En bas, collé : le bouton **JOIN** unique. Désactivé, il dit pourquoi : `PICK A CAR`, `TRACK MISSING`, `SERVER FULL`, `CSP REQUIRED`. Si mot de passe : champ inline, vérifié via checksum avant le lancement quand le serveur le permet.
+**Le bouton Rejoindre**, collé en bas, suit le niveau de la voiture choisie :
+`Rejoindre`, `Préparer et rejoindre`, ou la raison qui empêche (« Circuit
+manquant », « DLC requis : Red Pack », « CSP 3465 ou plus récent requis »,
+« Voiture complète »). Un serveur en réservation ouvre la fiche de CM, qui
+seule sait réserver.
 
-Ce bouton suit le niveau de préparation du serveur pour la voiture choisie : `JOIN`, `PREPARE & JOIN` ou `GET CONTENT` (section suivante). Dans la liste des pilotes, un clic sur un nom le marque comme ami.
+- **Le mot de passe est vérifié avant le lancement** sur un serveur qui publie
+  son empreinte (`passwordChecksum` des détails étendus) : faux, le panneau le
+  dit au lieu de laisser le jeu charger pour se faire refuser. Le mot de passe
+  joueur ou admin ouvre ; **un mot de passe vide n'est jamais accepté**. Sans
+  empreinte, c'est le jeu qui vérifie.
+- **Les serveurs qui exigent leur lanceur** : un serveur officiel No Hesi refuse
+  qui n'est pas passé par le lanceur No Hesi. Le panneau le dit au-dessus du
+  bouton, avec un lien, sans bloquer. Ces serveurs se reconnaissent au lien
+  vers `nohesi.gg` dans leur description — ni à leur nom, ni à leurs voitures.
+- **Une session à la fois** : le bouton affiche `Lancement…` puis `Session en
+  cours` tant qu'Assetto Corsa tourne (SESSION§2.4).
+
+**Le lancement** passe par CM : `acmanager://race/online?ip=…&port=…&httpPort=…&car=…&track=…`,
+qui part directement avec la voiture choisie, plus la réinjection de `[REMOTE]
+__FEATURES` dans `race.ini` sur AssettoServer. `race/online/join` ne sert
+qu'à la réservation. La livrée n'est pas transmise : le serveur impose celle
+du slot. Un Rejoindre réussi ajoute le serveur aux **Récents**, avec la voiture
+utilisée.
 
 ## Contenu manquant : prêt à rejoindre
 
-C'est le vrai différenciateur. CM ne voit que `content/` ; PitBox sait, pour chaque voiture et circuit du serveur, si tu l'as, sous quelle forme, et comment l'obtenir. Il peut donc transformer la plupart des « contenu manquant » en un clic.
+Pour chaque voiture et pour le circuit, Pit Box sait si l'utilisateur l'a, sous
+quelle forme, et comment l'obtenir.
 
-| Ce que PitBox trouve | Ce qu'il fait | Niveau |
+| Ce que Pit Box trouve | Ce qu'il fait | Niveau |
 | --- | --- | --- |
-| Installé, actif | Rien | `READY` |
-| Installé mais **désactivé** | L'active (hardlinks, instantané). CM le verrait comme manquant | `1 CLICK` |
-| **En vitrine** (sans fichiers) | Le réhydrate : archive conservée, puis lien fourni par le serveur, puis registre CUP | `1 CLICK` si la source est directe, sinon `DOWNLOAD` |
-| Absent, **lien direct** fourni par le serveur | Télécharge, puis passe par l'import PitBox (mod géré, activé) | `1 CLICK` |
-| Absent, lien non direct (Mega, Drive, Discord) | Ouvre le navigateur ; l'archive glissée dans PitBox est reconnue et l'état se met à jour | `DOWNLOAD` |
-| Absent, aucune source | Le panneau le liste sous « Aucune source de téléchargement connue », chaque élément avec « Chercher sur le web » : une recherche générale DuckDuckGo sur son id (« {id} assetto corsa »), dans le navigateur ; l'archive trouvée, glissée sur Pit Box, est importée et reconnue. Jamais de téléchargement depuis un résultat : Pit Box ne saurait pas choisir l'archive. Les liens extraits du nom et de la description restent dans le panneau | `DOWNLOAD` |
-| **Version différente** de celle du serveur (quand il la déclare) | Propose la mise à jour. Sinon, le contrôle d'intégrité échoue et le joueur est expulsé | `1 CLICK` ou `DOWNLOAD` |
-| **Couche PitBox** qui remplace `data.acd` d'une voiture ou `surfaces.ini` du circuit | Rejoint sans elle et la réactive à la fermeture du jeu, annoncé avant le lancement (voir « Couches et versions ») | `1 CLICK` |
-| Contenu d'un DLC Kunos non possédé | Nomme le DLC (table `kunos_content_dates`) | `BLOCKED` |
-| CSP trop ancien pour le serveur | Le dit, renvoie vers CM | `BLOCKED` |
+| Installé dans le jeu | rien | `Prêt` |
+| En bibliothèque, désactivé | Rejoindre l'active d'abord | `1 clic` |
+| En vitrine, ou absent, **avec une source** | Préparer et rejoindre le récupère | `1 clic` |
+| En vitrine ou absent, sans source directe | le panneau dit où chercher | `À télécharger` |
+| Contenu Kunos d'un DLC non possédé | nomme le DLC | `Bloqué` |
+| CSP absent ou plus ancien que celui qu'exige le serveur | le dit | `Bloqué` |
 
-Le niveau d'un serveur est le pire niveau de ce qui est nécessaire. **Le bouton suit ce niveau** : `JOIN` quand tout est prêt ; `PREPARE & JOIN` quand tout se règle en un clic (actions enchaînées dans la pile de notifications, même progression que l'import, puis lancement via CM) ; `GET CONTENT` quand il faut passer par le navigateur, avec une ligne par téléchargement qui se coche à chaque archive importée.
+**Voitures nécessaires : toutes**, celles de la liste d'engagés — le jeu les
+charge toutes, une seule manquante ferme la porte, quelle que soit celle qu'on
+conduit, trafic IA compris. **Le niveau d'un serveur est le pire** de son
+circuit, de toutes ses voitures et du CSP. La bascule « Joignable » garde
+`Prêt` et `1 clic`.
 
-**Le bouton « Install missing content » de CM est à contourner, pas à reproduire.** Il n'apparaît que si le serveur fournit des liens directs ([Emperor Servers](https://wiki.emperorservers.com/assetto-corsa-server-manager/share-content-with-content-manager-wrapper)), et il installe directement dans `content/` : le contenu arriverait en « non géré ». PitBox lit les mêmes liens et les fait passer par son propre import.
+**Les sources**, dans l'ordre : l'archive gardée à l'import d'un mod en
+vitrine ; le lien du serveur — le bloc `content` des détails étendus, une `url`
+par voiture et pour le circuit, ou sans `url` le fichier servi par le serveur
+lui-même (`/content/car/<id>`, `/content/track`) ; une `url` vide ou
+`direct: false` ne vaut rien, `cup: true` renvoie au registre — ; enfin le
+**registre CUP**, quand il liste l'id sans le réserver (`limited`). Le contenu
+servi par un serveur à mot de passe n'est pas proposé.
+
+**Préparer et rejoindre** récupère tout ce qui manque — la voiture choisie
+d'abord — par les chemins existants : l'archive gardée comme la récupération
+d'un mod en vitrine, un lien ou le registre comme une mise à jour de mod, puis
+**l'import ordinaire** : le contenu arrive géré, **jamais posé tel quel dans
+`content/`** (c'est ce que ferait le bouton « Install missing content » de CM,
+contourné exprès). Toute la préparation se suit dans **une seule
+notification**, le mod en cours et le décompte du tout, « Arrêter » coupant le
+mod en cours et les suivants ; les notifications d'un seul mod s'effacent pendant
+ce temps et leurs comptes rendus reviennent à la fin. Rejoindre pose ensuite
+dans le jeu **toutes** les voitures nécessaires, pas seulement celle qu'on
+conduit. Une page au lieu d'une archive s'ouvre dans le navigateur ; l'archive
+glissée ensuite sur Pit Box fait relire le serveur.
+
+**La liste ne montre que ce qu'elle sait sans détails étendus** : les sources
+et les versions du serveur ne se lisent que dans le panneau, à l'ouverture.
+Les interroger pour chaque ligne serait abusif envers les serveurs.
+
+**Sans aucune source**, le panneau liste ce qui manque sous « Aucune source de
+téléchargement connue », chacun avec « Chercher sur le web » (une recherche
+DuckDuckGo sur « {id} assetto corsa », dans le navigateur). Jamais de
+téléchargement depuis un résultat.
 
 ### Couches et versions
 
-PitBox est le seul outil qui sait qu'une voiture ou un circuit n'est pas « tel que livré ». Le serveur contrôle `data.acd` et les `surfaces.ini` ([JustaPenguin, FAQ](https://github-wiki-see.page/m/JustaPenguin/assetto-server-manager/wiki/2%29-Troubleshooting-FAQ)) ; le reste peut passer ou non. D'où deux niveaux, selon que l'échec est certain ou seulement possible.
+Le serveur contrôle `data.acd` (ou `data/`) des voitures et les `surfaces.ini`
+du circuit ; le son seul (`sfx/`) passe.
 
-| Cas | Ce que fait PitBox | Ce que voit l'utilisateur |
+| Cas | Ce que fait Pit Box | Ce que voit l'utilisateur |
 | --- | --- | --- |
-| **Échec certain** : une couche active remplace `data.acd` (ou `data/`) de la voiture choisie, ou un `surfaces.ini` du circuit | Désactive la couche pour la session, la réactive à la fermeture du jeu | Une ligne au-dessus du bouton : « La couche *X* sera désactivée pendant la session, puis réactivée ». Le bouton devient `PREPARE & JOIN`. Une case permet de refuser |
-| **Échec possible** : une couche active touche autre chose sur la voiture ou le circuit (textures, extension CSP — le son seul, `sfx/`, passe) | Rien par défaut | Encadré jaune « Couche active sur cette voiture » avec son nom, et l'option « Rejoindre sans les couches » |
-| **Aucune couche** | Rien | Rien |
+| **Échec certain** : une couche active de la voiture choisie ou du circuit remplace l'un de ces fichiers | la désactive pour la session, la réactive à la fermeture du jeu | une ligne au-dessus du bouton, « Garder ces couches » pour refuser ; le bouton devient `Préparer et rejoindre` |
+| **Échec possible** : une couche active touche autre chose (hors `sfx/`) | rien par défaut | un encadré jaune qui la nomme, avec « Rejoindre sans ces couches » |
+| Aucune couche | rien | rien |
 
-**La réactivation ne dépend pas d'une fermeture propre.** Le choix « désactivée pour la session » est écrit sur disque avant le lancement. La fermeture du jeu (signal de fin de session déjà utilisé par les replays) réactive la couche et le dit dans une notification. Si PitBox a été fermé entre-temps, la réactivation se fait au démarrage suivant, comme le filet de `gamebackup`. Si aucun jeu ne démarre — CM a refusé le join —, la couche revient deux minutes après le join.
+**La réactivation ne dépend pas d'une fermeture propre.** La liste des couches
+écartées est écrite (`online_layers.json`) **avant** la moindre désactivation.
+La fin du jeu les réactive et le dit dans une notification ; si Pit Box a été
+fermé entre-temps, c'est au démarrage suivant ; si CM ne lance aucun jeu, un
+délai de garde les rend deux minutes après le join (un join plus récent
+l'annule). Seules les couches de la voiture et du circuit rejoints sont
+touchées, par l'interrupteur ordinaire.
 
-**Versions à côté du choix.** Sous la voiture choisie et sous le circuit : la version installée et l'archive d'origine (`v1.4 · rss_911_v14.7z`). Quand le serveur déclare sa version (détails étendus), elle s'affiche à côté ; un écart passe en orange. Une mauvaise version installée est l'autre cause fréquente d'échec, et c'est ce qu'on vérifie en premier.
-
-À vérifier : un mod son (`.bank` remplacé) fait-il échouer la connexion de façon reproductible sur certains serveurs ? Si oui, il passe dans « échec certain ».
+**Versions à côté du choix.** Sous la voiture choisie et sous le circuit : la
+version installée et l'archive d'origine ; quand le serveur déclare sa version,
+elle s'affiche à côté, **en orange quand elles diffèrent**. Une version
+installée plus ancienne que celle du serveur passe en `1 clic` quand une source
+permet la mise à jour.
 
 ## Filtres de base
 
-Une barre unique, sur une seule ligne comme celle de la bibliothèque : un champ de recherche, quatre **puces oui/non épinglées**, le reste en tokens. Pas de panneau de 20 cases.
+La barre de la bibliothèque (`FilterBar`), sur une ligne : la recherche,
+`+ Filtre` et les puces.
 
-| Filtre | Forme | Défaut |
-| --- | --- | --- |
-| Nom du serveur | Champ texte, recherche instantanée | vide |
-| Not full | Puce oui/non, épinglée | posée |
-| No password | Puce oui/non, épinglée | fantôme |
-| Not empty | Puce oui/non, épinglée | fantôme |
-| Joinable (`READY` ou `1 CLICK`) | Puce oui/non, épinglée | fantôme |
-| Circuit | Token avec autocomplétion sur les circuits en ligne, nombre de serveurs affiché (`Spa · 23 servers`) | aucun |
-| Voiture | Même principe que le circuit | aucun |
-| Catégorie de circuit | Token `track category: Freeroam` : ton choix, ta bibliothèque, le catalogue Pit Box, puis les mots du serveur (voir plus bas) | aucun |
-| Contenu | Token `content: kunos` (rejoignable sans rien télécharger) ou `content: mods` | aucun |
-| Ping max | Token `ping < 100` | aucun |
-| Pays / région | Token avec drapeaux | aucun |
-| Session en cours | Token `session: race` | aucun |
+- **Quatre puces oui/non épinglées**, à trois états : « Pas plein » (posée
+  d'usine), « Sans mot de passe », « Pas vide », « Joignable ». Elles ne
+  s'appliquent qu'à `Tous` : un serveur à soi reste listé plein, verrouillé ou
+  vide. Le négatif sert (« Avec mot de passe » retrouve le serveur de sa ligue).
+- **Sept tokens** : circuit (le layout, avec le nombre de serveurs qui le font
+  tourner), voiture (`ET` / `OU`), catégorie de circuit, contenu (`Kunos` :
+  circuit et toutes les voitures officiels, DLC compris ; `Mods` : au moins un
+  mod), ping (moins de 60, 120 ou 200 ms), pays, session en cours. Circuit,
+  Voiture et Catégorie sont épinglés en fantômes. Chaque valeur s'inclut ou
+  s'exclut ; les tokens valent pour tous les onglets.
+- **Un serveur dont le ping n'est pas mesuré n'est pas « proche »** : poser un
+  token de ping fait mesurer les serveurs qui passent les autres filtres, le
+  haut de la liste d'abord, par lots de 64, et ils apparaissent à mesure ; un
+  serveur qui ne répond pas reste écarté.
+- Les tokens, les puces, les épingles et le tri sont mémorisés ; la recherche
+  ne l'est pas. Un état enregistré par les anciennes cases à cocher se relit
+  comme les puces équivalentes.
 
-La catégorie de circuit répond au cas 3 (freeroam, drift, touge, circuit) avec un vocabulaire que PitBox tient déjà. Un serveur dont personne ne connaît la catégorie compte comme **inconnu** : une catégorie **incluse** l'écarte, une catégorie **exclue** le garde. Ce qu'une catégorie incluse écarte ainsi se compte sous la liste (« + N serveurs sur des circuits de catégorie inconnue · Afficher »), à un clic d'être montré — une bascule d'affichage, pas un filtre de plus. Sous un token de ping, ces serveurs sont mesurés eux aussi, pour que le nombre annoncé soit celui qu'« Afficher » montrera. La première règle, « ni inclus ni exclu », laissait passer la majorité du lobby sous « Drift ». D'où vient la catégorie : « Catégorie des circuits hors bibliothèque », dans les Lots.
+### Catégorie de circuit
 
-Une puce oui/non a trois états, comme à la bibliothèque : absente (indifférent), positive, négative. Le négatif sert : « Avec mot de passe » retrouve le serveur privé de sa ligue, « Pas joignable » montre ce qu'il faudrait télécharger.
+La catégorie d'un serveur est celle de son circuit, résolue dans cet ordre, la
+première source qui répond l'emportant :
 
-Les puces et le tri sont **mémorisés** entre deux ouvertures de la page.
+1. **le choix de l'utilisateur**, dans le panneau (« Catégorie : inconnue ·
+   Choisir », puis « Modifier ») : la liste fermée des catégories de circuit,
+   chacune cochée ou décochée et enregistrée aussitôt, rangée dans
+   `overlay.sqlite` par id de circuit. Il survit à l'installation du circuit et
+   passe devant ce qu'elle apporte ; tout décocher l'oublie ; il voyage avec
+   l'export de la bibliothèque ;
+2. **la bibliothèque**, quand elle a le circuit avec au moins une catégorie ;
+3. **le catalogue Pit Box** (`track_categories` de `taxonomy-catalog.json`, avec
+   sa surcouche, REGLES§2).
+
+**Puis les mots du serveur**, marqués « ≈ », qui **s'ajoutent** : un mot-clé du
+nom du serveur, de sa description (dans le panneau seulement) ou de l'id du
+circuit (`server_keywords` du même catalogue : `drift`, `touge`, `traffic`,
+`cruise`, `freeroam`…). Mots entiers, sans casse ni accents ; un mot-clé
+précédé de « no » est ignoré. L'infobulle dit la catégorie, la source et le mot.
+
+**Une catégorie inconnue n'est ni incluse ni exclue par défaut** : une catégorie
+incluse écarte un serveur inconnu, une catégorie exclue le garde. Ce qu'une
+inclusion écarte ainsi se compte sous la liste (« + N serveurs sur des circuits
+de catégorie inconnue · Afficher ») — une bascule d'affichage, pas un filtre ;
+sous un token de ping, ces serveurs sont mesurés aussi.
+
+## Vignette d'un circuit non installé
+
+L'image d'un circuit, dans la liste et dans la bannière, se résout dans cet
+ordre :
+
+1. **la bibliothèque** : circuit installé ou en vitrine ;
+2. **Wikimedia Commons**, par l'appariement Wikipédia des circuits (le lien
+   livré de l'id, sinon les coordonnées et le nom que la table de CSP donne à
+   cet id) ; l'image n'est gardée que si son auteur et sa licence sont connus,
+   et son crédit est en infobulle sur la ligne et en clair sous la bannière. Le
+   réglage `wiki_online` décide : coupé, seul le cache sert ;
+3. **une vignette dessinée** : le pictogramme de la catégorie du circuit et le
+   drapeau de son pays (Wikidata, quand l'élément est connu — jamais le pays du
+   serveur). **Jamais l'image d'un autre circuit.**
+
+Les images sont demandées une à une (le serveur ouvert d'abord, puis les lignes
+visibles) et gardées dans le cache des miniatures ; un circuit sans image est
+redemandé après trente jours. **Interdits** : embarquer des `preview.png` de
+mods, chercher des images sur les sites de mods, l'affiche qu'un serveur publie
+(elle est celle de sa communauté, pas du circuit).
+
+Le **nom** d'un circuit non installé vient de la table de CSP (ou de sa copie
+dans CM), son dossier en repli ; le nom de la bibliothèque passe toujours
+avant.
 
 ## Au-delà de Content Manager
 
-Ce que PitBox peut faire mieux que CM tient aux cas 1 et 2 : **préparer l'entrée** avec la bibliothèque (section suivante) et **retrouver ses serveurs et ses amis** sans chercher. Les filtres de bibliothèque (tags, marque, famille) sont retirés : aucun cas d'usage ne les demande.
+- **Favoris et Récents** : l'étoile met un serveur en favori ; les Récents en
+  gardent vingt, un par serveur, le plus récent en tête. **Les deux listes
+  gardent une copie du serveur** : elles s'affichent sans attendre le lobby et
+  survivent à sa panne ; l'entrée fraîche du lobby remplace la copie dès
+  qu'elle existe. Stockage : `online.json`, écrit côté Rust, compris dans la
+  sauvegarde de démarrage.
+- **Amis** : après chaque chargement de la liste, et seulement si un ami est
+  marqué, Pit Box demande leurs pilotes aux serveurs qui ont des joueurs
+  (32 requêtes à la fois). Un serveur où roule un ami porte sa pastille, passe
+  en tête de `Tous` et forme l'onglet `Amis`.
+- **« Online : N serveurs » sur la fiche d'un circuit** : une carte en bas de sa
+  colonne de droite, comptée sur la liste brute sans requête aux serveurs, sur
+  les seuls serveurs occupés, tous layouts confondus ; « Voir les serveurs »
+  ouvre Online sur `Tous` avec le token Circuit posé. Lobby injoignable ou
+  personne en piste : rien ne s'affiche.
+- **Écarté** : les filtres de bibliothèque (tags, marque, famille) — aucun cas
+  d'usage ne les demande.
 
-| Idée | Cas | Lot |
-| --- | --- | --- |
-| Favoris et Récents (avec la voiture utilisée) | 1 | v1 |
-| Amis : marquer un joueur depuis la liste des pilotes connectés, onglet `FRIENDS` | 1 | v1 — CM le fait déjà, c'est un minimum |
-| Coller un lien de connexion | 1 | v1 |
-| Préparer et rejoindre en un clic | 2 | v1 |
-| Filtre catégorie de circuit | 3 | v1 |
-| Regrouper par circuit (30 serveurs Shutoko = une ligne dépliable) | 3 | v2 |
-| Lien bibliothèque → online : `Online: 4 servers now` sur la fiche d'un circuit | 5 | v2 |
-| Prévenir quand un ami se connecte ou qu'un slot se libère | 1, 4 | v2 |
-| Filtres de bibliothèque (tags, marque, famille, motorisation) | aucun | écarté |
+## v2 — Prévenir : ami connecté, place libérée
 
-## Maquette fil de fer
+Une surveillance démarrée avec la coquille, quel que soit l'écran ouvert. **Elle
+ne regarde que ce que l'utilisateur a désigné**, jamais tout le lobby :
 
-&#91;embedded content: Page Online · barre de filtres, liste, panneau de détail\]
-
-La liste reste lisible sans ouvrir le détail : circuit, session, remplissage et état `READY` sont dans des colonnes fixes. Le panneau de droite ne sert qu'à choisir la voiture et rejoindre. Données fictives.
-
-## Décisions et questions ouvertes
-
-La v1 se construit autour des onglets Favoris / Récents / Amis, du statut de préparation et du bouton qui prépare tout. Les filtres restent légers.
-
-| Sujet | Décision |
-| --- | --- |
-| Lancement | Via CM, par `acmanager://race/online?ip=…&port=…&httpPort=…&car=…&track=…` (lancement direct avec la voiture choisie), plus la réinjection de `[REMOTE] __FEATURES` dans `race.ini` sur AssettoServer. `race/online/join` ne sert qu'en repli (booking) : il rouvre la fiche de CM où la voiture se rechoisit. Voir `online-join-research.md` |
-| Source de la liste | Lobby Kunos en direct, `/INFO` et `/JSON` interrogés à la demande. En repli, la dernière liste reçue, gardée sur disque (voir plus bas) |
-| Ping | Mesuré sur les lignes visibles, mis en cache quelques minutes |
-| Freeroam, drift, etc. | Filtre par catégorie de circuit : choix de l'utilisateur, bibliothèque, catalogue Pit Box, mots du serveur (« ≈ »). Un libellé « type de serveur » plus tard, seulement si une donnée fiable le permet |
-| Rail | Entrée `Online` dédiée, juste sous `Session`, au-dessus du filet. La colonne de session est masquée sur Online : le panneau de détail joue son rôle (choix de la voiture, lancement) |
-
-**Sur la source de la liste**, il y a deux choses distinctes, et aucune n'est une base de contenu. La liste officielle est le **lobby Kunos** : chaque serveur public s'y enregistre, et c'est lui que le jeu interroge. Content Manager tient en plus **son propre miroir en cache** de cette liste, hébergé par son auteur : plus rapide, et il a maintenu la liste visible quand le lobby Kunos est tombé ([OverTake](https://www.overtake.gg/threads/lobby-server-unavailable.272823/)). PitBox dépend déjà d'acstuff pour les mises à jour (CUP), donc s'en servir en repli ne changerait pas de principe. **Mais son adresse n'est pas publique** (vérifié le 2026-10-03 dans les sources de CM, `KunosApiProvider.TryToGetListAsync`) : elle vient d'`InternalUtils.GetKunosServerCompressedProxyUri()`, d'un module de CM qui n'est pas publié — comme la liste des autres serveurs de lobby Kunos que CM essaie à la suite (`MoveToNextKunosServer`). La prendre voudrait dire la tirer du binaire de CM, donc la deviner. **Le repli retenu est la dernière liste reçue** (`online/lobby_cache.rs`) : chaque réponse du lobby est écrite telle quelle dans le dossier de cache ; quand il ne répond pas, elle revient, gardée une minute avant de redemander, sous un bandeau qui la date (« Le lobby Kunos ne répond pas : voici la liste du … »). Elle mène encore quelque part : les serveurs répondent à leur `/INFO` et leur `/JSON` quoi que fasse le lobby, et le panneau les interroge en direct. La fiche d'un circuit ne compte rien dessus — une vieille liste ne dit pas qui roule maintenant. Sans Steam, pas de repli : la raison s'affiche, la cacher derrière une vieille liste n'aiderait pas.
-
-- [x] **Voitures nécessaires** : **toutes**, celles de la liste d'engagés (constaté en jeu, 2026-10-04) — le jeu les charge toutes, une seule manquante ferme la porte, quelle que soit celle qu'on conduit ; c'est aussi ce que compte CM. Un serveur vaut donc le pire de son circuit et de toutes ses voitures, trafic IA d'un AssettoServer compris. Dans le panneau, les voitures sans place joueur (le trafic) ne se choisissent pas mais s'affichent sous « Aussi nécessaires » avec leur niveau ; le bouton dit « N voitures du serveur manquent » ; « Préparer et rejoindre » récupère toutes celles qui manquent, la choisie d'abord, et Rejoindre les pose toutes dans le jeu, pas seulement celle qu'on conduit.
-- [x] **Voiture dans le lien CM** : oui pour la voiture (`race/online&car=`, vérifié en jeu). Non pour la livrée : le serveur impose celle du slot libre, quelle que soit celle demandée. Voir `online-join-research.md`.
-- [x] **Mods son** : un son seul (`sfx/`) passe, les serveurs ne le contrôlent pas (constaté en jeu, 2026-10-04). Une couche qui ne touche que `sfx/` n'est donc ni écartée ni signalée ; les mods son de Pit Box, sous-éléments d'une voiture qui ne posent que là, ne l'ont jamais été.
-- [x] **SPEC §7.2** : tableau des trois territoires et ordre du rail mis à jour (`Session`, `Online`, filet, Apps…).
-- [x] **Rejoindre sans une couche** : décidé, voir « Couches et versions ».
-- [x] **Amis** : comme CM, par nom affiché.
-
-## Lots
-
-**Lot 1 — lister et rejoindre (livré, à vérifier à l'écran).** L'entrée
-`Online` du rail ; la liste du lobby Kunos (recherche, les quatre bascules,
-mémorisées) triée joignables d'abord puis par joueurs ; un panneau de détail
-interrogé sur le serveur lui-même (`/INFO`, `/JSON`) : voitures avec leurs
-slots libres et le skin imposé, pilotes connectés ; le bouton Rejoindre, qui
-active voiture et circuit au besoin puis passe par `race/online` et la
-réinjection de `__FEATURES` (`online-join-research.md`). Un serveur en booking
-ouvre la fiche de CM, qui seule sait réserver. « Joignable » y veut dire :
-circuit et au moins une voiture jouables ici (installés, ou dans la
-bibliothèque avec leurs fichiers) — les quatre niveaux de préparation viennent
-plus tard.
-
-**Lot 2 — noms et vignettes (livré).** La liste montre la photo du layout, son
-nom et celui des voitures tels que la bibliothèque les connaît (correction de
-l'utilisateur comprise), les voitures possédées en premier ; la recherche lit
-aussi ces noms. Le panneau ouvre sur la bannière du circuit avec son tracé, et
-chaque voiture porte la photo du skin que le serveur imposera. Ce que la
-bibliothèque n'a pas garde son identifiant. Les voitures sans aucun slot
-joueur (le trafic IA d'un AssettoServer) ne sont pas proposées.
-
-**Lot 3 — Favoris et Récents (livré).** Trois onglets au-dessus de la liste :
-`Tous`, `Favoris`, `Récents`, avec leur décompte ; l'onglet ouvert est
-mémorisé. L'étoile du panneau met un serveur en favori ; chaque Rejoindre
-réussi l'ajoute aux récents avec la voiture utilisée (vingt gardés, un par
-serveur, le plus récent en tête), et rouvrir ce serveur présélectionne cette
-voiture si elle est encore prenable — rejoindre à l'identique est un clic.
-Les deux listes gardent une **copie** du serveur tel qu'il était : elles
-s'affichent tout de suite, sans attendre le lobby, et survivent à sa panne ou
-à un serveur qu'il ne liste plus ; l'entrée fraîche du lobby remplace la copie
-dès qu'elle existe. Les quatre bascules ne s'appliquent qu'à `Tous` : un
-serveur à soi reste listé plein, verrouillé ou vide, puisque c'est justement
-là qu'on le cherche ; la recherche s'applique partout. Stockage :
-`online.json` d'`app_config_dir`, écrit côté Rust et compris dans la
-sauvegarde de démarrage.
-
-**Lot 4 — Amis (livré).** Dans le panneau, un clic sur un pilote connecté le
-marque comme ami (☆ → ★, en vert), un second clic le retire ; les noms se
-comparent sans casse ni espaces autour, comme les écrit chaque jeu. Le lobby
-ne nomme personne : après chaque chargement de la liste, et seulement si au
-moins un ami est marqué, Pit Box demande leurs pilotes aux serveurs qui ont
-des joueurs (32 requêtes à la fois — mesuré le 2026-10-03 : 341 serveurs
-occupés sur 9 000, 4,5 s). Un serveur où roule un ami porte une pastille
-`★ Léo` (ou `★ 3`), passe en tête de `Tous`, et forme l'onglet `Amis`. Les
-amis vivent dans `online.json` avec les favoris.
-
-**Lot 5 — niveaux de préparation, sans les couches ni les téléchargements
-(livré).** Chaque circuit et chaque voiture est connu avec l'endroit où il est :
-dans le jeu (`Prêt`), seulement en bibliothèque (`1 clic` — Rejoindre le pose
-d'abord), en vitrine ou absent (`À télécharger`), ou contenu Kunos absent
-(`Bloqué`, avec le nom du DLC) ; un serveur qui exige un CSP plus récent que
-celui installé (ou CSP quand il n'y en a pas) est `Bloqué` lui aussi. La liste
-montre le niveau de chaque serveur — le pire de son circuit, de **toutes** ses
-voitures et du CSP (voir « Voitures nécessaires » plus haut) —,
-la cause au survol, et trie `Prêt` avant `1 clic` ; la bascule « Joignable »
-garde ces deux-là. Dans le panneau, chaque voiture porte son propre niveau, on
-peut en choisir une manquante pour savoir pourquoi on ne peut pas entrer, et le
-bouton suit : `Rejoindre`, `Préparer et rejoindre`, ou la raison
-(« Circuit manquant », « DLC requis : Red Pack », « CSP 3465 ou plus récent
-requis »). Ce que le lot ne fait pas encore : télécharger, et écarter une
-couche le temps d'une session — un serveur qui en aurait besoin se lit
-`À télécharger` ou `Prêt`.
-
-**Lot 6 — le détail du panneau (livré).** La **frise des sessions** sous les
-faits du serveur : chaque session et sa durée lues comme CM les lit (secondes,
-sauf une course aux tours ; « +1 tour » pour une course au temps qui en
-ajoute un ; heures au-delà de deux), la session en cours encadrée avec le temps
-qui reste, et `Arrêt obligatoire` / `Grille inversée` en pastilles. Sur les
-serveurs qui publient `/api/details` (AssettoServer, le wrapper de CM — pas un
-serveur Kunos nu) : une bande de **conditions** (météo telle que CSP la nomme,
-air, piste, grip, vent), les **règles en écarts** à ce qu'un serveur AC fait par
-défaut (ABS ou antipatinage interdit ou imposé, ESC autorisé, embrayage auto
-interdit, couvertures, rétro virtuel, dégâts, consommation et usure s'ils ne
-sont pas à 100 %, roues hors piste tolérées), la **description** repliée,
-débarrassée de son BBCode. Les **liens** du nom et de la description (Discord
-le plus souvent, `discord.gg/…` écrit sans `https` compris, images exclues)
-s'ouvrent dans le navigateur. **Coller un lien de connexion** n'importe où sur
-la page (lien de partage CM `acstuff.club/s/q:race/online/join?…`, forme
-`acmanager://`) ouvre son serveur, même absent du lobby ; un mot de passe en
-clair dans le lien remplit le champ — le mot de passe chiffré de CM ne se lit
-pas ici. Le **ping** est mesuré par Pit Box (une connexion TCP au port HTTP du
-serveur, soit un aller-retour) sur les lignes visibles une fois le défilement
-arrêté, gardé cinq minutes : vert sous 60 ms, orange sous 120, gris au-delà —
-pas rouge, réservé à la session (SPEC §7.2ter).
-
-**Lot 7a — écarter les couches le temps d'une session (livré).** Le panneau
-lit les couches actives du circuit et de la voiture choisie, et leurs fichiers :
-une couche qui remplace `data.acd` ou un fichier de `data/` d'une voiture, ou
-un `surfaces.ini` d'un circuit (le sien ou celui d'un layout), est un **échec
-certain** ; une couche qui touche autre chose, un **échec possible**. Au-dessus
-du bouton, une ligne annonce celles qui seront désactivées pendant la session
-puis réactivées, avec « Garder ces couches » pour refuser ; un encadré jaune
-nomme les autres, avec « Rejoindre sans ces couches ». Le bouton devient
-`Préparer et rejoindre` dès qu'une couche est écartée. La liste est écrite dans
-`online_layers.json` **avant** la moindre désactivation ; la fin du jeu (le
-sondage du process qui sert déjà la musique) réactive les couches et le dit
-dans une notification, et l'annonce de départ de ce même sondage fait le
-rattrapage au démarrage suivant si Pit Box a été fermé entre-temps. **Et si CM
-ne lance aucun jeu** (il refuse le lien, l'utilisateur le ferme), un délai de
-garde de deux minutes après le join rend les couches quand aucun jeu ne tourne
-à son échéance ; un join plus récent l'annule. Le délai vient des journaux de
-CM : du démarrage de CM à `acs.exe`, 1,3 à 4,1 s sur trois joins réels
-(2026-10-06). Les couches passent par l'interrupteur ordinaire
-(`compose::set_layer_active`) ; seules celles de la voiture et du circuit
-rejoints sont acceptées.
-
-**Lot 7b — récupérer le contenu manquant (livré).** Pour le circuit et chaque
-voiture d'un serveur, le panneau cherche une source, dans l'ordre de la table
-ci-dessus : l'**archive gardée à l'import** d'un mod en vitrine ; le **lien du
-serveur** — le bloc `content` de `/api/details`, au format du wrapper de CM :
-une `url` par voiture et pour le circuit, ou, sans clé `url`, le fichier servi
-par le serveur lui-même (`/content/car/<id>`, `/content/track`) ; une `url`
-vide ne vaut rien (mesuré : 404), `direct: false` non plus, et `cup: true`
-renvoie au registre — ; enfin le **registre CUP**, quand il liste l'id sans le
-réserver aux humains (`limited`). Une source change « À télécharger » en
-`1 clic` ; une version installée plus ancienne que celle que le serveur déclare
-aussi, quand une source permet la mise à jour — les deux versions s'affichent
-côte à côte, en orange quand elles diffèrent. `Préparer et rejoindre` récupère
-d'abord, une source après l'autre, par les chemins existants : l'archive
-gardée comme la récupération d'un mod en vitrine, un lien ou le registre comme
-une mise à jour de mod (même progression, même annulation, puis l'import
-ordinaire : le contenu arrive **géré**, jamais posé tel quel dans `content/`).
-Toute la préparation se suit dans **une seule notification**, « Préparation
-pour rejoindre {serveur} » : comme un import en masse, le mod en cours dans la
-barre principale (téléchargement, puis installation), et sous elle le décompte
-« 3 / 12 » et la barre du tout ; « Arrêter » coupe le mod en cours et les
-suivants. Les notifications d'un seul mod (téléchargement, import, comptes
-rendus) s'effacent pendant ce temps ; les comptes rendus reviennent à la fin.
-Une page au lieu d'une archive s'ouvre dans le navigateur, le panneau le dit,
-et l'archive glissée ensuite sur Pit Box fait relire le serveur. Mesuré le
-2026-10-03 : 151 serveurs sur 254 interrogés publient des liens, souvent
-directs (`.rar` d'une communauté, publications GitHub, Google Drive).
-Le contenu servi par un serveur protégé par mot de passe n'est pas proposé :
-il exige un hachage du mot de passe que Pit Box ne calcule pas encore — la
-recette est connue depuis (`online-join-research.md`, « Empreinte du mot de
-passe »).
-
-**Lot 8 — les tokens de filtre (livré).** La barre est celle de la
-bibliothèque, puces et popovers compris (`FilterBar`) : la recherche, `+ Filtre`
-et les puces, avec `Circuit`, `Voiture` et `Catégorie de circuit` épinglés en
-fantômes. Sept tokens : **circuit** (le layout, sous son nom ici, et le nombre
-de serveurs qui le font tourner), **voiture** (`ET` / `OU` entre deux),
-**catégorie de circuit** (d'abord celles de la bibliothèque seule ; ses autres
-sources et la règle de l'inconnu sont venues ensuite, voir « Catégorie des
-circuits hors bibliothèque »), **contenu** (`Kunos` : circuit et toutes les voitures officiels,
-DLC compris, possédés ou non ; `Mods` : au moins un mod), **ping** (moins de
-60, 120 ou 200 ms), **pays** (drapeau et nom dans la langue de l'utilisateur)
-et **session en cours**. Chaque valeur s'inclut ou s'exclut comme à la
-bibliothèque. Les tokens s'appliquent à tous les onglets, comme la recherche :
-ce sont des critères posés, et la puce les montre partout. Un serveur dont le
-ping n'est pas mesuré n'est pas « proche » : poser un token de ping fait
-mesurer les serveurs qui passent tous les autres filtres, le haut de la liste
-d'abord, par lots de 64, et ils apparaissent à mesure qu'ils répondent (« Mesure
-du ping · N serveurs restants ») ; un serveur qui ne répond pas reste écarté.
-Les tokens et les épingles sont mémorisés ; la recherche ne l'est toujours
-pas. Le pays d'un serveur est un **drapeau** : seul sur la ligne,
-son nom en infobulle ; suivi du nom dans le panneau. Un code que le jeu ne
-connaît pas reste écrit tel quel.
-
-**Lot 9 — les puces oui/non et le tableau (livré).** Les quatre cases
-« Pas plein », « Sans mot de passe », « Pas vide » et « Joignable » sont des
-puces de la barre, épinglées, à trois états ; « Pas plein » est posée d'usine,
-« Sans mot de passe » ne l'est plus. Elles ne s'offrent que sur `Tous` : un
-serveur à soi reste listé plein, verrouillé ou vide. Un état enregistré par les
-anciennes cases se relit comme les puces équivalentes, et les quatre rejoignent
-les épingles.
-
-La liste est un **tableau**, celui de la bibliothèque (SPEC §7.4,
-`components/ui/DataTable.svelte`) : colonnes choisies, déplacées par
-glisser-déposer d'en-tête, redimensionnées, mémorisées côté Rust
-(`library_columns.json`, clé `online`). Colonnes : **Circuit** (fixe, ni
-masquable ni déplaçable), Serveur, Session, Joueurs, Ping, Voitures, CSP, Pays,
-État ; IP:port et Mot de passe en option. Un clic d'en-tête trie croissant, un
-deuxième décroissant, un troisième rend l'ordre par défaut (amis, joignables,
-joueurs) ; ce qui n'a pas de valeur (ping non mesuré, pas de CSP) va toujours en
-dernier. Le tableau est virtuel : seules les lignes visibles sont dessinées.
-
-Sous le nom du circuit, le **nom lisible du layout** (« Main Layout », la
-répétition du nom du circuit ôtée), l'identifiant en infobulle. L'**état** reste
-discret quand tout est prêt ; la couleur va à `1 clic` (bleu), `À télécharger`
-(orange) et `Bloqué` (jaune). La **session** dit le temps restant, et
-« Ouvert » pour des essais de plus de 3 h — la frise du panneau aussi
-(`sessions.ts`, `isOpenPractice`). « Réservation » ne s'écrit qu'une
-fois. Les voitures tronquées gardent leur `+N` en vue, la liste entière au
-survol.
-
-**Regrouper par circuit** est dans le menu d'affichage (le chevron à côté des
-colonnes), sur `Tous`, mémorisé, éteint d'usine. La ligne d'un groupe est une
-ligne du tableau, une cellule par colonne visible : Circuit (vignette et nom),
-Serveur (le nombre de serveurs, et les amis présents), Joueurs (total / places) ;
-les autres cellules restent vides. Les groupes viennent par total de joueurs,
-le plus fréquenté en tête — le nombre de serveurs ne dit pas ce qui est joué.
-Une colonne peut déclarer un **agrégat** (Circuit, Serveur, Joueurs) : trier
-sur elle ordonne les groupes par l'agrégat et les serveurs de chaque groupe par
-leur valeur ; trier sur une autre n'ordonne que les serveurs. Un clic déplie un
-groupe, ses serveurs dessous, un filet à gauche et la cellule Circuit réduite au
-layout. Un layout tenu par un seul serveur garde sa ligne ordinaire, rangée
-comme un groupe d'un.
-
-**v2 — « Online : N serveurs » sur la fiche d'un circuit (livré).** La
-liste du lobby est **une seule**, sur deux étages. En bas, côté Rust
-(`online/lobby_cache.rs`), la liste brute, téléchargée une fois et gardée trois
-minutes pour tous ses lecteurs ; deux demandes en même temps n'en font qu'une,
-et « Actualiser » passe outre. Au-dessus, la page Online la juge contre la
-bibliothèque (`judge_list` : disque et verrou SQLite) et garde ce jugement
-(`online/lobby.svelte.ts`) trois minutes aussi — moins si la bibliothèque
-change entre-temps (un import, une activation, du contenu récupéré pour
-rejoindre) : elle juge alors à nouveau, **sans retélécharger**. La fiche d'un
-circuit, elle, ne juge rien : une commande légère (`online_track_activity`)
-compte sur la liste brute, sans disque ni base. Elle s'affiche sans
-l'attendre et, quand le décompte est là, ajoute en bas de sa colonne de droite
-une carte **Online** comme ses voisines (le nombre de joueurs en complément du
-bandeau, le nombre de serveurs et « Voir les serveurs ») — compté sur les
-seuls serveurs qui ont au moins un joueur, tous layouts du circuit confondus,
-sans une requête aux serveurs eux-mêmes. Un clic ouvre Online sur `Tous` avec le jeton
-Circuit posé sur ces layouts. Lobby injoignable ou personne en piste : rien ne
-s'affiche, pas d'erreur.
-
-**v2 — prévenir : ami connecté, place libérée (livré).** Une surveillance
-démarrée avec la coquille (`online/watch.svelte.ts`), qui tourne quel que soit
-l'écran ouvert. Elle **ne regarde que ce que l'utilisateur a désigné**, jamais
-les 9 000 serveurs — ce serait abusif pour eux, et certains routeurs bloquent
-une machine qui contacte des milliers d'adresses :
-
-- **amis** : le `/JSON` des seuls serveurs en favoris et en récents, une requête
-  chacun toutes les 2 minutes. Le premier tour, 15 s après le démarrage, ne fait
-  que relever qui est déjà là : un ami en ligne au lancement de Pit Box ne vient
-  pas de se connecter. Un serveur qui ne répond pas à un tour garde ce qu'il
-  disait au précédent : rien n'est annoncé sur lui tant qu'il n'a pas répondu
-  deux fois, sans quoi chaque raté de réseau ramènerait ses amis comme
-  « en ligne ». Un ami sur un serveur inconnu n'est pas vu : limite assumée ;
+- **amis** : le `/JSON` des seuls serveurs en favoris et en récents, toutes les
+  2 minutes. Le premier tour, 15 s après le démarrage, ne fait que relever qui
+  est là. Un serveur qui ne répond pas garde ce qu'il disait : rien n'est
+  annoncé sur lui tant qu'il n'a pas répondu deux fois. Un ami sur un serveur
+  inconnu n'est pas vu ;
 - **place libre** : seulement sur le serveur où l'utilisateur a cliqué « Me
-  prévenir » — proposé dans le panneau quand le serveur est plein ou que la
-  voiture choisie n'a plus de place : une voiture complète reste grisée mais
-  se choisit, pour attendre l'une de ses places, et le bouton dit alors
-  « Voiture complète » —, toutes les 30 s, par le seul `/JSON`
-  (`online_slot_counts`). La place attendue est celle de la voiture choisie
-  quand c'est elle qui manque de place, sinon n'importe laquelle. La
-  surveillance s'arrête quand la place se libère, au bout d'une heure, ou au
-  lancement du jeu ; un serveur à la fois. Elle ne vit que le temps de la
-  fenêtre : fermer Pit Box l'arrête, et c'est voulu — c'est une attente du
-  moment, pas un réglage (décidé le 2026-10-06).
+  prévenir » (proposé quand le serveur est plein ou la voiture choisie
+  complète), toutes les 30 s, par le seul `/JSON`. La place attendue est celle
+  de la voiture choisie quand c'est elle qui manque de place, sinon n'importe
+  laquelle. Elle s'arrête quand la place se libère, au bout d'une heure, ou au
+  lancement du jeu ; un serveur à la fois ; fermer Pit Box l'arrête.
 
-Elle se met en pause pendant une session (`ac://running`) et repart de zéro
-après : ce qu'elle savait avant ne dit rien de qui est arrivé pendant. Une
-alerte entre dans la pile de notifications de l'app, avec « Ouvrir », qui mène
-au panneau du serveur sur la page Online ; quand la fenêtre n'a pas le focus,
-**Windows la montre aussi** (`tauri-plugin-notification`), et la pile la garde
-pour le retour. Réglages › Général la coupe entière, « Me prévenir » compris.
-
-**Le panneau est toujours là**, pour que la liste ne change pas de largeur
-quand on ouvre et ferme des serveurs. Tant que l'utilisateur n'en a pas choisi,
-il s'ouvre sur le dernier serveur rejoint, sinon sur le premier de la liste ;
-venu d'une fiche circuit, sur le premier serveur de ce circuit. Fermé, ou sans
-rien à montrer, sa place dit « Sélectionnez un serveur ».
-
-**Le mot de passe vérifié avant le lancement (livré).** Sur un serveur
-verrouillé qui publie `passwordChecksum` dans `/api/details`, « Rejoindre »
-vérifie le mot de passe saisi **avant** de rien télécharger ni lancer :
-faux, le panneau le dit (« Mot de passe incorrect ») au lieu de laisser le jeu
-charger 40 s pour se faire refuser. La recette est celle du wrapper de CM,
-`sha1("apatosaur" + nom + mot de passe)`, le nom étant celui des détails (sans
-le `ℹport` du lobby) ; le serveur publie celle du mot de passe joueur et celle
-du mot de passe admin, et l'un ou l'autre ouvre. Mesuré le 2026-10-03 : 837
-serveurs verrouillés la publient, tous par le wrapper ; sur 255 d'entre eux,
-l'empreinte d'un mot de passe admin vide retombe exactement sur la recette,
-ce qui la confirme. Un mot de passe vide n'est jamais accepté — sans quoi
-l'empreinte d'un admin sans mot de passe le laisserait passer. Un serveur qui
-ne la publie pas (un AssettoServer, un serveur Kunos nu) reste vérifié par le
-jeu lui-même, comme avant.
-
-**Les serveurs qui exigent leur lanceur.** Un serveur officiel No Hesi refuse
-(`ACP_AUTH_FAILED`, « handshake failed » à l'écran de chargement) le joueur
-qui n'est pas passé par le lanceur No Hesi — le Join de Content Manager tout
-autant (constaté le 2026-10-04). Le panneau le dit au-dessus du bouton, avec
-un lien vers ce lanceur, sans bloquer : un joueur inscrit chez eux passe
-peut-être. Ces serveurs se reconnaissent au lien vers `nohesi.gg` dans leur
-description — exactement les 31 serveurs officiels du lobby ; pas à leur nom
-(« No Hesi » est aussi un style de jeu, sur des serveurs ouverts à tous) ni à
-leurs voitures (`nohesi_*` roulent sur des centaines d'autres serveurs).
-
-**Partager un serveur.** Le bouton `⧉` de l'en-tête du panneau copie le lien
-de partage de Content Manager (`https://acstuff.club/s/q:race/online/join?ip=…&httpPort=…`) :
-un ami l'ouvre avec CM depuis un navigateur ou une messagerie, ou le colle
-dans Pit Box. Sans mot de passe : celui de CM est chiffré et ne s'écrit pas
-ici ; il se donne à part.
-
-**Catégorie des circuits hors bibliothèque (livré, 2026-10-14).** La
-bibliothèque ne connaît qu'une petite partie des circuits du lobby (1 726 ids
-le 2026-10-11). La catégorie d'un serveur se résout donc dans cet ordre, la
-première source qui répond donnant celle du circuit :
-
-1. **ton choix**, fait dans le panneau : « Catégorie : inconnue · Choisir »
-   ouvre la liste fermée des catégories de circuit (l'allowlist des règles),
-   chacune se coche ou se décoche et s'enregistre aussitôt. Le choix est
-   rangé dans `overlay.sqlite` par id de circuit : il survit à l'installation
-   du circuit et passe avant ce qu'elle apportera. Tout décocher l'oublie.
-   « Modifier » remplace « Choisir » une fois un choix fait ; le choix reste
-   offert sur un circuit connu, pour corriger une source qui se trompe ;
-2. **la bibliothèque**, quand elle a le circuit avec au moins une catégorie (un
-   circuit qu'elle a sans catégorie ne dit rien : on passe à la suite) ;
-3. **le catalogue Pit Box** : la table `track_categories` de
-   `taxonomy-catalog.json` (id de circuit → catégories), avec sa surcouche
-   (REGLES§2), promouvable par `rules-tool` comme le reste du catalogue.
-
-Puis **les mots du serveur**, marqués « ≈ » : un mot-clé du **nom** du serveur,
-de sa **description** (ses détails étendus, donc dans le panneau seulement — la
-liste ne les a pas) ou de l'**id du circuit** annonce une catégorie, qui
-**s'ajoute** à celles du circuit. Table `server_keywords` du même catalogue,
-même surcouche ; au départ `drift` → Drift, `touge` → Touge, `traffic`,
-`cruise`, `freeroam` → Freeroam. Mots entiers, sans casse ni accents (un id
-`ek_akina_drift` en compte trois) ; un mot-clé précédé de « no » est ignoré
-(« No drift » n'annonce pas du drift). L'infobulle dit la catégorie, la source
-et le mot (« ≈ #drift, d'après le nom du serveur (« drift ») »).
-
-Les valeurs s'écrivent comme à la bibliothèque (`#drift`). Les choix voyagent
-avec l'export de la bibliothèque (`online_track_categories`, remplacée à
-l'import). Pour remplir le catalogue, `npm run online:tracks` (outil de
-développement, jamais livré) lit la dernière liste du lobby gardée sur disque
-et classe les ids de circuit par joueurs : serveurs, serveurs occupés, joueurs,
-et la couverture cumulée. Mesuré le 2026-10-11 (8 996 serveurs, 876 occupés,
-3 763 joueurs) : les **30** premiers ids couvrent 67 % des joueurs et 52 % des
-serveurs occupés, les **50** premiers 75 % et 60 %.
-
-**Vignette d'un circuit non installé (livré, 2026-10-15).** Dans la liste et
-dans la bannière du panneau, l'image d'un circuit se résout dans cet ordre, la
-première source qui répond l'emporte :
-
-1. **la bibliothèque** : circuit installé ou en vitrine, comme avant ;
-2. ~~l'image fournie par le serveur ou par CUP~~ — **écartée, mesurée** : une
-   fiche CUP de circuit ne porte aucune image (version, journal, auteur, lien),
-   et CUP ne connaît que 120 circuits dont aucun des dix premiers du lobby ;
-   le `loadingImageUrl` des détails étendus d'un serveur existe (141 serveurs
-   sur 236 sondés le 2026-10-15), mais c'est l'affiche de la communauté qui
-   tient le serveur — 53 images seulement, dont 11 sur plusieurs circuits
-   (la même image No Hesi sur Shutoko et sur `nohesi_110`) ;
-3. **Wikimedia Commons**, par l'appariement Wikipédia des circuits : le lien
-   livré de l'id du circuit (`wiki-links.json`), sinon un appariement par les
-   coordonnées et le nom que la table de CSP (`data_track_params.ini`, 445
-   circuits) donne à cet id. L'image de l'élément Wikidata (`P18`) n'est
-   gardée que si son auteur et sa licence sont connus. Le crédit (« Photo :
-   auteur · licence · Wikimedia Commons ») est en infobulle sur la vignette de
-   la ligne et en clair sous la bannière, un clic menant à la page du fichier.
-   Le réglage Wikipédia `wiki_online` décide : coupé, aucune requête, seul le
-   cache sert ;
-4. **une vignette dessinée** : le pictogramme de la catégorie du circuit
-   (TAXO§3.3 — la sienne, sinon celle que son id annonce, `ek_myogi-freeroam`)
-   et le drapeau de son pays (`P17` de Wikidata, quand l'élément est connu —
-   jamais le pays du serveur), sur le fond neutre des cartes. **Jamais
-   l'image d'un autre circuit.**
-
-Le **nom** d'un circuit non installé suit le même esprit : celui que donne la
-table de CSP (ou sa copie dans Content Manager) — `Imola`, `Mt. Akina` —
-plutôt que son dossier, qui reste le repli ; le nom de la bibliothèque passe
-toujours avant. La puce Circuit le nomme de même, suivi du dossier de son
-layout quand il en a un à lui (`EK Myogi Touge - freeroam`).
-
-Les images sont demandées une à une — celle du serveur ouvert d'abord, puis
-celles des lignes visibles —, gardées dans le cache des miniatures avec leur
-crédit ; un circuit sans image est redemandé après trente jours. Mesuré : les
-routes (Akagi, Myogi, Akina) n'ont pas d'image, l'appariement automatique ne
-retenant que les circuits (WIKI§1) ; Monza, Salzburgring et Shutoko en ont
-une. Interdits : embarquer des `preview.png` de mods, chercher des images sur
-les sites de mods.
-
-**Restent** (2026-10-06) — la spec, v1 et v2, est faite ; ce qui suit est soit
-à voir à l'écran, soit écarté, soit une limite connue :
-
-- *À voir à l'écran* : le panneau relu quand on redemande le serveur déjà
-  ouvert — vu par un lien collé (2026-10-06 : 15 puis 17 joueurs) ; restent
-  « Ouvrir » sur la notification d'une place libérée, « Actualiser » après le
-  retour de Steam (rechargé de zéro s'il était resté sur une erreur) ; la
-  notification unique de « Préparer et rejoindre » (décompte et barre du
-  tout) ; une couche écartée puis rendue en jeu (la couche « spa » de la
-  machine de dev est le cas tout trouvé), ou rendue par le délai de garde
-  quand CM ne lance rien ; le niveau « Bloqué » — impossible à provoquer sur
-  la machine de dev, qui a tous les DLC et un CSP plus récent que tout le
-  lobby ; un mot de passe **juste** accepté (un faux est bien refusé avant
-  tout lancement) ; une notification d'ami ; les notifications **Windows**
-  (celle d'une place libérée est vue dans la pile de l'app) ; le bandeau de
-  la liste de secours (il faut que le lobby tombe).
-- *Écarté* (2026-10-06) : donner à la liste les niveaux fins du panneau — un
-  manquant qui a un lien (« 1 clic » plutôt que « À télécharger »), une
-  version plus ancienne que celle du serveur. Il faudrait interroger
-  `/api/details` de chaque serveur : beaucoup de réseau, abusif envers les
-  serveurs, et ce que la liste dit aujourd'hui suffit — le panneau dit le
-  reste au moment de choisir. **Ne pas y revenir.**
-- *Écarté* (2026-10-05) : proposer le contenu d'un serveur verrouillé avec la
-  clé `EncryptedContentKey` de CM (`sha1("tgys3cqpcwpbssphb0j46tak8ykldaub" +
-  mot de passe)` en base64 coupé). La clé ne protège que les fichiers que le
-  serveur héberge lui-même (`/content/…`) ; les liens d'auteur restent en
-  clair et sont déjà proposés. Mesuré sur le vrai lobby : sur 1 764 serveurs
-  verrouillés, 1 399 répondent à `/api/details`, 65 déclarent
-  `"password": true`, et **aucun** n'héberge un fichier lui-même. À reprendre
-  le jour où l'un d'eux le fait — avec lui pour vérifier le format de la
-  requête, qu'aucun serveur ne permet d'essayer aujourd'hui.
-- *Limites connues* : le clic sur une notification Windows n'ouvre pas le
-  serveur (c'est celle de la pile qui y mène ; accepté tel quel le
-  2026-10-06) ; un serveur qui renvoie une liste de places vide le temps d'une
-  requête fait afficher toutes ses voitures à « 0 / 0 » dans le panneau
-  jusqu'à la relecture suivante (vu le 2026-10-06 sur un serveur No Hesi) ;
-  BSG et LA Canyons refusaient aussi l'authentification — peut-être une
-  communauté à lanceur comme No Hesi, à vérifier dans
-  `Documents/Assetto Corsa/logs/log.txt` (une ligne `ACP_…`) le jour où l'un
-  d'eux se retrouve.
+Elle se met en pause pendant une session et repart de zéro après. Une alerte
+entre dans la pile de notifications, avec « Ouvrir », qui mène au panneau du
+serveur ; quand la fenêtre n'a pas le focus, **Windows la montre aussi** — le clic sur la notification Windows n'ouvre pas
+le serveur, c'est celle de la pile qui y mène.
+Réglages › Général coupe toute la surveillance, « Me prévenir » compris.

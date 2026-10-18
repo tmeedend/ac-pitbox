@@ -124,9 +124,8 @@ de reprendre. En cas d'écart, la spec fait foi.
       puis le tableau, les puces oui/non, le regroupement par circuit, la
       carte Online de la fiche circuit, les notifications et « Me
       prévenir », le mot de passe vérifié, la liste de secours. **Ce qui
-      reste est listé à la fin de la section Lots de `SPEC-play-online.md`
-      (« Restent ») : des vérifications à l'écran et des limites
-      connues.**
+      reste** : des vérifications à l'écran et des limites connues, listées
+      plus bas (« Pas vu à l'écran »).
       - **Vu à l'écran** : le tableau Online, colonnes, tri et regroupement
         (2026-10-03) ; la carte Online de la fiche circuit, « Préparer et
         rejoindre » qui télécharge et importe pour de vrai, la recherche
@@ -139,8 +138,8 @@ de reprendre. En cas d'écart, la spec fait foi.
         (2026-10-06)** : c'est une attente du moment, pas un réglage. Une
         version persistée dans `online.json` a été faite puis annulée (revert
         de `9fdae29`) — ne pas la refaire.
-      - **Niveaux fins dans la liste : écarté (2026-10-06)**, voir « Restent »
-        de la spec. Ne pas interroger les serveurs un par un pour la liste.
+      - **Niveaux fins dans la liste : écarté (2026-10-06)**, voir « Écarté » de
+        `online-join-research.md`. Ne pas interroger les serveurs un par un pour la liste.
       - **Défaut corrigé (2026-10-05), vu à l'écran le 2026-10-06** : rouvrir le
         serveur déjà ouvert (« Ouvrir » sur une notification, lien collé, clic
         sur sa ligne) ou « Actualiser » ne relisait pas le panneau — « 0
@@ -154,7 +153,7 @@ de reprendre. En cas d'écart, la spec fait foi.
         réservation, `pass: true` pour le mot de passe, puis le lien CM collé
         dans la page. Les places d'une voiture : `/JSON|<SteamID64>` du
         serveur.
-      - **Pas vu à l'écran** — la même liste que « Restent » dans la spec :
+      - **Pas vu à l'écran** :
         la notification unique de « Préparer et rejoindre », refaite après
         l'essai ; une couche écartée puis rendue en jeu ; le niveau « Bloqué »
         (jaune dans le panneau aussi depuis le 2026-10-04 ; impossible à
@@ -162,6 +161,13 @@ de reprendre. En cas d'écart, la spec fait foi.
         récent du lobby) ; un mot de passe juste accepté ; la notification
         d'ami ; les notifications Windows ; le bandeau de la liste de secours
         (il faut que le lobby tombe) — tests et types seulement.
+        Restent aussi « Ouvrir » sur la notification d'une place libérée et
+        « Actualiser » après le retour de Steam. **Limites connues** : un
+        serveur qui renvoie une liste de places vide le temps d'une requête
+        affiche toutes ses voitures à « 0 / 0 » jusqu'à la relecture suivante
+        (vu sur un serveur No Hesi) ; BSG et LA Canyons refusaient aussi
+        l'authentification — peut-être une communauté à lanceur, à vérifier
+        dans `Documents/Assetto Corsa/logs/log.txt` (une ligne `ACP_…`).
         Le clic sur une notification **Windows** n'ouvre pas le serveur : le
         plugin n'expose pas de clic sur bureau (sa doc le réserve au mobile,
         pas vérifié sur Windows) ; c'est la notification de la pile, gardée
@@ -169,7 +175,7 @@ de reprendre. En cas d'écart, la spec fait foi.
       - **Contenu d'un serveur verrouillé : écarté (2026-10-05).** 0 serveur
         sur 65 qui déclarent leur contenu protégé n'héberge un fichier
         lui-même ; la mesure et ce qu'il faudrait pour le reprendre sont dans
-        « Restent » de la spec.
+        « Écarté » de `online-join-research.md`.
       - **Tokens (lot 8)** : la barre est le `FilterBar` de la bibliothèque,
         alimenté par `online/tokens.ts` ; le test d'une valeur
         (`valTest`) est partagé avec la bibliothèque, pour qu'un token veuille
@@ -208,7 +214,8 @@ de reprendre. En cas d'écart, la spec fait foi.
         dessinée ; **reste à voir à l'écran** une image Commons et son crédit
         sous la bannière. Le nom d'un circuit non installé vient désormais
         de la table de CSP (`NAME=`), son dossier en repli.
-      Ce qui est fait et ce qui reste : `SPEC-play-online.md`, section Lots.
+      Ce que fait la page : `SPEC-play-online.md` ; ses relevés et pistes
+      écartées : `online-join-research.md`.
       **Pièges déjà payés** (`online-join-research.md`), à relire avant de
       toucher au lancement :
       - `race/online/join` ne prend pas la voiture ; `race/online` si.
