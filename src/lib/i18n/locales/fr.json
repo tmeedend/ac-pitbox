@@ -1801,7 +1801,7 @@
   },
   "driver": {
     "title": "Pilote",
-    "subtitle": "Le corps du pilote et sa tenue — casque, combinaison, gants. Le choix est global : il vous suit d'une voiture à l'autre.",
+    "subtitle": "Le corps du pilote et sa tenue — casque, combinaison, gants — pour cette voiture.",
     "discarded": "{count} fichiers .kn5 de content/driver sont inutilisables (illisibles ou sans squelette) et ne sont pas montrés ici.",
     "search": "Recherche",
     "searchPlaceholder": "Nom de dossier, famille…",
