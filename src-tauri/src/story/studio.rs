@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use story_engine::load::{draft, read_dir, Draft, SourceFile};
-use story_engine::model::{Chapter, Characters, Manifest, Placement, Variables};
+use story_engine::model::{Chapter, Characters, Event, Manifest, Placement, Variables};
 use story_engine::refs::{self, NameKind, NameUsages};
 use story_engine::validate::{validate, Diagnostic, Severity};
 use story_engine::write;
@@ -205,8 +205,8 @@ pub struct ChapterFile {
     pub error: Option<String>,
 }
 
-/// A content item, as the flow screen needs it: something a message node can
-/// point to.
+/// A content item, as the flow and event screens need it: something a
+/// message node can point to, or a variant of a failure pool.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContentRef {
@@ -215,6 +215,35 @@ pub struct ContentRef {
     /// `flow`, `reactive` or `pool`: only flow content is sent by a node.
     pub placement: &'static str,
     pub has_replies: bool,
+    /// The pool a variant belongs to.
+    pub pool: Option<String>,
+    pub from: Option<String>,
+    /// Its conditions, as written.
+    pub when: Vec<String>,
+    /// The first line of its text, to recognise it.
+    pub first_line: Option<String>,
+}
+
+impl ContentRef {
+    fn of(c: &story_engine::model::ContentItem) -> Self {
+        let (placement, pool, when) = match &c.placement {
+            Placement::Flow => ("flow", None, &[][..]),
+            Placement::Reactive { when, .. } => ("reactive", None, &when[..]),
+            Placement::Pool { pool, when } => ("pool", Some(pool.clone()), &when[..]),
+        };
+        ContentRef {
+            id: c.id.clone(),
+            file: c.file.clone(),
+            placement,
+            has_replies: !c.replies.is_empty(),
+            pool,
+            from: c.from.clone(),
+            when: when.iter().map(ToString::to_string).collect(),
+            first_line: (c.body.lines().map(str::trim))
+                .find(|l| !l.is_empty())
+                .map(String::from),
+        }
+    }
 }
 
 /// One of the story-wide files the editor writes (`story.yaml`, `world/`),
@@ -239,9 +268,10 @@ pub struct OpenStory {
     pub variables: EditedFile<Variables>,
     pub chapters: Vec<ChapterFile>,
     pub content: Vec<ContentRef>,
-    pub events: Vec<String>,
+    /// One per file of `events/`, in file-name order.
+    pub events: Vec<EditedFile<Event>>,
     pub diagnostics: Vec<Diagnostic>,
-    /// Where each character, flag, counter and relation step is cited.
+    /// Where each character, flag, counter, relation step and event is cited.
     pub usages: Vec<NameUsages>,
     pub history: HistoryStatus,
 }
@@ -264,6 +294,10 @@ fn edited<T>(files: &[SourceFile], errors: &[LoadError], file: &str, value: Opti
 pub fn open(folder: &Path) -> Result<OpenStory, String> {
     let files = read_dir(folder).map_err(|e| e.to_string())?;
     let chapter_files: Vec<SourceFile> = files.iter().filter(|f| is_chapter_path(&f.path)).cloned().collect();
+    let event_files: Vec<String> = (files.iter())
+        .filter(|f| is_event_path(&f.path))
+        .map(|f| f.path.clone())
+        .collect();
     // Drafted once, then both shown and checked: the screen and its
     // diagnostics describe the same state of the folder, read once.
     let mut d = draft(files.clone());
@@ -285,18 +319,14 @@ pub fn open(folder: &Path) -> Result<OpenStory, String> {
             }
         })
         .collect();
-    let content = (d.content.iter())
-        .map(|c| ContentRef {
-            id: c.id.clone(),
-            file: c.file.clone(),
-            placement: match c.placement {
-                Placement::Flow => "flow",
-                Placement::Reactive { .. } => "reactive",
-                Placement::Pool { .. } => "pool",
-            },
-            has_replies: !c.replies.is_empty(),
+    let content = d.content.iter().map(ContentRef::of).collect();
+    let mut events: Vec<EditedFile<Event>> = (event_files.iter())
+        .map(|file| {
+            let event = d.events.iter().find(|e| &e.file == file).cloned();
+            edited(&files, &d.errors, file, event)
         })
         .collect();
+    events.sort_by(|a, b| a.file.cmp(&b.file));
     Ok(OpenStory {
         path: folder.to_path_buf(),
         manifest,
@@ -304,7 +334,7 @@ pub fn open(folder: &Path) -> Result<OpenStory, String> {
         variables,
         chapters,
         content,
-        events: d.events.iter().map(|e| e.id.clone()).collect(),
+        events,
         diagnostics,
         usages,
         history: history::with(folder, |h| h.status()),
@@ -319,7 +349,7 @@ const VARIABLES: &str = "world/variables.yaml";
 #[derive(Debug, Serialize)]
 pub struct Checked {
     pub diagnostics: Vec<Diagnostic>,
-    /// Where each character, flag, counter and relation step is cited.
+    /// Where each character, flag, counter, relation step and event is cited.
     pub usages: Vec<NameUsages>,
     pub history: HistoryStatus,
 }
@@ -366,11 +396,21 @@ fn load_error(e: story_engine::LoadError) -> Diagnostic {
 }
 
 /// `flow/<name>.yaml`, directly in `flow/`. With `story.yaml` and the two
-/// world files, the only files the editor writes: anything else - a path
-/// climbing out of the story, another folder - is refused, whatever the
-/// frontend sends.
+/// world files and the events, the only files the editor writes: anything
+/// else - a path climbing out of the story, another folder - is refused,
+/// whatever the frontend sends.
 fn is_chapter_path(path: &str) -> bool {
-    path.strip_prefix("flow/").is_some_and(|name| {
+    is_yaml_in("flow/", path)
+}
+
+/// `events/<name>.yaml`, directly in `events/`, with the same care.
+fn is_event_path(path: &str) -> bool {
+    is_yaml_in("events/", path)
+}
+
+/// A `.yaml` file directly in `dir`, whose name cannot climb out of it.
+fn is_yaml_in(dir: &str, path: &str) -> bool {
+    path.strip_prefix(dir).is_some_and(|name| {
         name.ends_with(".yaml")
             && name.len() > ".yaml".len()
             && !name.contains(['/', '\\', ':'])
@@ -392,6 +432,7 @@ pub fn render(file: &str, value: serde_json::Value) -> Result<String, String> {
         CHARACTERS => write::characters(&from(value)?),
         VARIABLES => write::variables(&from(value)?),
         _ if is_chapter_path(file) => write::chapter(file, &from::<Chapter>(value)?),
+        _ if is_event_path(file) => write::event(file, &from::<Event>(value)?),
         _ => Err(format!("not a file the editor writes: {file}")),
     }
 }
@@ -405,21 +446,46 @@ pub fn save_file(
     expected: Option<&str>,
     value: serde_json::Value,
 ) -> Result<String, String> {
-    if !matches!(file, MANIFEST | CHARACTERS | VARIABLES) && !is_chapter_path(file) {
+    if !matches!(file, MANIFEST | CHARACTERS | VARIABLES) && !is_chapter_path(file) && !is_event_path(file) {
         return Err(format!("not a file the editor writes: {file}"));
     }
     write_guarded(folder, file, expected, || render(file, value))
 }
 
-/// Renames a character, flag, counter or relation step, and every sentence
-/// citing it, in every file of the story (`story_engine::refs`). Unlike a
-/// save it takes no stamp: it reads the files as they are now and changes
-/// only the cited words, so an edit made meanwhile in a text editor is kept,
-/// not overwritten. Nothing is written unless the whole story reads back.
+/// Deletes an event's file, only if it still holds what the editor read.
+/// What cited it is left as it is, for the checks to report. Recorded in the
+/// undo history, so Ctrl+Z brings it back.
+pub fn remove_file(folder: &Path, file: &str, expected: &str) -> Result<(), String> {
+    if !is_event_path(file) {
+        return Err(format!("not a file the editor removes: {file}"));
+    }
+    let path = folder.join(file);
+    let on_disk = std::fs::read_to_string(&path).ok();
+    if on_disk.as_deref().map(stamp).as_deref() != Some(expected) {
+        return Err(errors::STORY_FILE_CHANGED.into());
+    }
+    std::fs::remove_file(&path).map_err(|e| format!("removing {}: {e}", path.display()))?;
+    history::with(folder, |h| {
+        h.record(vec![FileChange {
+            file: file.into(),
+            before: on_disk,
+            after: None,
+        }])
+    });
+    Ok(())
+}
+
+/// Renames a character, flag, counter, relation step or event, and every
+/// sentence citing it, in every file of the story (`story_engine::refs`).
+/// Unlike a save it takes no stamp: it reads the files as they are now and
+/// changes only the cited words, so an edit made meanwhile in a text editor
+/// is kept, not overwritten. Nothing is written unless the whole story reads
+/// back. An event's file named after it moves to its new name.
 pub fn rename(folder: &Path, kind: NameKind, from: &str, to: &str) -> Result<(), String> {
     let files = read_dir(folder).map_err(|e| e.to_string())?;
+    let changes = refs::rename(&files, kind, from, to)?;
     let mut edit = Vec::new();
-    for file in refs::rename(&files, kind, from, to)? {
+    for file in changes.written {
         let path = folder.join(&file.path);
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
@@ -429,6 +495,17 @@ pub fn rename(folder: &Path, kind: NameKind, from: &str, to: &str) -> Result<(),
             before: files.iter().find(|f| f.path == file.path).map(|f| f.text.clone()),
             after: Some(file.text),
             file: file.path,
+        });
+    }
+    // Removed last: the moved file is already written under its new name.
+    for file in changes.removed {
+        let path = folder.join(&file);
+        let before = std::fs::read_to_string(&path).ok();
+        std::fs::remove_file(&path).map_err(|e| format!("removing {}: {e}", path.display()))?;
+        edit.push(FileChange {
+            file,
+            before,
+            after: None,
         });
     }
     // One edit, however many files: Ctrl+Z undoes the rename whole.
@@ -619,7 +696,8 @@ mod tests {
             "flow/.yaml",
             "flow/01.txt",
             "flow/..\\x.yaml",
-            "events/race.yaml",
+            "events/../story.yaml",
+            "events/sub/race.yaml",
             "world/../story.yaml",
             "world/economy.yaml",
         ] {
@@ -631,6 +709,90 @@ mod tests {
             assert!(!base.join(bad).exists(), "{bad} not written");
         }
         assert!(is_chapter_path("flow/02-chapter.yaml"));
+        assert!(is_event_path("events/race_01.yaml") && !is_chapter_path("events/race_01.yaml"));
+        assert!(
+            remove_file(&base, "flow/01-chapter.yaml", "").is_err(),
+            "only an event's file is removed"
+        );
+    }
+
+    // An event is created, edited and read back like a chapter; deleting it
+    // leaves the node citing it for the checks, and Ctrl+Z brings it back
+    // (SPEC-story-mode, Create Your Own).
+    #[test]
+    fn an_event_is_saved_removed_and_restored() {
+        let config = temp_dir("studio-config");
+        let base = temp_dir("studio-story");
+        let folder = base.join("s");
+        create(&config, &folder, "S", "en", "C").unwrap();
+        let file = "events/race_01.yaml";
+        let event = serde_json::json!({
+            "id": "race_01", "name": "Race 01", "type": "race",
+            "session": { "track": "some_track", "car": "some_car", "laps": 8 },
+            "success": ["position <= 3"],
+            "on_success": { "effects": [], "advance": null },
+            "on_failure": { "effects": [], "pool": null, "pick": 1 },
+            "entry_fee": null,
+        });
+        let stamp = save_file(&folder, file, None, event).expect("created");
+        let opened = open(&folder).unwrap();
+        let read = opened.events[0].value.as_ref().expect("reads");
+        assert_eq!((read.id.as_str(), read.session.laps), ("race_01", Some(8)));
+        assert_eq!(opened.events[0].stamp, stamp, "the stamp the save returned");
+
+        let (mut chapter, cstamp) = chapter_of(&folder, "flow/01-chapter.yaml");
+        chapter.nodes[0].kind = story_engine::model::NodeKind::Event {
+            event: "race_01".into(),
+            on_failure: None,
+        };
+        save_file(&folder, "flow/01-chapter.yaml", Some(&cstamp), json(&chapter)).unwrap();
+        assert!(check(&folder).diagnostics.is_empty(), "{:#?}", check(&folder));
+
+        assert_eq!(
+            remove_file(&folder, file, "0").unwrap_err(),
+            errors::STORY_FILE_CHANGED,
+            "never removed on an old stamp"
+        );
+        remove_file(&folder, file, &stamp).expect("removed");
+        assert!(!folder.join(file).exists());
+        assert!(
+            (check(&folder).diagnostics.iter()).any(|d| d.message.contains("unknown event `race_01`")),
+            "the node citing it is reported"
+        );
+        history::with(&folder, |h| h.undo(&folder)).unwrap();
+        assert!(folder.join(file).exists(), "Ctrl+Z brings it back");
+    }
+
+    // Renaming an event moves its file and follows its node; Ctrl+Z puts
+    // both back at once.
+    #[test]
+    fn renaming_an_event_moves_its_file_and_undoes_whole() {
+        let config = temp_dir("studio-config");
+        let base = temp_dir("studio-story");
+        let folder = base.join("s");
+        create(&config, &folder, "S", "en", "C").unwrap();
+        std::fs::create_dir_all(folder.join("events")).unwrap();
+        std::fs::write(
+            folder.join("events/race_01.yaml"),
+            "id: race_01\ntype: race\nsession: { track: t, car: c }\n",
+        )
+        .unwrap();
+        let (mut chapter, cstamp) = chapter_of(&folder, "flow/01-chapter.yaml");
+        chapter.nodes[0].kind = story_engine::model::NodeKind::Event {
+            event: "race_01".into(),
+            on_failure: None,
+        };
+        save_file(&folder, "flow/01-chapter.yaml", Some(&cstamp), json(&chapter)).unwrap();
+
+        rename(&folder, NameKind::Event, "race_01", "opener").expect("renamed");
+        assert!(!folder.join("events/race_01.yaml").exists(), "the old file is gone");
+        assert!(folder.join("events/opener.yaml").exists(), "under its new name");
+        assert!(check(&folder).diagnostics.is_empty(), "{:#?}", check(&folder));
+
+        history::with(&folder, |h| h.undo(&folder)).unwrap();
+        assert!(folder.join("events/race_01.yaml").exists(), "back under its old name");
+        assert!(!folder.join("events/opener.yaml").exists(), "the new one undone");
+        assert!(check(&folder).diagnostics.is_empty(), "the node follows back");
     }
 
     // story.yaml and the world files are saved like a chapter: canonical,

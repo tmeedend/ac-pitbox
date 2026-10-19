@@ -163,6 +163,7 @@ pub fn run() {
             commands::story::story_open,
             commands::story::story_check,
             commands::story::story_save_file,
+            commands::story::story_remove_file,
             commands::story::story_rename,
             commands::story::story_undo,
             commands::story::story_redo,

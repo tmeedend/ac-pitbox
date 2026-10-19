@@ -12,7 +12,7 @@ use std::fmt;
 
 use crate::expr::{Condition, ContentFact, Effect, EventFact, Literal, Var};
 use crate::load::Story;
-use crate::model::{NodeKind, Placement};
+use crate::model::{Event, EventType, NodeKind, Placement};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -410,6 +410,45 @@ impl Checker<'_> {
             if event.entry_fee.is_some() && !story.settings().money {
                 self.error(file, format!("{at}: an entry fee needs an economy (`settings.money`)"));
             }
+            self.session(file, &at, event);
+        }
+    }
+
+    /// What the launcher needs to start the session, and what only a race
+    /// has. Whether the car and the track are in the player's library is the
+    /// app's to tell, not the engine's: it does not know the library.
+    fn session(&mut self, file: &str, at: &str, event: &Event) {
+        let s = &event.session;
+        if s.track.is_none() {
+            self.error(file, format!("{at}: no track"));
+        }
+        if s.car.is_none() {
+            self.error(file, format!("{at}: no car"));
+        }
+        if s.layout.is_some() && s.track.is_none() {
+            self.error(file, format!("{at}: a layout without a track"));
+        }
+        let race_only = [
+            ("laps", s.laps.is_some()),
+            ("grid", s.grid.is_some()),
+            ("ai_level", s.ai_level.is_some()),
+            ("start", s.start.is_some()),
+        ];
+        if event.kind != EventType::Race {
+            for (key, set) in race_only {
+                if set {
+                    self.error(file, format!("{at}: `{key}` is for a race"));
+                }
+            }
+        }
+        if s.laps == Some(0) {
+            self.error(file, format!("{at}: a race of 0 laps"));
+        }
+        if s.grid == Some(0) {
+            self.error(file, format!("{at}: a grid of 0 cars"));
+        }
+        if s.ai_level.is_some_and(|l| l > 100) {
+            self.error(file, format!("{at}: `ai_level` goes from 0 to 100"));
         }
     }
 
@@ -731,5 +770,40 @@ type: race
         ] {
             assert!(has(&d, Severity::Error, needle), "{needle} in {d:#?}");
         }
+    }
+
+    // An event names its track and its car, and what only a race has
+    // (laps, grid, opponents' skill, start) is refused on another type
+    // (SPEC-story-mode, Events, retries and failure).
+    #[test]
+    fn an_event_session_is_checked() {
+        let flow = "id: ch01
+nodes:
+  - id: start
+    event: lap
+  - id: end
+    end: done
+";
+        let event = "id: lap
+type: hot_lap
+session: { layout: gp, laps: 5, ai_level: 120 }
+";
+        let d = diagnostics(&[("flow/01-one.yaml", flow), ("events/lap.yaml", event)]);
+        for expected in [
+            "event `lap`: no track",
+            "event `lap`: no car",
+            "event `lap`: a layout without a track",
+            "event `lap`: `laps` is for a race",
+            "event `lap`: `ai_level` is for a race",
+            "event `lap`: `ai_level` goes from 0 to 100",
+        ] {
+            assert!(has(&d, Severity::Error, expected), "{expected}: {d:#?}");
+        }
+        let fine = "id: lap
+type: race
+session: { track: t, car: c, laps: 5, grid: 10, ai_level: 90, start: first }
+";
+        let d = diagnostics(&[("flow/01-one.yaml", flow), ("events/lap.yaml", fine)]);
+        assert!(d.is_empty(), "a full race session is clean: {d:#?}");
     }
 }

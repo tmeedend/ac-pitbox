@@ -7,7 +7,9 @@
   import { confirm } from "@tauri-apps/plugin-dialog";
   import { t } from "$lib/i18n/index.svelte";
   import { allNodeIds, hasNext, isNodeId, kindOf, moveItem, parseLines, renameNode } from "$lib/story/flow";
-  import { saveChapterAt, studio } from "$lib/story/studioState.svelte";
+  import { eventIds, eventLabels, newEvent } from "$lib/story/events";
+  import { addEvent, saveChapterAt, selectEvent, studio } from "$lib/story/studioState.svelte";
+  import { nameFrom } from "$lib/story/world";
   import { KIND_LABEL } from "$lib/story/labels";
   import type { FlowNode } from "$lib/story/studio";
   import Field from "$lib/components/ui/Field.svelte";
@@ -26,6 +28,8 @@
   const nodeIds = $derived(allNodeIds(story.chapters.map((c) => c.chapter)).filter((id) => id !== node.id));
   const flowContent = $derived(story.content.filter((c) => c.placement === "flow").map((c) => c.id));
   const isStart = $derived(node.id === story.manifest.value?.start.node);
+  const events = $derived(eventIds(story.events));
+  const eventNames = $derived(eventLabels(story.events));
 
   let idError = $state<string | null>(null);
 
@@ -81,6 +85,16 @@
     if (lines.length) target.effects = lines;
     else delete target.effects;
     save();
+  }
+
+  /** A new event for this node, linked to it and shown in the Events
+   * section. Its name is numbered among the events the story has. */
+  async function createEvent(n: FlowNode) {
+    const name = t("story.events.newName", { n: events.length + 1 });
+    const event = newEvent(nameFrom(name, events, "event"), name);
+    n.event = event.id;
+    save();
+    await addEvent(event);
   }
 
   function addCase(n: FlowNode) {
@@ -167,12 +181,19 @@
     <Field label={t("story.studio.event")}>
       <TargetSelect
         value={node.event ?? ""}
-        options={story.events}
+        options={events}
+        labels={eventNames}
         onchange={(v) => {
           node.event = v;
           save();
         }}
       />
+      <div class="links">
+        {#if node.event && events.includes(node.event)}
+          <button class="btn btn-ghost" onclick={() => selectEvent(node.event!)}>{t("story.events.open")}</button>
+        {/if}
+        <button class="btn btn-ghost" onclick={() => createEvent(node)}>+ {t("story.events.create")}</button>
+      </div>
     </Field>
     <Field label={t("story.studio.onFailure")}>
       <TargetSelect
@@ -310,6 +331,11 @@
     gap: 8px;
     font-size: 12.5px;
     color: var(--txt2);
+  }
+  .links {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
   }
   .case {
     margin: 14px 0 10px;

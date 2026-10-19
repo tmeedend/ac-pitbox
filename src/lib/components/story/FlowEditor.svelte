@@ -7,6 +7,7 @@
   import { t } from "$lib/i18n/index.svelte";
   import { allNodeIds, freshNodeId, hasNext, insertNode, kindOf, linksOf, newNode, NODE_KINDS } from "$lib/story/flow";
   import type { NodeKind } from "$lib/story/flow";
+  import { eventIds, eventLabels } from "$lib/story/events";
   import type { FlowNode } from "$lib/story/studio";
   import { saveChapterAt, selectNode, studio } from "$lib/story/studioState.svelte";
   import { KIND_LABEL, LINK_LABEL } from "$lib/story/labels";
@@ -22,6 +23,7 @@
   const selected = $derived(selectedIndex >= 0 ? chapter!.nodes[selectedIndex] : null);
 
   /** Diagnostics by node, for the marks on the cards. */
+  const eventNames = $derived(eventLabels(story.events));
   const marks = $derived.by(() => {
     const out = new Map<string, "error" | "warning">();
     for (const d of studio.diagnostics) {
@@ -38,7 +40,7 @@
     const following = chapter.nodes[after === null ? chapter.nodes.length : after + 1]?.id;
     const node = newNode(kind, id, {
       content: story.content.find((c) => c.placement === "flow")?.id,
-      event: story.events[0],
+      event: eventIds(story.events)[0],
       following,
     });
     const [nodes] = insertNode(chapter.nodes, after, node);
@@ -64,7 +66,7 @@
       case "message":
         return node.message ?? "";
       case "event":
-        return node.event ?? "";
+        return node.event ? (eventNames[node.event] ?? node.event) : "";
       case "action":
         return node.action ?? "";
       case "side_events": {

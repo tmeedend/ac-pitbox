@@ -1,6 +1,6 @@
-//! The story's own names - characters, flags, counters, relation steps -
-//! where they are cited, and renaming them (SPEC-story-mode, Create Your
-//! Own: renaming a name renames every sentence that cites it).
+//! The story's own names - characters, flags, counters, relation steps,
+//! events - where they are cited, and renaming them (SPEC-story-mode, Create
+//! Your Own: renaming a name renames every sentence that cites it).
 //!
 //! Citations are found in the **text** of the files, not in the parsed story,
 //! for two reasons. A rename must change the cited word and nothing else in
@@ -10,10 +10,13 @@
 //! engine does not parse. The editor lists what a rename will change with the
 //! same scan, so the list and the rename can never disagree.
 //!
-//! The declarations themselves (`world/`, the scale in `story.yaml`) are
-//! edited as data and written back in canonical form, like any file the
-//! editor writes. File and folder names are left alone: `content/friend/` is
-//! the author's filing, not a citation.
+//! The declarations themselves (`world/`, the scale in `story.yaml`, an
+//! event's own file) are edited as data and written back in canonical form,
+//! like any file the editor writes. File and folder names are left alone:
+//! `content/friend/` is the author's filing, not a citation. The one
+//! exception is an event's file named after it (`events/<id>.yaml`): the
+//! file *is* the event, and keeping the old name would leave anyone reading
+//! the folder looking for it under the wrong one.
 
 use std::ops::Range;
 
@@ -31,6 +34,7 @@ pub enum NameKind {
     Counter,
     /// A step of the relation scale.
     Step,
+    Event,
 }
 
 /// A line citing a name.
@@ -92,6 +96,13 @@ fn citations(path: &str, text: &str, kind: NameKind, id: &str) -> Vec<Range<usiz
             }
         }
         NameKind::Step => steps(text, id, &mut out),
+        NameKind::Event => {
+            prefixed(text, "event.", id, &mut out);
+            if path.starts_with("flow/") {
+                keyed(text, "event", id, &mut out);
+                side_lists(text, id, &mut out);
+            }
+        }
     }
     out.sort_by_key(|r| r.start);
     out
@@ -143,6 +154,82 @@ fn steps(text: &str, step: &str, out: &mut Vec<Range<usize>>) {
         let end = start + id_len(bytes, start);
         if &text[start..end] == step {
             out.push(start..end);
+        }
+    }
+}
+
+/// Starts of `key:` that begin a YAML key: not inside a longer word
+/// (`side_events:`) or a path. Yields where the value after it starts.
+fn key_values<'a>(text: &'a str, key: &'a str) -> impl Iterator<Item = usize> + 'a {
+    let bytes = text.as_bytes();
+    variable_starts(text, key).filter_map(move |i| {
+        let colon = i + key.len();
+        (bytes.get(colon) == Some(&b':')).then_some(colon + 1)
+    })
+}
+
+/// `at`, past blanks and an opening quote.
+fn skip_blanks_and_quote(bytes: &[u8], mut at: usize) -> usize {
+    while bytes.get(at).is_some_and(|b| b" \t\"'".contains(b)) {
+        at += 1;
+    }
+    at
+}
+
+/// The id at `at`, past blanks and a quote, when it is `id`.
+fn id_at(text: &str, at: usize, id: &str, out: &mut Vec<Range<usize>>) -> usize {
+    let bytes = text.as_bytes();
+    let start = skip_blanks_and_quote(bytes, at);
+    let end = start + id_len(bytes, start);
+    if &text[start..end] == id {
+        out.push(start..end);
+    }
+    end
+}
+
+/// `<key>: <id>` in a chapter file: the event an Event node launches.
+fn keyed(text: &str, key: &str, id: &str, out: &mut Vec<Range<usize>>) {
+    for value in key_values(text, key) {
+        id_at(text, value, id, out);
+    }
+}
+
+/// The events a Side events node opens or closes, in either form an author
+/// writes a list: `open: [a, b]` on the line, or one `- a` per line below
+/// `open:`.
+fn side_lists(text: &str, id: &str, out: &mut Vec<Range<usize>>) {
+    let bytes = text.as_bytes();
+    let all = lines("", text);
+    let indent = |l: &Line| l.text.len() - l.text.trim_start().len();
+    for key in ["open", "close"] {
+        for value in key_values(text, key) {
+            let at = skip_blanks_and_quote(bytes, value);
+            if bytes.get(at) == Some(&b'[') {
+                let close = text[at..].find(']').map_or(text.len(), |n| at + n);
+                let mut item = at + 1;
+                while item < close {
+                    let end = id_at(text, item, id, out);
+                    item = text[end..close].find(',').map_or(close, |n| end + n + 1);
+                }
+                continue;
+            }
+            // A block list: the `- ` lines below, deeper than the key.
+            let Some(k) = all
+                .iter()
+                .position(|l| l.start <= value && value <= l.start + l.text.len())
+            else {
+                continue;
+            };
+            let depth = indent(&all[k]);
+            for line in all[k + 1..].iter().filter(|l| !l.text.trim().is_empty()) {
+                let Some(rest) = line.text.trim_start().strip_prefix('-') else {
+                    break;
+                };
+                if indent(line) <= depth {
+                    break;
+                }
+                id_at(text, line.start + line.text.len() - rest.len(), id, out);
+            }
         }
     }
 }
@@ -253,6 +340,7 @@ pub fn all_usages(files: &[SourceFile], d: &Draft) -> Vec<NameUsages> {
     if let Some(m) = &d.manifest {
         names.extend(m.settings.relations.scale.iter().map(|s| (NameKind::Step, s.clone())));
     }
+    names.extend(d.events.iter().map(|e| (NameKind::Event, e.id.clone())));
     names
         .into_iter()
         .map(|(kind, id)| {
@@ -265,22 +353,31 @@ pub fn all_usages(files: &[SourceFile], d: &Draft) -> Vec<NameUsages> {
         .collect()
 }
 
+/// What a rename does to the story's files; nothing is written here.
+#[derive(Debug, Default)]
+pub struct Changes {
+    /// The files that changed, with their new text, and the files added.
+    pub written: Vec<SourceFile>,
+    /// The files removed: an event's file, moved to its new name.
+    pub removed: Vec<String>,
+}
+
 /// Renames `from` to `to` in its declaration and in every sentence citing it.
-/// Returns the files that changed, with their new text; nothing is written
-/// here. Refused, with the reason, when `to` is not a name or already taken,
-/// when `from` is not declared, when its declaration file does not read, and
-/// when the result would make a file unreadable that read before.
-pub fn rename(files: &[SourceFile], kind: NameKind, from: &str, to: &str) -> Result<Vec<SourceFile>, String> {
+/// Refused, with the reason, when `to` is not a name or already taken, when
+/// `from` is not declared, when its declaration file does not read, and when
+/// the result would make a file unreadable that read before.
+pub fn rename(files: &[SourceFile], kind: NameKind, from: &str, to: &str) -> Result<Changes, String> {
     if !is_name(to) {
         return Err(format!(
             "`{to}` is not a valid name (a letter, then letters, digits and `_`)"
         ));
     }
     if from == to {
-        return Ok(Vec::new());
+        return Ok(Changes::default());
     }
     let before = draft(files.to_vec());
     let mut changed = rename_declaration(&before, kind, from, to)?;
+    let mut removed = Vec::new();
     for file in files.iter().filter(|f| cites(&f.path)) {
         let ranges = citations(&file.path, &file.text, kind, from);
         if ranges.is_empty() {
@@ -292,16 +389,57 @@ pub fn rename(files: &[SourceFile], kind: NameKind, from: &str, to: &str) -> Res
         }
         changed.push(SourceFile::new(&file.path, &text));
     }
+    if kind == NameKind::Event {
+        removed.extend(rename_event_file(&before, files, &mut changed, from, to)?);
+    }
     // Read back as a whole: a file that read before must still read.
     let mut after: Vec<SourceFile> = (files.iter())
-        .filter(|f| !changed.iter().any(|c| c.path == f.path))
+        .filter(|f| !changed.iter().any(|c| c.path == f.path) && !removed.contains(&f.path))
         .cloned()
         .collect();
     after.extend(changed.iter().cloned());
     if let Some(e) = (draft(after).errors.into_iter()).find(|e| !before.errors.iter().any(|b| b.file == e.file)) {
         return Err(format!("the rename would break {}: {}", e.file, e.message));
     }
-    Ok(changed)
+    Ok(Changes {
+        written: changed,
+        removed,
+    })
+}
+
+/// An event's own file, once its citations are renamed: its id changed,
+/// written back in canonical form, and moved to `events/<to>.yaml` when it
+/// was named after the old id. Returns the file it moved from, if it moved.
+fn rename_event_file(
+    before: &Draft,
+    files: &[SourceFile],
+    changed: &mut Vec<SourceFile>,
+    from: &str,
+    to: &str,
+) -> Result<Option<String>, String> {
+    let old = (before.events.iter().find(|e| e.id == from))
+        .map(|e| e.file.clone())
+        .ok_or_else(|| format!("`{from}` is not declared"))?;
+    let new = if old == format!("events/{from}.yaml") {
+        format!("events/{to}.yaml")
+    } else {
+        old.clone()
+    };
+    if new != old && files.iter().any(|f| f.path == new) {
+        return Err(format!("{new} already exists"));
+    }
+    // The text as the citations left it: an event may cite its own facts.
+    let text = match changed.iter().position(|f| f.path == old) {
+        Some(i) => changed.remove(i).text,
+        None => (files.iter().find(|f| f.path == old))
+            .map(|f| f.text.clone())
+            .unwrap_or_default(),
+    };
+    let mut event = (draft(vec![SourceFile::new(&old, &text)]).events.pop())
+        .ok_or_else(|| format!("{old} does not read, fix it first"))?;
+    event.id = to.into();
+    changed.push(SourceFile::new(&new, &write::event(&new, &event)?));
+    Ok((new != old).then_some(old))
 }
 
 /// The declaration files of `from`, renamed and written back in canonical
@@ -319,6 +457,15 @@ fn rename_declaration(before: &Draft, kind: NameKind, from: &str, to: &str) -> R
     };
     let mut changed = Vec::new();
     match kind {
+        // Its declaration is its own file, rewritten once its citations are
+        // (`rename_event_file`).
+        NameKind::Event => {
+            let has = |id: &str| before.events.iter().any(|e| e.id == id);
+            check(has(from), has(to))?;
+            if let Some(e) = before.events.iter().find(|e| e.id == from) {
+                readable(&e.file)?;
+            }
+        }
         NameKind::Character => {
             readable("world/characters.yaml")?;
             let mut c = before.characters.clone();
@@ -388,14 +535,21 @@ mod tests {
         read_dir(&Path::new(env!("CARGO_MANIFEST_DIR")).join("sample")).expect("the sample reads")
     }
 
-    /// `files` with the renamed ones replaced.
-    fn apply(files: &[SourceFile], changed: Vec<SourceFile>) -> Vec<SourceFile> {
+    /// `files` with the renamed ones replaced, and the moved ones removed.
+    fn apply(files: &[SourceFile], changes: Changes) -> Vec<SourceFile> {
         let mut out: Vec<SourceFile> = (files.iter())
-            .filter(|f| !changed.iter().any(|c| c.path == f.path))
+            .filter(|f| !changes.written.iter().any(|c| c.path == f.path) && !changes.removed.contains(&f.path))
             .cloned()
             .collect();
-        out.extend(changed);
+        out.extend(changes.written);
         out
+    }
+
+    fn written(files: Vec<SourceFile>) -> Changes {
+        Changes {
+            written: files,
+            removed: Vec::new(),
+        }
     }
 
     fn usages(files: &[SourceFile], kind: NameKind, id: &str) -> Vec<Usage> {
@@ -440,7 +594,7 @@ mod tests {
     fn renaming_a_counter_renames_every_sentence_citing_it() {
         let files = sample();
         let changed = rename(&files, NameKind::Counter, "garage_visits", "visits").expect("renamed");
-        let mut paths: Vec<_> = changed.iter().map(|f| f.path.as_str()).collect();
+        let mut paths: Vec<_> = changed.written.iter().map(|f| f.path.as_str()).collect();
         paths.sort();
         assert_eq!(
             paths,
@@ -534,15 +688,77 @@ mod tests {
             "a flag does not take a counter's name"
         );
         assert!(refused(NameKind::Counter, "ghost", "x").contains("not declared"));
-        let broken = apply(&files, vec![SourceFile::new("world/variables.yaml", "flags: [oops\n")]);
+        let broken = apply(
+            &files,
+            written(vec![SourceFile::new("world/variables.yaml", "flags: [oops\n")]),
+        );
         assert!(rename(&broken, NameKind::Flag, "sponsor_met", "met")
             .unwrap_err()
             .contains("does not read"));
         assert!(
             rename(&files, NameKind::Flag, "sponsor_met", "sponsor_met")
                 .unwrap()
+                .written
                 .is_empty(),
             "the same name changes nothing"
+        );
+    }
+
+    // An event is cited by the node that launches it, by the Side events
+    // nodes that open or close it, and by every sentence reading its facts -
+    // never by a node or a `goto` that merely shares its id.
+    #[test]
+    fn the_usages_of_an_event_are_its_nodes_and_its_facts() {
+        let places = |id: &str| -> Vec<(String, usize)> {
+            (usages(&sample(), NameKind::Event, id).into_iter())
+                .map(|u| (u.file, u.line))
+                .collect()
+        };
+        let race: Vec<_> = places("race_01");
+        assert_eq!(
+            race,
+            [
+                ("content/pools/fail.story".to_string(), 14),
+                ("content/rival/posts.story".to_string(), 5),
+                ("flow/01-first-race.yaml".to_string(), 17),
+            ],
+            "the facts read and the Event node, not `- id: race_01` nor `goto: race_01`"
+        );
+        assert_eq!(places("track_day_01").len(), 2, "opened and closed by side events");
+
+        let block = "id: ch01\nnodes:\n  - id: s\n    side_events:\n      open:\n        - a\n        - \"b\"\n      close: [c, b]\n";
+        let mut out = Vec::new();
+        side_lists(block, "b", &mut out);
+        assert_eq!(out.len(), 2, "a block list and an inline one: {out:?}");
+    }
+
+    // Renaming an event follows its node, its side events and its facts,
+    // moves its file to its new name, and leaves the story clean
+    // (SPEC-story-mode, Create Your Own).
+    #[test]
+    fn renaming_an_event_follows_everything_citing_it_and_moves_its_file() {
+        let files = sample();
+        let changes = rename(&files, NameKind::Event, "track_day_01", "open_day").expect("renamed");
+        assert_eq!(changes.removed, ["events/track_day_01.yaml"], "the old file goes");
+        let after = apply(&files, changes);
+        let story = Story::from_sources(after.clone()).expect("loads");
+        assert_eq!(validate(&story), [], "nothing left pointing to the old id");
+        assert_eq!(story.event("open_day").unwrap().file, "events/open_day.yaml");
+        assert!(file(&after, "flow/02-second-race.yaml").contains("open: [open_day]"));
+
+        let after = apply(&files, rename(&files, NameKind::Event, "race_01", "opener").unwrap());
+        let story = Story::from_sources(after.clone()).expect("loads");
+        assert_eq!(validate(&story), [], "clean after the rename");
+        assert!(
+            story.node("race_01").is_some(),
+            "the node sharing the event's id keeps its own"
+        );
+        assert!(file(&after, "content/rival/posts.story").contains("event.opener.succeeded"));
+        assert!(
+            rename(&files, NameKind::Event, "race_01", "race_02")
+                .unwrap_err()
+                .contains("already exists"),
+            "two events never share an id"
         );
     }
 }

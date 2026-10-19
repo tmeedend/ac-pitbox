@@ -1,6 +1,7 @@
 id: race_02
+name: Race 02
 type: race
-session: { track: another_track, car: some_car, laps: 10, grid: 14 }
+session: { track: another_track, layout: short, car: some_car, laps: 10, grid: 14, ai_level: 92, start: last, time: "16:30", weather: overcast }
 success: ["position <= 1", "finished"]
 on_success:
   effects: ["reputation += 3"]

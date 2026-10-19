@@ -47,6 +47,52 @@ export interface ContentRef {
   file: string;
   placement: "flow" | "reactive" | "pool";
   hasReplies: boolean;
+  /** The pool a variant belongs to. */
+  pool: string | null;
+  from: string | null;
+  /** Its conditions, as written. */
+  when: string[];
+  /** The first line of its text, to recognise it. */
+  firstLine: string | null;
+}
+
+export type EventType = "race" | "hot_lap" | "time_attack" | "test_drive" | "track_day";
+
+export type GridStart = "random" | "first" | "second" | "last";
+
+/** What the author sets of an event's session; a key left out is Pit Box's
+ * default, and what is not here at all stays the player's. */
+export interface Session {
+  /** Folder ids, from the library. */
+  track?: string;
+  layout?: string;
+  car?: string;
+  /** Race only, like the three below. */
+  laps?: number;
+  /** Cars on the grid, the player's included. */
+  grid?: number;
+  ai_level?: number;
+  start?: GridStart;
+  /** `HH:MM`. */
+  time?: string;
+  /** A weather intent (`clear`, `rain`…), not a weather folder. */
+  weather?: string;
+}
+
+/** `events/<id>.yaml` (`story_engine::model::Event`), every default spelt
+ * out. */
+export interface StoryEvent {
+  id: string;
+  /** Display name, in the story's language. */
+  name: string | null;
+  type: EventType;
+  session: Session;
+  /** Sentences, all of which must hold: `position <= 3`, `finished`,
+   * `best_lap < 1:18.200`, `ahead_of <driver>`. */
+  success: string[];
+  on_success: { effects: string[]; advance: string | null };
+  on_failure: { effects: string[]; pool: string | null; pick: number };
+  entry_fee: number | null;
 }
 
 /** `story.yaml` (`story_engine::model::Manifest`), every default spelt out:
@@ -121,7 +167,7 @@ export interface EditedFile<T> {
   error: string | null;
 }
 
-export type NameKind = "character" | "flag" | "counter" | "step";
+export type NameKind = "character" | "flag" | "counter" | "step" | "event";
 
 /** A line citing a name. */
 export interface Usage {
@@ -168,7 +214,8 @@ export interface OpenStory {
   variables: EditedFile<Variables>;
   chapters: ChapterFile[];
   content: ContentRef[];
-  events: string[];
+  /** One per file of `events/`, in file-name order. */
+  events: EditedFile<StoryEvent>[];
   diagnostics: Diagnostic[];
   usages: NameUsages[];
   history: HistoryStatus;
@@ -204,11 +251,15 @@ export interface Checked {
 
 export const checkStory = (folder: string) => invoke<Checked>("story_check", { folder });
 
-/** Writes one file - a chapter, `story.yaml` or a world file - in the shape
+/** Writes one file - a chapter, an event, `story.yaml` or a world file - in the shape
  * of that file; `expected` is the stamp it was read with, `null` for a file
  * the story does not have yet. Resolves to the new stamp. */
 export const saveFile = (folder: string, file: string, expected: string | null, value: unknown) =>
   invoke<string>("story_save_file", { folder, file, expected, value });
+
+/** Deletes an event's file, read with stamp `expected`. */
+export const removeFile = (folder: string, file: string, expected: string) =>
+  invoke<void>("story_remove_file", { folder, file, expected });
 
 /** Renames a name and every sentence citing it, in every file. */
 export const renameName = (folder: string, kind: NameKind, from: string, to: string) =>

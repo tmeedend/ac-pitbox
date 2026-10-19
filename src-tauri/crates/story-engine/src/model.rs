@@ -597,16 +597,20 @@ impl RawContentHeader {
 // ------------------------------------------------------------------ events/
 
 /// `events/<id>.yaml` (SPEC-story-mode, Events, retries and failure).
-#[derive(Debug, Clone, Deserialize)]
+/// Serialized in full for the editor, every default spelt out; `write.rs`
+/// leaves the defaults out of the file.
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Event {
     pub id: EventId,
+    /// Display name in the source language ("Race 01"); opaque to the
+    /// engine, like a character's.
+    #[serde(default)]
+    pub name: Option<String>,
     #[serde(rename = "type")]
     pub kind: EventType,
-    /// Track, car, laps, grid… Opaque here: the launcher types it (L3),
-    /// against the session format of `launch.rs`.
     #[serde(default)]
-    pub session: Option<serde_json::Value>,
+    pub session: Session,
     /// All must hold. Empty: finishing is enough.
     #[serde(default)]
     pub success: Vec<Criterion>,
@@ -615,12 +619,13 @@ pub struct Event {
     #[serde(default)]
     pub on_failure: OnFailure,
     /// Paid at launch when the story has an economy.
+    #[serde(default)]
     pub entry_fee: Option<i64>,
     #[serde(skip)]
     pub file: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EventType {
     Race,
@@ -630,14 +635,70 @@ pub enum EventType {
     TrackDay,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+/// What the author sets of the session an event launches. The engine plays
+/// none of it: it is the launcher's (L3), which builds the app's own session
+/// (`launch.rs`, `RaceSetup`) from it, field by field. Its own type rather
+/// than the app's, so the pure engine never depends on the app, and a story
+/// file names what an author thinks about, not how Content Manager wants it.
+///
+/// Everything left out is Pit Box's default for that session, and what the
+/// author does not set at all (assists, damage, tyre wear) stays the
+/// player's. The race-only fields are refused on another type by the
+/// validator, not here: a type changed in the editor must not make the file
+/// unreadable. A key left out is not serialized either, in the file as in
+/// the editor's JSON.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Session {
+    /// The track's folder id (`content/tracks/<id>`), from the library.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub track: Option<String>,
+    /// Its layout, for a track that has several.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub layout: Option<String>,
+    /// The car's folder id, the same for the whole grid until the story has
+    /// drivers (L2.6).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub car: Option<String>,
+    /// Race only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub laps: Option<u32>,
+    /// Race only: cars on the grid, the player's included.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grid: Option<u32>,
+    /// Race only: the opponents' skill, 0 to 100.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ai_level: Option<u32>,
+    /// Race only: where the player starts.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start: Option<GridStart>,
+    /// Time of day in the game.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time: Option<Clock>,
+    /// Weather, as Pit Box names it (`clear`, `rain`…), not a weather
+    /// folder: the folders differ from one installation to the next.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub weather: Option<String>,
+}
+
+/// The player's place on the grid, the choices of Pit Box's session screen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GridStart {
+    Random,
+    First,
+    Second,
+    Last,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct OnSuccess {
     pub effects: Vec<Effect>,
     pub advance: Option<Span>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct OnFailure {
     pub effects: Vec<Effect>,

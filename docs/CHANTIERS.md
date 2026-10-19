@@ -137,7 +137,7 @@ de reprendre. En cas d'écart, la spec fait foi.
           que L2.2 éditera).
           **Limites connues** : un nœud Message ou Event ne vise que des
           contenus et événements déjà écrits à la main (leurs écrans sont
-          L2.3 et L2.4) ; ouvrir une histoire puis changer d'écran ne laisse
+          L2.3 et L2.4 ; levée pour les événements, L2.3 fait) ; ouvrir une histoire puis changer d'écran ne laisse
           pas d'entrée dans l'historique de navigation (le studio est un
           état interne de l'écran Story, comme un onglet) ; un chapitre ne se
           supprime pas encore dans l'éditeur.
@@ -202,6 +202,47 @@ de reprendre. En cas d'écart, la spec fait foi.
           les médias ; restaurer retire les fichiers de l'histoire ajoutés
           depuis (pas les autres fichiers du dossier) et s'annule par
           Ctrl+Z. Créer une histoire ne s'annule pas.
+        - **L2.3 — fait (2026-10-19).** Section **Événements** du studio :
+          la liste dans l'ordre de jeu (par chapitre, puis épreuves annexes,
+          puis « pas encore utilisés »), la fiche (nom affiché, type,
+          circuit et voiture choisis dans la bibliothèque, session, réussite,
+          effets et avance du temps, pool d'échec et nombre de variantes,
+          inscription si l'histoire a une économie), le nœud Event du Fil
+          avec « Ouvrir » et « Nouvel événement ». Le moteur type la session
+          (`model::Session`, liste fermée) au lieu d'une valeur opaque, écrit
+          `events/<id>.yaml` en forme canonique et sait renommer un
+          événement (`refs.rs`, `Changes` : fichiers écrits et retirés).
+          **Décidé avec l'utilisateur** : pour ce lot, l'auteur règle circuit,
+          layout, voiture, heure, météo et, pour une course, tours, grille,
+          niveau des adversaires et départ ; le reste est au joueur ; grille
+          monomarque (la voiture de l'événement) ; voiture imposée.
+          **Demandé pour la suite** (écrit dans la spec, « Events, retries and
+          failure ») : l'auteur choisit réglage par réglage ce qui est imposé
+          ou laissé au joueur ; la grille complète est celle de l'auteur
+          (reprendre l'écran de session de Pit Box, mais rempli par
+          l'auteur) ; la voiture est imposée ou choisie dans le garage de
+          l'histoire, éventuellement parmi une liste permise.
+          **Choisi sans demander** : la session a ses propres noms (`track`,
+          `car`, `laps`, `grid`, `ai_level`, `start`, `time`, `weather`) que
+          le lancement (L3) traduira vers `RaceSetup`, plutôt que le format
+          de `launch.rs` lui-même (le moteur est pur, et ce format porte des
+          détails de CM) ; `grid` compte le joueur ; la météo est l'intention
+          de Pit Box (`clear`, `rain`…), pas un dossier ; les quatre départs
+          de l'écran de session (aléatoire, premier, deuxième, dernier) ;
+          sans circuit ou sans voiture, un événement est en erreur ; changer
+          de type retire tours, grille, niveau et départ ; un circuit à
+          layouts prend le premier ; un nouvel événement est une course ;
+          renommer un événement déplace son fichier quand il porte son nom
+          (seule exception à « les noms de fichiers ne changent pas ») ;
+          supprimer laisse les citations aux vérifications ; Ctrl+Z reste sur
+          la section affichée quand la modification annulée la touchait ;
+          libellé « Hotlap » comme ailleurs dans l'app.
+          **Limites connues** : les messages d'échec ne s'écrivent pas encore
+          (L2.4) — on choisit un pool existant et on voit ses variantes ;
+          `ahead_of` n'a pas de contrôle (il attend les pilotes, L2.6) et est
+          gardé tel quel ; la bibliothèque est lue une fois par lancement de
+          l'app ; aucune vérification qu'un circuit accueille la taille de
+          grille demandée (le jeu la plafonne au nombre de stands).
       - **L3 à L8** : dans l'ordre du plan de livraison de la spec.
       **Écarts assumés par rapport au document de conception** (la spec
       publique les reprend déjà) :

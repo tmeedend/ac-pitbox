@@ -74,8 +74,8 @@ pub async fn story_check(app: AppHandle, folder: PathBuf) -> Result<studio::Chec
     off_window(app, move |_| Ok(studio::check(&folder))).await
 }
 
-/// Writes one file the editor edits - a chapter, `story.yaml` or a world
-/// file - from the value it sends, in the shape of that file.
+/// Writes one file the editor edits - a chapter, an event, `story.yaml` or
+/// a world file - from the value it sends, in the shape of that file.
 #[tauri::command]
 pub fn story_save_file(
     folder: PathBuf,
@@ -86,8 +86,14 @@ pub fn story_save_file(
     studio::save_file(&folder, &file, expected.as_deref(), value)
 }
 
-/// Renames a character, flag, counter or relation step everywhere it is
-/// cited. Off the window thread: it reads the whole story folder. The
+/// Deletes an event's file, guarded by the stamp it was read with.
+#[tauri::command]
+pub fn story_remove_file(folder: PathBuf, file: String, expected: String) -> Result<(), String> {
+    studio::remove_file(&folder, &file, &expected)
+}
+
+/// Renames a character, flag, counter, relation step or event everywhere it
+/// is cited. Off the window thread: it reads the whole story folder. The
 /// frontend's queue of edits keeps it in order with the saves around it.
 #[tauri::command]
 pub async fn story_rename(

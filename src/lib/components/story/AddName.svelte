@@ -38,7 +38,12 @@
     margin-top: 10px;
   }
   .add .input {
-    width: 240px;
+    flex: 0 1 240px;
+    min-width: 0;
+  }
+  .add .btn {
+    flex-shrink: 0;
+    white-space: nowrap;
   }
   .errbox {
     margin: 6px 0 0;

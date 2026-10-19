@@ -15,6 +15,7 @@ import {
   checkStory,
   openStory as fetchStory,
   redoEdit,
+  removeFile,
   renameName,
   restoreBackup,
   saveFile,
@@ -23,16 +24,19 @@ import {
   type Diagnostic,
   type NameKind,
   type OpenStory,
+  type StoryEvent,
 } from "./studio";
+import { eventFile } from "./events";
 
 /** The studio's sections (SPEC-story-mode, Create Your Own). */
-export type StudioSection = "flow" | "world" | "settings" | "backups";
+export type StudioSection = "flow" | "events" | "world" | "settings" | "backups";
 
 /** The section whose files hold `file` (a diagnostic's, say): `story.yaml`
- * is the Settings', `world/` the World's, everything else the flow's -
- * until events and content get their own sections. */
+ * is the Settings', `world/` the World's, `events/` the Events', everything
+ * else the flow's - until content gets its own section. */
 export function sectionOf(file: string): StudioSection {
   if (file === "story.yaml") return "settings";
+  if (file.startsWith("events/")) return "events";
   return file.startsWith("world/") ? "world" : "flow";
 }
 
@@ -46,6 +50,8 @@ export const studio = $state<{
   chapter: number;
   /** The selected node's id, in the shown chapter. */
   node: string | null;
+  /** The file of the event shown in the Events section. */
+  event: string | null;
   diagnostics: Diagnostic[];
   /** Why the last save of a chapter file failed, by file. */
   unsaved: Record<string, string>;
@@ -57,6 +63,7 @@ export const studio = $state<{
   section: "flow",
   chapter: 0,
   node: null,
+  event: null,
   diagnostics: [],
   unsaved: {},
   notice: null,
@@ -77,7 +84,9 @@ export async function openStudio(path: string): Promise<void> {
       studio.section = "flow";
       studio.chapter = 0;
       studio.node = null;
+      studio.event = null;
     }
+    if (!story.events.some((e) => e.file === studio.event)) studio.event = story.events[0]?.file ?? null;
     studio.chapter = Math.min(studio.chapter, Math.max(0, story.chapters.length - 1));
     const nodes = story.chapters[studio.chapter]?.chapter?.nodes ?? [];
     if (!nodes.some((n) => n.id === studio.node)) studio.node = null;
@@ -90,6 +99,14 @@ export function closeStudio(): void {
   studio.story = null;
   studio.node = null;
   studio.notice = null;
+}
+
+/** Shows event `id` in the Events section. */
+export function selectEvent(id: string): void {
+  const entry = studio.story?.events.find((e) => e.value?.id === id);
+  if (!entry) return;
+  studio.section = "events";
+  studio.event = entry.file;
 }
 
 /** Shows the chapter holding node `id`, in the flow, and selects it. */
@@ -133,6 +150,47 @@ export function saveStoryFile(key: StoryFileKey): Promise<void> {
   });
 }
 
+/** Queues a save of the event in `file`, like a chapter. */
+export function saveEventFile(file: string): Promise<void> {
+  return enqueue(async () => {
+    const entry = studio.story?.events.find((e) => e.file === file);
+    if (entry?.value) await write(entry, entry.value);
+  });
+}
+
+/** Adds an event to the open story (its stamp is empty: new), shows it
+ * and saves it. */
+export function addEvent(event: StoryEvent): Promise<void> {
+  const story = studio.story;
+  if (!story) return Promise.resolve();
+  const file = eventFile(event.id);
+  story.events.push({ file, stamp: "", value: event, error: null });
+  story.events.sort((a, b) => a.file.localeCompare(b.file));
+  studio.section = "events";
+  studio.event = file;
+  return saveEventFile(file);
+}
+
+/** Queues the deletion of the event in `file`, then reloads the story.
+ * Resolves to why it was refused, or `null` once done. */
+export function removeEvent(file: string): Promise<string | null> {
+  return enqueue(async () => {
+    const path = studio.story?.path;
+    const entry = studio.story?.events.find((e) => e.file === file);
+    if (!path || !entry) return null;
+    // The deletion reloads every file, like a rename.
+    if (Object.keys(studio.unsaved).length > 0) return t("story.studio.historyUnsaved");
+    try {
+      await removeFile(path, file, entry.stamp);
+    } catch (e) {
+      await openStudio(path);
+      return errorText(e);
+    }
+    await openStudio(path);
+    return null;
+  });
+}
+
 /** Queues a rename of `from` and of every sentence citing it, then reloads
  * the story, whose files it changed. Resolves to why it was refused, or
  * `null` once done. */
@@ -148,6 +206,8 @@ export function renameEverywhere(kind: NameKind, from: string, to: string): Prom
     } catch (e) {
       return errorText(e);
     }
+    // An event's file named after it moved with it: keep it shown.
+    if (kind === "event" && studio.event === eventFile(from)) studio.event = eventFile(to);
     await openStudio(path);
     return null;
   });
@@ -176,8 +236,13 @@ export function stepHistory(direction: "undo" | "redo"): Promise<void> {
     if (files.length === 0) return;
     await openStudio(path);
     studio.notice = null;
-    const first = files[0];
+    // The section shown, when the edit touched its files; the first one's
+    // otherwise. An event's rename also changes the flow citing it, and
+    // undoing it from the Events section must not leave that section.
+    const here = files.find((f) => sectionOf(f) === studio.section);
+    const first = here ?? files[0];
     studio.section = sectionOf(first);
+    if (studio.story?.events.some((e) => e.file === first)) studio.event = first;
     const chapter = studio.story?.chapters.findIndex((c) => c.file === first) ?? -1;
     if (chapter >= 0) studio.chapter = chapter;
   });

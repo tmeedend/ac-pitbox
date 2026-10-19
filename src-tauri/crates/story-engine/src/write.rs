@@ -9,12 +9,14 @@
 
 use serde::Serialize;
 
+use crate::expr::{Criterion, Effect};
 use crate::load::{draft, SourceFile};
 use crate::model::{
-    AdaptiveDifficulty, Beat, Chapter, Characters, DateDisplay, FailureMode, Manifest, Node, NodeKind, Protagonist,
-    RelationScale, Requires, RetryCost, Saves, Settings, Start, Variables, STORY_FORMAT,
+    AdaptiveDifficulty, Beat, Chapter, Characters, DateDisplay, Event, EventType, FailureMode, Manifest, Node,
+    NodeKind, Protagonist, RelationScale, Requires, RetryCost, Saves, Session, Settings, Start, Variables,
+    STORY_FORMAT,
 };
-use crate::time::{Clock, StoryDate};
+use crate::time::{Clock, Span, StoryDate};
 
 /// The layout the sample story is typed in: lists indented under their key,
 /// and every sentence on one line, however long - a condition folded over two
@@ -61,6 +63,77 @@ pub fn characters(characters: &Characters) -> Result<String, String> {
 /// written in name order, whatever the order they were typed in.
 pub fn variables(variables: &Variables) -> Result<String, String> {
     yaml("world/variables.yaml", variables)
+}
+
+/// `events/<id>.yaml` for `event`, read back to be sure it loads. What
+/// equals its default is left out, as in `story.yaml`.
+pub fn event(path: &str, event: &Event) -> Result<String, String> {
+    yaml(path, &EventYaml::of(event))
+}
+
+/// An event as written: the id, its name and type, the session, then what
+/// success takes and what each outcome does - the order an author reads it.
+#[derive(Serialize)]
+struct EventYaml<'a> {
+    id: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<&'a str>,
+    #[serde(rename = "type")]
+    kind: EventType,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    session: Option<&'a Session>,
+    #[serde(skip_serializing_if = "<[Criterion]>::is_empty")]
+    success: &'a [Criterion],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    on_success: Option<OnSuccessYaml<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    on_failure: Option<OnFailureYaml<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    entry_fee: Option<i64>,
+}
+
+#[derive(Serialize)]
+struct OnSuccessYaml<'a> {
+    #[serde(skip_serializing_if = "<[Effect]>::is_empty")]
+    effects: &'a [Effect],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    advance: Option<&'a Span>,
+}
+
+#[derive(Serialize)]
+struct OnFailureYaml<'a> {
+    #[serde(skip_serializing_if = "<[Effect]>::is_empty")]
+    effects: &'a [Effect],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pool: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pick: Option<u8>,
+}
+
+impl<'a> EventYaml<'a> {
+    fn of(e: &'a Event) -> Self {
+        let (s, f) = (&e.on_success, &e.on_failure);
+        let on_success = (!s.effects.is_empty() || s.advance.is_some()).then_some(OnSuccessYaml {
+            effects: &s.effects,
+            advance: s.advance.as_ref(),
+        });
+        let pick = (f.pick != 1).then_some(f.pick);
+        let on_failure = (!f.effects.is_empty() || f.pool.is_some() || pick.is_some()).then_some(OnFailureYaml {
+            effects: &f.effects,
+            pool: f.pool.as_deref(),
+            pick,
+        });
+        EventYaml {
+            id: &e.id,
+            name: e.name.as_deref(),
+            kind: e.kind,
+            session: unless(&e.session, &Session::default()),
+            success: &e.success,
+            on_success,
+            on_failure,
+            entry_fee: e.entry_fee,
+        }
+    }
 }
 
 /// `story.yaml` as written: what equals its default is left out. A group
@@ -342,6 +415,81 @@ settings: {}
                 original.file
             );
         }
+    }
+
+    // An event goes through the editor like a chapter: read back as it was
+    // given, and written the same a second time (SPEC-story-mode, Create
+    // Your Own: one canonical form).
+    #[test]
+    fn a_written_event_reads_back_the_same_and_writes_the_same() {
+        let d = sample();
+        assert_eq!(d.events.len(), 3, "the sample's events");
+        for original in &d.events {
+            let text = event(&original.file, original).expect("writes");
+            let mut back = reread(&original.file, &text).events;
+            let mut back = back.remove(0);
+            back.file = original.file.clone();
+            assert_eq!(
+                format!("{back:?}"),
+                format!("{original:?}"),
+                "{}: the event read back is the one written",
+                original.file
+            );
+            assert_eq!(
+                event(&back.file, &back).unwrap(),
+                text,
+                "{}: written again",
+                original.file
+            );
+        }
+    }
+
+    // The canonical event: defaults left out (`pick: 1`, an empty outcome,
+    // an empty session), the keys in the order an author reads them.
+    #[test]
+    fn a_written_event_leaves_its_defaults_out() {
+        let source = "id: e
+type: hot_lap
+on_failure: { pick: 1 }
+session: {}
+entry_fee: 20
+name: Hot lap
+";
+        let e = reread("events/e.yaml", source).events.remove(0);
+        assert_eq!(
+            event("events/e.yaml", &e).unwrap(),
+            "id: e
+name: Hot lap
+type: hot_lap
+entry_fee: 20
+",
+            "nothing but what the author set"
+        );
+        let source = "id: r
+type: race
+session: { car: c, track: t, start: last, time: \"09:05\" }
+success: [\"position <= 3\"]
+on_failure: { pool: p, pick: 2 }
+";
+        let e = reread("events/r.yaml", source).events.remove(0);
+        let expected = "id: r
+type: race
+session:
+  track: t
+  car: c
+  start: last
+  time: 09:05
+success:
+  - position <= 3
+on_failure:
+  pool: p
+  pick: 2
+";
+        assert_eq!(
+            event("events/r.yaml", &e).unwrap(),
+            expected,
+            "session keys in their order"
+        );
     }
 
     // "New story" in the editor opens on a story with nothing to fix, whose

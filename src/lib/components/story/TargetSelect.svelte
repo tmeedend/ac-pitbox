@@ -11,9 +11,11 @@
     /** The label of the empty choice; without it, the empty choice says
      * that nothing is picked yet. */
     emptyLabel?: string;
+    /** What to show for an id (an event's display name); the id otherwise. */
+    labels?: Record<string, string>;
     onchange: (value: string) => void;
   }
-  const { value, options, emptyLabel, onchange }: Props = $props();
+  const { value, options, emptyLabel, labels, onchange }: Props = $props();
 
   const all = $derived(value && !options.includes(value) ? [value, ...options] : options);
 </script>
@@ -21,6 +23,6 @@
 <select class="input mono" {value} onchange={(e) => onchange((e.currentTarget as HTMLSelectElement).value)}>
   <option value="">{emptyLabel ?? t("story.studio.pick")}</option>
   {#each all as id (id)}
-    <option value={id}>{id}</option>
+    <option value={id}>{labels?.[id] ?? id}</option>
   {/each}
 </select>

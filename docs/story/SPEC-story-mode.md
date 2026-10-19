@@ -176,6 +176,19 @@ On failure: Failure pool 01
 **Event types.** Race, hot lap, time attack, test drive, track day. Only races
 need AI opponents; the others use what AC does best.
 
+**The session.** An event names its track (and layout) and its car, picked in
+the player's library, and the few settings of the session the author decides:
+time of day and weather; for a race only, laps, cars on the grid (the
+player's included), opponents' skill and the player's start. What the author
+leaves unset is Pit Box's default; what the event does not cover at all
+(assists, damage, tyre wear) is the player's. Until the story has drivers,
+the whole grid drives the event's car. Where this is going: the author
+decides **setting by setting** whether it is imposed or
+left to the player; a race's **grid is the author's** in full (cars,
+liveries, drivers, skill), on the model of Pit Box's own session screen; and
+the car is either **imposed** or **chosen by the player in their story
+garage**, possibly among a list the author allows.
+
 **Success condition.** Finish position, beat a named driver, lap time under a
 target, finish without DNF, or several combined.
 
@@ -413,9 +426,18 @@ the editor is reserved; they are translated when it opens to all.
 - **A name is a letter followed by letters, digits and `_`**, so that it can
   never read as a number or a yes/no. A new character's name is made from
   their display name, which can change freely afterwards: it is only shown.
+- **An event is a file, `events/<id>.yaml`**, created from its display name
+  like a character. Renaming it renames the node launching it, the Side
+  events opening or closing it, every sentence reading its facts
+  (`event.<id>.position`), and its file, when the file is named after it.
+  Deleting it leaves those citations, for the checks to report; Ctrl+Z
+  brings it back. Its track and car are picked in the player's library; one
+  the library does not have is kept as written and shown as missing. A track
+  with layouts starts on its first. Changing an event's type away from a race
+  drops what only a race has.
 - **A section appears with the lot that builds it**, never as an entry that
-  opens nothing: the Story flow, the World (characters, flags, counters),
-  the Settings and the story's copies so far. Settings shows only the settings the engine applies.
+  opens nothing: the Story flow, the Events, the World (characters, flags,
+  counters), the Settings and the story's copies so far. Settings shows only the settings the engine applies.
   Each section counts the errors of its own files.
 
 ### Story flow screen
@@ -476,6 +498,11 @@ visible in it:
   A sentence cites a name with its prefix (`flag.`, `counter.`, `rel.`); a
   relation step is cited as the value of a relation (`rel.friend >= warm`).
 - Saves are JSON with a format number: a save from a newer Pit Box is refused.
+- An event's session keys are a closed list: `laps`, `grid`, `ai_level` and
+  `start` on another type than a race are errors, as are an event without a
+  track or a car. `weather` is a weather as Pit Box names it (`clear`,
+  `rain`…), never a weather folder: those differ from one installation to
+  the next.
 
 ### Dialogue text: Ink, in one language first
 
