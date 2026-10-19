@@ -239,8 +239,8 @@ fn usages_in(file: &SourceFile, kind: NameKind, id: &str) -> Vec<Usage> {
 }
 
 /// Where each declared name is cited, for every name the story declares.
-pub fn all_usages(files: &[SourceFile]) -> Vec<NameUsages> {
-    let d = draft(files.to_vec());
+/// `d` is the draft of `files`, which tells what the story declares.
+pub fn all_usages(files: &[SourceFile], d: &Draft) -> Vec<NameUsages> {
     let mut names: Vec<(NameKind, String)> = Vec::new();
     names.extend(
         d.characters
@@ -399,7 +399,7 @@ mod tests {
     }
 
     fn usages(files: &[SourceFile], kind: NameKind, id: &str) -> Vec<Usage> {
-        (all_usages(files).into_iter())
+        (all_usages(files, &draft(files.to_vec())).into_iter())
             .find(|n| n.kind == kind && n.id == id)
             .map(|n| n.usages)
             .unwrap_or_default()

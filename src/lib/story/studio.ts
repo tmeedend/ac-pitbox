@@ -180,7 +180,14 @@ export const createStory = (folder: string, title: string, language: string, cha
 
 export const openStory = (folder: string) => invoke<OpenStory>("story_open", { folder });
 
-export const checkStory = (folder: string) => invoke<Diagnostic[]>("story_check", { folder });
+/** What the studio re-reads after every save, from one reading of the
+ * folder. */
+export interface Checked {
+  diagnostics: Diagnostic[];
+  usages: NameUsages[];
+}
+
+export const checkStory = (folder: string) => invoke<Checked>("story_check", { folder });
 
 /** Writes one file - a chapter, `story.yaml` or a world file - in the shape
  * of that file; `expected` is the stamp it was read with, `null` for a file
@@ -191,5 +198,3 @@ export const saveFile = (folder: string, file: string, expected: string | null, 
 /** Renames a name and every sentence citing it, in every file. */
 export const renameName = (folder: string, kind: NameKind, from: string, to: string) =>
   invoke<void>("story_rename", { folder, kind, from, to });
-
-export const fetchUsages = (folder: string) => invoke<NameUsages[]>("story_usages", { folder });

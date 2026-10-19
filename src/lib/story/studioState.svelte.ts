@@ -12,7 +12,6 @@ import { errorText } from "$lib/errors";
 import { t } from "$lib/i18n/index.svelte";
 import {
   checkStory,
-  fetchUsages,
   openStory as fetchStory,
   renameName,
   saveFile,
@@ -181,7 +180,7 @@ function scheduleCheck(): void {
     const path = studio.story?.path;
     if (!path) return;
     try {
-      const [diagnostics, usages] = await Promise.all([checkStory(path), fetchUsages(path)]);
+      const { diagnostics, usages } = await checkStory(path);
       if (studio.story?.path !== path) return;
       studio.diagnostics = diagnostics;
       studio.story.usages = usages;

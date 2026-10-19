@@ -60,7 +60,7 @@ pub async fn story_open(app: AppHandle, folder: PathBuf) -> Result<studio::OpenS
 }
 
 #[tauri::command]
-pub async fn story_check(app: AppHandle, folder: PathBuf) -> Result<Vec<story_engine::validate::Diagnostic>, String> {
+pub async fn story_check(app: AppHandle, folder: PathBuf) -> Result<studio::Checked, String> {
     off_window(app, move |_| Ok(studio::check(&folder))).await
 }
 
@@ -88,9 +88,4 @@ pub async fn story_rename(
     to: String,
 ) -> Result<(), String> {
     off_window(app, move |_| studio::rename(&folder, kind, &from, &to)).await
-}
-
-#[tauri::command]
-pub async fn story_usages(app: AppHandle, folder: PathBuf) -> Result<Vec<story_engine::refs::NameUsages>, String> {
-    off_window(app, move |_| studio::usages(&folder)).await
 }

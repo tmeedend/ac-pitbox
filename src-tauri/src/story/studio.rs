@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use story_engine::load::{draft, read_dir, SourceFile};
+use story_engine::load::{draft, read_dir, Draft, SourceFile};
 use story_engine::model::{Chapter, Characters, Manifest, Placement, Variables};
 use story_engine::refs::{self, NameKind, NameUsages};
 use story_engine::validate::{validate, Diagnostic, Severity};
@@ -102,9 +102,9 @@ pub fn list(config_dir: &Path) -> Vec<StorySummary> {
             }
             let (title, chapters, diagnostics) = match read_dir(&path) {
                 Ok(files) => {
-                    let diagnostics = check_files(files.clone());
                     let d = draft(files);
-                    (d.manifest.map(|m| m.title), d.chapters.len(), diagnostics)
+                    let (title, chapters) = (d.manifest.as_ref().map(|m| m.title.clone()), d.chapters.len());
+                    (title, chapters, verdict(d))
                 }
                 Err(e) => (None, 0, vec![load_error(e)]),
             };
@@ -261,9 +261,11 @@ fn edited<T>(files: &[SourceFile], errors: &[LoadError], file: &str, value: Opti
 pub fn open(folder: &Path) -> Result<OpenStory, String> {
     let files = read_dir(folder).map_err(|e| e.to_string())?;
     let chapter_files: Vec<SourceFile> = files.iter().filter(|f| is_chapter_path(&f.path)).cloned().collect();
-    let diagnostics = check_files(files.clone());
-    let usages = refs::all_usages(&files);
+    // Drafted once, then both shown and checked: the screen and its
+    // diagnostics describe the same state of the folder, read once.
     let mut d = draft(files.clone());
+    let usages = refs::all_usages(&files, &d);
+    let diagnostics = verdict(d.clone());
     let manifest = edited(&files, &d.errors, MANIFEST, d.manifest.take());
     let characters = edited(&files, &d.errors, CHARACTERS, Some(std::mem::take(&mut d.characters)));
     let variables = edited(&files, &d.errors, VARIABLES, Some(std::mem::take(&mut d.variables)));
@@ -309,27 +311,37 @@ const MANIFEST: &str = "story.yaml";
 const CHARACTERS: &str = "world/characters.yaml";
 const VARIABLES: &str = "world/variables.yaml";
 
-/// Where each name of the story is cited, read afresh: the studio asks after
-/// every save, as it does for the checks.
-pub fn usages(folder: &Path) -> Result<Vec<NameUsages>, String> {
-    Ok(refs::all_usages(&read_dir(folder).map_err(|e| e.to_string())?))
+/// What the studio re-reads after every save, from one reading of the folder.
+#[derive(Debug, Serialize)]
+pub struct Checked {
+    pub diagnostics: Vec<Diagnostic>,
+    /// Where each character, flag, counter and relation step is cited.
+    pub usages: Vec<NameUsages>,
 }
 
-/// Everything wrong with the story: what keeps it from loading, or else what
-/// the validator finds. The messages are the engine's, in English: the
-/// editor is reserved for now, and they are translated when it opens to all
-/// (docs/CHANTIERS.md, Story).
-pub fn check(folder: &Path) -> Vec<Diagnostic> {
+/// Everything wrong with the story, and where its names are cited.
+pub fn check(folder: &Path) -> Checked {
     match read_dir(folder) {
-        Ok(files) => check_files(files),
-        Err(e) => vec![load_error(e)],
+        Ok(files) => {
+            let d = draft(files.clone());
+            Checked {
+                usages: refs::all_usages(&files, &d),
+                diagnostics: verdict(d),
+            }
+        }
+        Err(e) => Checked {
+            diagnostics: vec![load_error(e)],
+            usages: Vec::new(),
+        },
     }
 }
 
-/// `check` on files already read: the screen and its diagnostics then
-/// describe the same state of the folder, read once.
-fn check_files(files: Vec<SourceFile>) -> Vec<Diagnostic> {
-    match Story::from_sources(files) {
+/// Everything wrong with a drafted story: what keeps it from loading, or
+/// else what the validator finds. The messages are the engine's, in English:
+/// the editor is reserved for now, and they are translated when it opens to
+/// all (docs/CHANTIERS.md, Story).
+fn verdict(d: Draft) -> Vec<Diagnostic> {
+    match Story::from_draft(d) {
         Ok(story) => validate(&story),
         Err(errors) => errors.into_iter().map(load_error).collect(),
     }
@@ -520,7 +532,7 @@ mod tests {
         let (back, read_stamp) = chapter_of(&folder, "flow/01-chapter.yaml");
         assert_eq!(read_stamp, new_stamp, "the returned stamp is the file's");
         assert_eq!(back.nodes[0].next.as_deref(), Some("nowhere"));
-        let d = check(&folder);
+        let d = check(&folder).diagnostics;
         assert!(
             d.iter()
                 .any(|d| d.node.as_deref() == Some("start") && d.message.contains("nowhere")),
@@ -626,7 +638,7 @@ mod tests {
         assert_eq!(opened.characters.value.unwrap().characters[0].id, "friend");
         assert_ne!(opened.characters.stamp, "", "now on disk");
         assert_eq!(list(&config)[0].title.as_deref(), Some("Renamed"), "the hub follows");
-        assert!(check(&folder).is_empty(), "still clean");
+        assert!(check(&folder).diagnostics.is_empty(), "still clean");
     }
 
     // A rename reaches every file citing the name, and keeps what was typed
@@ -660,7 +672,7 @@ A line.
         std::fs::create_dir_all(folder.join("content")).unwrap();
         std::fs::write(folder.join("content/remark.story"), content).unwrap();
         let cited = |id: &str| {
-            let u = usages(&folder).unwrap();
+            let u = check(&folder).usages;
             u.into_iter().find(|n| n.id == id).map(|n| n.usages.len())
         };
         assert_eq!(cited("visits"), Some(2), "the beat and the reactive message");
@@ -673,7 +685,7 @@ A line.
             content.replace("counter.visits", "counter.trips"),
             "only the cited word changed in the hand-typed file"
         );
-        assert!(check(&folder).is_empty(), "clean: {:#?}", check(&folder));
+        assert!(check(&folder).diagnostics.is_empty(), "clean: {:#?}", check(&folder));
         assert!(
             rename(&folder, NameKind::Counter, "trips", "9lives").is_err(),
             "an invalid name is refused"

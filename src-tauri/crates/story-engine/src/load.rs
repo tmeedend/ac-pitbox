@@ -170,7 +170,7 @@ fn parse_story_file(file: &SourceFile) -> Result<Vec<ContentItem>, LoadError> {
 /// editor can still show while the story as a whole does not load (a file
 /// that does not read, an id used twice). A file that does not read is in
 /// `errors` and nowhere else.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Draft {
     pub manifest: Option<Manifest>,
     pub variables: Variables,
@@ -257,6 +257,12 @@ impl Story {
     /// Parses a story from its files. Collects every error it can rather than
     /// stopping at the first, so that one run shows an author all of them.
     pub fn from_sources(files: Vec<SourceFile>) -> Result<Story, Vec<LoadError>> {
+        Story::from_draft(draft(files))
+    }
+
+    /// The story from files already parsed one by one: the editor drafts a
+    /// story once and both shows it and checks it from that draft.
+    pub fn from_draft(draft: Draft) -> Result<Story, Vec<LoadError>> {
         let Draft {
             manifest,
             variables,
@@ -265,7 +271,7 @@ impl Story {
             content,
             events,
             mut errors,
-        } = draft(files);
+        } = draft;
 
         let Some(manifest) = manifest else {
             errors.insert(
