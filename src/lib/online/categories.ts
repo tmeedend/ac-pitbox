@@ -14,6 +14,7 @@
 // leaves it out of an included category and keeps it under an excluded one
 // (`tokens.ts`): most of the lobby's tracks are not in the library, and
 // letting them all through made "Drift" list whatever ran anywhere.
+import { stripAccents } from "$lib/format";
 import type { Looks } from "./looks";
 import type { ServerSummary, TrackRef } from "./online";
 
@@ -60,7 +61,7 @@ export function filterCategories(c: ServerCategories): string[] | null {
 
 /** Lowercase, accents gone: the comparison the search makes everywhere. */
 export function fold(text: string): string {
-  return text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  return stripAccents(text).toLowerCase();
 }
 
 /** The words of a text, as a keyword is matched: whole words, any

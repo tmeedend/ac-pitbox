@@ -7,6 +7,7 @@
 // pictogram of its own name for the categories Pit Box knows - then the tag
 // itself and the circuit. Pure, for Vitest: the reactive table is
 // `trackCategoryTable.svelte.ts`.
+import { stripAccents } from "$lib/format";
 import type { CategoryLook } from "$lib/workshop/rules";
 import { DEFAULT_TRACK_ICON, TRACK_CATEGORY_ICONS } from "./trackCategoryIcons";
 
@@ -55,9 +56,7 @@ export function categoryName(
  */
 export function tagForName(name: string, taken: string[]): string {
   const base =
-    name
-      .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "")
+    stripAccents(name)
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "_")
       .replace(/^_|_$/g, "") || "category";

@@ -10,6 +10,7 @@
 //
 // The overlay is keyed by TAG, not by family: forking a whole family to move
 // one tag would freeze it, and the next catalogue could no longer add to it.
+import { stripAccents } from "$lib/format";
 import { familyLookup, familyTag, type CategoryFamily } from "$lib/library/families";
 import type { FamilyOverlay } from "$lib/workshop/rules";
 
@@ -80,9 +81,7 @@ export function setFamilyLook(
  */
 export function createFamily(o: FamilyOverlay, taken: string[], name: string): { overlay: FamilyOverlay; id: string } {
   const base =
-    name
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
+    stripAccents(name)
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "") || "family";

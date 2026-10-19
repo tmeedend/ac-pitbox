@@ -9,6 +9,7 @@
 // trimmed). Every function returns a new overlay; the effective tables come
 // back from `taxonomy.rs` after each save and are never merged here (see
 // `familyEdit.ts` for why).
+import { stripAccents } from "$lib/format";
 import type { MapOverlay } from "$lib/workshop/rules";
 
 type Table = Record<string, string>;
@@ -135,9 +136,7 @@ export function unignoreCountry(ignored: string[], value: string): string[] {
 
 /** Case, accents and anything but letters folded away, for comparing. */
 function fold(s: string): string {
-  return s
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+  return stripAccents(s)
     .toLowerCase()
     .replace(/[^a-z]/g, "");
 }

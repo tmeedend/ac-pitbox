@@ -29,7 +29,8 @@ export function fmtDuration(seconds: number | null | undefined): string {
   return `${s} s`;
 }
 
-/** Accents taken off (`é` → `e`), for building an id from a name. */
+/** Accents taken off (`é` → `e`): the one fold behind every id built from a
+ * name and every accent-blind search. */
 export function stripAccents(s: string): string {
   return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }

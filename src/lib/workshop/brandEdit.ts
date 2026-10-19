@@ -3,6 +3,7 @@
 // like the country aliases, and reuses their operations; what is proper to the
 // brands is the PROPOSALS, since no fixed list (the game's countries) tells
 // the right name.
+import { stripAccents } from "$lib/format";
 import type { MapOverlay, SetOverlay } from "$lib/workshop/rules";
 import { removeEntry, retarget, setEntry } from "./countryEdit";
 
@@ -56,9 +57,7 @@ export interface BrandProposal {
 /** Lowercase, no accents, words separated by single spaces - `Mercedes-Benz`
  * reads `mercedes benz`. */
 function words(s: string): string {
-  return s
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+  return stripAccents(s)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
