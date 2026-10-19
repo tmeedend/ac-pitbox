@@ -16,6 +16,7 @@
   import type { RaceSetup, Season, TrackStateOption, TrackSun, WeatherOption } from "$lib/launch/launch";
   import TrackConditionBlock from "./TrackConditionBlock.svelte";
   import { t } from "$lib/i18n/index.svelte";
+  import { WEATHER_IDS, WEATHER_LABEL_KEYS } from "$lib/launch/weatherIntents";
   import NumberStepper from "$lib/components/ui/NumberStepper.svelte";
   import Slider from "$lib/components/ui/Slider.svelte";
   import Tooltip from "$lib/components/ui/Tooltip.svelte";
@@ -54,18 +55,6 @@
     onoverridetemps: () => void;
     onoverridewind: () => void;
   } = $props();
-
-  const WEATHER_IDS = ["clear", "few_clouds", "overcast", "fog", "light_rain", "rain", "storm", "snow"] as const;
-  const WEATHER_LABEL_KEYS: Record<string, string> = {
-    clear: "launch.wxClear",
-    few_clouds: "launch.wxFewClouds",
-    overcast: "launch.wxOvercast",
-    fog: "launch.wxFog",
-    light_rain: "launch.wxLightRain",
-    rain: "launch.wxRain",
-    storm: "launch.wxStorm",
-    snow: "launch.wxSnow",
-  };
 
   const SEASONS: { id: Season; labelKey: string }[] = [
     { id: "", labelKey: "launch.seasonNone" },
