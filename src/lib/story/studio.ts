@@ -140,6 +140,19 @@ export interface NameUsages {
   usages: Usage[];
 }
 
+/** Whether the editor can undo or redo (`story/history.rs`). */
+export interface HistoryStatus {
+  canUndo: boolean;
+  canRedo: boolean;
+}
+
+/** A copy of a story (`story/backups.rs`). */
+export interface Backup {
+  /** When it was taken, `YYYY-MM-DD_HH-MM-SS`, local time. */
+  id: string;
+  files: number;
+}
+
 export interface Diagnostic {
   severity: "error" | "warning";
   file: string;
@@ -158,6 +171,7 @@ export interface OpenStory {
   events: string[];
   diagnostics: Diagnostic[];
   usages: NameUsages[];
+  history: HistoryStatus;
 }
 
 export interface StorySummary {
@@ -185,6 +199,7 @@ export const openStory = (folder: string) => invoke<OpenStory>("story_open", { f
 export interface Checked {
   diagnostics: Diagnostic[];
   usages: NameUsages[];
+  history: HistoryStatus;
 }
 
 export const checkStory = (folder: string) => invoke<Checked>("story_check", { folder });
@@ -198,3 +213,17 @@ export const saveFile = (folder: string, file: string, expected: string | null, 
 /** Renames a name and every sentence citing it, in every file. */
 export const renameName = (folder: string, kind: NameKind, from: string, to: string) =>
   invoke<void>("story_rename", { folder, kind, from, to });
+
+/** Ctrl+Z: puts back the files of the last edit; resolves to the files
+ * written, empty when there was nothing to undo. */
+export const undoEdit = (folder: string) => invoke<string[]>("story_undo", { folder });
+
+/** Ctrl+Y: writes again the files of the last edit undone. */
+export const redoEdit = (folder: string) => invoke<string[]>("story_redo", { folder });
+
+/** The story's copies, newest first. */
+export const listBackups = (folder: string) => invoke<Backup[]>("story_backups", { folder });
+
+/** Puts the story back as it was in copy `id`; resolves to the files
+ * written or removed. */
+export const restoreBackup = (folder: string, id: string) => invoke<string[]>("story_restore", { folder, id });

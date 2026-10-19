@@ -6,15 +6,19 @@
 // other, each with the stamp the previous one returned: two saves in flight
 // with the same stamp would refuse each other. A save the engine refuses (a
 // sentence that does not parse) leaves the edit on screen, marked as not
-// saved, and the next save carries it. A rename joins the same queue, so it
-// runs on files every earlier edit has reached.
+// saved, and the next save carries it. A rename, an undo, a redo and a
+// restore join the same queue, so each runs on files every earlier edit has
+// reached.
 import { errorText } from "$lib/errors";
 import { t } from "$lib/i18n/index.svelte";
 import {
   checkStory,
   openStory as fetchStory,
+  redoEdit,
   renameName,
+  restoreBackup,
   saveFile,
+  undoEdit,
   type Chapter,
   type Diagnostic,
   type NameKind,
@@ -22,7 +26,7 @@ import {
 } from "./studio";
 
 /** The studio's sections (SPEC-story-mode, Create Your Own). */
-export type StudioSection = "flow" | "world" | "settings";
+export type StudioSection = "flow" | "world" | "settings" | "backups";
 
 /** The section whose files hold `file` (a diagnostic's, say): `story.yaml`
  * is the Settings', `world/` the World's, everything else the flow's -
@@ -138,9 +142,56 @@ export function renameEverywhere(kind: NameKind, from: string, to: string): Prom
     if (!path) return null;
     // The rename reloads every file: an edit kept on screen because the
     // engine refused it would vanish with the reload.
-    if (Object.keys(studio.unsaved).length > 0) return t("story.world.renameUnsaved");
+    if (Object.keys(studio.unsaved).length > 0) return t("story.studio.historyUnsaved");
     try {
       await renameName(path, kind, from, to);
+    } catch (e) {
+      return errorText(e);
+    }
+    await openStudio(path);
+    return null;
+  });
+}
+
+/** Queues an undo (or a redo) of the last edit, then reloads the story and
+ * shows where the edit was: its section, its chapter. */
+export function stepHistory(direction: "undo" | "redo"): Promise<void> {
+  return enqueue(async () => {
+    const path = studio.story?.path;
+    if (!path) return;
+    if (Object.keys(studio.unsaved).length > 0) {
+      studio.notice = t("story.studio.historyUnsaved");
+      return;
+    }
+    let files: string[];
+    try {
+      files = await (direction === "undo" ? undoEdit : redoEdit)(path);
+    } catch (e) {
+      // A file changed outside Pit Box: what is on disk wins, and the
+      // history it stood on is gone.
+      await openStudio(path);
+      studio.notice = errorText(e);
+      return;
+    }
+    if (files.length === 0) return;
+    await openStudio(path);
+    studio.notice = null;
+    const first = files[0];
+    studio.section = sectionOf(first);
+    const chapter = studio.story?.chapters.findIndex((c) => c.file === first) ?? -1;
+    if (chapter >= 0) studio.chapter = chapter;
+  });
+}
+
+/** Queues a restore of copy `id`, then reloads the story. Resolves to why it
+ * failed, or `null` once done. */
+export function restoreCopy(id: string): Promise<string | null> {
+  return enqueue(async () => {
+    const path = studio.story?.path;
+    if (!path) return null;
+    if (Object.keys(studio.unsaved).length > 0) return t("story.studio.historyUnsaved");
+    try {
+      await restoreBackup(path, id);
     } catch (e) {
       return errorText(e);
     }
@@ -180,10 +231,11 @@ function scheduleCheck(): void {
     const path = studio.story?.path;
     if (!path) return;
     try {
-      const { diagnostics, usages } = await checkStory(path);
+      const { diagnostics, usages, history } = await checkStory(path);
       if (studio.story?.path !== path) return;
       studio.diagnostics = diagnostics;
       studio.story.usages = usages;
+      studio.story.history = history;
     } catch (e) {
       console.warn("story studio: check failed", e);
     }

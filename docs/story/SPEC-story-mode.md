@@ -399,12 +399,23 @@ the editor is reserved; they are translated when it opens to all.
   file the editor does not write yet, only the cited word changes; file and
   folder names are never renamed. Deleting a name leaves the sentences citing
   it, and the checks report them.
+- **Ctrl+Z undoes the last edit, Ctrl+Y (or Ctrl+Shift+Z) redoes it**, a
+  rename or a restore whole, whatever section shows; inside a text field the
+  keys undo the typing instead. An edit is undone only while its files still
+  hold what it wrote: a file changed outside Pit Box since is never
+  overwritten, the story is read again and its history is cleared. The
+  history lasts while Pit Box runs.
+- **A copy of the story is taken the first time it is opened on a day**, and
+  before every restore; the ten most recent are kept, in Pit Box's own data,
+  never in the story's folder. A copy holds the files the editor writes, not
+  the media. Restoring puts the whole story back as it was, removes the story
+  files added since, and can itself be undone.
 - **A name is a letter followed by letters, digits and `_`**, so that it can
   never read as a number or a yes/no. A new character's name is made from
   their display name, which can change freely afterwards: it is only shown.
 - **A section appears with the lot that builds it**, never as an entry that
-  opens nothing: the Story flow, the World (characters, flags, counters) and
-  the Settings so far. Settings shows only the settings the engine applies.
+  opens nothing: the Story flow, the World (characters, flags, counters),
+  the Settings and the story's copies so far. Settings shows only the settings the engine applies.
   Each section counts the errors of its own files.
 
 ### Story flow screen

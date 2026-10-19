@@ -1739,7 +1739,8 @@
     "transferNotAnExport": "Ce fichier n'est pas un export Pit Box.",
     "transferIncompatible": "Cet export ne peut pas être lu par cette version de Pit Box : mettez-la à jour.",
     "transferNotEmpty": "L'import d'une bibliothèque ne se fait que dans une installation vide.",
-    "transferFolderNotEmpty": "Le dossier de la bibliothèque contient déjà des mods : l'import d'une bibliothèque ne se fait que dans un dossier vide."
+    "transferFolderNotEmpty": "Le dossier de la bibliothèque contient déjà des mods : l'import d'une bibliothèque ne se fait que dans un dossier vide.",
+    "storyHistoryOutdated": "Un fichier a été modifié hors de Pit Box entre-temps : l'histoire a été relue et l'historique d'annulation vidé."
   },
   "pack": {
     "tabMembers": "Mods",
@@ -2648,7 +2649,10 @@
       "checks": "Vérification",
       "allClear": "rien à corriger",
       "error": "erreur",
-      "warning": "avertissement"
+      "warning": "avertissement",
+      "undo": "Annuler (Ctrl+Z)",
+      "redo": "Rétablir (Ctrl+Y)",
+      "historyUnsaved": "Des modifications ne sont pas encore enregistrées : corrige-les d'abord."
     },
     "world": {
       "title": "Monde",
@@ -2667,7 +2671,6 @@
       "nameInvalid": "Une lettre, puis des lettres, des chiffres et _.",
       "nameTaken": "Ce nom est déjà pris.",
       "rename": "Renommer",
-      "renameUnsaved": "Des modifications ne sont pas encore enregistrées : corrige-les avant de renommer.",
       "renameConfirm": "Renommer {from} en {to} partout où il est cité ? Lignes : {count} · fichiers : {files}.",
       "cited": "Cité {count} fois",
       "notCited": "pas cité",
@@ -2717,6 +2720,14 @@
       "startStep": "départ",
       "startStepLabel": "Cran de départ",
       "newStep": "Nouveau cran"
+    },
+    "backups": {
+      "title": "Copies de sécurité",
+      "copies": "Copies",
+      "none": "Aucune copie pour l'instant.",
+      "files": "Fichiers : {count}",
+      "restore": "Restaurer",
+      "restoreConfirm": "Remettre l'histoire telle qu'elle était le {when} ? Son état actuel est copié d'abord."
     }
   }
 }

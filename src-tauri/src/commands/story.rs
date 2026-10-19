@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use super::prelude::*;
-use crate::story::studio;
+use crate::story::{backups, studio};
 
 /// The Story switch asked for on this launch's command line, if any
 /// (`--enable-story-studio` / `--disable-story-studio`). Read once at startup
@@ -54,9 +54,19 @@ pub fn story_create(
     )
 }
 
+/// Opens a story, and takes its copy of the day if it has none yet
+/// (`story::backups`). The copy is best-effort: a story that cannot be
+/// copied still opens.
 #[tauri::command]
 pub async fn story_open(app: AppHandle, folder: PathBuf) -> Result<studio::OpenStory, String> {
-    off_window(app, move |_| studio::open(&folder)).await
+    off_window(app, move |app| {
+        let now = chrono::Local::now().naive_local();
+        if let Err(e) = backups::take_daily(&crate::rules::config_dir(app)?, &folder, now) {
+            log::warn!("story backups: no copy of {}: {e}", folder.display());
+        }
+        studio::open(&folder)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -88,4 +98,37 @@ pub async fn story_rename(
     to: String,
 ) -> Result<(), String> {
     off_window(app, move |_| studio::rename(&folder, kind, &from, &to)).await
+}
+
+/// Ctrl+Z in the editor: puts back the files of the last edit. Resolves to
+/// the files written, empty when there was nothing to undo. A short write,
+/// synchronous like a save.
+#[tauri::command]
+pub fn story_undo(folder: PathBuf) -> Result<Vec<String>, String> {
+    crate::story::history::with(&folder, |h| h.undo(&folder))
+}
+
+/// Ctrl+Y: writes again the files of the last edit undone.
+#[tauri::command]
+pub fn story_redo(folder: PathBuf) -> Result<Vec<String>, String> {
+    crate::story::history::with(&folder, |h| h.redo(&folder))
+}
+
+/// The story's copies, newest first.
+#[tauri::command]
+pub async fn story_backups(app: AppHandle, folder: PathBuf) -> Result<Vec<backups::Backup>, String> {
+    off_window(app, move |app| {
+        Ok(backups::list(&crate::rules::config_dir(app)?, &folder))
+    })
+    .await
+}
+
+/// Puts the story back as it was in a copy, after copying it as it is now.
+#[tauri::command]
+pub async fn story_restore(app: AppHandle, folder: PathBuf, id: String) -> Result<Vec<String>, String> {
+    off_window(app, move |app| {
+        let now = chrono::Local::now().naive_local();
+        backups::restore(&crate::rules::config_dir(app)?, &folder, &id, now)
+    })
+    .await
 }

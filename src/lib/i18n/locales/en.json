@@ -1739,7 +1739,8 @@
     "transferNotAnExport": "This file is not a Pit Box export.",
     "transferIncompatible": "This version of Pit Box cannot read this export: update it.",
     "transferNotEmpty": "A library is only imported into an empty installation.",
-    "transferFolderNotEmpty": "The library folder already holds mods: a library is only imported into an empty folder."
+    "transferFolderNotEmpty": "The library folder already holds mods: a library is only imported into an empty folder.",
+    "storyHistoryOutdated": "A file was changed outside Pit Box since: the story was read again, and the undo history was cleared."
   },
   "pack": {
     "tabMembers": "Mods",
@@ -2648,7 +2649,10 @@
       "checks": "Checks",
       "allClear": "nothing to fix",
       "error": "error",
-      "warning": "warning"
+      "warning": "warning",
+      "undo": "Undo (Ctrl+Z)",
+      "redo": "Redo (Ctrl+Y)",
+      "historyUnsaved": "Some edits are not saved yet: fix them first."
     },
     "world": {
       "title": "World",
@@ -2667,7 +2671,6 @@
       "nameInvalid": "A letter, then letters, digits and _.",
       "nameTaken": "This name is already taken.",
       "rename": "Rename",
-      "renameUnsaved": "Some edits are not saved yet: fix them before renaming.",
       "renameConfirm": "Rename {from} to {to} everywhere it is cited? Lines: {count} · files: {files}.",
       "cited": "Cited: {count}",
       "notCited": "not cited",
@@ -2717,6 +2720,14 @@
       "startStep": "start",
       "startStepLabel": "Starting step",
       "newStep": "New step"
+    },
+    "backups": {
+      "title": "Backups",
+      "copies": "Copies",
+      "none": "No copy yet.",
+      "files": "Files: {count}",
+      "restore": "Restore",
+      "restoreConfirm": "Put the story back as it was on {when}? Its current state is copied first."
     }
   }
 }

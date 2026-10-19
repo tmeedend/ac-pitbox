@@ -14,7 +14,8 @@
 //! that: a file is only written when it still holds what the editor last read
 //! (`Stamp`), so a change made meanwhile in a text editor is reloaded rather
 //! than overwritten; and the engine reads every write back before it reaches
-//! the disk.
+//! the disk. Every write is recorded in the story's undo history
+//! (`history.rs`).
 
 use std::path::{Path, PathBuf};
 
@@ -28,6 +29,7 @@ use story_engine::write;
 use story_engine::LoadError;
 use story_engine::Story;
 
+use super::history::{self, FileChange, HistoryStatus};
 use crate::errors;
 
 /// The list of story folders, beside Pit Box's other settings.
@@ -182,7 +184,7 @@ fn story_id(folder: &Path) -> String {
 
 /// What a file held when the editor read it: a write is refused if the file
 /// no longer holds it.
-fn stamp(text: &str) -> String {
+pub(super) fn stamp(text: &str) -> String {
     // FNV-1a: a fingerprint, not a security measure.
     let mut h: u64 = 0xcbf29ce484222325;
     for b in text.as_bytes() {
@@ -241,6 +243,7 @@ pub struct OpenStory {
     pub diagnostics: Vec<Diagnostic>,
     /// Where each character, flag, counter and relation step is cited.
     pub usages: Vec<NameUsages>,
+    pub history: HistoryStatus,
 }
 
 /// `file` as the editor shows it. `value` is what the draft read from it - a
@@ -304,6 +307,7 @@ pub fn open(folder: &Path) -> Result<OpenStory, String> {
         events: d.events.iter().map(|e| e.id.clone()).collect(),
         diagnostics,
         usages,
+        history: history::with(folder, |h| h.status()),
     })
 }
 
@@ -317,21 +321,26 @@ pub struct Checked {
     pub diagnostics: Vec<Diagnostic>,
     /// Where each character, flag, counter and relation step is cited.
     pub usages: Vec<NameUsages>,
+    pub history: HistoryStatus,
 }
 
-/// Everything wrong with the story, and where its names are cited.
+/// Everything wrong with the story, where its names are cited, and what can
+/// be undone.
 pub fn check(folder: &Path) -> Checked {
+    let history = history::with(folder, |h| h.status());
     match read_dir(folder) {
         Ok(files) => {
             let d = draft(files.clone());
             Checked {
                 usages: refs::all_usages(&files, &d),
                 diagnostics: verdict(d),
+                history,
             }
         }
         Err(e) => Checked {
             diagnostics: vec![load_error(e)],
             usages: Vec::new(),
+            history,
         },
     }
 }
@@ -409,20 +418,28 @@ pub fn save_file(
 /// not overwritten. Nothing is written unless the whole story reads back.
 pub fn rename(folder: &Path, kind: NameKind, from: &str, to: &str) -> Result<(), String> {
     let files = read_dir(folder).map_err(|e| e.to_string())?;
+    let mut edit = Vec::new();
     for file in refs::rename(&files, kind, from, to)? {
         let path = folder.join(&file.path);
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
         }
         std::fs::write(&path, &file.text).map_err(|e| format!("writing {}: {e}", path.display()))?;
+        edit.push(FileChange {
+            before: files.iter().find(|f| f.path == file.path).map(|f| f.text.clone()),
+            after: Some(file.text),
+            file: file.path,
+        });
     }
+    // One edit, however many files: Ctrl+Z undoes the rename whole.
+    history::with(folder, |h| h.record(edit));
     Ok(())
 }
 
 /// Writes `file` with the text `render` gives, only if the file still holds
 /// what the editor read (`expected`, its stamp; `None`: the file must not
 /// exist yet). The text is rendered after the check, so a refused write costs
-/// nothing. Returns the new stamp.
+/// nothing. Recorded in the undo history; returns the new stamp.
 fn write_guarded(
     folder: &Path,
     file: &str,
@@ -444,7 +461,15 @@ fn write_guarded(
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
     std::fs::write(&path, &text).map_err(|e| format!("writing {}: {e}", path.display()))?;
-    Ok(stamp(&text))
+    let new_stamp = stamp(&text);
+    history::with(folder, |h| {
+        h.record(vec![FileChange {
+            file: file.into(),
+            before: on_disk,
+            after: Some(text),
+        }])
+    });
+    Ok(new_stamp)
 }
 
 #[cfg(test)]
@@ -690,6 +715,54 @@ A line.
             rename(&folder, NameKind::Counter, "trips", "9lives").is_err(),
             "an invalid name is refused"
         );
+    }
+
+    // Saves and renames land in one undo history, undone last first; a
+    // rename that touched several files comes back whole (SPEC-story-mode,
+    // Create Your Own).
+    #[test]
+    fn saves_and_renames_are_undone_last_first() {
+        let config = temp_dir("studio-config");
+        let base = temp_dir("studio-story");
+        let folder = base.join("s");
+        create(&config, &folder, "S", "en", "C").unwrap();
+        let undo =
+            |n: usize| (0..n).for_each(|_| assert!(!history::with(&folder, |h| h.undo(&folder)).unwrap().is_empty()));
+        save_file(
+            &folder,
+            VARIABLES,
+            None,
+            serde_json::json!({ "counters": { "visits": 0 } }),
+        )
+        .unwrap();
+        let (mut chapter, stamp) = chapter_of(&folder, "flow/01-chapter.yaml");
+        let original = std::fs::read_to_string(folder.join("flow/01-chapter.yaml")).unwrap();
+        chapter.nodes[0].kind = story_engine::model::NodeKind::Beat(
+            serde_json::from_value(serde_json::json!({ "effects": ["counter.visits += 1"] })).unwrap(),
+        );
+        save_file(&folder, "flow/01-chapter.yaml", Some(&stamp), json(&chapter)).unwrap();
+        rename(&folder, NameKind::Counter, "visits", "trips").unwrap();
+        assert!(check(&folder).history.can_undo, "the editor can offer Ctrl+Z");
+
+        undo(1);
+        assert_eq!(check(&folder).usages[0].id, "visits", "the rename undone: declaration");
+        assert!(
+            std::fs::read_to_string(folder.join("flow/01-chapter.yaml"))
+                .unwrap()
+                .contains("counter.visits"),
+            "and the sentence citing it"
+        );
+        undo(2);
+        assert_eq!(
+            std::fs::read_to_string(folder.join("flow/01-chapter.yaml")).unwrap(),
+            original,
+            "the chapter as created"
+        );
+        assert!(
+            !folder.join(VARIABLES).exists(),
+            "the world file the first save created is gone"
+        );
+        assert!(check(&folder).history.can_redo && !check(&folder).history.can_undo);
     }
 
     // One chapter that does not read hides neither the others nor itself:

@@ -3,12 +3,22 @@
   // editor). The side column names the story, its sections and its chapters;
   // the rest is the section shown. A section appears with the lot that
   // builds it, rather than as an entry that opens nothing: the Story flow,
-  // the World and the Settings so far.
+  // the World and the Settings so far, and the story's copies. Ctrl+Z and
+  // Ctrl+Y undo and redo the last edits, whatever section shows.
   import { t } from "$lib/i18n/index.svelte";
   import { allNodeIds, freshChapterId, freshNodeId, nextChapterFile } from "$lib/story/flow";
-  import { addChapter, closeStudio, sectionOf, studio, type StudioSection } from "$lib/story/studioState.svelte";
+  import { historyKey, isTypingTarget } from "$lib/story/history";
+  import {
+    addChapter,
+    closeStudio,
+    sectionOf,
+    stepHistory,
+    studio,
+    type StudioSection,
+  } from "$lib/story/studioState.svelte";
   import FlowEditor from "./FlowEditor.svelte";
   import SettingsEditor from "./SettingsEditor.svelte";
+  import StoryBackups from "./StoryBackups.svelte";
   import WorldEditor from "./WorldEditor.svelte";
 
   interface Props {
@@ -22,14 +32,22 @@
     { id: "flow", label: "story.studio.flow" },
     { id: "world", label: "story.world.title" },
     { id: "settings", label: "story.settings.title" },
+    { id: "backups", label: "story.backups.title" },
   ];
 
   /** Errors by section, for the counts beside their entries. */
   const errors = $derived.by(() => {
-    const out: Record<StudioSection, number> = { flow: 0, world: 0, settings: 0 };
+    const out: Record<StudioSection, number> = { flow: 0, world: 0, settings: 0, backups: 0 };
     for (const d of studio.diagnostics) if (d.severity === "error") out[sectionOf(d.file)]++;
     return out;
   });
+
+  function onkeydown(e: KeyboardEvent) {
+    const step = historyKey(e, isTypingTarget(e.target));
+    if (!step) return;
+    e.preventDefault();
+    void stepHistory(step);
+  }
 
   function leave() {
     closeStudio();
@@ -48,11 +66,29 @@
   }
 </script>
 
+<svelte:window {onkeydown} />
+
 <div class="studio">
   <aside class="side">
     <button class="back btn-ghost" onclick={leave}>‹ {t("story.createTitle")}</button>
     <div class="title">{story.manifest.value?.title ?? t("story.studio.untitled")}</div>
     <div class="path mono" title={story.path}>{story.path}</div>
+    <div class="history">
+      <button
+        class="btn btn-ghost"
+        disabled={!story.history.canUndo}
+        title={t("story.studio.undo")}
+        aria-label={t("story.studio.undo")}
+        onclick={() => stepHistory("undo")}>↶</button
+      >
+      <button
+        class="btn btn-ghost"
+        disabled={!story.history.canRedo}
+        title={t("story.studio.redo")}
+        aria-label={t("story.studio.redo")}
+        onclick={() => stepHistory("redo")}>↷</button
+      >
+    </div>
 
     <nav class="sections">
       {#each SECTIONS as s (s.id)}
@@ -88,6 +124,8 @@
 
   {#if studio.section === "world"}
     <WorldEditor />
+  {:else if studio.section === "backups"}
+    <StoryBackups />
   {:else if studio.section === "settings"}
     <SettingsEditor />
   {:else}
@@ -128,6 +166,15 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .history {
+    display: flex;
+    gap: 4px;
+    margin: 8px 0 0 -6px;
+  }
+  .history .btn {
+    padding: 2px 8px;
+    font-size: 15px;
   }
   .sections {
     margin-top: 18px;

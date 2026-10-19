@@ -183,6 +183,25 @@ de reprendre. En cas d'écart, la spec fait foi.
           partie en cours la valeur de l'ancien drapeau ou compteur (repris à
           sa valeur de départ), et une sauvegarde sur un cran renommé est
           refusée — un avertissement à la publication serait à prévoir (L4).
+        - **Annuler et copies de sécurité — fait (2026-10-19).** Demandé
+          par l'utilisateur après L2.2, les deux à la fois : Ctrl+Z / Ctrl+Y
+          (et boutons ↶ ↷ sous le titre) pour l'erreur d'il y a dix
+          secondes, une copie par jour pour la mauvaise surprise du
+          lendemain (`story/history.rs`, `story/backups.rs`, section
+          « Copies de sécurité » du studio). **Choisi sans demander** :
+          l'historique garde les 100 dernières modifications, en mémoire
+          seulement ; une modification faite ailleurs entre-temps vide
+          l'historique plutôt que de n'en annuler qu'une partie ; les
+          touches restent au champ de saisie quand on y tape ; une copie
+          à la **première ouverture du jour** (et non à chaque ouverture,
+          que le studio refait à chaque rechargement), plus une avant
+          chaque restauration, dix gardées ; les copies vont dans
+          `app_config_dir/story/backups/`, pas dans le dossier de
+          l'histoire, souvent un dépôt git où elles finiraient commitées ;
+          une copie ne contient que les fichiers que l'éditeur écrit, pas
+          les médias ; restaurer retire les fichiers de l'histoire ajoutés
+          depuis (pas les autres fichiers du dossier) et s'annule par
+          Ctrl+Z. Créer une histoire ne s'annule pas.
       - **L3 à L8** : dans l'ordre du plan de livraison de la spec.
       **Écarts assumés par rapport au document de conception** (la spec
       publique les reprend déjà) :
