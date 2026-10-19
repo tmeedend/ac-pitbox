@@ -64,13 +64,33 @@ pub async fn story_check(app: AppHandle, folder: PathBuf) -> Result<Vec<story_en
     off_window(app, move |_| Ok(studio::check(&folder))).await
 }
 
+/// Writes one file the editor edits - a chapter, `story.yaml` or a world
+/// file - from the value it sends, in the shape of that file.
 #[tauri::command]
-pub fn story_save_chapter(
+pub fn story_save_file(
     folder: PathBuf,
     file: String,
     expected: Option<String>,
-    chapter: serde_json::Value,
+    value: serde_json::Value,
 ) -> Result<String, String> {
-    let chapter = studio::chapter_from_json(chapter)?;
-    studio::save_chapter(&folder, &file, expected.as_deref(), &chapter)
+    studio::save_file(&folder, &file, expected.as_deref(), value)
+}
+
+/// Renames a character, flag, counter or relation step everywhere it is
+/// cited. Off the window thread: it reads the whole story folder. The
+/// frontend's queue of edits keeps it in order with the saves around it.
+#[tauri::command]
+pub async fn story_rename(
+    app: AppHandle,
+    folder: PathBuf,
+    kind: story_engine::refs::NameKind,
+    from: String,
+    to: String,
+) -> Result<(), String> {
+    off_window(app, move |_| studio::rename(&folder, kind, &from, &to)).await
+}
+
+#[tauri::command]
+pub async fn story_usages(app: AppHandle, folder: PathBuf) -> Result<Vec<story_engine::refs::NameUsages>, String> {
+    off_window(app, move |_| studio::usages(&folder)).await
 }

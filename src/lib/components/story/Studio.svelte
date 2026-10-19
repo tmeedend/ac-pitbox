@@ -1,13 +1,15 @@
 <script lang="ts">
   // Create Your Own, one story open (SPEC-story-mode, Create Your Own: the
   // editor). The side column names the story, its sections and its chapters;
-  // the rest is the section shown. Only the Story flow exists so far: the
-  // other sections appear with the lot that builds them, rather than as
-  // entries that open nothing.
+  // the rest is the section shown. A section appears with the lot that
+  // builds it, rather than as an entry that opens nothing: the Story flow,
+  // the World and the Settings so far.
   import { t } from "$lib/i18n/index.svelte";
   import { allNodeIds, freshChapterId, freshNodeId, nextChapterFile } from "$lib/story/flow";
-  import { addChapter, closeStudio, studio } from "$lib/story/studioState.svelte";
+  import { addChapter, closeStudio, sectionOf, studio, type StudioSection } from "$lib/story/studioState.svelte";
   import FlowEditor from "./FlowEditor.svelte";
+  import SettingsEditor from "./SettingsEditor.svelte";
+  import WorldEditor from "./WorldEditor.svelte";
 
   interface Props {
     onleave: () => void;
@@ -15,7 +17,19 @@
   const { onleave }: Props = $props();
 
   const story = $derived(studio.story!);
-  const errors = $derived(studio.diagnostics.filter((d) => d.severity === "error").length);
+
+  const SECTIONS: { id: StudioSection; label: string }[] = [
+    { id: "flow", label: "story.studio.flow" },
+    { id: "world", label: "story.world.title" },
+    { id: "settings", label: "story.settings.title" },
+  ];
+
+  /** Errors by section, for the counts beside their entries. */
+  const errors = $derived.by(() => {
+    const out: Record<StudioSection, number> = { flow: 0, world: 0, settings: 0 };
+    for (const d of studio.diagnostics) if (d.severity === "error") out[sectionOf(d.file)]++;
+    return out;
+  });
 
   function leave() {
     closeStudio();
@@ -25,6 +39,7 @@
   function newChapter() {
     const { file, number } = nextChapterFile(story.chapters.map((c) => c.file));
     const chapters = story.chapters.map((c) => c.chapter);
+    studio.section = "flow";
     addChapter(file, {
       id: freshChapterId(number, chapters),
       title: t("story.studio.chapterTitle", { n: number }),
@@ -36,14 +51,16 @@
 <div class="studio">
   <aside class="side">
     <button class="back btn-ghost" onclick={leave}>‹ {t("story.createTitle")}</button>
-    <div class="title">{story.title ?? t("story.studio.untitled")}</div>
+    <div class="title">{story.manifest.value?.title ?? t("story.studio.untitled")}</div>
     <div class="path mono" title={story.path}>{story.path}</div>
 
     <nav class="sections">
-      <span class="entry on">
-        {t("story.studio.flow")}
-        {#if errors > 0}<span class="pill pill-err">{errors}</span>{/if}
-      </span>
+      {#each SECTIONS as s (s.id)}
+        <button class="entry" class:on={studio.section === s.id} onclick={() => (studio.section = s.id)}>
+          {t(s.label)}
+          {#if errors[s.id] > 0}<span class="pill pill-err">{errors[s.id]}</span>{/if}
+        </button>
+      {/each}
     </nav>
 
     <div class="lbl section">{t("story.studio.chapters")}</div>
@@ -52,8 +69,9 @@
         <li>
           <button
             class="chapter"
-            class:on={i === studio.chapter}
+            class:on={studio.section === "flow" && i === studio.chapter}
             onclick={() => {
+              studio.section = "flow";
               studio.chapter = i;
               studio.node = null;
             }}
@@ -68,7 +86,13 @@
     <button class="btn btn-ghost add" onclick={newChapter}>+ {t("story.studio.addChapter")}</button>
   </aside>
 
-  <FlowEditor />
+  {#if studio.section === "world"}
+    <WorldEditor />
+  {:else if studio.section === "settings"}
+    <SettingsEditor />
+  {:else}
+    <FlowEditor />
+  {/if}
 </div>
 
 <style>
@@ -114,9 +138,15 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    width: 100%;
+    text-align: left;
     padding: 6px 10px;
     font-size: 13px;
+    background: transparent;
     color: var(--txt2);
+  }
+  .entry:hover {
+    background: var(--raised);
   }
   .entry.on {
     background: var(--raised);

@@ -383,8 +383,8 @@ the editor is reserved; they are translated when it opens to all.
   fix, a chapter whose first node leads to an end, written in the app's
   language.
 - **Every change is written at once**, the whole file, in one canonical form,
-  so a diff shows only what changed. Comments typed by hand in a file the
-  editor writes do not survive.
+  so a diff shows only what changed: a setting left at its default is not
+  written. Comments typed by hand in a file the editor writes do not survive.
 - **A file changed outside Pit Box since the editor read it is never
   overwritten**: the story is read again, and the author is told their last
   change did not go through.
@@ -392,8 +392,20 @@ the editor is reserved; they are translated when it opens to all.
   screen, marked as not saved, until it reads.
 - **Renaming a node renames every link to it**, in every chapter. The start
   node keeps its id in the flow: it is set in the story settings.
+- **Renaming a name renames every sentence citing it**: a character, a flag,
+  a counter or a relation step, in every file of the story - flow, events,
+  content, the scripts' `check()` and `effect()` included. The editor lists
+  the lines citing a name, and a rename asks first when there are any. In a
+  file the editor does not write yet, only the cited word changes; file and
+  folder names are never renamed. Deleting a name leaves the sentences citing
+  it, and the checks report them.
+- **A name is a letter followed by letters, digits and `_`**, so that it can
+  never read as a number or a yes/no. A new character's name is made from
+  their display name, which can change freely afterwards: it is only shown.
 - **A section appears with the lot that builds it**, never as an entry that
-  opens nothing. The first is the Story flow.
+  opens nothing: the Story flow, the World (characters, flags, counters) and
+  the Settings so far. Settings shows only the settings the engine applies.
+  Each section counts the errors of its own files.
 
 ### Story flow screen
 
@@ -450,6 +462,8 @@ visible in it:
   next chapter, in file-name order.
 - Conditions and effects are short sentences (`reputation >= 10`,
   `rel.friend += 1`, `send conv_06`), checked against the story as it loads.
+  A sentence cites a name with its prefix (`flag.`, `counter.`, `rel.`); a
+  relation step is cited as the value of a relation (`rel.friend >= warm`).
 - Saves are JSON with a format number: a save from a newer Pit Box is refused.
 
 ### Dialogue text: Ink, in one language first

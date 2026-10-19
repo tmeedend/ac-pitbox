@@ -18,10 +18,14 @@
 
 use std::path::{Path, PathBuf};
 
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use story_engine::load::{draft, read_dir, SourceFile};
-use story_engine::model::{Chapter, Placement};
+use story_engine::model::{Chapter, Characters, Manifest, Placement, Variables};
+use story_engine::refs::{self, NameKind, NameUsages};
 use story_engine::validate::{validate, Diagnostic, Severity};
+use story_engine::write;
+use story_engine::LoadError;
 use story_engine::Story;
 
 use crate::errors;
@@ -211,23 +215,58 @@ pub struct ContentRef {
     pub has_replies: bool,
 }
 
+/// One of the story-wide files the editor writes (`story.yaml`, `world/`),
+/// readable or not. A world file the story does not have yet reads as empty,
+/// with an empty stamp: the first save creates it.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditedFile<T> {
+    pub file: String,
+    pub stamp: String,
+    pub value: Option<T>,
+    pub error: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OpenStory {
     pub path: PathBuf,
-    pub title: Option<String>,
-    pub start: Option<String>,
+    /// `story.yaml`: title, start, settings.
+    pub manifest: EditedFile<Manifest>,
+    pub characters: EditedFile<Characters>,
+    pub variables: EditedFile<Variables>,
     pub chapters: Vec<ChapterFile>,
     pub content: Vec<ContentRef>,
     pub events: Vec<String>,
     pub diagnostics: Vec<Diagnostic>,
+    /// Where each character, flag, counter and relation step is cited.
+    pub usages: Vec<NameUsages>,
+}
+
+/// `file` as the editor shows it. `value` is what the draft read from it - a
+/// world file the story does not have yet reads as empty - and is dropped
+/// when the file does not read: the screen shows the error instead.
+fn edited<T>(files: &[SourceFile], errors: &[LoadError], file: &str, value: Option<T>) -> EditedFile<T> {
+    let error = (errors.iter()).find(|e| e.file == file).map(|e| e.message.clone());
+    EditedFile {
+        file: file.into(),
+        stamp: (files.iter().find(|f| f.path == file))
+            .map(|f| stamp(&f.text))
+            .unwrap_or_default(),
+        value: if error.is_some() { None } else { value },
+        error,
+    }
 }
 
 pub fn open(folder: &Path) -> Result<OpenStory, String> {
     let files = read_dir(folder).map_err(|e| e.to_string())?;
     let chapter_files: Vec<SourceFile> = files.iter().filter(|f| is_chapter_path(&f.path)).cloned().collect();
     let diagnostics = check_files(files.clone());
-    let d = draft(files);
+    let usages = refs::all_usages(&files);
+    let mut d = draft(files.clone());
+    let manifest = edited(&files, &d.errors, MANIFEST, d.manifest.take());
+    let characters = edited(&files, &d.errors, CHARACTERS, Some(std::mem::take(&mut d.characters)));
+    let variables = edited(&files, &d.errors, VARIABLES, Some(std::mem::take(&mut d.variables)));
     let chapters = chapter_files
         .iter()
         .map(|f| {
@@ -255,13 +294,25 @@ pub fn open(folder: &Path) -> Result<OpenStory, String> {
         .collect();
     Ok(OpenStory {
         path: folder.to_path_buf(),
-        title: d.manifest.as_ref().map(|m| m.title.clone()),
-        start: d.manifest.as_ref().map(|m| m.start.node.clone()),
+        manifest,
+        characters,
+        variables,
         chapters,
         content,
         events: d.events.iter().map(|e| e.id.clone()).collect(),
         diagnostics,
+        usages,
     })
+}
+
+const MANIFEST: &str = "story.yaml";
+const CHARACTERS: &str = "world/characters.yaml";
+const VARIABLES: &str = "world/variables.yaml";
+
+/// Where each name of the story is cited, read afresh: the studio asks after
+/// every save, as it does for the checks.
+pub fn usages(folder: &Path) -> Result<Vec<NameUsages>, String> {
+    Ok(refs::all_usages(&read_dir(folder).map_err(|e| e.to_string())?))
 }
 
 /// Everything wrong with the story: what keeps it from loading, or else what
@@ -293,9 +344,10 @@ fn load_error(e: story_engine::LoadError) -> Diagnostic {
     }
 }
 
-/// `flow/<name>.yaml`, directly in `flow/`: the only files this lot writes.
-/// Anything else - a path climbing out of the story, another folder - is
-/// refused, whatever the frontend sends.
+/// `flow/<name>.yaml`, directly in `flow/`. With `story.yaml` and the two
+/// world files, the only files the editor writes: anything else - a path
+/// climbing out of the story, another folder - is refused, whatever the
+/// frontend sends.
 fn is_chapter_path(path: &str) -> bool {
     path.strip_prefix("flow/").is_some_and(|name| {
         name.ends_with(".yaml")
@@ -305,22 +357,54 @@ fn is_chapter_path(path: &str) -> bool {
     })
 }
 
-/// A chapter as the editor sends it, read here rather than in the command's
-/// signature: a sentence the engine cannot read is then reported in the
-/// engine's words alone, without Tauri's "invalid args" wrapping, and the
+/// The canonical text of `file` from the value the editor sends, in the
+/// shape of that file (`story_engine::model`). Read here rather than in the
+/// command's signature: a sentence the engine cannot read is then reported in
+/// the engine's words alone, without Tauri's "invalid args" wrapping, and the
 /// author sees what to fix.
-pub fn chapter_from_json(value: serde_json::Value) -> Result<Chapter, String> {
-    serde_json::from_value(value).map_err(|e| e.to_string())
+pub fn render(file: &str, value: serde_json::Value) -> Result<String, String> {
+    fn from<T: DeserializeOwned>(value: serde_json::Value) -> Result<T, String> {
+        serde_json::from_value(value).map_err(|e| e.to_string())
+    }
+    match file {
+        MANIFEST => write::manifest(&from(value)?),
+        CHARACTERS => write::characters(&from(value)?),
+        VARIABLES => write::variables(&from(value)?),
+        _ if is_chapter_path(file) => write::chapter(file, &from::<Chapter>(value)?),
+        _ => Err(format!("not a file the editor writes: {file}")),
+    }
 }
 
-/// Writes one chapter. `expected` is the stamp the editor read the file with,
-/// `None` for a new chapter, whose file must not exist yet. Returns the new
-/// stamp.
-pub fn save_chapter(folder: &Path, file: &str, expected: Option<&str>, chapter: &Chapter) -> Result<String, String> {
-    if !is_chapter_path(file) {
-        return Err(format!("not a chapter file: {file}"));
+/// Writes one file of the story. `expected` is the stamp the editor read it
+/// with, `None` for a file the story does not have yet (a new chapter, a
+/// first character), which must not exist. Returns the new stamp.
+pub fn save_file(
+    folder: &Path,
+    file: &str,
+    expected: Option<&str>,
+    value: serde_json::Value,
+) -> Result<String, String> {
+    if !matches!(file, MANIFEST | CHARACTERS | VARIABLES) && !is_chapter_path(file) {
+        return Err(format!("not a file the editor writes: {file}"));
     }
-    write_guarded(folder, file, expected, || story_engine::write::chapter(file, chapter))
+    write_guarded(folder, file, expected, || render(file, value))
+}
+
+/// Renames a character, flag, counter or relation step, and every sentence
+/// citing it, in every file of the story (`story_engine::refs`). Unlike a
+/// save it takes no stamp: it reads the files as they are now and changes
+/// only the cited words, so an edit made meanwhile in a text editor is kept,
+/// not overwritten. Nothing is written unless the whole story reads back.
+pub fn rename(folder: &Path, kind: NameKind, from: &str, to: &str) -> Result<(), String> {
+    let files = read_dir(folder).map_err(|e| e.to_string())?;
+    for file in refs::rename(&files, kind, from, to)? {
+        let path = folder.join(&file.path);
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        }
+        std::fs::write(&path, &file.text).map_err(|e| format!("writing {}: {e}", path.display()))?;
+    }
+    Ok(())
 }
 
 /// Writes `file` with the text `render` gives, only if the file still holds
@@ -355,6 +439,10 @@ fn write_guarded(
 mod tests {
     use super::*;
     use crate::testutil::temp_dir;
+
+    fn json<T: Serialize>(value: &T) -> serde_json::Value {
+        serde_json::to_value(value).expect("serializes")
+    }
 
     fn chapter_of(folder: &Path, file: &str) -> (Chapter, String) {
         let open = open(folder).expect("opens");
@@ -428,7 +516,7 @@ mod tests {
         create(&config, &folder, "S", "en", "C").unwrap();
         let (mut chapter, stamp) = chapter_of(&folder, "flow/01-chapter.yaml");
         chapter.nodes[0].next = Some("nowhere".into());
-        let new_stamp = save_chapter(&folder, "flow/01-chapter.yaml", Some(&stamp), &chapter).expect("saved");
+        let new_stamp = save_file(&folder, "flow/01-chapter.yaml", Some(&stamp), json(&chapter)).expect("saved");
         let (back, read_stamp) = chapter_of(&folder, "flow/01-chapter.yaml");
         assert_eq!(read_stamp, new_stamp, "the returned stamp is the file's");
         assert_eq!(back.nodes[0].next.as_deref(), Some("nowhere"));
@@ -453,12 +541,12 @@ mod tests {
         let by_hand = format!("# typed by hand\n{}", std::fs::read_to_string(&path).unwrap());
         std::fs::write(&path, &by_hand).unwrap();
         assert_eq!(
-            save_chapter(&folder, "flow/01-chapter.yaml", Some(&stamp), &chapter).unwrap_err(),
+            save_file(&folder, "flow/01-chapter.yaml", Some(&stamp), json(&chapter)).unwrap_err(),
             errors::STORY_FILE_CHANGED
         );
         assert_eq!(std::fs::read_to_string(&path).unwrap(), by_hand, "the hand edit kept");
         assert_eq!(
-            save_chapter(&folder, "flow/01-chapter.yaml", None, &chapter).unwrap_err(),
+            save_file(&folder, "flow/01-chapter.yaml", None, json(&chapter)).unwrap_err(),
             errors::STORY_FILE_CHANGED,
             "a new chapter never replaces an existing file"
         );
@@ -472,27 +560,124 @@ mod tests {
             "id": "ch01",
             "nodes": [{ "id": "start", "beat": { "effects": ["money +=== 1"] } }]
         });
-        let why = chapter_from_json(bad).unwrap_err();
+        let why = render("flow/01-chapter.yaml", bad).unwrap_err();
         assert!(why.contains("cannot read effect `money +=== 1`"), "{why}");
         let good = serde_json::json!({ "id": "ch01", "nodes": [{ "id": "start", "end": "done" }] });
-        assert!(chapter_from_json(good).is_ok());
+        assert!(render("flow/01-chapter.yaml", good).is_ok());
+        let bad_date = serde_json::json!({ "characters": [{ "id": "a", "relation": "warm", "age": 3 }] });
+        assert!(
+            render("world/characters.yaml", bad_date).unwrap_err().contains("age"),
+            "an unknown key named, in a world file too"
+        );
     }
 
-    // Only chapter files are written, inside the story.
+    // Only the story's own files are written, inside the story: its chapters,
+    // story.yaml and the two world files.
     #[test]
-    fn only_chapter_files_are_written() {
+    fn only_the_story_files_are_written() {
+        let base = temp_dir("studio-story");
         for bad in [
-            "story.yaml",
             "flow/../story.yaml",
             "flow/sub/01.yaml",
             "flow/.yaml",
             "flow/01.txt",
             "flow/..\\x.yaml",
             "events/race.yaml",
+            "world/../story.yaml",
+            "world/economy.yaml",
         ] {
-            assert!(!is_chapter_path(bad), "{bad} refused");
+            assert!(!is_chapter_path(bad), "{bad} is not a chapter");
+            assert!(
+                save_file(&base, bad, None, serde_json::json!({})).is_err(),
+                "{bad} refused"
+            );
+            assert!(!base.join(bad).exists(), "{bad} not written");
         }
         assert!(is_chapter_path("flow/02-chapter.yaml"));
+    }
+
+    // story.yaml and the world files are saved like a chapter: canonical,
+    // read back, guarded by their stamp; a world file the story did not have
+    // yet is created by its first save.
+    #[test]
+    fn story_yaml_and_world_files_save_and_read_back() {
+        let config = temp_dir("studio-config");
+        let base = temp_dir("studio-story");
+        let folder = base.join("s");
+        create(&config, &folder, "S", "en", "C").unwrap();
+        let opened = open(&folder).unwrap();
+        assert_eq!(opened.characters.stamp, "", "no characters file yet");
+        assert!(opened.characters.value.unwrap().characters.is_empty(), "read as empty");
+        let mut manifest = opened.manifest.value.expect("story.yaml reads");
+        manifest.title = "Renamed".into();
+        manifest.settings.failure = story_engine::model::FailureMode::Final;
+        save_file(&folder, MANIFEST, Some(&opened.manifest.stamp), json(&manifest)).expect("saved");
+        let characters = serde_json::json!({ "characters": [{ "id": "friend", "name": "A friend" }] });
+        save_file(&folder, CHARACTERS, None, characters.clone()).expect("created");
+        assert_eq!(
+            save_file(&folder, CHARACTERS, None, characters).unwrap_err(),
+            errors::STORY_FILE_CHANGED,
+            "a second \"first save\" never replaces it"
+        );
+        let opened = open(&folder).unwrap();
+        let m = opened.manifest.value.unwrap();
+        assert_eq!(m.title, "Renamed");
+        assert_eq!(m.settings.failure, story_engine::model::FailureMode::Final);
+        assert_eq!(opened.characters.value.unwrap().characters[0].id, "friend");
+        assert_ne!(opened.characters.stamp, "", "now on disk");
+        assert_eq!(list(&config)[0].title.as_deref(), Some("Renamed"), "the hub follows");
+        assert!(check(&folder).is_empty(), "still clean");
+    }
+
+    // A rename reaches every file citing the name, and keeps what was typed
+    // by hand around it (SPEC-story-mode, Create Your Own).
+    #[test]
+    fn a_rename_follows_into_every_file_and_keeps_hand_edits() {
+        let config = temp_dir("studio-config");
+        let base = temp_dir("studio-story");
+        let folder = base.join("s");
+        create(&config, &folder, "S", "en", "C").unwrap();
+        save_file(
+            &folder,
+            VARIABLES,
+            None,
+            serde_json::json!({ "counters": { "visits": 0 } }),
+        )
+        .unwrap();
+        let (mut chapter, stamp) = chapter_of(&folder, "flow/01-chapter.yaml");
+        chapter.nodes[0].kind = story_engine::model::NodeKind::Beat(
+            serde_json::from_value(serde_json::json!({ "effects": ["counter.visits += 1"] })).unwrap(),
+        );
+        save_file(&folder, "flow/01-chapter.yaml", Some(&stamp), json(&chapter)).unwrap();
+        let content = "---
+id: remark
+type: message
+when: [\"counter.visits >= 2\"]
+---
+# typed by hand
+A line.
+";
+        std::fs::create_dir_all(folder.join("content")).unwrap();
+        std::fs::write(folder.join("content/remark.story"), content).unwrap();
+        let cited = |id: &str| {
+            let u = usages(&folder).unwrap();
+            u.into_iter().find(|n| n.id == id).map(|n| n.usages.len())
+        };
+        assert_eq!(cited("visits"), Some(2), "the beat and the reactive message");
+
+        rename(&folder, NameKind::Counter, "visits", "trips").expect("renamed");
+        assert_eq!(cited("trips"), Some(2), "both citations followed");
+        assert_eq!(cited("visits"), None, "the old name is gone");
+        assert_eq!(
+            std::fs::read_to_string(folder.join("content/remark.story")).unwrap(),
+            content.replace("counter.visits", "counter.trips"),
+            "only the cited word changed in the hand-typed file"
+        );
+        assert!(check(&folder).is_empty(), "clean: {:#?}", check(&folder));
+        assert!(
+            rename(&folder, NameKind::Counter, "trips", "9lives").is_err(),
+            "an invalid name is refused"
+        );
     }
 
     // One chapter that does not read hides neither the others nor itself:

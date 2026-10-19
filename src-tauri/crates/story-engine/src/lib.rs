@@ -30,6 +30,7 @@ pub mod engine;
 pub mod expr;
 pub mod load;
 pub mod model;
+pub mod refs;
 pub mod save;
 pub mod state;
 pub mod time;

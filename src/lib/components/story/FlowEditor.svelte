@@ -14,6 +14,7 @@
   import StoryChecks from "./StoryChecks.svelte";
 
   const story = $derived(studio.story!);
+  const start = $derived(story.manifest.value?.start.node ?? null);
   const entry = $derived(story.chapters[studio.chapter]);
   const chapter = $derived(entry?.chapter ?? null);
   const isLastChapter = $derived(studio.chapter === story.chapters.length - 1);
@@ -128,7 +129,7 @@
                 <span class="top">
                   <span class="kind mono">{t(KIND_LABEL[kind])}</span>
                   <span class="id mono">{node.id}</span>
-                  {#if node.id === story.start}<span class="pill">{t("story.studio.start")}</span>{/if}
+                  {#if node.id === start}<span class="pill">{t("story.studio.start")}</span>{/if}
                   {#if marks.get(node.id) === "error"}
                     <span class="pill pill-err">{t("story.studio.hasError")}</span>
                   {:else if marks.get(node.id) === "warning"}
@@ -159,7 +160,7 @@
       {/if}
     {/if}
 
-    <StoryChecks />
+    <StoryChecks section="flow" />
   </div>
 
   {#if selected && chapter}

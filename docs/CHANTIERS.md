@@ -141,6 +141,48 @@ de reprendre. En cas d'écart, la spec fait foi.
           pas d'entrée dans l'historique de navigation (le studio est un
           état interne de l'écran Story, comme un onglet) ; un chapitre ne se
           supprime pas encore dans l'éditeur.
+        - **L2.2 — fait (2026-10-18).** Deux sections de plus dans le
+          studio : **Monde** (personnages avec nom affiché et relation de
+          départ, drapeaux, compteurs avec leur valeur de départ) et
+          **Réglages** (titre, auteurs, version, langue ; nœud, date, heure,
+          réputation, abonnés et argent de départ ; échec, tentatives,
+          reprises payantes, aide après échecs ; économie, sauvegardes ; date
+          affichée, protagoniste ; échelle des relations). Chaque nom montre
+          les lignes qui le citent. Le moteur écrit `story.yaml` et `world/`
+          comme un chapitre (`write.rs`, relu avant d'être rendu) et sait
+          trouver et renommer les citations (`refs.rs`).
+          **Décidé avec l'utilisateur** : renommer un personnage, un
+          drapeau, un compteur ou un cran fait suivre toutes les phrases qui
+          le citent, après confirmation quand il y en a (option A, sur
+          l'exemple du compteur cité trois fois de l'histoire d'exemple).
+          **Choisi sans demander** : les citations se cherchent dans le
+          texte des fichiers et non dans l'histoire analysée, pour ne changer
+          que le mot dans les fichiers que l'éditeur n'écrit pas encore et
+          pour atteindre les scripts Ink plus tard ; une ligne de commentaire
+          qui cite un nom compte donc comme une citation. Le renommage ne
+          prend pas d'empreinte : il relit les fichiers au moment où il
+          s'exécute et ne change que les mots cités, donc une modification
+          faite ailleurs entre-temps est gardée. Un nom est une lettre puis
+          lettres, chiffres et `_` (plus strict que ce que le moteur lit) ;
+          celui d'un nouveau personnage vient de son nom affiché. L'échelle
+          des relations est dans Réglages, comme dans le tableau de la spec,
+          et non dans Monde. Un groupe de réglages égal à son défaut n'est
+          pas écrit ; différent, il l'est en entier. Les compteurs s'écrivent
+          dans l'ordre alphabétique, quel que soit l'ordre de saisie. La
+          langue se choisit parmi les six de l'app (plus celle de l'histoire
+          si elle est autre) ; les traductions déclarées sont gardées. Les
+          reprises payantes ne s'affichent qu'avec l'économie, la limite de
+          tentatives qu'avec « recommencer » ; allumées, la limite vaut 3 et
+          l'aide 1 cran tous les 2 échecs, au plus 2. La date de départ est
+          toujours une date complète : une histoire en « année N » montre le
+          1ᵉʳ janvier de l'an 1. Les erreurs de `story.yaml` comptent dans
+          Réglages, celles de `world/` dans Monde, le reste dans le Fil.
+          **Limites connues** : les voitures de départ et les versions
+          requises ne s'éditent pas (bibliothèque en L2.3, paquet en L4) ;
+          renommer dans une histoire **déjà publiée** fait perdre à une
+          partie en cours la valeur de l'ancien drapeau ou compteur (repris à
+          sa valeur de départ), et une sauvegarde sur un cran renommé est
+          refusée — un avertissement à la publication serait à prévoir (L4).
       - **L3 à L8** : dans l'ordre du plan de livraison de la spec.
       **Écarts assumés par rapport au document de conception** (la spec
       publique les reprend déjà) :

@@ -1,6 +1,10 @@
 //! The types of a story folder (SPEC-story-mode, File format), as read from
 //! its YAML files.
 //!
+//! Serialized for the editor (`write.rs`, and the studio's JSON): the
+//! story-wide types in full, with every default spelt out, so the editor
+//! never has to know them; `write.rs` leaves the defaults out of the file.
+//!
 //! Every struct refuses unknown keys: a misspelt `on_falure` must be an error
 //! on its line, not a silently ignored field that changes how the story
 //! plays. The price is that a setting introduced by a later lot needs its
@@ -26,7 +30,7 @@ pub const STORY_FORMAT: u32 = 1;
 
 // ---------------------------------------------------------------- story.yaml
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Manifest {
     pub format: u32,
@@ -44,15 +48,17 @@ pub struct Manifest {
     pub settings: Settings,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Requires {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub pitbox: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub csp: Option<String>,
 }
 
 /// Where and when the story begins.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Start {
     pub node: NodeId,
@@ -78,7 +84,7 @@ fn relative_start() -> StoryDate {
 /// a setting of the story, never a rule of the engine, and each default suits
 /// a story with no custom work. Only the settings the engine interprets live
 /// here; the others (background, frame, calendar…) arrive with their lot.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
     /// How the frame shows the date. The engine counts the same way for all.
@@ -113,7 +119,7 @@ impl Default for Settings {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DateDisplay {
     Relative,
@@ -122,7 +128,7 @@ pub enum DateDisplay {
     None,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FailureMode {
     /// Story time is frozen and the event can be driven again.
@@ -132,7 +138,7 @@ pub enum FailureMode {
     Final,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RetryCost {
     /// Only the first attempt pays the entry fee.
@@ -144,14 +150,14 @@ pub enum RetryCost {
 /// Help after repeated failures: the opponents lose a step of skill every
 /// `every` consecutive failures, up to `cap` steps. The engine computes the
 /// step; the launcher applies it to the grid.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct AdaptiveDifficulty {
     pub every: u32,
     pub cap: u32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Saves {
     pub autosave: Autosave,
@@ -167,14 +173,14 @@ impl Default for Saves {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Autosave {
     PerDay,
     Manual,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Protagonist {
     Fixed,
@@ -185,7 +191,7 @@ pub enum Protagonist {
 /// its own; the default has five steps. Saves keep the step's *name*, so a
 /// step inserted in a later version of the story leaves running games
 /// meaning what they meant.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct RelationScale {
     pub scale: Vec<String>,
@@ -218,29 +224,33 @@ impl RelationScale {
 // ------------------------------------------------------------------- world/
 
 /// `world/variables.yaml`: the story's own variables.
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Variables {
     /// Yes/no values, all false at the start.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub flags: Vec<String>,
-    /// Whole numbers, with their starting value.
+    /// Whole numbers, with their starting value. Written in name order.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub counters: BTreeMap<String, i64>,
 }
 
 /// `world/characters.yaml`.
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Characters {
     pub characters: Vec<Character>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Character {
     pub id: CharacterId,
     /// Display name in the source language; opaque to the engine.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     /// Starting relation, when it is not the scale's `start`.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub relation: Option<String>,
 }
 

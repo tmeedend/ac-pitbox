@@ -1,28 +1,35 @@
 <script lang="ts">
-  // The engine's verdict on the whole story, re-run after every save
+  // The engine's verdict on the story, re-run after every save
   // (SPEC-story-mode, Create Your Own: validation runs continuously). A
   // diagnostic about a flow node selects it; the others name their file.
+  // Each section lists the ones its own files have.
   import { t } from "$lib/i18n/index.svelte";
-  import { selectNode, studio } from "$lib/story/studioState.svelte";
+  import { sectionOf, selectNode, studio, type StudioSection } from "$lib/story/studioState.svelte";
 
-  const errors = $derived(studio.diagnostics.filter((d) => d.severity === "error").length);
-  const warnings = $derived(studio.diagnostics.length - errors);
+  interface Props {
+    section: StudioSection;
+  }
+  const { section }: Props = $props();
+
+  const diagnostics = $derived(studio.diagnostics.filter((d) => sectionOf(d.file) === section));
+  const errors = $derived(diagnostics.filter((d) => d.severity === "error").length);
+  const warnings = $derived(diagnostics.length - errors);
 </script>
 
 <section class="blk checks">
   <div class="blk-h">
     <span class="blk-t">{t("story.studio.checks")}</span>
     <span class="blk-n">
-      {#if studio.diagnostics.length === 0}
+      {#if diagnostics.length === 0}
         {t("story.studio.allClear")}
       {:else}
         {t("story.studio.errorCount", { count: errors })} · {t("story.studio.warningCount", { count: warnings })}
       {/if}
     </span>
   </div>
-  {#if studio.diagnostics.length}
+  {#if diagnostics.length}
     <ul>
-      {#each studio.diagnostics as d, i (i)}
+      {#each diagnostics as d, i (i)}
         <li>
           <span class="pill" class:pill-err={d.severity === "error"} class:pill-warn={d.severity === "warning"}>
             {d.severity === "error" ? t("story.studio.error") : t("story.studio.warning")}

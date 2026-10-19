@@ -25,7 +25,7 @@
   const kind = $derived(kindOf(node));
   const nodeIds = $derived(allNodeIds(story.chapters.map((c) => c.chapter)).filter((id) => id !== node.id));
   const flowContent = $derived(story.content.filter((c) => c.placement === "flow").map((c) => c.id));
-  const isStart = $derived(node.id === story.start);
+  const isStart = $derived(node.id === story.manifest.value?.start.node);
 
   let idError = $state<string | null>(null);
 
