@@ -164,6 +164,7 @@ pub fn run() {
             commands::story::story_register,
             commands::story::story_forget,
             commands::story::story_create,
+            commands::story::story_copy_sample,
             commands::story::story_open,
             commands::story::story_check,
             commands::story::story_preview,

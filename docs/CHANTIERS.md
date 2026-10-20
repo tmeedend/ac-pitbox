@@ -553,6 +553,24 @@ de reprendre. En cas d'écart, la spec fait foi.
           se lancent pas encore (aucun écran ne les montre) ; le dernier
           résultat n'est pas affiché sur la carte (seules les réactions du
           téléphone le disent).
+        - **Retours sur l'éditeur (2026-10-21)**, demandés par l'utilisateur
+          après un premier essai : la fiche d'un événement en deux colonnes,
+          une note d'aide à droite de chaque bloc (`HelpNote`, l'encadré du
+          thème ; `EffectsHelp` pour la syntaxe des effets et les noms de
+          l'histoire) et ses vérifications à droite de son nom ; « Copier
+          l'exemple » dans Create Your Own.
+          **Choisi sans demander** : les notes sont toujours visibles (pas de
+          bouton pour les masquer) ; le tableau des adversaires prend les deux
+          colonnes et n'a pas de note ; sous 820 px de fiche, une seule
+          colonne ; les vérifications de la section restent en bas quand
+          aucun événement n'est affiché ; la copie de l'exemple garde son id
+          (`sample`) et va dans un dossier vide, comme une histoire neuve.
+          Écart assumé avec la règle « un libellé n'explique jamais son
+          fonctionnement » : ces notes sont la documentation d'un langage
+          d'auteur (la syntaxe des effets), demandée explicitement.
+          **Reste** : les autres écrans du studio (Fil, Monde, Pilotes,
+          Contenus) gardent leurs vérifications en bas et n'ont pas de notes ;
+          les effets d'un nœud Beat (Fil) mériteraient la même aide.
       - **L3b à L8** : dans l'ordre du plan de livraison de la spec.
       **Écarts assumés par rapport au document de conception** (la spec
       publique les reprend déjà) :

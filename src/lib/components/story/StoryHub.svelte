@@ -10,7 +10,7 @@
   import { open } from "@tauri-apps/plugin-dialog";
   import { t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
-  import { forgetStory, listStories, registerStory, type StorySummary } from "$lib/story/studio";
+  import { copySample, forgetStory, listStories, registerStory, type StorySummary } from "$lib/story/studio";
   import { play } from "$lib/story/playState.svelte";
   import { openStudio, studio } from "$lib/story/studioState.svelte";
   import NewStoryDialog from "./NewStoryDialog.svelte";
@@ -39,6 +39,21 @@
     error = null;
     try {
       await registerStory(picked);
+      await refresh();
+      await enter(picked);
+    } catch (e) {
+      error = errorText(e);
+    }
+  }
+
+  /** The sample, copied into an empty folder the author picks: their own
+   * story to read and change. */
+  async function copyTheSample() {
+    const picked = await open({ directory: true, title: t("story.studio.pickEmptyFolder") });
+    if (typeof picked !== "string") return;
+    error = null;
+    try {
+      await copySample(picked);
       await refresh();
       await enter(picked);
     } catch (e) {
@@ -95,6 +110,9 @@
       <div class="blk-h">
         <span class="blk-t">{t("story.createTitle")}</span>
         <span class="actions">
+          <button class="btn" title={t("story.studio.copySampleHint")} onclick={copyTheSample}
+            >{t("story.studio.copySample")}</button
+          >
           <button class="btn" onclick={openFolder}>{t("story.studio.openFolder")}</button>
           <button class="btn" onclick={() => (creating = true)}>{t("story.studio.newStory")}</button>
         </span>

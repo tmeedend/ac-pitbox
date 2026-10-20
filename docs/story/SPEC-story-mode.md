@@ -474,7 +474,10 @@ the editor is reserved; they are translated when it opens to all.
   files it did not write. It starts as the smallest story with nothing to
   fix, a chapter whose first node leads to an end, written in the app's
   language, on the starting frame the author picks in the creation dialog
-  (none is preselected).
+  (none is preselected). **Copy the sample** writes the sample story Pit Box
+  carries, portraits included, into an empty folder: the author's own copy,
+  to read and change and learn from; Story Mode keeps playing the sample
+  Pit Box carries.
 - **Every change is written at once**, the whole file, in one canonical form,
   so a diff shows only what changed: a setting left at its default is not
   written. Comments typed by hand in a file the editor writes do not survive.
@@ -509,6 +512,11 @@ the editor is reserved; they are translated when it opens to all.
   never read as a number or a yes/no. A new character's or driver's name is
   made from their display name, which can change freely afterwards: it is
   only shown.
+- **The event sheet explains itself**: beside each block, a note on how to
+  fill it in - the session, success, effects (their forms, and the names
+  this story declares), the failure pool - and beside the event's name, its
+  own checks. The opponents' table takes the whole width. Where the sheet is
+  too narrow for two columns, each note goes under its block.
 - **An event is a file, `events/<id>.yaml`**, created from its display name
   like a character. Renaming it renames the node launching it, the Side
   events opening or closing it, every sentence reading its facts

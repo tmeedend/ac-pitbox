@@ -349,6 +349,10 @@ export const forgetStory = (folder: string) => invoke<void>("story_forget", { fo
 export const createStory = (folder: string, title: string, language: string, frame: Frame, chapterTitle: string) =>
   invoke<void>("story_create", { folder, title, language, frame, chapterTitle });
 
+/** Copies the sample story Pit Box carries into an empty folder, as a story
+ * of the author's. */
+export const copySample = (folder: string) => invoke<void>("story_copy_sample", { folder });
+
 export const openStory = (folder: string) => invoke<OpenStory>("story_open", { folder });
 
 /** What the studio re-reads after every save, from one reading of the

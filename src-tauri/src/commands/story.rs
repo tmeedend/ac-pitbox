@@ -92,6 +92,12 @@ pub fn story_create(
     )
 }
 
+/// Copies the sample story into an empty folder of the author's.
+#[tauri::command]
+pub fn story_copy_sample(app: AppHandle, folder: PathBuf) -> Result<(), String> {
+    studio::copy_sample(&crate::rules::config_dir(&app)?, &folder)
+}
+
 /// Opens a story, and takes its copy of the day if it has none yet
 /// (`story::backups`). The copy is best-effort: a story that cannot be
 /// copied still opens.

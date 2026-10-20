@@ -3,6 +3,12 @@
   // its name, what it launches, what success takes, and what each outcome
   // does. Each edit saves the file at once. Its id renames every sentence
   // and node citing it, and its file, like the World's names (NameRow).
+  //
+  // Two columns: each block, and beside it a note on how to fill it in; the
+  // event's checks beside its name. The opponents' table, as wide as the
+  // session screen's, takes both. Below a width that holds both columns, the
+  // notes go under their block (a container query: what counts is the room
+  // the sheet has, not the window).
   import { t } from "$lib/i18n/index.svelte";
   import { parseLines } from "$lib/story/flow";
   import { driverLabel, namedOnGrid } from "$lib/story/drivers";
@@ -13,10 +19,13 @@
   import NumberStepper from "$lib/components/ui/NumberStepper.svelte";
   import Seg from "$lib/components/ui/Seg.svelte";
   import Switch from "$lib/components/ui/Switch.svelte";
+  import EffectsHelp from "./EffectsHelp.svelte";
   import EventGrid from "./EventGrid.svelte";
   import EventSession from "./EventSession.svelte";
   import FileStatus from "./FileStatus.svelte";
+  import HelpNote from "./HelpNote.svelte";
   import NameRow from "./NameRow.svelte";
+  import StoryChecks from "./StoryChecks.svelte";
   import TargetSelect from "./TargetSelect.svelte";
 
   interface Props {
@@ -68,35 +77,44 @@
   <FileStatus entry={entry} />
   {#if entry.value}
     {@const ev = entry.value}
-    <header>
-      <input
-        class="input title"
-        value={ev.name ?? ""}
-        placeholder={ev.id}
-        aria-label={t("story.events.name")}
-        onchange={(e) => {
-          const name = value(e).trim();
-          ev.name = name || null;
-          save();
-        }}
-      />
-      <ul class="id-row">
-        <NameRow
-          kind="event"
-          id={ev.id}
-          taken={eventIds(story.events)}
-          onremove={async () => (removeProblem = await removeEvent(entry.file))}
+    <div class="row">
+      <header>
+        <input
+          class="input title"
+          value={ev.name ?? ""}
+          placeholder={ev.id}
+          aria-label={t("story.events.name")}
+          onchange={(e) => {
+            const name = value(e).trim();
+            ev.name = name || null;
+            save();
+          }}
         />
-      </ul>
-      {#if removeProblem}<p class="errbox">{removeProblem}</p>{/if}
-    </header>
+        <ul class="id-row">
+          <NameRow
+            kind="event"
+            id={ev.id}
+            taken={eventIds(story.events)}
+            onremove={async () => (removeProblem = await removeEvent(entry.file))}
+          />
+        </ul>
+        {#if removeProblem}<p class="errbox">{removeProblem}</p>{/if}
+      </header>
+      <div class="side"><StoryChecks section="events" file={entry.file} /></div>
+    </div>
 
-    <section class="blk">
-      <div class="blk-h"><span class="blk-t">{t("story.events.event")}</span></div>
-      <div class="blk-b">
-        <EventSession event={ev} {money} onsave={save} />
-      </div>
-    </section>
+    <div class="row">
+      <section class="blk">
+        <div class="blk-h"><span class="blk-t">{t("story.events.event")}</span></div>
+        <div class="blk-b">
+          <EventSession event={ev} {money} onsave={save} />
+        </div>
+      </section>
+      <HelpNote title={t("story.events.event")}>
+        <p>{t("story.events.help.session")}</p>
+        {#if ev.type === "race"}<p>{t("story.events.help.grid")}</p>{/if}
+      </HelpNote>
+    </div>
 
     {#if ev.type === "race"}
       <section class="blk wide">
@@ -111,165 +129,192 @@
     {/if}
 
     {#if criteria}
-      <section class="blk">
-        <div class="blk-h">
-          <span class="blk-t">{t("story.events.success")}</span>
-          {#if ev.success.length === 0}<span class="blk-n">{t("story.events.finishingEnough")}</span>{/if}
-        </div>
-        <div class="blk-b">
-          <div class="toggle">
-            <Switch
-              on={criteria.position !== null}
-              label={t("story.events.position")}
-              onclick={() => setCriteria((c) => (c.position = c.position === null ? 3 : null))}
-            />
-            <span>{t("story.events.position")}</span>
-            {#if criteria.position !== null}
-              <NumberStepper
-                value={criteria.position}
-                min={1}
-                width={80}
-                onchange={(v) => setCriteria((c) => (c.position = v))}
-              />
-            {/if}
+      <div class="row">
+        <section class="blk">
+          <div class="blk-h">
+            <span class="blk-t">{t("story.events.success")}</span>
+            {#if ev.success.length === 0}<span class="blk-n">{t("story.events.finishingEnough")}</span>{/if}
           </div>
-          <div class="toggle">
-            <Switch
-              on={criteria.finished}
-              label={t("story.events.finished")}
-              onclick={() => setCriteria((c) => (c.finished = !c.finished))}
-            />
-            <span>{t("story.events.finished")}</span>
-          </div>
-          <div class="toggle">
-            <Switch
-              on={criteria.lapUnder !== null}
-              label={t("story.events.lapUnder")}
-              onclick={() => setCriteria((c) => (c.lapUnder = c.lapUnder === null ? "1:30.000" : null))}
-            />
-            <span>{t("story.events.lapUnder")}</span>
-            {#if criteria.lapUnder !== null}
-              <input
-                class="input mono lap"
-                value={criteria.lapUnder}
-                placeholder="1:18.200"
-                onchange={(e) => setCriteria((c) => (c.lapUnder = value(e).trim() || null))}
-              />
-            {/if}
-          </div>
-          {#each rivals as rival (rival)}
+          <div class="blk-b">
             <div class="toggle">
               <Switch
-                on={criteria.aheadOf.includes(rival)}
-                label={t("story.events.aheadOf", { name: rivalName(rival) })}
-                onclick={() =>
-                  setCriteria(
-                    (c) =>
-                      (c.aheadOf = c.aheadOf.includes(rival) ? c.aheadOf.filter((x) => x !== rival) : [...c.aheadOf, rival]),
-                  )}
+                on={criteria.position !== null}
+                label={t("story.events.position")}
+                onclick={() => setCriteria((c) => (c.position = c.position === null ? 3 : null))}
               />
-              <span>{t("story.events.aheadOf", { name: rivalName(rival) })}</span>
+              <span>{t("story.events.position")}</span>
+              {#if criteria.position !== null}
+                <NumberStepper
+                  value={criteria.position}
+                  min={1}
+                  width={80}
+                  onchange={(v) => setCriteria((c) => (c.position = v))}
+                />
+              {/if}
             </div>
-          {/each}
-          {#each criteria.others as other (other)}
-            <div class="other mono">{other}</div>
-          {/each}
-        </div>
-      </section>
+            <div class="toggle">
+              <Switch
+                on={criteria.finished}
+                label={t("story.events.finished")}
+                onclick={() => setCriteria((c) => (c.finished = !c.finished))}
+              />
+              <span>{t("story.events.finished")}</span>
+            </div>
+            <div class="toggle">
+              <Switch
+                on={criteria.lapUnder !== null}
+                label={t("story.events.lapUnder")}
+                onclick={() => setCriteria((c) => (c.lapUnder = c.lapUnder === null ? "1:30.000" : null))}
+              />
+              <span>{t("story.events.lapUnder")}</span>
+              {#if criteria.lapUnder !== null}
+                <input
+                  class="input mono lap"
+                  value={criteria.lapUnder}
+                  placeholder="1:18.200"
+                  onchange={(e) => setCriteria((c) => (c.lapUnder = value(e).trim() || null))}
+                />
+              {/if}
+            </div>
+            {#each rivals as rival (rival)}
+              <div class="toggle">
+                <Switch
+                  on={criteria.aheadOf.includes(rival)}
+                  label={t("story.events.aheadOf", { name: rivalName(rival) })}
+                  onclick={() =>
+                    setCriteria(
+                      (c) =>
+                        (c.aheadOf = c.aheadOf.includes(rival) ? c.aheadOf.filter((x) => x !== rival) : [...c.aheadOf, rival]),
+                    )}
+                />
+                <span>{t("story.events.aheadOf", { name: rivalName(rival) })}</span>
+              </div>
+            {/each}
+            {#each criteria.others as other (other)}
+              <div class="other mono">{other}</div>
+            {/each}
+          </div>
+        </section>
+        <HelpNote title={t("story.events.success")}>
+          <p>{t("story.events.help.success")}</p>
+          {#if ev.type === "race"}<p>{t("story.events.help.aheadOf")}</p>{/if}
+        </HelpNote>
+      </div>
     {/if}
 
-    <section class="blk">
-      <div class="blk-h"><span class="blk-t">{t("story.events.onSuccess")}</span></div>
-      <div class="blk-b">
-        <Field label={t("story.studio.effects")}>
-          <textarea
-            class="input mono"
-            rows="3"
-            value={ev.on_success.effects.join("\n")}
-            placeholder="reputation += 2"
-            onchange={(e) => setEffects(ev.on_success, e)}
-          ></textarea>
-        </Field>
-        <Field label={t("story.studio.advance")}>
-          <input
-            class="input mono short"
-            value={ev.on_success.advance ?? ""}
-            placeholder="1 month"
-            onchange={(e) => {
-              ev.on_success.advance = value(e).trim() || null;
-              save();
-            }}
-          />
-        </Field>
-      </div>
-    </section>
-
-    <section class="blk">
-      <div class="blk-h"><span class="blk-t">{t("story.events.onFailure")}</span></div>
-      <div class="blk-b">
-        <div class="pair">
-          <Field label={t("story.events.pool")}>
-            <TargetSelect
-              value={ev.on_failure.pool ?? ""}
-              options={pools}
-              emptyLabel={t("story.events.noPool")}
-              onchange={(v) => {
-                ev.on_failure.pool = v || null;
+    <div class="row">
+      <section class="blk">
+        <div class="blk-h"><span class="blk-t">{t("story.events.onSuccess")}</span></div>
+        <div class="blk-b">
+          <Field label={t("story.studio.effects")}>
+            <textarea
+              class="input mono"
+              rows="3"
+              value={ev.on_success.effects.join("\n")}
+              placeholder="reputation += 2"
+              onchange={(e) => setEffects(ev.on_success, e)}
+            ></textarea>
+          </Field>
+          <Field label={t("story.studio.advance")}>
+            <input
+              class="input mono short"
+              value={ev.on_success.advance ?? ""}
+              placeholder="1 month"
+              onchange={(e) => {
+                ev.on_success.advance = value(e).trim() || null;
                 save();
               }}
             />
           </Field>
-          {#if ev.on_failure.pool}
-            <Field label={t("story.events.pick")}>
-              <Seg
-                value={String(ev.on_failure.pick)}
-                onselect={(v) => {
-                  ev.on_failure.pick = Number(v);
+        </div>
+      </section>
+      <EffectsHelp advance />
+    </div>
+
+    <div class="row">
+      <section class="blk">
+        <div class="blk-h"><span class="blk-t">{t("story.events.onFailure")}</span></div>
+        <div class="blk-b">
+          <div class="pair">
+            <Field label={t("story.events.pool")}>
+              <TargetSelect
+                value={ev.on_failure.pool ?? ""}
+                options={pools}
+                emptyLabel={t("story.events.noPool")}
+                onchange={(v) => {
+                  ev.on_failure.pool = v || null;
                   save();
                 }}
-                items={[
-                  { value: "1", label: "1" },
-                  { value: "2", label: "2" },
-                ]}
               />
             </Field>
+            {#if ev.on_failure.pool}
+              <Field label={t("story.events.pick")}>
+                <Seg
+                  value={String(ev.on_failure.pick)}
+                  onselect={(v) => {
+                    ev.on_failure.pick = Number(v);
+                    save();
+                  }}
+                  items={[
+                    { value: "1", label: "1" },
+                    { value: "2", label: "2" },
+                  ]}
+                />
+              </Field>
+            {/if}
+          </div>
+          {#if ev.on_failure.pool}
+            {@const variants = story.content.filter((c) => c.pool === ev.on_failure.pool)}
+            <ul class="variants">
+              {#each variants as v (v.id)}
+                <li>
+                  <span class="from">{v.from ?? "—"}</span>
+                  <span class="when mono">{v.when.length ? v.when.join(" · ") : t("story.studio.always")}</span>
+                  <span class="line">{v.firstLine ?? ""}</span>
+                </li>
+              {/each}
+            </ul>
           {/if}
+          <Field label={t("story.studio.effects")}>
+            <textarea
+              class="input mono"
+              rows="2"
+              value={ev.on_failure.effects.join("\n")}
+              onchange={(e) => setEffects(ev.on_failure, e)}
+            ></textarea>
+          </Field>
         </div>
-        {#if ev.on_failure.pool}
-          {@const variants = story.content.filter((c) => c.pool === ev.on_failure.pool)}
-          <ul class="variants">
-            {#each variants as v (v.id)}
-              <li>
-                <span class="from">{v.from ?? "—"}</span>
-                <span class="when mono">{v.when.length ? v.when.join(" · ") : t("story.studio.always")}</span>
-                <span class="line">{v.firstLine ?? ""}</span>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-        <Field label={t("story.studio.effects")}>
-          <textarea
-            class="input mono"
-            rows="2"
-            value={ev.on_failure.effects.join("\n")}
-            onchange={(e) => setEffects(ev.on_failure, e)}
-          ></textarea>
-        </Field>
-      </div>
-    </section>
+      </section>
+      <HelpNote title={t("story.events.onFailure")}>
+        <p>{t("story.events.help.pool")}</p>
+        <p>{t("story.events.help.failureEffects")}</p>
+      </HelpNote>
+    </div>
   {/if}
 </div>
 
 <style>
-  /* Wide enough for the grid, the session screen's table; every other
-     block keeps the width of a form. */
+  /* Wide enough for the grid, the session screen's table. */
   .sheet {
     flex: 1;
     min-width: 0;
     max-width: 1100px;
+    container: sheet / inline-size;
   }
-  .sheet > :not(.wide) {
-    max-width: 760px;
+  /* A block and its note side by side, both starting at the top. */
+  .row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 0 18px;
+    align-items: start;
+  }
+  .side :global(.checks) {
+    margin-top: 0;
+  }
+  @container sheet (max-width: 820px) {
+    .row {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
   header {
     margin-bottom: 14px;
