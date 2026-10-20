@@ -1505,19 +1505,22 @@ de reprendre. En cas d'écart, la spec fait foi.
         pas plus qu'il ne verrait `game_backup/`), ou l'envie d'un seul
         registre de ce que Pit Box a changé dans le jeu.
 
-- [ ] **Corrections par mod — à faire, chantier à part.** Aujourd'hui on
-      corrige d'un mod son nom, sa description, ses tags (couche 4 de
-      REGLES§14), et depuis la fiche technique (FICHE§8) son **pays** et sa
-      **fiche technique** — mais **ni sa marque, ni sa classe**. Le modèle à
-      suivre est celui de la fiche : une table de décisions sans clé
-      étrangère, lue devant tout le reste (`tech_user`, et
-      `overlay::MOD_SELECT` pour ce que la liste doit voir). Demandé par l'utilisateur (2026-09-24) en discutant des
-      fausses marques : pour deux ou trois voitures, une correction directe
-      est plus simple qu'une règle. À concevoir comme la couche la plus
-      prioritaire de la cascade (REGLES§3), par mod, jamais exportée ni
-      remontée par le relevé (elle appartient à une bibliothèque, pas à une
-      façon de classer), et visible sur la fiche comme « modifié par vous »
-      avec retour à la valeur calculée.
+- [ ] **Corrections par mod — reste la classe.** On corrige d'un mod son nom,
+      sa description, ses tags (couche 4 de REGLES§14), depuis la fiche
+      technique (FICHE§8) son **pays** et sa **fiche technique**, et depuis
+      le crayon de l'en-tête (2026-10-20, §5bis.3) sa **marque** et son
+      **année**. **Pas encore sa classe.** La marque suit le modèle du nom :
+      une colonne `brand_user` à côté de `brand`, que l'harmonisation réécrit,
+      lue devant elle dans `overlay::MOD_SELECT`. Reste ouvert : (1) la
+      fusion de marques de l'onglet Marques s'applique aux marques que
+      l'harmonisation calcule, pas à une marque saisie à la main — une voiture
+      classée à la main sous un nom ensuite fusionné ne suit pas la fusion ;
+      (2) la décision n'est pas « modifié par vous » ailleurs que dans le
+      formulaire de l'en-tête (pas de marque sur la liste) ; (3) l'historique
+      d'un circuit dit « fiche technique modifiée » quand on corrige son année
+      (même décision `tech_user`, même entrée `TECH_EDITED`). Demandé par
+      l'utilisateur (2026-09-24) en discutant des fausses marques : pour deux
+      ou trois voitures, une correction directe est plus simple qu'une règle.
 
 - [ ] **Deux jeux de règles de tags ont divergé — à trancher.**
       `docs/default-tag-rules-enriched.json` **n'est pas ce que l'app charge** :

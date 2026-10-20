@@ -165,7 +165,7 @@ Une seule fonction, `techsheet::effective(mod_id)`, applique R2 et rend la fiche
 
 L'aperçu à gauche ; à sa droite, la fiche technique **et la courbe à côté d'elle** (dessous quand la place manque) ; sous le tout, la description puis Wikipédia :
 
-1. **En-tête** : nom, marque, année, badges de classe et de catégorie. En dessous, une ligne **d'usage** : odomètre et « déjà essayée ». L'odomètre sort de la fiche technique : c'est l'usage de l'utilisateur, pas une caractéristique de la voiture.
+1. **En-tête** : nom, marque, année, badges de classe et de catégorie ; le crayon du nom ouvre aussi la marque et l'année (§5bis.3), l'année étant la décision `year` de ce mode édition. En dessous, une ligne **d'usage** : odomètre et « déjà essayée ». L'odomètre sort de la fiche technique : c'est l'usage de l'utilisateur, pas une caractéristique de la voiture.
 2. **À droite de l'aperçu**, la fiche technique, de haut en bas :
    - **les chiffres clés** (puissance, couple, poids, rapport P/P, vitesse max, 0-100), grands chiffres et unités en petit, les absents disparaissant ;
    - **Mécanique** : moteur, transmission, carburant, origine, en phrases courtes (« atmosphérique · 8 300 tr/min », « propulsion · ≈ séquentielle · 6 rapports ») ;

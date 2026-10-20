@@ -28,6 +28,17 @@ export interface ModCard {
   /** Nom annoncé par le fichier du mod, que `display_name` masque dès qu'une
    * surcharge existe — à montrer à qui hésite à y renoncer. */
   display_name_file: string | null;
+  /** Brand the user filed the car under by hand, `null` if none. `brand` is
+   * already it: this only says the brand is a decision, and `brand_auto` where
+   * going back lands. */
+  brand_user: string | null;
+  /** Brand computed from the mod's files and the rules, which `brand` hides
+   * once a decision exists. */
+  brand_auto: string | null;
+  /** Year as the mod's own files give it, which `year` hides once corrected. */
+  year_file: number | null;
+  /** The year is a decision of the user's (a forced "unknown" included). */
+  year_edited: boolean;
   year: number | null;
   car_class: string | null;
   category: string | null;
@@ -655,6 +666,17 @@ export function setModField(
   value: string | null,
 ): Promise<void> {
   return invoke<void>("set_mod_field", { id, field, value });
+}
+
+/** Files a car under a brand typed by hand; `null` goes back to the computed
+ * one. Stored in Pit Box's base, never in the mod's files. */
+export function setModBrand(id: string, brand: string | null): Promise<void> {
+  return invoke<void>("set_mod_brand", { id, brand });
+}
+
+/** The brands cars are filed under, sorted: the suggestions of the brand field. */
+export function listCarBrands(): Promise<string[]> {
+  return invoke<string[]>("list_car_brands");
 }
 
 export function reapplyRules(): Promise<number> {

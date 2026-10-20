@@ -21,6 +21,8 @@
     setFavorite,
     setManualTags,
     setModField,
+    setModBrand,
+    listCarBrands,
     type ModCard,
     type ModDetail,
     type ModKind,
@@ -36,6 +38,8 @@
   import FicheHeader from "./FicheHeader.svelte";
   import { usageLine } from "$lib/detail/odometer";
   import { setEntityNote } from "$lib/detail/userMeta";
+  import { saveTechSheet } from "$lib/detail/techSheet";
+  import type { FicheIdentity, IdentityPatch } from "$lib/detail/identityEdit";
   import LayerDetail from "./LayerDetail.svelte";
   import { listAttached, type InventoryRow } from "$lib/inventory/inventory";
   import { listOtherMods, type OtherModRow } from "$lib/inventory/others";
@@ -349,6 +353,59 @@
     }
   }
 
+  /** The header form (name, brand, year): each changed field is saved where its
+   * decision lives, then the sheet and the library reload once. None of it
+   * touches the mod's files (golden rule 1). The year goes through the tech
+   * sheet's decisions (FICHE§8) for cars and tracks alike: one place says what
+   * the year is, and the library already reads it there. */
+  async function saveIdentity(patch: IdentityPatch) {
+    actionError = "";
+    try {
+      if (patch.name !== undefined) await setModField(id, "display_name_user", patch.name);
+      if (patch.brand !== undefined) await setModBrand(id, patch.brand);
+      if (patch.year !== undefined) {
+        await saveTechSheet(
+          id,
+          patch.year === null ? [{ field: "year", value: null, revert: true }] : [{ field: "year", value: patch.year }],
+        );
+      }
+    } catch (e) {
+      actionError = errorText(e);
+    }
+    // Reloaded even when a write failed: the ones before it are saved, and the
+    // page must show them rather than the state it had.
+    try {
+      await refreshEntity();
+      onchange?.();
+    } catch (e) {
+      actionError ||= errorText(e);
+    }
+  }
+
+  /** What the header form starts from. The year's original is the tech sheet's
+   * fallback for a car (a table can give one the files do not), the file's own
+   * otherwise. */
+  function identityOf(d: ModDetail): FicheIdentity {
+    const sheetYear = d.tech?.fallback.year?.value;
+    return {
+      name: { value: d.display_name ?? d.id_interne, original: d.display_name_file, overridden: !!d.display_name_user },
+      brand: isCar
+        ? {
+            value: d.brand,
+            original: d.brand_auto,
+            overridden: !!d.brand_user,
+            suggestions: listCarBrands,
+          }
+        : undefined,
+      year: {
+        value: d.year,
+        original: typeof sheetYear === "number" ? sheetYear : d.year_file,
+        overridden: d.year_edited,
+      },
+      onsave: (patch) => void saveIdentity(patch),
+    };
+  }
+
   /** The tech sheet was corrected (FICHE§8): the page reloads, and so does the
    * library — its spec columns, year and country follow the sheet. */
   async function techSaved() {
@@ -653,17 +710,18 @@
   const subtitle = $derived.by(() => {
     const d = detail;
     if (!d) return "";
-    // Un circuit n'a ni marque, ni année, ni classe : sa ligne d'identité se
-    // réduisait à son auteur. Ce qui l'identifie, c'est sa longueur et le
-    // nombre de tracés qu'il porte (maquette écran 7). Le décompte ne
-    // s'affiche qu'à partir de deux — « 1 tracé » n'apprend rien, et c'est
-    // aussi ce qui évite un pluriel que l'i18n ne sait pas accorder.
+    // Un circuit n'a ni marque ni classe : sa ligne d'identité se réduisait à
+    // son auteur. Ce qui l'identifie, c'est sa longueur, le nombre de tracés
+    // qu'il porte (maquette écran 7) et son année quand on la connaît. Le
+    // décompte ne s'affiche qu'à partir de deux — « 1 tracé » n'apprend rien,
+    // et c'est aussi ce qui évite un pluriel que l'i18n ne sait pas accorder.
     const layouts = d.track?.layouts ?? [];
     const parts = isCar
       ? [d.brand, d.year ? String(d.year) : null, d.car_class ? d.car_class.toUpperCase() : null]
       : [
           trackLength(layouts[previewLayout]?.length),
           layouts.length > 1 ? t("detail.layoutCount", { count: layouts.length }) : null,
+          d.year ? String(d.year) : null,
         ];
     parts.push(d.author ? t("detail.byAuthor", { author: d.author }) : null);
     return parts.filter(Boolean).join(" · ");
@@ -713,11 +771,7 @@
       {subtitle}
       usage={isCar ? usageLine(d) : undefined}
       category={d.category}
-      rename={{
-        original: d.display_name_file,
-        overridden: !!d.display_name_user,
-        onsave: (v) => saveOverride("display_name_user", v),
-      }}
+      identity={identityOf(d)}
       deployment={{ active: d.active, stock: d.is_stock, unmanaged: d.is_unmanaged, showcase: d.showcase }}
       favorite={{ on: d.is_favorite, ontoggle: toggleFav }}
       actions={menuItems}

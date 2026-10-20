@@ -25,6 +25,8 @@
   import type { Snippet } from "svelte";
   import ContextMenu from "$lib/components/ui/ContextMenu.svelte";
   import InlineEdit from "$lib/components/ui/InlineEdit.svelte";
+  import IdentityEdit from "./IdentityEdit.svelte";
+  import type { FicheIdentity } from "$lib/detail/identityEdit";
   import StateBadge from "$lib/components/ui/StateBadge.svelte";
   import { t } from "$lib/i18n/index.svelte";
 
@@ -77,6 +79,9 @@
     /** Seul tag qui fait un travail — la composition de plateau (REFONTE§7.5). */
     category?: string | null;
     rename?: FicheRename;
+    /** Name, brand and year in one form, for a car or a track. Replaces
+     * `rename` when given: the pencil next to the name opens all three. */
+    identity?: FicheIdentity;
     deployment?: FicheDeployment;
     favorite?: { on: boolean; ontoggle: () => void };
     actions?: FicheAction[];
@@ -105,12 +110,16 @@
     usage,
     category,
     rename,
+    identity,
     deployment,
     favorite,
     actions,
     flush = false,
     control,
   }: Props = $props();
+
+  /** The identity form is open: it is the title for the time it takes. */
+  let identityOpen = $state(false);
 
   let menuPos = $state<{ x: number; y: number } | null>(null);
 
@@ -139,8 +148,10 @@
   {/if}
   <div class="title">
     <div class="t-name">
-      <span class="t-name-txt">{name}</span>
-      {#if rename}
+      {#if !identityOpen}<span class="t-name-txt">{name}</span>{/if}
+      {#if identity}
+        <IdentityEdit {identity} bind:editing={identityOpen} />
+      {:else if rename}
         <!-- Le repère montré pendant l'édition est le nom du FICHIER : `name`
              porte déjà la surcharge quand il y en a une, il ne dirait donc pas
              à quoi on reviendrait. -->
@@ -152,10 +163,10 @@
           onsave={rename.onsave}
         />
       {/if}
-      {#if category}<span class="cat">{category}</span>{/if}
+      {#if category && !identityOpen}<span class="cat">{category}</span>{/if}
     </div>
-    {#if subtitle}<div class="t-meta mono">{subtitle}</div>{/if}
-    {#if usage}<div class="t-meta">{usage}</div>{/if}
+    {#if subtitle && !identityOpen}<div class="t-meta mono">{subtitle}</div>{/if}
+    {#if usage && !identityOpen}<div class="t-meta">{usage}</div>{/if}
   </div>
   <div class="actions">
     {#if control}{@render control()}{/if}
