@@ -14,8 +14,8 @@ use crate::frame::Frame;
 use crate::load::{draft, SourceFile};
 use crate::model::{
     AdaptiveDifficulty, Beat, Chapter, Characters, ContentFile, DateDisplay, Event, EventType, FailureMode, Manifest,
-    Node, NodeKind, Protagonist, RelationScale, Requires, RetryCost, Saves, Session, Settings, Start, Variables,
-    STORY_FORMAT,
+    Node, NodeKind, Protagonist, RelationScale, Requires, RetryCost, Roster, Saves, Session, Settings, Start,
+    Variables, STORY_FORMAT,
 };
 use crate::time::{Clock, Span, StoryDate};
 
@@ -58,6 +58,11 @@ pub fn manifest(manifest: &Manifest) -> Result<String, String> {
 /// `world/characters.yaml`, read back to be sure it loads.
 pub fn characters(characters: &Characters) -> Result<String, String> {
     yaml("world/characters.yaml", characters)
+}
+
+/// `drivers/roster.yaml`, read back to be sure it loads.
+pub fn roster(roster: &Roster) -> Result<String, String> {
+    yaml(crate::load::ROSTER, roster)
 }
 
 /// `world/variables.yaml`, read back to be sure it loads. Counters are
@@ -384,6 +389,34 @@ mod tests {
         let back = reread("world/variables.yaml", &text).variables;
         assert_eq!(format!("{back:?}"), format!("{:?}", d.variables), "variables read back");
         assert_eq!(variables(&back).unwrap(), text, "variables written again");
+
+        assert_eq!(d.roster.drivers.len(), 2, "the sample's drivers");
+        let text = roster(&d.roster).unwrap();
+        let back = reread("drivers/roster.yaml", &text).roster;
+        assert_eq!(format!("{back:?}"), format!("{:?}", d.roster), "roster read back");
+        assert_eq!(roster(&back).unwrap(), text, "roster written again");
+    }
+
+    // A grid as written: one opponent per item, its keys in the order an
+    // author reads them, a ballast of 0 left out.
+    #[test]
+    fn a_written_grid_leaves_its_defaults_out() {
+        let source = "id: r
+type: race
+session: { car: c, opponents: [{ skin: s, driver: d, ballast: 0 }, { car: x, restrictor: 20 }] }
+";
+        let e = reread("events/r.yaml", source).events.remove(0);
+        let expected = "id: r
+type: race
+session:
+  car: c
+  opponents:
+    - driver: d
+      skin: s
+    - car: x
+      restrictor: 20
+";
+        assert_eq!(event("events/r.yaml", &e).unwrap(), expected);
     }
 
     // The canonical story.yaml leaves every default out, group by group: a

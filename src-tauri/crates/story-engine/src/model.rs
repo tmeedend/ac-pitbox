@@ -25,6 +25,7 @@ pub type ContentId = String;
 pub type EventId = String;
 pub type PoolId = String;
 pub type CharacterId = String;
+pub type DriverId = String;
 
 /// The story-folder format this engine reads. A story declaring a higher one
 /// was written for a newer Pit Box and is refused rather than misread.
@@ -263,6 +264,55 @@ pub struct Character {
     /// Shown by dialogues (SPEC-story-mode, In-person dialogues).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub portraits: BTreeMap<String, String>,
+}
+
+// ------------------------------------------------------------------ drivers/
+
+/// `drivers/roster.yaml` (SPEC-story-mode, Drivers): the story's own drivers,
+/// those a grid can name. Optional: without it, grids use filler names.
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Roster {
+    pub drivers: Vec<Driver>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Driver {
+    pub id: DriverId,
+    /// Display name, as the entry list shows it; opaque to the engine. A
+    /// driver who is a character and has none takes the character's.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// The character this driver is on track: the friend one texts with and
+    /// races against is one person, not two.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub character: Option<CharacterId>,
+    /// A country as the game names it in full (`Italy`), never a code: the
+    /// entry list writes it as it is.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nationality: Option<String>,
+    /// Age at the start of the story.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub age: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<DriverRole>,
+    /// 0 to 100: their skill wherever a grid names them without its own.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ai_level: Option<u32>,
+    /// 0 to 100; none: the game's.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aggression: Option<u32>,
+}
+
+/// What a driver is to the story; the engine gives it no meaning yet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DriverRole {
+    Friend,
+    Rival,
+    Star,
+    Filler,
 }
 
 // -------------------------------------------------------------------- flow/
@@ -812,14 +862,16 @@ pub struct Session {
     /// Its layout, for a track that has several.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub layout: Option<String>,
-    /// The car's folder id, the same for the whole grid until the story has
-    /// drivers (L2.6).
+    /// The car's folder id: the player's, and that of every opponent that
+    /// names no car of its own.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub car: Option<String>,
     /// Race only.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub laps: Option<u32>,
-    /// Race only: cars on the grid, the player's included.
+    /// Race only: cars on the grid, the player's included. With `opponents`
+    /// listed, the slots beyond them drive the event's car under filler
+    /// names; without `grid`, the listed opponents are the whole field.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grid: Option<u32>,
     /// Race only: the opponents' skill, 0 to 100.
@@ -835,6 +887,42 @@ pub struct Session {
     /// folder: the folders differ from one installation to the next.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub weather: Option<String>,
+    /// Race only: the opponents the author places on the grid, in order
+    /// (SPEC-story-mode, Drivers). Last, being the longest.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub opponents: Vec<Opponent>,
+}
+
+/// One opponent an author places on a race's grid: a car, a livery, a driver
+/// of the story's roster, their skill. Every key is optional; what is left
+/// out is the event's (`car`, `ai_level`) or the driver's, and otherwise the
+/// launcher's to pick (a livery, a name: the livery's own).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Opponent {
+    /// A driver of `drivers/roster.yaml`; none: an unnamed driver, called
+    /// what the livery declares.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub driver: Option<DriverId>,
+    /// The car's folder id; none: the event's car.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub car: Option<String>,
+    /// The livery's folder id (`skins/<id>`); none: the launcher picks one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub skin: Option<String>,
+    /// 0 to 100; none: the driver's, else the event's.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ai_level: Option<u32>,
+    /// Balance of performance, 0 to 100 like the session screen's: kilograms
+    /// of ballast, percent of restrictor. 0 is none, and is left out.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub ballast: u32,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub restrictor: u32,
+}
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
 }
 
 /// The player's place on the grid, the choices of Pit Box's session screen.
