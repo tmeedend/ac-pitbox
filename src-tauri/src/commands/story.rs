@@ -76,6 +76,18 @@ pub async fn story_check(app: AppHandle, folder: PathBuf) -> Result<studio::Chec
     off_window(app, move |_| Ok(studio::check(&folder))).await
 }
 
+/// Reads a content item's text into the tree the Form view edits.
+#[tauri::command]
+pub fn story_script_read(text: String) -> studio::ScriptRead {
+    studio::read_script(&text)
+}
+
+/// Writes the tree the Form view edited back as Ink.
+#[tauri::command]
+pub fn story_script_write(script: serde_json::Value) -> Result<String, String> {
+    studio::write_script(script)
+}
+
 /// Writes one file the editor edits - a chapter, an event, `story.yaml` or
 /// a world file - from the value it sends, in the shape of that file.
 #[tauri::command]

@@ -4,17 +4,23 @@
   // present and the scene - and its text, in Ink. Each edit saves the whole
   // `.story` file at once; the engine checks the text after every save, line
   // by line (StoryChecks). Its id is not renamed here: renaming a content
-  // item does not follow its citations yet.
+  // item does not follow its citations yet. The text shows as a form or as
+  // Ink; the form is the tree the engine reads, and only the engine turns
+  // one into the other (`readScript`, `writeScript`).
+  import { untrack } from "svelte";
+  import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
   import { CONTENT_TYPES, placementOf, setPlacement, setType, type Placement } from "$lib/story/content";
   import { parseLines } from "$lib/story/flow";
   import { CONTENT_TYPE_LABEL } from "$lib/story/labels";
-  import type { ContentHeader } from "$lib/story/studio";
+  import type { FormContext } from "$lib/story/script";
+  import { readScript, writeScript, type ContentHeader, type ScriptRead } from "$lib/story/studio";
   import { removeContent, saveContentFile, studio } from "$lib/story/studioState.svelte";
   import Field from "$lib/components/ui/Field.svelte";
   import NumberStepper from "$lib/components/ui/NumberStepper.svelte";
   import Seg from "$lib/components/ui/Seg.svelte";
   import FileStatus from "./FileStatus.svelte";
+  import ScriptItems from "./ScriptItems.svelte";
 
   interface Props {
     file: string;
@@ -33,6 +39,44 @@
   );
 
   let removeProblem = $state<string | null>(null);
+  let view = $state<"form" | "script">("form");
+  /** The text read for the form: its tree, or why it cannot be one. */
+  let read = $state<ScriptRead | null>(null);
+  let formProblem = $state<string | null>(null);
+  const ctx = $derived<FormContext | null>(
+    read
+      ? {
+          characters: (story.characters.value?.characters ?? []).map((c) => ({
+            id: c.id,
+            name: c.name ?? c.id,
+            expressions: Object.keys(c.portraits ?? {}),
+          })),
+          dialogue: h.type === "dialogue",
+          from: h.from,
+          root: read.script.items,
+        }
+      : null,
+  );
+
+  /** Reads the text for the form, when the form is shown: on opening, and
+   * on coming back from the Script view. */
+  $effect(() => {
+    if (view !== "form") return;
+    const body = untrack(() => doc.body);
+    void readScript(body).then((r) => (read = r));
+  });
+
+  /** The form changed: the engine writes the tree as Ink, which is saved. */
+  async function formChanged() {
+    if (!read) return;
+    try {
+      doc.body = await writeScript($state.snapshot(read.script));
+      formProblem = null;
+      save();
+    } catch (e) {
+      formProblem = errorText(e);
+    }
+  }
 
   function save() {
     void saveContentFile(file);
@@ -204,19 +248,42 @@
   </section>
 
   <section class="blk">
-    <div class="blk-h"><span class="blk-t">{t("story.content.text")}</span></div>
+    <div class="blk-h">
+      <span class="blk-t">{t("story.content.text")}</span>
+      <span class="views">
+        <Seg
+          items={[
+            { value: "form", label: t("story.content.viewForm") },
+            { value: "script", label: t("story.content.viewScript") },
+          ]}
+          value={view}
+          size="mini"
+          onselect={(v) => (view = v as "form" | "script")}
+        />
+      </span>
+    </div>
     <div class="blk-b">
-      <textarea
-        class="input mono script"
-        rows="16"
-        spellcheck="false"
-        value={doc.body}
-        aria-label={t("story.content.text")}
-        onchange={(e) => {
-          doc.body = value(e);
-          save();
-        }}
-      ></textarea>
+      {#if view === "script"}
+        <textarea
+          class="input mono script"
+          rows="16"
+          spellcheck="false"
+          value={doc.body}
+          aria-label={t("story.content.text")}
+          onchange={(e) => {
+            doc.body = value(e);
+            save();
+          }}
+        ></textarea>
+      {:else if read && read.errors.length}
+        <p class="warnbox">{t("story.content.formUnreadable")}</p>
+        <ul class="errors mono">
+          {#each read.errors as e, i (i)}<li>{t("story.content.lineError", { line: e.line, message: e.message })}</li>{/each}
+        </ul>
+      {:else if read && ctx}
+        {#if formProblem}<p class="errbox">{t("story.studio.notSaved", { reason: formProblem })}</p>{/if}
+        <ScriptItems items={read.script.items} {ctx} onchange={formChanged} />
+      {/if}
     </div>
   </section>
 </div>
@@ -257,6 +324,15 @@
     align-items: center;
     gap: 6px;
     font-size: 13px;
+  }
+  .views {
+    margin-left: auto;
+  }
+  .errors {
+    margin: 8px 0 0;
+    padding-left: 18px;
+    font-size: 11.5px;
+    color: var(--muted);
   }
   .script {
     width: 100%;

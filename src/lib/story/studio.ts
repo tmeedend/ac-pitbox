@@ -345,3 +345,47 @@ export const listBackups = (folder: string) => invoke<Backup[]>("story_backups",
 /** Puts the story back as it was in copy `id`; resolves to the files
  * written or removed. */
 export const restoreBackup = (folder: string, id: string) => invoke<string[]>("story_restore", { folder, id });
+
+/** A content item's text as the Form view edits it (`story_engine::script`):
+ * the tree the engine reads, which it alone parses and writes. */
+export type ScriptItem =
+  | {
+      kind: "line";
+      /** Sentences, all of which must hold. */
+      when?: string[];
+      /** A character's id; none: the item's sender. */
+      speaker?: string;
+      text: string;
+      expression?: string;
+      position?: "left" | "center" | "right";
+      line?: number;
+    }
+  | { kind: "effect"; effect: string; line?: number }
+  | { kind: "choices"; choices: ScriptChoice[] }
+  | { kind: "gather" }
+  | { kind: "end" };
+
+export interface ScriptChoice {
+  label: string;
+  when?: string[];
+  text: string;
+  body: ScriptItem[];
+  line?: number;
+}
+
+export interface Script {
+  items: ScriptItem[];
+}
+
+export interface ScriptRead {
+  script: Script;
+  /** What does not read, by line of the text. */
+  errors: { line: number; message: string }[];
+}
+
+/** Reads a text into the tree the Form view edits. */
+export const readScript = (text: string) => invoke<ScriptRead>("story_script_read", { text });
+
+/** Writes the tree back as Ink, in canonical form; refused when a sentence
+ * does not read. */
+export const writeScript = (script: Script) => invoke<string>("story_script_write", { script });

@@ -483,6 +483,43 @@ pub fn render(file: &str, value: serde_json::Value) -> Result<String, String> {
     }
 }
 
+/// A content item's text as the Form view edits it: its tree, and what
+/// does not read, by line of the text (1 is its first line).
+#[derive(Debug, Serialize)]
+pub struct ScriptRead {
+    pub script: story_engine::script::Script,
+    pub errors: Vec<ScriptLineError>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ScriptLineError {
+    pub line: usize,
+    pub message: String,
+}
+
+/// Reads a content item's text into the tree the Form view edits. The one
+/// reader of Ink is the engine's: the frontend never parses it.
+pub fn read_script(text: &str) -> ScriptRead {
+    let (script, errors) = story_engine::script::parse(text, 1);
+    ScriptRead {
+        script,
+        errors: (errors.into_iter())
+            .map(|e| ScriptLineError {
+                line: e.line,
+                message: e.message,
+            })
+            .collect(),
+    }
+}
+
+/// Writes the tree the Form view edited back as Ink, in canonical form. A
+/// sentence that does not read (a condition, an effect) is refused in the
+/// engine's words, like a save.
+pub fn write_script(value: serde_json::Value) -> Result<String, String> {
+    let script: story_engine::script::Script = serde_json::from_value(value).map_err(|e| e.to_string())?;
+    Ok(story_engine::script::print(&script))
+}
+
 /// Writes one file of the story. `expected` is the stamp the editor read it
 /// with, `None` for a file the story does not have yet (a new chapter, a
 /// first character), which must not exist. Returns the new stamp.
@@ -917,6 +954,24 @@ mod tests {
         );
         remove_file(&folder, file, &stamp).expect("removed");
         assert!(!folder.join(file).exists());
+    }
+
+    // The Form view edits the tree the engine reads, and gets back the text
+    // the engine writes: the same conversation, in canonical form.
+    #[test]
+    fn a_script_goes_through_the_form_view_and_back() {
+        let text = "friend: Hi.\n* (yes) [Yes.]\n    ~ effect(\"reputation += 1\")\n* (no) [No.]\n";
+        let read = read_script(text);
+        assert!(read.errors.is_empty(), "{:?}", read.errors);
+        let tree = serde_json::to_value(&read.script).unwrap();
+        assert_eq!(write_script(tree).unwrap(), text, "the canonical form of what was read");
+        let broken = read_script("friend: Hi.\n-> away\n");
+        assert_eq!(broken.errors[0].line, 2, "by line of the text");
+        let bad = serde_json::json!({ "items": [{ "kind": "effect", "effect": "money +== 1" }] });
+        assert!(
+            write_script(bad).unwrap_err().contains("cannot read effect"),
+            "in the engine's words"
+        );
     }
 
     // A portrait is a file of the story's `media/`: the studio lists them for

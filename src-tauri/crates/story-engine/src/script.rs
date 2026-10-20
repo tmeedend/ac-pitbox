@@ -57,6 +57,7 @@ pub enum Item {
     /// `~ effect("…")`.
     Effect {
         effect: Effect,
+        #[serde(default)]
         line: usize,
     },
     /// A choice point: consecutive choices of one level.
@@ -544,7 +545,16 @@ pub fn print(script: &Script) -> String {
 
 fn print_items(items: &[Item], depth: usize, out: &mut String) {
     let indent = "    ".repeat(depth);
-    for item in items {
+    let gather = format!("{indent}{}", "- ".repeat(depth + 1).trim_end());
+    for (i, item) in items.iter().enumerate() {
+        // Whatever follows a choice point without a gather - another line,
+        // another choice point - would read back inside its last choice, or
+        // as more of its choices: the gather an edited tree may lack is
+        // written here.
+        let after_choices = i > 0 && matches!(items[i - 1], Item::Choices { .. });
+        if after_choices && !matches!(item, Item::Gather) {
+            let _ = writeln!(out, "{gather}");
+        }
         match item {
             Item::Line(l) => {
                 let _ = writeln!(out, "{indent}{}", print_line(l));
@@ -556,7 +566,7 @@ fn print_items(items: &[Item], depth: usize, out: &mut String) {
                 let _ = writeln!(out, "{indent}-> DONE");
             }
             Item::Gather => {
-                let _ = writeln!(out, "{indent}{}", "- ".repeat(depth + 1).trim_end());
+                let _ = writeln!(out, "{gather}");
             }
             Item::Choices { choices } => {
                 for c in choices {
@@ -839,6 +849,28 @@ mod tests {
         ] {
             assert!(error(body).contains(needle), "{body}: {}", error(body));
         }
+    }
+
+    // A tree edited in the Form view can put a line right after a choice
+    // point: written with the gather that keeps it there, not inside the
+    // last choice.
+    #[test]
+    fn a_line_after_choices_is_written_with_its_gather() {
+        let mut script = read("* (a) [A]\n* (b) [B]\n- After.\n");
+        script.items.retain(|i| !matches!(i, Item::Gather));
+        let text = print(&script);
+        let back = read(&text);
+        assert!(
+            matches!(
+                back.items.as_slice(),
+                [Item::Choices { .. }, Item::Gather, Item::Line(_)]
+            ),
+            "{text}"
+        );
+        let Item::Choices { choices } = &back.items[0] else {
+            unreachable!()
+        };
+        assert!(choices[1].body.is_empty(), "the line did not slip into `b`");
     }
 
     // `- -> DONE` is a gather then the end, not two gathers.
