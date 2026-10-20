@@ -368,6 +368,30 @@ impl Story {
         }
     }
 
+    /// Every node `node` can lead to: each case of a branch and its
+    /// `otherwise`, an event's failure exit, the normal exit otherwise.
+    /// Targets that do not exist are kept: the validator reports them.
+    pub fn exits<'a>(&'a self, node: &'a Node) -> Vec<&'a str> {
+        let mut targets = Vec::new();
+        match &node.kind {
+            NodeKind::Branch { cases, otherwise } => {
+                targets.extend(cases.iter().map(|c| c.goto.as_str()));
+                targets.push(otherwise.as_str());
+            }
+            NodeKind::End { .. } => {}
+            kind => {
+                targets.extend(self.next_of(node).map(|n| n.id.as_str()));
+                if let NodeKind::Event {
+                    on_failure: Some(f), ..
+                } = kind
+                {
+                    targets.push(f.as_str());
+                }
+            }
+        }
+        targets
+    }
+
     pub fn content_item(&self, id: &str) -> Option<&ContentItem> {
         self.content_index.get(id).map(|&i| &self.content[i])
     }

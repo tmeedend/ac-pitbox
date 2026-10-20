@@ -466,24 +466,7 @@ impl Checker<'_> {
                 continue;
             }
             let Some(node) = story.node(id) else { continue };
-            let mut targets: Vec<&str> = Vec::new();
-            match &node.kind {
-                NodeKind::Branch { cases, otherwise } => {
-                    targets.extend(cases.iter().map(|c| c.goto.as_str()));
-                    targets.push(otherwise);
-                }
-                NodeKind::End { .. } => {}
-                kind => {
-                    targets.extend(story.next_of(node).map(|n| n.id.as_str()));
-                    if let NodeKind::Event {
-                        on_failure: Some(f), ..
-                    } = kind
-                    {
-                        targets.push(f);
-                    }
-                }
-            }
-            queue.extend(targets);
+            queue.extend(story.exits(node));
         }
         for chapter in &story.chapters {
             for node in chapter.nodes.iter().filter(|n| !seen.contains(n.id.as_str())) {
