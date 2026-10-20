@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 // One file per table family; the facade below keeps every caller on
 // `overlay::…`, as when all of it lived in a single file.
 mod apps;
+mod categories;
 mod extras;
 mod journal;
 mod layers;
@@ -34,6 +35,7 @@ mod tests;
 mod usage;
 
 pub use apps::*;
+pub use categories::*;
 pub use extras::*;
 pub use journal::*;
 pub use layers::*;

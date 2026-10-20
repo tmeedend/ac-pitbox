@@ -12,6 +12,7 @@
 pub mod activation;
 pub mod addons;
 pub mod bulk_ops;
+pub mod categories;
 pub mod cmimport;
 pub mod config;
 pub mod gamestate;

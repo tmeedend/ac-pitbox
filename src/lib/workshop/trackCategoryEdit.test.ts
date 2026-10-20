@@ -16,6 +16,7 @@ const row = (name: string, rank: number | null, on = true): CategoryRow => ({
   shipped: rank !== null,
   on,
   effect: 0,
+  masked: 0,
   shipped_rank: rank,
 });
 
@@ -38,6 +39,7 @@ describe("Families › Tracks", () => {
       disabled: false,
       outdated: false,
       effect: 3,
+      masked: 0,
     });
     const rules = [rule("a", ["drift"]), rule("b", ["#Drift", "jdm"]), rule("c", ["touge"])];
     expect(producers(rules, "#drift").map((r) => r.rule.id)).toEqual(["a", "b"]);

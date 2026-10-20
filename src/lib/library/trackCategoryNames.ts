@@ -49,15 +49,26 @@ export function categoryName(
   return bare in TRACK_CATEGORY_ICONS ? translate(`trackCategories.${bare}`) : bare;
 }
 
+/** `#slug` of a text: lower case, accents dropped, `_` as the separator - how a
+ * new category is written, and how a typed one is filed (`apply_category_op`
+ * writes it the same way, `categories::slug_tag`). Empty when the text holds
+ * nothing to write. */
+export function slugTag(name: string): string {
+  const base = fold(name)
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
+  return base ? `#${base}` : "";
+}
+
 /**
  * The tag of a category the user creates from a name. **Fixed at creation**,
  * like a family's id: it is what the tracks store and what a chip keeps, so
  * renaming the category later must not move it.
  */
 export function tagForName(name: string, taken: string[]): string {
-  const base = fold(name).replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "category";
+  const base = slugTag(name) || "#category";
   const used = new Set(taken.map(categoryTag));
-  let tag = `#${base}`;
-  for (let n = 2; used.has(tag); n++) tag = `#${base}_${n}`;
+  let tag = base;
+  for (let n = 2; used.has(tag); n++) tag = `${base}_${n}`;
   return tag;
 }

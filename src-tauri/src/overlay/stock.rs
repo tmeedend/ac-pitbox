@@ -95,6 +95,10 @@ pub fn clear_stock(conn: &Connection) -> rusqlite::Result<usize> {
         "DELETE FROM tech_user WHERE mod_id IN (SELECT id_interne FROM mods WHERE is_stock = 1)",
         [],
     )?;
+    conn.execute(
+        "DELETE FROM category_user WHERE mod_id IN (SELECT id_interne FROM mods WHERE is_stock = 1)",
+        [],
+    )?;
     let n = conn.execute("DELETE FROM mods WHERE is_stock = 1", [])?;
     Ok(n)
 }

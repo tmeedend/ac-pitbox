@@ -10,6 +10,7 @@ mod brands;
 mod bulk;
 mod cardata;
 mod catalog_update;
+mod categories;
 mod cm_stats;
 mod cmimport;
 mod commands;
@@ -294,7 +295,6 @@ pub fn run() {
             commands::gamestate::game_folder_owners,
             commands::gamestate::show_game_path,
             commands::bulk_ops::bulk_set_favorite,
-            commands::bulk_ops::bulk_set_category,
             commands::bulk_ops::bulk_add_tag,
             commands::bulk_ops::bulk_remove_tag,
             commands::bulk_ops::bulk_activate,
@@ -411,6 +411,8 @@ pub fn run() {
             commands::library::set_manual_tags,
             commands::library::set_mod_field,
             commands::library::set_mod_brand,
+            commands::categories::apply_category_op,
+            commands::categories::list_category_choices,
             commands::library::list_car_brands,
             commands::techsheet::save_tech_sheet,
             commands::techsheet::get_techsheet_report,

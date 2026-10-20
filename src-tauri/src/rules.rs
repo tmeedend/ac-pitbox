@@ -520,6 +520,15 @@ fn known_car_tags(c: &CarRules) -> BTreeSet<String> {
     known
 }
 
+/// The categories a car can be filed under by the rules: the `#` tags of the
+/// closed vocabulary (§5). What the category picker offers (REGLES§3).
+pub fn car_category_vocabulary(rules: &Rules) -> Vec<String> {
+    known_car_tags(&rules.car)
+        .into_iter()
+        .filter(|t| t.starts_with('#'))
+        .collect()
+}
+
 /// Same for tracks, plus the category allowlist — under **both** spellings.
 ///
 /// Six seeded categories (`#oval`, `#drag`, `#karting`, `#rallycross`, `#test`,

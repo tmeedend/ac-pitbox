@@ -112,6 +112,21 @@ pub struct ModRow {
     pub year_file: Option<i64>,
     /// The year is a decision of the user's, a forced "unknown" included.
     pub year_edited: bool,
+    /// What the rules computed for the category, which `category` hides once
+    /// the user's decision is laid on it (REGLES§3 level 4): where "back to
+    /// computed" goes. Equal to `category` while nothing is decided.
+    pub category_auto: Option<String>,
+    /// The same for a track's categories.
+    pub categories_auto: Vec<String>,
+    /// A car: the category the user forced. `category` already is it.
+    pub category_forced: Option<String>,
+    /// A track: the categories the user added to the computed list.
+    pub categories_added: Vec<String>,
+    /// A track: the computed categories the user took off.
+    pub categories_removed: Vec<String>,
+    /// Where the category comes from (REGLES§3): `"manual"` once the user
+    /// decided something on it, `"rules"` otherwise.
+    pub category_source: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -435,7 +450,9 @@ pub fn set_manual_tags(conn: &Connection, id: &str, tags: &[String]) -> rusqlite
 /// injection). `value = None` met la colonne à NULL.
 pub fn set_mod_field(conn: &Connection, id: &str, field: &str, value: Option<&str>) -> rusqlite::Result<()> {
     let column = match field {
-        "category" => "category",
+        // Not category: it is shown with the user's decision laid on what the
+        // rules computed, so a bare write here would be undone by the next
+        // harmonisation. It goes through `categories::apply` (REGLES§3).
         "car_class" => "car_class",
         "country" => "country",
         // Not drivetrain, aspiration, gearbox, engine_config, engine_pos: they
@@ -553,8 +570,14 @@ pub(super) const MOD_SELECT: &str = r#"
            m.brand_user,
            m.brand AS brand_auto,
            m.year AS year_file,
-           EXISTS (SELECT 1 FROM tech_user u WHERE u.mod_id = m.id_interne AND u.field = 'year') AS year_edited
+           EXISTS (SELECT 1 FROM tech_user u WHERE u.mod_id = m.id_interne AND u.field = 'year') AS year_edited,
+           -- Not yet written (`categories_auto` NULL) = nothing was laid on the
+           -- category, so the shown one is the computed one.
+           CASE WHEN m.categories_auto IS NULL THEN m.category ELSE m.category_auto END AS category_auto,
+           COALESCE(m.categories_auto, m.categories) AS categories_auto,
+           cu.forced, cu.added, cu.removed
     FROM mods m
+    LEFT JOIN category_user cu ON cu.mod_id = m.id_interne
 "#;
 
 pub(super) fn map_mod(row: &rusqlite::Row) -> rusqlite::Result<ModRow> {
@@ -564,6 +587,9 @@ pub(super) fn map_mod(row: &rusqlite::Row) -> rusqlite::Result<ModRow> {
     let layouts: String = row.get(24)?;
     let csp_features: String = row.get(25)?;
     let categories: String = row.get(30)?;
+    let forced: Option<String> = row.get(44)?;
+    let added: String = row.get::<_, Option<String>>(45)?.unwrap_or_else(|| "[]".into());
+    let removed: String = row.get::<_, Option<String>>(46)?.unwrap_or_else(|| "[]".into());
     Ok(ModRow {
         id_interne: row.get(0)?,
         kind: row.get(1)?,
@@ -607,6 +633,17 @@ pub(super) fn map_mod(row: &rusqlite::Row) -> rusqlite::Result<ModRow> {
         brand_auto: row.get(39)?,
         year_file: row.get(40)?,
         year_edited: row.get::<_, i64>(41)? != 0,
+        category_auto: row.get(42)?,
+        categories_auto: json_arr(&row.get::<_, String>(43)?),
+        category_source: if forced.is_some() || added != "[]" || removed != "[]" {
+            "manual"
+        } else {
+            "rules"
+        }
+        .to_string(),
+        categories_added: json_arr(&added),
+        categories_removed: json_arr(&removed),
+        category_forced: forced,
     })
 }
 
@@ -932,6 +969,7 @@ pub fn delete_mod(conn: &Connection, id: &str) -> rusqlite::Result<()> {
     // The tech sheet's corrections have no foreign key, on purpose (FICHE§6.1):
     // a complete deletion is the one gesture that removes them.
     conn.execute("DELETE FROM tech_user WHERE mod_id = ?1", [id])?;
+    conn.execute("DELETE FROM category_user WHERE mod_id = ?1", [id])?;
     conn.execute("DELETE FROM mods WHERE id_interne = ?1", [id])?;
     Ok(())
 }

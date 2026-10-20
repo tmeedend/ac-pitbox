@@ -28,6 +28,8 @@
   import IdentityEdit from "./IdentityEdit.svelte";
   import type { FicheIdentity } from "$lib/detail/identityEdit";
   import StateBadge from "$lib/components/ui/StateBadge.svelte";
+  import ManualMark from "$lib/components/ui/ManualMark.svelte";
+  import CategoryPicker from "./CategoryPicker.svelte";
   import { t } from "$lib/i18n/index.svelte";
 
   export interface FicheAction {
@@ -48,6 +50,18 @@
     pending?: boolean;
     /** In the showcase (ESPACE§4.3). */
     showcase?: boolean;
+  }
+
+  /** The category chip of a car, made a list (REGLES§3 level 4). */
+  export interface FicheCategoryEdit {
+    choices: () => Promise<string[]>;
+    /** The user forced it. */
+    forced: boolean;
+    /** What the rules compute, `null` for none. */
+    computed: string | null;
+    onpick: (tag: string) => void;
+    /** Back to the computed one. */
+    onreset: () => void;
   }
 
   export interface FicheRename {
@@ -78,6 +92,8 @@
     usage?: string;
     /** Seul tag qui fait un travail — la composition de plateau (REFONTE§7.5). */
     category?: string | null;
+    /** Makes `category` a list to choose from; cars only. */
+    categoryEdit?: FicheCategoryEdit;
     rename?: FicheRename;
     /** Name, brand and year in one form, for a car or a track. Replaces
      * `rename` when given: the pencil next to the name opens all three. */
@@ -109,6 +125,7 @@
     subtitle,
     usage,
     category,
+    categoryEdit,
     rename,
     identity,
     deployment,
@@ -163,7 +180,28 @@
           onsave={rename.onsave}
         />
       {/if}
-      {#if category && !identityOpen}<span class="cat">{category}</span>{/if}
+      {#if categoryEdit && !identityOpen}
+        <CategoryPicker choices={categoryEdit.choices} current={category ?? null} onpick={categoryEdit.onpick}>
+          {#snippet trigger(toggle)}
+            <button
+              class="cat cat-btn"
+              class:none={!category}
+              type="button"
+              onclick={toggle}
+              title={t("categoryDecision.setCategory")}>{category ?? "+"}</button
+            >
+          {/snippet}
+        </CategoryPicker>
+        {#if categoryEdit.forced}
+          <ManualMark
+            flagTitle={t("categoryDecision.manual")}
+            resetTitle={t("categoryDecision.computed", {
+              value: categoryEdit.computed ?? t("categoryDecision.computedNone"),
+            })}
+            onreset={categoryEdit.onreset}
+          />
+        {/if}
+      {:else if category && !identityOpen}<span class="cat">{category}</span>{/if}
     </div>
     {#if subtitle && !identityOpen}<div class="t-meta mono">{subtitle}</div>{/if}
     {#if usage && !identityOpen}<div class="t-meta">{usage}</div>{/if}
@@ -275,6 +313,19 @@
     font-weight: 400;
     letter-spacing: 0.5px;
     flex: none;
+  }
+  /* The category as a button: the same mono chip, no frame of its own. */
+  .cat-btn {
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+  }
+  .cat-btn:hover {
+    text-decoration: underline;
+  }
+  .cat-btn.none {
+    color: var(--faint);
   }
   .t-meta {
     color: var(--muted);

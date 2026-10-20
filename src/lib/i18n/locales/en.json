@@ -477,6 +477,20 @@
     "doneShowcase": "{count} mod(s) in the showcase",
     "skippedCount": " · {count} in the showcase, skipped"
   },
+  "categoryDecision": {
+    "new": "New category…",
+    "newPlaceholder": "Category name",
+    "manual": "Set by you",
+    "computed": "Computed: {value}",
+    "computedNone": "none",
+    "tagOnly": "Tag only — not a category",
+    "toCategory": "→ category",
+    "add": "Add category",
+    "remove": "Remove category",
+    "resetToComputed": "Reset to computed",
+    "setCategory": "Set category",
+    "removeFromTrack": "Remove this category"
+  },
   "bulkEdit": {
     "title": "{count} mods selected",
     "clearTooltip": "Clear selection",
@@ -484,8 +498,6 @@
     "markFavorite": "★ Mark favorite",
     "unmarkFavorite": "☆ Remove from favorites",
     "categorySection": "Common category",
-    "categoryPlaceholder": "#category…",
-    "apply": "Apply",
     "tagsSection": "Tags",
     "tagPlaceholder": "tag…",
     "addTagToAll": "+ Add to all",
@@ -1167,6 +1179,7 @@
     "newVersionTitle": "Pit Box ships a newer version of this rule. Restore the default to take it.",
     "effect": "{count} mods",
     "effectOne": "1 mod",
+    "maskedTitle": "Hidden by your own category choices: {count}",
     "actions": "Actions",
     "edit": "Edit",
     "duplicate": "Duplicate",

@@ -168,7 +168,12 @@
                     >PIT BOX</span
                   >{/if}</span
               >
-              <span class="num">{row.on ? tracksText(row.effect) : t("common.inactive")}</span>
+              <span class="num"
+                >{row.on ? tracksText(row.effect) : t("common.inactive")}{#if row.on && row.masked}<span
+                    class="masked"
+                    title={t("rules.maskedTitle", { count: row.masked })}> · ⚑ {row.masked}</span
+                  >{/if}</span
+              >
               <span class="flag" class:on={curated} title={curated ? t("categories.curated") : undefined} aria-hidden={!curated}
                 >⚑</span
               >
@@ -394,7 +399,7 @@
     flex: 1;
     min-width: 0;
     display: grid;
-    grid-template-columns: 46px 1fr 110px 18px;
+    grid-template-columns: 46px 1fr 140px 18px;
     align-items: center;
     gap: 12px;
     padding: 8px 10px;
@@ -417,6 +422,7 @@
   .num {
     color: var(--muted);
     font-size: 11.5px;
+    white-space: nowrap;
   }
   /* The curation flag: the dimmed red of the accent scale, a state and not an
      action (TAXO§11). Kept in place when off, so the columns do not dance. */

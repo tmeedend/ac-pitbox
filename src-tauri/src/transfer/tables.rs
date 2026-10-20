@@ -55,6 +55,9 @@ pub(super) const TABLES: &[(&str, Out, In)] = &[
     // game's content; what the user decided always wins (FICHE R6).
     ("tech_facts", Out::Keep, In::Ignore),
     ("tech_user", Out::Keep, In::Replace),
+    // The user's category decisions (REGLES§3 level 4), by mod id: no file of
+    // either machine could compute them again.
+    ("category_user", Out::Keep, In::Replace),
     ("wiki_link", Out::Keep, In::Replace),
     ("wiki_no_match", Out::Keep, In::Ignore),
     ("wiki_cache", Out::Keep, In::Ignore),
@@ -252,20 +255,22 @@ pub(super) fn finish(conn: &Connection, parts: &[Part], stamp: &str) -> rusqlite
 fn user_data(alias: &str) -> String {
     format!(
         "({alias}display_name_user IS NOT NULL OR {alias}description_user IS NOT NULL
+          OR {alias}brand_user IS NOT NULL
           OR {alias}notes_user IS NOT NULL OR {alias}tags_manual <> '[]' OR {alias}is_favorite = 1)"
     )
 }
 
 /// The fields of a game content row that are the user's, laid on the same id
-/// at arrival (EXPORT§4.2). Category, class and country too: the screens
-/// edit them, and harmonization runs again afterwards anyway.
+/// at arrival (EXPORT§4.2). Class and country too: the screens edit them, and
+/// harmonization runs again afterwards anyway. Not the category: it is shown
+/// with the decision laid on it, and the decision travels in `category_user`.
 const STOCK_USER_FIELDS: &[&str] = &[
     "display_name_user",
     "description_user",
+    "brand_user",
     "notes_user",
     "tags_manual",
     "is_favorite",
-    "category",
     "car_class",
     "country",
 ];

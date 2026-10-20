@@ -163,6 +163,9 @@ pub struct RowView<T> {
     #[serde(flatten)]
     pub row: Row<T>,
     pub effect: usize,
+    /// Among those mods, the ones where a category decision of the user's
+    /// hides what the rule produced.
+    pub masked: usize,
 }
 
 /// A track category of the allowlist: an ordered name, not a rule with an id,
@@ -173,6 +176,8 @@ pub struct CategoryRow {
     pub shipped: bool,
     pub on: bool,
     pub effect: usize,
+    /// Among those tracks, the ones where the user took the category off.
+    pub masked: usize,
     /// Its place in the shipped allowlist: what tells a category the user
     /// moved from one the catalogue placed (Families › Tracks, the ⚑).
     pub shipped_rank: Option<usize>,
@@ -211,6 +216,7 @@ fn rows<T: Rule>(o: &ListOverlay<T>, catalog: &[T], effects: &Effects) -> Vec<Ro
         .into_iter()
         .map(|row| RowView {
             effect: row.rule.id().and_then(|id| effects.get(id)).copied().unwrap_or(0),
+            masked: row.rule.id().map_or(0, |id| effects.masked(id)),
             row,
         })
         .collect()
@@ -232,6 +238,7 @@ pub fn view(o: &RulesOverlay, catalog: &Rules, effects: &Effects, version: Strin
             shipped: allow.contains(&name),
             on: true,
             effect: effects.get(&category_key(&name)).copied().unwrap_or(0),
+            masked: effects.masked(&category_key(&name)),
             shipped_rank: allow.iter().position(|a| a == &name),
             name,
         })
@@ -245,6 +252,7 @@ pub fn view(o: &RulesOverlay, catalog: &Rules, effects: &Effects, version: Strin
                 shipped: true,
                 on: false,
                 effect: 0,
+                masked: 0,
                 shipped_rank: allow.iter().position(|a| a == name),
             }),
     );

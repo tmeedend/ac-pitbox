@@ -8,7 +8,7 @@
 //! répondant plus. Les événements `bulk:progress` ne partiraient d'ailleurs
 //! qu'à la toute fin, ce qui rendrait la barre inutile.
 //!
-//! Les quatre autres (favori, catégorie, tags) restent synchrones : ce sont
+//! Les autres (favori, tags) restent synchrones : ce sont
 //! quelques écritures SQLite, sans I/O de fichiers.
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -49,12 +49,6 @@ pub fn cancel_bulk(control: State<BulkControl>) {
 pub fn bulk_set_favorite(db: State<Db>, ids: Vec<String>, favorite: bool) -> Result<(), String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::bulk::set_favorite(&conn, &ids, favorite)
-}
-
-#[tauri::command]
-pub fn bulk_set_category(db: State<Db>, ids: Vec<String>, category: Option<String>) -> Result<(), String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::bulk::set_category(&conn, &ids, category.as_deref())
 }
 
 #[tauri::command]

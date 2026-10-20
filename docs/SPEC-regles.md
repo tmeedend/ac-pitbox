@@ -59,6 +59,11 @@ C'est la même forme que la résolution des taxonomies (TAXO§2) : une valeur d�
 
 **Traçabilité obligatoire.** Chaque valeur dérivée retient d'où elle vient : `{ value, source: 'raw' | 'catalog' | 'user' | 'manual', ruleId? }`. C'est ce qui permet d'expliquer « pourquoi cette voiture est classée Drift » sur la fiche d'un mod, et de rendre le rapport de §6 possible.
 
+**La catégorie en est le premier cas de niveau 4.** Forcer la catégorie d'une voiture ou d'un circuit est une correction manuelle sur un mod précis : elle l'emporte sur les règles, et **aucun recalcul ne la défait** — import ou mise à jour du mod, changement de version active, « réappliquer les règles », mise à jour du moteur. La valeur affichée porte `source: 'manual'` ; ce que les règles calculent reste connu à côté, et c'est là qu'on revient. La règle « une catégorie, c'est ce que les règles savent produire » protège contre les auteurs de mods, pas contre l'utilisateur.
+
+- **Une voiture a un forçage, une valeur** (`#tag`). Choisir la valeur que les règles calculent déjà **n'enregistre rien et supprime un forçage existant** : la voiture est de nouveau suivie par les règles. Un `#` inconnu des règles est une catégorie valide une fois forcé : il apparaît dans le filtre Catégorie, compte pour la composition de grille et pour les familles qui le déclarent.
+- **Un circuit a des deltas** sur la liste calculée, `{ added, removed }` : une liste n'est pas une valeur à figer, une règle qui trouve plus tard une autre catégorie doit encore l'atteindre. Les catégories ajoutées se rangent selon l'ordre de Familles › Circuits (le rang 1 reste la catégorie principale), une catégorie que cette liste ne connaît pas vient après. Ajouter une catégorie déjà calculée ne fait rien ; retirer puis rajouter la même s'annule.
+
 ---
 
 # 4. Identité des règles du catalogue
@@ -227,11 +232,13 @@ Une règle du catalogue qui affiche `—` est soit inutile pour cette bibliothè
 
 Recalculé à la volée après chaque changement, pas au lancement seulement.
 
+**Une règle surchargée ne doit pas paraître inutile.** Le compteur distingue, parmi les mods qu'une règle affecte, ceux où une catégorie décidée par l'utilisateur masque son résultat (une voiture forcée ailleurs que dans la catégorie que la règle produit, un circuit dont l'utilisateur a retiré cette catégorie) : ce second nombre s'affiche à côté du premier, avec le fanion.
+
 ---
 
 # 9. Export et import
 
-**L'export ne contient que la surcouche** — règles de l'utilisateur, désactivations, dérivations, corrections manuelles. Jamais le catalogue.
+**L'export ne contient que la surcouche** — règles de l'utilisateur, désactivations, dérivations, corrections manuelles. Jamais le catalogue. Les corrections manuelles, ce sont aujourd'hui **les décisions de catégorie** (une voiture forcée, les deltas d'un circuit), par identifiant de mod. Elles se fusionnent comme le reste : un mod que le destinataire a déjà décidé garde sa décision, et une décision sur un mod qu'il n'a pas est gardée pour le jour où il l'importe. Un export d'avant ces décisions s'importe tel quel.
 
 Exporter le catalogue figerait le destinataire sur une version ancienne, et gonflerait le fichier de données identiques chez tout le monde.
 
@@ -321,7 +328,7 @@ La migration est atomique, et l'ancien fichier n'est jamais supprimé : il est m
 
 # 14. Points ouverts
 
-**La couche de corrections mod par mod** (niveau 4 de §3) : la marque et la classe d'un mod précis ne se corrigent pas encore sans règle (pays et fiche technique, si : FICHE§8). C'est un chantier à part (`CHANTIERS.md`, « Corrections par mod »).
+**La couche de corrections mod par mod** (niveau 4 de §3) couvre la catégorie (voitures et circuits), le pays et la fiche technique (FICHE§8), le nom, la marque et l'année (`SPEC.md` §5bis.3). La **classe** d'un mod précis ne se corrige pas encore sans règle (`CHANTIERS.md`, « Corrections par mod »).
 
 **Le partage communautaire de règles** passe aujourd'hui par le développeur : un relevé ou un export de décisions, envoyé à la main, refait dans l'app puis promu (`SPEC.md` §7.1bis). Un import direct de règles venues d'un inconnu pose la question de la confiance, non traitée.
 

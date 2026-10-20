@@ -1507,20 +1507,32 @@ de reprendre. En cas d'écart, la spec fait foi.
 
 - [ ] **Corrections par mod — reste la classe.** On corrige d'un mod son nom,
       sa description, ses tags (couche 4 de REGLES§14), depuis la fiche
-      technique (FICHE§8) son **pays** et sa **fiche technique**, et depuis
-      le crayon de l'en-tête (2026-10-20, §5bis.3) sa **marque** et son
-      **année**. **Pas encore sa classe.** La marque suit le modèle du nom :
-      une colonne `brand_user` à côté de `brand`, que l'harmonisation réécrit,
-      lue devant elle dans `overlay::MOD_SELECT`. Reste ouvert : (1) la
-      fusion de marques de l'onglet Marques s'applique aux marques que
-      l'harmonisation calcule, pas à une marque saisie à la main — une voiture
-      classée à la main sous un nom ensuite fusionné ne suit pas la fusion ;
-      (2) la décision n'est pas « modifié par vous » ailleurs que dans le
-      formulaire de l'en-tête (pas de marque sur la liste) ; (3) l'historique
-      d'un circuit dit « fiche technique modifiée » quand on corrige son année
-      (même décision `tech_user`, même entrée `TECH_EDITED`). Demandé par
-      l'utilisateur (2026-09-24) en discutant des fausses marques : pour deux
-      ou trois voitures, une correction directe est plus simple qu'une règle.
+      technique (FICHE§8) son **pays** et sa **fiche technique**, depuis le
+      crayon de l'en-tête (2026-10-20, §5bis.3) sa **marque** et son
+      **année**, et depuis la puce de catégorie (2026-10-21, §5, REGLES§3)
+      sa **catégorie** — voiture forcée, circuit ajouté ou retiré —, qui
+      survit à tout recalcul. **Pas encore sa classe.** La marque suit le
+      modèle du nom (une colonne `brand_user` à côté de `brand`, que
+      l'harmonisation réécrit, lue devant elle dans `overlay::MOD_SELECT`) ;
+      la catégorie a sa table `category_user`, sans clé étrangère comme
+      `tech_user`, posée sur le résultat par `harmonize::store` et par
+      `categories::apply`, avec le calculé gardé à côté. Reste ouvert :
+      (1) la fusion de marques de l'onglet Marques s'applique aux marques que
+      l'harmonisation calcule, pas à une marque saisie à la main ; (2) une
+      marque ou une catégorie décidée n'est « modifiée par vous » que sur la
+      fiche, pas sur la liste ; (3) l'historique d'un circuit dit « fiche
+      technique modifiée » quand on corrige son année (même décision
+      `tech_user`) ; (4) les décisions de catégorie voyagent avec l'export des
+      règles mais **pas avec le relevé anonyme** (`survey.rs` n'embarque que
+      les surcouches, une décision par identifiant de mod n'étant pas
+      anonyme) ; (5) la catégorie d'une voiture reste le premier tag `#` **par
+      ordre alphabétique** des tags que les règles produisent (`pick_category`),
+      pas par priorité : un forçage est aujourd'hui le seul moyen d'en choisir
+      une autre sans règle ; (6) le champ de tag manuel propose les catégories
+      de la bibliothèque, pas les noms traduits d'une catégorie de circuit.
+      Demandé par l'utilisateur (2026-09-24) en discutant des fausses marques :
+      pour deux ou trois voitures, une correction directe est plus simple
+      qu'une règle.
 
 - [ ] **Deux jeux de règles de tags ont divergé — à trancher.**
       `docs/default-tag-rules-enriched.json` **n'est pas ce que l'app charge** :

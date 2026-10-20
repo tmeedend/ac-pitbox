@@ -188,9 +188,11 @@ fn an_app_and_a_track_sharing_an_id_do_not_share_their_layers() {
 /// Columns `migrate` adds, each paired with a listing that reads it. Used
 /// by the migration test below to build an "old" database out of the
 /// current one.
-const ADDED_LATER: [(&str, &str); 11] = [
+const ADDED_LATER: [(&str, &str); 13] = [
     ("mods", "is_unmanaged"),
     ("mods", "brand_user"),
+    ("mods", "category_auto"),
+    ("mods", "categories_auto"),
     ("mods", "tech_marks"),
     ("layers", "notes_user"),
     ("sub_mods", "author"),

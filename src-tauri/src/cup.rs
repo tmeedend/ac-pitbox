@@ -556,6 +556,12 @@ mod tests {
             brand_auto: None,
             year_file: None,
             year_edited: false,
+            category_auto: None,
+            categories_auto: vec![],
+            category_forced: None,
+            categories_added: vec![],
+            categories_removed: vec![],
+            category_source: "rules".into(),
         }
     }
 

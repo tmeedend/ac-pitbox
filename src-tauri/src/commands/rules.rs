@@ -221,17 +221,30 @@ pub fn set_rule_enabled(
 #[tauri::command]
 pub fn export_rules(app: AppHandle, path: String) -> Result<(), String> {
     let dir = crate::rules::config_dir(&app)?;
-    crate::rules_share::write_export(&dir, &crate::rules::default_rules(), std::path::Path::new(&path))
+    let decisions = {
+        let db = app.state::<Db>();
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        crate::overlay::list_category_decisions(&conn).map_err(|e| e.to_string())?
+    };
+    crate::rules_share::write_export(
+        &dir,
+        &crate::rules::default_rules(),
+        std::path::Path::new(&path),
+        decisions,
+    )
 }
 
 /// Merges an export into the user's decisions, then re-applies the library.
 #[tauri::command]
 pub fn import_rules(app: AppHandle, db: State<Db>, path: String) -> Result<crate::rules_share::ImportReport, String> {
     let dir = crate::rules::config_dir(&app)?;
-    let report = crate::rules_share::import(&dir, &crate::rules::default_rules(), std::path::Path::new(&path))?;
+    let mut report = crate::rules_share::import(&dir, &crate::rules::default_rules(), std::path::Path::new(&path))?;
     let rules = crate::rules::load(&app);
     let cfg = crate::config::load(&app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;
+    (report.decisions_added, report.decisions_kept) =
+        crate::categories::merge_decisions(&conn, &rules, &report.decisions)?;
+    // Lays the decisions that arrived on what the screens show.
     crate::harmonize::harmonize_all(&conn, &cfg, &rules).map_err(|e| e.to_string())?;
     Ok(report)
 }

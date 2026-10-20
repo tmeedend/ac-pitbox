@@ -42,10 +42,6 @@ export function bulkSetFavorite(ids: string[], favorite: boolean): Promise<void>
   return invoke<void>("bulk_set_favorite", { ids, favorite });
 }
 
-export function bulkSetCategory(ids: string[], category: string | null): Promise<void> {
-  return invoke<void>("bulk_set_category", { ids, category });
-}
-
 export function bulkAddTag(ids: string[], tag: string): Promise<void> {
   return invoke<void>("bulk_add_tag", { ids, tag });
 }

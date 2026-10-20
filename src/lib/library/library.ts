@@ -39,6 +39,19 @@ export interface ModCard {
   year_file: number | null;
   /** The year is a decision of the user's (a forced "unknown" included). */
   year_edited: boolean;
+  /** What the rules computed for the category, which `category` hides once the
+   * user's decision is laid on it (REGLES§3 level 4). */
+  category_auto: string | null;
+  /** The same for a track's categories. */
+  categories_auto: string[];
+  /** A car: the category the user forced. `category` already is it. */
+  category_forced: string | null;
+  /** A track: the categories the user added to the computed list. */
+  categories_added: string[];
+  /** A track: the computed categories the user took off. */
+  categories_removed: string[];
+  /** Where the category comes from: `"manual"` once decided by the user. */
+  category_source: "rules" | "manual";
   year: number | null;
   car_class: string | null;
   category: string | null;

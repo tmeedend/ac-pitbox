@@ -15,7 +15,9 @@
   // N'expose que les champs communs à tout mod — jamais ceux propres à un type
   // (specs voiture, skin piloté, version active), réservés à la fiche détail.
   import type { ModCard } from "$lib/library/library";
-  import { bulkSetFavorite, bulkSetCategory, bulkAddTag, bulkRemoveTag } from "$lib/library/bulkEdit";
+  import { bulkSetFavorite, bulkAddTag, bulkRemoveTag } from "$lib/library/bulkEdit";
+  import { applyCategoryOp, listCategoryChoices, type CategoryOp } from "$lib/library/categoryDecision";
+  import CategoryPicker from "$lib/components/detail/CategoryPicker.svelte";
   import { t } from "$lib/i18n/index.svelte";
 
   import { errorText } from "$lib/errors";
@@ -29,12 +31,15 @@
 
   let busy = $state(false);
   let error = $state("");
-  let categoryInput = $state("");
   let tagInput = $state("");
 
-  const categories = $derived(
-    [...new Set(cards.map((c) => c.category).filter((c): c is string => !!c))].sort(),
-  );
+  // The group panel belongs to one library screen, so one kind (REGLES§3 level 4):
+  // a car takes a forced category, a track takes categories added and taken off.
+  const isCar = $derived(cards.every((c) => c.kind === "Car"));
+  /** A selection that mixes cars and tracks has no category gesture to offer. */
+  const oneKind = $derived(cards.length > 0 && cards.every((c) => c.kind === cards[0].kind));
+  /** The categories the selected tracks carry now: what can be taken off. */
+  const onSelection = $derived([...new Set(cards.flatMap((c) => c.categories))]);
 
   // Ces quatre actions sont quelques écritures SQLite : pas de progression, pas
   // de rapport — une barre y serait un clignotement (§6.3bis).
@@ -54,11 +59,7 @@
   const markFavorite = () => run(() => bulkSetFavorite(ids, true));
   const unmarkFavorite = () => run(() => bulkSetFavorite(ids, false));
 
-  function applyCategory() {
-    const cat = categoryInput.trim();
-    if (!cat) return;
-    run(() => bulkSetCategory(ids, cat));
-  }
+  const categoryOp = (op: CategoryOp) => run(() => applyCategoryOp(ids, op));
 
   function addTag() {
     const tag = tagInput.trim();
@@ -97,26 +98,58 @@
       </div>
     </section>
 
+    {#if oneKind}
     <section>
       <h3 class="lbl">{t("bulkEdit.categorySection")}</h3>
       <div class="row">
-        <!-- Enter is left alone here: with the suggestions open it picks one, and
-             must not write a half-typed category onto every selected mod. Applying
-             is the button's job. `autocomplete="off"` keeps WebView2's own history
-             popup from stacking on the suggestions. -->
-        <input
-          class="input"
-          list="bulk-categories"
-          autocomplete="off"
-          placeholder={t("bulkEdit.categoryPlaceholder")}
-          bind:value={categoryInput}
-        />
-        <datalist id="bulk-categories">
-          {#each categories as cat}<option value={cat}></option>{/each}
-        </datalist>
-        <button class="btn" type="button" onclick={applyCategory} disabled={busy || !categoryInput.trim()}>{t("bulkEdit.apply")}</button>
+        {#if isCar}
+          <CategoryPicker
+            choices={() => listCategoryChoices("Car")}
+            placement="up"
+            onpick={(tag) => categoryOp({ op: "force", tag })}
+          >
+            {#snippet trigger(toggle)}
+              <button class="btn" type="button" onclick={toggle} disabled={busy}>
+                {t("categoryDecision.setCategory")}
+              </button>
+            {/snippet}
+          </CategoryPicker>
+        {:else}
+          <CategoryPicker
+            choices={() => listCategoryChoices("Track")}
+            placement="up"
+            onpick={(tag) => categoryOp({ op: "add", tag })}
+          >
+            {#snippet trigger(toggle)}
+              <button class="btn" type="button" onclick={toggle} disabled={busy}>
+                {t("categoryDecision.add")}
+              </button>
+            {/snippet}
+          </CategoryPicker>
+          <CategoryPicker
+            choices={() => onSelection}
+            allowNew={false}
+            placement="up"
+            onpick={(tag) => categoryOp({ op: "remove", tag })}
+          >
+            {#snippet trigger(toggle)}
+              <button class="btn" type="button" onclick={toggle} disabled={busy || !onSelection.length}>
+                {t("categoryDecision.remove")}
+              </button>
+            {/snippet}
+          </CategoryPicker>
+        {/if}
+        <button
+          class="btn"
+          type="button"
+          onclick={() => categoryOp({ op: "reset" })}
+          disabled={busy}
+          title={t("categoryDecision.resetToComputed")}
+          aria-label={t("categoryDecision.resetToComputed")}>↺</button
+        >
       </div>
     </section>
+    {/if}
 
     <section>
       <h3 class="lbl">{t("bulkEdit.tagsSection")}</h3>

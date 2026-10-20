@@ -343,6 +343,9 @@
               <span class="flag" title={t("rules.newVersionTitle")}>⚑ {t("rules.newVersion")}</span>
             {/if}
             <span class="effect" class:none={row.effect === 0}>{effectText(row.effect)}</span>
+            <span class="masked" title={row.masked ? t("rules.maskedTitle", { count: row.masked }) : undefined}
+              >{row.masked ? `⚑ ${row.masked}` : ""}</span
+            >
             <button type="button" class="more" title={t("rules.actions")} onclick={(e) => openMenu(e, s, row)}>⋮</button>
           </div>
         {/if}
@@ -635,6 +638,14 @@
   }
   .effect.none {
     color: var(--faint);
+  }
+  /* A slot of its own, empty most of the time, so the counters stay aligned. */
+  .masked {
+    flex: none;
+    width: 40px;
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--mono);
   }
   .more {
     flex: none;

@@ -477,6 +477,20 @@
     "doneShowcase": "{count} mod(s) en vitrine",
     "skippedCount": " · {count} en vitrine, ignoré(s)"
   },
+  "categoryDecision": {
+    "new": "Nouvelle catégorie…",
+    "newPlaceholder": "Nom de la catégorie",
+    "manual": "Définie par vous",
+    "computed": "Calculée : {value}",
+    "computedNone": "aucune",
+    "tagOnly": "Simple tag — pas une catégorie",
+    "toCategory": "→ catégorie",
+    "add": "Ajouter une catégorie",
+    "remove": "Retirer une catégorie",
+    "resetToComputed": "Revenir au calculé",
+    "setCategory": "Choisir la catégorie",
+    "removeFromTrack": "Retirer cette catégorie"
+  },
   "bulkEdit": {
     "title": "{count} mods sélectionnés",
     "clearTooltip": "Annuler la sélection",
@@ -484,8 +498,6 @@
     "markFavorite": "★ Marquer favori",
     "unmarkFavorite": "☆ Retirer des favoris",
     "categorySection": "Catégorie commune",
-    "categoryPlaceholder": "#catégorie…",
-    "apply": "Appliquer",
     "tagsSection": "Tags",
     "tagPlaceholder": "tag…",
     "addTagToAll": "+ Ajouter à tous",
@@ -1167,6 +1179,7 @@
     "newVersionTitle": "Pit Box livre une version plus récente de cette règle. Rétablir le défaut pour la prendre.",
     "effect": "{count} mods",
     "effectOne": "1 mod",
+    "maskedTitle": "Masquée par vos choix de catégorie : {count}",
     "actions": "Actions",
     "edit": "Modifier",
     "duplicate": "Dupliquer",

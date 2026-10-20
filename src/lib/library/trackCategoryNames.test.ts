@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import shipped from "../../../src-tauri/rules/default-tag-rules.json";
 import { TRACK_CATEGORY_ICONS } from "./trackCategoryIcons";
-import { bareCategory, categoryIconId, categoryName, categoryTag, tagForName } from "./trackCategoryNames";
+import { bareCategory, categoryIconId, categoryName, categoryTag, slugTag, tagForName } from "./trackCategoryNames";
 
 const tr = (key: string) => `T(${key})`;
 
@@ -24,6 +24,15 @@ describe("track category names", () => {
     expect(categoryTag("##drift")).toBe("#drift");
     expect(bareCategory("#Touge")).toBe("touge");
     expect(categoryTag("  ")).toBe("");
+  });
+
+  // The backend writes a typed category the same way (`categories::slug_tag`):
+  // these cases are its test's too.
+  it("writes a typed category as a slug", () => {
+    expect(slugTag("Côte d'Azur")).toBe("#cote_d_azur");
+    expect(slugTag("  GT3 ")).toBe("#gt3");
+    expect(slugTag("##Drift")).toBe("#drift");
+    expect(slugTag("!!!")).toBe("");
   });
 
   // The tag of a new category is fixed at creation: what tracks store.

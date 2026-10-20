@@ -13,6 +13,14 @@ describe("families", () => {
   // A road car whose file only says `"class": "street"` is a road car: the
   // class is read with the tags (35 unclassified cars of the first Mod
   // Organizer survey).
+  // REGLES§3 level 4: a category forced on a car is in no rule's output, and
+  // still reaches the families that declare it.
+  it("reads a forced category along with the tags", () => {
+    const car = { tags_from_mod: [], tags_from_rule: [], tags_manual: [], car_class: null, category_forced: "#hot_rods" };
+    const fams = [{ id: "hotrod", tags: ["hot_rods"] }];
+    expect(familiesOfTags(familyTagsOf(car), familyLookup(fams), fams)).toEqual(["hotrod"]);
+  });
+
   it("reads the class along with the tags", () => {
     const car = { tags_from_mod: ["rwd"], tags_from_rule: [], tags_manual: [], car_class: "street" };
     const fams = [{ id: "street", tags: ["street"] }];

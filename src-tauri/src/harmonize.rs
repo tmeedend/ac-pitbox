@@ -2,6 +2,8 @@
 //! mod et persiste le résultat dans l'overlay. Utilisé à l'import et lors d'une
 //! réapplication globale après édition des règles.
 
+use std::collections::BTreeSet;
+
 use rusqlite::Connection;
 
 use crate::config::AppConfig;
@@ -69,19 +71,33 @@ pub fn store(
     rules: &Rules,
 ) -> rusqlite::Result<()> {
     let country = final_country(rules, h, native_country);
+    let is_car = is_car(conn, id)?;
+    // The user's decision on the category is laid on what the rules computed,
+    // here like the country: no recomputation - an import, a version change,
+    // new rules - can undo it (REGLES§3 level 4). The computed result is kept
+    // beside it.
+    let decision = overlay::get_category_decision(conn, id)?;
+    let (category, categories) = crate::categories::shown(
+        is_car,
+        h.category.as_deref(),
+        &h.categories,
+        decision.as_ref(),
+        &rules.track.category_allowlist,
+    );
     overlay::update_harmonization(
         conn,
         id,
         h.brand.as_deref(),
         h.car_class.as_deref(),
-        h.category.as_deref(),
-        &h.categories,
+        category.as_deref(),
+        &categories,
         country.as_deref(),
         &h.tags_from_rule,
     )?;
+    overlay::set_category_auto(conn, id, h.category.as_deref(), &h.categories)?;
     // A car's spec fields and country are one source among others on its tech
     // sheet (FICHE§6.2), which then rewrites the spec columns from all of them.
-    if is_car(conn, id)? {
+    if is_car {
         crate::techsheet::store_harmonized(conn, id, h, native_country, rules)?;
     }
     Ok(())
@@ -134,6 +150,7 @@ pub fn harmonize_all_counting(conn: &Connection, cfg: &AppConfig, rules: &Rules)
     let mods = overlay::list_mods(conn)?;
     let mut n = 0;
     let mut effects = Effects::new();
+    let outputs = rule_outputs(rules);
     // One transaction for the whole pass: the Rules screen re-applies on every
     // switch now, and a commit per mod is a disk sync per mod.
     let tx = conn.unchecked_transaction()?;
@@ -141,7 +158,7 @@ pub fn harmonize_all_counting(conn: &Connection, cfg: &AppConfig, rules: &Rules)
         let Some((h, native_country)) = recompute_for(conn, cfg, rules, m) else {
             continue;
         };
-        count(&mut effects, &h);
+        count(&mut effects, &h, &masked_categories(conn, m, &h), &outputs);
         match store(conn, &m.id_interne, &h, native_country.as_deref(), rules) {
             Ok(()) => n += 1,
             Err(e) => log::warn!("harmonisation of {} not stored: {e}", m.id_interne),
@@ -151,12 +168,111 @@ pub fn harmonize_all_counting(conn: &Connection, cfg: &AppConfig, rules: &Rules)
     Ok((n, effects))
 }
 
-/// Rule id → number of mods it acts on.
-pub type Effects = std::collections::BTreeMap<String, usize>;
+/// What the Rules screen counts per rule id (REGLES§8.3): the mods the rule
+/// acts on, and among them the mods where a category decision hides what it
+/// produced - so a rule the user overrode does not look useless.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Effects {
+    acts: std::collections::BTreeMap<String, usize>,
+    masked: std::collections::BTreeMap<String, usize>,
+}
 
-fn count(effects: &mut Effects, h: &Harmonized) {
+impl Effects {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the number of mods a rule acts on (tests build counters by hand).
+    #[cfg(test)]
+    pub fn insert(&mut self, id: String, n: usize) {
+        self.acts.insert(id, n);
+    }
+
+    /// The mods a rule acts on.
+    pub fn get(&self, id: &str) -> Option<&usize> {
+        self.acts.get(id)
+    }
+
+    /// How many rules act on at least one mod.
+    #[cfg(test)]
+    pub fn len(&self) -> usize {
+        self.acts.len()
+    }
+
+    #[cfg(test)]
+    pub fn is_empty(&self) -> bool {
+        self.acts.is_empty()
+    }
+
+    /// Rule id → mods it acts on.
+    #[cfg(test)]
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &usize)> {
+        self.acts.iter()
+    }
+
+    /// Among them, those where a category decision hides its result.
+    pub fn masked(&self, id: &str) -> usize {
+        self.masked.get(id).copied().unwrap_or(0)
+    }
+}
+
+/// Rule id → the category tags it produces: what a decision can hide. A track
+/// category of the allowlist has no id of its own (`track-category:#x`).
+type Outputs = std::collections::BTreeMap<String, Vec<String>>;
+
+fn rule_outputs(rules: &Rules) -> Outputs {
+    let mut out = Outputs::new();
+    let mut put = |id: &Option<String>, tags: &[String]| {
+        if let Some(id) = id {
+            out.insert(id.clone(), tags.iter().map(|t| crate::categories::key(t)).collect());
+        }
+    };
+    for r in &rules.car.tag_merge {
+        put(&r.id, &r.to);
+    }
+    for r in &rules.car.name_to_tag {
+        put(&r.id, &r.add);
+    }
+    for r in &rules.car.class_fix {
+        put(&r.id, &r.add);
+    }
+    for r in &rules.track.tag_merge {
+        put(&r.id, &r.to);
+    }
+    for c in &rules.track.category_allowlist {
+        let tag = crate::categories::key(c);
+        out.insert(crate::rule_overlay::category_key(c), vec![tag]);
+    }
+    out
+}
+
+/// The computed categories a decision of the user's hides on this mod: a car's
+/// when it was forced elsewhere, a track's when they were taken off.
+fn masked_categories(conn: &Connection, m: &overlay::ModRow, h: &Harmonized) -> BTreeSet<String> {
+    let Ok(Some(d)) = overlay::get_category_decision(conn, &m.id_interne) else {
+        return BTreeSet::new();
+    };
+    let computed: Vec<&String> = h.category.iter().chain(&h.categories).collect();
+    let hidden = |c: &&String| match (&d.forced, ModKind::from_column(&m.kind)) {
+        (Some(f), ModKind::Car) => crate::categories::key(f) != crate::categories::key(c),
+        _ => d
+            .removed
+            .iter()
+            .any(|r| crate::categories::key(r) == crate::categories::key(c)),
+    };
+    computed
+        .iter()
+        .filter(|c| hidden(c))
+        .map(|c| crate::categories::key(c))
+        .collect()
+}
+
+fn count(effects: &mut Effects, h: &Harmonized, masked: &BTreeSet<String>, outputs: &Outputs) {
     for id in &h.fired {
-        *effects.entry(id.clone()).or_default() += 1;
+        *effects.acts.entry(id.clone()).or_default() += 1;
+        if outputs.get(id).is_some_and(|o| o.iter().any(|t| masked.contains(t))) {
+            *effects.masked.entry(id.clone()).or_default() += 1;
+        }
     }
 }
 
@@ -164,9 +280,10 @@ fn count(effects: &mut Effects, h: &Harmonized) {
 /// when it opens.
 pub fn effects(conn: &Connection, cfg: &AppConfig, rules: &Rules) -> rusqlite::Result<Effects> {
     let mut effects = Effects::new();
+    let outputs = rule_outputs(rules);
     for m in &overlay::list_mods(conn)? {
         if let Some((h, _)) = recompute_for(conn, cfg, rules, m) {
-            count(&mut effects, &h);
+            count(&mut effects, &h, &masked_categories(conn, m, &h), &outputs);
         }
     }
     Ok(effects)
@@ -249,7 +366,9 @@ pub fn snapshot(
 }
 
 /// What a car's families are read from - the Rust twin of `familyTagsOf`
-/// (`families.ts`): its file's tags, the rules' tags, the user's, AND its
+/// (`families.ts`), minus the category the user forced: this serves the
+/// reports on what the RULES change (the catalogue update, the survey), where
+/// a decision of the user's is not the rules' doing. It reads: its file's tags, the rules' tags, the user's, AND its
 /// class. A road car whose file only says `"class": "street"` belonged to no
 /// family while the tags alone were read (35 of the 43 unclassified cars of
 /// the first Mod Organizer survey).

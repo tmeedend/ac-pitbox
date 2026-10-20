@@ -139,6 +139,9 @@ export interface RuleRow<T> {
   outdated: boolean;
   /** Mods the rule acts on, measured on the library. */
   effect: number;
+  /** Among them, the mods where a category the user set hides what the rule
+   * produced (REGLES§8.3): an overridden rule must not look useless. */
+  masked: number;
 }
 
 export interface CategoryRow {
@@ -148,6 +151,8 @@ export interface CategoryRow {
   on: boolean;
   /** Tracks that carry it, measured on the library. */
   effect: number;
+  /** Among them, the tracks where the user took the category off. */
+  masked: number;
   /** Its place in the shipped allowlist; `null` for one of the user's. */
   shipped_rank: number | null;
 }

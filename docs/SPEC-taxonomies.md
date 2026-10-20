@@ -177,6 +177,8 @@ Ligne dépliée :
 
 L'ordre, l'activation, l'ajout et la suppression changent la catégorie qu'un circuit enregistre : ils réappliquent les règles à la bibliothèque, comme l'onglet Règles. Renommer ou changer l'icône ne réapplique rien.
 
+**Sur un circuit précis**, l'utilisateur ajoute et retire des catégories à la main (`SPEC.md` §5, REGLES§3 niveau 4) : ce sont des deltas sur la liste calculée, rangés selon cette même liste — le rang 1 reste la catégorie principale —, et une catégorie qu'elle ne connaît pas vient après. Ils ne modifient pas la liste : ils ne réappliquent rien, et un retrait se voit ici dans la colonne d'effet, à côté du nombre de circuits qui portent la catégorie.
+
 « Nouvelle catégorie » crée un tag tiré du nom (`Côte d'Azur` → `#cote_d_azur`), figé à la création comme l'id d'une famille, et range le nom saisi comme nom affiché. « Tout rétablir » remet la liste, les noms et les icônes tels que livrés ; les mots-clés de la page Online, édités mot par mot, ne sont pas touchés.
 
 ---

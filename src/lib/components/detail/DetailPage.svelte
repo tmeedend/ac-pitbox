@@ -39,6 +39,7 @@
   import { usageLine } from "$lib/detail/odometer";
   import { setEntityNote } from "$lib/detail/userMeta";
   import { saveTechSheet } from "$lib/detail/techSheet";
+  import { applyCategoryOp, listCategoryChoices, type CategoryOp } from "$lib/library/categoryDecision";
   import type { FicheIdentity, IdentityPatch } from "$lib/detail/identityEdit";
   import LayerDetail from "./LayerDetail.svelte";
   import { listAttached, type InventoryRow } from "$lib/inventory/inventory";
@@ -374,6 +375,23 @@
     }
     // Reloaded even when a write failed: the ones before it are saved, and the
     // page must show them rather than the state it had.
+    try {
+      await refreshEntity();
+      onchange?.();
+    } catch (e) {
+      actionError ||= errorText(e);
+    }
+  }
+
+  /** A gesture on the category (REGLES§3 level 4): the decision is written in
+   * the base, then the sheet and the library reload. */
+  async function categoryOp(op: CategoryOp) {
+    actionError = "";
+    try {
+      await applyCategoryOp([id], op);
+    } catch (e) {
+      actionError = errorText(e);
+    }
     try {
       await refreshEntity();
       onchange?.();
@@ -771,6 +789,15 @@
       {subtitle}
       usage={isCar ? usageLine(d) : undefined}
       category={d.category}
+      categoryEdit={isCar
+        ? {
+            choices: () => listCategoryChoices("Car"),
+            forced: !!d.category_forced,
+            computed: d.category_auto,
+            onpick: (tag) => void categoryOp({ op: "force", tag }),
+            onreset: () => void categoryOp({ op: "reset" }),
+          }
+        : undefined}
       identity={identityOf(d)}
       deployment={{ active: d.active, stock: d.is_stock, unmanaged: d.is_unmanaged, showcase: d.showcase }}
       favorite={{ on: d.is_favorite, ontoggle: toggleFav }}
@@ -998,7 +1025,7 @@
             hostName={d.display_name}
             onopen={(layer, siblings) => (openLayer = { layer, siblings })}
           />
-          <TagsBlock detail={d} onaddtag={addManual} onremovetag={removeManual} />
+          <TagsBlock detail={d} onaddtag={addManual} onremovetag={removeManual} oncategory={categoryOp} />
           {#if d.csp_features.length}
             <!-- Les extensions CSP ont quitté les étiquettes (REFONTE§7.5) : elles
                  décrivent l'installation, pas le contenu. Une ligne grise

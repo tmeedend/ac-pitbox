@@ -25,6 +25,13 @@ pub(super) fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         // harmonisation computes (`brand`): that one is rewritten at every
         // harmonisation, a decision living there would be undone by the next.
         "brand_user TEXT",
+        // What the rules computed for the category, beside what `category` and
+        // `categories` show once the user's decision is laid on it
+        // (`category_user`, REGLES§3 level 4): where "back to computed" goes,
+        // and what the Rules screen measures. NULL until a harmonisation or
+        // the backfill below wrote it.
+        "category_auto TEXT",
+        "categories_auto TEXT",
         // Mod installé hors Pit Box, trouvé dans content/ à l'indexation (§8.2).
         "is_unmanaged INTEGER NOT NULL DEFAULT 0",
         // Where the cached spec columns came from, field → source (FICHE§6.3).
@@ -33,6 +40,17 @@ pub(super) fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     for col in cols {
         // Ignore l'erreur « duplicate column » si la colonne existe déjà.
         let _ = conn.execute(&format!("ALTER TABLE mods ADD COLUMN {col}"), []);
+    }
+    // Before the category decisions existed, `category` was always what the
+    // rules computed, so it IS the computed value of every row written until
+    // now: copied once (`categories_auto` NULL marks a row not yet copied).
+    // A row with a decision is left out - its `category` is already laid on.
+    if let Err(e) = conn.execute(
+        "UPDATE mods SET category_auto = category, categories_auto = categories
+         WHERE categories_auto IS NULL AND id_interne NOT IN (SELECT mod_id FROM category_user)",
+        [],
+    ) {
+        log::warn!("category backfill failed: {e}");
     }
     // Date de publication estimée depuis les dates de fichiers (§6.2).
     let _ = conn.execute("ALTER TABLE versions ADD COLUMN published_at TEXT", []);
@@ -466,6 +484,21 @@ pub(super) fn init(conn: &Connection) -> rusqlite::Result<()> {
             value     TEXT,                    -- JSON; NULL = forced "unknown"
             edited_at TEXT NOT NULL,
             PRIMARY KEY (mod_id, field)
+        );
+
+        -- The user's decision on a mod's category, the fourth level of the
+        -- cascade (REGLES§3): it wins over the rules and no recomputation
+        -- touches it. A car holds one forced category (`forced`); a track
+        -- holds deltas on the computed list (`added`, `removed`: JSON arrays
+        -- of `#tag`). **No foreign key, deliberately**, like `tech_user`: a
+        -- decision survives a deletion followed by a reimport; a complete
+        -- deletion removes it explicitly (`delete_mod`).
+        CREATE TABLE IF NOT EXISTS category_user (
+            mod_id    TEXT PRIMARY KEY,
+            forced    TEXT,
+            added     TEXT NOT NULL DEFAULT '[]',
+            removed   TEXT NOT NULL DEFAULT '[]',
+            edited_at TEXT NOT NULL
         );
 
         -- Track categories chosen on the Online page (SPEC-play-online.md),

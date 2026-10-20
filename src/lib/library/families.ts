@@ -55,10 +55,14 @@ export function familyLookup(families: CategoryFamily[]): Map<string, string> {
  * TAGS precisely because the class carries them.
  */
 export function familyTagsOf(
-  c: Pick<ModCard, "tags_from_mod" | "tags_from_rule" | "tags_manual" | "car_class">,
+  c: Pick<ModCard, "tags_from_mod" | "tags_from_rule" | "tags_manual" | "car_class"> &
+    Partial<Pick<ModCard, "category_forced">>,
 ): string[] {
   const tags = modTags(c);
-  return c.car_class ? [...tags, c.car_class] : tags;
+  // A category the user forced counts for the families that declare it, like
+  // any tag the rules produce: it is not in `tags_from_rule`, being no rule's.
+  const withClass = c.car_class ? [...tags, c.car_class] : tags;
+  return c.category_forced ? [...withClass, c.category_forced] : withClass;
 }
 
 /** Families a set of tags reaches, each once, in the order of the table. */

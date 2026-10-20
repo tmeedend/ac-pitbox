@@ -981,7 +981,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Refonte navigation et fiches** | livrée et fusionnée ; restent trois questions ouvertes, dont le markdown dans les notes | `docs/PLAN-refonte-navigation.md` |
 | **Taxonomies** | livré (familles lues aussi dans la classe, onglets Familles, Pays et Marques : fusions, logos, règles sur le nom, « pas une marque ») ; reste une liste livrée de marques connues, si la recherche dans le nom manque de vocabulaire | `docs/SPEC-taxonomies.md`, `docs/CHANTIERS.md` |
 | **Catalogue de règles** | livré, et enrichi par deux relevés réels promus (2026-09-25) ; restent les relevés de contributeurs, quand il y en aura | `docs/SPEC-regles.md`, `docs/CHANTIERS.md` |
-| **Corrections par mod** | reste la classe d'un mod précis (marque et année : livrées avec le crayon de l'en-tête ; pays et fiche technique : avec la fiche) | `docs/CHANTIERS.md` |
+| **Corrections par mod** | reste la classe d'un mod précis (marque et année : livrées avec le crayon de l'en-tête ; catégorie : avec la puce de catégorie ; pays et fiche technique : avec la fiche) | `docs/CHANTIERS.md` |
 | **Règles de tags divergentes** | deux fichiers décrivent la même ontologie, un seul est chargé | `docs/CHANTIERS.md` |
 | **Export / import de la bibliothèque** | construit, visible sous `tauri dev` seulement (`FEATURE_LIBRARY_TRANSFER`) ; reste l'essai sur de vraies bibliothèques, puis allumer | `docs/SPEC-export-bibliotheque.md`, `docs/CHANTIERS.md` |
 | **Dossier du jeu** | lot 1 livré (lecture seule) ; reste le lot 2, les tailles | `docs/SPEC-etat-dossier.md`, `docs/CHANTIERS.md` |

@@ -171,13 +171,6 @@ pub fn set_favorite(conn: &Connection, ids: &[String], favorite: bool) -> Result
     Ok(())
 }
 
-pub fn set_category(conn: &Connection, ids: &[String], category: Option<&str>) -> Result<(), String> {
-    for id in ids {
-        overlay::set_mod_field(conn, id, "category", category).map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
-
 pub fn add_tag(conn: &Connection, ids: &[String], tag: &str) -> Result<(), String> {
     let tag = tag.trim().to_lowercase();
     if tag.is_empty() {
@@ -318,7 +311,7 @@ mod tests {
     }
 
     #[test]
-    fn bulk_tags_favorite_and_category() {
+    fn bulk_tags_and_favorite() {
         let base = crate::testutil::temp_dir("bulk");
         std::fs::create_dir_all(&base).unwrap();
         let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
@@ -346,16 +339,6 @@ mod tests {
         set_favorite(&conn, &ids, true).unwrap();
         assert!(overlay::get_mod(&conn, "modA").unwrap().unwrap().is_favorite);
         assert!(overlay::get_mod(&conn, "modB").unwrap().unwrap().is_favorite);
-
-        set_category(&conn, &ids, Some("#gt")).unwrap();
-        assert_eq!(
-            overlay::get_mod(&conn, "modA").unwrap().unwrap().category.as_deref(),
-            Some("#gt")
-        );
-        assert_eq!(
-            overlay::get_mod(&conn, "modB").unwrap().unwrap().category.as_deref(),
-            Some("#gt")
-        );
     }
 
     /// Règle : un lot arrêté le DIT, et ce qui n'a pas été traité n'apparaît
