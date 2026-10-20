@@ -148,6 +148,39 @@ pub fn picture(dir: &Path, net: &WikiClient, sources: &Sources, track_id: &str, 
     Some(picture)
 }
 
+/// [`picture`] with what it reads besides the network loaded here: the
+/// user's matching settings (`config_dir`, WIKI§7) and the shipped links. Run
+/// it off the window's thread, it may ask the network.
+pub fn fetch(
+    dir: &Path,
+    config_dir: &Path,
+    ac_install: Option<&Path>,
+    thresholds: &Thresholds,
+    track_id: &str,
+    now: i64,
+) -> Option<TrackPicture> {
+    let matching = crate::wiki::clean::load(config_dir);
+    let cleaner = Cleaner::new(&matching);
+    let curated = curated_links();
+    let sources = Sources {
+        ac_install,
+        curated: &curated,
+        cleaner: &cleaner,
+        thresholds,
+    };
+    picture(dir, &WikiClient::new(), &sources, track_id, now)
+}
+
+/// The shipped links (`wiki-links.json`) keyed as `Sources::curated` wants
+/// them: by lowercase track id, which is how the lobby names a track.
+fn curated_links() -> BTreeMap<String, String> {
+    crate::wiki::curated::shipped()
+        .links
+        .into_iter()
+        .map(|(id, q)| (id.to_lowercase(), q))
+        .collect()
+}
+
 /// The entity of a track: its shipped link, else a match by CSP's
 /// coordinates and name. `Absent` when nothing designates one.
 fn entity_of(net: &WikiClient, sources: &Sources, id: &str) -> Fetched<String> {
@@ -347,11 +380,7 @@ mod tests {
             return;
         };
         let dir = crate::testutil::temp_dir("onlinepic-net");
-        let curated = crate::wiki::curated::shipped()
-            .links
-            .into_iter()
-            .map(|(id, q)| (id.to_lowercase(), q))
-            .collect();
+        let curated = curated_links();
         let cleaner = Cleaner::new(&Default::default());
         let thresholds = crate::wiki::matching::Thresholds::from_prefs(&Default::default());
         let ac = PathBuf::from(ac);

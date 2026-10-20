@@ -10,8 +10,8 @@
 //
 // The overlay is keyed by TAG, not by family: forking a whole family to move
 // one tag would freeze it, and the next catalogue could no longer add to it.
-import { stripAccents } from "$lib/format";
 import { familyLookup, familyTag, type CategoryFamily } from "$lib/library/families";
+import { fold } from "$lib/text";
 import type { FamilyOverlay } from "$lib/workshop/rules";
 
 function copy(o: FamilyOverlay): Required<FamilyOverlay> {
@@ -80,11 +80,7 @@ export function setFamilyLook(
  * "Endurance" must keep working once the family is renamed "Le Mans".
  */
 export function createFamily(o: FamilyOverlay, taken: string[], name: string): { overlay: FamilyOverlay; id: string } {
-  const base =
-    stripAccents(name)
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "") || "family";
+  const base = fold(name).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "family";
   const used = new Set([...taken, ...(o.created ?? []).map((c) => c.id)]);
   let id = base;
   for (let n = 2; used.has(id); n++) id = `${base}-${n}`;

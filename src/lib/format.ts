@@ -28,9 +28,3 @@ export function fmtDuration(seconds: number | null | undefined): string {
   if (m > 0) return `${m} min ${String(s).padStart(2, "0")} s`;
   return `${s} s`;
 }
-
-/** Accents taken off (`é` → `e`): the one fold behind every id built from a
- * name and every accent-blind search. */
-export function stripAccents(s: string): string {
-  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-}

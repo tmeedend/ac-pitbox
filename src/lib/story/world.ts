@@ -3,7 +3,7 @@
 // Whether the story is right is still the engine's validator, run after
 // every save; these functions only keep an edit from writing a name the
 // engine would read as something else.
-import { stripAccents } from "$lib/format";
+import { fold } from "$lib/text";
 import type { NameKind, NameUsages, Usage, Variables } from "./studio";
 
 /** A name the editor gives: a letter, then letters, digits and `_`. The
@@ -25,8 +25,7 @@ export function nameProblem(name: string, taken: Iterable<string>): string | nul
  * unique among `taken`. `fallback` stands in when the label gives no letter
  * to start with. */
 export function nameFrom(label: string, taken: Iterable<string>, fallback: string): string {
-  let base = stripAccents(label)
-    .toLowerCase()
+  let base = fold(label)
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
   if (!isName(base)) base = base ? `${fallback}_${base}` : fallback;

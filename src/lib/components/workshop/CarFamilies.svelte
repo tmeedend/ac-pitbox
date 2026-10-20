@@ -18,6 +18,7 @@
   // that fails in silence is the bug rule 6 of CLAUDE.md was written for.
   import { onMount } from "svelte";
   import { errorText } from "$lib/errors";
+  import { writeQueue } from "$lib/workshop/writeQueue";
   import { t } from "$lib/i18n/index.svelte";
   import { familiesOfTags, familyLookup, familyTag, familyTagsOf, type CategoryFamily } from "$lib/library/families";
   import { FAMILY_ICONS, NEUTRAL_ICON, familyIcon } from "$lib/library/familyIcons";
@@ -66,26 +67,19 @@
     }
   });
 
-  let queue: Promise<void> = Promise.resolve();
+  const enqueue = writeQueue({ error: (text) => (error = text) });
+
   /** Takes the new decisions at once (the next gesture builds on them), writes
-   * them, and shows the table Rust merged from them. The `catch` is not
-   * optional: a rejected promise in the chain would freeze every later write
-   * until the next start. */
+   * them, and shows the table Rust merged from them. */
   function commit(next: FamilyOverlay) {
     overlay = next;
     armed = null;
-    queue = queue
-      .then(async () => {
-        const view = await saveFamilyOverlay(next);
-        overlay = view.overlay.families;
-        families = view.effective.families;
-        setFamilies(view.effective.families);
-        error = "";
-      })
-      .catch((e) => {
-        console.error("save_category_families", e);
-        error = errorText(e);
-      });
+    void enqueue("save_category_families", async () => {
+      const view = await saveFamilyOverlay(next);
+      overlay = view.overlay.families;
+      families = view.effective.families;
+      setFamilies(view.effective.families);
+    });
   }
 
   const lookup = $derived(familyLookup(families));
