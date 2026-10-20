@@ -159,7 +159,7 @@ Chaque voiture d'un pack est une **entité de premier niveau** (activable, taggu
 - ses **ressources** apparaissent dans la carte Ressources de **chaque** membre, marquées « du pack » — une seule copie sur disque ;
 - ses **ajouts au jeu** sont posés dès qu'au moins un membre est actif, retirés quand aucun ne l'est (`extras::sync_pack`, après chaque activation, désactivation ou suppression). Le dernier membre supprimé emporte l'arbre du pack, ressources comprises.
 
-La fiche d'un membre porte un bloc « Source / origine » (pack cliquable, nom d'archive) et les autres voitures du même pack ; on peut filtrer par pack et désinstaller le pack en lot. Pour le contenu de base, la provenance dit **« Jeu de base »** ou le nom du DLC (`kunos_dates::pack_name`).
+La fiche d'un membre porte un bloc « Source / origine » (pack cliquable, nom d'archive) et les autres voitures du même pack — **cinq au plus**, une tuile « +N » ouvrant la fiche du pack pour le reste, et le bouton de la fiche devenant « Fiche du pack · tout voir » quand la liste est tronquée ; on peut filtrer par pack et désinstaller le pack en lot. Pour le contenu de base, la provenance dit **« Jeu de base »** ou le nom du DLC (`kunos_dates::pack_name`).
 
 **Le pack a sa fiche** (`PackDetail.svelte`), ouverte depuis le bloc « Source / origine » et posée par-dessus la fiche du mod : les **mods livrés**, les **ajouts au jeu** du pack, ses **ressources**, les tailles, la date d'entrée, la désinstallation en lot. Un pack sans aucun membre n'a pas de fiche (`errors.packNotFound`).
 

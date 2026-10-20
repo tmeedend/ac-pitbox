@@ -778,6 +778,8 @@
     "deleteVersionPurged": "Version {label} deleted permanently: the recycle bin refused it.",
     "openPack": "Pack sheet",
     "unmanagedOrigin": "Installed outside Pit Box",
+    "openPackAll": "Pack sheet · see all",
+    "siblingsMore": "more",
     "unmanagedContentLabel": "Installed in the game outside Pit Box",
     "unmanagedHowTo": "Pit Box leaves this mod alone: it did not install it. To manage it here — activate, deactivate, keep several versions — delete its folder from the game yourself, then import the mod into Pit Box.",
     "odometer": "Odometer",

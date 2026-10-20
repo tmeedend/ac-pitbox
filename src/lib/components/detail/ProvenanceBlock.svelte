@@ -56,6 +56,12 @@
         : (detail.versions.find((v) => v.id === detail.active_version_id)?.source_archive ?? null),
   );
 
+  /** How many neighbours are drawn. A 90-car pack otherwise loaded ninety
+   * thumbnails for a hint; the rest is the pack sheet's job (`onopenpack`). */
+  const SIBLINGS_SHOWN = 5;
+  const shown = $derived(siblings.slice(0, SIBLINGS_SHOWN));
+  const hidden = $derived(siblings.length - shown.length);
+
   /** Date seule : l'heure d'une date estimée n'a aucun sens (§6.2). */
   function fmtDay(iso: string): string {
     const d = new Date(iso);
@@ -102,7 +108,7 @@
         <div class="blk-sub">{t("detail.siblingsLabel", { count: siblings.length })}</div>
         {#if siblings.length}
           <div class="siblings">
-            {#each siblings as c (c.id_interne)}
+            {#each shown as c (c.id_interne)}
               {@const img = previewSrc(c.preview)}
               <button class="sib" type="button" onclick={() => onopensibling(c)} title={t("detail.openSheetTooltip")}>
                 <span class="sib-img">
@@ -111,12 +117,18 @@
                 <span class="sib-nm">{c.display_name ?? c.id_interne}</span>
               </button>
             {/each}
+            {#if hidden > 0}
+              <button class="sib" type="button" onclick={onopenpack} title={t("detail.openPack")}>
+                <span class="sib-img sib-more">+{hidden}</span>
+                <span class="sib-nm">{t("detail.siblingsMore")}</span>
+              </button>
+            {/if}
           </div>
         {:else}
           <div class="hint">{t("detail.onlyEntity")}</div>
         {/if}
         <div class="actions">
-          <button class="btn" type="button" onclick={onopenpack}>{t("detail.openPack")}</button>
+          <button class="btn" type="button" onclick={onopenpack}>{hidden > 0 ? t("detail.openPackAll") : t("detail.openPack")}</button>
           <button class="btn" type="button" onclick={onfilterbypack}>{t("detail.filterByPack")}</button>
           <button class="btn danger" type="button" onclick={onuninstallpack} disabled={busy}>
             {busy ? t("common.working") : t("detail.uninstallPack")}
@@ -200,6 +212,14 @@
   }
   .sib:hover .sib-img {
     border-color: var(--rosso-border);
+  }
+  .sib-more {
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 16px;
+  }
+  .sib:hover .sib-more {
+    color: var(--rosso-bright);
   }
   .sib-none {
     font-size: 18px;
