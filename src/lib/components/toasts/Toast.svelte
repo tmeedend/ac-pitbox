@@ -48,7 +48,25 @@
     children,
   }: Props = $props();
 
-  const foldable = $derived(ontoggle != null && children != null);
+  /** Whether the body shows anything. A `children` snippet is no proof of it:
+   * a report made of `{#if}` blocks that are all false (a lot of deletions
+   * with no failure to list) still hands over a snippet, and the frame then
+   * drew an empty bordered rectangle under the title. Svelte cannot tell us
+   * what a snippet rendered, so the body is looked at once it is in the DOM. */
+  let hasBody = $state(true);
+
+  function watchBody(el: HTMLElement) {
+    const update = () => {
+      hasBody = el.children.length > 0 || (el.textContent ?? "").trim() !== "";
+    };
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(el, { childList: true, subtree: true, characterData: true });
+    return { destroy: () => observer.disconnect() };
+  }
+
+  // An empty body has nothing to fold either: no chevron on a bare title.
+  const foldable = $derived(ontoggle != null && children != null && hasBody);
 </script>
 
 <div class="toast" class:info={tone === "info"} class:warn={tone === "warn"}>
@@ -84,7 +102,7 @@
     {/if}
   </div>
   {#if children && !collapsed}
-    <div class="t-body">{@render children()}</div>
+    <div class="t-body" class:empty={!hasBody} use:watchBody>{@render children()}</div>
   {/if}
 </div>
 
@@ -187,5 +205,9 @@
     max-height: calc(50 * var(--vh));
     overflow-y: auto;
     border-top: 1px solid var(--line);
+  }
+  /* Kept in the DOM (it is what `watchBody` observes), just not drawn. */
+  .t-body.empty {
+    display: none;
   }
 </style>
