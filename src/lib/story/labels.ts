@@ -1,6 +1,8 @@
-// The studio's names for node kinds and links, as i18n keys written out in
-// full - so the key check (`check-conventions.mjs`) sees every one of them.
+// The studio's names for node kinds, links and content types, as i18n keys
+// written out in full - so the key check (`check-conventions.mjs`) sees every
+// one of them.
 import type { LinkRole, NodeKind } from "./flow";
+import type { ContentType } from "./studio";
 
 export const KIND_LABEL: Record<NodeKind, string> = {
   beat: "story.studio.kindBeat",
@@ -18,4 +20,18 @@ export const LINK_LABEL: Record<LinkRole, string> = {
   case: "story.studio.linkCase",
   otherwise: "story.studio.linkOtherwise",
   reply: "story.studio.linkReply",
+};
+
+/** A content type's name in the editor (SPEC-story-mode, Content types). */
+export const CONTENT_TYPE_LABEL: Record<ContentType, string> = {
+  message: "story.content.typeMessage",
+  call: "story.content.typeCall",
+  mail: "story.content.typeMail",
+  article: "story.content.typeArticle",
+  social_post: "story.content.typeSocialPost",
+  video: "story.content.typeVideo",
+  listing: "story.content.typeListing",
+  statement: "story.content.typeStatement",
+  calendar_entry: "story.content.typeCalendarEntry",
+  dialogue: "story.content.typeDialogue",
 };

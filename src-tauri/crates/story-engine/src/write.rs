@@ -13,8 +13,8 @@ use crate::expr::{Criterion, Effect};
 use crate::frame::Frame;
 use crate::load::{draft, SourceFile};
 use crate::model::{
-    AdaptiveDifficulty, Beat, Chapter, Characters, DateDisplay, Event, EventType, FailureMode, Manifest, Node,
-    NodeKind, Protagonist, RelationScale, Requires, RetryCost, Saves, Session, Settings, Start, Variables,
+    AdaptiveDifficulty, Beat, Chapter, Characters, ContentFile, DateDisplay, Event, EventType, FailureMode, Manifest,
+    Node, NodeKind, Protagonist, RelationScale, Requires, RetryCost, Saves, Session, Settings, Start, Variables,
     STORY_FORMAT,
 };
 use crate::time::{Clock, Span, StoryDate};
@@ -70,6 +70,39 @@ pub fn variables(variables: &Variables) -> Result<String, String> {
 /// equals its default is left out, as in `story.yaml`.
 pub fn event(path: &str, event: &Event) -> Result<String, String> {
     yaml(path, &EventYaml::of(event))
+}
+
+/// A `.story` file: each item's header between two `---` lines, then its
+/// text as the author wrote it, trailing blank lines dropped. Read back
+/// before it is returned. The text is written even when its Ink has errors:
+/// those are the checks', on their lines, and a conversation typed over time
+/// must be savable half-written. Never with a line made of `---` alone,
+/// though, which would end it and start a header.
+pub fn content_file(path: &str, file: &ContentFile) -> Result<String, String> {
+    let mut text = String::new();
+    for item in &file.items {
+        let id = &item.header.id;
+        if item.body.lines().any(|l| l.trim_end() == "---") {
+            return Err(format!("content `{id}`: a line made of `---` alone would end its text"));
+        }
+        let header = serde_saphyr::to_string_with_options(&item.header, options()).map_err(|e| e.to_string())?;
+        text.push_str("---\n");
+        text.push_str(&header);
+        if !header.ends_with('\n') {
+            text.push('\n');
+        }
+        text.push_str("---\n");
+        let body = item.body.trim_end();
+        if !body.is_empty() {
+            text.push_str(body);
+            text.push('\n');
+        }
+    }
+    let back = draft(vec![SourceFile::new(path, &text)]);
+    match back.errors.into_iter().next() {
+        Some(e) => Err(format!("the written {path} does not read back: {}", e.message)),
+        None => Ok(text),
+    }
 }
 
 /// An event as written: the id, its name and type, the session, then what
@@ -429,6 +462,40 @@ settings: {}
                 original.file
             );
         }
+    }
+
+    // A `.story` file goes through the editor like a chapter: every item of
+    // every content file of the sample reads back as it was given, and the
+    // file is written the same a second time.
+    #[test]
+    fn a_written_content_file_reads_back_the_same_and_writes_the_same() {
+        let d = sample();
+        let mut files: Vec<&str> = d.content.iter().map(|c| c.file.as_str()).collect();
+        files.dedup();
+        assert!(files.len() >= 5, "the sample's content files: {files:?}");
+        for path in files {
+            let file = ContentFile {
+                items: d.content.iter().filter(|c| c.file == path).map(|c| c.doc()).collect(),
+            };
+            let text = content_file(path, &file).expect("writes");
+            let back = reread(path, &text);
+            let again = ContentFile {
+                items: back.content.iter().map(|c| c.doc()).collect(),
+            };
+            assert_eq!(again, file, "{path}: read back the same");
+            assert_eq!(content_file(path, &again).unwrap(), text, "{path}: written the same");
+        }
+    }
+
+    // A line made of `---` alone would end the text and start a header:
+    // refused rather than written.
+    #[test]
+    fn a_text_line_made_of_dashes_is_refused() {
+        let d = sample();
+        let mut doc = d.content[0].doc();
+        doc.body.push_str("\n---\nsurprise");
+        let refused = content_file(&d.content[0].file, &ContentFile { items: vec![doc] }).unwrap_err();
+        assert!(refused.contains("`---`"), "{refused}");
     }
 
     // An event goes through the editor like a chapter: read back as it was

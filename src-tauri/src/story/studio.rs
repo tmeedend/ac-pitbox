@@ -23,7 +23,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use story_engine::frame::Frame;
 use story_engine::load::{draft_dir, read_dir, Draft, SourceFile};
-use story_engine::model::{Chapter, Characters, Event, Manifest, Placement, Variables};
+use story_engine::model::{Chapter, Characters, ContentFile, Event, Manifest, Placement, Variables};
 use story_engine::refs::{self, NameKind, NameUsages};
 use story_engine::validate::{validate, Diagnostic, Severity};
 use story_engine::write;
@@ -276,6 +276,9 @@ pub struct OpenStory {
     pub content: Vec<ContentRef>,
     /// One per file of `events/`, in file-name order.
     pub events: Vec<EditedFile<Event>>,
+    /// One per `.story` file of `content/`, in file-name order: what the
+    /// Contents section edits.
+    pub content_files: Vec<EditedFile<ContentFile>>,
     pub diagnostics: Vec<Diagnostic>,
     /// Where each character, flag, counter, relation step and event is cited.
     pub usages: Vec<NameUsages>,
@@ -304,6 +307,10 @@ pub fn open(folder: &Path) -> Result<OpenStory, String> {
     let chapter_files: Vec<SourceFile> = files.iter().filter(|f| is_chapter_path(&f.path)).cloned().collect();
     let event_files: Vec<String> = (files.iter())
         .filter(|f| is_event_path(&f.path))
+        .map(|f| f.path.clone())
+        .collect();
+    let story_files: Vec<String> = (files.iter())
+        .filter(|f| is_content_path(&f.path))
         .map(|f| f.path.clone())
         .collect();
     // Drafted once, then both shown and checked: the screen and its
@@ -335,6 +342,16 @@ pub fn open(folder: &Path) -> Result<OpenStory, String> {
         })
         .collect();
     events.sort_by(|a, b| a.file.cmp(&b.file));
+    let mut content_files: Vec<EditedFile<ContentFile>> = (story_files.iter())
+        .map(|file| {
+            let items = (d.content.iter())
+                .filter(|c| &c.file == file)
+                .map(|c| c.doc())
+                .collect();
+            edited(&files, &d.errors, file, Some(ContentFile { items }))
+        })
+        .collect();
+    content_files.sort_by(|a, b| a.file.cmp(&b.file));
     Ok(OpenStory {
         path: folder.to_path_buf(),
         manifest,
@@ -343,6 +360,7 @@ pub fn open(folder: &Path) -> Result<OpenStory, String> {
         chapters,
         content,
         events,
+        content_files,
         diagnostics,
         usages,
         media,
@@ -423,6 +441,18 @@ fn is_event_path(path: &str) -> bool {
     is_yaml_in("events/", path)
 }
 
+/// `content/…/<name>.story`, in `content/` or a folder of it: an author
+/// files content as they like (`content/friend/`). No part of the path can
+/// climb out of the story or hide a file.
+fn is_content_path(path: &str) -> bool {
+    path.strip_prefix("content/").is_some_and(|rest| {
+        rest.ends_with(".story")
+            && !rest.contains(['\\', ':'])
+            && rest.split('/').all(|part| !part.is_empty() && !part.starts_with('.'))
+            && rest.rsplit('/').next().is_some_and(|name| name.len() > ".story".len())
+    })
+}
+
 /// A `.yaml` file directly in `dir`, whose name cannot climb out of it.
 fn is_yaml_in(dir: &str, path: &str) -> bool {
     path.strip_prefix(dir).is_some_and(|name| {
@@ -448,6 +478,7 @@ pub fn render(file: &str, value: serde_json::Value) -> Result<String, String> {
         VARIABLES => write::variables(&from(value)?),
         _ if is_chapter_path(file) => write::chapter(file, &from::<Chapter>(value)?),
         _ if is_event_path(file) => write::event(file, &from::<Event>(value)?),
+        _ if is_content_path(file) => write::content_file(file, &from::<ContentFile>(value)?),
         _ => Err(format!("not a file the editor writes: {file}")),
     }
 }
@@ -461,17 +492,22 @@ pub fn save_file(
     expected: Option<&str>,
     value: serde_json::Value,
 ) -> Result<String, String> {
-    if !matches!(file, MANIFEST | CHARACTERS | VARIABLES) && !is_chapter_path(file) && !is_event_path(file) {
+    let writes = matches!(file, MANIFEST | CHARACTERS | VARIABLES)
+        || is_chapter_path(file)
+        || is_event_path(file)
+        || is_content_path(file);
+    if !writes {
         return Err(format!("not a file the editor writes: {file}"));
     }
     write_guarded(folder, file, expected, || render(file, value))
 }
 
-/// Deletes an event's file, only if it still holds what the editor read.
-/// What cited it is left as it is, for the checks to report. Recorded in the
-/// undo history, so Ctrl+Z brings it back.
+/// Deletes an event's file, or a `.story` file whose last item goes, only
+/// if it still holds what the editor read. What cited it is left as it is,
+/// for the checks to report. Recorded in the undo history, so Ctrl+Z brings
+/// it back.
 pub fn remove_file(folder: &Path, file: &str, expected: &str) -> Result<(), String> {
-    if !is_event_path(file) {
+    if !is_event_path(file) && !is_content_path(file) {
         return Err(format!("not a file the editor removes: {file}"));
     }
     let path = folder.join(file);
@@ -725,6 +761,16 @@ mod tests {
         }
         assert!(is_chapter_path("flow/02-chapter.yaml"));
         assert!(is_event_path("events/race_01.yaml") && !is_chapter_path("events/race_01.yaml"));
+        assert!(is_content_path("content/friend/invite.story") && is_content_path("content/a.story"));
+        for bad in [
+            "content/../story.yaml",
+            "content/.hidden.story",
+            "content//a.story",
+            "content/.story",
+            "flow/a.story",
+        ] {
+            assert!(!is_content_path(bad), "{bad} is not a content file the editor writes");
+        }
         assert!(
             remove_file(&base, "flow/01-chapter.yaml", "").is_err(),
             "only an event's file is removed"
@@ -841,6 +887,36 @@ mod tests {
         assert_ne!(opened.characters.stamp, "", "now on disk");
         assert_eq!(list(&config)[0].title.as_deref(), Some("Renamed"), "the hub follows");
         assert!(check(&folder).diagnostics.is_empty(), "still clean");
+    }
+
+    // A `.story` file goes through the editor like an event: created by its
+    // first save, read back as items, guarded by its stamp, and removed when
+    // its last item goes (SPEC-story-mode, Create Your Own).
+    #[test]
+    fn a_content_file_is_created_read_back_and_removed() {
+        let config = temp_dir("studio-config");
+        let base = temp_dir("studio-story");
+        let folder = base.join("s");
+        create(&config, &folder, "S", "en", Frame::Named("phone".into()), "C").unwrap();
+        let file = "content/friend/ask.story";
+        let doc = serde_json::json!({ "items": [{
+            "header": { "id": "ask", "type": "message", "when": ["reputation >= 1"] },
+            "body": "Coming?\n* (yes) [Yes.]\n* (no) [No.]\n"
+        }] });
+        let stamp = save_file(&folder, file, None, doc).expect("created");
+        let opened = open(&folder).unwrap();
+        let entry = opened.content_files.iter().find(|f| f.file == file).expect("listed");
+        let items = &entry.value.as_ref().expect("reads").items;
+        assert_eq!(items[0].header.id, "ask");
+        assert!(items[0].body.contains("* (yes) [Yes.]"), "the text as written");
+        assert_eq!(opened.content[0].labels, ["yes", "no"], "its labels, for the flow");
+        assert!(
+            check(&folder).diagnostics.is_empty(),
+            "{:#?}",
+            check(&folder).diagnostics
+        );
+        remove_file(&folder, file, &stamp).expect("removed");
+        assert!(!folder.join(file).exists());
     }
 
     // A portrait is a file of the story's `media/`: the studio lists them for

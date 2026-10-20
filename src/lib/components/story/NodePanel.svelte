@@ -18,7 +18,8 @@
     setReplyExit,
   } from "$lib/story/flow";
   import { eventIds, eventLabels, newEvent } from "$lib/story/events";
-  import { addEvent, saveChapterAt, selectEvent, studio } from "$lib/story/studioState.svelte";
+  import { addContent, addEvent, saveChapterAt, selectContent, selectEvent, studio } from "$lib/story/studioState.svelte";
+  import { contentIds, newContent } from "$lib/story/content";
   import { nameFrom } from "$lib/story/world";
   import { KIND_LABEL } from "$lib/story/labels";
   import { frameLabel, framesWith } from "$lib/story/frames";
@@ -108,6 +109,14 @@
     await addEvent(event);
   }
 
+  async function createContent(n: FlowNode) {
+    const ids = contentIds(story.contentFiles);
+    const doc = newContent(nameFrom(t("story.content.newName", { n: ids.length + 1 }), ids, "content"));
+    n.message = doc.header.id;
+    save();
+    await addContent(doc);
+  }
+
   function addCase(n: FlowNode) {
     n.branch = [...(n.branch ?? []), { if: [], goto: "" }];
     save();
@@ -181,6 +190,12 @@
           save();
         }}
       />
+      <div class="links">
+        {#if node.message && flowContent.includes(node.message)}
+          <button class="btn btn-ghost" onclick={() => selectContent(node.message!)}>{t("story.events.open")}</button>
+        {/if}
+        <button class="btn btn-ghost" onclick={() => createContent(node)}>+ {t("story.content.create")}</button>
+      </div>
     </Field>
     {@const sent = story.content.find((c) => c.id === node.message)}
     {@const exits = exitLabels(sent?.labels ?? [], node.on_reply)}

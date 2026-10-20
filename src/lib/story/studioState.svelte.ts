@@ -21,22 +21,25 @@ import {
   saveFile,
   undoEdit,
   type Chapter,
+  type ContentDoc,
   type Diagnostic,
   type NameKind,
   type OpenStory,
   type StoryEvent,
 } from "./studio";
 import { eventFile } from "./events";
+import { contentFile, findContent } from "./content";
 
 /** The studio's sections (SPEC-story-mode, Create Your Own). */
-export type StudioSection = "flow" | "events" | "world" | "settings" | "backups";
+export type StudioSection = "flow" | "events" | "content" | "world" | "settings" | "backups";
 
-/** The section whose files hold `file` (a diagnostic's, say): `story.yaml`
- * is the Settings', `world/` the World's, `events/` the Events', everything
- * else the flow's - until content gets its own section. */
+/** The section whose files hold `file` (a diagnostic's, say, which may end
+ * with `:<line>`): `story.yaml` is the Settings', `world/` the World's,
+ * `events/` the Events', `content/` the Contents', the rest the flow's. */
 export function sectionOf(file: string): StudioSection {
   if (file === "story.yaml") return "settings";
   if (file.startsWith("events/")) return "events";
+  if (file.startsWith("content/")) return "content";
   return file.startsWith("world/") ? "world" : "flow";
 }
 
@@ -52,6 +55,8 @@ export const studio = $state<{
   node: string | null;
   /** The file of the event shown in the Events section. */
   event: string | null;
+  /** The id of the item shown in the Contents section. */
+  content: string | null;
   diagnostics: Diagnostic[];
   /** Why the last save of a chapter file failed, by file. */
   unsaved: Record<string, string>;
@@ -64,6 +69,7 @@ export const studio = $state<{
   chapter: 0,
   node: null,
   event: null,
+  content: null,
   diagnostics: [],
   unsaved: {},
   notice: null,
@@ -85,8 +91,10 @@ export async function openStudio(path: string): Promise<void> {
       studio.chapter = 0;
       studio.node = null;
       studio.event = null;
+      studio.content = null;
     }
     if (!story.events.some((e) => e.file === studio.event)) studio.event = story.events[0]?.file ?? null;
+    if (studio.content && !findContent(story.contentFiles, studio.content)) studio.content = null;
     studio.chapter = Math.min(studio.chapter, Math.max(0, story.chapters.length - 1));
     const nodes = story.chapters[studio.chapter]?.chapter?.nodes ?? [];
     if (!nodes.some((n) => n.id === studio.node)) studio.node = null;
@@ -107,6 +115,13 @@ export function selectEvent(id: string): void {
   if (!entry) return;
   studio.section = "events";
   studio.event = entry.file;
+}
+
+/** Shows content item `id` in the Contents section. */
+export function selectContent(id: string): void {
+  if (!studio.story || !findContent(studio.story.contentFiles, id)) return;
+  studio.section = "content";
+  studio.content = id;
 }
 
 /** Shows the chapter holding node `id`, in the flow, and selects it. */
@@ -155,6 +170,55 @@ export function saveEventFile(file: string): Promise<void> {
   return enqueue(async () => {
     const entry = studio.story?.events.find((e) => e.file === file);
     if (entry?.value) await write(entry, entry.value);
+  });
+}
+
+/** Queues a save of the `.story` file `file`, like a chapter: all its items. */
+export function saveContentFile(file: string): Promise<void> {
+  return enqueue(async () => {
+    const entry = studio.story?.contentFiles.find((f) => f.file === file);
+    if (entry?.value) await write(entry, entry.value);
+  });
+}
+
+/** Adds an item in a file of its own (its stamp is empty: new), shows it
+ * and saves it. */
+export function addContent(doc: ContentDoc): Promise<void> {
+  const story = studio.story;
+  if (!story) return Promise.resolve();
+  const file = contentFile(doc.header.id);
+  story.contentFiles.push({ file, stamp: "", value: { items: [doc] }, error: null });
+  story.contentFiles.sort((a, b) => a.file.localeCompare(b.file));
+  studio.section = "content";
+  studio.content = doc.header.id;
+  return saveContentFile(file);
+}
+
+/** Queues the deletion of item `id`: its file loses it, or goes with its
+ * last item. Resolves to why it was refused, or `null` once done. */
+export function removeContent(id: string): Promise<string | null> {
+  return enqueue(async () => {
+    const story = studio.story;
+    const at = story ? findContent(story.contentFiles, id) : null;
+    const entry = at ? story?.contentFiles.find((f) => f.file === at.file) : undefined;
+    if (!story || !at || !entry?.value) return null;
+    if (entry.value.items.length > 1) {
+      entry.value.items.splice(at.index, 1);
+      studio.content = null;
+      await write(entry, entry.value);
+      return studio.unsaved[entry.file] ?? null;
+    }
+    // Its last item: the file goes, which reloads every file, like a rename.
+    if (Object.keys(studio.unsaved).length > 0) return t("story.studio.historyUnsaved");
+    try {
+      await removeFile(story.path, entry.file, entry.stamp);
+    } catch (e) {
+      await openStudio(story.path);
+      return errorText(e);
+    }
+    studio.content = null;
+    await openStudio(story.path);
+    return null;
   });
 }
 

@@ -51,6 +51,51 @@ export interface ChapterFile {
   error: string | null;
 }
 
+export type ContentType =
+  | "message"
+  | "call"
+  | "mail"
+  | "article"
+  | "social_post"
+  | "video"
+  | "listing"
+  | "statement"
+  | "calendar_entry"
+  | "dialogue";
+
+/** A `.story` item's header, as written (`story_engine::model::ContentHeader`):
+ * a key left out is absent from the file. Its placement is told by which keys
+ * are there (`placementOf`). */
+export interface ContentHeader {
+  id: string;
+  type: ContentType;
+  from?: string;
+  /** `HH:MM`. */
+  clock?: string;
+  /** Dialogue only. */
+  characters?: string[];
+  /** Dialogue only: a name, until the story's scenes exist. */
+  scene?: string;
+  pool?: string;
+  /** Sentences, all of which must hold. */
+  when?: string[];
+  /** `3 days`. */
+  delay?: string;
+  priority?: number;
+  repeat?: "once" | "each_time";
+}
+
+/** A content item as the editor edits it: its header and its Ink text. */
+export interface ContentDoc {
+  header: ContentHeader;
+  body: string;
+}
+
+/** A `.story` file: its items, in file order. */
+export interface ContentFile {
+  items: ContentDoc[];
+}
+
 export interface ContentRef {
   id: string;
   file: string;
@@ -233,6 +278,8 @@ export interface OpenStory {
   content: ContentRef[];
   /** One per file of `events/`, in file-name order. */
   events: EditedFile<StoryEvent>[];
+  /** One per `.story` file of `content/`, in file-name order. */
+  contentFiles: EditedFile<ContentFile>[];
   diagnostics: Diagnostic[];
   usages: NameUsages[];
   /** The files under `media/`, as paths inside it. */

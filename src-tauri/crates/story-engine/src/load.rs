@@ -190,7 +190,7 @@ fn parse_story_file(file: &SourceFile) -> Result<Vec<ContentItem>, LoadError> {
         // Where the kept text starts in the file, for the script's errors.
         let blank = lines[close + 1..body_end].iter().take_while(|l| l.is_empty()).count();
         let body_line = close + 2 + blank;
-        let raw: RawContentHeader =
+        let raw: ContentHeader =
             serde_saphyr::from_str(&header).map_err(|e| err(format!("item header at line {}: {e}", open + 1)))?;
         items.push(
             raw.into_item(body, file.path.clone(), open + 1, body_line)

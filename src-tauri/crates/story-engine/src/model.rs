@@ -500,7 +500,7 @@ impl TryFrom<RawNode> for Node {
 
 /// Content types (SPEC-story-mode, Content types): written by type, never by
 /// app; the frame decides how each one is shown.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ContentType {
     Message,
@@ -575,7 +575,7 @@ pub enum Placement {
     Pool { pool: PoolId, when: Vec<Condition> },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Repeat {
     /// Delivered at most once.
@@ -585,26 +585,97 @@ pub enum Repeat {
     EachTime,
 }
 
-/// A content header as written. Its placement is told by which keys are
-/// present: `pool` → a pool variant, `when` → reactive, neither → flow.
-#[derive(Deserialize)]
+/// A content header as written, which is also how the editor edits it. Its
+/// placement is told by which keys are present: `pool` → a pool variant,
+/// `when` → reactive, neither → flow. The fields are in the order the
+/// editor writes them: who and what, then the dialogue's own, then the
+/// placement.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct RawContentHeader {
-    id: ContentId,
+pub struct ContentHeader {
+    pub id: ContentId,
     #[serde(rename = "type")]
-    kind: ContentType,
-    from: Option<CharacterId>,
-    clock: Option<Clock>,
-    pool: Option<PoolId>,
-    when: Option<Vec<Condition>>,
-    delay: Option<Span>,
-    priority: Option<i32>,
-    repeat: Option<Repeat>,
-    characters: Option<Vec<CharacterId>>,
-    scene: Option<String>,
+    pub kind: ContentType,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from: Option<CharacterId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clock: Option<Clock>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub characters: Option<Vec<CharacterId>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scene: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pool: Option<PoolId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub when: Option<Vec<Condition>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delay: Option<Span>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub priority: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repeat: Option<Repeat>,
 }
 
-impl RawContentHeader {
+/// A content item as the editor edits it: its header, and its text as
+/// written.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ContentDoc {
+    pub header: ContentHeader,
+    pub body: String,
+}
+
+/// A `.story` file as the editor edits it: its items, in file order.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ContentFile {
+    pub items: Vec<ContentDoc>,
+}
+
+impl ContentItem {
+    /// The item as the editor edits it. Defaults are left out, as an author
+    /// would type them: a priority of 0, `repeat: once`, no characters.
+    pub fn doc(&self) -> ContentDoc {
+        let mut header = ContentHeader {
+            id: self.id.clone(),
+            kind: self.kind,
+            from: self.from.clone(),
+            clock: self.clock,
+            characters: (!self.characters.is_empty()).then(|| self.characters.clone()),
+            scene: self.scene.clone(),
+            pool: None,
+            when: None,
+            delay: None,
+            priority: None,
+            repeat: None,
+        };
+        match &self.placement {
+            Placement::Flow => {}
+            Placement::Reactive {
+                when,
+                delay,
+                priority,
+                repeat,
+            } => {
+                // `when: []` is what makes an item reactive: always written.
+                header.when = Some(when.clone());
+                header.delay = *delay;
+                header.priority = (*priority != 0).then_some(*priority);
+                header.repeat = (*repeat != Repeat::Once).then_some(*repeat);
+            }
+            Placement::Pool { pool, when } => {
+                header.pool = Some(pool.clone());
+                header.when = (!when.is_empty()).then(|| when.clone());
+            }
+        }
+        ContentDoc {
+            header,
+            body: self.body.clone(),
+        }
+    }
+}
+
+impl ContentHeader {
     /// `body_line`: the 1-based line of the text's first line in `file`.
     pub(crate) fn into_item(
         self,
