@@ -16,10 +16,11 @@
   // **Saving re-applies them to the whole library**, unlike the
   // Categories tab: the country is decided at write time
   // (`harmonize::store`), so a new spelling changes what is stored for every
-  // mod that writes it. Same write queue as Categories, failures shown and
-  // logged (CLAUDE.md rule 6).
+  // mod that writes it. Same write queue as the other Classement tabs
+  // (`writeQueue.ts`), failures shown and logged (CLAUDE.md rule 6).
   import { onMount } from "svelte";
   import { errorText } from "$lib/errors";
+  import { writeQueue } from "$lib/workshop/writeQueue";
   import { countryLabel, flagFor, gameCountries, gameCountry, loadFlags } from "$lib/flags.svelte";
   import { FICTIONAL, isFictional } from "$lib/flags";
   import { t } from "$lib/i18n/index.svelte";
@@ -85,28 +86,21 @@
     ignored = v.overlay.ignored_countries ?? [];
   }
 
-  let queue: Promise<void> = Promise.resolve();
+  const enqueue = writeQueue({ busy: (b) => (busy = b), error: (text) => (error = text) });
+
   /** Takes the new decisions at once, writes and re-applies them, then reads
    * the library back: the counts only mean something once the stored values
-   * moved. The `catch` keeps one failure from freezing every later write. */
+   * moved. */
   function commit(next: { aliases?: MapOverlay; tags?: MapOverlay; ignored?: string[] }) {
     aliases = next.aliases ?? aliases;
     tags = next.tags ?? tags;
     ignored = next.ignored ?? ignored;
     const [a, tg, ig] = [aliases, tags, ignored];
-    queue = queue
-      .then(async () => {
-        busy = true;
-        take(await saveCountryOverlay(a, tg, ig));
-        await reloadMods();
-        bumpLibraryVersion();
-        error = "";
-      })
-      .catch((e) => {
-        console.error("save_country_aliases", e);
-        error = errorText(e);
-      })
-      .finally(() => (busy = false));
+    void enqueue("save_country_aliases", async () => {
+      take(await saveCountryOverlay(a, tg, ig));
+      await reloadMods();
+      bumpLibraryVersion();
+    });
   }
 
   interface Row {
