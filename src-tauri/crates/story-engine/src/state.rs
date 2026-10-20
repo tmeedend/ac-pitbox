@@ -71,7 +71,21 @@ pub struct ContentFacts {
     /// Times it was sent to the frame (more than once for `repeat: each_time`).
     pub delivered: u32,
     pub seen: bool,
+    /// The last reply chosen in its conversation.
     pub reply: Option<String>,
+    /// Every reply label chosen in its current conversation, in order: what
+    /// `content.<id>.reply == <label>` tests, and what a Message node's reply
+    /// exits read. Reset when the item is delivered again.
+    #[serde(default)]
+    pub chosen: Vec<String>,
+}
+
+/// A conversation waiting at a choice point (SPEC-story-mode, Dialogue
+/// text): where it stands in the script, and the labels offered there.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Conversation {
+    pub at: crate::script::At,
+    pub offered: Vec<String>,
 }
 
 /// Reactive content whose conditions held, waiting for its delay.
@@ -169,6 +183,9 @@ pub struct State {
     pub side_events: BTreeSet<EventId>,
     /// The event a session was launched for, until its result comes back.
     pub launched: Option<EventId>,
+    /// Conversations waiting for the player's choice, by content item.
+    #[serde(default)]
+    pub conversations: BTreeMap<ContentId, Conversation>,
     pub rng: Rng,
     pub history: Vec<Entry>,
 }
@@ -204,6 +221,7 @@ impl State {
             pools: BTreeMap::new(),
             side_events: BTreeSet::new(),
             launched: None,
+            conversations: BTreeMap::new(),
             rng: Rng::new(seed),
             history: Vec::new(),
         }
@@ -259,6 +277,20 @@ impl State {
     /// Whether a condition holds. Types were checked by the validator; a
     /// mismatch left here (an unvalidated story) is simply false.
     pub fn holds(&self, story: &Story, cond: &Condition) -> bool {
+        // A reply is tested against every label chosen in the conversation,
+        // not only the last one (SPEC-story-mode, In-person dialogues).
+        if let (Var::Content(c, ContentFact::Reply), Some((op, Literal::Name(label)))) = (&cond.var, &cond.test) {
+            let Some(facts) = self.content.get(c).filter(|f| f.reply.is_some()) else {
+                return cond.negated;
+            };
+            let chosen = facts.chosen.iter().any(|l| l == label) || facts.reply.as_deref() == Some(label);
+            let result = match op {
+                crate::expr::CmpOp::Eq => chosen,
+                crate::expr::CmpOp::Ne => !chosen,
+                _ => false,
+            };
+            return result != cond.negated;
+        }
         let result = match (self.value(story, &cond.var), &cond.test) {
             (None, _) => false,
             (Some(Value::Bool(b)), None) => b,

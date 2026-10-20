@@ -13,7 +13,7 @@ use std::fmt;
 use crate::expr::{Condition, ContentFact, Effect, EventFact, Literal, Var};
 use crate::frame::{frames_on_entry, Frame};
 use crate::load::Story;
-use crate::model::{Character, Event, EventType, Node, NodeKind, Placement};
+use crate::model::{Character, ContentItem, ContentType, Event, EventType, Node, NodeKind, Placement};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -213,8 +213,8 @@ impl Checker<'_> {
                 let item = story.content_item(c).ok_or_else(|| format!("unknown content `{c}`"))?;
                 match fact {
                     ContentFact::Delivered | ContentFact::Seen => VarType::Bool,
-                    ContentFact::Reply if item.replies.is_empty() => {
-                        return Err(format!("content `{c}` has no replies to test"))
+                    ContentFact::Reply if !item.script.has_choices() => {
+                        return Err(format!("content `{c}` has no choices to test"))
                     }
                     ContentFact::Reply => VarType::Reply(c.clone()),
                 }
@@ -259,8 +259,8 @@ impl Checker<'_> {
             }
             (VarType::Reply(c), Literal::Name(reply)) => {
                 let item = self.story.content_item(c).expect("checked by var_type");
-                if !item.replies.iter().any(|r| r.id == *reply) {
-                    return Err(format!("content `{c}` has no reply `{reply}`"));
+                if !item.script.labels().contains(&reply.as_str()) {
+                    return Err(format!("content `{c}` has no choice labelled `{reply}`"));
                 }
                 !op.is_ordering()
             }
@@ -356,20 +356,16 @@ impl Checker<'_> {
                             self.error(file, format!("{at}: {why}"));
                         }
                     }
-                    NodeKind::Message { content, wait_reply } => match story.content_item(content) {
-                        None => self.error(file, format!("{at}: unknown content `{content}`")),
-                        Some(item) => {
-                            if !matches!(item.placement, Placement::Flow) {
-                                self.error(file, format!("{at}: `{content}` is reactive or a pool variant; a message node sends flow content"));
-                            }
-                            if *wait_reply && item.replies.is_empty() {
-                                self.error(
-                                    file,
-                                    format!("{at}: waits for a reply but `{content}` has no `replies`"),
-                                );
-                            }
+                    NodeKind::Message {
+                        content,
+                        wait_reply,
+                        on_reply,
+                    } => {
+                        self.message_node(file, &at, content, *wait_reply, on_reply);
+                        for to in on_reply.values() {
+                            target(self, to, "reply exit");
                         }
-                    },
+                    }
                     NodeKind::Event { event, on_failure } => {
                         if story.event(event).is_none() {
                             self.error(file, format!("{at}: unknown event `{event}`"));
@@ -401,6 +397,38 @@ impl Checker<'_> {
         self.node = None;
     }
 
+    /// What a Message node sends, and the replies it waits for or leaves by
+    /// (SPEC-story-mode, In-person dialogues). Its exits' targets are checked
+    /// with the node's other links.
+    fn message_node(
+        &mut self,
+        file: &str,
+        at: &str,
+        content: &str,
+        wait_reply: bool,
+        on_reply: &std::collections::BTreeMap<String, String>,
+    ) {
+        let Some(item) = self.story.content_item(content) else {
+            return self.error(file, format!("{at}: unknown content `{content}`"));
+        };
+        if !matches!(item.placement, Placement::Flow) {
+            self.error(
+                file,
+                format!("{at}: `{content}` is reactive or a pool variant; a message node sends flow content"),
+            );
+        }
+        let labels = item.script.labels();
+        if wait_reply && labels.is_empty() {
+            self.error(file, format!("{at}: waits for a reply but `{content}` has no choices"));
+        }
+        for label in on_reply.keys().filter(|l| !labels.contains(&l.as_str())) {
+            self.error(
+                file,
+                format!("{at}: reply exit `{label}`: `{content}` has no choice labelled so"),
+            );
+        }
+    }
+
     fn content(&mut self) {
         let story = self.story;
         for item in &story.content {
@@ -416,13 +444,75 @@ impl Checker<'_> {
             for cond in when {
                 self.condition(&file, &at, cond);
             }
-            let mut replies = HashSet::new();
-            for reply in &item.replies {
-                if !replies.insert(&reply.id) {
-                    self.error(&file, format!("{at}: reply `{}` appears twice", reply.id));
+            self.script(item);
+        }
+    }
+
+    /// A content item's text (SPEC-story-mode, Dialogue text; In-person
+    /// dialogues): what is outside the subset, labels told apart, sentences
+    /// checked like any other, speakers and portraits checked against the
+    /// story. Each diagnostic names its line in the file.
+    fn script(&mut self, item: &ContentItem) {
+        let story = self.story;
+        let at = format!("content `{}`", item.id);
+        let on = |line: usize| format!("{}:{line}", item.file);
+        for e in &item.script_errors {
+            self.error(&on(e.line), format!("{at}: {}", e.message));
+        }
+        for (line, label) in item.script.duplicate_labels() {
+            self.error(
+                &on(line),
+                format!("{at}: label `{label}` is used twice - each reply is told apart by its label"),
+            );
+        }
+        for (line, e) in item.script.effects() {
+            self.effect(&on(line), &at, e);
+        }
+        for (line, c) in item.script.conditions() {
+            self.condition(&on(line), &at, c);
+        }
+        let header = format!("{}:{}", item.file, item.line);
+        let dialogue = item.kind == ContentType::Dialogue;
+        if !dialogue && !item.characters.is_empty() {
+            self.error(&header, format!("{at}: `characters` is for a dialogue"));
+        }
+        if !dialogue && item.scene.is_some() {
+            self.error(&header, format!("{at}: `scene` is for a dialogue"));
+        }
+        for who in item.characters.iter().filter(|w| story.character(w).is_none()) {
+            self.error(&header, format!("{at}: unknown character `{who}` among those present"));
+        }
+        for line in item.script.lines() {
+            let place = on(line.line);
+            if !dialogue && (line.expression.is_some() || line.position.is_some()) {
+                self.error(
+                    &place,
+                    format!("{at}: `#expression:` and `#position:` are for a dialogue"),
+                );
+            }
+            if let Some(who) = line.speaker.as_deref().filter(|w| story.character(w).is_none()) {
+                self.warning(
+                    &place,
+                    format!("{at}: `{who}:` reads as a speaker, but there is no such character"),
+                );
+                continue;
+            }
+            let speaker = line.speaker.as_deref().or(item.from.as_deref());
+            if let Some(who) = line.speaker.as_deref() {
+                if dialogue && !item.characters.is_empty() && !item.characters.iter().any(|c| c == who) {
+                    self.error(
+                        &place,
+                        format!("{at}: `{who}` speaks but is not among the `characters` present"),
+                    );
                 }
-                for e in &reply.effects {
-                    self.effect(&file, &format!("{at}, reply `{}`", reply.id), e);
+            }
+            if let Some(expression) = line.expression.as_deref().filter(|_| dialogue) {
+                match speaker.and_then(|w| story.character(w)) {
+                    None => self.error(&place, format!("{at}: `#expression:{expression}` needs a speaker")),
+                    Some(ch) if !ch.portraits.contains_key(expression) => {
+                        self.error(&place, format!("{at}: `{}` has no portrait `{expression}`", ch.id))
+                    }
+                    Some(_) => {}
                 }
             }
         }
@@ -617,7 +707,7 @@ impl Checker<'_> {
             effects.extend(event.on_success.effects.iter().chain(&event.on_failure.effects));
         }
         for item in &story.content {
-            effects.extend(item.replies.iter().flat_map(|r| &r.effects));
+            effects.extend(item.script.effects().into_iter().map(|(_, e)| e));
         }
         sent.extend(effects.iter().filter_map(|e| match e {
             Effect::Send(c) => Some(c.as_str()),
@@ -658,13 +748,15 @@ fn sent_by<'a>(story: &'a Story, node: &'a Node, on_entry: &BTreeSet<Frame>) -> 
                 .map_or_else(|| on_entry.clone(), |f| BTreeSet::from([f]));
             sent.extend(sends(&beat.effects).map(|c| (c, frames.clone())));
         }
-        NodeKind::Message { content, wait_reply } => {
+        NodeKind::Message { content, .. } => {
             sent.push((content, on_entry.clone()));
-            // A reply is chosen while the flow still waits here.
-            if let Some(item) = story.content_item(content).filter(|_| *wait_reply) {
-                for reply in &item.replies {
-                    sent.extend(sends(&reply.effects).map(|c| (c, on_entry.clone())));
-                }
+            // What its script sends, as the conversation plays here.
+            if let Some(item) = story.content_item(content) {
+                let effects = item.script.effects();
+                sent.extend(effects.into_iter().filter_map(|(_, e)| match e {
+                    Effect::Send(c) => Some((c.as_str(), on_entry.clone())),
+                    _ => None,
+                }));
             }
         }
         NodeKind::Event { event, .. } => {
@@ -900,7 +992,7 @@ type: race
         let d = diagnostics(&[("content/x.story", content), ("flow/01-one.yaml", flow)]);
         for needle in [
             "a message node sends flow content",
-            "has no `replies`",
+            "has no choices",
             "unknown character `stranger`",
             "`send` delivers flow content",
         ] {
@@ -1094,5 +1186,64 @@ nodes:
             !has(&unlisted, Severity::Error, "does not exist"),
             "a story built in memory has no media list to check against: {unlisted:#?}"
         );
+    }
+
+    // A content item's text (SPEC-story-mode, Dialogue text): what is
+    // outside the subset is an error on its line of the file, a label is
+    // used once, and the sentences inside are checked like any other.
+    #[test]
+    fn a_script_is_checked_line_by_line() {
+        let content = "---\nid: talk\ntype: message\nfrom: friend\n---\nfriend: Hi.\n-> elsewhere\n* (yes) [Yes.]\n    ~ effect(\"flag.ghost = true\")\n* (yes) [Again.]\n";
+        let chars = "characters:\n  - id: friend\n";
+        let d = diagnostics(&[("content/a.story", content), ("world/characters.yaml", chars)]);
+        let at = |line: usize, needle: &str| {
+            (d.iter()).any(|x| x.file == format!("content/a.story:{line}") && x.message.contains(needle))
+        };
+        assert!(at(7, "only divert"), "the divert, on line 7: {d:#?}");
+        assert!(at(10, "label `yes` is used twice"), "{d:#?}");
+        assert!(at(9, "unknown flag `ghost`"), "an effect inside the script: {d:#?}");
+    }
+
+    // In-person dialogues: the characters present are known, whoever speaks
+    // is among them, an expression is one of the speaker's portraits, and a
+    // position or an expression only goes with a dialogue.
+    #[test]
+    fn dialogue_speakers_and_portraits_are_checked() {
+        let chars = "characters:\n  - id: friend\n    portraits: { neutral: f.png }\n  - id: rival\n";
+        let content = "---\nid: scene\ntype: dialogue\ncharacters: [friend, ghost]\n---\nfriend: Hi. #expression:angry\nrival: Me too.\nstranger: Who?\n---\nid: text\ntype: message\nfrom: friend\nscene: garage\n---\nfriend: Hi. #position:left\n";
+        let d = diagnostics(&[("content/a.story", content), ("world/characters.yaml", chars)]);
+        for needle in [
+            "unknown character `ghost` among those present",
+            "`friend` has no portrait `angry`",
+            "`rival` speaks but is not among the `characters` present",
+            "`scene` is for a dialogue",
+            "`#expression:` and `#position:` are for a dialogue",
+        ] {
+            assert!(has(&d, Severity::Error, needle), "{needle} in {d:#?}");
+        }
+        assert!(
+            has(
+                &d,
+                Severity::Warning,
+                "`stranger:` reads as a speaker, but there is no such character"
+            ),
+            "{d:#?}"
+        );
+    }
+
+    // Reply exits: a label the content does not have, a target that does
+    // not exist; and a condition on a reply names one of its labels.
+    #[test]
+    fn reply_exits_and_reply_conditions_name_real_labels() {
+        let content = "---\nid: ask\ntype: message\n---\n* (yes) [Yes.]\n";
+        let flow = "id: ch01\nnodes:\n  - id: start\n    message: ask\n    on_reply: { maybe: end, yes: nowhere }\n  - id: check\n    branch:\n      - if: [\"content.ask.reply == perhaps\"]\n        goto: end\n    otherwise: end\n  - id: end\n    end: done\n";
+        let d = diagnostics(&[("content/a.story", content), ("flow/01-one.yaml", flow)]);
+        for needle in [
+            "reply exit `maybe`: `ask` has no choice labelled so",
+            "reply exit `nowhere` does not exist",
+            "content `ask` has no choice labelled `perhaps`",
+        ] {
+            assert!(has(&d, Severity::Error, needle), "{needle} in {d:#?}");
+        }
     }
 }

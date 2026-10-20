@@ -117,11 +117,30 @@ impl Save {
             Wait::Reply { content } if story.content_item(content).is_none() => {
                 return stale(format!("content `{content}` no longer exists"))
             }
+            Wait::Reply { content } if !s.conversations.contains_key(content) => {
+                return stale(format!(
+                    "the flow waits on a conversation in `{content}` that is not under way"
+                ))
+            }
             _ => {}
         }
         for event in s.launched.iter().chain(&s.side_events) {
             if story.event(event).is_none() {
                 return stale(format!("event `{event}` no longer exists"));
+            }
+        }
+        // A conversation saved at a choice point resumes there only if the
+        // script still has that choice point, with the labels it offered.
+        for (content, conversation) in &s.conversations {
+            let choices = story
+                .content_item(content)
+                .and_then(|item| crate::script::choices_at(&item.script, &conversation.at));
+            let kept = choices
+                .is_some_and(|cs| (conversation.offered.iter()).all(|label| cs.iter().any(|c| &c.label == label)));
+            if !kept {
+                return stale(format!(
+                    "the conversation in `{content}` no longer has the choice it stood at"
+                ));
             }
         }
         for scheduled in &s.scheduled {
@@ -319,6 +338,61 @@ mod tests {
             Some(crate::frame::Frame::None),
             "`none` saved as such"
         );
+    }
+
+    // A game saved at a choice point resumes there; a story update that
+    // removed that choice point says so instead of resuming somewhere else.
+    #[test]
+    fn a_save_in_the_middle_of_a_conversation_resumes_at_its_choice() {
+        let content = "---\nid: ask\ntype: message\n---\nCome?\n* (yes) [Yes.]\n    * * (sure) [Sure.]\n* (no) [No.]\n";
+        let flow =
+            "id: ch01\nnodes:\n  - id: start\n    message: ask\n    wait_reply: true\n  - id: end\n    end: done\n";
+        let files = with(with(minimal(), "flow/01-one.yaml", flow), "content/ask.story", content);
+        let story = Story::from_sources(files.clone()).unwrap();
+        let mut state = State::new(&story, 0);
+        run(&story, &mut state).unwrap();
+        let reply = |label: &str| Input::Reply {
+            content: "ask".into(),
+            reply: label.into(),
+        };
+        submit(&story, &mut state, reply("yes")).unwrap();
+
+        let back = Save::from_json(&Save::new(&story, &state).to_json()).unwrap();
+        let mut resumed = back.clone().resume(&story).expect("resumes");
+        assert_eq!(resumed.conversations["ask"].offered, ["sure"], "at the nested choice");
+        submit(&story, &mut resumed, reply("sure")).unwrap();
+        assert_eq!(resumed.wait, Wait::Ended { ending: "done".into() });
+
+        let shorter = Story::from_sources(with(
+            files,
+            "content/ask.story",
+            "---\nid: ask\ntype: message\n---\nCome?\n* (yes) [Yes.]\n* (no) [No.]\n",
+        ))
+        .unwrap();
+        assert!(
+            matches!(back.check(&shorter), Err(SaveError::Stale(why)) if why.contains("no longer has the choice")),
+            "the nested choice point is gone"
+        );
+    }
+
+    // A reply recorded before labels were kept in a list still answers
+    // `content.<id>.reply == <label>`.
+    #[test]
+    fn a_reply_saved_before_the_list_of_labels_still_counts() {
+        let content = "---\nid: ask\ntype: message\n---\n* (yes) [Yes.]\n";
+        let story = Story::from_sources(with(minimal(), "content/ask.story", content)).unwrap();
+        let mut state = State::new(&story, 0);
+        state.content.insert(
+            "ask".into(),
+            crate::state::ContentFacts {
+                delivered: 1,
+                seen: false,
+                reply: Some("yes".into()),
+                chosen: Vec::new(),
+            },
+        );
+        let cond: crate::expr::Condition = "content.ask.reply == yes".parse().unwrap();
+        assert!(state.holds(&story, &cond), "the last reply alone answers");
     }
 
     // Format 1 as written on the first day. If this test has to change, the

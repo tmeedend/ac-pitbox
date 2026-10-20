@@ -93,6 +93,8 @@ fn citations(path: &str, text: &str, kind: NameKind, id: &str) -> Vec<Range<usiz
             prefixed(text, "rel.", id, &mut out);
             if path.ends_with(".story") {
                 senders(text, id, &mut out);
+                speakers(text, id, &mut out);
+                present(text, id, &mut out);
             }
         }
         NameKind::Step => steps(text, id, &mut out),
@@ -100,7 +102,7 @@ fn citations(path: &str, text: &str, kind: NameKind, id: &str) -> Vec<Range<usiz
             prefixed(text, "event.", id, &mut out);
             if path.starts_with("flow/") {
                 keyed(text, "event", id, &mut out);
-                side_lists(text, id, &mut out);
+                listed(text, &["open", "close"], id, &mut out);
             }
         }
     }
@@ -194,14 +196,15 @@ fn keyed(text: &str, key: &str, id: &str, out: &mut Vec<Range<usize>>) {
     }
 }
 
-/// The events a Side events node opens or closes, in either form an author
-/// writes a list: `open: [a, b]` on the line, or one `- a` per line below
-/// `open:`.
-fn side_lists(text: &str, id: &str, out: &mut Vec<Range<usize>>) {
+/// The ids listed under `keys`, in either form an author writes a list:
+/// `open: [a, b]` on the line, or one `- a` per line below `open:` - the
+/// events a Side events node opens or closes, the characters present in a
+/// dialogue.
+fn listed(text: &str, keys: &[&str], id: &str, out: &mut Vec<Range<usize>>) {
     let bytes = text.as_bytes();
     let all = lines("", text);
     let indent = |l: &Line| l.text.len() - l.text.trim_start().len();
-    for key in ["open", "close"] {
+    for &key in keys {
         for value in key_values(text, key) {
             let at = skip_blanks_and_quote(bytes, value);
             if bytes.get(at) == Some(&b'[') {
@@ -282,6 +285,56 @@ fn senders(text: &str, who: &str, out: &mut Vec<Range<usize>>) {
             out.push(start..start + who.len());
         }
     }
+}
+
+/// A speaker in the text of a `.story` file: `who: …` at the start of a line,
+/// past the markers of a choice or a gather and a line's `{check(…):`
+/// condition (SPEC-story-mode, Dialogue text).
+fn speakers(text: &str, who: &str, out: &mut Vec<Range<usize>>) {
+    for line in lines(".story", text).iter().filter(|l| !l.header) {
+        let t = line.text;
+        let mut at = t.len() - t.trim_start().len();
+        while let Some(c) = t[at..].chars().next() {
+            let marker = c == '*' || (c == '-' && !t[at..].starts_with("->"));
+            if marker || c == ' ' || c == '\t' {
+                at += c.len_utf8();
+            } else {
+                break;
+            }
+        }
+        if t[at..].starts_with('{') {
+            // Past the conditions: the first `:` outside quotes.
+            let mut quoted = false;
+            let Some(colon) = t[at..].char_indices().find_map(|(i, c)| {
+                if c == '"' {
+                    quoted = !quoted;
+                }
+                (c == ':' && !quoted).then_some(i)
+            }) else {
+                continue;
+            };
+            at += colon + 1;
+            at += t[at..].len() - t[at..].trim_start().len();
+        }
+        if crate::script::speaker_prefix(&t[at..]).is_some_and(|(name, _)| name == who) {
+            out.push(line.start + at..line.start + at + who.len());
+        }
+    }
+}
+
+/// The characters present in a dialogue: `characters:` in an item's header.
+fn present(text: &str, who: &str, out: &mut Vec<Range<usize>>) {
+    let headers: Vec<Range<usize>> = (lines(".story", text).iter())
+        .filter(|l| l.header)
+        .map(|l| l.start..l.start + l.text.len())
+        .collect();
+    let mut found = Vec::new();
+    listed(text, &["characters"], who, &mut found);
+    out.extend(
+        found
+            .into_iter()
+            .filter(|r| headers.iter().any(|h| h.contains(&r.start))),
+    );
 }
 
 /// `key: value` on a line, the value unquoted.
@@ -583,8 +636,8 @@ mod tests {
         assert_eq!(found[1].text, "beat: { effects: [\"counter.garage_visits += 1\"] }");
         assert_eq!(
             usages(&sample(), NameKind::Character, "sponsor").len(),
-            1,
-            "a sender counts: `from: sponsor`"
+            2,
+            "a sender counts, `from: sponsor`, and so does a speaker, `sponsor: …`"
         );
     }
 
@@ -674,6 +727,26 @@ mod tests {
         assert_eq!(validate(&story), [], "clean after the rename");
         assert_eq!(story.content_item("invite_01").unwrap().from.as_deref(), Some("pal"));
         assert!(story.character("friend").is_none() && story.character("pal").is_some());
+        let talk = story.content_item("talk_01").unwrap();
+        assert_eq!(talk.characters, ["pal"], "the characters present in a dialogue");
+        assert!(
+            talk.script.lines().iter().all(|l| l.speaker.as_deref() == Some("pal")),
+            "every speaker, a choice's body included"
+        );
+    }
+
+    // A speaker is found past a choice's or a gather's markers and a line's
+    // condition, never in a choice's own text.
+    #[test]
+    fn a_speaker_is_cited_wherever_a_line_starts() {
+        let text = "---\nid: a\ntype: dialogue\ncharacters:\n  - friend\n---\nfriend: Hi.\n{check(\"rel.friend >= warm\"): friend: Pal.}\n* (yes) [friend: not a line]\n    friend: Great.\n- friend: Bye.\n";
+        let mut out = Vec::new();
+        speakers(text, "friend", &mut out);
+        let cited: Vec<&str> = out.iter().map(|r| &text[r.clone()]).collect();
+        assert_eq!(cited.len(), 4, "four lines, not the choice: {out:?}");
+        let mut out = Vec::new();
+        present(text, "friend", &mut out);
+        assert_eq!(out.len(), 1, "the block list of the header");
     }
 
     #[test]
@@ -728,7 +801,7 @@ mod tests {
 
         let block = "id: ch01\nnodes:\n  - id: s\n    side_events:\n      open:\n        - a\n        - \"b\"\n      close: [c, b]\n";
         let mut out = Vec::new();
-        side_lists(block, "b", &mut out);
+        listed(block, &["open", "close"], "b", &mut out);
         assert_eq!(out.len(), 2, "a block list and an inline one: {out:?}");
     }
 

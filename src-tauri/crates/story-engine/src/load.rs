@@ -152,7 +152,7 @@ fn parse_yaml<T: DeserializeOwned>(file: &SourceFile) -> Result<T, LoadError> {
 /// type: message
 /// from: friend
 /// ---
-/// The text, opaque to the engine.
+/// The text, in the Ink subset `script.rs` reads.
 /// ```
 ///
 /// Hence the one constraint on the text: no line made of `---` alone. The
@@ -187,9 +187,15 @@ fn parse_story_file(file: &SourceFile) -> Result<Vec<ContentItem>, LoadError> {
         let header = lines[open + 1..*close].join("\n");
         let body_end = fences.iter().find(|&&f| f > *close).copied().unwrap_or(lines.len());
         let body = lines[close + 1..body_end].join("\n").trim_matches('\n').to_string();
+        // Where the kept text starts in the file, for the script's errors.
+        let blank = lines[close + 1..body_end].iter().take_while(|l| l.is_empty()).count();
+        let body_line = close + 2 + blank;
         let raw: RawContentHeader =
             serde_saphyr::from_str(&header).map_err(|e| err(format!("item header at line {}: {e}", open + 1)))?;
-        items.push(raw.into_item(body, file.path.clone(), open + 1).map_err(err)?);
+        items.push(
+            raw.into_item(body, file.path.clone(), open + 1, body_line)
+                .map_err(err)?,
+        );
     }
     if items.is_empty() {
         return Err(err("no content item (a .story file starts with a `---` header)".into()));
@@ -414,8 +420,9 @@ impl Story {
     }
 
     /// Every node `node` can lead to: each case of a branch and its
-    /// `otherwise`, an event's failure exit, the normal exit otherwise.
-    /// Targets that do not exist are kept: the validator reports them.
+    /// `otherwise`, an event's failure exit, a message's reply exits, the
+    /// normal exit otherwise. Targets that do not exist are kept: the
+    /// validator reports them.
     pub fn exits<'a>(&'a self, node: &'a Node) -> Vec<&'a str> {
         let mut targets = Vec::new();
         match &node.kind {
@@ -426,11 +433,12 @@ impl Story {
             NodeKind::End { .. } => {}
             kind => {
                 targets.extend(self.next_of(node).map(|n| n.id.as_str()));
-                if let NodeKind::Event {
-                    on_failure: Some(f), ..
-                } = kind
-                {
-                    targets.push(f.as_str());
+                match kind {
+                    NodeKind::Event {
+                        on_failure: Some(f), ..
+                    } => targets.push(f.as_str()),
+                    NodeKind::Message { on_reply, .. } => targets.extend(on_reply.values().map(String::as_str)),
+                    _ => {}
                 }
             }
         }
@@ -470,9 +478,9 @@ mod tests {
     use crate::testutil::{minimal, with};
 
     // File format: a `.story` file holds one or more items, each a YAML
-    // header between `---` lines followed by its opaque text.
+    // header between `---` lines followed by its text, kept as written.
     #[test]
-    fn a_story_file_splits_into_headers_and_opaque_bodies() {
+    fn a_story_file_splits_into_headers_and_bodies() {
         let story = Story::from_sources(with(
             minimal(),
             "content/pools/fail_01.story",
@@ -615,6 +623,19 @@ mod tests {
                 .any(|e| e.file == "story.yaml" && e.message.contains("frame")),
             "names the missing key: {errors:?}"
         );
+    }
+
+    // Replies are the labels of the Ink text since L2.4: the header's old
+    // `replies` list is refused, not half-read.
+    #[test]
+    fn the_old_replies_header_is_refused() {
+        let errors = Story::from_sources(with(
+            minimal(),
+            "content/a.story",
+            "---\nid: a\ntype: message\nreplies:\n  - id: yes\n---\nx\n",
+        ))
+        .unwrap_err();
+        assert!(errors[0].message.contains("replies"), "names the key: {errors:?}");
     }
 
     // The media are listed, never read: names inside `media/`, with `/`.

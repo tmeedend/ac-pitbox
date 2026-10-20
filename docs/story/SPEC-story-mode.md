@@ -183,7 +183,10 @@ with none.
 - **Written like any conversation.** Same Ink subset, same Form and Script
   views, same conditions and effects, same placement (a Message node in the
   flow, or reactive content). The header of the `.story` item adds the scene
-  (optional: the current scene otherwise) and the characters present.
+  (optional: the current scene otherwise) and the characters present
+  (`characters`); whoever speaks must be among them. A dialogue with choices
+  always holds the flow until it ends. Until the story's scenes exist, a scene
+  is a name kept as written.
 - **Portraits.** A character has one portrait per expression (at least
   `neutral`), picked from the story's media: a file inside `media/`, which the
   checks look for. A line can name the speaker's
@@ -194,6 +197,11 @@ with none.
   condition, and a Message node can have **one exit per label**, shown like the
   cases of a Branch (an arrow only where a reply leads elsewhere). Effects on
   the state remain possible in addition, for consequences that come later.
+  A conversation can have several choice points: `content.<id>.reply == yes`
+  holds when `yes` was chosen at any of them, and when the conversation ends
+  the node leaves by the exit of **the most recent reply that has one**,
+  otherwise by its `next`. Delivering an item again starts a new conversation
+  and forgets the replies of the last one.
 - **Stories with no frame.** When the active frame is `none`, the flow chains
   dialogues and events directly; an event is launched from a card shown on the
   scene (the same summary as in the frame: car, cost, goal); the player's
@@ -558,6 +566,9 @@ visible in it:
 - A portrait's path is relative to `media/` and stays inside it, with `/`
   between folders; it is matched with the case it has on disk, since a shared
   story is a zip.
+- A content header has no `replies`: replies are the labels of its text. A
+  Message node's reply exits are `on_reply: { <label>: <node> }`; a node with
+  reply exits waits for the conversation to end, as does `wait_reply: true`.
 - An event's session keys are a closed list: `laps`, `grid`, `ai_level` and
   `start` on another type than a race are errors, as are an event without a
   track or a car. `weather` is a weather as Pit Box names it (`clear`,
@@ -575,15 +586,20 @@ id on every line and a format of Pit Box's own with line ids (the idea of
 Yarn Spinner).
 
 ```
-Friend: There is a race next weekend.
-Friend: Want to come?
-* [I'm in!]
+friend: There is a race next weekend.
+friend: Want to come?
+* (yes) [I'm in!]
     ~ effect("rel.friend += 1")
-    Friend: Great, I'll pick you up at 8.
-* [Not this time.]
-    Friend: Your loss.
+    friend: Great, I'll pick you up at 8.
+* (no) [Not this time.]
+    friend: Your loss.
 - -> DONE
 ```
+
+A line starts with the **id** of the character who says it (the frame shows
+their name), or is plain text, said by the item's sender: an email or an
+article is written as text. A name followed by `:` that is no character is a
+warning.
 
 **Why it can be revisited cheaply.** Ink has no translation system: each
 language would be a full copy of the scripts, choices and effects included,
@@ -595,12 +611,15 @@ rewrite. Three rules keep it so:
   conditions and the package stay in Pit Box's editor, so progression is
   decided in one place.
 - **A subset of Ink, the one the Form view writes**: lines (each starting
-  with who speaks), choices (each with a label, `* (label) [text]`), what a
-  choice changes, lines and choices shown on a condition, joining up again
-  after a choice, and the `#expression:` and `#position:` tags of a dialogue.
-  Anything else in the
-  Script view is an error: the subset is what a later format must be able to
-  hold.
+  with who speaks), choices (each with a label, `* (label) [text]`, nested
+  with `* *`), what a choice changes, lines and choices shown on a condition
+  (`{check("…"): …}`, `* (label) {check("…")} [text]`), joining up again
+  after a choice (`-`), `-> DONE`, and the `#expression:` and `#position:`
+  (`left`, `center`, `right`) tags of a dialogue. Anything else in the Script
+  view is an error on its line - sticky `+` choices, other diverts, knots,
+  Ink's own variables, comments: the subset is what a later format must be
+  able to hold. A choice point whose choices all fail their conditions is
+  passed.
 - **No variables of Ink's own.** A script reads and changes the story's state
   only through the story's own conditions and effects, the same sentences as
   everywhere else (`check("rel.friend >= warm")`, `effect("money -= 50")`),
@@ -609,8 +628,10 @@ rewrite. Three rules keep it so:
 
 **The engine runs the script, the frame shows the lines**, as for every rule
 of the story: the balance simulator plays conversations with no frame. The
-Rust compiler and runtime [blade-ink-rs](https://github.com/bladecoder/blade-ink-rs)
-(Apache-2.0) make that possible inside the pure engine crate. Inky, inkle's
+engine reads and plays the subset itself, with no Ink runtime: tried in
+October 2026, [blade-ink-rs](https://github.com/bladecoder/blade-ink-rs)
+refused `~ effect("x += 1")` and did not expose a choice's label, which is the
+"reply chosen" fact. What the editor writes stays valid Ink, so Inky, inkle's
 editor, can still be used to type a script; its preview knows nothing of the
 story's state.
 

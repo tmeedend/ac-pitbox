@@ -11,8 +11,9 @@ use std::fmt;
 
 use crate::expr::{Criterion, Effect, Literal, Var};
 use crate::load::Story;
-use crate::model::{Beat, FailureMode, Node, NodeKind, Placement, Repeat, RetryCost};
-use crate::state::{Entry, EventResult, Happening, Scheduled, State, Verdict, Via, Wait};
+use crate::model::{Beat, ContentType, FailureMode, Node, NodeKind, Placement, Repeat, RetryCost};
+use crate::script::{self, Position, Stop};
+use crate::state::{Conversation, Entry, EventResult, Happening, Scheduled, State, Verdict, Via, Wait};
 use crate::time::Span;
 
 /// What the host must show or do.
@@ -28,6 +29,17 @@ pub enum Output {
     /// A Beat changed the frame (`none`: removed it).
     FrameChanged {
         to: crate::frame::Frame,
+    },
+    /// Lines of a content item's conversation, in order, with what held.
+    Lines {
+        content: String,
+        lines: Vec<Said>,
+    },
+    /// The choices a conversation offers now; the player answers with
+    /// `Input::Reply` and one of these labels.
+    Choices {
+        content: String,
+        choices: Vec<Offer>,
     },
     /// The flow waits for this event. `difficulty_step`: how many steps of
     /// skill the launcher takes off the opponents (adaptive difficulty).
@@ -48,6 +60,23 @@ pub enum Output {
     },
 }
 
+/// A line as the frame or the scene shows it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Said {
+    /// A character's id; `None`: the item's sender.
+    pub speaker: Option<String>,
+    pub text: String,
+    pub expression: Option<String>,
+    pub position: Option<Position>,
+}
+
+/// A choice offered: its label and its text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Offer {
+    pub label: String,
+    pub text: String,
+}
+
 /// What the player did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Input {
@@ -56,7 +85,8 @@ pub enum Input {
     Launch { event: String },
     /// Its result came back.
     Result { event: String, result: EventResult },
-    /// The player chose a reply on a delivered content item.
+    /// The player chose a reply - a choice's label - in a conversation
+    /// waiting at a choice point.
     Reply { content: String, reply: String },
     /// The action the flow waits for is done.
     ActionDone { action: String },
@@ -106,12 +136,17 @@ impl fmt::Display for EngineError {
 /// is a few dozen nodes; a beat-and-branch counting loop a few hundred.
 const MAX_STEPS: usize = 10_000;
 
+/// Conversations started from within another one (`effect("send …")`)
+/// before the engine calls it a loop: two items sending each other.
+const MAX_NESTED: usize = 32;
+
 /// Advances the flow from where the state stands, until it waits.
 pub fn run(story: &Story, state: &mut State) -> Result<Vec<Output>, EngineError> {
     let mut r = Run {
         story,
         state,
         out: Vec::new(),
+        nested: 0,
     };
     r.advance()?;
     Ok(r.out)
@@ -129,6 +164,7 @@ pub fn submit(story: &Story, state: &mut State, input: Input) -> Result<Vec<Outp
         story,
         state: &mut next,
         out: Vec::new(),
+        nested: 0,
     };
     r.apply(input)?;
     r.advance()?;
@@ -179,6 +215,8 @@ struct Run<'a> {
     story: &'a Story,
     state: &'a mut State,
     out: Vec<Output>,
+    /// How deep `deliver` is in conversations started by conversations.
+    nested: usize,
 }
 
 impl<'a> Run<'a> {
@@ -228,13 +266,19 @@ impl<'a> Run<'a> {
                     self.beat(beat)?;
                     self.go_next(&id)?;
                 }
-                NodeKind::Message { content, wait_reply } => {
-                    let (content, wait_reply) = (content.clone(), *wait_reply);
-                    self.deliver(&content, Via::Flow);
-                    if wait_reply {
+                NodeKind::Message {
+                    content,
+                    wait_reply,
+                    on_reply,
+                } => {
+                    let content = content.clone();
+                    self.deliver(&content, Via::Flow)?;
+                    let dialogue = self.story.content_item(&content).map(|c| c.kind) == Some(ContentType::Dialogue);
+                    let holds = *wait_reply || !on_reply.is_empty() || dialogue;
+                    if holds && self.state.conversations.contains_key(&content) {
                         self.state.wait = Wait::Reply { content };
                     } else {
-                        self.go_next(&id)?;
+                        self.leave_message(&id, &content)?;
                     }
                 }
                 NodeKind::Event { event, .. } => self.state.wait = Wait::Event { event: event.clone() },
@@ -305,8 +349,15 @@ impl<'a> Run<'a> {
         self.out.push(Output::TimeMoved { to: self.state.date });
     }
 
-    fn deliver(&mut self, content: &str, via: Via) {
-        self.state.content.entry(content.to_string()).or_default().delivered += 1;
+    /// Sends a content item, and plays its conversation from the start: a
+    /// new delivery is a new conversation, so the replies of the last one
+    /// are forgotten.
+    fn deliver(&mut self, content: &str, via: Via) -> Result<(), EngineError> {
+        let facts = self.state.content.entry(content.to_string()).or_default();
+        facts.delivered += 1;
+        facts.reply = None;
+        facts.chosen.clear();
+        self.state.conversations.remove(content);
         self.log(Happening::Delivered {
             content: content.into(),
             via: via.clone(),
@@ -315,12 +366,87 @@ impl<'a> Run<'a> {
             content: content.into(),
             via,
         });
+        self.nested += 1;
+        if self.nested > MAX_NESTED {
+            return Err(EngineError::Loop {
+                node: self.state.node.clone(),
+            });
+        }
+        let played = self.converse(content, vec![0]);
+        self.nested -= 1;
+        played
+    }
+
+    /// Plays `content`'s script from `at` until a choice point or its end
+    /// (SPEC-story-mode, Dialogue text). At the end, a flow waiting on this
+    /// conversation goes on along the node's reply exit.
+    fn converse(&mut self, content: &str, at: script::At) -> Result<(), EngineError> {
+        let story: &'a Story = self.story;
+        let Some(item) = story.content_item(content) else {
+            return Ok(());
+        };
+        let mut host = Speaking {
+            run: self,
+            said: Vec::new(),
+        };
+        let stop = script::play(&item.script, at, &mut host)?;
+        let said = host.said;
+        if !said.is_empty() {
+            self.out.push(Output::Lines {
+                content: content.into(),
+                lines: said,
+            });
+        }
+        match stop {
+            Stop::Choices { at, offered } => {
+                let written = script::choices_at(&item.script, &at).unwrap_or_default();
+                let choices = (offered.iter())
+                    .filter_map(|label| written.iter().find(|c| &c.label == label))
+                    .map(|c| Offer {
+                        label: c.label.clone(),
+                        text: c.text.clone(),
+                    })
+                    .collect();
+                self.state
+                    .conversations
+                    .insert(content.into(), Conversation { at, offered });
+                self.out.push(Output::Choices {
+                    content: content.into(),
+                    choices,
+                });
+            }
+            Stop::Ended => {
+                self.state.conversations.remove(content);
+                if matches!(&self.state.wait, Wait::Reply { content: c } if c == content) {
+                    let node = self.state.node.clone();
+                    self.leave_message(&node, content)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Leaves a Message node: along the exit of the most recent reply that
+    /// has one, else along `next`.
+    fn leave_message(&mut self, node: &str, content: &str) -> Result<(), EngineError> {
+        let exit = match &self.node(node)?.kind {
+            NodeKind::Message { on_reply, .. } => (self.state.content_facts(content).chosen.iter().rev())
+                .find_map(|label| on_reply.get(label))
+                .cloned(),
+            _ => None,
+        };
+        match exit {
+            Some(target) => {
+                self.go_to(target);
+                Ok(())
+            }
+            None => self.go_next(node),
+        }
     }
 
     fn apply_effect(&mut self, effect: &Effect) -> Result<(), EngineError> {
         if let Effect::Send(content) = effect {
-            self.deliver(content, Via::Effect);
-            return Ok(());
+            return self.deliver(content, Via::Effect);
         }
         let s = &mut *self.state;
         let scale = &self.story.settings().relations;
@@ -401,7 +527,7 @@ impl<'a> Run<'a> {
                     self.story.content_item(&s.content).map(|c| &c.placement)
                 {
                     if self.state.all_hold(self.story, when) {
-                        self.deliver(&s.content, Via::Reactive);
+                        self.deliver(&s.content, Via::Reactive)?;
                         changed = true;
                     }
                 }
@@ -431,7 +557,7 @@ impl<'a> Run<'a> {
                         due: date.advance(span),
                     }),
                     None => {
-                        self.deliver(id, Via::Reactive);
+                        self.deliver(id, Via::Reactive)?;
                         changed = true;
                     }
                 }
@@ -510,40 +636,35 @@ impl<'a> Run<'a> {
         Ok(())
     }
 
-    /// A reply to any delivered content item that offers replies - the one
-    /// the flow waits on, or a reactive message - once per item.
+    /// A reply in any conversation waiting at a choice point - the one the
+    /// flow waits on, or a reactive message answered later. The script goes
+    /// on under the chosen label, and the flow with it once it ends.
     fn reply(&mut self, content: String, reply: String) -> Result<(), EngineError> {
         let story: &'a Story = self.story;
         let Some(item) = story.content_item(&content) else {
             return unexpected(format!("unknown content `{content}`"));
         };
-        let facts = self.state.content_facts(&content);
-        if facts.delivered == 0 {
-            return unexpected(format!("`{content}` was never delivered"));
-        }
-        if facts.reply.is_some() {
-            return unexpected(format!("`{content}` already has a reply"));
-        }
-        let Some(chosen) = item.replies.iter().find(|r| r.id == reply) else {
-            let known: Vec<_> = item.replies.iter().map(|r| r.id.as_str()).collect();
-            return unexpected(format!(
-                "`{content}` has no reply `{reply}` (replies: {})",
-                known.join(", ")
-            ));
+        let Some(conversation) = self.state.conversations.get(&content) else {
+            return unexpected(format!("`{content}` waits for no reply"));
         };
-        for effect in &chosen.effects {
-            self.apply_effect(effect)?;
+        if !conversation.offered.contains(&reply) {
+            return unexpected(format!(
+                "`{content}` offers no reply `{reply}` (offered: {})",
+                conversation.offered.join(", ")
+            ));
         }
-        self.state.content.entry(content.clone()).or_default().reply = Some(reply.clone());
+        let Some(next) = script::after_choice(&item.script, &conversation.at, &reply) else {
+            return unexpected(format!("`{content}` has no choice `{reply}` any more"));
+        };
+        let facts = self.state.content.entry(content.clone()).or_default();
+        facts.reply = Some(reply.clone());
+        facts.chosen.push(reply.clone());
+        self.state.conversations.remove(&content);
         self.log(Happening::Replied {
             content: content.clone(),
             reply,
         });
-        if matches!(&self.state.wait, Wait::Reply { content: c } if *c == content) {
-            let node = self.state.node.clone();
-            self.go_next(&node)?;
-        }
-        Ok(())
+        self.converse(&content, next)
     }
 
     /// SPEC-story-mode, Events, retries and failure. The result is recorded
@@ -594,7 +715,7 @@ impl<'a> Run<'a> {
             self.apply_effect(effect)?;
         }
         if let Some(pool) = &event.on_failure.pool {
-            self.draw_pool(pool, event.on_failure.pick, &event_id);
+            self.draw_pool(pool, event.on_failure.pick, &event_id)?;
         }
         let Some(node) = flow_node else { return Ok(()) };
         let NodeKind::Event { on_failure, .. } = &self.node(&node)?.kind else {
@@ -618,7 +739,7 @@ impl<'a> Run<'a> {
 
     /// Sends `pick` variants of a failure pool, among those whose conditions
     /// hold, never one already sent until every eligible one has been.
-    fn draw_pool(&mut self, pool: &str, pick: u8, event: &str) {
+    fn draw_pool(&mut self, pool: &str, pick: u8, event: &str) -> Result<(), EngineError> {
         let eligible: Vec<String> = self
             .story
             .pool_variants(pool)
@@ -634,8 +755,36 @@ impl<'a> Run<'a> {
         for _ in 0..usize::from(pick).min(fresh.len()) {
             let id = fresh.remove(self.state.rng.below(fresh.len()));
             self.state.pools.entry(pool.to_string()).or_default().insert(id.clone());
-            self.deliver(&id, Via::Pool { event: event.into() });
+            self.deliver(&id, Via::Pool { event: event.into() })?;
         }
+        Ok(())
+    }
+}
+
+/// The story's state as a script sees it while it plays.
+struct Speaking<'r, 'a> {
+    run: &'r mut Run<'a>,
+    said: Vec<Said>,
+}
+
+impl script::Host for Speaking<'_, '_> {
+    type Error = EngineError;
+
+    fn holds(&mut self, when: &[crate::expr::Condition]) -> bool {
+        self.run.state.all_hold(self.run.story, when)
+    }
+
+    fn effect(&mut self, effect: &Effect) -> Result<(), EngineError> {
+        self.run.apply_effect(effect)
+    }
+
+    fn say(&mut self, line: &script::Line) {
+        self.said.push(Said {
+            speaker: line.speaker.clone(),
+            text: line.text.clone(),
+            expression: line.expression.clone(),
+            position: line.position,
+        });
     }
 }
 
@@ -926,7 +1075,7 @@ mod tests {
 
     #[test]
     fn a_reply_applies_its_effects_and_releases_the_flow() {
-        let content = "---\nid: invite\ntype: message\nfrom: friend\nreplies:\n  - id: accept\n    effects: [\"rel.friend += 1\"]\n  - id: decline\n    effects: [\"rel.friend -= 9\"]\n---\nCome along?\n";
+        let content = "---\nid: invite\ntype: message\nfrom: friend\n---\nCome along?\n* (accept) [Sure.]\n    ~ effect(\"rel.friend += 1\")\n* (decline) [No.]\n    ~ effect(\"rel.friend -= 9\")\n";
         let flow = "id: ch\nnodes:\n  - id: start\n    message: invite\n    wait_reply: true\n  - id: check\n    branch:\n      - if: [\"content.invite.reply == accept\", \"rel.friend >= warm\"]\n        goto: yes_end\n    otherwise: no_end\n  - id: yes_end\n    end: yes\n  - id: no_end\n    end: no\n";
         let story = story("", flow, &[("content/invite.story", content)]);
         let mut state = start(&story);
@@ -970,6 +1119,131 @@ mod tests {
         .unwrap();
         assert_eq!(state.relations["friend"], "warm", "neutral + 1");
         assert_eq!(state.wait, Wait::Ended { ending: "yes".into() });
+    }
+
+    // Reply exits (SPEC-story-mode, In-person dialogues): the conversation
+    // ends, then the node leaves along the exit of the most recent reply
+    // that has one; a reply without an exit takes `next`. Here the player
+    // chooses `yes`, then `sure` under it: `sure` has no exit, `yes` does.
+    #[test]
+    fn a_message_leaves_by_the_latest_reply_that_has_an_exit() {
+        let content = "---\nid: ask\ntype: dialogue\ncharacters: [friend]\n---\nfriend: Coming?\n* (yes) [Yes.]\n    * * (sure) [Sure.]\n    * * (maybe) [Maybe.]\n* (no) [No.]\n";
+        let flow = "id: ch\nnodes:\n  - id: start\n    message: ask\n    on_reply: { yes: went, no: stayed }\n  - id: default\n    end: default\n  - id: went\n    end: went\n  - id: stayed\n    end: stayed\n";
+        let story = story("", flow, &[("content/ask.story", content)]);
+        let reply = |state: &mut State, label: &str| {
+            submit(
+                &story,
+                state,
+                Input::Reply {
+                    content: "ask".into(),
+                    reply: label.into(),
+                },
+            )
+        };
+        let mut state = start(&story);
+        assert_eq!(state.wait, Wait::Reply { content: "ask".into() });
+        let out = reply(&mut state, "yes").unwrap();
+        assert!(
+            out.iter()
+                .any(|o| matches!(o, Output::Choices { choices, .. } if choices.len() == 2)),
+            "the nested choice point: {out:?}"
+        );
+        assert_eq!(state.wait, Wait::Reply { content: "ask".into() }, "still talking");
+        reply(&mut state, "sure").unwrap();
+        assert_eq!(state.wait, Wait::Ended { ending: "went".into() }, "`yes` has the exit");
+        assert_eq!(state.content_facts("ask").chosen, ["yes", "sure"]);
+
+        let mut state = start(&story);
+        assert!(
+            matches!(reply(&mut state.clone(), "sure"), Err(EngineError::Unexpected(_))),
+            "a label not offered here is refused"
+        );
+        reply(&mut state, "no").unwrap();
+        assert_eq!(
+            state.wait,
+            Wait::Ended {
+                ending: "stayed".into()
+            }
+        );
+    }
+
+    // A reply is tested against every label chosen in the conversation, and
+    // a reactive message is answered whenever the player likes, the flow
+    // going on meanwhile.
+    #[test]
+    fn a_reactive_conversation_is_answered_later_and_every_reply_counts() {
+        let content = "---\nid: ping\ntype: message\nfrom: friend\nwhen: [\"flag.met\"]\n---\nfriend: Hey.\n* (wave) [Wave.]\n    * * (smile) [Smile.]\n";
+        let flow = "id: ch\nnodes:\n  - id: start\n    beat: { effects: [\"flag.met = true\"] }\n  - id: act\n    action: wait\n  - id: check\n    branch:\n      - if: [\"content.ping.reply == wave\", \"content.ping.reply == smile\"]\n        goto: both\n    otherwise: neither\n  - id: both\n    end: both\n  - id: neither\n    end: neither\n";
+        let story = story("", flow, &[("content/ping.story", content)]);
+        let mut state = start(&story);
+        assert_eq!(
+            state.wait,
+            Wait::Action { action: "wait".into() },
+            "the flow did not wait"
+        );
+        for label in ["wave", "smile"] {
+            submit(
+                &story,
+                &mut state,
+                Input::Reply {
+                    content: "ping".into(),
+                    reply: label.into(),
+                },
+            )
+            .unwrap();
+        }
+        assert!(
+            matches!(
+                submit(
+                    &story,
+                    &mut state.clone(),
+                    Input::Reply {
+                        content: "ping".into(),
+                        reply: "wave".into()
+                    }
+                ),
+                Err(EngineError::Unexpected(_))
+            ),
+            "an ended conversation waits for no reply"
+        );
+        submit(&story, &mut state, Input::ActionDone { action: "wait".into() }).unwrap();
+        assert_eq!(state.wait, Wait::Ended { ending: "both".into() }, "both labels count");
+    }
+
+    // A new delivery is a new conversation: the replies of the last one are
+    // forgotten.
+    #[test]
+    fn a_new_delivery_forgets_the_last_replies() {
+        let content = "---\nid: ask\ntype: message\nfrom: friend\n---\n* (yes) [Yes.]\n";
+        let flow = "id: ch\nnodes:\n  - id: start\n    message: ask\n    wait_reply: true\n  - id: again\n    beat: { effects: [\"send ask\"] }\n  - id: wait\n    action: look\n  - id: end\n    end: done\n";
+        let story = story("", flow, &[("content/ask.story", content)]);
+        let mut state = start(&story);
+        submit(
+            &story,
+            &mut state,
+            Input::Reply {
+                content: "ask".into(),
+                reply: "yes".into(),
+            },
+        )
+        .unwrap();
+        let facts = state.content_facts("ask");
+        assert_eq!(
+            (facts.delivered, facts.chosen.len()),
+            (2, 0),
+            "sent again, its replies reset"
+        );
+        assert!(state.conversations.contains_key("ask"), "and waiting again");
+    }
+
+    // Two items sending each other would never stop: an error, not a hang.
+    #[test]
+    fn items_sending_each_other_are_a_loop_not_a_hang() {
+        let content = "---\nid: a\ntype: message\n---\n~ effect(\"send b\")\n---\nid: b\ntype: message\n---\n~ effect(\"send a\")\n";
+        let flow = "id: ch\nnodes:\n  - id: start\n    message: a\n  - id: end\n    end: done\n";
+        let story = story("", flow, &[("content/loop.story", content)]);
+        let mut state = State::new(&story, 7);
+        assert!(matches!(run(&story, &mut state), Err(EngineError::Loop { .. })));
     }
 
     // Story settings: the relation scale belongs to the story.

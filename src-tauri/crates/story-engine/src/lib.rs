@@ -33,6 +33,7 @@ pub mod load;
 pub mod model;
 pub mod refs;
 pub mod save;
+pub mod script;
 pub mod state;
 pub mod time;
 pub mod validate;
@@ -135,6 +136,25 @@ mod tests {
         }
         assert_eq!(state.money, 300 - 50 - 50 + 200, "paid retries, prize");
         drive(&story, &mut state, "race_02", 1);
+        assert_eq!(
+            state.wait,
+            Wait::Reply {
+                content: "talk_01".into()
+            },
+            "the face-to-face dialogue holds the flow until it is answered"
+        );
+        let reputation = state.reputation;
+        submit(
+            &story,
+            &mut state,
+            Input::Reply {
+                content: "talk_01".into(),
+                reply: "rest".into(),
+            },
+        )
+        .unwrap();
+        assert_eq!(state.relations["parent"], "close", "`rest` led to its own follow-up");
+        assert_eq!(state.reputation, reputation, "not to the one `another` leads to");
         assert_eq!(
             state.wait,
             Wait::Ended {

@@ -215,7 +215,9 @@ pub struct ContentRef {
     pub file: String,
     /// `flow`, `reactive` or `pool`: only flow content is sent by a node.
     pub placement: &'static str,
-    pub has_replies: bool,
+    /// Its reply labels, in the order written: what a Message node's reply
+    /// exits can name.
+    pub labels: Vec<String>,
     /// The pool a variant belongs to.
     pub pool: Option<String>,
     pub from: Option<String>,
@@ -236,7 +238,7 @@ impl ContentRef {
             id: c.id.clone(),
             file: c.file.clone(),
             placement,
-            has_replies: !c.replies.is_empty(),
+            labels: c.script.labels().into_iter().map(String::from).collect(),
             pool,
             from: c.from.clone(),
             when: when.iter().map(ToString::to_string).collect(),
@@ -890,8 +892,8 @@ id: remark
 type: message
 when: [\"counter.visits >= 2\"]
 ---
-# typed by hand
-A line.
+
+    A line, indented by hand.
 ";
         std::fs::create_dir_all(folder.join("content")).unwrap();
         std::fs::write(folder.join("content/remark.story"), content).unwrap();

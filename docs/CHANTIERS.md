@@ -101,10 +101,10 @@ de reprendre. En cas d'écart, la spec fait foi.
         vers un format à identifiants de ligne reste peu coûteuse). D'où les
         règles de la spec (« Dialogue text ») : un sous-ensemble d'Ink, sans
         variables propres, conditions et effets écrits avec les phrases de
-        l'histoire. Ce qu'Ink coûtera, à savoir avant L2.4 :
-        `blade-ink-rs` (compilateur et moteur Rust, Apache-2.0) dans la crate
-        du moteur ; Yarn écarté parce que son portage Rust se dit « en
-        chantier, sans support » et vise Bevy.
+        l'histoire. Yarn écarté parce que son portage Rust se dit « en
+        chantier, sans support » et vise Bevy. `blade-ink-rs`, prévu pour
+        exécuter Ink, a été **écarté à l'essai en L2.4** (voir plus bas) : le
+        moteur lit et joue le sous-ensemble lui-même.
       - **L2, Create Your Own — découpé en six sous-lots (validé
         2026-10-18)** : L2.1 ouvrir une histoire et construire son fil ;
         L2.2 le monde et les réglages (personnages, drapeaux, compteurs,

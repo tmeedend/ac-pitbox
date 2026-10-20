@@ -38,11 +38,11 @@ COMMANDS:
 
 const PLAY_HELP: &str = "\
   When an event waits:     P3 | P3 1:18.2 | P1 ahead:<driver> | dnf | failed | won
-  When a reply waits:      <reply id>
+  When a reply waits:      <label>
   When an action waits:    done
   Any time:
     side <event> <result>  drive an open side event
-    reply <content> <id>   reply to a delivered content item
+    reply <content> <label> reply in a conversation waiting at a choice
     seen <content>         mark a content item as opened
     state | history        show the state / what happened
     save <file.json>       write a save
@@ -241,10 +241,8 @@ fn prompt(story: &Story, state: &State) -> String {
             p + ")"
         }
         Wait::Reply { content } => {
-            let replies = story
-                .content_item(content)
-                .map(|c| c.replies.iter().map(|r| r.id.as_str()).collect::<Vec<_>>());
-            format!("reply to {content} [{}]", replies.unwrap_or_default().join(" / "))
+            let offered = state.conversations.get(content).map(|c| c.offered.join(" / "));
+            format!("reply to {content} [{}]", offered.unwrap_or_default())
         }
         Wait::Action { action } => format!("action `{action}` (type `done`)"),
         Wait::Running | Wait::Ended { .. } => String::new(),
@@ -267,8 +265,23 @@ fn show(story: &Story, state: &State, out: &[Output]) {
                 let from = item.from.as_deref().map(|f| format!(" from {f}")).unwrap_or_default();
                 let clock = item.clock.unwrap_or(state.clock);
                 println!("[{} {clock}] {:?}{from} — {content} ({via})", state.date, item.kind);
-                for line in item.body.lines() {
-                    println!("    {line}");
+            }
+            Output::Lines { lines, .. } => {
+                for line in lines {
+                    let who = line.speaker.as_deref().map(|w| format!("{w}: ")).unwrap_or_default();
+                    let mut tags = String::new();
+                    if let Some(e) = &line.expression {
+                        tags += &format!("  ({e})");
+                    }
+                    println!("    {who}{}{tags}", line.text);
+                }
+            }
+            Output::Choices { content, choices } => {
+                for c in choices {
+                    println!("    * ({}) {}", c.label, c.text);
+                }
+                if !matches!(&state.wait, Wait::Reply { content: w } if w == content) {
+                    println!("    (answer any time: reply {content} <label>)");
                 }
             }
             Output::TimeMoved { to } => println!("\n—— {to} ——"),

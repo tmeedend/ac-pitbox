@@ -53,7 +53,8 @@ export interface ContentRef {
   id: string;
   file: string;
   placement: "flow" | "reactive" | "pool";
-  hasReplies: boolean;
+  /** Its reply labels, in the order written. */
+  labels: string[];
   /** The pool a variant belongs to. */
   pool: string | null;
   from: string | null;

@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::expr::{Condition, Criterion, Effect};
 use crate::frame::Frame;
+use crate::script::{self, Script, ScriptError};
 use crate::time::{Clock, Span, StoryDate};
 
 pub type NodeId = String;
@@ -295,9 +296,16 @@ pub struct Node {
 pub enum NodeKind {
     /// Changes the state; can move story time on.
     Beat(Beat),
-    /// Sends a flow content item to the frame. With `wait_reply`, the flow
-    /// waits for the player's reply before going on.
-    Message { content: ContentId, wait_reply: bool },
+    /// Sends a flow content item to the frame, or plays a dialogue on the
+    /// scene. The flow waits for the conversation to end when it has
+    /// choices and `wait_reply` is set, the node has reply exits, or it is a
+    /// dialogue. `on_reply`: where a reply label leads (SPEC-story-mode,
+    /// In-person dialogues); a label it does not name takes `next`.
+    Message {
+        content: ContentId,
+        wait_reply: bool,
+        on_reply: BTreeMap<String, NodeId>,
+    },
     /// Launches a session. `next` is the success exit; `on_failure` the
     /// failure exit, and without one the story's `failure` setting decides.
     Event { event: EventId, on_failure: Option<NodeId> },
@@ -361,6 +369,8 @@ struct RawNode {
     #[serde(skip_serializing_if = "Option::is_none")]
     wait_reply: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    on_reply: Option<BTreeMap<String, NodeId>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     event: Option<EventId>,
     #[serde(skip_serializing_if = "Option::is_none")]
     on_failure: Option<NodeId>,
@@ -386,6 +396,7 @@ impl From<Node> for RawNode {
             beat: None,
             message: None,
             wait_reply: None,
+            on_reply: None,
             event: None,
             on_failure: None,
             branch: None,
@@ -396,10 +407,15 @@ impl From<Node> for RawNode {
         };
         match node.kind {
             NodeKind::Beat(beat) => raw.beat = Some(beat),
-            NodeKind::Message { content, wait_reply } => {
+            NodeKind::Message {
+                content,
+                wait_reply,
+                on_reply,
+            } => {
                 raw.message = Some(content);
                 // `false` is the default: written only when it says something.
                 raw.wait_reply = wait_reply.then_some(true);
+                raw.on_reply = (!on_reply.is_empty()).then_some(on_reply);
             }
             NodeKind::Event { event, on_failure } => {
                 raw.event = Some(event);
@@ -429,9 +445,12 @@ impl TryFrom<RawNode> for Node {
             kinds.push(NodeKind::Message {
                 content,
                 wait_reply: raw.wait_reply.unwrap_or(false),
+                on_reply: raw.on_reply.unwrap_or_default(),
             });
-        } else if raw.wait_reply.is_some() {
-            return Err(format!("node `{id}`: `wait_reply` only goes with `message`"));
+        } else if raw.wait_reply.is_some() || raw.on_reply.is_some() {
+            return Err(format!(
+                "node `{id}`: `wait_reply` and `on_reply` only go with `message`"
+            ));
         }
         if let Some(event) = raw.event {
             kinds.push(NodeKind::Event {
@@ -525,10 +544,17 @@ pub struct ContentItem {
     /// In-story time of day shown on the item; the current clock otherwise.
     pub clock: Option<Clock>,
     pub placement: Placement,
-    pub replies: Vec<Reply>,
-    /// The text, in Ink (SPEC-story-mode, Dialogue text). Opaque to the
-    /// engine until the content editor runs it.
+    /// Dialogue only: the characters present, shown as portraits.
+    pub characters: Vec<CharacterId>,
+    /// Dialogue only: where it is played; the current scene otherwise. A
+    /// name kept as written until the story's scenes exist.
+    pub scene: Option<String>,
+    /// The text as written, in Ink (SPEC-story-mode, Dialogue text).
     pub body: String,
+    /// The text, read (`script.rs`); what did not read is in
+    /// `script_errors`, for the validator to report.
+    pub script: Script,
+    pub script_errors: Vec<ScriptError>,
     pub file: String,
     /// 1-based line of the item's header in `file`.
     pub line: usize,
@@ -559,15 +585,6 @@ pub enum Repeat {
     EachTime,
 }
 
-/// A reply the player can choose, and what choosing it changes.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Reply {
-    pub id: String,
-    #[serde(default)]
-    pub effects: Vec<Effect>,
-}
-
 /// A content header as written. Its placement is told by which keys are
 /// present: `pool` → a pool variant, `when` → reactive, neither → flow.
 #[derive(Deserialize)]
@@ -583,12 +600,19 @@ pub(crate) struct RawContentHeader {
     delay: Option<Span>,
     priority: Option<i32>,
     repeat: Option<Repeat>,
-    #[serde(default)]
-    replies: Vec<Reply>,
+    characters: Option<Vec<CharacterId>>,
+    scene: Option<String>,
 }
 
 impl RawContentHeader {
-    pub(crate) fn into_item(self, body: String, file: String, line: usize) -> Result<ContentItem, String> {
+    /// `body_line`: the 1-based line of the text's first line in `file`.
+    pub(crate) fn into_item(
+        self,
+        body: String,
+        file: String,
+        line: usize,
+        body_line: usize,
+    ) -> Result<ContentItem, String> {
         let id = self.id;
         let reactive_only = self.delay.is_some() || self.priority.is_some() || self.repeat.is_some();
         let placement = match (self.pool, self.when) {
@@ -616,14 +640,18 @@ impl RawContentHeader {
             }
             (None, None) => Placement::Flow,
         };
+        let (script, script_errors) = script::parse(&body, body_line);
         Ok(ContentItem {
             id,
             kind: self.kind,
             from: self.from,
             clock: self.clock,
             placement,
-            replies: self.replies,
+            characters: self.characters.unwrap_or_default(),
+            scene: self.scene,
             body,
+            script,
+            script_errors,
             file,
             line,
         })
