@@ -11,7 +11,7 @@ use std::fmt;
 
 use crate::expr::{Criterion, Effect, Literal, Var};
 use crate::load::Story;
-use crate::model::{FailureMode, Node, NodeKind, Placement, Repeat, RetryCost};
+use crate::model::{Beat, FailureMode, Node, NodeKind, Placement, Repeat, RetryCost};
 use crate::state::{Entry, EventResult, Happening, Scheduled, State, Verdict, Via, Wait};
 use crate::time::Span;
 
@@ -221,15 +221,7 @@ impl<'a> Run<'a> {
             let node = self.node(&id)?;
             match &node.kind {
                 NodeKind::Beat(beat) => {
-                    for effect in &beat.effects {
-                        self.apply_effect(effect)?;
-                    }
-                    if let Some(clock) = beat.clock {
-                        self.state.clock = clock;
-                    }
-                    if let Some(span) = beat.advance {
-                        self.move_time(span);
-                    }
+                    self.beat(beat)?;
                     self.go_next(&id)?;
                 }
                 NodeKind::Message { content, wait_reply } => {
@@ -280,6 +272,19 @@ impl<'a> Run<'a> {
             Wait::Running => unreachable!("the loop above only exits once the flow waits"),
         };
         self.out.push(awaiting);
+        Ok(())
+    }
+
+    fn beat(&mut self, beat: &Beat) -> Result<(), EngineError> {
+        for effect in &beat.effects {
+            self.apply_effect(effect)?;
+        }
+        if let Some(clock) = beat.clock {
+            self.state.clock = clock;
+        }
+        if let Some(span) = beat.advance {
+            self.move_time(span);
+        }
         Ok(())
     }
 
