@@ -9,6 +9,7 @@
 // trimmed). Every function returns a new overlay; the effective tables come
 // back from `taxonomy.rs` after each save and are never merged here (see
 // `familyEdit.ts` for why).
+import { editDistance, fold } from "$lib/text";
 import type { MapOverlay } from "$lib/workshop/rules";
 
 type Table = Record<string, string>;
@@ -134,26 +135,8 @@ export function unignoreCountry(ignored: string[], value: string): string[] {
 }
 
 /** Case, accents and anything but letters folded away, for comparing. */
-function fold(s: string): string {
-  return s
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z]/g, "");
-}
-
-function distance(a: string, b: string): number {
-  const row = Array.from({ length: b.length + 1 }, (_, j) => j);
-  for (let i = 1; i <= a.length; i++) {
-    let prev = row[0];
-    row[0] = i;
-    for (let j = 1; j <= b.length; j++) {
-      const cur = row[j];
-      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
-      prev = cur;
-    }
-  }
-  return row[b.length];
+function lettersOf(s: string): string {
+  return fold(s).replace(/[^a-z]/g, "");
 }
 
 /**
@@ -167,13 +150,13 @@ function distance(a: string, b: string): number {
  * a wrong flag on every mod of that spelling.
  */
 export function closestCountry(value: string, names: string[]): string | null {
-  const v = fold(value);
+  const v = lettersOf(value);
   if (v.length < 3) return null;
   let best: { name: string; d: number } | null = null;
   for (const name of names) {
-    const n = fold(name);
+    const n = lettersOf(name);
     if (!n) continue;
-    const d = n.includes(v) || v.includes(n) ? 0 : distance(v, n);
+    const d = n.includes(v) || v.includes(n) ? 0 : editDistance(v, n);
     if (d <= Math.max(1, Math.floor(Math.min(v.length, n.length) / 5)) && (!best || d < best.d)) best = { name, d };
   }
   return best?.name ?? null;

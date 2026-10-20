@@ -1,12 +1,13 @@
 // Highlighting of what matched in a search result (DOSSIER§7.3). The backend
 // compares case- and accent-insensitively; the highlight must find the same
 // places in the text as displayed, accents included.
+import { fold } from "$lib/text";
 
 /** One character folded the way the search folds: lowercase, no accent. A
  * character whose folded form is not a single character stays as it is, so
  * that indexes in the folded text are indexes in the original. */
 function foldChar(c: string): string {
-  const f = c.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const f = fold(c);
   return f.length === 1 ? f : c.toLowerCase().length === 1 ? c.toLowerCase() : c;
 }
 

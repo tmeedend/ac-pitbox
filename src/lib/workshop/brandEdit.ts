@@ -3,6 +3,7 @@
 // like the country aliases, and reuses their operations; what is proper to the
 // brands is the PROPOSALS, since no fixed list (the game's countries) tells
 // the right name.
+import { editDistance, fold } from "$lib/text";
 import type { MapOverlay, SetOverlay } from "$lib/workshop/rules";
 import { removeEntry, retarget, setEntry } from "./countryEdit";
 
@@ -56,26 +57,7 @@ export interface BrandProposal {
 /** Lowercase, no accents, words separated by single spaces - `Mercedes-Benz`
  * reads `mercedes benz`. */
 function words(s: string): string {
-  return s
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
-
-function distance(a: string, b: string): number {
-  const row = Array.from({ length: b.length + 1 }, (_, j) => j);
-  for (let i = 1; i <= a.length; i++) {
-    let prev = row[0];
-    row[0] = i;
-    for (let j = 1; j <= b.length; j++) {
-      const cur = row[j];
-      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
-      prev = cur;
-    }
-  }
-  return row[b.length];
+  return fold(s).replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 /** Two names close enough to ASK about: one is the other's first words
@@ -87,7 +69,7 @@ function close(a: string, b: string): boolean {
   if (wb.startsWith(`${wa} `) || wa.startsWith(`${wb} `)) return true;
   const [la, lb] = [wa.replace(/ /g, ""), wb.replace(/ /g, "")];
   const shortest = Math.min(la.length, lb.length);
-  return shortest >= 5 && distance(la, lb) <= Math.max(1, Math.floor(shortest / 5));
+  return shortest >= 5 && editDistance(la, lb) <= Math.max(1, Math.floor(shortest / 5));
 }
 
 /**
