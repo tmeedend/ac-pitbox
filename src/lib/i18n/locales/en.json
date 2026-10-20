@@ -921,7 +921,6 @@
     "centerLabel": "{label} centre",
     "aiCount": "Opponents",
     "gridHeader": "Grid · {count} AI",
-    "regenerateGrid": "Regenerate",
     "opponentEditTooltip": "Click to change the car or skin",
     "opponentLevelTooltip": "Difficulty level — click to edit",
     "opponentDuplicateTooltip": "Add the same car with a different skin",

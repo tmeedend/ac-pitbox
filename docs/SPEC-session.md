@@ -360,9 +360,6 @@ de la ligne conservée, le skin retiré au sort dans la nouvelle voiture).
   dit au-dessus du bouton de lancement et répare d'un clic.
 - **Le plateau ne change que sur un geste**, jamais tout seul au changement de
   voiture pilotée.
-- **`Régénérer` n'est pas `Tirer`** : il garde les voitures et retire au sort ce
-  qui avait été tiré sur elles — la livrée, et le nom de pilote laissé en
-  `Auto`.
 - **Deux pilotes ne portent jamais la même identité par accident** : le jeu
   nomme une IA d'après le `ui_skin.json` de sa livrée, donc le tirage évite les
   livrées dont le couple numéro + nom est déjà pris **sur tout le plateau**. Un
@@ -408,9 +405,9 @@ un tirage, et **vider le champ la rend à `Auto`**.
 
 **La page** : le bandeau (vivier à gauche, tirage à droite, séparés d'un filet
 qui disparaît quand les deux s'empilent ; le décompte du vivier dans la coulée
-des puces), les bannières d'alerte, puis le plateau (`PLATEAU · N IA`, avec
-`Régénérer`), en un seul enchaînement pleine largeur. Dégâts, carburant, usure,
-pénalités et ligne idéale restent sur la page de réglages.
+des puces), les bannières d'alerte, puis le plateau (`PLATEAU · N IA`), en un
+seul enchaînement pleine largeur. Dégâts, carburant, usure, pénalités et ligne
+idéale restent sur la page de réglages.
 
 **Difficulté et agressivité : un centre et un écart**, un même composant deux
 fois. Déplacer le centre conserve l'écart ; l'écart est un champ (`± 0` se pose

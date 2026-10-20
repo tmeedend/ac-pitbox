@@ -397,11 +397,9 @@
     // de l'écran course/trackday, ou aucun adversaire restauré) — jamais en
     // écrasant silencieusement un plateau déjà construit (SESSION§3.3, bug réel).
     //
-    // `fill` et non `regenerate` : celle-ci **garde les voitures** et
-    // ne retire au sort que ce qui est posé dessus, donc sur un plateau vide
-    // elle ne faisait rien du tout. Une course ouverte pour la première fois
-    // restait sans adversaire, alors qu'on doit pouvoir la lancer sans être
-    // allé sur la page adversaires (L5§1.5).
+    // Une course ouverte pour la première fois ne doit pas rester sans
+    // adversaire : on doit pouvoir la lancer sans être allé sur la page
+    // adversaires (L5§1.5).
     if (hasOpponents(type) && setup.opponents.length === 0) await grid.fill();
     applying = false;
   }
@@ -543,7 +541,7 @@
   // changement de voiture ne déplace pas (les jetons `Model` et `Category`
   // portent une valeur), donc régénérer jetterait un plateau au profit d'un
   // tirage dans le **même** vivier. Le plateau ne change plus que sur un
-  // geste : `Fill`, `Choose`, `Regenerate`.
+  // geste : `Fill`, `Choose`.
   $effect(() => {
     void [nav.sessionCar?.id, nav.sessionCar?.skin, nav.sessionTrack?.id, nav.sessionTrack?.layout];
     if (!ready) return;
@@ -789,7 +787,6 @@
           {nationalityList}
           duplicateDrivers={grid.duplicateDrivers}
           onchoose={openAddPicker}
-          onregenerate={() => void grid.regenerate()}
           onremove={(i) => grid.remove(i)}
           onduplicate={(i) => grid.duplicate(i)}
           onsetlevel={(i, raw) => grid.setLevel(i, raw)}

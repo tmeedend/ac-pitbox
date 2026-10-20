@@ -41,7 +41,6 @@
     nationalityList,
     duplicateDrivers,
     onchoose,
-    onregenerate,
     onremove,
     onduplicate,
     onsetlevel,
@@ -64,7 +63,6 @@
      * (L5§1.3) : une seule source, deux lecteurs. */
     duplicateDrivers: boolean;
     onchoose: () => void;
-    onregenerate: () => void;
     onremove: (index: number) => void;
     onduplicate: (index: number) => void;
     onsetlevel: (index: number, level: number | null) => void;
@@ -160,10 +158,10 @@
   // --- Choix de la livrée d'un adversaire -----------------------------------
   //
   // Il n'y en avait aucun : le `+` dupliquait une ligne avec une autre livrée,
-  // `Regenerate` les retirait toutes au sort, mais rien ne permettait d'en
-  // désigner une. La vignette est la cible naturelle — c'est l'image de la
-  // livrée, donc l'endroit où l'on pense à la changer — et elle évite un
-  // bouton de plus dans une ligne qui en porte déjà deux.
+  // mais rien ne permettait d'en désigner une. La vignette est la cible
+  // naturelle — c'est l'image de la livrée, donc l'endroit où l'on pense à la
+  // changer — et elle évite un bouton de plus dans une ligne qui en porte déjà
+  // deux.
   let skinRow = $state<number | null>(null);
   let skinAnchor = $state<HTMLElement | null>(null);
   const skinChoices = $derived(skinRow == null ? [] : (skinsByCarId[setup.opponents[skinRow]?.car_id] ?? []));
@@ -240,18 +238,10 @@
   {/if}
 
   <div class="oppo">
-    <!-- `Regenerate` is NOT `Fill` with another name: it keeps the cars and
-         re-rolls what was drawn on them (skin, strength), where `Fill` draws
-         the cars themselves. Two gestures one actually wants separately — the
-         grid is right but the liveries repeat, versus the grid is wrong. -->
     <div class="oppo-h lbl">
       <span>{t("launch.gridHeader", { count: setup.opponents.length })}</span>
       <!-- La position de départ a rejoint SESSION OPTIONS (SETUP§2.5) : elle dépend
            du type de session, et tout ce qui en dépend vit là-bas. -->
-      <span class="oppo-sp"></span>
-      <button class="oppo-regen" type="button" disabled={!setup.opponents.length} onclick={onregenerate}
-        >{t("launch.regenerateGrid")}</button
-      >
     </div>
 
     <!-- La table, et elle seule, défile (L5§5.3). L'en-tête de colonnes y est
@@ -537,10 +527,6 @@
     padding: 7px 10px;
     border-top: 1px solid var(--line);
   }
-  /* Pushes the start position and `Regenerate` to the right of the title. */
-  .oppo-sp {
-    flex: 1;
-  }
   /* Compteur d'adversaires, tirage et difficulté : tout sur une ligne (retombe
      seulement si la largeur manque). */
   .oppo {
@@ -577,10 +563,8 @@
     justify-content: space-between;
     gap: 10px;
   }
-  /* Bouton secondaire neutre : régénérer le plateau n'est pas ce qui est
-     retenu pour la session, donc pas de rouge (§7.2ter). L'action existait
-     déjà comme effet de bord d'un changement de voiture — sans aucun moyen de
-     la demander. */
+  /* Bouton secondaire neutre : enregistrer ou charger une grille n'est pas ce
+     qui est retenu pour la session, donc pas de rouge (§7.2ter). */
   .oppo-regen {
     background: transparent;
     border: 1px solid var(--line);

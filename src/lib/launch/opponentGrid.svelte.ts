@@ -3,9 +3,8 @@
 //
 // It lives here rather than in `Launch.svelte` because it is the part of that
 // screen that moves most, and the part whose bugs were subtle (two identical
-// drivers on one grid, a regeneration landing after the user had imposed
-// opponents). The screen keeps what is the screen's: the dialogs, the
-// messages, and `setup` itself — whose `opponents` this class reads and writes
+// drivers on one grid, a draw landing after the user had imposed opponents).
+// The screen keeps what is the screen's: the dialogs, the messages, and `setup` itself — whose `opponents` this class reads and writes
 // through the host, since a loaded session replaces the whole object.
 import { withCountryLabels } from "$lib/flags.svelte";
 import { hasOwnDriver } from "$lib/driver/driverOverride.svelte";
@@ -51,11 +50,11 @@ export class OpponentGrid {
   // fields below that read it go through `$derived.by`, whose function runs
   // only when the value is first read.
   #host: GridHost;
-  // Jeton de génération du plateau (§6.3ter) : `regenerate` est asynchrone
+  // Jeton de génération du plateau (§6.3ter) : `fill` est asynchrone
   // (résolution des skins par IPC) et peut encore être « en vol » quand
   // `impose` prend la main — sans garde, son résultat arrive après coup et
-  // écrase les adversaires qu'on vient d'imposer. Toute régénération capture
-  // le jeton courant et n'applique son résultat que s'il n'a pas été invalidé
+  // écrase les adversaires qu'on vient d'imposer. Tout tirage capture le jeton
+  // courant et n'applique son résultat que s'il n'a pas été invalidé
   // entre-temps par un appel plus récent.
   #gen = 0;
 
@@ -160,27 +159,9 @@ export class OpponentGrid {
   async fill() {
     const gen = ++this.#gen;
     const opponents = await this.#generate(this.count, new Set());
-    // Une action plus récente (nouvelle régénération, ou adversaires imposés
+    // Une action plus récente (nouveau tirage, ou adversaires imposés
     // depuis la bibliothèque) a pris le dessus entre-temps : ne pas écraser.
     if (gen === this.#gen) this.#opponents = opponents;
-  }
-
-  /** `Regenerate` (§4.1) : garde les voitures, **retire au sort ce qui avait
-   * été tiré sur elles** — skin et force. Ce n'est pas `Fill` sous un autre
-   * nom : « le plateau est bon mais les livrées se répètent » et « le plateau
-   * n'est pas le bon » sont deux gestes qu'on veut séparément. */
-  async regenerate() {
-    const gen = ++this.#gen;
-    const taken = newTaken();
-    const out: Opponent[] = [];
-    for (const opp of this.#opponents) {
-      // La livrée est retirée au sort, **pas** les cellules `Auto` : `Auto`
-      // n'est pas une valeur qu'on tire, c'est l'absence de surcharge, et
-      // c'est le jeu qui tire dedans (§4.1). Ce qui change vraiment ici est
-      // donc la livrée — et avec elle le nom de pilote `Auto`, qui en vient.
-      out.push({ ...opp, car_skin: await this.#skinFor(opp.car_id, taken) });
-    }
-    if (gen === this.#gen) this.#opponents = out;
   }
 
   async setCount(raw: number) {

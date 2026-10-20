@@ -921,7 +921,6 @@
     "centerLabel": "Centre de {label}",
     "aiCount": "Adversaires",
     "gridHeader": "Plateau · {count} IA",
-    "regenerateGrid": "Régénérer",
     "opponentEditTooltip": "Cliquer pour changer la voiture ou le skin",
     "opponentLevelTooltip": "Niveau de difficulté — cliquer pour modifier",
     "opponentDuplicateTooltip": "Ajouter la même voiture avec un autre skin",
