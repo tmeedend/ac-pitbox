@@ -11,6 +11,7 @@
   import { addEvent, saveChapterAt, selectEvent, studio } from "$lib/story/studioState.svelte";
   import { nameFrom } from "$lib/story/world";
   import { KIND_LABEL } from "$lib/story/labels";
+  import { frameLabel, framesWith } from "$lib/story/frames";
   import type { FlowNode } from "$lib/story/studio";
   import Field from "$lib/components/ui/Field.svelte";
   import TargetSelect from "./TargetSelect.svelte";
@@ -151,6 +152,14 @@
         placeholder="09:00"
         onchange={(e) => setOpt(beat, "clock", value(e))}
       />
+    </Field>
+    <Field label={t("story.studio.frame")}>
+      <select class="input" value={beat.frame ?? ""} onchange={(e) => setOpt(beat, "frame", value(e))}>
+        <option value="">{t("story.studio.frameUnchanged")}</option>
+        {#each framesWith(beat.frame) as f (f)}
+          <option value={f}>{frameLabel(f)}</option>
+        {/each}
+      </select>
     </Field>
   {:else if kind === "message"}
     <Field label={t("story.studio.content")}>

@@ -10,6 +10,7 @@
   import AddName from "./AddName.svelte";
   import FileStatus from "./FileStatus.svelte";
   import NameRow from "./NameRow.svelte";
+  import PortraitsEditor from "./PortraitsEditor.svelte";
   import StoryChecks from "./StoryChecks.svelte";
 
   const story = $derived(studio.story!);
@@ -18,6 +19,9 @@
   const scale = $derived(story.manifest.value?.settings.relations ?? null);
   const characterIds = $derived(characters?.characters.map((c) => c.id) ?? []);
   const variableIds = $derived(variables ? variableNames(variables) : []);
+  /** The row whose portraits are open, one at a time: by position, so a
+   * rename of the character keeps it open. */
+  let portraitsOf = $state<number | null>(null);
 
   function saveCharacters() {
     void saveStoryFile("characters");
@@ -120,6 +124,19 @@
                   <option value={step}>{step}</option>
                 {/each}
               </select>
+              <button
+                class="btn btn-ghost portraits"
+                aria-expanded={portraitsOf === i}
+                onclick={() => (portraitsOf = portraitsOf === i ? null : i)}
+              >
+                {t("story.world.portraits", { count: Object.keys(c.portraits ?? {}).length })}
+                <span class="caret">{portraitsOf === i ? "▾" : "▸"}</span>
+              </button>
+              {#snippet below()}
+                {#if portraitsOf === i}
+                  <PortraitsEditor character={c} media={story.media} folder={story.path} onchange={saveCharacters} />
+                {/if}
+              {/snippet}
             </NameRow>
           {/each}
         </ul>
@@ -228,5 +245,15 @@
   }
   .relation {
     width: 170px;
+  }
+  .portraits {
+    flex-shrink: 0;
+    font-size: 12px;
+    padding: 4px 6px;
+    color: var(--txt2);
+  }
+  .caret {
+    margin-left: 4px;
+    color: var(--muted);
   }
 </style>

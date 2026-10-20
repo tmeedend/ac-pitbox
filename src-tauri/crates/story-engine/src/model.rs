@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::expr::{Condition, Criterion, Effect};
+use crate::frame::Frame;
 use crate::time::{Clock, Span, StoryDate};
 
 pub type NodeId = String;
@@ -62,6 +63,9 @@ pub struct Requires {
 #[serde(deny_unknown_fields)]
 pub struct Start {
     pub node: NodeId,
+    /// What shows the story at first, `none` for a visual novel. Required,
+    /// with no default: the platform never picks a frame for the author.
+    pub frame: Frame,
     #[serde(default = "relative_start")]
     pub date: StoryDate,
     #[serde(default)]
@@ -83,7 +87,8 @@ fn relative_start() -> StoryDate {
 /// The choices a story makes (SPEC-story-mode, Story settings): every one is
 /// a setting of the story, never a rule of the engine, and each default suits
 /// a story with no custom work. Only the settings the engine interprets live
-/// here; the others (background, frame, calendar…) arrive with their lot.
+/// here; the others (background, calendar…) arrive with their lot. The frame
+/// is not one: it is part of the state, set by `start` and by Beats.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
@@ -252,6 +257,11 @@ pub struct Character {
     /// Starting relation, when it is not the scale's `start`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub relation: Option<String>,
+    /// One picture per expression (`neutral`, `happy`…), as a path inside
+    /// the story's `media/` folder; at least `neutral` when there are any.
+    /// Shown by dialogues (SPEC-story-mode, In-person dialogues).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub portraits: BTreeMap<String, String>,
 }
 
 // -------------------------------------------------------------------- flow/
@@ -313,6 +323,11 @@ pub struct Beat {
     /// In-story time of day after the beat.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub clock: Option<Clock>,
+    /// The frame from this beat on, `none` to remove it; left out, the
+    /// frame does not change. Applied before the beat's effects, so a
+    /// `send` in the same beat goes to the new frame.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frame: Option<Frame>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -478,6 +493,27 @@ pub enum ContentType {
     Listing,
     Statement,
     CalendarEntry,
+    /// Characters face to face, played on the scene outside any frame
+    /// (SPEC-story-mode, In-person dialogues): it needs no frame.
+    Dialogue,
+}
+
+impl ContentType {
+    /// The name a `.story` header gives it.
+    pub fn name(self) -> &'static str {
+        match self {
+            ContentType::Message => "message",
+            ContentType::Call => "call",
+            ContentType::Mail => "mail",
+            ContentType::Article => "article",
+            ContentType::SocialPost => "social_post",
+            ContentType::Video => "video",
+            ContentType::Listing => "listing",
+            ContentType::Statement => "statement",
+            ContentType::CalendarEntry => "calendar_entry",
+            ContentType::Dialogue => "dialogue",
+        }
+    }
 }
 
 /// One content item of a `.story` file: its header, and its text.

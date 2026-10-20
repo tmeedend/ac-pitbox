@@ -2574,6 +2574,10 @@
     "noStory": "No story installed.",
     "createTitle": "Create Your Own",
     "noOwnStory": "No story written yet.",
+    "frame": {
+      "phone": "Phone",
+      "none": "None (visual novel)"
+    },
     "studio": {
       "openFolder": "Open a folder",
       "newStory": "New story",
@@ -2612,6 +2616,8 @@
       "kindAction": "Player action",
       "kindSideEvents": "Side events",
       "kindEnd": "End",
+      "frame": "Frame",
+      "frameUnchanged": "Unchanged",
       "linkNext": "then",
       "linkFailure": "on failure",
       "linkCase": "if",
@@ -2732,6 +2738,13 @@
       "delete": "Delete",
       "deleteConfirm": "Delete {id}?",
       "deleteCitedConfirm": "Delete {id}? The lines citing it ({count}) will be reported as errors.",
+      "portraits": "Portraits: {count}",
+      "addExpression": "+ {name}",
+      "newExpression": "New expression",
+      "pickPortrait": "Choose a picture",
+      "noImages": "No picture in this story's media folder yet.",
+      "noImagesShort": "No picture",
+      "portraitMissing": "missing",
       "unreadable": "{file} does not read: {reason}"
     },
     "settings": {
@@ -2742,6 +2755,7 @@
       "language": "Language",
       "start": "Start",
       "startNode": "Starting node",
+      "startFrame": "Starting frame",
       "startDate": "Date",
       "startClock": "Time",
       "reputation": "Reputation",

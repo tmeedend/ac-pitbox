@@ -2574,6 +2574,10 @@
     "noStory": "Aucune histoire installée.",
     "createTitle": "Écrire une histoire",
     "noOwnStory": "Aucune histoire écrite pour l'instant.",
+    "frame": {
+      "phone": "Téléphone",
+      "none": "Aucun (roman visuel)"
+    },
     "studio": {
       "openFolder": "Ouvrir un dossier",
       "newStory": "Nouvelle histoire",
@@ -2612,6 +2616,8 @@
       "kindAction": "Action du joueur",
       "kindSideEvents": "Événements annexes",
       "kindEnd": "Fin",
+      "frame": "Cadre",
+      "frameUnchanged": "Inchangé",
       "linkNext": "puis",
       "linkFailure": "si échec",
       "linkCase": "si",
@@ -2732,6 +2738,13 @@
       "delete": "Supprimer",
       "deleteConfirm": "Supprimer {id} ?",
       "deleteCitedConfirm": "Supprimer {id} ? Les lignes qui le citent ({count}) seront signalées en erreur.",
+      "portraits": "Portraits : {count}",
+      "addExpression": "+ {name}",
+      "newExpression": "Nouvelle expression",
+      "pickPortrait": "Choisir une image",
+      "noImages": "Aucune image dans le dossier media de l'histoire pour l'instant.",
+      "noImagesShort": "Aucune image",
+      "portraitMissing": "introuvable",
       "unreadable": "{file} ne se lit pas : {reason}"
     },
     "settings": {
@@ -2742,6 +2755,7 @@
       "language": "Langue",
       "start": "Départ",
       "startNode": "Nœud de départ",
+      "startFrame": "Cadre de départ",
       "startDate": "Date",
       "startClock": "Heure",
       "reputation": "Réputation",

@@ -296,10 +296,11 @@ function scheduleCheck(): void {
     const path = studio.story?.path;
     if (!path) return;
     try {
-      const { diagnostics, usages, history } = await checkStory(path);
+      const { diagnostics, usages, media, history } = await checkStory(path);
       if (studio.story?.path !== path) return;
       studio.diagnostics = diagnostics;
       studio.story.usages = usages;
+      studio.story.media = media;
       studio.story.history = history;
     } catch (e) {
       console.warn("story studio: check failed", e);

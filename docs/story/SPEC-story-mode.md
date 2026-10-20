@@ -61,8 +61,8 @@ it can, and re-checks the conditions of all reactive content.
 
 | Node | What it does | Example |
 | --- | --- | --- |
-| Beat | Changes state; advances story time | Advance one month, reputation +2 |
-| Message | Sends content to the frame | A character invites the player to a race |
+| Beat | Changes state; advances story time; can change or remove the frame | Advance one month, reputation +2 |
+| Message | Sends content to the frame, or plays a dialogue on the scene; can have one exit per reply | A character invites the player to a race |
 | Event | Launches a session in AC; has a success and a failure exit | Race 01, required finish P1 |
 | Branch | Checks the state and takes one path; no UI | Money ≥ 1 500? |
 | Player action | Waits for the player to do something in the frame | Buy a car from a listing |
@@ -116,7 +116,7 @@ event.
   its starting value.
 - **Automatic facts**: every event exposes attempts, finished, position, best
   lap and DNF; every content item exposes whether it was seen and which reply
-  was chosen.
+  was chosen (by the reply's label, see Dialogue text).
 
 ### Content types, templates and frames
 
@@ -126,11 +126,14 @@ classified ads. So content is written by **type**, never by app, and a
 **frame** decides how each type is shown.
 
 **Content types**: message, call, mail, article, social post, video, listing,
-statement, calendar entry. The author writes "a message from a character",
-never "an SMS".
+statement, calendar entry, and **dialogue** (two or more characters talking face
+to face, see In-person dialogues). The author writes "a message from a
+character", never "an SMS".
 
-**Five templates** display them, whatever the era: thread, inbox, feed,
-catalog, statement. A newspaper is a feed; classified ads are a catalog.
+**Six templates** display them, whatever the era: thread, inbox, feed,
+catalog, statement, and dialogue. A newspaper is a feed; classified ads are a
+catalog. The dialogue template is the only one no frame shows: it is played on
+the scene, outside the frame.
 
 **A frame** is a skin for those templates plus the overall picture around them
 (a phone screen; a desk with the post, the paper and the answering machine).
@@ -146,10 +149,18 @@ Each frame declares which content types it can show:
 | Statement | Bank app | Paper statement |
 | Social post | Social network | Not available |
 
-- **Validation.** If a story uses a content type its frame cannot show, the
-  editor flags it.
+- **The frame is part of the state.** The start state in `story.yaml` holds the
+  starting frame, alongside the starting date and money; a Beat node can change
+  it or remove it (`none`). **There is no default frame**: the author picks the
+  starting frame when creating the story, and nothing is picked for them - the
+  phone is one frame among others, never the platform's choice. A story with
+  no frame at all is a visual novel.
 - **Frames over time.** A story can change frame at chosen beats: letters, then
   a pager, a first mobile, a smartphone.
+- **Nowhere to show.** Content of a type the active frame cannot show (or sent
+  while there is no frame) is flagged by the checks wherever the flow makes it
+  knowable, as a warning: on a path where it is sure, or on some paths only.
+  At play, it waits until a frame can show it (L3). A dialogue needs no frame.
 - **Frame-specific settings.** Status bar, wallpaper and UI sounds belong to the
   phone frame; another frame has its own.
 - **First version.** Only the phone frame is built at first. The data model is
@@ -159,6 +170,47 @@ Each frame declares which content types it can show:
 A new app is a skin and a configuration of one of the templates within a frame,
 with no code. Apps can change look as the story advances by switching skins at
 chosen beats.
+
+### In-person dialogues and visual novels
+
+A dialogue is a conversation face to face, shown the way visual novels do: the
+scene is the set, the characters appear as portraits, the lines come in a text
+box at the bottom, the player's replies as choices. While it plays the frame
+slides out of view and the scene's blur is reduced; when it ends the frame
+comes back. Nothing in it is specific to a frame, so it works with any frame and
+with none.
+
+- **Written like any conversation.** Same Ink subset, same Form and Script
+  views, same conditions and effects, same placement (a Message node in the
+  flow, or reactive content). The header of the `.story` item adds the scene
+  (optional: the current scene otherwise) and the characters present.
+- **Portraits.** A character has one portrait per expression (at least
+  `neutral`), picked from the story's media: a file inside `media/`, which the
+  checks look for. A line can name the speaker's
+  expression and position with Ink tags (`#expression:happy
+  #position:left`), checked against the character's portraits.
+- **Replies that branch.** Every choice carries a stable Ink label
+  (`* (yes) [I'm in!]`). The label is the "reply chosen" fact, readable by any
+  condition, and a Message node can have **one exit per label**, shown like the
+  cases of a Branch (an arrow only where a reply leads elsewhere). Effects on
+  the state remain possible in addition, for consequences that come later.
+- **Stories with no frame.** When the active frame is `none`, the flow chains
+  dialogues and events directly; an event is launched from a card shown on the
+  scene (the same summary as in the frame: car, cost, goal); the player's
+  actions go through the replies.
+- **What visual novels expect, always available, with no setting**: a
+  scrollable log of past lines (part of the save's history), fast-forward
+  through text already read (never past a choice), auto-advance at a speed the
+  player picks. Saving at any moment during a dialogue follows the story's
+  `saves` setting.
+- **Illustrations.** A content type `illustration` shows a full-screen picture,
+  with optional text, for the big moments, with or without a frame.
+- **Transitions** are options in the editor, never story settings: fade or cut
+  between scenes, a portrait entering or leaving, a change of expression.
+- **Seeing the shape of a branching story.** The Story flow screen stays a
+  column for editing. A read-only graph view, laid out automatically each time
+  it opens (nothing stored), shows a chapter as a map: branches side by side,
+  where they join, the endings. A click on a box opens that node in the column.
 
 ## Events, retries and failure
 
@@ -359,9 +411,9 @@ users later.
 
 | Screen | Purpose | Key points |
 | --- | --- | --- |
-| Story flow | Build the spine, chapter by chapter | Nodes linked by arrows; an event has a success and a failure exit; the selected node's fields in a side panel; the chapter's reactive content listed below |
+| Story flow | Build the spine, chapter by chapter | Nodes in a column, in playing order; an event has a success and a failure exit, a Message node one exit per reply; a Beat sets the frame; the selected node's fields in a side panel; the chapter's reactive content listed below; later, a read-only graph view laid out automatically |
 | Timeline | See the whole story across the years | One lane per arc; conditional items dashed; a cursor showing the simulated state at any point |
-| Content | Write a message, email, article or post | Placement (in the flow, or reactive with conditions); conversations as a form of bubbles and choices, with a Script view for fast typing; live preview in the frame |
+| Content | Write a message, email, article, post or dialogue | Placement (in the flow, or reactive with conditions); conversations as a form of bubbles and choices, with a Script view for fast typing; live preview in the frame, or on the scene for a dialogue (portraits, text box, replies) |
 | Events | Define an event | Track, car, session, grid with per-driver skill, success condition, success effects, failure pool, retry cost |
 | Drivers | The story's drivers (optional) | Roster, skill per chapter, career line per year, standings import |
 | World | Variables, characters, economy | Variables and where they are used; character sheets; price formulas, economy states, world events |
@@ -394,7 +446,8 @@ the editor is reserved; they are translated when it opens to all.
 - **A new story needs an empty folder**: the editor never mixes a story into
   files it did not write. It starts as the smallest story with nothing to
   fix, a chapter whose first node leads to an end, written in the app's
-  language.
+  language, on the starting frame the author picks in the creation dialog
+  (none is preselected).
 - **Every change is written at once**, the whole file, in one canonical form,
   so a diff shows only what changed: a setting left at its default is not
   written. Comments typed by hand in a file the editor writes do not survive.
@@ -498,6 +551,13 @@ visible in it:
   A sentence cites a name with its prefix (`flag.`, `counter.`, `rel.`); a
   relation step is cited as the value of a relation (`rel.friend >= warm`).
 - Saves are JSON with a format number: a save from a newer Pit Box is refused.
+  A save from before frames existed resumes on its story's starting frame.
+- `start.frame` is required: `none`, or a frame Pit Box ships (`phone` so far;
+  a story's own frames come with `frames/`). A Beat's `frame` applies before
+  its effects, so a `send` in the same Beat goes to the new frame.
+- A portrait's path is relative to `media/` and stays inside it, with `/`
+  between folders; it is matched with the case it has on disk, since a shared
+  story is a zip.
 - An event's session keys are a closed list: `laps`, `grid`, `ai_level` and
   `start` on another type than a race are errors, as are an event without a
   track or a car. `weather` is a weather as Pit Box names it (`clear`,
@@ -535,8 +595,10 @@ rewrite. Three rules keep it so:
   conditions and the package stay in Pit Box's editor, so progression is
   decided in one place.
 - **A subset of Ink, the one the Form view writes**: lines (each starting
-  with who speaks), choices, what a choice changes, lines and choices shown
-  on a condition, and joining up again after a choice. Anything else in the
+  with who speaks), choices (each with a label, `* (label) [text]`), what a
+  choice changes, lines and choices shown on a condition, joining up again
+  after a choice, and the `#expression:` and `#position:` tags of a dialogue.
+  Anything else in the
   Script view is an error: the subset is what a later format must be able to
   hold.
 - **No variables of Ink's own.** A script reads and changes the story's state
@@ -601,8 +663,10 @@ The player side follows each story's settings. What the engine needs:
 - **The frame can be the whole game.** A story can show nothing outside its
   frame but Settings and Save & exit, over a background that shows where the
   character is.
-- **Going to an event.** A card in the frame opens a short summary (car, cost,
-  goal), then AC starts. When AC closes, the frame is back and fills with
+- **Three layers.** The scene, the frame over it, and the dialogue layer over
+  both, shown only while a dialogue plays (see In-person dialogues).
+- **Going to an event.** A card in the frame (on the scene, in a story with no
+  frame) opens a short summary (car, cost, goal), then AC starts. When AC closes, the frame is back and fills with
   reactions, success or failure.
 - **Saves** follow the story's settings (autosave, manual saves, reload or
   not). A save holds the state and the full history of what was seen, so the
@@ -655,16 +719,16 @@ therefore settings of a story, never rules of the engine. Two principles
 follow:
 
 - **Every immersion layer is optional.** A story with no custom art must still
-  work: Pit Box ships a default phone theme and plain backgrounds, and each
-  richer layer (video scenes, status bar details, phone models, sounds,
-  cinematics) is added on top.
+  work: each frame Pit Box ships has a default theme, backgrounds can be plain,
+  and each richer layer (video scenes, status bar details, phone models,
+  sounds, cinematics) is added on top.
 - **Each setting below is a choice among options**, with a default that suits
   a story with no custom work.
 
 | Setting | Options |
 | --- | --- |
 | Background | Video loops by scene, still image, plain colour; blur or not; ambient sound or not |
-| Frame | Pit Box's default phone theme, custom phone frames changing at chosen beats, or another frame |
+| Frame | Pit Box's phone frame with its default theme, custom phone frames changing at chosen beats, another frame, or none (a visual novel). Not a setting in `story.yaml`'s `settings` and no default: the starting frame is part of the start state, picked when the story is created, and Beats change it |
 | Status bar | Detailed per beat, or plain clock only |
 | Date | Relative (year N), a real date chosen by the author, seasons, or no date |
 | Protagonist | Fixed name, or a name chosen by the player and inserted in the texts |
@@ -688,8 +752,9 @@ The settings live in the `settings` part of each story's `story.yaml`.
 | --- | --- | --- |
 | L0 | Fix the CSP launch issue; read the race result file; entry list with per-driver skill | A session launched by Pit Box returns a usable result |
 | L1 | File format, flow engine, conditions, story time, saves | The engine runs a sample story from the command line |
-| L2 | Create Your Own: Story flow, Content, Events, Drivers, World, validation, preview in the phone frame | An author builds a first chapter in the editor (behind the switch) |
-| L3 | Story Mode: hub, phone with thread, inbox, feed and statement templates, events with retries and failure pools | A first chapter is playable end to end |
+| L2 | Create Your Own: Story flow, Content, Events, Drivers, World, validation, preview in the phone frame; with L2.3b (dialogue content type, portraits, starting frame and Beat frame), reply labels and exits per reply in L2.4, the dialogue preview on the scene in L2.5 | An author builds a first chapter in the editor (behind the switch) |
+| L3 | Story Mode: hub, phone with thread, inbox, feed and statement templates, events with retries and failure pools; the dialogue layer and stories with no frame | A first chapter is playable end to end |
+| L3b | Visual novel: line log, fast-forward and auto-advance, illustrations, transitions, saving during a dialogue, read-only graph view of the flow | A story with no frame plays like a visual novel |
 | L4 | Story package: build, permissions, download, install and update (mechanism chosen at implementation) | A player installs a bundled story in one click |
 | L5 | Playtest and Timeline | An author checks years of story in minutes |
 | L6 | Balance simulator, catalogs, economy, side events | Money pressure is tuned on numbers |

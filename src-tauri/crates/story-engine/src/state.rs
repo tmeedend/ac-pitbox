@@ -11,6 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 
 use crate::expr::{Condition, ContentFact, EventFact, Literal, Var};
+use crate::frame::Frame;
 use crate::load::Story;
 use crate::model::{ContentId, EventId, NodeId, PoolId};
 use crate::time::{Clock, StoryDate};
@@ -142,6 +143,11 @@ pub struct State {
     pub wait: Wait,
     pub date: StoryDate,
     pub clock: Clock,
+    /// The active frame, `none` included. Missing only from a save written
+    /// before frames existed: `Save::resume` gives it the story's starting
+    /// frame, never a frame of the platform's choosing.
+    #[serde(default)]
+    pub frame: Option<Frame>,
     pub reputation: i64,
     pub followers: i64,
     pub money: i64,
@@ -179,6 +185,7 @@ impl State {
             wait: Wait::Running,
             date: start.date,
             clock: start.clock,
+            frame: Some(start.frame.clone()),
             reputation: start.reputation,
             followers: start.followers,
             money: start.money,

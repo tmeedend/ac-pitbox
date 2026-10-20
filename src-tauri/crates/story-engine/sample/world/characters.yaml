@@ -1,6 +1,9 @@
 characters:
   - id: friend
     name: A friend
+    portraits:
+      happy: portraits/friend_happy.png
+      neutral: portraits/friend_neutral.png
   - id: parent
     name: A parent
     relation: warm

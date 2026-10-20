@@ -43,6 +43,7 @@ pub fn story_create(
     folder: PathBuf,
     title: String,
     language: String,
+    frame: story_engine::frame::Frame,
     chapter_title: String,
 ) -> Result<(), String> {
     studio::create(
@@ -50,6 +51,7 @@ pub fn story_create(
         &folder,
         &title,
         &language,
+        frame,
         &chapter_title,
     )
 }

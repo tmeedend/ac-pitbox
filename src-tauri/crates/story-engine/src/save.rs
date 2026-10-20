@@ -147,9 +147,11 @@ impl Save {
     /// The state to play on, once `check` passed. A character or a counter
     /// the story gained since the save gets its starting value: without
     /// it, every condition on it would stay false and its effects do nothing.
+    /// A save from before frames existed takes the story's starting frame.
     pub fn resume(self, story: &Story) -> Result<State, SaveError> {
         self.check(story)?;
         let mut state = self.state;
+        state.frame.get_or_insert_with(|| story.manifest.start.frame.clone());
         let start = &story.settings().relations.start;
         for ch in &story.characters {
             (state.relations.entry(ch.id.clone()))
@@ -288,6 +290,35 @@ mod tests {
             "new character at its starting relation"
         );
         assert_eq!(state.counters["visits"], 3, "new counter at its starting value");
+    }
+
+    // A save written before frames existed has no `frame`: it reads, and
+    // resumes on its story's starting frame - never on one the platform
+    // would pick (here `none`, to tell the two apart).
+    #[test]
+    fn a_save_from_before_frames_resumes_on_the_starting_frame() {
+        let mut files = minimal();
+        files[0].text = files[0].text.replace("frame: phone", "frame: none");
+        let story = Story::from_sources(files).unwrap();
+        let mut save = Save::new(&story, &State::new(&story, 0));
+        save.state.frame = Some(crate::frame::Frame::Named("phone".into()));
+        let mut json: serde_json::Value = serde_json::from_str(&save.to_json()).unwrap();
+        json["state"].as_object_mut().unwrap().remove("frame");
+        let old = Save::from_json(&json.to_string()).expect("a save without a frame reads");
+        assert_eq!(old.state.frame, None, "nothing invented on reading");
+        let state = old.resume(&story).expect("resumes");
+        assert_eq!(
+            state.frame,
+            Some(crate::frame::Frame::None),
+            "the story's starting frame"
+        );
+
+        let back = Save::from_json(&Save::new(&story, &state).to_json()).unwrap();
+        assert_eq!(
+            back.state.frame,
+            Some(crate::frame::Frame::None),
+            "`none` saved as such"
+        );
     }
 
     // Format 1 as written on the first day. If this test has to change, the

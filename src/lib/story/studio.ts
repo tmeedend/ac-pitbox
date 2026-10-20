@@ -4,10 +4,17 @@
 // (`story_engine::model`): what the editor shows is what the file says.
 import { invoke } from "@tauri-apps/api/core";
 
+/** What shows the story (SPEC-story-mode, Content types, templates and
+ * frames): `none` (a visual novel) or a frame's name. There is no default:
+ * the author always picks it. */
+export type Frame = string;
+
 /** A flow node, one key naming its kind (SPEC-story-mode, Flow nodes). */
 export interface FlowNode {
   id: string;
-  beat?: { effects?: string[]; advance?: string; clock?: string };
+  /** `frame`: the frame from this beat on (`none` removes it); left out,
+   * it does not change. */
+  beat?: { effects?: string[]; advance?: string; clock?: string; frame?: Frame };
   message?: string;
   wait_reply?: boolean;
   event?: string;
@@ -113,6 +120,8 @@ export interface Manifest {
 
 export interface Start {
   node: string;
+  /** Required: the platform never picks a frame for the author. */
+  frame: Frame;
   /** `YYYY-MM-DD`; a relative story starts on `0001-01-01`. */
   date: string;
   /** `HH:MM`. */
@@ -145,6 +154,9 @@ export interface Character {
   name?: string;
   /** Starting step, when it is not the scale's start. */
   relation?: string;
+  /** Expression → picture, as a path inside the story's `media/`; at
+   * least `neutral` when there are any. */
+  portraits?: Record<string, string>;
 }
 
 export interface Characters {
@@ -218,6 +230,8 @@ export interface OpenStory {
   events: EditedFile<StoryEvent>[];
   diagnostics: Diagnostic[];
   usages: NameUsages[];
+  /** The files under `media/`, as paths inside it. */
+  media: string[];
   history: HistoryStatus;
 }
 
@@ -236,8 +250,8 @@ export const registerStory = (folder: string) => invoke<void>("story_register", 
 
 export const forgetStory = (folder: string) => invoke<void>("story_forget", { folder });
 
-export const createStory = (folder: string, title: string, language: string, chapterTitle: string) =>
-  invoke<void>("story_create", { folder, title, language, chapterTitle });
+export const createStory = (folder: string, title: string, language: string, frame: Frame, chapterTitle: string) =>
+  invoke<void>("story_create", { folder, title, language, frame, chapterTitle });
 
 export const openStory = (folder: string) => invoke<OpenStory>("story_open", { folder });
 
@@ -246,6 +260,7 @@ export const openStory = (folder: string) => invoke<OpenStory>("story_open", { f
 export interface Checked {
   diagnostics: Diagnostic[];
   usages: NameUsages[];
+  media: string[];
   history: HistoryStatus;
 }
 

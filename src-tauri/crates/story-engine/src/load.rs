@@ -7,7 +7,7 @@
 //! nothing, a node nobody reaches) is the validator's (`validate.rs`), which
 //! reports all of it at once.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::fmt;
 use std::path::Path;
 
@@ -54,14 +54,45 @@ pub struct Story {
     pub chapters: Vec<Chapter>,
     pub content: Vec<ContentItem>,
     pub events: Vec<Event>,
+    /// The files under `media/`, as paths inside it; `None` for a story
+    /// built in memory, whose media nobody listed.
+    pub media: Option<BTreeSet<String>>,
     nodes: HashMap<NodeId, (usize, usize)>,
     content_index: HashMap<ContentId, usize>,
     event_index: HashMap<EventId, usize>,
 }
 
-/// The folders this lot reads. `drivers/`, `catalogs/`, `frames/`,
-/// `package/` and `media/` belong to later lots and are left alone.
+/// The folders this lot reads. `drivers/`, `catalogs/`, `frames/` and
+/// `package/` belong to later lots and are left alone; `media/` is only
+/// listed (`read_media`).
 const READ: [&str; 4] = ["flow", "content", "events", "world"];
+
+/// The files under the story's `media/` folder, as paths inside it with
+/// forward slashes (`portraits/a.png`): what the checks need to tell a
+/// portrait that points to nothing. Names only - pictures and sounds are
+/// never read here, and never part of the `SourceFile`s, which is what keeps
+/// them out of the editor's copies (`backups.rs` in the app). Paths keep the
+/// case they have on disk: a story is shared as a zip, where `A.png` and
+/// `a.png` are two files.
+pub fn read_media(root: &Path) -> BTreeSet<String> {
+    fn walk(dir: &Path, prefix: &str, out: &mut BTreeSet<String>) {
+        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let path = format!("{prefix}{name}");
+            // `Path::is_dir` follows links: a media folder that is a
+            // junction to shared art is walked, not listed as a file.
+            if entry.path().is_dir() {
+                walk(&entry.path(), &format!("{path}/"), out);
+            } else {
+                out.insert(path);
+            }
+        }
+    }
+    let mut out = BTreeSet::new();
+    walk(&root.join("media"), "", &mut out);
+    out
+}
 
 /// Reads every file the engine understands from a story folder.
 pub fn read_dir(root: &Path) -> Result<Vec<SourceFile>, LoadError> {
@@ -179,6 +210,8 @@ pub struct Draft {
     pub chapters: Vec<Chapter>,
     pub content: Vec<ContentItem>,
     pub events: Vec<Event>,
+    /// Filled by whoever read the folder (`read_media`), not by `draft`.
+    pub media: Option<BTreeSet<String>>,
     pub errors: Vec<LoadError>,
 }
 
@@ -224,6 +257,15 @@ pub fn draft(mut files: Vec<SourceFile>) -> Draft {
     p
 }
 
+/// A story folder read once: its files as read, and their draft with the
+/// media listed - what the editor both shows and checks.
+pub fn draft_dir(root: &Path) -> Result<(Vec<SourceFile>, Draft), LoadError> {
+    let files = read_dir(root)?;
+    let mut d = draft(files.clone());
+    d.media = Some(read_media(root));
+    Ok((files, d))
+}
+
 /// Indexes items by id, in order, reporting every id used twice.
 fn index_by_id<'a>(
     what: &str,
@@ -249,9 +291,10 @@ fn in_dir<'a>(path: &'a str, dir: &str, ext: &str) -> Option<&'a str> {
 }
 
 impl Story {
-    /// Reads and parses a story folder.
+    /// Reads and parses a story folder, its media listed.
     pub fn load(root: &Path) -> Result<Story, Vec<LoadError>> {
-        Story::from_sources(read_dir(root).map_err(|e| vec![e])?)
+        let (_, d) = draft_dir(root).map_err(|e| vec![e])?;
+        Story::from_draft(d)
     }
 
     /// Parses a story from its files. Collects every error it can rather than
@@ -270,6 +313,7 @@ impl Story {
             chapters,
             content,
             events,
+            media,
             mut errors,
         } = draft;
 
@@ -326,6 +370,7 @@ impl Story {
             chapters,
             content,
             events,
+            media,
             nodes,
             content_index,
             event_index,
@@ -554,6 +599,33 @@ mod tests {
             story.fallthrough("third").map(|n| n.id.as_str()),
             None,
             "end of the flow"
+        );
+    }
+
+    // There is no default frame: a story names its starting frame, and
+    // one that does not is refused rather than given the phone.
+    #[test]
+    fn a_story_without_a_starting_frame_does_not_load() {
+        let mut files = minimal();
+        files[0].text = files[0].text.replace("  frame: phone\n", "");
+        let errors = Story::from_sources(files).unwrap_err();
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.file == "story.yaml" && e.message.contains("frame")),
+            "names the missing key: {errors:?}"
+        );
+    }
+
+    // The media are listed, never read: names inside `media/`, with `/`.
+    #[test]
+    fn a_story_folder_lists_its_media() {
+        let story = Story::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("sample")).unwrap();
+        let media = story.media.expect("listed when read from a folder");
+        assert!(media.contains("portraits/friend_neutral.png"), "{media:?}");
+        assert!(
+            Story::from_sources(minimal()).unwrap().media.is_none(),
+            "a story built in memory has no list"
         );
     }
 }

@@ -3,7 +3,8 @@
   // relation step - with what every one of them shares: its name, which
   // renames every sentence citing it (SPEC-story-mode, Create Your Own), the
   // lines citing it, and its removal. What differs (a character's display
-  // name, a counter's starting value) comes in as `children`.
+  // name, a counter's starting value) comes in as `children`, and what opens
+  // under the line (a character's portraits) as `below`.
   import type { Snippet } from "svelte";
   import { confirm } from "@tauri-apps/plugin-dialog";
   import { t } from "$lib/i18n/index.svelte";
@@ -20,8 +21,10 @@
     children?: Snippet;
     /** Shown before the name: a step's move buttons. */
     lead?: Snippet;
+    /** Shown under the line. */
+    below?: Snippet;
   }
-  const { kind, id, taken, onremove, children, lead }: Props = $props();
+  const { kind, id, taken, onremove, children, lead, below }: Props = $props();
 
   const usages = $derived(usagesOf(studio.story?.usages ?? [], kind, id));
   let open = $state(false);
@@ -78,6 +81,7 @@
     <button class="btn btn-ghost del" onclick={remove} aria-label={t("story.world.delete")}>✕</button>
   </div>
   {#if problem}<p class="errbox">{problem}</p>{/if}
+  {@render below?.()}
   {#if open && usages.length > 0}
     <ul class="usages">
       {#each usages as u (u.file + ":" + u.line)}

@@ -189,6 +189,7 @@ mod tests {
     use super::*;
     use crate::story::studio::create;
     use crate::testutil::temp_dir;
+    use story_engine::frame::Frame;
 
     fn at(text: &str) -> NaiveDateTime {
         NaiveDateTime::parse_from_str(text, ID_FORMAT).unwrap()
@@ -196,7 +197,7 @@ mod tests {
 
     fn new_story(base: &Path, config: &Path) -> PathBuf {
         let folder = base.join("s");
-        create(config, &folder, "S", "en", "C").unwrap();
+        create(config, &folder, "S", "en", Frame::None, "C").unwrap();
         folder
     }
 

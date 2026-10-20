@@ -9,6 +9,7 @@ version: "1"
 languages: [en]
 start:
   node: intro
+  frame: phone
   date: 2001-03-01
   clock: "09:00"
   money: 300

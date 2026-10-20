@@ -1,14 +1,17 @@
 <script lang="ts">
-  // "New story": a title and an empty folder. Pit Box writes the smallest
-  // story that validates clean there (`story_engine::write::new_story`), in
-  // the app's language as the story's own - the author changes it with the
-  // story settings.
+  // "New story": a title, the starting frame and an empty folder. Pit Box
+  // writes the smallest story that validates clean there
+  // (`story_engine::write::new_story`), in the app's language as the story's
+  // own - the author changes it with the story settings. The frame starts
+  // unchosen: the platform never picks one for the author.
   import { open } from "@tauri-apps/plugin-dialog";
   import { i18n, t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
-  import { createStory } from "$lib/story/studio";
+  import { createStory, type Frame } from "$lib/story/studio";
+  import { FRAMES, frameLabel } from "$lib/story/frames";
   import Modal from "$lib/components/ui/Modal.svelte";
   import Field from "$lib/components/ui/Field.svelte";
+  import Seg from "$lib/components/ui/Seg.svelte";
 
   interface Props {
     oncreated: (path: string) => void;
@@ -18,6 +21,8 @@
 
   let title = $state("");
   let folder = $state<string | null>(null);
+  let frame = $state<Frame | null>(null);
+  const ready = $derived(!!folder && !!title.trim() && !!frame);
   let error = $state<string | null>(null);
   let busy = $state(false);
 
@@ -27,11 +32,11 @@
   }
 
   async function create() {
-    if (!folder || !title.trim()) return;
+    if (!folder || !title.trim() || !frame) return;
     busy = true;
     error = null;
     try {
-      await createStory(folder, title.trim(), i18n.locale, t("story.studio.chapterTitle", { n: 1 }));
+      await createStory(folder, title.trim(), i18n.locale, frame, t("story.studio.chapterTitle", { n: 1 }));
       oncreated(folder);
     } catch (e) {
       error = errorText(e);
@@ -45,6 +50,13 @@
   <Field label={t("story.studio.storyTitle")}>
     <input class="input" bind:value={title} />
   </Field>
+  <Field label={t("story.settings.startFrame")}>
+    <Seg
+      items={FRAMES.map((f) => ({ value: f, label: frameLabel(f) }))}
+      value={frame ?? ""}
+      onselect={(v) => (frame = v)}
+    />
+  </Field>
   <Field label={t("story.studio.folder")}>
     <div class="folder">
       <span class="mono path">{folder ?? "—"}</span>
@@ -54,7 +66,7 @@
   {#if error}<p class="errbox">{error}</p>{/if}
   {#snippet footer()}
     <button class="btn btn-ghost" onclick={oncancel}>{t("common.cancel")}</button>
-    <button class="btn" disabled={busy || !folder || !title.trim()} onclick={create}>
+    <button class="btn" disabled={busy || !ready} onclick={create}>
       {t("story.studio.create")}
     </button>
   {/snippet}

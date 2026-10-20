@@ -7,6 +7,7 @@
   import { localeNames, t } from "$lib/i18n/index.svelte";
   import { allNodeIds, moveItem } from "$lib/story/flow";
   import { nameProblem, parseList } from "$lib/story/world";
+  import { frameLabel, framesWith } from "$lib/story/frames";
   import type { Settings } from "$lib/story/studio";
   import { saveStoryFile, studio } from "$lib/story/studioState.svelte";
   import Field from "$lib/components/ui/Field.svelte";
@@ -129,6 +130,20 @@
                 save();
               }}
             />
+          </Field>
+          <Field label={t("story.settings.startFrame")}>
+            <select
+              class="input"
+              value={manifest.start.frame}
+              onchange={(e) => {
+                manifest.start.frame = value(e);
+                save();
+              }}
+            >
+              {#each framesWith(manifest.start.frame) as f (f)}
+                <option value={f}>{frameLabel(f)}</option>
+              {/each}
+            </select>
           </Field>
           <div class="pair">
             <Field label={t("story.settings.startDate")}>

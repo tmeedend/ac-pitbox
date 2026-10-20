@@ -10,6 +10,7 @@
 use serde::Serialize;
 
 use crate::expr::{Criterion, Effect};
+use crate::frame::Frame;
 use crate::load::{draft, SourceFile};
 use crate::model::{
     AdaptiveDifficulty, Beat, Chapter, Characters, DateDisplay, Event, EventType, FailureMode, Manifest, Node,
@@ -158,6 +159,8 @@ struct ManifestYaml<'a> {
 #[derive(Serialize)]
 struct StartYaml<'a> {
     node: &'a str,
+    /// Always written: there is no default frame to leave out.
+    frame: &'a Frame,
     #[serde(skip_serializing_if = "Option::is_none")]
     date: Option<&'a StoryDate>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -228,6 +231,7 @@ impl<'a> ManifestYaml<'a> {
             requires: unless(&m.requires, &Requires::default()),
             start: StartYaml {
                 node: &m.start.node,
+                frame: &m.start.frame,
                 date: unless(&m.start.date, &StoryDate::RELATIVE_START),
                 clock: unless(&m.start.clock, &Clock::default()),
                 reputation: nonzero(m.start.reputation),
@@ -242,8 +246,15 @@ impl<'a> ManifestYaml<'a> {
 
 /// The files of a new story: the smallest one that validates clean, so the
 /// editor opens it with nothing to fix - a chapter whose first node leads to
-/// an end. `language` is the story's source language.
-pub fn new_story(id: &str, title: &str, language: &str, chapter_title: &str) -> Result<Vec<SourceFile>, String> {
+/// an end. `language` is the story's source language; `frame` the starting
+/// frame the author picked - the editor never picks one for them.
+pub fn new_story(
+    id: &str,
+    title: &str,
+    language: &str,
+    frame: Frame,
+    chapter_title: &str,
+) -> Result<Vec<SourceFile>, String> {
     let story = manifest(&Manifest {
         format: STORY_FORMAT,
         id: id.into(),
@@ -254,6 +265,7 @@ pub fn new_story(id: &str, title: &str, language: &str, chapter_title: &str) -> 
         requires: Requires::default(),
         start: Start {
             node: "start".into(),
+            frame,
             date: StoryDate::RELATIVE_START,
             clock: Clock::default(),
             reputation: 0,
@@ -352,6 +364,7 @@ version: \"1\"
 languages: [en]
 start:
   node: start
+  frame: none
   date: 0001-01-01
   clock: \"00:00\"
   money: 0
@@ -368,6 +381,7 @@ languages:
   - en
 start:
   node: start
+  frame: none
 settings:
   saves:
     autosave: manual
@@ -381,7 +395,7 @@ id: s
 title: S
 version: \"1\"
 languages: [en]
-start: { node: start }
+start: { node: start, frame: phone }
 settings: {}
 ",
         );
@@ -496,11 +510,12 @@ on_failure:
     // title is the author's own words - quotes and colons included.
     #[test]
     fn a_new_story_loads_and_validates_clean() {
-        let files = new_story("my_story", "A story: \"the first\"", "fr", "Chapter 1").unwrap();
+        let files = new_story("my_story", "A story: \"the first\"", "fr", Frame::None, "Chapter 1").unwrap();
         let story = crate::Story::from_sources(files).expect("the new story loads");
         assert_eq!(crate::validate::validate(&story), [], "nothing to fix");
         assert_eq!(story.manifest.title, "A story: \"the first\"", "the title as typed");
         assert_eq!(story.manifest.languages, ["fr"], "the source language given");
+        assert_eq!(story.manifest.start.frame, Frame::None, "the frame the author picked");
     }
 
     // The canonical form: the node's id, its kind, then the way out; defaults

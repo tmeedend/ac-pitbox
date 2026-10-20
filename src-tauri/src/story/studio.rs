@@ -21,7 +21,8 @@ use std::path::{Path, PathBuf};
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use story_engine::load::{draft, read_dir, Draft, SourceFile};
+use story_engine::frame::Frame;
+use story_engine::load::{draft_dir, read_dir, Draft, SourceFile};
 use story_engine::model::{Chapter, Characters, Event, Manifest, Placement, Variables};
 use story_engine::refs::{self, NameKind, NameUsages};
 use story_engine::validate::{validate, Diagnostic, Severity};
@@ -102,9 +103,8 @@ pub fn list(config_dir: &Path) -> Vec<StorySummary> {
                     missing: true,
                 };
             }
-            let (title, chapters, diagnostics) = match read_dir(&path) {
-                Ok(files) => {
-                    let d = draft(files);
+            let (title, chapters, diagnostics) = match draft_dir(&path) {
+                Ok((_, d)) => {
                     let (title, chapters) = (d.manifest.as_ref().map(|m| m.title.clone()), d.chapters.len());
                     (title, chapters, verdict(d))
                 }
@@ -145,6 +145,7 @@ pub fn create(
     folder: &Path,
     title: &str,
     language: &str,
+    frame: Frame,
     chapter_title: &str,
 ) -> Result<(), String> {
     if folder.exists() {
@@ -153,7 +154,7 @@ pub fn create(
             return Err(errors::STORY_FOLDER_NOT_EMPTY.into());
         }
     }
-    let files = story_engine::write::new_story(&story_id(folder), title, language, chapter_title)?;
+    let files = story_engine::write::new_story(&story_id(folder), title, language, frame, chapter_title)?;
     for file in files {
         let path = folder.join(&file.path);
         if let Some(dir) = path.parent() {
@@ -273,6 +274,8 @@ pub struct OpenStory {
     pub diagnostics: Vec<Diagnostic>,
     /// Where each character, flag, counter, relation step and event is cited.
     pub usages: Vec<NameUsages>,
+    /// The files under `media/`, as paths inside it: what a portrait can be.
+    pub media: Vec<String>,
     pub history: HistoryStatus,
 }
 
@@ -292,7 +295,7 @@ fn edited<T>(files: &[SourceFile], errors: &[LoadError], file: &str, value: Opti
 }
 
 pub fn open(folder: &Path) -> Result<OpenStory, String> {
-    let files = read_dir(folder).map_err(|e| e.to_string())?;
+    let (files, mut d) = draft_dir(folder).map_err(|e| e.to_string())?;
     let chapter_files: Vec<SourceFile> = files.iter().filter(|f| is_chapter_path(&f.path)).cloned().collect();
     let event_files: Vec<String> = (files.iter())
         .filter(|f| is_event_path(&f.path))
@@ -300,7 +303,7 @@ pub fn open(folder: &Path) -> Result<OpenStory, String> {
         .collect();
     // Drafted once, then both shown and checked: the screen and its
     // diagnostics describe the same state of the folder, read once.
-    let mut d = draft(files.clone());
+    let media = media_list(&d);
     let usages = refs::all_usages(&files, &d);
     let diagnostics = verdict(d.clone());
     let manifest = edited(&files, &d.errors, MANIFEST, d.manifest.take());
@@ -337,8 +340,13 @@ pub fn open(folder: &Path) -> Result<OpenStory, String> {
         events,
         diagnostics,
         usages,
+        media,
         history: history::with(folder, |h| h.status()),
     })
+}
+
+fn media_list(d: &Draft) -> Vec<String> {
+    d.media.iter().flatten().cloned().collect()
 }
 
 const MANIFEST: &str = "story.yaml";
@@ -351,6 +359,9 @@ pub struct Checked {
     pub diagnostics: Vec<Diagnostic>,
     /// Where each character, flag, counter, relation step and event is cited.
     pub usages: Vec<NameUsages>,
+    /// Re-listed too: a picture copied into `media/` while the editor is
+    /// open shows up at the next save.
+    pub media: Vec<String>,
     pub history: HistoryStatus,
 }
 
@@ -358,18 +369,17 @@ pub struct Checked {
 /// be undone.
 pub fn check(folder: &Path) -> Checked {
     let history = history::with(folder, |h| h.status());
-    match read_dir(folder) {
-        Ok(files) => {
-            let d = draft(files.clone());
-            Checked {
-                usages: refs::all_usages(&files, &d),
-                diagnostics: verdict(d),
-                history,
-            }
-        }
+    match draft_dir(folder) {
+        Ok((files, d)) => Checked {
+            usages: refs::all_usages(&files, &d),
+            media: media_list(&d),
+            diagnostics: verdict(d),
+            history,
+        },
         Err(e) => Checked {
             diagnostics: vec![load_error(e)],
             usages: Vec::new(),
+            media: Vec::new(),
             history,
         },
     }
@@ -575,7 +585,7 @@ mod tests {
         let config = temp_dir("studio-config");
         let base = temp_dir("studio-stories");
         let folder = base.join("My Story");
-        create(&config, &folder, "My story", "en", "Chapter 1").expect("created");
+        create(&config, &folder, "My story", "en", Frame::None, "Chapter 1").expect("created");
         let listed = list(&config);
         assert_eq!(listed.len(), 1, "listed once");
         assert_eq!(listed[0].title.as_deref(), Some("My story"));
@@ -590,7 +600,7 @@ mod tests {
         let folder = temp_dir("studio-full");
         std::fs::write(folder.join("notes.txt"), "mine").unwrap();
         assert_eq!(
-            create(&config, &folder, "S", "en", "C").unwrap_err(),
+            create(&config, &folder, "S", "en", Frame::None, "C").unwrap_err(),
             errors::STORY_FOLDER_NOT_EMPTY
         );
         assert_eq!(
@@ -608,7 +618,7 @@ mod tests {
         let config = temp_dir("studio-config");
         let base = temp_dir("studio-story");
         let folder = base.join("s");
-        create(&config, &folder, "S", "en", "C").unwrap();
+        create(&config, &folder, "S", "en", Frame::None, "C").unwrap();
         forget(&config, &folder).unwrap();
         assert!(list(&config).is_empty(), "no longer listed");
         assert!(folder.join("story.yaml").is_file(), "story.yaml still there");
@@ -627,7 +637,7 @@ mod tests {
         let config = temp_dir("studio-config");
         let base = temp_dir("studio-story");
         let folder = base.join("s");
-        create(&config, &folder, "S", "en", "C").unwrap();
+        create(&config, &folder, "S", "en", Frame::None, "C").unwrap();
         let (mut chapter, stamp) = chapter_of(&folder, "flow/01-chapter.yaml");
         chapter.nodes[0].next = Some("nowhere".into());
         let new_stamp = save_file(&folder, "flow/01-chapter.yaml", Some(&stamp), json(&chapter)).expect("saved");
@@ -649,7 +659,7 @@ mod tests {
         let config = temp_dir("studio-config");
         let base = temp_dir("studio-story");
         let folder = base.join("s");
-        create(&config, &folder, "S", "en", "C").unwrap();
+        create(&config, &folder, "S", "en", Frame::None, "C").unwrap();
         let (chapter, stamp) = chapter_of(&folder, "flow/01-chapter.yaml");
         let path = folder.join("flow/01-chapter.yaml");
         let by_hand = format!("# typed by hand\n{}", std::fs::read_to_string(&path).unwrap());
@@ -724,7 +734,7 @@ mod tests {
         let config = temp_dir("studio-config");
         let base = temp_dir("studio-story");
         let folder = base.join("s");
-        create(&config, &folder, "S", "en", "C").unwrap();
+        create(&config, &folder, "S", "en", Frame::None, "C").unwrap();
         let file = "events/race_01.yaml";
         let event = serde_json::json!({
             "id": "race_01", "name": "Race 01", "type": "race",
@@ -770,7 +780,7 @@ mod tests {
         let config = temp_dir("studio-config");
         let base = temp_dir("studio-story");
         let folder = base.join("s");
-        create(&config, &folder, "S", "en", "C").unwrap();
+        create(&config, &folder, "S", "en", Frame::None, "C").unwrap();
         std::fs::create_dir_all(folder.join("events")).unwrap();
         std::fs::write(
             folder.join("events/race_01.yaml"),
@@ -803,7 +813,7 @@ mod tests {
         let config = temp_dir("studio-config");
         let base = temp_dir("studio-story");
         let folder = base.join("s");
-        create(&config, &folder, "S", "en", "C").unwrap();
+        create(&config, &folder, "S", "en", Frame::None, "C").unwrap();
         let opened = open(&folder).unwrap();
         assert_eq!(opened.characters.stamp, "", "no characters file yet");
         assert!(opened.characters.value.unwrap().characters.is_empty(), "read as empty");
@@ -828,6 +838,33 @@ mod tests {
         assert!(check(&folder).diagnostics.is_empty(), "still clean");
     }
 
+    // A portrait is a file of the story's `media/`: the studio lists them for
+    // the picker, and its checks see one that points to nothing - including a
+    // picture added while the editor is open.
+    #[test]
+    fn the_studio_lists_media_and_checks_portraits_against_them() {
+        let config = temp_dir("studio-config");
+        let base = temp_dir("studio-story");
+        let folder = base.join("s");
+        create(&config, &folder, "S", "en", Frame::None, "C").unwrap();
+        let characters = serde_json::json!({ "characters": [{ "id": "friend", "portraits": {
+            "neutral": "portraits/friend.png", "happy": "portraits/happy.png" } }] });
+        save_file(&folder, CHARACTERS, None, characters).expect("saved");
+        std::fs::create_dir_all(folder.join("media/portraits")).unwrap();
+        std::fs::write(folder.join("media/portraits/friend.png"), b"png").unwrap();
+
+        let opened = open(&folder).unwrap();
+        assert_eq!(opened.media, ["portraits/friend.png"], "listed inside media/");
+        let missing =
+            |d: &[Diagnostic]| (d.iter()).any(|x| x.message.contains("`media/portraits/happy.png` does not exist"));
+        assert!(missing(&opened.diagnostics), "{:#?}", opened.diagnostics);
+
+        std::fs::write(folder.join("media/portraits/happy.png"), b"png").unwrap();
+        let checked = check(&folder);
+        assert_eq!(checked.media.len(), 2, "re-listed at the next check");
+        assert!(checked.diagnostics.is_empty(), "{:#?}", checked.diagnostics);
+    }
+
     // A rename reaches every file citing the name, and keeps what was typed
     // by hand around it (SPEC-story-mode, Create Your Own).
     #[test]
@@ -835,7 +872,7 @@ mod tests {
         let config = temp_dir("studio-config");
         let base = temp_dir("studio-story");
         let folder = base.join("s");
-        create(&config, &folder, "S", "en", "C").unwrap();
+        create(&config, &folder, "S", "en", Frame::Named("phone".into()), "C").unwrap();
         save_file(
             &folder,
             VARIABLES,
@@ -887,7 +924,7 @@ A line.
         let config = temp_dir("studio-config");
         let base = temp_dir("studio-story");
         let folder = base.join("s");
-        create(&config, &folder, "S", "en", "C").unwrap();
+        create(&config, &folder, "S", "en", Frame::None, "C").unwrap();
         let undo =
             |n: usize| (0..n).for_each(|_| assert!(!history::with(&folder, |h| h.undo(&folder)).unwrap().is_empty()));
         save_file(
@@ -934,7 +971,7 @@ A line.
         let config = temp_dir("studio-config");
         let base = temp_dir("studio-story");
         let folder = base.join("s");
-        create(&config, &folder, "S", "en", "C").unwrap();
+        create(&config, &folder, "S", "en", Frame::None, "C").unwrap();
         std::fs::write(folder.join("flow/02-broken.yaml"), "id: ch02\nnodes: [oops\n").unwrap();
         let open = open(&folder).unwrap();
         assert_eq!(open.chapters.len(), 2, "both chapters listed");

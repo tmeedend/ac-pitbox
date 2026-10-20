@@ -58,3 +58,16 @@ export function parseList(text: string): string[] {
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
 }
+
+/** The pictures of `media/` a portrait can be: the image files, by path. */
+export function portraitImages(media: string[]): string[] {
+  return media.filter((p) => /\.(png|jpe?g|webp)$/i.test(p));
+}
+
+/** A character's expressions in the order the editor lists them: `neutral`
+ * first, the one every dialogue falls back on, then by name. */
+export function expressionsInOrder(portraits: Record<string, string> | undefined): string[] {
+  return Object.keys(portraits ?? {}).sort((a, b) =>
+    a === "neutral" ? -1 : b === "neutral" ? 1 : a.localeCompare(b),
+  );
+}

@@ -16,6 +16,12 @@ nodes:
   - id: race_02
     event: race_02
     on_failure: after_defeat
+  - id: face_to_face
+    beat: { frame: none }
+  - id: talk
+    message: talk_01
+  - id: phone_back
+    beat: { frame: phone }
   - id: finale
     side_events: { close: [track_day_01] }
   - id: the_end

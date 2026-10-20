@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { fileCount, isName, nameFrom, nameProblem, parseList, usagesOf, variableNames } from "./world";
+import {
+  expressionsInOrder,
+  fileCount,
+  isName,
+  nameFrom,
+  nameProblem,
+  parseList,
+  portraitImages,
+  usagesOf,
+  variableNames,
+} from "./world";
 import type { NameUsages } from "./studio";
 
 describe("names", () => {
@@ -58,4 +68,24 @@ describe("usages", () => {
 
 it("a comma-separated list drops blanks", () => {
   expect(parseList(" A, B ,, ")).toEqual(["A", "B"]);
+});
+
+describe("portraits", () => {
+  it("are picked among the pictures of media/", () => {
+    expect(portraitImages(["portraits/a.png", "photos/b.JPG", "c.webp", "music/d.ogg", "e.txt"])).toEqual([
+      "portraits/a.png",
+      "photos/b.JPG",
+      "c.webp",
+    ]);
+  });
+
+  // `neutral` is the one every line without an expression falls back on.
+  it("list neutral first, then by name", () => {
+    expect(expressionsInOrder({ sad: "s.png", neutral: "n.png", angry: "a.png" })).toEqual([
+      "neutral",
+      "angry",
+      "sad",
+    ]);
+    expect(expressionsInOrder(undefined)).toEqual([]);
+  });
 });

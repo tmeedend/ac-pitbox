@@ -28,6 +28,7 @@ macro_rules! serde_as_text {
 
 pub mod engine;
 pub mod expr;
+pub mod frame;
 pub mod load;
 pub mod model;
 pub mod refs;
@@ -49,7 +50,7 @@ pub(crate) mod testutil {
         vec![
             SourceFile::new(
                 "story.yaml",
-                "format: 1\nid: sample\ntitle: Sample\nversion: \"1\"\nlanguages: [en]\nstart:\n  node: start\n",
+                "format: 1\nid: sample\ntitle: Sample\nversion: \"1\"\nlanguages: [en]\nstart:\n  node: start\n  frame: phone\n",
             ),
             SourceFile::new("flow/01-one.yaml", "id: ch01\nnodes:\n  - id: start\n    end: done\n"),
         ]
@@ -140,7 +141,18 @@ mod tests {
                 ending: "finished".into()
             }
         );
-        for content in ["sponsor_offer", "rival_post_01", "garage_remark", "congrats_01"] {
+        assert_eq!(
+            state.frame,
+            Some(crate::frame::Frame::Named("phone".into())),
+            "the phone put back after the face-to-face dialogue"
+        );
+        for content in [
+            "sponsor_offer",
+            "rival_post_01",
+            "garage_remark",
+            "congrats_01",
+            "talk_01",
+        ] {
             assert_eq!(state.content_facts(content).delivered, 1, "{content} delivered once");
         }
         assert_eq!(

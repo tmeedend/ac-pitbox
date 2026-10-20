@@ -25,6 +25,10 @@ pub enum Output {
     TimeMoved {
         to: crate::time::StoryDate,
     },
+    /// A Beat changed the frame (`none`: removed it).
+    FrameChanged {
+        to: crate::frame::Frame,
+    },
     /// The flow waits for this event. `difficulty_step`: how many steps of
     /// skill the launcher takes off the opponents (adaptive difficulty).
     AwaitEvent {
@@ -276,6 +280,12 @@ impl<'a> Run<'a> {
     }
 
     fn beat(&mut self, beat: &Beat) -> Result<(), EngineError> {
+        // Before the effects: a `send` in this beat goes to the frame the
+        // beat puts up.
+        if let Some(frame) = beat.frame.as_ref().filter(|f| self.state.frame.as_ref() != Some(*f)) {
+            self.state.frame = Some(frame.clone());
+            self.out.push(Output::FrameChanged { to: frame.clone() });
+        }
         for effect in &beat.effects {
             self.apply_effect(effect)?;
         }
@@ -632,11 +642,12 @@ impl<'a> Run<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::frame::Frame;
     use crate::load::SourceFile;
     use crate::testutil::with;
 
     const MANIFEST: &str =
-        "format: 1\nid: t\ntitle: T\nversion: \"1\"\nlanguages: [en]\nstart:\n  node: start\n  date: 2000-01-31\n  money: 250\n";
+        "format: 1\nid: t\ntitle: T\nversion: \"1\"\nlanguages: [en]\nstart:\n  node: start\n  frame: phone\n  date: 2000-01-31\n  money: 250\n";
     const RACE: &str = "id: race\ntype: race\nsuccess: [\"position <= 3\"]\non_success:\n  effects: [\"reputation += 2\"]\n  advance: 1 month\non_failure:\n  pool: fail\nentry_fee: 100\n";
     const POOL: &str = "---\nid: fail_a\ntype: message\nfrom: friend\npool: fail\n---\nA.\n---\nid: fail_b\ntype: message\nfrom: family\npool: fail\n---\nB.\n---\nid: fail_c\ntype: message\npool: fail\n---\nC.\n";
     const ONE_EVENT: &str = "id: ch\nnodes:\n  - id: start\n    event: race\n  - id: after\n    end: done\n";
@@ -876,6 +887,41 @@ mod tests {
             2,
             "true, still true, false, true again"
         );
+    }
+
+    // The frame is part of the state (SPEC-story-mode, Content types,
+    // templates and frames): a Beat changes or removes it, before its own
+    // effects, and says so once; a Beat that leaves it as it is says nothing.
+    #[test]
+    fn a_beat_changes_the_frame_before_its_effects() {
+        let content = "---\nid: hello\ntype: dialogue\n---\nx\n";
+        let flow = "id: ch\nnodes:\n  - id: start\n    beat: { frame: none, effects: [\"send hello\"] }\n  - id: same\n    beat: { frame: none }\n  - id: back\n    beat: { frame: phone }\n  - id: end\n    end: done\n";
+        let story = story("", flow, &[("content/hello.story", content)]);
+        let mut state = State::new(&story, 7);
+        assert_eq!(
+            state.frame,
+            Some(Frame::Named("phone".into())),
+            "the story's starting frame"
+        );
+        let out = run(&story, &mut state).unwrap();
+        let changes: Vec<&Output> = (out.iter())
+            .filter(|o| matches!(o, Output::FrameChanged { .. } | Output::Delivered { .. }))
+            .collect();
+        assert_eq!(
+            changes,
+            [
+                &Output::FrameChanged { to: Frame::None },
+                &Output::Delivered {
+                    content: "hello".into(),
+                    via: Via::Effect
+                },
+                &Output::FrameChanged {
+                    to: Frame::Named("phone".into())
+                },
+            ],
+            "removed, then the send, nothing for the beat that kept it removed, then put back"
+        );
+        assert_eq!(state.frame, Some(Frame::Named("phone".into())));
     }
 
     #[test]

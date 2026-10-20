@@ -109,7 +109,9 @@ de reprendre. En cas d'écart, la spec fait foi.
         2026-10-18)** : L2.1 ouvrir une histoire et construire son fil ;
         L2.2 le monde et les réglages (personnages, drapeaux, compteurs,
         échelle des relations, départ, `story.yaml`) ; L2.3 les événements
-        (circuit et voiture tirés de la bibliothèque) ; L2.4 les contenus en
+        (circuit et voiture tirés de la bibliothèque), puis L2.3b les
+        dialogues en personne et le cadre dans le fil (ajouté le
+        2026-10-20) ; L2.4 les contenus en
         Ink (vue Formulaire et vue Script, le moteur exécute Ink) ; L2.5
         l'aperçu dans le téléphone (modèle fil de discussion d'abord) ;
         L2.6 les pilotes (facultatif).
@@ -243,6 +245,65 @@ de reprendre. En cas d'écart, la spec fait foi.
           gardé tel quel ; la bibliothèque est lue une fois par lancement de
           l'app ; aucune vérification qu'un circuit accueille la taille de
           grille demandée (le jeu la plafonne au nombre de stands).
+        - **L2.3b — fait (2026-10-20).** Sous-lot ajouté avant L2.4 :
+          les dialogues en personne et le cadre dans le fil. Le moteur
+          connaît le type de contenu `dialogue` (joué sur la scène, il n'a
+          besoin d'aucun cadre), le cadre de départ (`start.frame`), le champ
+          `frame` d'un Beat (un cadre ou `none`, appliqué avant ses effets),
+          le cadre actif dans l'état et la sauvegarde, et les portraits d'un
+          personnage par expression (`world/characters.yaml`, chemins dans
+          `media/`). Les cadres vivent dans `frame.rs` : une table des cadres
+          livrés (le téléphone seul pour l'instant), pas des cas dans le
+          moteur. La vérification suit le cadre le long du fil et signale un
+          contenu que le cadre actif ne peut pas montrer. Dans l'éditeur :
+          le cadre se choisit à la création de l'histoire et dans Réglages,
+          le nœud Beat a un champ Cadre, et Monde ouvre les portraits d'un
+          personnage.
+          **Décidé avec l'utilisateur** : **aucun cadre par défaut**, nulle
+          part : Pit Box est une plateforme pour d'autres auteurs, et le
+          téléphone n'est qu'un cadre parmi d'autres. `start.frame` est donc
+          obligatoire, la fenêtre de création ne présélectionne rien, et un
+          nouveau Beat laisse le cadre inchangé. Les histoires écrites avant
+          ne se lisent plus sans ajouter la clé (l'utilisateur a jugé que
+          c'était sans enjeu : l'auteur n'avait encore rien écrit). « Rien
+          pour l'afficher » est un **avertissement**, levé dès qu'un chemin
+          arrive sans cadre capable, en distinguant « toujours » de « sur
+          certains chemins » ; les conditions des branches ne sont pas
+          évaluées, donc un chemin impossible en pratique peut donner une
+          fausse alerte. Un portrait se choisit **parmi les images déjà dans
+          `media/`** : l'éditeur n'écrit aucun média.
+          **Choisi sans demander** : une sauvegarde sans cadre (antérieure à
+          L2.3b) reprend le cadre de départ de son histoire, sans changer de
+          format ; un cadre autre que `phone` ou `none` est une erreur tant
+          que `frames/` n'existe pas ; un portrait introuvable, un chemin
+          qui sort de `media/` ou des portraits sans `neutral` sont des
+          erreurs ; le chemin est comparé avec la casse du disque (une
+          histoire partagée est un zip) ; les médias ne sont que listés,
+          jamais lus, et restent hors des copies de sécurité ; la liste se
+          relit à chaque vérification, donc une image ajoutée pendant que le
+          studio est ouvert apparaît à l'enregistrement suivant ; une
+          nouvelle expression commence sans image, pour que la vérification
+          le montre plutôt qu'un choix deviné ; un changement de cadre est
+          une sortie du moteur (`Output::FrameChanged`) et pas une ligne
+          d'historique ; un contenu réactif n'est signalé que si aucun
+          cadre de toute l'histoire ne peut le montrer.
+          **Laissé pour plus tard, à savoir** :
+          - *Un contenu envoyé sans cadre capable de le montrer attend un
+            cadre* (la spec le dit) : **reporté à L3**. Aujourd'hui le
+            moteur le livre comme un autre, et seule la vérification le
+            signale. À trancher en L3 : un contenu en attente compte-t-il
+            pour `content.<id>.delivered` ?
+          - *« Choisir un fichier » pour un portrait* : une boîte de
+            sélection qui copie l'image dans `media/portraits/`. Plus
+            confortable que la liste actuelle, mais l'éditeur se mettrait à
+            écrire des médias, que les copies de sécurité ne contiennent pas
+            (demandé par l'utilisateur, pas urgent).
+          - L'en-tête d'un dialogue (personnages présents, scène) et les tags
+            `#expression:` / `#position:` vérifiés contre les portraits :
+            avec l'écriture des contenus, L2.4.
+          - Un nœud Action sans cadre n'est pas signalé (en roman visuel,
+            les actions du joueur passent par les réponses).
+          - Le type `illustration` et les transitions arrivent avec L3b.
       - **L3 à L8** : dans l'ordre du plan de livraison de la spec.
       **Écarts assumés par rapport au document de conception** (la spec
       publique les reprend déjà) :

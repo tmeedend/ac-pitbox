@@ -272,6 +272,7 @@ fn show(story: &Story, state: &State, out: &[Output]) {
                 }
             }
             Output::TimeMoved { to } => println!("\n—— {to} ——"),
+            Output::FrameChanged { to } => println!("[frame: {to}]"),
             // The prompt says what is awaited.
             Output::AwaitEvent { .. }
             | Output::AwaitReply { .. }

@@ -4,15 +4,16 @@
 //! probably a mistake but plays (a node nobody reaches, a draft left aside).
 //!
 //! What it cannot check yet, for lack of the data: car and driver ids
-//! (`car.<id>`, `ahead_of`) - the package and the roster arrive in later lots
-//! - and content types a frame cannot show (frames, L2).
+//! (`car.<id>`, `ahead_of`) - the package and the roster arrive in later lots.
+//! Media files are checked only when the folder was listed (`Story::media`).
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::{BTreeSet, HashSet, VecDeque};
 use std::fmt;
 
 use crate::expr::{Condition, ContentFact, Effect, EventFact, Literal, Var};
+use crate::frame::{frames_on_entry, Frame};
 use crate::load::Story;
-use crate::model::{Event, EventType, NodeKind, Placement};
+use crate::model::{Character, Event, EventType, Node, NodeKind, Placement};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -71,6 +72,7 @@ pub fn validate(story: &Story) -> Vec<Diagnostic> {
     c.content();
     c.events();
     c.reachability();
+    c.nowhere_to_show();
     c.events_used_once();
     c.unused();
     c.out.sort_by(|a, b| (a.severity, &a.file).cmp(&(b.severity, &b.file)));
@@ -111,6 +113,9 @@ impl Checker<'_> {
         if story.node(&m.start.node).is_none() {
             self.error("story.yaml", format!("start node `{}` does not exist", m.start.node));
         }
+        if let Some(why) = unknown_frame(&m.start.frame) {
+            self.error("story.yaml", format!("start: {why}"));
+        }
         let scale = &m.settings.relations;
         let mut seen = HashSet::new();
         for level in &scale.scale {
@@ -143,6 +148,7 @@ impl Checker<'_> {
                     format!("character `{}`: relation `{level}` is not on the scale", ch.id),
                 );
             }
+            self.portraits(ch);
         }
         let mut flags = HashSet::new();
         for flag in &story.variables.flags {
@@ -151,6 +157,33 @@ impl Checker<'_> {
             }
             if story.variables.counters.contains_key(flag) {
                 self.warning("world/variables.yaml", format!("`{flag}` is both a flag and a counter"));
+            }
+        }
+    }
+
+    /// A character's portraits (SPEC-story-mode, In-person dialogues): a
+    /// `neutral` one for the lines that name no expression, and each a file
+    /// inside the story's `media/`, so that a shared story carries it.
+    fn portraits(&mut self, ch: &Character) {
+        const FILE: &str = "world/characters.yaml";
+        if !ch.portraits.is_empty() && !ch.portraits.contains_key("neutral") {
+            self.error(
+                FILE,
+                format!(
+                    "character `{}`: portraits need a `neutral` one, for the lines that name no expression",
+                    ch.id
+                ),
+            );
+        }
+        for (expression, path) in &ch.portraits {
+            let at = format!("character `{}`, portrait `{expression}`", ch.id);
+            if expression.is_empty() || expression.chars().any(char::is_whitespace) {
+                self.error(FILE, format!("{at}: an expression is a name, without spaces"));
+            }
+            if let Some(why) = media_path_problem(path) {
+                self.error(FILE, format!("{at}: `{path}`: {why}"));
+            } else if self.story.media.as_ref().is_some_and(|m| !m.contains(path)) {
+                self.error(FILE, format!("{at}: `media/{path}` does not exist"));
             }
         }
     }
@@ -319,6 +352,9 @@ impl Checker<'_> {
                         for e in &beat.effects {
                             self.effect(file, &at, e);
                         }
+                        if let Some(why) = beat.frame.as_ref().and_then(unknown_frame) {
+                            self.error(file, format!("{at}: {why}"));
+                        }
                     }
                     NodeKind::Message { content, wait_reply } => match story.content_item(content) {
                         None => self.error(file, format!("{at}: unknown content `{content}`")),
@@ -480,6 +516,66 @@ impl Checker<'_> {
         }
     }
 
+    /// Content sent where no active frame can show it (SPEC-story-mode,
+    /// Nowhere to show). Where the flow tells which frames can be active -
+    /// a message node, a `send` in a beat, what an event sends on success
+    /// or failure - every path to that node counts; reactive content can
+    /// arrive at any moment, so it is flagged only when no frame the story
+    /// ever puts up can show it. Warnings: at play it waits for a frame.
+    fn nowhere_to_show(&mut self) {
+        let story = self.story;
+        let on_entry = frames_on_entry(story);
+        for chapter in &story.chapters {
+            for node in &chapter.nodes {
+                // A node no path reaches is already reported as such.
+                let Some(frames) = on_entry.get(&node.id) else { continue };
+                for (content, frames) in sent_by(story, node, frames) {
+                    self.shown_under(&chapter.file, node, content, &frames);
+                }
+            }
+        }
+        // A beat's frame reaches the node after it; a beat with no node after
+        // it is already an error.
+        let mut anywhere: BTreeSet<&Frame> = on_entry.values().flatten().collect();
+        // The start's frame even when the start node is missing (an error
+        // of its own): no warning on every item for want of a path.
+        anywhere.insert(&story.manifest.start.frame);
+        for item in &story.content {
+            let reactive = matches!(item.placement, Placement::Reactive { .. });
+            if reactive && !anywhere.iter().any(|f| f.can_show(item.kind)) {
+                self.warning(
+                    &format!("{}:{}", item.file, item.line),
+                    format!(
+                        "content `{}` is a {}, and no frame the story puts up can show it",
+                        item.id,
+                        item.kind.name()
+                    ),
+                );
+            }
+        }
+    }
+
+    fn shown_under(&mut self, file: &str, node: &Node, content: &str, frames: &BTreeSet<Frame>) {
+        // An unknown content is reported by `flow`, `events` or `effect`.
+        let Some(item) = self.story.content_item(content) else {
+            return;
+        };
+        let blind: Vec<String> = (frames.iter())
+            .filter(|f| !f.can_show(item.kind))
+            .map(|f| format!("`{f}`"))
+            .collect();
+        if blind.is_empty() {
+            return;
+        }
+        let (id, kind, blind_list) = (&node.id, item.kind.name(), blind.join(", "));
+        let message = if blind.len() == frames.len() {
+            format!("node `{id}`: `{content}` is a {kind}, and frame {blind_list} cannot show it here; it will wait for a frame that can")
+        } else {
+            format!("node `{id}`: `{content}` is a {kind}, which frame {blind_list} cannot show on some paths leading here; it will wait for a frame that can")
+        };
+        self.on_node(id, |c| c.warning(file, message));
+    }
+
     /// Flow content no message node or `send` delivers, and pools no event
     /// draws from.
     /// An event's facts (attempts, fees paid, failures in a row) belong to
@@ -549,9 +645,88 @@ impl Checker<'_> {
     }
 }
 
+/// What a node sends to the frame, and which frames can be active then;
+/// `on_entry` are those on arriving at it.
+fn sent_by<'a>(story: &'a Story, node: &'a Node, on_entry: &BTreeSet<Frame>) -> Vec<(&'a str, BTreeSet<Frame>)> {
+    let mut sent: Vec<(&str, BTreeSet<Frame>)> = Vec::new();
+    match &node.kind {
+        NodeKind::Beat(beat) => {
+            // The beat's own frame is up before its effects run.
+            let frames = beat
+                .frame
+                .clone()
+                .map_or_else(|| on_entry.clone(), |f| BTreeSet::from([f]));
+            sent.extend(sends(&beat.effects).map(|c| (c, frames.clone())));
+        }
+        NodeKind::Message { content, wait_reply } => {
+            sent.push((content, on_entry.clone()));
+            // A reply is chosen while the flow still waits here.
+            if let Some(item) = story.content_item(content).filter(|_| *wait_reply) {
+                for reply in &item.replies {
+                    sent.extend(sends(&reply.effects).map(|c| (c, on_entry.clone())));
+                }
+            }
+        }
+        NodeKind::Event { event, .. } => {
+            if let Some(event) = story.event(event) {
+                for effects in [&event.on_success.effects, &event.on_failure.effects] {
+                    sent.extend(sends(effects).map(|c| (c, on_entry.clone())));
+                }
+                if let Some(pool) = &event.on_failure.pool {
+                    sent.extend(
+                        story
+                            .pool_variants(pool)
+                            .map(|(item, _)| (item.id.as_str(), on_entry.clone())),
+                    );
+                }
+            }
+        }
+        _ => {}
+    }
+    sent
+}
+
+/// The content `effects` send.
+fn sends(effects: &[Effect]) -> impl Iterator<Item = &str> {
+    effects.iter().filter_map(|e| match e {
+        Effect::Send(c) => Some(c.as_str()),
+        _ => None,
+    })
+}
+
+/// Why a story cannot use `frame`, if it cannot.
+fn unknown_frame(frame: &Frame) -> Option<String> {
+    (!frame.is_known()).then(|| {
+        let shipped: Vec<String> = (crate::frame::BUILT_IN.iter())
+            .map(|b| format!("`{}`", b.name))
+            .collect();
+        format!(
+            "unknown frame `{frame}` (the frames are {}, or `none`)",
+            shipped.join(", ")
+        )
+    })
+}
+
+/// Why `path` is not a file inside `media/`, if it is not: a shared story
+/// carries its own folder only, so a portrait must live in it.
+fn media_path_problem(path: &str) -> Option<&'static str> {
+    if path.is_empty() {
+        Some("no file")
+    } else if path.contains('\\') {
+        Some("folders are separated by `/`")
+    } else if path.starts_with('/') || path.contains(':') {
+        Some("a path inside `media/`, not an absolute one")
+    } else if path.split('/').any(|part| matches!(part, "" | "." | "..")) {
+        Some("a path inside `media/` cannot leave it")
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::load::draft;
     use crate::testutil::{minimal, with};
 
     fn diagnostics(extra: &[(&str, &str)]) -> Vec<Diagnostic> {
@@ -629,6 +804,7 @@ version: \"1\"
 languages: []
 start:
   node: start
+  frame: phone
 ",
         )]);
         assert!(
@@ -788,5 +964,135 @@ session: { track: t, car: c, laps: 5, grid: 10, ai_level: 90, start: first }
 ";
         let d = diagnostics(&[("flow/01-one.yaml", flow), ("events/lap.yaml", fine)]);
         assert!(d.is_empty(), "a full race session is clean: {d:#?}");
+    }
+
+    // Frames: `none` or a frame Pit Box ships, at the start and in a Beat;
+    // the frames a story declares itself come with `frames/` (later lot).
+    #[test]
+    fn an_unknown_frame_is_an_error_where_it_is_written() {
+        let mut files = with(
+            minimal(),
+            "flow/01-one.yaml",
+            "id: ch01\nnodes:\n  - id: start\n    beat: { frame: pager }\n  - id: end\n    end: done\n",
+        );
+        files[0].text = files[0].text.replace("frame: phone", "frame: desk");
+        let d = validate(&crate::Story::from_sources(files).unwrap());
+        let unknown = |file: &str, frame: &str| {
+            (d.iter()).any(|x| x.file == file && x.message.contains(&format!("unknown frame `{frame}`")))
+        };
+        assert!(unknown("story.yaml", "desk"), "the start's frame: {d:#?}");
+        assert!(unknown("flow/01-one.yaml", "pager"), "a beat's frame: {d:#?}");
+    }
+
+    // Nowhere to show (SPEC-story-mode, Content types, templates and frames):
+    // content sent while no active frame can show it is a warning, said
+    // "here" when every path arrives without one, "on some paths" when only
+    // some do. A dialogue is played on the scene: it needs no frame.
+    #[test]
+    fn content_with_no_frame_to_show_it_is_flagged_where_the_flow_tells() {
+        let flow = "id: ch01
+nodes:
+  - id: start
+    branch:
+      - if: [\"reputation >= 1\"]
+        goto: hide
+    otherwise: join
+  - id: hide
+    beat: { frame: none }
+  - id: join
+    message: maybe_shown
+  - id: hide_again
+    beat: { frame: none, effects: [\"send sent_in_beat\"] }
+  - id: sure
+    message: never_shown
+  - id: talk
+    message: face_to_face
+  - id: end
+    end: done
+";
+        let content = "---\nid: maybe_shown\ntype: message\n---\nx\n---\nid: sent_in_beat\ntype: mail\n---\nx\n---\nid: never_shown\ntype: message\n---\nx\n---\nid: face_to_face\ntype: dialogue\n---\nx\n";
+        let d = diagnostics(&[("flow/01-one.yaml", flow), ("content/a.story", content)]);
+        let about = |content: &str| {
+            (d.iter())
+                .filter(|x| x.message.contains(&format!("`{content}`")))
+                .collect::<Vec<_>>()
+        };
+        let maybe = about("maybe_shown");
+        assert!(
+            maybe.len() == 1 && maybe[0].message.contains("on some paths") && maybe[0].node.as_deref() == Some("join"),
+            "one path removed the frame: {d:#?}"
+        );
+        assert_eq!(maybe[0].severity, Severity::Warning, "it plays: it waits for a frame");
+        let sure = about("never_shown");
+        assert!(
+            sure.len() == 1 && sure[0].message.contains("cannot show it here"),
+            "every path: {d:#?}"
+        );
+        assert!(
+            about("sent_in_beat").iter().any(|x| x.message.contains("mail")),
+            "the beat's own frame is up before its `send`: {d:#?}"
+        );
+        assert!(about("face_to_face").is_empty(), "a dialogue needs no frame: {d:#?}");
+        assert!(about("start").is_empty() && d.len() == 3, "nothing else: {d:#?}");
+    }
+
+    // Reactive content can arrive whatever the frame: only a story that never
+    // puts up a frame able to show it is flagged.
+    #[test]
+    fn reactive_content_is_flagged_only_if_no_frame_of_the_story_shows_it() {
+        let reactive = "---\nid: news\ntype: article\nwhen: [\"reputation >= 1\"]\n---\nx\n";
+        let d = diagnostics(&[("content/a.story", reactive)]);
+        assert!(d.is_empty(), "the phone shows an article: {d:#?}");
+        let mut lost = with(minimal(), "content/a.story", reactive);
+        lost[0].text = lost[0].text.replace("node: start", "node: nowhere");
+        let d = validate(&crate::Story::from_sources(lost).unwrap());
+        assert!(
+            !has(&d, Severity::Warning, "no frame the story puts up"),
+            "a missing start node is its own error, not a frame warning per item: {d:#?}"
+        );
+        let mut files = with(minimal(), "content/a.story", reactive);
+        files[0].text = files[0].text.replace("frame: phone", "frame: none");
+        let d = validate(&crate::Story::from_sources(files).unwrap());
+        assert!(
+            has(&d, Severity::Warning, "no frame the story puts up can show it"),
+            "a visual novel has nowhere to show an article: {d:#?}"
+        );
+    }
+
+    // Portraits (SPEC-story-mode, In-person dialogues): a `neutral` one, and
+    // each a file inside `media/` - checked against the folder when it was
+    // listed, never outside it.
+    #[test]
+    fn portraits_need_a_neutral_one_and_a_file_inside_media() {
+        let chars = "characters:
+  - id: friend
+    portraits:
+      happy: portraits/happy.png
+      sad: ../outside.png
+      angry: C:/pictures/angry.png
+      tired: portraits\\tired.png
+  - id: rival
+    portraits:
+      neutral: portraits/rival.png
+";
+        let mut d = draft(with(minimal(), "world/characters.yaml", chars));
+        d.media = Some(BTreeSet::from(["portraits/happy.png".to_string()]));
+        let diags = validate(&crate::Story::from_draft(d).unwrap());
+        for needle in [
+            "character `friend`: portraits need a `neutral` one",
+            "portrait `sad`: `../outside.png`: a path inside `media/` cannot leave it",
+            "portrait `angry`: `C:/pictures/angry.png`: a path inside `media/`, not an absolute one",
+            "portrait `tired`: `portraits\\tired.png`: folders are separated by `/`",
+            "portrait `neutral`: `media/portraits/rival.png` does not exist",
+        ] {
+            assert!(has(&diags, Severity::Error, needle), "{needle} in {diags:#?}");
+        }
+        assert_eq!(diags.len(), 5, "the listed `happy` file is fine: {diags:#?}");
+
+        let unlisted = diagnostics(&[("world/characters.yaml", chars)]);
+        assert!(
+            !has(&unlisted, Severity::Error, "does not exist"),
+            "a story built in memory has no media list to check against: {unlisted:#?}"
+        );
     }
 }
