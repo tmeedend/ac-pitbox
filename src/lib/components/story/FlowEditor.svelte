@@ -140,10 +140,12 @@
                 </span>
                 {#if text}<span class="sum mono">{text}</span>{/if}
               </button>
-              {#each linksOf(node) as link, k (k)}
+              {#each linksOf(node, chapter.nodes[i + 1]?.id) as link, k (k)}
                 <button class="link mono" onclick={() => selectNode(link.target)}>
                   <span class="role">{t(LINK_LABEL[link.role])}</span>
-                  {#if link.when?.length}
+                  {#if link.label}
+                    <span class="when">{link.label}</span>
+                  {:else if link.when?.length}
                     <span class="when">{link.when.join(" · ")}</span>
                   {:else if link.role === "case"}
                     <!-- A case without conditions is always taken. -->

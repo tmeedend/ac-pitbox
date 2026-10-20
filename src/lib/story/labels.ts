@@ -17,4 +17,5 @@ export const LINK_LABEL: Record<LinkRole, string> = {
   failure: "story.studio.linkFailure",
   case: "story.studio.linkCase",
   otherwise: "story.studio.linkOtherwise",
+  reply: "story.studio.linkReply",
 };

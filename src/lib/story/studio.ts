@@ -17,6 +17,8 @@ export interface FlowNode {
   beat?: { effects?: string[]; advance?: string; clock?: string; frame?: Frame };
   message?: string;
   wait_reply?: boolean;
+  /** Reply label → the node it leads to; a label left out takes `next`. */
+  on_reply?: Record<string, string>;
   event?: string;
   on_failure?: string;
   branch?: BranchCase[];
@@ -53,6 +55,8 @@ export interface ContentRef {
   id: string;
   file: string;
   placement: "flow" | "reactive" | "pool";
+  /** Its content type, as a `.story` header names it (`message`, `dialogue`…). */
+  kind: string;
   /** Its reply labels, in the order written. */
   labels: string[];
   /** The pool a variant belongs to. */

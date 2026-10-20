@@ -215,6 +215,8 @@ pub struct ContentRef {
     pub file: String,
     /// `flow`, `reactive` or `pool`: only flow content is sent by a node.
     pub placement: &'static str,
+    /// Its content type, as a `.story` header names it.
+    pub kind: &'static str,
     /// Its reply labels, in the order written: what a Message node's reply
     /// exits can name.
     pub labels: Vec<String>,
@@ -238,6 +240,7 @@ impl ContentRef {
             id: c.id.clone(),
             file: c.file.clone(),
             placement,
+            kind: c.kind.name(),
             labels: c.script.labels().into_iter().map(String::from).collect(),
             pool,
             from: c.from.clone(),

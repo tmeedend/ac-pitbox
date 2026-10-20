@@ -21,7 +21,7 @@ export function hasNext(node: FlowNode): boolean {
   return kind !== "branch" && kind !== "end";
 }
 
-export type LinkRole = "next" | "failure" | "case" | "otherwise";
+export type LinkRole = "next" | "failure" | "case" | "otherwise" | "reply";
 
 /** An arrow leaving a node. The plain "then the node below" is not one: it
  * is drawn by the order itself. */
@@ -30,10 +30,19 @@ export interface Link {
   target: string;
   /** For a branch case: the conditions that take it. */
   when?: string[];
+  /** For a reply exit: the reply label that takes it. */
+  label?: string;
 }
 
-export function linksOf(node: FlowNode): Link[] {
+/** The arrows leaving `node`; `following` is the node written after it. A
+ * reply exit is an arrow only where it leads elsewhere than the node would
+ * go anyway (SPEC-story-mode, In-person dialogues). */
+export function linksOf(node: FlowNode, following?: string): Link[] {
   const out: Link[] = [];
+  const onward = node.next ?? following;
+  for (const [label, target] of Object.entries(node.on_reply ?? {})) {
+    if (target !== onward) out.push({ role: "reply", target, label });
+  }
   for (const c of node.branch ?? []) out.push({ role: "case", target: c.goto, when: c.if });
   if (node.otherwise !== undefined) out.push({ role: "otherwise", target: node.otherwise });
   if (node.on_failure) out.push({ role: "failure", target: node.on_failure });
@@ -134,10 +143,35 @@ export function renameNode(chapters: (Chapter | null)[], from: string, to: strin
           touched = true;
         }
       }
+      for (const [label, target] of Object.entries(n.on_reply ?? {})) {
+        if (target === from) {
+          n.on_reply![label] = to;
+          touched = true;
+        }
+      }
     }
     if (touched) changed.push(i);
   });
   return changed;
+}
+
+/** The reply labels a Message node's panel lists: its content's, in the
+ * order written, then any exit naming a label the content no longer has -
+ * kept on screen so it can be removed, the checks reporting it. */
+export function exitLabels(labels: string[], onReply: Record<string, string> | undefined): string[] {
+  const stale = Object.keys(onReply ?? {}).filter((l) => !labels.includes(l));
+  return [...labels, ...stale];
+}
+
+/** Sets where reply `label` leads, or removes its exit for `""` (the flow
+ * then goes on); `on_reply` itself goes once empty, so the file stays as an
+ * author would type it. */
+export function setReplyExit(node: FlowNode, label: string, target: string): void {
+  const exits = { ...(node.on_reply ?? {}) };
+  if (target) exits[label] = target;
+  else delete exits[label];
+  if (Object.keys(exits).length) node.on_reply = exits;
+  else delete node.on_reply;
 }
 
 /** The file and number of a chapter added after `files`: one more than the

@@ -6,7 +6,17 @@
   // whether it reads them.
   import { confirm } from "@tauri-apps/plugin-dialog";
   import { t } from "$lib/i18n/index.svelte";
-  import { allNodeIds, hasNext, isNodeId, kindOf, moveItem, parseLines, renameNode } from "$lib/story/flow";
+  import {
+    allNodeIds,
+    exitLabels,
+    hasNext,
+    isNodeId,
+    kindOf,
+    moveItem,
+    parseLines,
+    renameNode,
+    setReplyExit,
+  } from "$lib/story/flow";
   import { eventIds, eventLabels, newEvent } from "$lib/story/events";
   import { addEvent, saveChapterAt, selectEvent, studio } from "$lib/story/studioState.svelte";
   import { nameFrom } from "$lib/story/world";
@@ -172,11 +182,17 @@
         }}
       />
     </Field>
+    {@const sent = story.content.find((c) => c.id === node.message)}
+    {@const exits = exitLabels(sent?.labels ?? [], node.on_reply)}
+    <!-- A node with reply exits, or playing a dialogue, waits whatever the
+         box says (story_engine::engine, Message): the box shows it, locked. -->
+    {@const waits = Object.keys(node.on_reply ?? {}).length > 0 || sent?.kind === "dialogue"}
     <Field>
       <label class="check">
         <input
           type="checkbox"
-          checked={node.wait_reply ?? false}
+          checked={waits || (node.wait_reply ?? false)}
+          disabled={waits}
           onchange={(e) => {
             if ((e.currentTarget as HTMLInputElement).checked) node.wait_reply = true;
             else delete node.wait_reply;
@@ -186,6 +202,24 @@
         {t("story.studio.waitReply")}
       </label>
     </Field>
+    {#if exits.length}
+      <Field label={t("story.studio.replyExits")}>
+        {#each exits as label (label)}
+          <div class="goto">
+            <span class="lbl-key mono">{label}</span>
+            <TargetSelect
+              value={node.on_reply?.[label] ?? ""}
+              options={nodeIds}
+              emptyLabel={t("story.studio.replyGoesOn")}
+              onchange={(v) => {
+                setReplyExit(node, label, v);
+                save();
+              }}
+            />
+          </div>
+        {/each}
+      </Field>
+    {/if}
   {:else if kind === "event"}
     <Field label={t("story.studio.event")}>
       <TargetSelect

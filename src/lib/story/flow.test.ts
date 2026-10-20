@@ -13,6 +13,8 @@ import {
   nextChapterFile,
   parseLines,
   renameNode,
+  exitLabels,
+  setReplyExit,
 } from "./flow";
 
 const chapter = (): Chapter => ({
@@ -44,6 +46,30 @@ describe("flow nodes", () => {
     expect(linksOf(race)).toEqual([{ role: "failure", target: "again" }]);
     expect(linksOf(pick).map((l) => l.role)).toEqual(["case", "otherwise"]);
     expect(linksOf(again)).toEqual([{ role: "next", target: "race" }]);
+  });
+
+  // A reply exit is drawn only where it leads elsewhere than the node goes
+  // anyway (SPEC-story-mode, In-person dialogues).
+  it("a reply exit is an arrow only where it leads elsewhere", () => {
+    const ask = { id: "ask", message: "talk", on_reply: { yes: "after", no: "home" } };
+    expect(linksOf(ask, "after")).toEqual([{ role: "reply", target: "home", label: "no" }]);
+    expect(linksOf({ ...ask, next: "home" }, "after")).toEqual([
+      { role: "reply", target: "after", label: "yes" },
+      { role: "next", target: "home" },
+    ]);
+  });
+
+  it("the panel lists the content's labels, then the stale ones", () => {
+    expect(exitLabels(["yes", "no"], { gone: "x", yes: "y" })).toEqual(["yes", "no", "gone"]);
+    expect(exitLabels([], undefined)).toEqual([]);
+  });
+
+  it("an exit set to nothing goes, and so does an empty on_reply", () => {
+    const node: { id: string; message: string; on_reply?: Record<string, string> } = { id: "a", message: "m" };
+    setReplyExit(node, "yes", "b");
+    expect(node.on_reply).toEqual({ yes: "b" });
+    setReplyExit(node, "yes", "");
+    expect("on_reply" in node, "removed once empty").toBe(false);
   });
 
   it("inserting goes after the selected node, or at the end", () => {
