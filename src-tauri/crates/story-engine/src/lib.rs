@@ -32,11 +32,13 @@ pub mod frame;
 pub mod load;
 pub mod model;
 pub mod refs;
+pub mod sample;
 pub mod save;
 pub mod script;
 pub mod state;
 pub mod time;
 pub mod validate;
+pub mod view;
 pub mod write;
 
 pub use load::{LoadError, SourceFile, Story};

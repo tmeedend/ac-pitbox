@@ -15,6 +15,9 @@ use serde::de::DeserializeOwned;
 
 use crate::model::*;
 
+/// The story's drivers (SPEC-story-mode, Drivers).
+pub const ROSTER: &str = "drivers/roster.yaml";
+
 /// One file of a story folder: its path inside the folder (forward slashes)
 /// and its text.
 #[derive(Debug, Clone)]
@@ -50,6 +53,8 @@ pub struct Story {
     pub manifest: Manifest,
     pub variables: Variables,
     pub characters: Vec<Character>,
+    /// `drivers/roster.yaml`; empty without one.
+    pub drivers: Vec<Driver>,
     /// In file-name order, which is the flow order.
     pub chapters: Vec<Chapter>,
     pub content: Vec<ContentItem>,
@@ -62,10 +67,10 @@ pub struct Story {
     event_index: HashMap<EventId, usize>,
 }
 
-/// The folders this lot reads. `drivers/`, `catalogs/`, `frames/` and
-/// `package/` belong to later lots and are left alone; `media/` is only
-/// listed (`read_media`).
-const READ: [&str; 4] = ["flow", "content", "events", "world"];
+/// The folders this lot reads. `catalogs/`, `frames/` and `package/` belong
+/// to later lots and are left alone, as is any file of `drivers/` but the
+/// roster (careers come later); `media/` is only listed (`read_media`).
+const READ: [&str; 5] = ["flow", "content", "events", "world", "drivers"];
 
 /// The files under the story's `media/` folder, as paths inside it with
 /// forward slashes (`portraits/a.png`): what the checks need to tell a
@@ -212,6 +217,7 @@ pub struct Draft {
     pub manifest: Option<Manifest>,
     pub variables: Variables,
     pub characters: Characters,
+    pub roster: Roster,
     /// In file-name order, which is the flow order.
     pub chapters: Vec<Chapter>,
     pub content: Vec<ContentItem>,
@@ -241,6 +247,8 @@ pub fn draft(mut files: Vec<SourceFile>) -> Draft {
             parse_yaml(file).map(|v| p.variables = v)
         } else if path == "world/characters.yaml" {
             parse_yaml(file).map(|c| p.characters = c)
+        } else if path == ROSTER {
+            parse_yaml(file).map(|r| p.roster = r)
         } else if in_dir(path, "flow", ".yaml").is_some_and(|rest| !rest.contains('/')) {
             parse_yaml::<Chapter>(file).map(|mut c| {
                 c.file = file.path.clone();
@@ -316,6 +324,7 @@ impl Story {
             manifest,
             variables,
             characters,
+            roster,
             chapters,
             content,
             events,
@@ -373,6 +382,7 @@ impl Story {
             manifest,
             variables,
             characters: characters.characters,
+            drivers: roster.drivers,
             chapters,
             content,
             events,
@@ -455,6 +465,10 @@ impl Story {
 
     pub fn character(&self, id: &str) -> Option<&Character> {
         self.characters.iter().find(|c| c.id == id)
+    }
+
+    pub fn driver(&self, id: &str) -> Option<&Driver> {
+        self.drivers.iter().find(|d| d.id == id)
     }
 
     pub fn pool_variants<'a>(
@@ -636,6 +650,23 @@ mod tests {
         ))
         .unwrap_err();
         assert!(errors[0].message.contains("replies"), "names the key: {errors:?}");
+    }
+
+    // The roster is read; another file of `drivers/` (careers, a later lot)
+    // is left alone rather than refused.
+    #[test]
+    fn the_roster_is_read_and_the_rest_of_drivers_left_alone() {
+        let files = crate::testutil::with(
+            crate::testutil::with(
+                crate::testutil::minimal(),
+                "drivers/roster.yaml",
+                "drivers:\n  - { id: rival, name: R, role: rival }\n",
+            ),
+            "drivers/careers.yaml",
+            "not: [what this lot reads\n",
+        );
+        let story = Story::from_sources(files).expect("loads");
+        assert_eq!(story.driver("rival").and_then(|d| d.role), Some(DriverRole::Rival));
     }
 
     // The media are listed, never read: names inside `media/`, with `/`.

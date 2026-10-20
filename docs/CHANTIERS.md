@@ -89,9 +89,8 @@ de reprendre. En cas d'écart, la spec fait foi.
         - le moteur a son propre type de résultat (`EventResult`) : le pont
           de L3 le remplira depuis `raceresult` (L0), sans que le moteur
           dépende du format de session de l'app ;
-        - les identifiants de voiture et de pilote (`car.<id>`,
-          `ahead_of`) ne sont pas vérifiés : le paquet et le plateau
-          n'existent pas encore ;
+        - les identifiants de voiture (`car.<id>`) ne sont pas vérifiés :
+          le paquet n'existe pas encore (ceux de pilote le sont depuis L2.6) ;
         - `wealth`, `economy` et `garage_slots` attendent l'économie (L6) ;
         - un contenu à réponses portait ses effets dans son en-tête
           (`replies`) : migrés dans le texte Ink en L2.4, la clé est
@@ -242,8 +241,8 @@ de reprendre. En cas d'écart, la spec fait foi.
           libellé « Hotlap » comme ailleurs dans l'app.
           **Limites connues** : les messages d'échec ne s'écrivent pas encore
           (L2.4) — on choisit un pool existant et on voit ses variantes ;
-          `ahead_of` n'a pas de contrôle (il attend les pilotes, L2.6) et est
-          gardé tel quel ; la bibliothèque est lue une fois par lancement de
+          `ahead_of` n'a pas de contrôle (il attend les pilotes, L2.6 ; levée,
+          L2.6 fait) ; la bibliothèque est lue une fois par lancement de
           l'app ; aucune vérification qu'un circuit accueille la taille de
           grille demandée (le jeu la plafonne au nombre de stands).
         - **L2.3b — fait (2026-10-20).** Sous-lot ajouté avant L2.4 :
@@ -410,7 +409,151 @@ de reprendre. En cas d'écart, la spec fait foi.
           **Limites connues** : pas d'aperçu pour les autres types que
           `message` dans le téléphone ; faits d'épreuve et de contenu non
           réglables ; la scène est un fond uni.
-      - **L3 à L8** : dans l'ordre du plan de livraison de la spec.
+        - **L2.6 — fait (2026-10-20).** Section **Pilotes** du studio (le
+          roster, `drivers/roster.yaml`) et bloc **Adversaires** de la fiche
+          d'une course. Le moteur lit le roster (nom, personnage, nationalité,
+          âge, rôle, niveau, agressivité), la grille d'un événement
+          (`session.opponents` : pilote, voiture, livrée, niveau, lest,
+          bride), vérifie l'une et l'autre et `ahead_of`, et sait renommer un
+          pilote (grilles et critères suivent) ; renommer un personnage fait
+          suivre le pilote qu'il est.
+          **Décidé avec l'utilisateur** : périmètre roster + grille (force par
+          chapitre, livrée par série, carrières et classements reportés) ; le
+          tableau des adversaires de l'écran de session est **extrait**
+          (`OpponentTable`, et `NationalityPicker` pour la liste des pays,
+          commit de refactoring à part) et repris tel quel avec le sélecteur
+          de voitures (`OpponentPicker`), plutôt qu'une grille Story écrite à
+          côté.
+          **Choisi sans demander** : un pilote peut **être** un personnage
+          (clé `character`), dont il prend le nom quand il n'en a pas, et un
+          personnage n'est qu'un pilote ; pas de portrait propre au pilote
+          tant que rien ne l'affiche (celui du personnage suffira) ; le
+          pilote d'une ligne se choisit dans le roster, jamais tapé, et la
+          nationalité suit le pilote (celle de la livrée sans pilote) ; une
+          ligne sans niveau à elle affiche celui de son pilote (sans
+          pilote ni niveau : `Auto`, celui de l'événement) ; passer
+          l'événement à un autre type que la course retire aussi ses
+          `ahead_of` ; pas
+          d'agressivité par ligne, c'est celle du pilote ; une voiture
+          choisie s'écrit toujours (une ligne sans `car` ne vient que d'un
+          fichier tapé à la main) ; remplacer la voiture retire la livrée ;
+          une ligne copiée n'a pas de pilote ; `grid` plus petit que la grille
+          posée est une erreur, et sans `grid` la grille posée est tout le
+          plateau ; `ahead_of` d'un pilote absent de la grille est une
+          **erreur** (l'épreuve ne se gagnerait jamais) ; un pilote sans nom
+          ni personnage est un avertissement ; niveau et agressivité de 0 à
+          100 pour le moteur, mais 70 à 100 dans l'éditeur pour le niveau
+          (la plage de Content Manager, comme l'écran de session) ; la fiche
+          d'un événement s'élargit pour le tableau (les autres blocs gardent
+          leur largeur), qui défile en largeur sous 1 040 px plutôt que
+          d'écraser le nom de la voiture ; le roster est un fichier qui
+          s'annule et se copie comme les autres.
+          **Limites connues** :
+          - la grille n'est pas encore lancée : c'est L3 qui la traduira en
+            `RaceSetup` (pilotes nommés, places restantes en noms de
+            remplissage au niveau de l'événement) ;
+          - le niveau de l'événement (`ai_level`, L2.3) s'éditait de 0 à 100
+            quand celui d'un pilote ou d'une ligne s'arrête à 70 : aligné sur
+            70 à 100 (2026-10-20). Un événement à 70 ne laisse donc aucune
+            marge à l'aide après échecs, ce que la taille d'un cran (L3)
+            devra prendre en compte ;
+          - aucune vérification qu'une livrée existe pour sa voiture (le
+            moteur ne connaît pas la bibliothèque, comme pour les voitures) ;
+          - pas de vivier ni de tirage au hasard comme dans l'écran de
+            session : l'auteur pose ses adversaires un par un (ou par lot dans
+            le sélecteur).
+      - **L3, Story Mode côté joueur — découpé en quatre sous-lots (validé
+        2026-10-20)** : L3.1 jouer sans course (hub, partie et sauvegarde,
+        écran de jeu avec la scène, le téléphone et son fil de messages, les
+        dialogues) ; L3.2 les courses (la grille devient une session, AC se
+        lance, le résultat revient, tentatives et messages d'échec) ; L3.3 les
+        autres gabarits du téléphone (boîte mail, fil d'actu, relevé) et les
+        contenus qui attendent un cadre ; L3.4 les histoires sans cadre.
+        - **L3.1 — fait (2026-10-20).** Le hub liste l'histoire d'exemple et
+          celles de Create Your Own, avec la partie en cours ; « Nouvelle
+          partie » et « Continuer » ouvrent l'écran de jeu : la scène (fond
+          uni), le téléphone et ses fils de messages, la couche de dialogue,
+          et à côté ce qu'attend l'histoire (résumé d'une épreuve, action,
+          réponse attendue, fin). Le moteur garde dans l'historique les
+          répliques vues et le texte des réponses (`Happening::Said`,
+          `Replied.text`), et reconstruit l'écran depuis l'état seul
+          (`view.rs`) : une partie reprise montre ce qui avait été vu.
+          L'histoire d'exemple est embarquée (`sample.rs`, testé contre le
+          dossier). Les parties sont dans `app_config_dir/story/saves/`.
+          **Décidé avec l'utilisateur** : le découpage ; une partie par
+          histoire, écrite après chaque geste (les emplacements et le
+          rechargement viendront plus tard) ; l'histoire d'exemple en plus
+          de celles de l'auteur.
+          **Choisi sans demander** : une histoire avec des erreurs de
+          vérification ne se lance pas ; chaque commande relit l'histoire et
+          la sauvegarde (rien en mémoire entre deux gestes), donc une histoire
+          modifiée dans le studio se joue telle quelle ou refuse la partie
+          avec la raison ; écriture par fichier temporaire renommé ; la partie
+          d'une histoire de l'auteur est `saves/<id>-<empreinte du dossier>.json`
+          (deux copies d'une histoire ne partagent pas leur partie : la
+          déplacer fait donc perdre la partie), celle de l'exemple
+          `saves/builtin/sample.json` ; une partie qui ne peut plus reprendre
+          (histoire modifiée, fichier illisible) reste listée avec sa raison,
+          et « Nouvelle partie » demande quand même avant de la remplacer ;
+          l'histoire est vérifiée au début d'une partie et à sa reprise, pas à
+          chaque geste ; un même geste demandé deux fois de suite (double
+          clic) n'est joué qu'une fois ; livrer à nouveau un contenu le rend
+          « non vu » (le moteur oubliait déjà ses réponses) ; une ancienne
+          livraison d'un contenu compte comme lue ; le format de sauvegarde
+          reste le 1 (l'historique gagne une variante et un champ, une partie
+          écrite avant se relit) ; un fil par expéditeur, le plus récent en
+          haut, marqué non lu tant qu'un message n'est pas ouvert ou qu'une
+          réponse est attendue (pastille bleue, le rouge a son barème) ;
+          ouvrir un fil marque ses messages vus ; le dialogue en cours est le
+          dernier livré, montré tant qu'il attend une réponse ou n'a pas été
+          lu jusqu'au bout ; une action du joueur est une carte avec un
+          bouton « Fait » ; l'exemple n'a pas ses portraits (initiales) ;
+          « Quitter » ne demande rien, tout est déjà enregistré.
+          **Limites connues** : pas encore de lancement de course (L3.2) ;
+          les autres types de contenu ne sont que nommés dans le téléphone
+          (L3.3) ; une histoire sans cadre n'a rien pour ses messages (L3.4) ;
+          la date d'une partie n'est pas montrée dans le hub ; le jeu n'a pas
+          été lancé à l'écran.
+        - **L3.2 — fait (2026-10-20).** « Aller à l'épreuve » paie la tentative
+          puis lance la session par le lancement de l'écran de session
+          (`startSession`, porte Steam, pilote et livrée du joueur). La
+          session part des réglages du joueur pour ce type (les presets de
+          l'écran de session) et prend ceux de l'événement par-dessus
+          (`story/race.ts`, pur et testé ; `raceLaunch.ts` lit les fichiers).
+          Au retour du jeu, le résultat (`race_out.json`, L0) devient celui du
+          moteur ; une session restée en cours à la fermeture de Pit Box est
+          relue à l'ouverture. Refactoring en passant : `defaultSetup()` sorti
+          de `Launch.svelte` (commit à part).
+          **Choisi sans demander** : une course part sur la grille, sans essais
+          ni qualification (l'auteur règle le départ) ; contre-la-montre =
+          hotlap, essai = practice ; météo de l'événement, sinon celle du
+          joueur pour ce type, sinon ciel clair ; le niveau de l'événement est
+          celui de tous les adversaires anonymes (écart 0) ; sans `grid` ni
+          `opponents`, le nombre habituel du joueur (preset, sinon 7) ; un cran
+          d'aide = 2 points, jamais sous 70 ; la session décisive est la
+          course d'une course, la dernière sinon ; une course est finie sans
+          abandon, une autre session avec un tour ; un pilote nommé est
+          retrouvé par le nom que la grille lui a donné, pas par sa place (le
+          lancement écarte une voiture qui ne peut pas rouler, ce qui décale
+          les suivantes), et compte battu s'il finit derrière ou abandonne,
+          jamais si le joueur abandonne ; un résultat dont le circuit ou la
+          voiture du joueur n'est pas celui de l'épreuve n'est pas pris (une
+          session lancée ailleurs entre-temps) ; l'heure du lancement est
+          gardée à côté de la sauvegarde (`.launched`), et un relancement
+          avant résultat garde la première ; sans résultat, quelle qu'en soit
+          la raison (jeu fermé tôt, jamais démarré, lancement échoué) :
+          « Relancer » (sans payer) ou « Abandonner » (non fini) ; le bouton
+          est le rouge de l'écran, comme le lancement de session.
+          **Limites connues** : rien n'a été lancé en vrai (pas de jeu ici) :
+          la session construite, le retour du résultat et les noms de pilotes
+          dans la grille sont à vérifier en jeu - en particulier que
+          `race_out.json` rend bien le nom posé pour chaque adversaire, dont
+          dépend « finir devant » ; deux pilotes du roster au même nom
+          affiché se confondraient ; les épreuves annexes ne
+          se lancent pas encore (aucun écran ne les montre) ; le dernier
+          résultat n'est pas affiché sur la carte (seules les réactions du
+          téléphone le disent).
+      - **L3b à L8** : dans l'ordre du plan de livraison de la spec.
       **Écarts assumés par rapport au document de conception** (la spec
       publique les reprend déjà) :
       - Le drapeau qu'il plaçait dans la base SQLite est dans

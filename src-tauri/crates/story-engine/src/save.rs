@@ -441,4 +441,19 @@ mod tests {
         assert_eq!(save.state.history.len(), 3);
         assert!(save.state.pools["p"].contains("p1"), "pool memory kept");
     }
+
+    // A reply recorded before its text was kept still reads, with no text:
+    // the history only gained fields (SPEC-story-mode, Story Mode: player
+    // side), so format 1 stands.
+    #[test]
+    fn a_reply_saved_without_its_text_still_reads() {
+        let entry: crate::state::Entry = serde_json::from_str(
+            r#"{ "date": "0001-01-01", "clock": "00:00", "kind": "replied", "content": "c", "reply": "yes" }"#,
+        )
+        .expect("reads");
+        assert!(
+            matches!(entry.what, crate::state::Happening::Replied { ref text, .. } if text.is_empty()),
+            "{entry:?}"
+        );
+    }
 }

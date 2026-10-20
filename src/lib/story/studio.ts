@@ -135,6 +135,47 @@ export interface Session {
   time?: string;
   /** A weather intent (`clear`, `rain`…), not a weather folder. */
   weather?: string;
+  /** Race only: the opponents the author places, in order. */
+  opponents?: StoryOpponent[];
+}
+
+/** One opponent of a race's grid (`story_engine::model::Opponent`); a key
+ * left out is the event's (`car`, `ai_level`), the driver's, or the
+ * launcher's to pick. */
+export interface StoryOpponent {
+  /** A driver of the roster; none: the livery's name. */
+  driver?: string;
+  /** Folder ids, from the library. */
+  car?: string;
+  skin?: string;
+  ai_level?: number;
+  /** 0 to 100; 0 is left out. */
+  ballast?: number;
+  restrictor?: number;
+}
+
+export type DriverRole = "friend" | "rival" | "star" | "filler";
+
+/** A driver of `drivers/roster.yaml` (`story_engine::model::Driver`). */
+export interface Driver {
+  id: string;
+  /** Display name; a driver who is a character and has none takes the
+   * character's. */
+  name?: string;
+  /** The character this driver is on track. */
+  character?: string;
+  /** A country as the game names it in full. */
+  nationality?: string;
+  /** Age at the start of the story. */
+  age?: number;
+  role?: DriverRole;
+  /** 0 to 100. */
+  ai_level?: number;
+  aggression?: number;
+}
+
+export interface Roster {
+  drivers: Driver[];
 }
 
 /** `events/<id>.yaml` (`story_engine::model::Event`), every default spelt
@@ -230,7 +271,7 @@ export interface EditedFile<T> {
   error: string | null;
 }
 
-export type NameKind = "character" | "flag" | "counter" | "step" | "event";
+export type NameKind = "character" | "flag" | "counter" | "step" | "event" | "driver";
 
 /** A line citing a name. */
 export interface Usage {
@@ -275,6 +316,8 @@ export interface OpenStory {
   manifest: EditedFile<Manifest>;
   characters: EditedFile<Characters>;
   variables: EditedFile<Variables>;
+  /** `drivers/roster.yaml`: read as empty until its first save. */
+  drivers: EditedFile<Roster>;
   chapters: ChapterFile[];
   content: ContentRef[];
   /** One per file of `events/`, in file-name order. */
@@ -319,7 +362,8 @@ export interface Checked {
 
 export const checkStory = (folder: string) => invoke<Checked>("story_check", { folder });
 
-/** Writes one file - a chapter, an event, `story.yaml` or a world file - in the shape
+/** Writes one file - a chapter, an event, `story.yaml`, a world file or the
+ * roster - in the shape
  * of that file; `expected` is the stamp it was read with, `null` for a file
  * the story does not have yet. Resolves to the new stamp. */
 export const saveFile = (folder: string, file: string, expected: string | null, value: unknown) =>

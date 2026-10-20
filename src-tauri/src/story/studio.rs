@@ -22,8 +22,8 @@ use std::path::{Path, PathBuf};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use story_engine::frame::Frame;
-use story_engine::load::{draft_dir, read_dir, Draft, SourceFile};
-use story_engine::model::{Chapter, Characters, ContentFile, Event, Manifest, Placement, Variables};
+use story_engine::load::{draft_dir, read_dir, Draft, SourceFile, ROSTER};
+use story_engine::model::{Chapter, Characters, ContentFile, Event, Manifest, Placement, Roster, Variables};
 use story_engine::refs::{self, NameKind, NameUsages};
 use story_engine::validate::{validate, Diagnostic, Severity};
 use story_engine::write;
@@ -63,6 +63,12 @@ fn write_studio(config_dir: &Path, studio: &StudioFile) -> Result<(), String> {
     }
     let json = serde_json::to_string_pretty(studio).map_err(|e| e.to_string())?;
     std::fs::write(&path, json).map_err(|e| format!("writing {}: {e}", path.display()))
+}
+
+/// The author's story folders, in the order they were added: what Story
+/// Mode offers besides the sample (`play.rs`).
+pub(super) fn folders(config_dir: &Path) -> Vec<PathBuf> {
+    read_studio(config_dir).stories
 }
 
 fn add_to_studio(config_dir: &Path, folder: &Path) -> Result<(), String> {
@@ -184,7 +190,8 @@ fn story_id(folder: &Path) -> String {
 }
 
 /// What a file held when the editor read it: a write is refused if the file
-/// no longer holds it.
+/// no longer holds it. Also the fingerprint of a story's folder in the name
+/// of its save (`play.rs`).
 pub(super) fn stamp(text: &str) -> String {
     // FNV-1a: a fingerprint, not a security measure.
     let mut h: u64 = 0xcbf29ce484222325;
@@ -252,9 +259,9 @@ impl ContentRef {
     }
 }
 
-/// One of the story-wide files the editor writes (`story.yaml`, `world/`),
-/// readable or not. A world file the story does not have yet reads as empty,
-/// with an empty stamp: the first save creates it.
+/// One of the story-wide files the editor writes (`story.yaml`, `world/`, the
+/// roster), readable or not. A world file or a roster the story does not have
+/// yet reads as empty, with an empty stamp: the first save creates it.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EditedFile<T> {
@@ -272,6 +279,8 @@ pub struct OpenStory {
     pub manifest: EditedFile<Manifest>,
     pub characters: EditedFile<Characters>,
     pub variables: EditedFile<Variables>,
+    /// `drivers/roster.yaml`: optional, read as empty until the first driver.
+    pub drivers: EditedFile<Roster>,
     pub chapters: Vec<ChapterFile>,
     pub content: Vec<ContentRef>,
     /// One per file of `events/`, in file-name order.
@@ -321,6 +330,7 @@ pub fn open(folder: &Path) -> Result<OpenStory, String> {
     let manifest = edited(&files, &d.errors, MANIFEST, d.manifest.take());
     let characters = edited(&files, &d.errors, CHARACTERS, Some(std::mem::take(&mut d.characters)));
     let variables = edited(&files, &d.errors, VARIABLES, Some(std::mem::take(&mut d.variables)));
+    let drivers = edited(&files, &d.errors, ROSTER, Some(std::mem::take(&mut d.roster)));
     let chapters = chapter_files
         .iter()
         .map(|f| {
@@ -357,6 +367,7 @@ pub fn open(folder: &Path) -> Result<OpenStory, String> {
         manifest,
         characters,
         variables,
+        drivers,
         chapters,
         content,
         events,
@@ -428,10 +439,10 @@ fn load_error(e: story_engine::LoadError) -> Diagnostic {
     }
 }
 
-/// `flow/<name>.yaml`, directly in `flow/`. With `story.yaml` and the two
-/// world files and the events, the only files the editor writes: anything
-/// else - a path climbing out of the story, another folder - is refused,
-/// whatever the frontend sends.
+/// `flow/<name>.yaml`, directly in `flow/`. With `story.yaml`, the two
+/// world files, the roster, the events and the content, the only files the
+/// editor writes: anything else - a path climbing out of the story, another
+/// folder - is refused, whatever the frontend sends.
 fn is_chapter_path(path: &str) -> bool {
     is_yaml_in("flow/", path)
 }
@@ -476,6 +487,7 @@ pub fn render(file: &str, value: serde_json::Value) -> Result<String, String> {
         MANIFEST => write::manifest(&from(value)?),
         CHARACTERS => write::characters(&from(value)?),
         VARIABLES => write::variables(&from(value)?),
+        ROSTER => write::roster(&from(value)?),
         _ if is_chapter_path(file) => write::chapter(file, &from::<Chapter>(value)?),
         _ if is_event_path(file) => write::event(file, &from::<Event>(value)?),
         _ if is_content_path(file) => write::content_file(file, &from::<ContentFile>(value)?),
@@ -501,7 +513,7 @@ pub struct PreviewView {
     pub from: Option<String>,
     /// A dialogue's characters present.
     pub characters: Vec<String>,
-    pub steps: Vec<story_engine::engine::PreviewStep>,
+    pub steps: Vec<story_engine::engine::Step>,
     pub choices: Vec<story_engine::engine::Offer>,
     pub ended: bool,
     /// The other items it sent, named.
@@ -687,7 +699,7 @@ pub fn save_file(
     expected: Option<&str>,
     value: serde_json::Value,
 ) -> Result<String, String> {
-    let writes = matches!(file, MANIFEST | CHARACTERS | VARIABLES)
+    let writes = matches!(file, MANIFEST | CHARACTERS | VARIABLES | ROSTER)
         || is_chapter_path(file)
         || is_event_path(file)
         || is_content_path(file);
@@ -721,7 +733,7 @@ pub fn remove_file(folder: &Path, file: &str, expected: &str) -> Result<(), Stri
     Ok(())
 }
 
-/// Renames a character, flag, counter, relation step or event, and every
+/// Renames a character, flag, counter, relation step, event or driver, and every
 /// sentence citing it, in every file of the story (`story_engine::refs`).
 /// Unlike a save it takes no stamp: it reads the files as they are now and
 /// changes only the cited words, so an edit made meanwhile in a text editor
@@ -946,6 +958,7 @@ mod tests {
             "events/sub/race.yaml",
             "world/../story.yaml",
             "world/economy.yaml",
+            "drivers/careers.yaml",
         ] {
             assert!(!is_chapter_path(bad), "{bad} is not a chapter");
             assert!(
@@ -1082,6 +1095,38 @@ mod tests {
         assert_ne!(opened.characters.stamp, "", "now on disk");
         assert_eq!(list(&config)[0].title.as_deref(), Some("Renamed"), "the hub follows");
         assert!(check(&folder).diagnostics.is_empty(), "still clean");
+    }
+
+    // The roster goes through the editor like a world file: read as empty
+    // until its first save, then checked with the rest - here a grid naming
+    // a driver it does not have (SPEC-story-mode, Drivers).
+    #[test]
+    fn the_roster_is_created_read_back_and_checked() {
+        let config = temp_dir("studio-config");
+        let base = temp_dir("studio-story");
+        let folder = base.join("s");
+        create(&config, &folder, "S", "en", Frame::None, "C").unwrap();
+        let opened = open(&folder).unwrap();
+        assert_eq!(opened.drivers.stamp, "", "no roster yet");
+        assert!(opened.drivers.value.unwrap().drivers.is_empty(), "read as empty");
+        let event = serde_json::json!({
+            "id": "r", "type": "race",
+            "session": { "track": "t", "car": "c", "opponents": [{ "driver": "rival" }] },
+        });
+        save_file(&folder, "events/r.yaml", None, event).expect("event created");
+        let unknown =
+            |folder: &Path| (check(folder).diagnostics.iter()).any(|d| d.message.contains("unknown driver `rival`"));
+        assert!(unknown(&folder), "the grid names a driver the story lacks");
+        let roster = serde_json::json!({ "drivers": [{ "id": "rival", "name": "R", "ai_level": 95 }] });
+        save_file(&folder, ROSTER, None, roster).expect("roster created");
+        let opened = open(&folder).unwrap();
+        let drivers = opened.drivers.value.expect("reads").drivers;
+        assert_eq!((drivers[0].id.as_str(), drivers[0].ai_level), ("rival", Some(95)));
+        assert!(!unknown(&folder), "the driver is known now");
+        assert!(
+            (opened.usages.iter()).any(|u| u.kind == NameKind::Driver && u.id == "rival" && u.usages.len() == 1),
+            "the grid cites the driver"
+        );
     }
 
     // A `.story` file goes through the editor like an event: created by its

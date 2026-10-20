@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use super::prelude::*;
-use crate::story::{backups, studio};
+use crate::story::{backups, play, studio};
 
 /// The Story switch asked for on this launch's command line, if any
 /// (`--enable-story-studio` / `--disable-story-studio`). Read once at startup
@@ -12,6 +12,42 @@ use crate::story::{backups, studio};
 #[tauri::command]
 pub fn story_studio_switch() -> Option<bool> {
     crate::story::studio_switch_from_args(std::env::args())
+}
+
+// ------------------------------------------------------------- Story Mode
+//
+// Façades over `crate::story::play`. Each reads the story and its save from
+// disk, hence off the window thread; the screen sends one move at a time, so
+// two moves never race for the save.
+
+#[tauri::command]
+pub async fn story_play_list(app: AppHandle) -> Result<Vec<play::Playable>, String> {
+    off_window(app, |app| Ok(play::list(&crate::rules::config_dir(app)?))).await
+}
+
+/// A new game, replacing the one under way; its draws come from the clock.
+#[tauri::command]
+pub async fn story_play_new(app: AppHandle, source: play::Source) -> Result<play::Game, String> {
+    off_window(app, move |app| {
+        let seed = (std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH))
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or(0);
+        play::new_game(&crate::rules::config_dir(app)?, &source, seed)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn story_play_resume(app: AppHandle, source: play::Source) -> Result<play::Game, String> {
+    off_window(app, move |app| play::resume(&crate::rules::config_dir(app)?, &source)).await
+}
+
+#[tauri::command]
+pub async fn story_play_move(app: AppHandle, source: play::Source, input: play::Move) -> Result<play::Game, String> {
+    off_window(app, move |app| {
+        play::play(&crate::rules::config_dir(app)?, &source, input)
+    })
+    .await
 }
 
 // ------------------------------------------------- Create Your Own (studio)

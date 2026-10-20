@@ -9,7 +9,7 @@ export const EVENT_TYPES: EventType[] = ["race", "hot_lap", "time_attack", "test
 
 /** The session keys only a race has: the validator refuses them on another
  * type, so changing the type drops them. */
-const RACE_ONLY = ["laps", "grid", "ai_level", "start"] as const;
+const RACE_ONLY = ["laps", "grid", "ai_level", "start", "opponents"] as const;
 
 /** The file of a new event: named after its id, like the engine's sample. */
 export function eventFile(id: string): string {
@@ -50,6 +50,14 @@ export function sessionFor(type: EventType, session: Session): Session {
   return out;
 }
 
+/** `success` fit for `type`: only a race has a grid, so another type loses
+ * the drivers to finish ahead of, which the checks would otherwise report
+ * as not on its grid. */
+export function successFor(type: EventType, success: string[]): string[] {
+  if (type === "race") return success;
+  return success.filter((line) => !/^ahead_of\s/.test(line));
+}
+
 /** Where the events are used, in the order the story plays them: by chapter,
  * the events its Event nodes launch, then those Side events nodes open, then
  * those nothing uses yet. An event appears once, at its first use. */
@@ -78,22 +86,26 @@ export function eventPlaces(chapters: (Chapter | null)[], ids: string[]): EventP
 }
 
 /** What success takes, as the form shows it. A sentence the form has no
- * control for (`ahead_of`, until the story has drivers) is kept as it is. */
+ * control for is kept as it is. */
 export interface Criteria {
   position: number | null;
   finished: boolean;
   /** `1:18.200`. */
   lapUnder: string | null;
+  /** The drivers to finish ahead of, in the order written. */
+  aheadOf: string[];
   others: string[];
 }
 
 export function criteriaOf(success: string[]): Criteria {
-  const out: Criteria = { position: null, finished: false, lapUnder: null, others: [] };
+  const out: Criteria = { position: null, finished: false, lapUnder: null, aheadOf: [], others: [] };
   for (const line of success) {
     const position = /^position\s*<=\s*(\d+)$/.exec(line);
     const lap = /^best_lap\s*<\s*(\S+)$/.exec(line);
+    const ahead = /^ahead_of\s+(\S+)$/.exec(line);
     if (position) out.position = Number(position[1]);
     else if (lap) out.lapUnder = lap[1];
+    else if (ahead) out.aheadOf.push(ahead[1]);
     else if (line === "finished") out.finished = true;
     else out.others.push(line);
   }
@@ -106,6 +118,7 @@ export function successOf(c: Criteria): string[] {
     ...(c.position !== null ? [`position <= ${c.position}`] : []),
     ...(c.finished ? ["finished"] : []),
     ...(c.lapUnder ? [`best_lap < ${c.lapUnder}`] : []),
+    ...c.aheadOf.map((d) => `ahead_of ${d}`),
     ...c.others,
   ];
 }

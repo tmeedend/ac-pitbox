@@ -1,7 +1,21 @@
 id: race_02
 name: Race 02
 type: race
-session: { track: another_track, layout: short, car: some_car, laps: 10, grid: 14, ai_level: 92, start: last, time: "16:30", weather: overcast }
+session:
+  track: another_track
+  layout: short
+  car: some_car
+  laps: 10
+  grid: 14
+  ai_level: 92
+  start: last
+  time: "16:30"
+  weather: overcast
+  # The named opponents first; the ten other slots drive `some_car`.
+  opponents:
+    - { driver: rival_driver, skin: red_livery }
+    - { driver: a_star, car: another_car, ballast: 30 }
+    - { car: another_car, ai_level: 90 }
 success: ["position <= 1", "finished"]
 on_success:
   effects: ["reputation += 3"]

@@ -3,14 +3,14 @@
 //! file it is in. Errors are what makes the story misbehave; warnings what is
 //! probably a mistake but plays (a node nobody reaches, a draft left aside).
 //!
-//! What it cannot check yet, for lack of the data: car and driver ids
-//! (`car.<id>`, `ahead_of`) - the package and the roster arrive in later lots.
-//! Media files are checked only when the folder was listed (`Story::media`).
+//! What it cannot check yet, for lack of the data: car ids (`car.<id>`) -
+//! the package arrives in a later lot. Media files are checked only when the
+//! folder was listed (`Story::media`).
 
 use std::collections::{BTreeSet, HashSet, VecDeque};
 use std::fmt;
 
-use crate::expr::{Condition, ContentFact, Effect, EventFact, Literal, Var};
+use crate::expr::{Condition, ContentFact, Criterion, Effect, EventFact, Literal, Var};
 use crate::frame::{nowhere, Frame, FrameMap};
 use crate::load::Story;
 use crate::model::{Character, ContentItem, ContentType, Event, EventType, Node, NodeKind, Placement};
@@ -68,6 +68,7 @@ pub fn validate(story: &Story) -> Vec<Diagnostic> {
         node: None,
     };
     c.manifest_and_world();
+    c.drivers();
     c.flow();
     c.content();
     c.events();
@@ -157,6 +158,36 @@ impl Checker<'_> {
             }
             if story.variables.counters.contains_key(flag) {
                 self.warning("world/variables.yaml", format!("`{flag}` is both a flag and a counter"));
+            }
+        }
+    }
+
+    /// The roster (SPEC-story-mode, Drivers): each driver once, the character
+    /// they are on track one that exists and is no other driver, their
+    /// numbers in range.
+    fn drivers(&mut self) {
+        const FILE: &str = crate::load::ROSTER;
+        let story = self.story;
+        let (mut ids, mut characters) = (HashSet::new(), HashSet::new());
+        for d in &story.drivers {
+            let at = format!("driver `{}`", d.id);
+            if !ids.insert(&d.id) {
+                self.error(FILE, format!("{at} is declared twice"));
+            }
+            if let Some(ch) = &d.character {
+                if story.character(ch).is_none() {
+                    self.error(FILE, format!("{at}: unknown character `{ch}`"));
+                } else if !characters.insert(ch) {
+                    self.error(FILE, format!("{at}: character `{ch}` is already another driver"));
+                }
+            }
+            if d.name.is_none() && d.character.is_none() {
+                self.warning(FILE, format!("{at} has no name: the grid would show the livery's"));
+            }
+            for (key, value) in [("ai_level", d.ai_level), ("aggression", d.aggression)] {
+                if value.is_some_and(|v| v > 100) {
+                    self.error(FILE, format!("{at}: `{key}` goes from 0 to 100"));
+                }
             }
         }
     }
@@ -537,6 +568,8 @@ impl Checker<'_> {
                 self.error(file, format!("{at}: an entry fee needs an economy (`settings.money`)"));
             }
             self.session(file, &at, event);
+            self.opponents(file, &at, event);
+            self.ahead_of(file, &at, event);
         }
     }
 
@@ -559,6 +592,7 @@ impl Checker<'_> {
             ("grid", s.grid.is_some()),
             ("ai_level", s.ai_level.is_some()),
             ("start", s.start.is_some()),
+            ("opponents", !s.opponents.is_empty()),
         ];
         if event.kind != EventType::Race {
             for (key, set) in race_only {
@@ -575,6 +609,56 @@ impl Checker<'_> {
         }
         if s.ai_level.is_some_and(|l| l > 100) {
             self.error(file, format!("{at}: `ai_level` goes from 0 to 100"));
+        }
+    }
+
+    /// The opponents an author places on a race's grid: drivers of the roster,
+    /// each once, numbers in range, and no more than the grid holds.
+    fn opponents(&mut self, file: &str, at: &str, event: &Event) {
+        let s = &event.session;
+        let mut seen = HashSet::new();
+        for (i, o) in s.opponents.iter().enumerate() {
+            let at = format!("{at}, opponent {}", i + 1);
+            if let Some(d) = &o.driver {
+                if self.story.driver(d).is_none() {
+                    self.error(file, format!("{at}: unknown driver `{d}`"));
+                } else if !seen.insert(d) {
+                    self.error(file, format!("{at}: driver `{d}` is already on this grid"));
+                }
+            }
+            for (key, value) in [
+                ("ai_level", o.ai_level.unwrap_or(0)),
+                ("ballast", o.ballast),
+                ("restrictor", o.restrictor),
+            ] {
+                if value > 100 {
+                    self.error(file, format!("{at}: `{key}` goes from 0 to 100"));
+                }
+            }
+        }
+        let cars = s.opponents.len() + 1;
+        if s.grid.is_some_and(|g| (g as usize) < cars) {
+            self.error(
+                file,
+                format!(
+                    "{at}: a grid of {} cars cannot hold {} opponents and the player",
+                    s.grid.unwrap_or(0),
+                    s.opponents.len()
+                ),
+            );
+        }
+    }
+
+    /// `ahead_of <driver>` names a driver of the roster who is on the event's
+    /// grid: otherwise the event could never be won.
+    fn ahead_of(&mut self, file: &str, at: &str, event: &Event) {
+        for c in &event.success {
+            let Criterion::AheadOf(d) = c else { continue };
+            if self.story.driver(d).is_none() {
+                self.error(file, format!("{at}: `{c}`: unknown driver `{d}`"));
+            } else if !event.session.opponents.iter().any(|o| o.driver.as_ref() == Some(d)) {
+                self.error(file, format!("{at}: `{c}`: driver `{d}` is not on its grid"));
+            }
         }
     }
 
@@ -997,6 +1081,110 @@ session: { track: t, car: c, laps: 5, grid: 10, ai_level: 90, start: first }
 ";
         let d = diagnostics(&[("flow/01-one.yaml", flow), ("events/lap.yaml", fine)]);
         assert!(d.is_empty(), "a full race session is clean: {d:#?}");
+    }
+
+    // The roster (SPEC-story-mode, Drivers): each driver once, the character
+    // they are one that exists and no other driver's, numbers in range; a
+    // driver nobody named would race under the livery's name.
+    #[test]
+    fn the_roster_is_checked() {
+        let world = "characters:\n  - id: friend\n";
+        let roster = "drivers:
+  - { id: a, character: friend }
+  - { id: a, name: Twice }
+  - { id: b, character: ghost, name: B }
+  - { id: c, character: friend, name: C, ai_level: 101, aggression: 150 }
+  - { id: d }
+";
+        let d = diagnostics(&[("world/characters.yaml", world), ("drivers/roster.yaml", roster)]);
+        for expected in [
+            "driver `a` is declared twice",
+            "driver `b`: unknown character `ghost`",
+            "driver `c`: character `friend` is already another driver",
+            "driver `c`: `ai_level` goes from 0 to 100",
+            "driver `c`: `aggression` goes from 0 to 100",
+        ] {
+            assert!(has(&d, Severity::Error, expected), "{expected}: {d:#?}");
+        }
+        assert!(has(&d, Severity::Warning, "driver `d` has no name"), "{d:#?}");
+        assert!(
+            d.iter().all(|x| x.file == "drivers/roster.yaml"),
+            "all on the roster: {d:#?}"
+        );
+    }
+
+    // A race's grid names drivers of the roster, each once, and holds no
+    // more opponents than its size; only a race has one.
+    #[test]
+    fn an_event_grid_is_checked() {
+        let flow = "id: ch01\nnodes:\n  - id: start\n    event: r\n  - id: end\n    end: done\n";
+        let roster = "drivers:\n  - { id: rival, name: R }\n";
+        let event = "id: r
+type: race
+session:
+  track: t
+  car: c
+  grid: 3
+  opponents:
+    - { driver: rival }
+    - { driver: rival, ballast: 120 }
+    - { driver: ghost, ai_level: 101 }
+";
+        let d = diagnostics(&[
+            ("flow/01-one.yaml", flow),
+            ("drivers/roster.yaml", roster),
+            ("events/r.yaml", event),
+        ]);
+        for expected in [
+            "event `r`, opponent 2: driver `rival` is already on this grid",
+            "event `r`, opponent 2: `ballast` goes from 0 to 100",
+            "event `r`, opponent 3: unknown driver `ghost`",
+            "event `r`, opponent 3: `ai_level` goes from 0 to 100",
+            "event `r`: a grid of 3 cars cannot hold 3 opponents and the player",
+        ] {
+            assert!(has(&d, Severity::Error, expected), "{expected}: {d:#?}");
+        }
+        let lap = "id: r\ntype: hot_lap\nsession:\n  track: t\n  car: c\n  opponents: [{ driver: rival }]\n";
+        let d = diagnostics(&[
+            ("flow/01-one.yaml", flow),
+            ("drivers/roster.yaml", roster),
+            ("events/r.yaml", lap),
+        ]);
+        assert!(has(&d, Severity::Error, "`opponents` is for a race"), "{d:#?}");
+        let fine = "id: r\ntype: race\nsession:\n  track: t\n  car: c\n  opponents: [{ driver: rival }, {}]\n";
+        let d = diagnostics(&[
+            ("flow/01-one.yaml", flow),
+            ("drivers/roster.yaml", roster),
+            ("events/r.yaml", fine),
+        ]);
+        assert!(d.is_empty(), "a grid without `grid` is the listed field: {d:#?}");
+    }
+
+    // `ahead_of` names a driver who races in the event: one unknown, or not
+    // on the grid, would make the event impossible to win.
+    #[test]
+    fn ahead_of_names_a_driver_on_the_grid() {
+        let flow = "id: ch01\nnodes:\n  - id: start\n    event: r\n  - id: end\n    end: done\n";
+        let roster = "drivers:\n  - { id: rival, name: R }\n  - { id: star, name: S }\n";
+        let event = "id: r
+type: race
+session: { track: t, car: c, opponents: [{ driver: rival }] }
+success: [\"ahead_of rival\", \"ahead_of star\", \"ahead_of ghost\"]
+";
+        let d = diagnostics(&[
+            ("flow/01-one.yaml", flow),
+            ("drivers/roster.yaml", roster),
+            ("events/r.yaml", event),
+        ]);
+        assert!(
+            has(&d, Severity::Error, "`ahead_of star`: driver `star` is not on its grid"),
+            "{d:#?}"
+        );
+        assert!(
+            has(&d, Severity::Error, "`ahead_of ghost`: unknown driver `ghost`"),
+            "{d:#?}"
+        );
+        assert!(!d.iter().any(|x| x.message.contains("ahead_of rival")), "{d:#?}");
     }
 
     // Frames: `none` or a frame Pit Box ships, at the start and in a Beat;

@@ -1,14 +1,19 @@
 // The player's library, as the story editor sees it: the cars and tracks an
 // event picks from (SPEC-story-mode, Create Your Own: Events). Read once
 // per run of the app - the library rarely changes while an author writes -
-// and a track's layouts only when an event shows that track.
+// a track's layouts only when an event shows that track, and a car's
+// liveries only when a grid shows that car. The game's countries are the
+// app's own cache (`$lib/flags.svelte`).
 import { getModDetail, listLibrary, type LayoutItem, type ModCard, type ModKind } from "$lib/library/library";
+import { listModSkins, type SkinItem } from "$lib/launch/launch";
 
 export const studioLibrary = $state<{
   cards: ModCard[] | null;
   /** Layouts by track id, once read. */
   layouts: Record<string, LayoutItem[]>;
-}>({ cards: null, layouts: {} });
+  /** Liveries by car id, once read. */
+  skins: Record<string, SkinItem[]>;
+}>({ cards: null, layouts: {}, skins: {} });
 
 let loading: Promise<void> | null = null;
 
@@ -46,4 +51,19 @@ export function loadLayouts(trackId: string): Promise<LayoutItem[]> {
     },
   );
   return layoutReads[trackId];
+}
+
+const skinReads: Record<string, Promise<SkinItem[]>> = {};
+
+/** The liveries of `carId`, read once; `studioLibrary.skins` follows. */
+export function loadSkins(carId: string): Promise<SkinItem[]> {
+  skinReads[carId] ??= listModSkins(carId).then(
+    (skins) => (studioLibrary.skins[carId] = skins),
+    (e) => {
+      delete skinReads[carId];
+      console.warn("story studio: liveries not read", carId, e);
+      return [];
+    },
+  );
+  return skinReads[carId];
 }
