@@ -258,6 +258,19 @@ pub fn preview(story: &Story, setup: &[Effect], id: &str, replies: &[String]) ->
     })
 }
 
+/// The choices a conversation stopped at offers, label and text, in the
+/// order the script reached them: what the frame shows, now or on reload.
+pub fn offers(script: &script::Script, at: &[usize], offered: &[String]) -> Vec<Offer> {
+    let written = script::choices_at(script, at).unwrap_or_default();
+    (offered.iter())
+        .filter_map(|label| written.iter().find(|c| &c.label == label))
+        .map(|c| Offer {
+            label: c.label.clone(),
+            text: c.text.clone(),
+        })
+        .collect()
+}
+
 /// Whether a result satisfies an event's success criteria: all of them, and
 /// finishing when there are none.
 pub fn succeeded(criteria: &[Criterion], result: &EventResult) -> bool {
@@ -484,14 +497,7 @@ impl<'a> Run<'a> {
         }
         match stop {
             Stop::Choices { at, offered } => {
-                let written = script::choices_at(&item.script, &at).unwrap_or_default();
-                let choices = (offered.iter())
-                    .filter_map(|label| written.iter().find(|c| &c.label == label))
-                    .map(|c| Offer {
-                        label: c.label.clone(),
-                        text: c.text.clone(),
-                    })
-                    .collect();
+                let choices = offers(&item.script, &at, &offered);
                 self.state
                     .conversations
                     .insert(content.into(), Conversation { at, offered });
