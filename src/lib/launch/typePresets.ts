@@ -19,6 +19,11 @@ import { clampAiLevel } from "$lib/launch/opponent";
 import type { SavedPool } from "$lib/launch/gridRules";
 import { START_MODES, assistLevelFrom, nearestGrip } from "$lib/launch/setupRules";
 
+/** How many opponents a grid has before the player chose: the session
+ * screen's, a preset that does not say, and a story race that does not
+ * either. */
+export const DEFAULT_OPPONENT_COUNT = 7;
+
 /** A per-type preset as `launch_state.json` stores it. The pool fields
  * (`grid_filters`, and the tab-era ones still read back) come from `SavedPool`,
  * next to the migration that reads them. */
@@ -144,7 +149,7 @@ export function readPreset(p: TypePreset): PresetValues {
       tyre_blankets: p.tyre_blankets ?? false,
       ideal_line: p.ideal_line ?? false,
     },
-    opponentCount: p.opponent_count ?? 7,
+    opponentCount: p.opponent_count ?? DEFAULT_OPPONENT_COUNT,
     abs: assistLevelFrom(p.abs, p.abs_auto),
     tractionControl: assistLevelFrom(p.traction_control, p.traction_control_auto),
     season: p.season ?? "",
