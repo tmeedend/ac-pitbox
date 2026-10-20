@@ -11,6 +11,7 @@
   import { nameFrom } from "$lib/story/world";
   import AddName from "./AddName.svelte";
   import EventSheet from "./EventSheet.svelte";
+  import PickList, { type PickEntry, type PickGroup } from "./PickList.svelte";
   import StoryChecks from "./StoryChecks.svelte";
 
   const story = $derived(studio.story!);
@@ -29,6 +30,24 @@
     new Set(studio.diagnostics.filter((d) => d.severity === "error").map((d) => d.file)),
   );
 
+  const groups = $derived.by((): PickGroup[] => {
+    const entry = (id: string): PickEntry[] => {
+      const e = story.events.find((x) => x.value?.id === id);
+      if (!e) return [];
+      const sub = t(`story.events.type_${e.value!.type}`);
+      return [{ key: e.file, label: labels[id], sub, error: errorFiles.has(e.file) }];
+    };
+    return [
+      ...places.chapters.map((c) => ({ title: c.title, entries: c.ids.flatMap(entry) })),
+      { title: t("story.events.sideEvents"), entries: places.side.flatMap(entry) },
+      { title: t("story.events.unused"), entries: places.unused.flatMap(entry) },
+      {
+        title: t("story.events.unreadable"),
+        entries: unreadable.map((e) => ({ key: e.file, label: e.file, sub: "", error: errorFiles.has(e.file) })),
+      },
+    ];
+  });
+
   onMount(() => void loadLibrary());
 
   function add(name: string): string | null {
@@ -39,28 +58,6 @@
   }
 </script>
 
-{#snippet item(file: string, label: string, sub: string)}
-  <li>
-    <button class="item" class:on={studio.event === file} onclick={() => (studio.event = file)}>
-      <span class="name">{label}</span>
-      <span class="sub mono">{sub}</span>
-      {#if errorFiles.has(file)}<span class="pill pill-err">!</span>{/if}
-    </button>
-  </li>
-{/snippet}
-
-{#snippet group(title: string, list: string[])}
-  <div class="lbl group">{title}</div>
-  <ul>
-    {#each list as id (id)}
-      {@const entry = story.events.find((e) => e.value?.id === id)}
-      {#if entry}
-        {@render item(entry.file, labels[id], t(`story.events.type_${entry.value!.type}`))}
-      {/if}
-    {/each}
-  </ul>
-{/snippet}
-
 <div class="main">
   <header>
     <span class="lbl-screen">{t("story.events.title")}</span>
@@ -69,20 +66,9 @@
   {#if studio.notice}<p class="warnbox">{studio.notice}</p>{/if}
 
   <div class="body">
-    <nav class="list">
-      {#each places.chapters as c (c.index)}
-        {@render group(c.title, c.ids)}
-      {/each}
-      {#if places.side.length}{@render group(t("story.events.sideEvents"), places.side)}{/if}
-      {#if places.unused.length}{@render group(t("story.events.unused"), places.unused)}{/if}
-      {#if unreadable.length}
-        <div class="lbl group">{t("story.events.unreadable")}</div>
-        <ul>
-          {#each unreadable as e (e.file)}{@render item(e.file, e.file, "")}{/each}
-        </ul>
-      {/if}
+    <PickList {groups} selected={studio.event} onselect={(file) => (studio.event = file)}>
       <AddName placeholder={t("story.events.newEvent")} onadd={add} />
-    </nav>
+    </PickList>
 
     {#if shown}
       {#key shown.file}
@@ -117,52 +103,6 @@
     display: flex;
     gap: 28px;
     align-items: flex-start;
-  }
-  .list {
-    width: 250px;
-    flex-shrink: 0;
-  }
-  .list ul {
-    list-style: none;
-    margin: 0 0 10px;
-    padding: 0;
-  }
-  .group {
-    margin: 12px 0 4px;
-  }
-  .group:first-child {
-    margin-top: 0;
-  }
-  .item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    text-align: left;
-    padding: 6px 10px;
-    background: transparent;
-    color: var(--txt2);
-    font-size: 13px;
-  }
-  .item:hover {
-    background: var(--raised);
-  }
-  .item.on {
-    background: var(--raised);
-    color: var(--txt);
-    box-shadow: inset 2px 0 0 var(--rosso);
-  }
-  .name {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .sub {
-    color: var(--muted);
-    font-size: 10.5px;
-    flex-shrink: 0;
   }
   .empty {
     color: var(--muted);
