@@ -208,7 +208,7 @@ with none.
   holds when `yes` was chosen at any of them, and when the conversation ends
   the node leaves by the exit of **the most recent reply that has one**,
   otherwise by its `next`. Delivering an item again starts a new conversation
-  and forgets the replies of the last one.
+  and forgets the replies of the last one, and that it was seen.
 - **Stories with no frame.** When the active frame is `none`, the flow chains
   dialogues and events directly; an event is launched from a card shown on the
   scene (the same summary as in the frame: car, cost, goal); the player's
@@ -752,6 +752,26 @@ The player side follows each story's settings. What the engine needs:
   updated since: what the story gained starts at its starting value, and a
   save standing on something removed is refused with the reason.
 - **The frame evolves.** Skins change at chosen beats.
+
+**Today** (L3, under way):
+
+- **Stories offered.** Until stories come as packages (L4), Story Mode offers
+  the sample story Pit Box carries and the author's own stories, played as
+  they are on disk. A story the checks find errors in does not start.
+- **One game per story**, saved after every move of the player, in Pit Box's
+  own data; a new game replaces it after a confirmation. The story's `saves`
+  setting (autosave per day or manual slots, reload) is not applied yet. A
+  game resumes on the story as it is now, or is refused with the reason.
+- **The phone's messaging app** lists one thread per sender, the latest
+  first, the unread ones marked; a thread opened marks its messages seen and
+  offers the replies of its open message. The content types the phone has no
+  template for yet are listed by name.
+- **The dialogue layer** plays the latest dialogue while it waits for a reply,
+  then until the player reads past its last line, which closes it and marks it
+  seen; a dialogue closed does not come back on reload.
+- **A player action** shows as a card with its name and a Done button, until
+  actions have their screens (catalogs, L6). An event shows its summary: type,
+  track, car, laps, entry fee, the goal in words, the attempt.
 
 ## Scenes, frame and sound
 

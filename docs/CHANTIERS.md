@@ -462,7 +462,59 @@ de reprendre. En cas d'écart, la spec fait foi.
           - pas de vivier ni de tirage au hasard comme dans l'écran de
             session : l'auteur pose ses adversaires un par un (ou par lot dans
             le sélecteur).
-      - **L3 à L8** : dans l'ordre du plan de livraison de la spec.
+      - **L3, Story Mode côté joueur — découpé en quatre sous-lots (validé
+        2026-10-20)** : L3.1 jouer sans course (hub, partie et sauvegarde,
+        écran de jeu avec la scène, le téléphone et son fil de messages, les
+        dialogues) ; L3.2 les courses (la grille devient une session, AC se
+        lance, le résultat revient, tentatives et messages d'échec) ; L3.3 les
+        autres gabarits du téléphone (boîte mail, fil d'actu, relevé) et les
+        contenus qui attendent un cadre ; L3.4 les histoires sans cadre.
+        - **L3.1 — fait (2026-10-20).** Le hub liste l'histoire d'exemple et
+          celles de Create Your Own, avec la partie en cours ; « Nouvelle
+          partie » et « Continuer » ouvrent l'écran de jeu : la scène (fond
+          uni), le téléphone et ses fils de messages, la couche de dialogue,
+          et à côté ce qu'attend l'histoire (résumé d'une épreuve, action,
+          réponse attendue, fin). Le moteur garde dans l'historique les
+          répliques vues et le texte des réponses (`Happening::Said`,
+          `Replied.text`), et reconstruit l'écran depuis l'état seul
+          (`view.rs`) : une partie reprise montre ce qui avait été vu.
+          L'histoire d'exemple est embarquée (`sample.rs`, testé contre le
+          dossier). Les parties sont dans `app_config_dir/story/saves/`.
+          **Décidé avec l'utilisateur** : le découpage ; une partie par
+          histoire, écrite après chaque geste (les emplacements et le
+          rechargement viendront plus tard) ; l'histoire d'exemple en plus
+          de celles de l'auteur.
+          **Choisi sans demander** : une histoire avec des erreurs de
+          vérification ne se lance pas ; chaque commande relit l'histoire et
+          la sauvegarde (rien en mémoire entre deux gestes), donc une histoire
+          modifiée dans le studio se joue telle quelle ou refuse la partie
+          avec la raison ; écriture par fichier temporaire renommé ; la partie
+          d'une histoire de l'auteur est `saves/<id>-<empreinte du dossier>.json`
+          (deux copies d'une histoire ne partagent pas leur partie : la
+          déplacer fait donc perdre la partie), celle de l'exemple
+          `saves/builtin/sample.json` ; une partie qui ne peut plus reprendre
+          (histoire modifiée, fichier illisible) reste listée avec sa raison,
+          et « Nouvelle partie » demande quand même avant de la remplacer ;
+          l'histoire est vérifiée au début d'une partie et à sa reprise, pas à
+          chaque geste ; un même geste demandé deux fois de suite (double
+          clic) n'est joué qu'une fois ; livrer à nouveau un contenu le rend
+          « non vu » (le moteur oubliait déjà ses réponses) ; une ancienne
+          livraison d'un contenu compte comme lue ; le format de sauvegarde
+          reste le 1 (l'historique gagne une variante et un champ, une partie
+          écrite avant se relit) ; un fil par expéditeur, le plus récent en
+          haut, marqué non lu tant qu'un message n'est pas ouvert ou qu'une
+          réponse est attendue (pastille bleue, le rouge a son barème) ;
+          ouvrir un fil marque ses messages vus ; le dialogue en cours est le
+          dernier livré, montré tant qu'il attend une réponse ou n'a pas été
+          lu jusqu'au bout ; une action du joueur est une carte avec un
+          bouton « Fait » ; l'exemple n'a pas ses portraits (initiales) ;
+          « Quitter » ne demande rien, tout est déjà enregistré.
+          **Limites connues** : pas encore de lancement de course (L3.2) ;
+          les autres types de contenu ne sont que nommés dans le téléphone
+          (L3.3) ; une histoire sans cadre n'a rien pour ses messages (L3.4) ;
+          la date d'une partie n'est pas montrée dans le hub ; le jeu n'a pas
+          été lancé à l'écran.
+      - **L3b à L8** : dans l'ordre du plan de livraison de la spec.
       **Écarts assumés par rapport au document de conception** (la spec
       publique les reprend déjà) :
       - Le drapeau qu'il plaçait dans la base SQLite est dans

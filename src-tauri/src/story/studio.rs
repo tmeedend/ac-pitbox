@@ -65,6 +65,12 @@ fn write_studio(config_dir: &Path, studio: &StudioFile) -> Result<(), String> {
     std::fs::write(&path, json).map_err(|e| format!("writing {}: {e}", path.display()))
 }
 
+/// The author's story folders, in the order they were added: what Story
+/// Mode offers besides the sample (`play.rs`).
+pub(super) fn folders(config_dir: &Path) -> Vec<PathBuf> {
+    read_studio(config_dir).stories
+}
+
 fn add_to_studio(config_dir: &Path, folder: &Path) -> Result<(), String> {
     let mut studio = read_studio(config_dir);
     if !studio.stories.iter().any(|p| p == folder) {
@@ -184,7 +190,8 @@ fn story_id(folder: &Path) -> String {
 }
 
 /// What a file held when the editor read it: a write is refused if the file
-/// no longer holds it.
+/// no longer holds it. Also the fingerprint of a story's folder in the name
+/// of its save (`play.rs`).
 pub(super) fn stamp(text: &str) -> String {
     // FNV-1a: a fingerprint, not a security measure.
     let mut h: u64 = 0xcbf29ce484222325;

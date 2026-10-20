@@ -1740,7 +1740,11 @@
     "transferIncompatible": "Cet export ne peut pas être lu par cette version de Pit Box : mettez-la à jour.",
     "transferNotEmpty": "L'import d'une bibliothèque ne se fait que dans une installation vide.",
     "transferFolderNotEmpty": "Le dossier de la bibliothèque contient déjà des mods : l'import d'une bibliothèque ne se fait que dans un dossier vide.",
-    "storyHistoryOutdated": "Un fichier a été modifié hors de Pit Box entre-temps : l'histoire a été relue et l'historique d'annulation vidé."
+    "storyHistoryOutdated": "Un fichier a été modifié hors de Pit Box entre-temps : l'histoire a été relue et l'historique d'annulation vidé.",
+    "storyHasErrors": "Cette histoire a des erreurs : ouvre-la dans Create Your Own pour les voir.",
+    "storyNoGame": "Aucune partie en cours dans cette histoire.",
+    "storySaveStale": "L'histoire a changé depuis l'enregistrement de cette partie : elle ne peut pas reprendre. Commence une nouvelle partie.",
+    "storySaveUnreadable": "La sauvegarde de cette partie est illisible (abîmée, ou écrite par un Pit Box plus récent)."
   },
   "pack": {
     "tabMembers": "Mods",
@@ -2571,7 +2575,6 @@
   "story": {
     "title": "Histoire",
     "modeTitle": "Mode histoire",
-    "noStory": "Aucune histoire installée.",
     "createTitle": "Écrire une histoire",
     "noOwnStory": "Aucune histoire écrite pour l'instant.",
     "frame": {
@@ -2821,6 +2824,34 @@
       "spring": "Printemps {year}",
       "summer": "Été {year}",
       "autumn": "Automne {year}"
+    },
+    "play": {
+      "sample": "L'histoire d'exemple, livrée avec Pit Box",
+      "newGame": "Nouvelle partie",
+      "continue": "Continuer",
+      "underWay": "Partie en cours",
+      "finished": "Terminée",
+      "replaceConfirm": "Recommencer depuis le début ? La partie en cours est remplacée.",
+      "leave": "Quitter",
+      "money": "Argent : {n}",
+      "reputation": "Réputation : {n}",
+      "messages": "Messages",
+      "unknownSender": "Inconnu",
+      "unread": "Non lu",
+      "noTemplate": "{kind} de {from}",
+      "noMessage": "Aucun message pour l'instant.",
+      "goal": "Objectif",
+      "goalPosition": "Finir à la {n}ᵉ place ou mieux",
+      "goalFinished": "Finir sans abandonner",
+      "goalLap": "Meilleur tour sous {time}",
+      "goalAhead": "Finir devant {name}",
+      "goalOther": "{text}",
+      "goalFinish": "Finir la session",
+      "attempt": "Tentative {n}",
+      "actionDone": "Fait",
+      "waitsReply": "{name} attend ta réponse.",
+      "theEnd": "Fin",
+      "backToHub": "Retour aux histoires"
     },
     "world": {
       "title": "Monde",

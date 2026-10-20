@@ -60,8 +60,8 @@ pub enum Output {
     },
 }
 
-/// A line as the frame or the scene shows it.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+/// A line as the frame or the scene shows it, kept in the history.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Said {
     /// A character's id; `None`: the item's sender.
     pub speaker: Option<String>,
@@ -448,10 +448,12 @@ impl<'a> Run<'a> {
 
     /// Sends a content item, and plays its conversation from the start: a
     /// new delivery is a new conversation, so the replies of the last one
-    /// are forgotten.
+    /// are forgotten, and so is having seen it - the player has not seen
+    /// this one yet.
     fn deliver(&mut self, content: &str, via: Via) -> Result<(), EngineError> {
         let facts = self.state.content.entry(content.to_string()).or_default();
         facts.delivered += 1;
+        facts.seen = false;
         facts.reply = None;
         facts.chosen.clear();
         self.state.conversations.remove(content);
@@ -489,6 +491,10 @@ impl<'a> Run<'a> {
         let stop = script::play(&item.script, at, &mut host)?;
         let said = host.said;
         if !said.is_empty() {
+            self.log(Happening::Said {
+                content: content.into(),
+                lines: said.clone(),
+            });
             self.out.push(Output::Lines {
                 content: content.into(),
                 lines: said,
@@ -746,6 +752,9 @@ impl<'a> Run<'a> {
         let Some(next) = script::after_choice(&item.script, &conversation.at, &reply) else {
             return unexpected(format!("`{content}` has no choice `{reply}` any more"));
         };
+        let text = (offers(&item.script, &conversation.at, std::slice::from_ref(&reply)).pop())
+            .map(|o| o.text)
+            .unwrap_or_default();
         let facts = self.state.content.entry(content.clone()).or_default();
         facts.reply = Some(reply.clone());
         facts.chosen.push(reply.clone());
@@ -753,6 +762,7 @@ impl<'a> Run<'a> {
         self.log(Happening::Replied {
             content: content.clone(),
             reply,
+            text,
         });
         self.converse(&content, next)
     }

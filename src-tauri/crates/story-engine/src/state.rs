@@ -70,6 +70,7 @@ pub struct EventFacts {
 pub struct ContentFacts {
     /// Times it was sent to the frame (more than once for `repeat: each_time`).
     pub delivered: u32,
+    /// The player opened its latest delivery.
     pub seen: bool,
     /// The last reply chosen in its conversation.
     pub reply: Option<String>,
@@ -126,9 +127,19 @@ pub enum Happening {
         content: ContentId,
         via: Via,
     },
+    /// Lines of a conversation, as the player saw them: the frame is the
+    /// record of the character's life, rebuilt from these on reload.
+    Said {
+        content: ContentId,
+        lines: Vec<crate::engine::Said>,
+    },
     Replied {
         content: ContentId,
         reply: String,
+        /// The reply as the player read it. Empty in a save written before
+        /// it was kept.
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        text: String,
     },
     Launched {
         event: EventId,

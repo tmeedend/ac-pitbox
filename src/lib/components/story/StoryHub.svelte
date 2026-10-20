@@ -1,9 +1,9 @@
 <script lang="ts">
   // The Story hub: the rail entry's two doors, Story Mode and Create Your Own
   // (`docs/story/SPEC-story-mode.md`, « Story Mode: player side »). Story
-  // Mode is still empty - nothing plays yet, so that door offers nothing it
-  // could not carry out. Create Your Own lists the author's stories; opening
-  // one replaces the hub with the studio.
+  // Mode lists the stories to play (`StoryShelf`); a game started replaces
+  // the hub with the game. Create Your Own lists the author's stories;
+  // opening one replaces the hub with the studio.
   //
   // Loaded lazily by `AppShell` and shown only while `storyUnlocked()` holds.
   import { onMount } from "svelte";
@@ -11,8 +11,11 @@
   import { t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
   import { forgetStory, listStories, registerStory, type StorySummary } from "$lib/story/studio";
+  import { play } from "$lib/story/playState.svelte";
   import { openStudio, studio } from "$lib/story/studioState.svelte";
   import NewStoryDialog from "./NewStoryDialog.svelte";
+  import PlayScreen from "./PlayScreen.svelte";
+  import StoryShelf from "./StoryShelf.svelte";
   import Studio from "./Studio.svelte";
 
   let stories = $state<StorySummary[] | null>(null);
@@ -73,7 +76,9 @@
   }
 </script>
 
-{#if studio.story}
+{#if play.game}
+  <PlayScreen />
+{:else if studio.story}
   <Studio onleave={leaveStudio} />
 {:else}
   <div class="hub">
@@ -83,7 +88,7 @@
 
     <section class="blk">
       <div class="blk-h"><span class="blk-t">{t("story.modeTitle")}</span></div>
-      <div class="blk-b"><p class="empty">{t("story.noStory")}</p></div>
+      <div class="blk-b"><StoryShelf /></div>
     </section>
 
     <section class="blk">

@@ -8,6 +8,7 @@
 
 pub mod backups;
 pub mod history;
+pub mod play;
 pub mod studio;
 
 /// Turns the Story entry on in a built installer, where it is hidden by
