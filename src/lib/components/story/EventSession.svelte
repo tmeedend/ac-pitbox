@@ -5,6 +5,7 @@
   // Box's default; what is not here at all (assists, damage, tyre wear)
   // stays the player's. Only a race has laps, a grid, opponents and a start.
   import { t } from "$lib/i18n/index.svelte";
+  import { AI_LEVEL_MAX, AI_LEVEL_MIN } from "$lib/launch/opponent";
   import { WEATHER_IDS, WEATHER_LABEL_KEYS } from "$lib/launch/weatherIntents";
   import type { ModCard, ModKind } from "$lib/library/library";
   import { EVENT_TYPES, sessionFor, successFor } from "$lib/story/events";
@@ -130,8 +131,8 @@
         value={session.ai_level ?? -1}
         emptyValue={-1}
         emptyStart={90}
-        min={0}
-        max={100}
+        min={AI_LEVEL_MIN}
+        max={AI_LEVEL_MAX}
         width={90}
         onchange={number("ai_level", -1)}
       />

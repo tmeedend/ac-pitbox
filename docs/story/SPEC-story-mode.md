@@ -523,8 +523,8 @@ the editor is reserved; they are translated when it opens to all.
   livery of the old one, and a copied row is nobody's (a driver races once
   per grid). A driver is picked in the roster, never typed. A row shows what
   will race: the event's car, the driver's skill and nationality, when the
-  row has none of its own. A driver's and an opponent's skill are offered in
-  Content Manager's range, 70 to 100.
+  row has none of its own. Every skill - the event's, a driver's, an
+  opponent's - is offered in Content Manager's range, 70 to 100.
 - **The Content screen previews the item it shows**, played by the engine
   on its own from the story's starting state: the flow does not move and no
   reactive content comes. The author sets the variables the item reads

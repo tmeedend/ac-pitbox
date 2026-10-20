@@ -452,9 +452,11 @@ de reprendre. En cas d'écart, la spec fait foi.
           - la grille n'est pas encore lancée : c'est L3 qui la traduira en
             `RaceSetup` (pilotes nommés, places restantes en noms de
             remplissage au niveau de l'événement) ;
-          - le niveau de l'événement (`ai_level`, L2.3) s'édite encore de 0 à
-            100 dans l'éditeur, quand celui d'un pilote ou d'une ligne s'arrête
-            à 70 : à aligner ;
+          - le niveau de l'événement (`ai_level`, L2.3) s'éditait de 0 à 100
+            quand celui d'un pilote ou d'une ligne s'arrête à 70 : aligné sur
+            70 à 100 (2026-10-20). Un événement à 70 ne laisse donc aucune
+            marge à l'aide après échecs, ce que la taille d'un cran (L3)
+            devra prendre en compte ;
           - aucune vérification qu'une livrée existe pour sa voiture (le
             moteur ne connaît pas la bibliothèque, comme pour les voitures) ;
           - pas de vivier ni de tirage au hasard comme dans l'écran de
