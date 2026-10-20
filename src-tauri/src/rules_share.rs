@@ -9,14 +9,9 @@
 //! the file brings is added, and where both sides decided the same entry
 //! differently the importer's decision stays. So there is nothing to ask
 //! before, and nothing lost after; the report counts what was added, what was
-//! kept, and what names rules this catalogue does not have.
-//!
-//! **The category decisions of the user come with it** (REGLES§3 level 4, §9):
-//! a car forced into a category, the categories added to or taken off a track,
-//! by mod id. They merge like the rest - a mod the importer already decided
-//! keeps his decision - and one about a mod this library lacks is kept for the
-//! day it is imported. The other per-mod corrections (tags typed on a car, a
-//! name taken back) are not in it.
+//! kept, and what names rules this catalogue does not have. The per-mod
+//! corrections (tags typed on a car, a name taken back) are not in it: they
+//! belong to one library, not to a way of classifying.
 
 use std::path::Path;
 
@@ -25,7 +20,6 @@ use pitbox_catalog::rules::RulesOverlay;
 use pitbox_catalog::taxonomy::TaxonomyOverlay;
 use serde::{Deserialize, Serialize};
 
-use crate::overlay::CategoryDecision;
 use crate::rules::Rules;
 
 /// Version of the export format, and the key that tells an export from any
@@ -42,10 +36,6 @@ pub struct RulesExport {
     pub rules: RulesOverlay,
     #[serde(default)]
     pub taxonomy: TaxonomyOverlay,
-    /// The user's category decisions on single mods (REGLES§3 level 4).
-    /// Absent from an export made before them.
-    #[serde(default)]
-    pub category_decisions: Vec<CategoryDecision>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -54,14 +44,6 @@ pub struct ImportReport {
     pub stats: MergeStats,
     /// The catalogue the file was made on - said when it is not this one.
     pub catalog_version: String,
-    /// The category decisions the file carries, for the caller to merge into
-    /// the base (this module only reads files). Not sent to the screen.
-    #[serde(skip)]
-    pub decisions: Vec<CategoryDecision>,
-    /// Of those, the mods that had none and now do.
-    pub decisions_added: usize,
-    /// Of those, the mods that already had one, whose decision stays.
-    pub decisions_kept: usize,
 }
 
 fn overlays(dir: &Path, catalog: &Rules) -> (RulesOverlay, TaxonomyOverlay) {
@@ -71,13 +53,7 @@ fn overlays(dir: &Path, catalog: &Rules) -> (RulesOverlay, TaxonomyOverlay) {
     (crate::rule_overlay::normalized(rules, catalog), tax)
 }
 
-/// The overlays alone - what a survey carries. The category decisions live in
-/// the base: [`export_with_decisions`] adds them.
 pub fn export(dir: &Path, catalog: &Rules) -> RulesExport {
-    export_with_decisions(dir, catalog, Vec::new())
-}
-
-pub fn export_with_decisions(dir: &Path, catalog: &Rules, decisions: Vec<CategoryDecision>) -> RulesExport {
     let (rules, taxonomy) = overlays(dir, catalog);
     RulesExport {
         pitbox_rules_export: FORMAT,
@@ -89,13 +65,11 @@ pub fn export_with_decisions(dir: &Path, catalog: &Rules, decisions: Vec<Categor
             ..rules
         },
         taxonomy,
-        category_decisions: decisions,
     }
 }
 
-pub fn write_export(dir: &Path, catalog: &Rules, path: &Path, decisions: Vec<CategoryDecision>) -> Result<(), String> {
-    let json =
-        serde_json::to_string_pretty(&export_with_decisions(dir, catalog, decisions)).map_err(|e| e.to_string())?;
+pub fn write_export(dir: &Path, catalog: &Rules, path: &Path) -> Result<(), String> {
+    let json = serde_json::to_string_pretty(&export(dir, catalog)).map_err(|e| e.to_string())?;
     std::fs::write(path, json).map_err(|e| format!("{}: {e}", path.display()))
 }
 
@@ -162,9 +136,6 @@ pub fn import(dir: &Path, catalog: &Rules, path: &Path) -> Result<ImportReport, 
     Ok(ImportReport {
         stats,
         catalog_version: file.catalog_version,
-        decisions: file.category_decisions,
-        decisions_added: 0,
-        decisions_kept: 0,
     })
 }
 
@@ -194,7 +165,7 @@ mod tests {
         crate::rule_overlay::save(&a.join("rules-overlay.json"), &o).unwrap();
 
         let file = base.join("mine.json");
-        write_export(&a, &catalog, &file, Vec::new()).unwrap();
+        write_export(&a, &catalog, &file).unwrap();
         let exported: RulesExport = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
         assert!(!exported.rules.catalog_off, "a preference of the machine, not exported");
 
@@ -241,63 +212,6 @@ mod tests {
         assert_eq!(r.stats.added, 1, "{r:?}");
         let got = crate::rule_overlay::load_or_migrate(&b.join("rules-overlay.json"), None);
         assert_eq!(got.brand_fix.own[0].set_brand, "Lamborghini");
-    }
-
-    /// REGLES§9: the category decisions of a library leave with the export and
-    /// come in by mod id; where the importer already decided a mod, his
-    /// decision stays - importing is never a replacement.
-    #[test]
-    fn category_decisions_travel_and_the_importers_own_stay() {
-        let base = crate::testutil::temp_dir("rules-share-decisions");
-        let (a, b) = (base.join("a"), base.join("b"));
-        std::fs::create_dir_all(&a).unwrap();
-        std::fs::create_dir_all(&b).unwrap();
-        let catalog = default_rules();
-        let car = CategoryDecision {
-            forced: Some("#hot_rods".into()),
-            ..CategoryDecision::new("car")
-        };
-        let track = CategoryDecision {
-            added: vec!["#rally".into()],
-            removed: vec!["#drift".into()],
-            ..CategoryDecision::new("track")
-        };
-        let file = base.join("mine.json");
-        write_export(&a, &catalog, &file, vec![car, track.clone()]).unwrap();
-
-        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
-        let mine = CategoryDecision {
-            forced: Some("#mine".into()),
-            ..CategoryDecision::new("car")
-        };
-        crate::overlay::set_category_decision(&conn, &mine).unwrap();
-
-        let report = import(&b, &catalog, &file).unwrap();
-        assert_eq!(report.decisions.len(), 2, "the file carries them");
-        let (added, kept) = crate::categories::merge_decisions(&conn, &catalog, &report.decisions).unwrap();
-        assert_eq!((added, kept), (1, 1), "one new, one already decided here");
-        assert_eq!(crate::overlay::get_category_decision(&conn, "car").unwrap(), Some(mine));
-        assert_eq!(
-            crate::overlay::get_category_decision(&conn, "track").unwrap(),
-            Some(track)
-        );
-        let (again, kept) = crate::categories::merge_decisions(&conn, &catalog, &report.decisions).unwrap();
-        assert_eq!((again, kept), (0, 2), "importing twice adds nothing");
-    }
-
-    /// An export made before the decisions existed has no such section, and
-    /// imports as it always did.
-    #[test]
-    fn an_export_made_before_category_decisions_still_imports() {
-        let base = crate::testutil::temp_dir("rules-share-old");
-        let file = base.join("old.json");
-        std::fs::write(
-            &file,
-            r#"{"pitbox_rules_export":1,"app_version":"0.9.0","catalog_version":"0.9.0"}"#,
-        )
-        .unwrap();
-        let report = import(&base, &default_rules(), &file).unwrap();
-        assert!(report.decisions.is_empty());
     }
 
     #[test]

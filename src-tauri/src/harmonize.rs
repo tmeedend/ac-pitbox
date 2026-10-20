@@ -143,6 +143,31 @@ pub fn harmonize_all(conn: &Connection, cfg: &AppConfig, rules: &Rules) -> rusql
     harmonize_all_counting(conn, cfg, rules).map(|(n, _)| n)
 }
 
+/// The startup pass of a new engine version: re-harmonizes the whole library
+/// **once per version**, the stamp being laid only when it succeeded, and
+/// nothing is tried without an accessible library (an unmounted external disk
+/// would turn an empty sweep into a catch-up done, and the base would stay
+/// stale for good). `rules` is loaded only when the pass runs. `Some(n)`: the
+/// mods it processed; `None`: nothing to do.
+pub fn catch_up_engine(
+    conn: &Connection,
+    cfg: &AppConfig,
+    lib_ready: bool,
+    rules: impl FnOnce() -> Rules,
+) -> rusqlite::Result<Option<usize>> {
+    let engine = rules::ENGINE_VERSION.to_string();
+    let stamped = overlay::get_meta(conn, overlay::META_ENGINE_VERSION).unwrap_or(None);
+    if !lib_ready || stamped.as_deref() == Some(engine.as_str()) {
+        return Ok(None);
+    }
+    let rules = rules();
+    let n = crate::timing::step("setup.harmonize", || harmonize_all(conn, cfg, &rules))?;
+    if let Err(e) = overlay::set_meta(conn, overlay::META_ENGINE_VERSION, &engine) {
+        log::warn!("stamping engine version failed, catch-up will run again: {e}");
+    }
+    Ok(Some(n))
+}
+
 /// `harmonize_all`, which also counts, per rule id, the mods each rule acted
 /// on (`Harmonized::fired`) - the effect counters of the Rules screen
 /// (REGLES§8.3), measured on the pass that stores, not on a second one.

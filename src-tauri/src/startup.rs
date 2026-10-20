@@ -240,19 +240,10 @@ fn catch_up_classification(app: &App, conn: &Connection, cfg: &AppConfig) {
     // sinon un disque externe non monté ferait passer un balayage à
     // vide pour un rattrapage fait, et la base resterait périmée pour
     // toujours.
-    let engine = rules::ENGINE_VERSION.to_string();
-    let stamped = overlay::get_meta(conn, overlay::META_ENGINE_VERSION).unwrap_or(None);
-    if lib_ready && stamped.as_deref() != Some(engine.as_str()) {
-        let rules = rules::load(app.handle());
-        match timing::step("setup.harmonize", || harmonize::harmonize_all(conn, cfg, &rules)) {
-            Ok(n) => {
-                log::warn!("re-harmonized {n} mods for engine v{engine}");
-                if let Err(e) = overlay::set_meta(conn, overlay::META_ENGINE_VERSION, &engine) {
-                    log::warn!("stamping engine version failed, catch-up will run again: {e}");
-                }
-            }
-            Err(e) => log::warn!("re-harmonize at startup: {e}"),
-        }
+    match harmonize::catch_up_engine(conn, cfg, lib_ready, || rules::load(app.handle())) {
+        Ok(Some(n)) => log::warn!("re-harmonized {n} mods for engine v{}", rules::ENGINE_VERSION),
+        Ok(None) => {}
+        Err(e) => log::warn!("re-harmonize at startup: {e}"),
     }
 }
 
