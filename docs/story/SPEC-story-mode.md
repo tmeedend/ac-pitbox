@@ -286,7 +286,7 @@ knows before driving.
 
 **Hard events.** A story can help after repeated failures, automatically (for
 example, lowering the opponents' skill by a step every few failures in a row,
-with a cap) or as written per event (an alternative path). The balance
+with a cap; a step is 2 points of skill) or as written per event (an alternative path). The balance
 simulator shows where help is needed.
 
 ## Drivers
@@ -772,6 +772,27 @@ The player side follows each story's settings. What the engine needs:
 - **A player action** shows as a card with its name and a Done button, until
   actions have their screens (catalogs, L6). An event shows its summary: type,
   track, car, laps, entry fee, the goal in words, the attempt.
+- **Going to an event** pays the attempt, then sends the session through the
+  session screen's own launch (Steam check, the player's driver and livery
+  for that car). The session is the player's own for that type of session -
+  assists, damage, tyre wear, penalties, track state - with what the event
+  decides over it. A race starts on the grid, with no practice or qualifying;
+  a time attack runs as a hotlap, a test drive as a practice. The event's
+  weather is an intent; without one, the player's usual one, else a clear sky.
+  The event's skill is that of every unnamed opponent; without `grid` or
+  `opponents`, a race has the player's usual number of opponents.
+- **Adaptive difficulty** takes 2 points of skill off every set skill per
+  step, never below Content Manager's 70.
+- **Coming back.** When the game closes, the session's result is read: the
+  race of a race, the last session otherwise. A race is finished without
+  retiring, another session with a lap driven. A named driver is beaten when
+  they finished behind the player or retired, never when the player retired.
+  A result on another track or in another car is another session's, never
+  the event's. Without a result - the game closed before the end, or never
+  started - the attempt can be launched again without paying, or given up,
+  which counts as not finishing.
+  A session left under way when Pit Box closed is read when the game is
+  opened again.
 
 ## Scenes, frame and sound
 

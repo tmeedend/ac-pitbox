@@ -3,6 +3,7 @@
 // its Rust twin - keep them aligned.
 import { invoke } from "@tauri-apps/api/core";
 import type { PlayerChoice, PlayerStep } from "./player/types";
+import type { EventResult } from "./race";
 import type { Character, ContentType, DateDisplay, Driver, EventType, Session } from "./studio";
 
 /** Where a story is read from. */
@@ -68,6 +69,8 @@ export interface PlayView {
   /** In the order they arrived. */
   items: SeenItem[];
   waiting: Waiting;
+  /** The event a session was launched for, until its result comes back. */
+  launched: string | null;
 }
 
 export interface Game {
@@ -76,13 +79,18 @@ export interface Game {
   drivers: Driver[];
   /** The story's folder, where its media are; `null` for the sample. */
   folder: string | null;
+  /** When the session under way was launched (ms since the epoch). */
+  launched_at_ms: number | null;
 }
 
 /** What the player did. */
 export type Move =
   | { kind: "reply"; content: string; reply: string }
   | { kind: "action_done"; action: string }
-  | { kind: "seen"; content: string };
+  | { kind: "seen"; content: string }
+  /** A session starts: the entry fee is paid now. */
+  | { kind: "launch"; event: string }
+  | { kind: "result"; event: string; result: EventResult };
 
 export const listPlayable = () => invoke<Playable[]>("story_play_list");
 

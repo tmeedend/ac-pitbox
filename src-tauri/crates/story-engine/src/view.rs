@@ -30,6 +30,8 @@ pub struct PlayView {
     /// delivery is a new conversation.
     pub items: Vec<SeenItem>,
     pub waiting: Waiting,
+    /// The event a session was launched for, until its result comes back.
+    pub launched: Option<String>,
 }
 
 /// One delivery of a content item and what was said in it since.
@@ -143,6 +145,7 @@ pub fn play_view(story: &Story, state: &State) -> PlayView {
         followers: state.followers,
         items,
         waiting: waiting(story, state),
+        launched: state.launched.clone(),
     }
 }
 

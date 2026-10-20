@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use story_engine::engine::{self, Input};
 use story_engine::model::{Character, Driver};
 use story_engine::save::{Save, SaveError};
-use story_engine::state::{State, Wait};
+use story_engine::state::{EventResult, State, Wait};
 use story_engine::validate::{validate, Severity};
 use story_engine::view::{play_view, PlayView};
 use story_engine::Story;
@@ -70,16 +70,34 @@ pub struct Game {
     pub drivers: Vec<Driver>,
     /// The story's folder, where its media are; none for the sample.
     pub folder: Option<PathBuf>,
+    /// When the session under way was launched (ms since the epoch): the
+    /// game's result file is the session's only if it is newer.
+    pub launched_at_ms: Option<u64>,
 }
 
-/// What the player did, as the screen sends it. Launching an event and its
-/// result come with the races (L3.2).
+/// What the player did, as the screen sends it. A session's result is read
+/// by the screen, which knows the names it gave the grid's drivers.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Move {
-    Reply { content: String, reply: String },
-    ActionDone { action: String },
-    Seen { content: String },
+    Reply {
+        content: String,
+        reply: String,
+    },
+    ActionDone {
+        action: String,
+    },
+    Seen {
+        content: String,
+    },
+    /// A session starts: the entry fee is paid now.
+    Launch {
+        event: String,
+    },
+    Result {
+        event: String,
+        result: EventResult,
+    },
 }
 
 impl From<Move> for Input {
@@ -88,6 +106,8 @@ impl From<Move> for Input {
             Move::Reply { content, reply } => Input::Reply { content, reply },
             Move::ActionDone { action } => Input::ActionDone { action },
             Move::Seen { content } => Input::Seen { content },
+            Move::Launch { event } => Input::Launch { event },
+            Move::Result { event, result } => Input::Result { event, result },
         }
     }
 }
@@ -144,6 +164,13 @@ pub fn new_game(config_dir: &Path, source: &Source, seed: u64) -> Result<Game, S
     let mut state = State::new(&story, seed);
     engine::run(&story, &mut state).map_err(|e| e.to_string())?;
     write_save(config_dir, source, &story, &state)?;
+    // The replaced game may have been left in the middle of a session.
+    let stamp = launch_stamp(config_dir, source, &story);
+    if stamp.is_file() {
+        if let Err(e) = std::fs::remove_file(&stamp) {
+            log::warn!("story mode: {} not removed: {e}", stamp.display());
+        }
+    }
     Ok(game(&story, &state, source))
 }
 
@@ -151,7 +178,7 @@ pub fn new_game(config_dir: &Path, source: &Source, seed: u64) -> Result<Game, S
 pub fn resume(config_dir: &Path, source: &Source) -> Result<Game, String> {
     let story = playable(source)?;
     let state = resumed(config_dir, source, &story)?;
-    Ok(game(&story, &state, source))
+    Ok(game_in(config_dir, &story, &state, source))
 }
 
 /// Plays what the player did, saves, and shows where the game now stands.
@@ -161,9 +188,41 @@ pub fn resume(config_dir: &Path, source: &Source) -> Result<Game, String> {
 pub fn play(config_dir: &Path, source: &Source, m: Move) -> Result<Game, String> {
     let story = read(source)?;
     let mut state = resumed(config_dir, source, &story)?;
+    let launch = matches!(m, Move::Launch { .. });
+    let was_launched = state.launched.clone();
     engine::submit(&story, &mut state, m.into()).map_err(|e| e.to_string())?;
     write_save(config_dir, source, &story, &state)?;
-    Ok(game(&story, &state, source))
+    let stamp = launch_stamp(config_dir, source, &story);
+    if launch && (was_launched.is_none() || !stamp.is_file()) {
+        // Launched again before a result keeps the first time: the result
+        // file of the first launch, if the game wrote one, is still this
+        // attempt's. A time lost meanwhile is taken again, or the result
+        // could never be read.
+        let now = (std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH))
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        std::fs::write(&stamp, now.to_string()).map_err(|e| format!("writing {}: {e}", stamp.display()))?;
+    } else if state.launched.is_none() && stamp.is_file() {
+        if let Err(e) = std::fs::remove_file(&stamp) {
+            log::warn!("story mode: {} not removed: {e}", stamp.display());
+        }
+    }
+    Ok(game_in(config_dir, &story, &state, source))
+}
+
+/// Beside the save: when the session under way was launched.
+fn launch_stamp(config_dir: &Path, source: &Source, story: &Story) -> PathBuf {
+    save_path(config_dir, source, story).with_extension("launched")
+}
+
+/// `game`, with the launch time of the session under way.
+fn game_in(config_dir: &Path, story: &Story, state: &State, source: &Source) -> Game {
+    let mut g = game(story, state, source);
+    if state.launched.is_some() {
+        g.launched_at_ms =
+            (std::fs::read_to_string(launch_stamp(config_dir, source, story)).ok()).and_then(|t| t.trim().parse().ok());
+    }
+    g
 }
 
 fn game(story: &Story, state: &State, source: &Source) -> Game {
@@ -175,6 +234,7 @@ fn game(story: &Story, state: &State, source: &Source) -> Game {
             Source::Sample => None,
             Source::Folder { path } => Some(path.clone()),
         },
+        launched_at_ms: None,
     }
 }
 
@@ -355,6 +415,63 @@ mod tests {
             entry.game.as_ref().and_then(|g| g.problem.as_deref()),
             Some(errors::STORY_SAVE_STALE),
             "listed with why it cannot resume"
+        );
+    }
+
+    // A launch remembers when it happened, so that the game's result file
+    // is read only if it is newer; launched again before a result, the first
+    // time stands; the result ends the session (SPEC-story-mode, Events).
+    #[test]
+    fn a_launch_is_timed_until_its_result() {
+        let config = temp_dir("story-play");
+        let game = new_game(&config, &Source::Sample, 7).unwrap();
+        let (content, reply) = first_reply(&game);
+        play(&config, &Source::Sample, Move::Reply { content, reply }).unwrap();
+        let launch = || {
+            play(
+                &config,
+                &Source::Sample,
+                Move::Launch {
+                    event: "race_01".into(),
+                },
+            )
+            .expect("launched")
+        };
+        let first = launch();
+        assert_eq!(first.view.launched.as_deref(), Some("race_01"));
+        let at = first.launched_at_ms.expect("timed");
+        assert_eq!(
+            launch().launched_at_ms,
+            Some(at),
+            "launched again: the first time stands"
+        );
+        assert_eq!(
+            resume(&config, &Source::Sample).unwrap().launched_at_ms,
+            Some(at),
+            "kept on disk"
+        );
+        let result = EventResult {
+            finished: true,
+            position: Some(1),
+            ..Default::default()
+        };
+        let after = play(
+            &config,
+            &Source::Sample,
+            Move::Result {
+                event: "race_01".into(),
+                result,
+            },
+        )
+        .expect("result");
+        assert_eq!(
+            (after.view.launched, after.launched_at_ms),
+            (None, None),
+            "the session is over"
+        );
+        assert!(
+            !config.join("story/saves/builtin/sample.launched").exists(),
+            "its time goes with it"
         );
     }
 

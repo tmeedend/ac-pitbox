@@ -514,6 +514,45 @@ de reprendre. En cas d'écart, la spec fait foi.
           (L3.3) ; une histoire sans cadre n'a rien pour ses messages (L3.4) ;
           la date d'une partie n'est pas montrée dans le hub ; le jeu n'a pas
           été lancé à l'écran.
+        - **L3.2 — fait (2026-10-20).** « Aller à l'épreuve » paie la tentative
+          puis lance la session par le lancement de l'écran de session
+          (`startSession`, porte Steam, pilote et livrée du joueur). La
+          session part des réglages du joueur pour ce type (les presets de
+          l'écran de session) et prend ceux de l'événement par-dessus
+          (`story/race.ts`, pur et testé ; `raceLaunch.ts` lit les fichiers).
+          Au retour du jeu, le résultat (`race_out.json`, L0) devient celui du
+          moteur ; une session restée en cours à la fermeture de Pit Box est
+          relue à l'ouverture. Refactoring en passant : `defaultSetup()` sorti
+          de `Launch.svelte` (commit à part).
+          **Choisi sans demander** : une course part sur la grille, sans essais
+          ni qualification (l'auteur règle le départ) ; contre-la-montre =
+          hotlap, essai = practice ; météo de l'événement, sinon celle du
+          joueur pour ce type, sinon ciel clair ; le niveau de l'événement est
+          celui de tous les adversaires anonymes (écart 0) ; sans `grid` ni
+          `opponents`, le nombre habituel du joueur (preset, sinon 7) ; un cran
+          d'aide = 2 points, jamais sous 70 ; la session décisive est la
+          course d'une course, la dernière sinon ; une course est finie sans
+          abandon, une autre session avec un tour ; un pilote nommé est
+          retrouvé par le nom que la grille lui a donné, pas par sa place (le
+          lancement écarte une voiture qui ne peut pas rouler, ce qui décale
+          les suivantes), et compte battu s'il finit derrière ou abandonne,
+          jamais si le joueur abandonne ; un résultat dont le circuit ou la
+          voiture du joueur n'est pas celui de l'épreuve n'est pas pris (une
+          session lancée ailleurs entre-temps) ; l'heure du lancement est
+          gardée à côté de la sauvegarde (`.launched`), et un relancement
+          avant résultat garde la première ; sans résultat, quelle qu'en soit
+          la raison (jeu fermé tôt, jamais démarré, lancement échoué) :
+          « Relancer » (sans payer) ou « Abandonner » (non fini) ; le bouton
+          est le rouge de l'écran, comme le lancement de session.
+          **Limites connues** : rien n'a été lancé en vrai (pas de jeu ici) :
+          la session construite, le retour du résultat et les noms de pilotes
+          dans la grille sont à vérifier en jeu - en particulier que
+          `race_out.json` rend bien le nom posé pour chaque adversaire, dont
+          dépend « finir devant » ; deux pilotes du roster au même nom
+          affiché se confondraient ; les épreuves annexes ne
+          se lancent pas encore (aucun écran ne les montre) ; le dernier
+          résultat n'est pas affiché sur la carte (seules les réactions du
+          téléphone le disent).
       - **L3b à L8** : dans l'ordre du plan de livraison de la spec.
       **Écarts assumés par rapport au document de conception** (la spec
       publique les reprend déjà) :

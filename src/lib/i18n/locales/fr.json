@@ -2851,7 +2851,13 @@
       "actionDone": "Fait",
       "waitsReply": "{name} attend ta réponse.",
       "theEnd": "Fin",
-      "backToHub": "Retour aux histoires"
+      "backToHub": "Retour aux histoires",
+      "launch": "Aller à l'épreuve",
+      "racing": "Session en cours…",
+      "noResult": "Pas de résultat pour cette session.",
+      "launchAgain": "Relancer",
+      "giveUp": "Abandonner",
+      "cannotAfford": "Inscription {fee} : tu as {money}."
     },
     "world": {
       "title": "Monde",

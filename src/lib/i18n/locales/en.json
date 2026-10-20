@@ -2851,7 +2851,13 @@
       "actionDone": "Done",
       "waitsReply": "{name} is waiting for your answer.",
       "theEnd": "The end",
-      "backToHub": "Back to the stories"
+      "backToHub": "Back to the stories",
+      "launch": "Go to the event",
+      "racing": "Session under way…",
+      "noResult": "No result for this session.",
+      "launchAgain": "Launch again",
+      "giveUp": "Give up",
+      "cannotAfford": "Entry fee {fee}: you have {money}."
     },
     "world": {
       "title": "World",

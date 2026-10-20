@@ -1,9 +1,13 @@
 <script lang="ts">
   // What the story waits for, on the scene beside the frame (SPEC-story-mode,
   // Story Mode: player side): an event's summary (what, where, in what car,
-  // for what, at what cost), an action to do, a reply awaited, or the end.
-  // The launch of an event comes with the races (L3.2).
+  // for what, at what cost) and its launch, an action to do, a reply
+  // awaited, or the end. A session launched shows as under way until the
+  // game closes; then, without a result - closed early, never started, a
+  // launch that failed - it can be launched again (no fee: the attempt is
+  // paid) or given up, which counts as not finishing.
   import { onMount } from "svelte";
+  import { gameSession } from "$lib/launch/gameSession.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { driverLabel } from "$lib/story/drivers";
   import { cardOf, loadLibrary } from "$lib/story/library.svelte";
@@ -18,10 +22,31 @@
     /** Who a reply is awaited from, by content item. */
     senderOf: (content: string) => string | null;
     busy: boolean;
+    /** The money the player has, when the story has an economy. */
+    money: number | null;
+    /** The event a session was launched for and has not come back from. */
+    launched: string | null;
+    /** The session's result is being read. */
+    collecting: boolean;
     onaction: (action: string) => void;
+    onlaunch: () => void;
+    ongiveup: () => void;
     onleave: () => void;
   }
-  const { waiting, characters, drivers, senderOf, busy, onaction, onleave }: Props = $props();
+  const {
+    waiting,
+    characters,
+    drivers,
+    senderOf,
+    busy,
+    money,
+    launched,
+    collecting,
+    onaction,
+    onlaunch,
+    ongiveup,
+    onleave,
+  }: Props = $props();
 
   onMount(() => void loadLibrary());
 
@@ -64,6 +89,21 @@
     </ul>
     {#if waiting.attempt > 1}
       <p class="attempt">{t("story.play.attempt", { n: waiting.attempt })}</p>
+    {/if}
+    {#if launched === waiting.event && gameSession.phase !== "idle"}
+      <p class="note">{t("story.play.racing")}</p>
+    {:else if launched === waiting.event && !collecting}
+      <p class="note">{t("story.play.noResult")}</p>
+      <span class="buttons">
+        <button class="btn btn-primary" disabled={busy} onclick={onlaunch}>{t("story.play.launchAgain")}</button>
+        <button class="btn" disabled={busy} onclick={ongiveup}>{t("story.play.giveUp")}</button>
+      </span>
+    {:else if launched !== waiting.event}
+      {@const short = waiting.fee !== null && money !== null && money < waiting.fee}
+      {#if short}<p class="note">{t("story.play.cannotAfford", { fee: waiting.fee ?? 0, money: money ?? 0 })}</p>{/if}
+      <button class="btn btn-primary" disabled={busy || short || gameSession.phase !== "idle"} onclick={onlaunch}
+        >{t("story.play.launch")}</button
+      >
     {/if}
   {:else if waiting.kind === "action"}
     <div class="title">{waiting.action}</div>
@@ -124,5 +164,9 @@
   }
   .btn {
     align-self: flex-start;
+  }
+  .buttons {
+    display: flex;
+    gap: 8px;
   }
 </style>
