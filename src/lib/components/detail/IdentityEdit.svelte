@@ -1,18 +1,21 @@
 <script lang="ts">
   // Edition sur place de l'identité d'une voiture ou d'un circuit : nom, marque
-  // (voitures) et année, depuis le crayon de l'en-tête.
+  // et catégorie (voitures) et année, depuis le crayon de l'en-tête.
   //
   // Même promesse qu'`InlineEdit` pour le nom, étendue aux deux autres : rien
   // n'est écrit dans les fichiers du mod (règle d'or n°1), chaque saisie vit
   // dans la base de Pit Box à côté de la valeur du mod, et chaque champ
   // surchargé propose d'y revenir. Vider un champ revient aussi à l'origine —
-  // le geste naturel pour annuler, comme pour `InlineEdit`.
+  // le geste naturel pour annuler, comme pour `InlineEdit`. Pour la catégorie,
+  // « l'origine » est celle que calculent les règles.
   import Pencil from "$lib/components/ui/Pencil.svelte";
+  import SuggestInput from "$lib/components/ui/SuggestInput.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import {
-    parseYear,
+    categoryChange,
     textChange,
     yearChange,
+    yearRefused,
     type FicheIdentity,
     type IdentityField,
     type IdentityPatch,
@@ -28,34 +31,51 @@
 
   let name = $state("");
   let brand = $state("");
+  let category = $state("");
   let year = $state("");
-  let suggestions = $state<string[]>([]);
+  let brandChoices = $state<string[]>([]);
+  let categoryChoices = $state<string[]>([]);
   let form = $state<HTMLElement | null>(null);
 
-  const yearInvalid = $derived(year.trim() !== "" && parseYear(year) === null);
+  /** What the form opened on. The sheet can change under an open form (the tech
+   * sheet saves the year too): a field left alone must not write back what it
+   * showed at opening over what was saved since. */
+  let start = $state({ name: "", brand: "", category: "", year: "" });
+
+  const yearInvalid = $derived(year !== start.year && yearRefused(year, identity.year));
 
   function open() {
     name = identity.name.value ?? "";
     brand = identity.brand?.value ?? "";
+    category = identity.category?.value ?? "";
     year = identity.year.value != null ? String(identity.year.value) : "";
+    start = { name, brand, category, year };
     editing = true;
     // A failed suggestion list costs the autocompletion, not the edit.
     identity.brand
       ?.suggestions()
-      .then((list) => (suggestions = list))
+      .then((list) => (brandChoices = list))
       .catch((e) => console.warn("brand suggestions", e));
+    identity.category
+      ?.suggestions()
+      .then((list) => (categoryChoices = list))
+      .catch((e) => console.warn("category suggestions", e));
   }
 
   function commit() {
     if (yearInvalid) return;
     const patch: IdentityPatch = {};
-    const n = textChange(name, identity.name);
+    const n = name !== start.name && textChange(name, identity.name);
     if (n) patch.name = n.change;
     if (identity.brand) {
-      const b = textChange(brand, identity.brand);
+      const b = brand !== start.brand && textChange(brand, identity.brand);
       if (b) patch.brand = b.change;
     }
-    const y = yearChange(year, identity.year);
+    if (identity.category) {
+      const c = category !== start.category && categoryChange(category, identity.category);
+      if (c) patch.category = c.change;
+    }
+    const y = year !== start.year && yearChange(year, identity.year);
     if (y) patch.year = y.change;
     editing = false;
     if (Object.keys(patch).length) identity.onsave(patch);
@@ -76,12 +96,6 @@
     }
   }
 
-  /** The brand field leaves Enter alone: with its suggestions open it picks one,
-   * and must not save a half-typed brand along with the other two fields. */
-  function brandKeydown(e: KeyboardEvent) {
-    if (e.key === "Escape") onkeydown(e);
-  }
-
   // Focus on the name at opening: the pencil is for writing, not for revealing
   // a field that still needs a click. The name is the form's first input.
   $effect(() => {
@@ -93,12 +107,14 @@
   <div class="edit" bind:this={form}>
     {@render row(t("columns.name"), identity.name, name, (v) => (name = v))}
     {#if identity.brand}
-      {@render row(t("columns.brand"), identity.brand, brand, (v) => (brand = v), { list: "identity-brands", onkeydown: brandKeydown })}
-      <datalist id="identity-brands">
-        {#each suggestions as s (s)}<option value={s}></option>{/each}
-      </datalist>
+      {@render row(t("columns.brand"), identity.brand, brand, (v) => (brand = v), { suggest: brandChoices })}
     {/if}
-    {@render row(t("columns.year"), identity.year, year, (v) => (year = v), { inputmode: "numeric" }, yearInvalid)}
+    {#if identity.category}
+      {@render row(t("columns.category"), identity.category, category, (v) => (category = v), {
+        suggest: categoryChoices,
+      })}
+    {/if}
+    {@render row(t("columns.year"), identity.year, year, (v) => (year = v), { attrs: { inputmode: "numeric" }, invalid: yearInvalid })}
     <!-- The reassurance is HERE, where one types: a tooltip on the pencil is
          gone at the very moment it would be needed. -->
     <p class="note">{t("detail.editStoredInApp")}</p>
@@ -118,24 +134,33 @@
   field: IdentityField<string | number>,
   text: string,
   set: (v: string) => void,
-  attrs: Record<string, unknown> = {},
-  invalid = false,
+  opts: { attrs?: Record<string, unknown>; suggest?: string[]; invalid?: boolean } = {},
 )}
   <div class="f">
     <span class="lbl-key">{label}</span>
     <div class="line">
-      <input
-        class="input"
-        class:bad={invalid}
-        type="text"
-        autocomplete="off"
-        aria-label={label}
-        value={text}
-        oninput={(e) => set(e.currentTarget.value)}
-        placeholder={field.original != null ? String(field.original) : ""}
-        {onkeydown}
-        {...attrs}
-      />
+      {#if opts.suggest}
+        <SuggestInput
+          bind:value={() => text, set}
+          suggestions={opts.suggest}
+          ariaLabel={label}
+          placeholder={field.original != null ? String(field.original) : ""}
+          {onkeydown}
+        />
+      {:else}
+        <input
+          class="input"
+          class:bad={opts.invalid}
+          type="text"
+          autocomplete="off"
+          aria-label={label}
+          value={text}
+          oninput={(e) => set(e.currentTarget.value)}
+          placeholder={field.original != null ? String(field.original) : ""}
+          {onkeydown}
+          {...opts.attrs}
+        />
+      {/if}
       {#if field.overridden}
         <!-- Puts the original in the field: saving then gives the decision up
              (`textChange`/`yearChange`), and the field shows what it goes back to. -->

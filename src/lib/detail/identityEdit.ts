@@ -1,8 +1,8 @@
-// The header form of a car or a track - name, brand, year (the pencil next to
-// the title) - as pure functions: what a typed text changes, and what the form
-// hands back. The component only draws it.
+// The header form of a car or a track - name, brand, category, year (the pencil
+// next to the title) - as pure functions: what a typed text changes, and what
+// the form hands back. The component only draws it.
 //
-// Nothing here writes: the three values are the user's decisions, kept in
+// Nothing here writes: the values are the user's decisions, kept in
 // Pit Box's base beside what the mod's own files say (golden rule 1), and every
 // field can go back to the original.
 
@@ -20,13 +20,21 @@ export interface IdentityField<T> {
 export interface IdentityPatch {
   name?: string | null;
   brand?: string | null;
+  /** A car's category; `null` goes back to the one the rules compute. */
+  category?: string | null;
   year?: number | null;
 }
+
+/** A text field with a list of existing values to pick from, or to depart from. */
+export type SuggestedField = IdentityField<string> & { suggestions: () => Promise<string[]> };
 
 export interface FicheIdentity {
   name: IdentityField<string>;
   /** Cars only: a track has no brand. */
-  brand?: IdentityField<string> & { suggestions: () => Promise<string[]> };
+  brand?: SuggestedField;
+  /** Cars only: a track has a list of categories, edited elsewhere. `original`
+   * is what the rules compute, `overridden` whether the user filed the car. */
+  category?: SuggestedField;
   year: IdentityField<number>;
   onsave: (patch: IdentityPatch) => void;
 }
@@ -55,4 +63,32 @@ export function yearChange(draft: string, field: IdentityField<number>): { chang
   const year = parseYear(draft);
   if (year === null || year === field.value) return null;
   return year === field.original && field.overridden ? { change: null } : { change: year };
+}
+
+/** A year typed in the form that it must refuse. The year already shown is never
+ * refused, whatever it is: the tech sheet takes years the form would not
+ * (FICHE§8), and opening the form on one must not block the other fields. */
+export function yearRefused(draft: string, field: IdentityField<number>): boolean {
+  const text = draft.trim();
+  if (text === "" || parseYear(text) !== null) return false;
+  return text !== String(field.value ?? "");
+}
+
+/** How two spellings of a category compare: with a `#`, in lower case
+ * (`categories::key` on the Rust side). */
+function categoryKey(tag: string): string {
+  return `#${tag.trim().replace(/^#+/, "").toLowerCase()}`;
+}
+
+/** What the category field changes. Same rules as [`textChange`], except that
+ * `gt3` and `#GT3` are one category. The text is handed back as typed: the
+ * backend knows the spelling of the categories that exist. */
+export function categoryChange(draft: string, field: IdentityField<string>): { change: string | null } | null {
+  const next = draft.trim();
+  if (next === "") return field.overridden ? { change: null } : null;
+  const key = categoryKey(next);
+  if (field.value != null && key === categoryKey(field.value)) return null;
+  return field.original != null && key === categoryKey(field.original) && field.overridden
+    ? { change: null }
+    : { change: next };
 }
