@@ -24,6 +24,7 @@ import { centerSpreadOf } from "$lib/launch/aiBand";
 import { listModSkins, type RaceSetup, type SkinItem } from "$lib/launch/launch";
 import { AI_LEVEL_MAX, AI_LEVEL_MIN, clampAiLevel, newOpponent, type Opponent } from "$lib/launch/opponent";
 import { defaultGridFilters } from "$lib/launch/opponentPool";
+import { DEFAULT_OPPONENT_COUNT } from "$lib/launch/typePresets";
 import type { SavedGrid } from "$lib/launch/savedGrids";
 import {
   hasDuplicateDrivers,
@@ -59,7 +60,7 @@ export class OpponentGrid {
   #gen = 0;
 
   /** How many opponents the grid is meant to have. */
-  count = $state(7);
+  count = $state(DEFAULT_OPPONENT_COUNT);
 
   // --- The pool (CIBLE§3.3) ---------------------------------------------------
   //

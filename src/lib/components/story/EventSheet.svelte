@@ -5,6 +5,7 @@
   // and node citing it, and its file, like the World's names (NameRow).
   import { t } from "$lib/i18n/index.svelte";
   import { parseLines } from "$lib/story/flow";
+  import { driverLabel, namedOnGrid } from "$lib/story/drivers";
   import { criteriaOf, eventIds, poolIds, successOf, type Criteria } from "$lib/story/events";
   import type { EditedFile, StoryEvent } from "$lib/story/studio";
   import { removeEvent, saveEventFile, studio } from "$lib/story/studioState.svelte";
@@ -12,6 +13,7 @@
   import NumberStepper from "$lib/components/ui/NumberStepper.svelte";
   import Seg from "$lib/components/ui/Seg.svelte";
   import Switch from "$lib/components/ui/Switch.svelte";
+  import EventGrid from "./EventGrid.svelte";
   import EventSession from "./EventSession.svelte";
   import FileStatus from "./FileStatus.svelte";
   import NameRow from "./NameRow.svelte";
@@ -26,6 +28,17 @@
   const money = $derived(story.manifest.value?.settings.money ?? false);
   const pools = $derived(poolIds(story.content));
   const criteria = $derived(entry.value ? criteriaOf(entry.value.success) : null);
+  /** The drivers success can race against: those on the grid, and any a
+   * criterion names while they are not (the checks say why). */
+  const rivals = $derived.by(() => {
+    if (!entry.value || !criteria) return [];
+    return [...new Set([...namedOnGrid(entry.value.session), ...criteria.aheadOf])];
+  });
+
+  function rivalName(id: string): string {
+    const d = story.drivers.value?.drivers.find((x) => x.id === id);
+    return d ? driverLabel(d, story.characters.value?.characters ?? []) : id;
+  }
 
   let removeProblem = $state<string | null>(null);
 
@@ -39,7 +52,7 @@
 
   function setCriteria(change: (c: Criteria) => void) {
     if (!entry.value || !criteria) return;
-    const next = { ...criteria, others: [...criteria.others] };
+    const next = { ...criteria, aheadOf: [...criteria.aheadOf], others: [...criteria.others] };
     change(next);
     entry.value.success = successOf(next);
     save();
@@ -84,6 +97,18 @@
         <EventSession event={ev} {money} onsave={save} />
       </div>
     </section>
+
+    {#if ev.type === "race"}
+      <section class="blk wide">
+        <div class="blk-h">
+          <span class="blk-t">{t("story.events.opponents")}</span>
+          <span class="blk-n">{ev.session.opponents?.length ?? 0}</span>
+        </div>
+        <div class="blk-b">
+          <EventGrid event={ev} onsave={save} />
+        </div>
+      </section>
+    {/if}
 
     {#if criteria}
       <section class="blk">
@@ -132,6 +157,20 @@
               />
             {/if}
           </div>
+          {#each rivals as rival (rival)}
+            <div class="toggle">
+              <Switch
+                on={criteria.aheadOf.includes(rival)}
+                label={t("story.events.aheadOf", { name: rivalName(rival) })}
+                onclick={() =>
+                  setCriteria(
+                    (c) =>
+                      (c.aheadOf = c.aheadOf.includes(rival) ? c.aheadOf.filter((x) => x !== rival) : [...c.aheadOf, rival]),
+                  )}
+              />
+              <span>{t("story.events.aheadOf", { name: rivalName(rival) })}</span>
+            </div>
+          {/each}
           {#each criteria.others as other (other)}
             <div class="other mono">{other}</div>
           {/each}
@@ -222,9 +261,14 @@
 </div>
 
 <style>
+  /* Wide enough for the grid, the session screen's table; every other
+     block keeps the width of a form. */
   .sheet {
     flex: 1;
     min-width: 0;
+    max-width: 1100px;
+  }
+  .sheet > :not(.wide) {
     max-width: 760px;
   }
   header {

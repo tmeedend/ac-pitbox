@@ -1,12 +1,60 @@
 // The values a saved session setting is recalibrated against when it is read
 // back: the track grips the game offers, the start positions, the assist
-// levels.
+// levels; and the session a screen starts from before anything is read back.
 //
 // Its own module for the same mechanical reason as `opponent.ts`: `launch.ts`
 // imports runes and cannot be loaded by Vitest, and `typePresets.ts`, which is
 // tested, needs these. `launch.ts` re-exports them, so its callers do not
 // change.
-import type { AssistLevel, StartMode } from "$lib/launch/launch";
+import type { AssistLevel, RaceSetup, StartMode } from "$lib/launch/launch";
+
+/** The session before any choice, preset or saved selection is applied: the
+ * session screen's, and a story event's before its own settings. */
+export function defaultSetup(): RaceSetup {
+  return {
+    car_id: "",
+    car_skin: null,
+    driver: null,
+    track_id: "",
+    track_layout: null,
+    session_type: "practice",
+    opponents: [],
+    ai_level: 95,
+    ai_spread: 3,
+    aggression: 0,
+    aggression_spread: 0,
+    player_ballast: 0,
+    player_restrictor: 0,
+    start_mode: "random",
+    laps: 5,
+    weather: "",
+    time_hours: 13,
+    ambient_c: null,
+    road_c: null,
+    wind_speed_kmh: null,
+    wind_direction_deg: null,
+    season: null,
+    season_date: null,
+    penalties: false,
+    jump_start_penalty: 0,
+    track_state: null,
+    grip: 96,
+    practice_enabled: false,
+    practice_minutes: 20,
+    qualify_enabled: true,
+    qualify_minutes: 10,
+    ghost_car: false,
+    ghost_advantage: 0,
+    practice_start: "pit",
+    damage: 50,
+    fuel_rate: 100,
+    tyre_wear: 100,
+    tyre_blankets: false,
+    abs: "factory",
+    traction_control: "factory",
+    ideal_line: false,
+  };
+}
 
 /** Les six états de piste du jeu, par grip de départ croissant — la liste que
  * Content Manager propose, et qui vient du même fichier (`tracks.ini`). Le

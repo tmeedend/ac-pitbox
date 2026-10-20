@@ -6,13 +6,12 @@
   // reads to preview with, chooses replies, and sees what the conversation
   // changed. An item no frame can show shows the checks' warning instead.
   import { untrack } from "svelte";
-  import { convertFileSrc } from "@tauri-apps/api/core";
   import { errorText } from "$lib/errors";
   import { i18n, t } from "$lib/i18n/index.svelte";
   import { setupSentences } from "$lib/story/preview";
   import { inputsOf } from "$lib/story/preview.svelte";
   import { dateLabel } from "$lib/story/player/phone";
-  import type { Speaker } from "$lib/story/player/types";
+  import { speakersOf } from "$lib/story/player/speakers";
   import { previewContent, type PreviewView } from "$lib/story/studio";
   import { studio } from "$lib/story/studioState.svelte";
   import NumberStepper from "$lib/components/ui/NumberStepper.svelte";
@@ -57,17 +56,7 @@
     };
   });
 
-  const speakers = $derived.by(() => {
-    const out: Record<string, Speaker> = {};
-    for (const c of story.characters.value?.characters ?? []) {
-      const portraits: Record<string, string> = {};
-      for (const [expression, file] of Object.entries(c.portraits ?? {})) {
-        portraits[expression] = convertFileSrc(`${story.path}/media/${file}`);
-      }
-      out[c.id] = { name: c.name ?? c.id, portraits };
-    }
-    return out;
-  });
+  const speakers = $derived(speakersOf(story.characters.value?.characters ?? [], story.path));
   const names = $derived(Object.fromEntries(Object.entries(speakers).map(([k, s]) => [k, s.name])));
   const scale = $derived(story.manifest.value?.settings.relations.scale ?? []);
   const dateShown = $derived(

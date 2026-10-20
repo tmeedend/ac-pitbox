@@ -1,6 +1,7 @@
 //! The story's own names - characters, flags, counters, relation steps,
-//! events - where they are cited, and renaming them (SPEC-story-mode, Create
-//! Your Own: renaming a name renames every sentence that cites it).
+//! events, drivers - where they are cited, and renaming them
+//! (SPEC-story-mode, Create Your Own: renaming a name renames every sentence
+//! that cites it).
 //!
 //! Citations are found in the **text** of the files, not in the parsed story,
 //! for two reasons. A rename must change the cited word and nothing else in
@@ -22,7 +23,7 @@ use std::ops::Range;
 
 use serde::{Deserialize, Serialize};
 
-use crate::load::{draft, Draft, SourceFile};
+use crate::load::{draft, Draft, SourceFile, ROSTER};
 use crate::model::Character;
 use crate::write;
 
@@ -35,6 +36,8 @@ pub enum NameKind {
     /// A step of the relation scale.
     Step,
     Event,
+    /// A driver of the roster (`drivers/roster.yaml`).
+    Driver,
 }
 
 /// A line citing a name.
@@ -78,9 +81,10 @@ fn id_len(bytes: &[u8], from: usize) -> usize {
     bytes[from..].iter().take_while(|&&b| is_id_byte(b)).count()
 }
 
-/// The files that cite names: everything but the declarations.
+/// The files that cite names: everything but the declarations - save the
+/// roster, which cites characters while it declares drivers.
 fn cites(path: &str) -> bool {
-    ["flow/", "events/", "content/"].iter().any(|dir| path.starts_with(dir))
+    ["flow/", "events/", "content/"].iter().any(|dir| path.starts_with(dir)) || path == ROSTER
 }
 
 /// Where `text` cites `id` as a `kind`: the byte range of the id itself.
@@ -91,6 +95,9 @@ fn citations(path: &str, text: &str, kind: NameKind, id: &str) -> Vec<Range<usiz
         NameKind::Counter => prefixed(text, "counter.", id, &mut out),
         NameKind::Character => {
             prefixed(text, "rel.", id, &mut out);
+            if path == ROSTER {
+                keyed(text, "character", id, &mut out);
+            }
             if path.ends_with(".story") {
                 senders(text, id, &mut out);
                 speakers(text, id, &mut out);
@@ -103,6 +110,12 @@ fn citations(path: &str, text: &str, kind: NameKind, id: &str) -> Vec<Range<usiz
             if path.starts_with("flow/") {
                 keyed(text, "event", id, &mut out);
                 listed(text, &["open", "close"], id, &mut out);
+            }
+        }
+        NameKind::Driver => {
+            if path.starts_with("events/") {
+                keyed(text, "driver", id, &mut out);
+                after_word(text, "ahead_of", id, &mut out);
             }
         }
     }
@@ -189,7 +202,20 @@ fn id_at(text: &str, at: usize, id: &str, out: &mut Vec<Range<usize>>) -> usize 
     end
 }
 
-/// `<key>: <id>` in a chapter file: the event an Event node launches.
+/// `<word> <id>`, the word standing alone: a success criterion's driver,
+/// `ahead_of rival`.
+fn after_word(text: &str, word: &str, id: &str, out: &mut Vec<Range<usize>>) {
+    let bytes = text.as_bytes();
+    for i in variable_starts(text, word) {
+        let at = i + word.len();
+        if bytes.get(at).is_some_and(|b| *b == b' ' || *b == b'\t') {
+            id_at(text, at, id, out);
+        }
+    }
+}
+
+/// `<key>: <id>`: the event an Event node launches, an opponent's driver, the
+/// character a driver is.
 fn keyed(text: &str, key: &str, id: &str, out: &mut Vec<Range<usize>>) {
     for value in key_values(text, key) {
         id_at(text, value, id, out);
@@ -394,6 +420,7 @@ pub fn all_usages(files: &[SourceFile], d: &Draft) -> Vec<NameUsages> {
         names.extend(m.settings.relations.scale.iter().map(|s| (NameKind::Step, s.clone())));
     }
     names.extend(d.events.iter().map(|e| (NameKind::Event, e.id.clone())));
+    names.extend(d.roster.drivers.iter().map(|x| (NameKind::Driver, x.id.clone())));
     names
         .into_iter()
         .map(|(kind, id)| {
@@ -518,6 +545,16 @@ fn rename_declaration(before: &Draft, kind: NameKind, from: &str, to: &str) -> R
             if let Some(e) = before.events.iter().find(|e| e.id == from) {
                 readable(&e.file)?;
             }
+        }
+        NameKind::Driver => {
+            readable(ROSTER)?;
+            let mut r = before.roster.clone();
+            let has = |id: &str| r.drivers.iter().any(|x| x.id == id);
+            check(has(from), has(to))?;
+            for x in r.drivers.iter_mut().filter(|x| x.id == from) {
+                x.id = to.into();
+            }
+            changed.push(SourceFile::new(ROSTER, &write::roster(&r)?));
         }
         NameKind::Character => {
             readable("world/characters.yaml")?;
@@ -733,6 +770,43 @@ mod tests {
             talk.script.lines().iter().all(|l| l.speaker.as_deref() == Some("pal")),
             "every speaker, a choice's body included"
         );
+    }
+
+    // A driver is cited by the grids that place them and by the criteria
+    // that race against them; the character a driver is follows a rename
+    // of that character.
+    #[test]
+    fn renaming_a_driver_follows_its_grids_and_its_rivals() {
+        let files = sample();
+        let race = "events/race_02.yaml";
+        assert_eq!(
+            usages(&files, NameKind::Driver, "rival_driver").len(),
+            1,
+            "its place on race 02's grid"
+        );
+        let files = apply(
+            &files,
+            written(vec![SourceFile::new(
+                race,
+                &file(&files, race).replace("success: [\"position <= 1\"", "success: [\"ahead_of rival_driver\""),
+            )]),
+        );
+        let changes = rename(&files, NameKind::Driver, "rival_driver", "the_rival").expect("renamed");
+        let after = apply(&files, changes);
+        let story = Story::from_sources(after.clone()).expect("loads");
+        assert_eq!(validate(&story), [], "nothing left pointing to the old id");
+        assert!(story.driver("the_rival").is_some() && story.driver("rival_driver").is_none());
+        let text = file(&after, race);
+        assert!(
+            text.contains("{ driver: the_rival, skin: red_livery }"),
+            "the grid, as typed: {text}"
+        );
+        assert!(text.contains("\"ahead_of the_rival\""), "the criterion: {text}");
+
+        let after = apply(&files, rename(&files, NameKind::Character, "rival", "foe").unwrap());
+        let story = Story::from_sources(after).expect("loads");
+        assert_eq!(validate(&story), [], "clean after the rename");
+        assert_eq!(story.driver("rival_driver").unwrap().character.as_deref(), Some("foe"));
     }
 
     // A speaker is found past a choice's or a gather's markers and a line's

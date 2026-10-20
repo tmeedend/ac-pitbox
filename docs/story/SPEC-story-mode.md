@@ -208,7 +208,7 @@ with none.
   holds when `yes` was chosen at any of them, and when the conversation ends
   the node leaves by the exit of **the most recent reply that has one**,
   otherwise by its `next`. Delivering an item again starts a new conversation
-  and forgets the replies of the last one.
+  and forgets the replies of the last one, and that it was seen.
 - **Stories with no frame.** When the active frame is `none`, the flow chains
   dialogues and events directly; an event is launched from a card shown on the
   scene (the same summary as in the frame: car, cost, goal); the player's
@@ -248,16 +248,22 @@ the player's library, and the few settings of the session the author decides:
 time of day and weather; for a race only, laps, cars on the grid (the
 player's included), opponents' skill and the player's start. What the author
 leaves unset is Pit Box's default; what the event does not cover at all
-(assists, damage, tyre wear) is the player's. Until the story has drivers,
-the whole grid drives the event's car. Where this is going: the author
-decides **setting by setting** whether it is imposed or
-left to the player; a race's **grid is the author's** in full (cars,
-liveries, drivers, skill), on the model of Pit Box's own session screen; and
-the car is either **imposed** or **chosen by the player in their story
-garage**, possibly among a list the author allows.
+(assists, damage, tyre wear) is the player's. A race's **grid is the
+author's**: opponents placed one by one, each with a car, a livery, a driver
+of the story's roster and a skill, in the table of Pit Box's own session
+screen. An opponent without a car drives the event's; without a livery, the
+launcher picks one; without a driver, it races under the livery's name;
+without a skill, it has its driver's, else the event's. When the event asks
+for more cars than the author placed, the other slots drive the event's car
+under filler names; when it does not say, the placed opponents are the whole
+field. Where this is going: the author decides **setting by setting** whether
+it is imposed or left to the player; and the car is either **imposed** or
+**chosen by the player in their story garage**, possibly among a list the
+author allows.
 
 **Success condition.** Finish position, beat a named driver, lap time under a
-target, finish without DNF, or several combined.
+target, finish without DNF, or several combined. A named driver to beat is one
+the event's grid places: any other would make the event impossible to win.
 
 **Failure.** The player returns to the story screen. The engine picks one or
 two messages from the event's **failure pool**: variants written per character,
@@ -280,7 +286,7 @@ knows before driving.
 
 **Hard events.** A story can help after repeated failures, automatically (for
 example, lowering the opponents' skill by a step every few failures in a row,
-with a cap) or as written per event (an alternative path). The balance
+with a cap; a step is 2 points of skill) or as written per event (an alternative path). The balance
 simulator shows where help is needed.
 
 ## Drivers
@@ -292,6 +298,12 @@ without one, grids use filler names.
 the story (friend, rival, background star, filler), an AI skill and aggression
 per chapter, a livery per series, and a **career line**: one authored entry per
 year (series, team, result).
+
+**Today** a driver has a name, a nationality (a country as the game names it),
+an age, a role, one skill and one aggression; a driver can **be a character**,
+whose name they take when they have none of their own, and a character is at
+most one driver. The skill per chapter, the livery per series, the career line and the
+standings come later; the livery is the grid's, opponent by opponent.
 
 **What the career line produces**, with no extra writing: standings rows for
 championships the player is not in, short articles, social posts and videos,
@@ -474,8 +486,10 @@ the editor is reserved; they are translated when it opens to all.
 - **Renaming a node renames every link to it**, in every chapter. The start
   node keeps its id in the flow: it is set in the story settings.
 - **Renaming a name renames every sentence citing it**: a character, a flag,
-  a counter or a relation step, in every file of the story - flow, events,
-  content, the scripts' `check()` and `effect()` included. The editor lists
+  a counter, a relation step or a driver, in every file of the story - flow,
+  events, content, the scripts' `check()` and `effect()` included; a driver
+  in the grids placing them and the criteria racing against them, a
+  character in the driver they are. The editor lists
   the lines citing a name, and a rename asks first when there are any. In a
   file the editor does not write yet, only the cited word changes; file and
   folder names are never renamed. Deleting a name leaves the sentences citing
@@ -492,8 +506,9 @@ the editor is reserved; they are translated when it opens to all.
   the media. Restoring puts the whole story back as it was, removes the story
   files added since, and can itself be undone.
 - **A name is a letter followed by letters, digits and `_`**, so that it can
-  never read as a number or a yes/no. A new character's name is made from
-  their display name, which can change freely afterwards: it is only shown.
+  never read as a number or a yes/no. A new character's or driver's name is
+  made from their display name, which can change freely afterwards: it is
+  only shown.
 - **An event is a file, `events/<id>.yaml`**, created from its display name
   like a character. Renaming it renames the node launching it, the Side
   events opening or closing it, every sentence reading its facts
@@ -502,7 +517,14 @@ the editor is reserved; they are translated when it opens to all.
   brings it back. Its track and car are picked in the player's library; one
   the library does not have is kept as written and shown as missing. A track
   with layouts starts on its first. Changing an event's type away from a race
-  drops what only a race has.
+  drops what only a race has, its grid and the drivers to beat included.
+- **A race's grid is edited in the session screen's table**, with its car
+  picker: added opponents take the cars picked, replacing a car drops the
+  livery of the old one, and a copied row is nobody's (a driver races once
+  per grid). A driver is picked in the roster, never typed. A row shows what
+  will race: the event's car, the driver's skill and nationality, when the
+  row has none of its own. Every skill - the event's, a driver's, an
+  opponent's - is offered in Content Manager's range, 70 to 100.
 - **The Content screen previews the item it shows**, played by the engine
   on its own from the story's starting state: the flow does not move and no
   reactive content comes. The author sets the variables the item reads
@@ -525,8 +547,9 @@ the editor is reserved; they are translated when it opens to all.
   the engine reads, and a text with lines outside the subset opens only in
   the Script view.
 - **A section appears with the lot that builds it**, never as an entry that
-  opens nothing: the Story flow, the Events, the Contents, the World
-  (characters, flags, counters), the Settings and the story's copies so far. Settings shows only the settings the engine applies.
+  opens nothing: the Story flow, the Events, the Contents, the Drivers, the
+  World (characters, flags, counters), the Settings and the story's copies so
+  far. Settings shows only the settings the engine applies.
   Each section counts the errors of its own files.
 
 ### Story flow screen
@@ -598,11 +621,15 @@ visible in it:
 - A content header has no `replies`: replies are the labels of its text. A
   Message node's reply exits are `on_reply: { <label>: <node> }`; a node with
   reply exits waits for the conversation to end, as does `wait_reply: true`.
-- An event's session keys are a closed list: `laps`, `grid`, `ai_level` and
-  `start` on another type than a race are errors, as are an event without a
-  track or a car. `weather` is a weather as Pit Box names it (`clear`,
-  `rain`…), never a weather folder: those differ from one installation to
-  the next.
+- An event's session keys are a closed list: `laps`, `grid`, `ai_level`,
+  `start` and `opponents` on another type than a race are errors, as are an
+  event without a track or a car. A grid names a driver once, never one the
+  roster lacks, and never more opponents than `grid` holds beside the player.
+  Skills, aggression, ballast and restrictor go from 0 to 100. `weather` is
+  a weather as Pit Box names it (`clear`, `rain`…), never a weather folder:
+  those differ from one installation to the next.
+- `drivers/roster.yaml` is the only file of `drivers/` read today; the others
+  are left alone, for the careers to come.
 
 ### Dialogue text: Ink, in one language first
 
@@ -726,6 +753,47 @@ The player side follows each story's settings. What the engine needs:
   save standing on something removed is refused with the reason.
 - **The frame evolves.** Skins change at chosen beats.
 
+**Today** (L3, under way):
+
+- **Stories offered.** Until stories come as packages (L4), Story Mode offers
+  the sample story Pit Box carries and the author's own stories, played as
+  they are on disk. A story the checks find errors in does not start.
+- **One game per story**, saved after every move of the player, in Pit Box's
+  own data; a new game replaces it after a confirmation. The story's `saves`
+  setting (autosave per day or manual slots, reload) is not applied yet. A
+  game resumes on the story as it is now, or is refused with the reason.
+- **The phone's messaging app** lists one thread per sender, the latest
+  first, the unread ones marked; a thread opened marks its messages seen and
+  offers the replies of its open message. The content types the phone has no
+  template for yet are listed by name.
+- **The dialogue layer** plays the latest dialogue while it waits for a reply,
+  then until the player reads past its last line, which closes it and marks it
+  seen; a dialogue closed does not come back on reload.
+- **A player action** shows as a card with its name and a Done button, until
+  actions have their screens (catalogs, L6). An event shows its summary: type,
+  track, car, laps, entry fee, the goal in words, the attempt.
+- **Going to an event** pays the attempt, then sends the session through the
+  session screen's own launch (Steam check, the player's driver and livery
+  for that car). The session is the player's own for that type of session -
+  assists, damage, tyre wear, penalties, track state - with what the event
+  decides over it. A race starts on the grid, with no practice or qualifying;
+  a time attack runs as a hotlap, a test drive as a practice. The event's
+  weather is an intent; without one, the player's usual one, else a clear sky.
+  The event's skill is that of every unnamed opponent; without `grid` or
+  `opponents`, a race has the player's usual number of opponents.
+- **Adaptive difficulty** takes 2 points of skill off every set skill per
+  step, never below Content Manager's 70.
+- **Coming back.** When the game closes, the session's result is read: the
+  race of a race, the last session otherwise. A race is finished without
+  retiring, another session with a lap driven. A named driver is beaten when
+  they finished behind the player or retired, never when the player retired.
+  A result on another track or in another car is another session's, never
+  the event's. Without a result - the game closed before the end, or never
+  started - the attempt can be launched again without paying, or given up,
+  which counts as not finishing.
+  A session left under way when Pit Box closed is read when the game is
+  opened again.
+
 ## Scenes, frame and sound
 
 A story can place its frame in the centre of a widescreen view, over a blurred
@@ -802,7 +870,7 @@ The settings live in the `settings` part of each story's `story.yaml`.
 | --- | --- | --- |
 | L0 | Fix the CSP launch issue; read the race result file; entry list with per-driver skill | A session launched by Pit Box returns a usable result |
 | L1 | File format, flow engine, conditions, story time, saves | The engine runs a sample story from the command line |
-| L2 | Create Your Own: Story flow, Content, Events, Drivers, World, validation, preview in the phone frame; with L2.3b (dialogue content type, portraits, starting frame and Beat frame), reply labels and exits per reply in L2.4, the dialogue preview on the scene in L2.5 | An author builds a first chapter in the editor (behind the switch) |
+| L2 | Create Your Own: Story flow, Content, Events, Drivers, World, validation, preview in the phone frame; with L2.3b (dialogue content type, portraits, starting frame and Beat frame), reply labels and exits per reply in L2.4, the dialogue preview on the scene in L2.5, the roster and the race grids in L2.6 | An author builds a first chapter in the editor (behind the switch) |
 | L3 | Story Mode: hub, phone with thread, inbox, feed and statement templates, events with retries and failure pools; the dialogue layer and stories with no frame | A first chapter is playable end to end |
 | L3b | Visual novel: line log, fast-forward and auto-advance, illustrations, transitions, saving during a dialogue, read-only graph view of the flow | A story with no frame plays like a visual novel |
 | L4 | Story package: build, permissions, download, install and update (mechanism chosen at implementation) | A player installs a bundled story in one click |

@@ -43,6 +43,7 @@
   import { OpponentGrid } from "$lib/launch/opponentGrid.svelte";
   import { restoreOpponent } from "$lib/launch/gridRules";
   import { presetFromSetup, readPreset } from "$lib/launch/typePresets";
+  import { defaultSetup } from "$lib/launch/setupRules";
   import { loadLaunchState, saveLaunchState, selectionOf, type TypePresets } from "$lib/launch/launchState.svelte";
   import { restoreCar, restoreTrack } from "$lib/launch/sessionRestore";
 
@@ -68,49 +69,7 @@
   let warning = $state("");
   let ready = $state(false);
 
-  let setup = $state<RaceSetup>({
-    car_id: "",
-    car_skin: null,
-    driver: null,
-    track_id: "",
-    track_layout: null,
-    session_type: "practice",
-    opponents: [],
-    ai_level: 95,
-    ai_spread: 3,
-    aggression: 0,
-    aggression_spread: 0,
-    player_ballast: 0,
-    player_restrictor: 0,
-    start_mode: "random",
-    laps: 5,
-    weather: "",
-    time_hours: 13,
-    ambient_c: null,
-    road_c: null,
-    wind_speed_kmh: null,
-    wind_direction_deg: null,
-    season: null,
-    season_date: null,
-    penalties: false,
-    jump_start_penalty: 0,
-    track_state: null,
-    grip: 96,
-    practice_enabled: false,
-    practice_minutes: 20,
-    qualify_enabled: true,
-    qualify_minutes: 10,
-    ghost_car: false,
-    ghost_advantage: 0,
-    practice_start: "pit",
-    damage: 50,
-    fuel_rate: 100,
-    tyre_wear: 100,
-    tyre_blankets: false,
-    abs: "factory",
-    traction_control: "factory",
-    ideal_line: false,
-  });
+  let setup = $state<RaceSetup>(defaultSetup());
 
   // --- Saison optionnelle (SESSION§3.3) : associe une date au preset Quick
   // Drive (udt/dtv), best-effort côté CSP (voir RaceSetup.season_date côté back). ---

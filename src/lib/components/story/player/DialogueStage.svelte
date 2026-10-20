@@ -20,8 +20,11 @@
     speakers: Record<string, Speaker>;
     ended: boolean;
     onchoose: (label: string) => void;
+    /** The player went past the last line of an ended dialogue: Story Mode
+     * closes the layer; the preview has nothing to close. */
+    onend?: () => void;
   }
-  const { steps, choices, present, from, speakers, ended, onchoose }: Props = $props();
+  const { steps, choices, present, from, speakers, ended, onchoose, onend }: Props = $props();
 
   /** The said line shown, as an index into `steps`. */
   let at = $state(-1);
@@ -50,6 +53,7 @@
   function advance() {
     const next = nextLine(steps, at);
     if (next !== null) at = next;
+    else if (ended) onend?.();
   }
 
   function onkeydown(e: KeyboardEvent) {

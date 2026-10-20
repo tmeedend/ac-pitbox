@@ -1755,7 +1755,11 @@
     "transferIncompatible": "This version of Pit Box cannot read this export: update it.",
     "transferNotEmpty": "A library is only imported into an empty installation.",
     "transferFolderNotEmpty": "The library folder already holds mods: a library is only imported into an empty folder.",
-    "storyHistoryOutdated": "A file was changed outside Pit Box since: the story was read again, and the undo history was cleared."
+    "storyHistoryOutdated": "A file was changed outside Pit Box since: the story was read again, and the undo history was cleared.",
+    "storyHasErrors": "This story has errors: open it in Create Your Own to see them.",
+    "storyNoGame": "No game under way in this story.",
+    "storySaveStale": "The story changed since this game was saved: it cannot resume. Start a new game.",
+    "storySaveUnreadable": "This game's save does not read (damaged, or from a newer Pit Box)."
   },
   "pack": {
     "tabMembers": "Mods",
@@ -2586,7 +2590,6 @@
   "story": {
     "title": "Story",
     "modeTitle": "Story Mode",
-    "noStory": "No story installed.",
     "createTitle": "Create Your Own",
     "noOwnStory": "No story written yet.",
     "frame": {
@@ -2731,7 +2734,10 @@
       "onFailure": "On failure",
       "pool": "Messages drawn from",
       "noPool": "No message",
-      "pick": "How many"
+      "pick": "How many",
+      "opponents": "Opponents",
+      "addOpponents": "Add opponents",
+      "aheadOf": "Finish ahead of {name}"
     },
     "content": {
       "title": "Contents",
@@ -2798,6 +2804,23 @@
       "moveUp": "Move up",
       "moveDown": "Move down"
     },
+    "drivers": {
+      "title": "Drivers",
+      "roster": "Roster",
+      "none": "No driver yet: the grids race against the liveries' names.",
+      "newDriver": "A driver's name",
+      "character": "Character",
+      "noCharacter": "No character",
+      "nationality": "Nationality",
+      "age": "Age",
+      "role": "Role",
+      "role_friend": "Friend",
+      "role_rival": "Rival",
+      "role_star": "Star",
+      "role_filler": "Filler",
+      "skill": "Skill",
+      "aggression": "Aggression"
+    },
     "preview": {
       "title": "Preview",
       "restart": "Start again",
@@ -2816,6 +2839,40 @@
       "spring": "Spring {year}",
       "summer": "Summer {year}",
       "autumn": "Autumn {year}"
+    },
+    "play": {
+      "sample": "The sample story, carried by Pit Box",
+      "newGame": "New game",
+      "continue": "Continue",
+      "underWay": "Game under way",
+      "finished": "Finished",
+      "replaceConfirm": "Start again from the beginning? The game under way is replaced.",
+      "leave": "Leave",
+      "money": "Money: {n}",
+      "reputation": "Reputation: {n}",
+      "messages": "Messages",
+      "unknownSender": "Unknown",
+      "unread": "Unread",
+      "noTemplate": "{kind} from {from}",
+      "noMessage": "No message yet.",
+      "goal": "Goal",
+      "goalPosition": "Finish in position {n} or better",
+      "goalFinished": "Finish without retiring",
+      "goalLap": "Best lap under {time}",
+      "goalAhead": "Finish ahead of {name}",
+      "goalOther": "{text}",
+      "goalFinish": "Finish the session",
+      "attempt": "Attempt {n}",
+      "actionDone": "Done",
+      "waitsReply": "{name} is waiting for your answer.",
+      "theEnd": "The end",
+      "backToHub": "Back to the stories",
+      "launch": "Go to the event",
+      "racing": "Session under way…",
+      "noResult": "No result for this session.",
+      "launchAgain": "Launch again",
+      "giveUp": "Give up",
+      "cannotAfford": "Entry fee {fee}: you have {money}."
     },
     "world": {
       "title": "World",

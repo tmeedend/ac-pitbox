@@ -173,3 +173,13 @@ pub const STORY_FILE_CHANGED: &str = "errors.storyFileChanged";
 /// Undo or redo in the story editor refused: a file the edit touched was
 /// changed outside Pit Box since, and the history was dropped.
 pub const STORY_HISTORY_OUTDATED: &str = "errors.storyHistoryOutdated";
+// Story Mode, the player side.
+/// The story does not read, or its checks find errors: it does not start.
+pub const STORY_HAS_ERRORS: &str = "errors.storyHasErrors";
+/// "Continue" on a story with no game under way.
+pub const STORY_NO_GAME: &str = "errors.storyNoGame";
+/// The story changed since the game was saved, and the save points to what
+/// it no longer has.
+pub const STORY_SAVE_STALE: &str = "errors.storySaveStale";
+/// The save file does not read: damaged, or from a newer Pit Box.
+pub const STORY_SAVE_UNREADABLE: &str = "errors.storySaveUnreadable";

@@ -1,0 +1,16 @@
+# The story's own drivers, the ones a grid can name. Placeholders, like
+# everything in the sample.
+drivers:
+  - id: rival_driver
+    character: rival
+    nationality: Italy
+    age: 19
+    role: rival
+    ai_level: 96
+    aggression: 70
+  - id: a_star
+    name: A. Star
+    nationality: Brazil
+    age: 31
+    role: star
+    ai_level: 99

@@ -60,8 +60,8 @@ pub enum Output {
     },
 }
 
-/// A line as the frame or the scene shows it.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+/// A line as the frame or the scene shows it, kept in the history.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Said {
     /// A character's id; `None`: the item's sender.
     pub speaker: Option<String>,
@@ -173,10 +173,11 @@ pub fn submit(story: &Story, state: &mut State, input: Input) -> Result<Vec<Outp
     Ok(out)
 }
 
-/// One step of a previewed conversation: a line said, or the reply chosen.
+/// One step of a conversation as the player saw it, in a preview or in a
+/// game: a line said, or the reply chosen.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-pub enum PreviewStep {
+pub enum Step {
     Said(Said),
     Chose(Offer),
 }
@@ -185,7 +186,7 @@ pub enum PreviewStep {
 /// Content, live preview).
 #[derive(Debug, Clone)]
 pub struct Preview {
-    pub steps: Vec<PreviewStep>,
+    pub steps: Vec<Step>,
     /// What the conversation offers where it stopped; empty once it ended.
     pub choices: Vec<Offer>,
     pub ended: bool,
@@ -218,12 +219,10 @@ pub fn preview(story: &Story, setup: &[Effect], id: &str, replies: &[String]) ->
     let mut steps = Vec::new();
     let mut sent = Vec::new();
     let mut offered: Vec<Offer> = Vec::new();
-    let mut collect = |out: Vec<Output>, steps: &mut Vec<PreviewStep>, offered: &mut Vec<Offer>| {
+    let mut collect = |out: Vec<Output>, steps: &mut Vec<Step>, offered: &mut Vec<Offer>| {
         for o in out {
             match o {
-                Output::Lines { content, lines } if content == id => {
-                    steps.extend(lines.into_iter().map(PreviewStep::Said))
-                }
+                Output::Lines { content, lines } if content == id => steps.extend(lines.into_iter().map(Step::Said)),
                 Output::Choices { content, choices } if content == id => *offered = choices,
                 Output::Delivered { content, .. } if content != id => sent.push(content),
                 _ => {}
@@ -239,7 +238,7 @@ pub fn preview(story: &Story, setup: &[Effect], id: &str, replies: &[String]) ->
         if !r.state.conversations.contains_key(id) {
             break;
         }
-        steps.push(PreviewStep::Chose(choice));
+        steps.push(Step::Chose(choice));
         offered.clear();
         r.reply(id.into(), label.clone())?;
         collect(std::mem::take(&mut r.out), &mut steps, &mut offered);
@@ -256,6 +255,19 @@ pub fn preview(story: &Story, setup: &[Effect], id: &str, replies: &[String]) ->
         before,
         after: state,
     })
+}
+
+/// The choices a conversation stopped at offers, label and text, in the
+/// order the script reached them: what the frame shows, now or on reload.
+pub fn offers(script: &script::Script, at: &[usize], offered: &[String]) -> Vec<Offer> {
+    let written = script::choices_at(script, at).unwrap_or_default();
+    (offered.iter())
+        .filter_map(|label| written.iter().find(|c| &c.label == label))
+        .map(|c| Offer {
+            label: c.label.clone(),
+            text: c.text.clone(),
+        })
+        .collect()
 }
 
 /// Whether a result satisfies an event's success criteria: all of them, and
@@ -436,10 +448,12 @@ impl<'a> Run<'a> {
 
     /// Sends a content item, and plays its conversation from the start: a
     /// new delivery is a new conversation, so the replies of the last one
-    /// are forgotten.
+    /// are forgotten, and so is having seen it - the player has not seen
+    /// this one yet.
     fn deliver(&mut self, content: &str, via: Via) -> Result<(), EngineError> {
         let facts = self.state.content.entry(content.to_string()).or_default();
         facts.delivered += 1;
+        facts.seen = false;
         facts.reply = None;
         facts.chosen.clear();
         self.state.conversations.remove(content);
@@ -477,6 +491,10 @@ impl<'a> Run<'a> {
         let stop = script::play(&item.script, at, &mut host)?;
         let said = host.said;
         if !said.is_empty() {
+            self.log(Happening::Said {
+                content: content.into(),
+                lines: said.clone(),
+            });
             self.out.push(Output::Lines {
                 content: content.into(),
                 lines: said,
@@ -484,14 +502,7 @@ impl<'a> Run<'a> {
         }
         match stop {
             Stop::Choices { at, offered } => {
-                let written = script::choices_at(&item.script, &at).unwrap_or_default();
-                let choices = (offered.iter())
-                    .filter_map(|label| written.iter().find(|c| &c.label == label))
-                    .map(|c| Offer {
-                        label: c.label.clone(),
-                        text: c.text.clone(),
-                    })
-                    .collect();
+                let choices = offers(&item.script, &at, &offered);
                 self.state
                     .conversations
                     .insert(content.into(), Conversation { at, offered });
@@ -741,6 +752,9 @@ impl<'a> Run<'a> {
         let Some(next) = script::after_choice(&item.script, &conversation.at, &reply) else {
             return unexpected(format!("`{content}` has no choice `{reply}` any more"));
         };
+        let text = (offers(&item.script, &conversation.at, std::slice::from_ref(&reply)).pop())
+            .map(|o| o.text)
+            .unwrap_or_default();
         let facts = self.state.content.entry(content.clone()).or_default();
         facts.reply = Some(reply.clone());
         facts.chosen.push(reply.clone());
@@ -748,6 +762,7 @@ impl<'a> Run<'a> {
         self.log(Happening::Replied {
             content: content.clone(),
             reply,
+            text,
         });
         self.converse(&content, next)
     }
@@ -1341,8 +1356,8 @@ mod tests {
         let said = |p: &Preview| -> Vec<String> {
             (p.steps.iter())
                 .map(|s| match s {
-                    PreviewStep::Said(l) => l.text.clone(),
-                    PreviewStep::Chose(c) => format!("> {}", c.label),
+                    Step::Said(l) => l.text.clone(),
+                    Step::Chose(c) => format!("> {}", c.label),
                 })
                 .collect()
         };
