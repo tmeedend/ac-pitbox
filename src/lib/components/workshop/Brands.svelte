@@ -57,6 +57,7 @@
   import LogoSearch from "./LogoSearch.svelte";
   import { previewSrc } from "$lib/library/library";
   import {
+    adoptBrandLogo,
     brandLogos,
     importBrandLogo,
     loadBrandLogos,
@@ -175,22 +176,16 @@
     n === 0 ? t("brandsTab.noCar") : n === 1 ? t("brandsTab.carOne") : t("brandsTab.cars", { count: n });
 
   /** A logo choice: written at once (`brand_logos.json`), the logos re-read.
-   * Same failure path as the merges. */
-  async function logoChoice(write: () => Promise<void>) {
-    busy = true;
-    try {
-      await write();
-      error = "";
-    } catch (e) {
-      console.error("brand logo", e);
-      error = errorText(e);
-    } finally {
-      busy = false;
-    }
+   * In the tab's queue, as the merges: a merge's re-application of the library
+   * can run for seconds, and a write of its own would hand the buttons back
+   * while it runs; two choices made in a row would also race to the file, the
+   * last one to finish staying. */
+  function logoChoice(write: () => Promise<void>) {
+    void enqueue("brand logo", write);
   }
 
   function pickVariant(brand: string, pref: BrandPref, v: LogoVariant) {
-    void logoChoice(() => saveBrandLogo(brand, { ...pref, variant: v.hash, custom: undefined }));
+    logoChoice(() => saveBrandLogo(brand, { ...pref, variant: v.hash, custom: undefined }));
   }
 
   async function giveFile(brand: string) {
@@ -199,11 +194,18 @@
       multiple: false,
       filters: [{ name: t("brandsTab.logoFileFilter"), extensions: ["png", "svg"] }],
     });
-    if (typeof picked === "string") void logoChoice(() => importBrandLogo(brand, picked));
+    if (typeof picked === "string") logoChoice(() => importBrandLogo(brand, picked));
   }
 
   /** The brand whose logo is being searched online (TAXO§9.1). */
   let searchingLogo = $state<string | null>(null);
+
+  /** A logo picked online: the panel closes, and the download is the tab's
+   * next write - its failure shows on the tab, as a given file's does. */
+  function adoptOnline(brand: string, url: string) {
+    searchingLogo = null;
+    logoChoice(() => adoptBrandLogo(brand, url));
+  }
 
   const PREVIEW_SIZES = [13, 18, 20, 32];
   const bgKey: Record<string, string> = {
@@ -356,7 +358,7 @@
                       ]}
                       value={logo.pref.plaque === undefined ? "auto" : logo.pref.plaque ? "plaque" : "direct"}
                       onselect={(v) =>
-                        void logoChoice(() =>
+                        logoChoice(() =>
                           saveBrandLogo(r.name, { ...logo.pref, plaque: v === "auto" ? undefined : v === "plaque" }),
                         )}
                     />
@@ -393,7 +395,7 @@
                     >{t("brandsTab.logoFile")}</button
                   >
                   {#if logo && (logo.pref.variant || logo.pref.custom || logo.pref.plaque !== undefined)}
-                    <button type="button" class="btn" disabled={busy} onclick={() => void logoChoice(() => saveBrandLogo(r.name, {}))}
+                    <button type="button" class="btn" disabled={busy} onclick={() => logoChoice(() => saveBrandLogo(r.name, {}))}
                       >{t("brandsTab.logoAuto")}</button
                     >
                   {/if}
@@ -600,7 +602,8 @@
 </div>
 
 {#if searchingLogo}
-  <LogoSearch brand={searchingLogo} onclose={() => (searchingLogo = null)} />
+  {@const brand = searchingLogo}
+  <LogoSearch {brand} onclose={() => (searchingLogo = null)} onadopt={(url) => adoptOnline(brand, url)} />
 {/if}
 
 <style>

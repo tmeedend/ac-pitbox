@@ -3,18 +3,21 @@
   // Wikidata's logos for the brand first, then a Wikimedia Commons search,
   // page by page. The user picks
   // one; it is downloaded and becomes his own logo file, as one he gave would
-  // (TAXO§9). Nothing is fetched before he opens this.
+  // (TAXO§9). Nothing is fetched before he opens this. The download is the
+  // parent's to write: it goes through the Brands tab's write queue.
   import { onMount } from "svelte";
   import Modal from "$lib/components/ui/Modal.svelte";
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
-  import { adoptBrandLogo, searchBrandLogos, type LogoCandidate } from "$lib/library/brandLogos.svelte";
+  import { searchBrandLogos, type LogoCandidate } from "$lib/library/brandLogos.svelte";
 
   interface Props {
     brand: string;
     onclose: () => void;
+    /** The candidate picked, by its URL. */
+    onadopt: (url: string) => void;
   }
-  let { brand, onclose }: Props = $props();
+  let { brand, onclose, onadopt }: Props = $props();
 
   // The brand's name to start with, edited at will ("Renault Sport").
   let query = $state("");
@@ -22,7 +25,6 @@
   let next = $state<number | null>(null);
   let searched = $state(false);
   let loading = $state(false);
-  let adopting = $state(false);
   let error = $state("");
   /** The picked candidate, by its URL: a value, not the object (CLAUDE.md,
    * `$state` proxies). */
@@ -44,18 +46,8 @@
     }
   }
 
-  async function adopt() {
-    if (!picked) return;
-    adopting = true;
-    error = "";
-    try {
-      await adoptBrandLogo(brand, picked);
-      onclose();
-    } catch (e) {
-      error = errorText(e);
-    } finally {
-      adopting = false;
-    }
+  function adopt() {
+    if (picked) onadopt(picked);
   }
 
   // The two sources worth naming on a tile; a Commons file is the default.
@@ -68,7 +60,7 @@
   });
 </script>
 
-<Modal title={t("logoSearch.title", { brand })} width="760px" onclose={adopting ? undefined : onclose}>
+<Modal title={t("logoSearch.title", { brand })} width="760px" {onclose}>
   <form
     class="bar"
     onsubmit={(e) => {
@@ -90,11 +82,10 @@
           class="cand"
           class:on={picked === c.url}
           title={c.name}
-          disabled={adopting}
           onclick={() => (picked = c.url)}
           ondblclick={() => {
             picked = c.url;
-            void adopt();
+            adopt();
           }}
         >
           <span class="thumb"><img src={c.thumb} alt={c.name} loading="lazy" /></span>
@@ -116,8 +107,8 @@
   <p class="source lbl-sub">{t("logoSearch.source")}</p>
 
   {#snippet footer()}
-    <button type="button" class="btn" disabled={adopting} onclick={onclose}>{t("common.cancel")}</button>
-    <button type="button" class="btn btn-primary" disabled={!picked || adopting} onclick={() => void adopt()}
+    <button type="button" class="btn" onclick={onclose}>{t("common.cancel")}</button>
+    <button type="button" class="btn btn-primary" disabled={!picked} onclick={adopt}
       >{t("logoSearch.use")}</button
     >
   {/snippet}
