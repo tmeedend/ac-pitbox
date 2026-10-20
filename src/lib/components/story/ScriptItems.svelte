@@ -6,6 +6,7 @@
   // tree back as Ink: a gather the tree lacks after a choice point is the
   // engine's to write, so none is offered here.
   import { t } from "$lib/i18n/index.svelte";
+  import { setOptional } from "$lib/story/fields";
   import { moveItem } from "$lib/story/flow";
   import { conditionsText, freshLabel, newItem, parseConditions, type FormContext } from "$lib/story/script";
   import type { ScriptItem } from "$lib/story/studio";
@@ -40,8 +41,7 @@
 
   /** Sets or removes an optional key of `target`: an empty field writes nothing. */
   function setOpt<T extends object, K extends keyof T>(target: T, key: K, v: string) {
-    if (v.trim()) (target as Record<K, string>)[key] = v.trim();
-    else delete target[key];
+    setOptional(target, key, v);
     onchange();
   }
 

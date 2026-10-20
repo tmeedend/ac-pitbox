@@ -23,6 +23,7 @@
   import { nameFrom } from "$lib/story/world";
   import { KIND_LABEL } from "$lib/story/labels";
   import { frameLabel, framesWith } from "$lib/story/frames";
+  import { setOptional } from "$lib/story/fields";
   import type { FlowNode } from "$lib/story/studio";
   import Field from "$lib/components/ui/Field.svelte";
   import TargetSelect from "./TargetSelect.svelte";
@@ -55,8 +56,7 @@
 
   /** Sets or removes an optional key: an empty field writes nothing. */
   function setOpt<T extends object, K extends keyof T>(target: T, key: K, v: string) {
-    if (v.trim()) (target as Record<K, string>)[key] = v.trim();
-    else delete target[key];
+    setOptional(target, key, v);
     save();
   }
 

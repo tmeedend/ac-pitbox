@@ -11,6 +11,7 @@
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
   import { CONTENT_TYPES, placementOf, setPlacement, setType, type Placement } from "$lib/story/content";
+  import { setOptional } from "$lib/story/fields";
   import { parseLines } from "$lib/story/flow";
   import { CONTENT_TYPE_LABEL } from "$lib/story/labels";
   import type { FormContext } from "$lib/story/script";
@@ -88,8 +89,7 @@
 
   /** Sets or removes an optional header key: an empty field writes nothing. */
   function setOpt<K extends "from" | "clock" | "scene" | "delay" | "pool">(key: K, v: string) {
-    if (v.trim()) h[key] = v.trim();
-    else delete h[key];
+    setOptional(h, key, v);
     save();
   }
 
