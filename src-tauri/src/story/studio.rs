@@ -154,19 +154,26 @@ pub fn create(
     frame: Frame,
     chapter_title: &str,
 ) -> Result<(), String> {
+    let files = story_engine::write::new_story(&story_id(folder), title, language, frame, chapter_title)?;
+    let files: Vec<(String, Vec<u8>)> = files.into_iter().map(|f| (f.path, f.text.into_bytes())).collect();
+    write_new_story(config_dir, folder, &files)
+}
+
+/// Writes a story's first files into `folder`, which must be empty (or not
+/// exist yet), and adds it to the list.
+fn write_new_story(config_dir: &Path, folder: &Path, files: &[(String, Vec<u8>)]) -> Result<(), String> {
     if folder.exists() {
         let mut entries = std::fs::read_dir(folder).map_err(|e| e.to_string())?;
         if entries.next().is_some() {
             return Err(errors::STORY_FOLDER_NOT_EMPTY.into());
         }
     }
-    let files = story_engine::write::new_story(&story_id(folder), title, language, frame, chapter_title)?;
-    for file in files {
-        let path = folder.join(&file.path);
+    for (file, bytes) in files {
+        let path = folder.join(file);
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
         }
-        std::fs::write(&path, file.text).map_err(|e| format!("writing {}: {e}", path.display()))?;
+        std::fs::write(&path, bytes).map_err(|e| format!("writing {}: {e}", path.display()))?;
     }
     add_to_studio(config_dir, folder)
 }
