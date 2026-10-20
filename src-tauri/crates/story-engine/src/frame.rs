@@ -12,8 +12,9 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt;
 use std::str::FromStr;
 
+use crate::expr::Effect;
 use crate::load::Story;
-use crate::model::{ContentType, NodeId, NodeKind};
+use crate::model::{ContentType, Node, NodeId, NodeKind};
 
 /// The active frame, as a story writes it: `none`, or a frame's name.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -106,6 +107,57 @@ pub fn frames_on_entry(story: &Story) -> BTreeMap<NodeId, BTreeSet<Frame>> {
         queue.extend(story.exits(node).into_iter().map(|next| (next, after.clone())));
     }
     on_entry
+}
+
+/// What a node sends to the frame, and which frames can be active then;
+/// `on_entry` are those on arriving at it.
+pub fn sent_by<'a>(story: &'a Story, node: &'a Node, on_entry: &BTreeSet<Frame>) -> Vec<(&'a str, BTreeSet<Frame>)> {
+    let mut sent: Vec<(&str, BTreeSet<Frame>)> = Vec::new();
+    match &node.kind {
+        NodeKind::Beat(beat) => {
+            // The beat's own frame is up before its effects run.
+            let frames = beat
+                .frame
+                .clone()
+                .map_or_else(|| on_entry.clone(), |f| BTreeSet::from([f]));
+            sent.extend(sends(&beat.effects).map(|c| (c, frames.clone())));
+        }
+        NodeKind::Message { content, .. } => {
+            sent.push((content, on_entry.clone()));
+            // What its script sends, as the conversation plays here.
+            if let Some(item) = story.content_item(content) {
+                let effects = item.script.effects();
+                sent.extend(effects.into_iter().filter_map(|(_, e)| match e {
+                    Effect::Send(c) => Some((c.as_str(), on_entry.clone())),
+                    _ => None,
+                }));
+            }
+        }
+        NodeKind::Event { event, .. } => {
+            if let Some(event) = story.event(event) {
+                for effects in [&event.on_success.effects, &event.on_failure.effects] {
+                    sent.extend(sends(effects).map(|c| (c, on_entry.clone())));
+                }
+                if let Some(pool) = &event.on_failure.pool {
+                    sent.extend(
+                        story
+                            .pool_variants(pool)
+                            .map(|(item, _)| (item.id.as_str(), on_entry.clone())),
+                    );
+                }
+            }
+        }
+        _ => {}
+    }
+    sent
+}
+
+/// The content `effects` send.
+fn sends(effects: &[Effect]) -> impl Iterator<Item = &str> {
+    effects.iter().filter_map(|e| match e {
+        Effect::Send(c) => Some(c.as_str()),
+        _ => None,
+    })
 }
 
 #[cfg(test)]

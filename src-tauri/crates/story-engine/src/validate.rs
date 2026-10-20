@@ -619,7 +619,7 @@ impl Checker<'_> {
             for node in &chapter.nodes {
                 // A node no path reaches is already reported as such.
                 let Some(frames) = on_entry.get(&node.id) else { continue };
-                for (content, frames) in sent_by(story, node, frames) {
+                for (content, frames) in crate::frame::sent_by(story, node, frames) {
                     self.shown_under(&chapter.file, node, content, &frames);
                 }
             }
@@ -733,57 +733,6 @@ impl Checker<'_> {
             }
         }
     }
-}
-
-/// What a node sends to the frame, and which frames can be active then;
-/// `on_entry` are those on arriving at it.
-fn sent_by<'a>(story: &'a Story, node: &'a Node, on_entry: &BTreeSet<Frame>) -> Vec<(&'a str, BTreeSet<Frame>)> {
-    let mut sent: Vec<(&str, BTreeSet<Frame>)> = Vec::new();
-    match &node.kind {
-        NodeKind::Beat(beat) => {
-            // The beat's own frame is up before its effects run.
-            let frames = beat
-                .frame
-                .clone()
-                .map_or_else(|| on_entry.clone(), |f| BTreeSet::from([f]));
-            sent.extend(sends(&beat.effects).map(|c| (c, frames.clone())));
-        }
-        NodeKind::Message { content, .. } => {
-            sent.push((content, on_entry.clone()));
-            // What its script sends, as the conversation plays here.
-            if let Some(item) = story.content_item(content) {
-                let effects = item.script.effects();
-                sent.extend(effects.into_iter().filter_map(|(_, e)| match e {
-                    Effect::Send(c) => Some((c.as_str(), on_entry.clone())),
-                    _ => None,
-                }));
-            }
-        }
-        NodeKind::Event { event, .. } => {
-            if let Some(event) = story.event(event) {
-                for effects in [&event.on_success.effects, &event.on_failure.effects] {
-                    sent.extend(sends(effects).map(|c| (c, on_entry.clone())));
-                }
-                if let Some(pool) = &event.on_failure.pool {
-                    sent.extend(
-                        story
-                            .pool_variants(pool)
-                            .map(|(item, _)| (item.id.as_str(), on_entry.clone())),
-                    );
-                }
-            }
-        }
-        _ => {}
-    }
-    sent
-}
-
-/// The content `effects` send.
-fn sends(effects: &[Effect]) -> impl Iterator<Item = &str> {
-    effects.iter().filter_map(|e| match e {
-        Effect::Send(c) => Some(c.as_str()),
-        _ => None,
-    })
 }
 
 /// Why a story cannot use `frame`, if it cannot.
