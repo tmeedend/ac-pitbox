@@ -100,12 +100,16 @@
     <section>
       <h3 class="lbl">{t("bulkEdit.categorySection")}</h3>
       <div class="row">
+        <!-- Enter is left alone here: with the suggestions open it picks one, and
+             must not write a half-typed category onto every selected mod. Applying
+             is the button's job. `autocomplete="off"` keeps WebView2's own history
+             popup from stacking on the suggestions. -->
         <input
           class="input"
           list="bulk-categories"
+          autocomplete="off"
           placeholder={t("bulkEdit.categoryPlaceholder")}
           bind:value={categoryInput}
-          onkeydown={(e) => e.key === "Enter" && applyCategory()}
         />
         <datalist id="bulk-categories">
           {#each categories as cat}<option value={cat}></option>{/each}
@@ -119,6 +123,7 @@
       <div class="row">
         <input
           class="input"
+          autocomplete="off"
           placeholder={t("bulkEdit.tagPlaceholder")}
           bind:value={tagInput}
           onkeydown={(e) => e.key === "Enter" && addTag()}
