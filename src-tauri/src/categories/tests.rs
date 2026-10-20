@@ -455,45 +455,179 @@ fn an_older_base_gains_the_table_and_the_computed_columns() {
     assert!(overlay::list_category_decisions(&conn).unwrap().is_empty());
 }
 
-/// An imported decision is laid on its mod at once, also when the
-/// re-application that follows cannot read that mod (no files here): and the
-/// category it hid is still the one "back to computed" returns to.
+/// REGLES§3 level 4, the first trigger as the importer fires it - a real
+/// import of an update over a mod already in the library, not a call of
+/// `store` standing in for it.
 #[test]
-fn an_imported_decision_is_laid_even_where_the_reapplication_skips() {
+fn a_decision_survives_the_real_import_of_an_update() {
+    let dir = crate::testutil::temp_dir("categories-import");
+    let lib = dir.join("lib");
+    std::fs::create_dir_all(&lib).unwrap();
+    let db = overlay::Db(std::sync::Mutex::new(
+        overlay::open(&dir.join("overlay.sqlite")).unwrap(),
+    ));
+    let cfg = AppConfig {
+        library_path: Some(lib),
+        ..Default::default()
+    };
+    let rules = default_rules();
+    let write_pack = |car_tags: &str, track_tags: &str, content: &str| {
+        for (id, ui, json) in [
+            (
+                "rcar",
+                "ui_car.json",
+                format!(r#"{{"name":"rcar","version":"{content}","tags":{car_tags}}}"#),
+            ),
+            (
+                "rtrack",
+                "ui_track.json",
+                format!(r#"{{"name":"rtrack","version":"{content}","tags":{track_tags}}}"#),
+            ),
+        ] {
+            let root = dir.join("in").join(id);
+            std::fs::create_dir_all(root.join("ui")).unwrap();
+            std::fs::write(root.join("ui").join(ui), json).unwrap();
+            std::fs::write(root.join("model.kn5"), content.as_bytes()).unwrap();
+        }
+    };
+    let import = || -> Vec<String> {
+        let ctx = crate::import_progress::ImportCtx::silent();
+        let paths = [dir.join("in").to_string_lossy().into_owned()];
+        crate::importer::import_folders(&ctx, &db, &cfg, &rules, &paths, true, &[])
+            .unwrap()
+            .into_iter()
+            .flat_map(|r| r.mods)
+            .map(|m| m.outcome)
+            .collect()
+    };
+
+    write_pack(r##"["#gt3"]"##, r#"["drift","touge"]"#, "v1");
+    assert_eq!(import(), ["IMPORT", "IMPORT"]);
+    let conn = db.0.lock().unwrap();
+    let row = |id: &str| overlay::get_mod(&conn, id).unwrap().unwrap();
+    assert_eq!(row("rcar").category.as_deref(), Some("#gt3"), "computed to begin with");
+    apply(
+        &conn,
+        &rules,
+        &["rcar".to_string()],
+        &CategoryOp::Force("#hot_rods".into()),
+    )
+    .unwrap();
+    apply(
+        &conn,
+        &rules,
+        &["rtrack".to_string()],
+        &CategoryOp::Remove("#touge".into()),
+    )
+    .unwrap();
+    apply(
+        &conn,
+        &rules,
+        &["rtrack".to_string()],
+        &CategoryOp::Add("#rally".into()),
+    )
+    .unwrap();
+    assert_eq!(row("rtrack").categories, ["#rally", "#drift"]);
+    drop(conn);
+
+    write_pack(r##"["#gt4"]"##, r#"["drift","rallycross"]"#, "v2 updated");
+    assert_eq!(
+        import(),
+        ["UPDATE_REPLACE", "UPDATE_REPLACE"],
+        "the same two mods, updated"
+    );
+    let conn = db.0.lock().unwrap();
+    let car = overlay::get_mod(&conn, "rcar").unwrap().unwrap();
+    assert_eq!(car.category.as_deref(), Some("#hot_rods"), "the forced category stays");
+    assert_eq!(
+        car.category_auto.as_deref(),
+        Some("#gt4"),
+        "the update's own result is computed beside it"
+    );
+    let track = overlay::get_mod(&conn, "rtrack").unwrap().unwrap();
+    assert_eq!(
+        track.categories,
+        ["#rally", "#rallycross", "#drift"],
+        "the deltas stay on the new list"
+    );
+}
+
+/// REGLES§3 level 4, the fourth trigger: the startup pass of a new engine
+/// version. It runs once per version, only with a library to read, and leaves
+/// the decisions where they are.
+#[test]
+fn a_decision_survives_the_pass_of_a_new_engine() {
     let l = lib();
     let rules = default_rules();
-    let now = chrono::Local::now().to_rfc3339();
-    overlay::upsert_mod(&l.conn, "ghost", "Car", None, Some("ghost"), "h", None, &now).unwrap();
-    overlay::update_harmonization(&l.conn, "ghost", None, None, Some("#gt3"), &[], None, &[]).unwrap();
-    let incoming = vec![
-        CategoryDecision {
-            forced: Some(" #Hot_Rods ".into()),
-            ..CategoryDecision::new("ghost")
-        },
-        CategoryDecision::new("empty"),
-    ];
+    l.add("Car", "car", "v1", &["#gt3"]);
+    l.add("Track", "track", "v1", &["drift", "touge"]);
+    l.harmonize(&rules);
+    l.op(&rules, &["car"], CategoryOp::Force("#hot_rods".into()));
+    l.op(&rules, &["track"], CategoryOp::Remove("#touge".into()));
+    let stamp = || overlay::get_meta(&l.conn, overlay::META_ENGINE_VERSION).unwrap();
+    let mut changed = rules.clone();
+    changed.car.tag_merge.push(TagMerge {
+        id: Some("t.merge".into()),
+        from: vec!["#gt3".into()],
+        to: vec!["#gt4".into()],
+    });
+
+    overlay::set_meta(&l.conn, overlay::META_ENGINE_VERSION, "0").unwrap();
     assert_eq!(
-        merge_decisions(&l.conn, &rules, &incoming).unwrap(),
-        (1, 0),
-        "an empty one is nothing"
-    );
-    let m = l.row("ghost");
-    assert_eq!(
-        m.category.as_deref(),
-        Some("#hot_rods"),
-        "tidied and laid on what is shown"
+        harmonize::catch_up_engine(&l.conn, &l.cfg, false, || changed.clone()).unwrap(),
+        None,
+        "no library to read, no pass"
     );
     assert_eq!(
-        m.category_auto.as_deref(),
-        Some("#gt3"),
-        "what it hid is the computed one"
+        stamp().as_deref(),
+        Some("0"),
+        "and the stamp is not laid: it will run again"
     );
 
-    l.op(&rules, &["ghost"], CategoryOp::Force("#gt3".into()));
-    assert!(overlay::get_category_decision(&l.conn, "ghost").unwrap().is_none());
     assert_eq!(
-        l.row("ghost").category.as_deref(),
-        Some("#gt3"),
-        "back to computed clears it"
+        harmonize::catch_up_engine(&l.conn, &l.cfg, true, || changed.clone()).unwrap(),
+        Some(2)
     );
+    assert_eq!(
+        stamp().as_deref(),
+        Some(crate::rules::ENGINE_VERSION.to_string().as_str())
+    );
+    let car = l.row("car");
+    assert_eq!(car.category.as_deref(), Some("#hot_rods"), "the forced category stays");
+    assert_eq!(
+        car.category_auto.as_deref(),
+        Some("#gt4"),
+        "the new engine computed another one"
+    );
+    assert_eq!(
+        l.row("track").categories,
+        ["#drift"],
+        "the taken-off category stays off"
+    );
+
+    assert_eq!(
+        harmonize::catch_up_engine(&l.conn, &l.cfg, true, || changed.clone()).unwrap(),
+        None,
+        "once per version"
+    );
+}
+
+/// Choosing what the rules compute already is no decision: no entry is
+/// created, for a car as for a track.
+#[test]
+fn choosing_a_computed_value_creates_no_entry() {
+    let l = lib();
+    let rules = default_rules();
+    l.add("Car", "car", "v1", &["#gt3"]);
+    l.add("Track", "track", "v1", &["drift", "touge"]);
+    l.harmonize(&rules);
+    l.op(&rules, &["car"], CategoryOp::Force("#gt3".into()));
+    l.op(&rules, &["track"], CategoryOp::Add("#drift".into()));
+    l.op(&rules, &["track"], CategoryOp::Remove("#rally".into()));
+    assert!(
+        overlay::list_category_decisions(&l.conn).unwrap().is_empty(),
+        "nothing stored: the car and the track are followed by the rules"
+    );
+    assert_eq!(l.row("car").category_source, "rules");
+    assert_eq!(l.row("track").category_source, "rules");
 }

@@ -320,7 +320,7 @@ Google Images, la source de Playnite pour les icônes de jeu, a été écarté :
 |---|---|
 | Pastille claire (`render: 'plaque'`) | fond `#ececed`, rayon 2 px, marge intérieure 2 px |
 | Icône de catégorie | remplissage `#d4d5d7`, `#fff` au survol |
-| Terme curé manuellement (fanion) | `--accent-dim` `#7e2415` |
+| Terme curé manuellement, ou catégorie décidée sur un mod (fanion) | `--rosso-border` `#5c1212` |
 | Bandeau de fusions proposées | fond `#1b1811`, filet gauche 2 px `#c88a2a` |
 | Emblème manquant | glyphe neutre `--txt-4`, jamais de case vide |
 

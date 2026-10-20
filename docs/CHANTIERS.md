@@ -1511,28 +1511,50 @@ de reprendre. En cas d'écart, la spec fait foi.
       crayon de l'en-tête (2026-10-20, §5bis.3) sa **marque** et son
       **année**, et depuis la puce de catégorie (2026-10-21, §5, REGLES§3)
       sa **catégorie** — voiture forcée, circuit ajouté ou retiré —, qui
-      survit à tout recalcul. **Pas encore sa classe.** La marque suit le
-      modèle du nom (une colonne `brand_user` à côté de `brand`, que
-      l'harmonisation réécrit, lue devant elle dans `overlay::MOD_SELECT`) ;
-      la catégorie a sa table `category_user`, sans clé étrangère comme
-      `tech_user`, posée sur le résultat par `harmonize::store` et par
-      `categories::apply`, avec le calculé gardé à côté. Reste ouvert :
-      (1) la fusion de marques de l'onglet Marques s'applique aux marques que
-      l'harmonisation calcule, pas à une marque saisie à la main ; (2) une
-      marque ou une catégorie décidée n'est « modifiée par vous » que sur la
-      fiche, pas sur la liste ; (3) l'historique d'un circuit dit « fiche
-      technique modifiée » quand on corrige son année (même décision
-      `tech_user`) ; (4) les décisions de catégorie voyagent avec l'export des
-      règles mais **pas avec le relevé anonyme** (`survey.rs` n'embarque que
-      les surcouches, une décision par identifiant de mod n'étant pas
-      anonyme) ; (5) la catégorie d'une voiture reste le premier tag `#` **par
-      ordre alphabétique** des tags que les règles produisent (`pick_category`),
-      pas par priorité : un forçage est aujourd'hui le seul moyen d'en choisir
-      une autre sans règle ; (6) le champ de tag manuel propose les catégories
-      de la bibliothèque, pas les noms traduits d'une catégorie de circuit.
-      Demandé par l'utilisateur (2026-09-24) en discutant des fausses marques :
-      pour deux ou trois voitures, une correction directe est plus simple
-      qu'une règle.
+      survit à tout recalcul. **Pas encore sa classe.** La couche est celle
+      de REGLES§3 : par mod, la plus prioritaire de la cascade, **jamais
+      exportée avec les règles ni remontée par le relevé** (elle appartient à
+      une bibliothèque, pas à une façon de classer) — elle voyage avec
+      l'export de la bibliothèque (`category_user` et `brand_user`, EXPORT§4).
+      La marque suit le modèle du nom (une colonne `brand_user` à côté de
+      `brand`, que l'harmonisation réécrit, lue devant elle dans
+      `overlay::MOD_SELECT`) ; la catégorie a sa table `category_user`, sans
+      clé étrangère comme `tech_user`, posée sur le résultat par
+      `harmonize::store` et par `categories::apply`, avec le calculé gardé à
+      côté. Reste ouvert : (1) la fusion de marques de l'onglet Marques
+      s'applique aux marques que l'harmonisation calcule, pas à une marque
+      saisie à la main ; (2) une marque ou une catégorie décidée n'est
+      « modifiée par vous » que sur la fiche, pas sur la liste ; (3)
+      l'historique d'un circuit dit « fiche technique modifiée » quand on
+      corrige son année (même décision `tech_user`) ; (4) le champ de tag
+      manuel propose les catégories de la bibliothèque, pas les noms traduits
+      d'une catégorie de circuit. Demandé par l'utilisateur (2026-09-24) en
+      discutant des fausses marques : pour deux ou trois voitures, une
+      correction directe est plus simple qu'une règle.
+
+- [ ] **Catégorie calculée : choisir par rang d'exécution des règles
+      (REGLES§3), pas par ordre alphabétique.** Aujourd'hui la catégorie
+      d'une voiture est le premier tag `#` **par ordre alphabétique** des tags
+      que les règles produisent (`rules::pick_category`, un `BTreeSet`) :
+      l'ordre d'exécution de REGLES§3 — par couche, puis par rang dans la
+      couche — n'y joue aucun rôle, si bien qu'une règle de l'utilisateur
+      passée devant celles du catalogue ne change pas la catégorie choisie.
+      À faire : garder, pour chaque tag `#` produit, le rang de la règle qui
+      l'a produit, et prendre le premier dans l'ordre d'exécution. Change la
+      catégorie de voitures existantes : un lot à part, avec un diff attendu
+      et expliqué (REGLES§13.5 et REGLES§13.6). Un forçage reste aujourd'hui le seul
+      moyen de choisir une autre catégorie sans règle.
+
+- [ ] **Unifier les retours à l'original sur `ManualMark`.** Le nom, la marque
+      et l'année reprennent leur valeur d'origine par un lien « Back to
+      original » dans le formulaire du crayon de l'en-tête
+      (`IdentityEdit.svelte`) ; la catégorie, elle, porte le fanion et le `↺`
+      de `ui/ManualMark.svelte` (la valeur calculée en infobulle). Deux
+      gestes pour la même idée, selon l'endroit. À faire : le fanion et le `↺`
+      de `ManualMark` sur ce que le formulaire a modifié (puce du nom, de la
+      marque, de l'année, dans l'en-tête), le lien du formulaire restant un
+      raccourci ou disparaissant ; et la même chose pour la description et
+      la fiche technique (`↺ revenir`, `TechSheetEdit.svelte`).
 
 - [ ] **Deux jeux de règles de tags ont divergé — à trancher.**
       `docs/default-tag-rules-enriched.json` **n'est pas ce que l'app charge** :

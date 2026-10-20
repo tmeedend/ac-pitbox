@@ -220,56 +220,6 @@ pub fn apply(conn: &Connection, rules: &Rules, ids: &[String], op: &CategoryOp) 
     tx.commit().map_err(|e| e.to_string())
 }
 
-/// A decision read from an export, in the form the base keeps: `#tag` in lower
-/// case, nothing empty. The spelling of a known tag (`#formula 1`) is kept -
-/// it is already the exporter's stored form, not a typed text.
-fn sanitized(d: &CategoryDecision) -> CategoryDecision {
-    let tags = |list: &[String]| -> Vec<String> {
-        let mut out: Vec<String> = Vec::new();
-        for t in list.iter().map(|t| key(t)).filter(|t| t.len() > 1) {
-            if !out.contains(&t) {
-                out.push(t);
-            }
-        }
-        out
-    };
-    CategoryDecision {
-        mod_id: d.mod_id.clone(),
-        forced: d.forced.as_deref().map(key).filter(|t| t.len() > 1),
-        added: tags(&d.added),
-        removed: tags(&d.removed),
-    }
-}
-
-/// Takes the decisions of an import: a mod the base already decided keeps its
-/// own, the others are written (a mod this library lacks keeps its decision
-/// for the day it is imported). `(added, kept)`.
-///
-/// Each decision is laid on its mod right here, not left to the re-application
-/// that follows: that one skips a mod whose files it cannot read, and the
-/// decision would then wait unseen for a later pass.
-pub fn merge_decisions(
-    conn: &Connection,
-    rules: &Rules,
-    incoming: &[CategoryDecision],
-) -> Result<(usize, usize), String> {
-    let (mut added, mut kept) = (0, 0);
-    for d in incoming.iter().map(sanitized).filter(|d| !d.is_empty()) {
-        if overlay::get_category_decision(conn, &d.mod_id)
-            .map_err(|e| e.to_string())?
-            .is_some()
-        {
-            kept += 1;
-            continue;
-        }
-        overlay::ensure_category_auto(conn, &d.mod_id).map_err(|e| e.to_string())?;
-        overlay::set_category_decision(conn, &d).map_err(|e| e.to_string())?;
-        lay(conn, rules, &d.mod_id)?;
-        added += 1;
-    }
-    Ok((added, kept))
-}
-
 /// The categories a picker offers for `kind`: what the rules can produce, then
 /// what the user decided on other mods. A track's come in the order of
 /// Familles › Circuits.

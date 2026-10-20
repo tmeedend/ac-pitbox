@@ -816,6 +816,75 @@ fn an_export_from_an_older_pit_box_is_brought_up_to_date() {
     );
 }
 
+/// Rule (EXPORT R4, REGLES§3 level 4): an export made before the category
+/// decisions lent `category` to the game's own content, and has neither
+/// `category_user` nor the columns that keep the computed category. It imports
+/// without a word; the category it carried is ignored - a category is shown
+/// with the user's decision laid on what the rules compute - and the next
+/// indexing computes it again.
+#[test]
+fn an_export_that_lent_the_category_to_game_content_still_imports() {
+    let root = crate::testutil::temp_dir("transfer-old-category");
+    let src = source(&root);
+    let file = root.join("library.pitbox");
+    export(&src.db, &src.cfg, &src.places, &Part::ALL, &file).unwrap();
+
+    // The same export as the previous version wrote it: no table of decisions,
+    // none of the columns added with them, and a category on the game content
+    // the user wrote a note on - which that version carried over.
+    let old = root.join("old.pitbox");
+    let mut zip = zip::ZipWriter::new(std::fs::File::create(&old).unwrap());
+    for (name, bytes) in entries(&file) {
+        let bytes = if name == DATABASE_ENTRY {
+            let tmp = root.join("old.sqlite");
+            std::fs::write(&tmp, &bytes).unwrap();
+            {
+                let c = Connection::open(&tmp).unwrap();
+                c.execute("DROP TABLE category_user", []).unwrap();
+                for col in ["brand_user", "category_auto", "categories_auto"] {
+                    c.execute(&format!("ALTER TABLE mods DROP COLUMN {col}"), []).unwrap();
+                }
+                let n = c
+                    .execute(
+                        "UPDATE mods SET category = '#old' WHERE id_interne = 'ks_mazda_mx5_cup'",
+                        [],
+                    )
+                    .unwrap();
+                assert_eq!(n, 1, "the cup car is in the export");
+            }
+            std::fs::read(&tmp).unwrap()
+        } else {
+            bytes
+        };
+        zip.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
+        std::io::Write::write_all(&mut zip, &bytes).unwrap();
+    }
+    zip.finish().unwrap();
+
+    let dest = Install::new(&root, "dest", &["ks_mazda_mx5_cup"]);
+    let rules = crate::rules::default_rules();
+    let imported = import(&dest.db, &dest.cfg, &dest.places, &rules, &old, &Part::ALL).unwrap();
+    assert_eq!(imported.stock_applied, 1, "the note on the cup car is still laid on it");
+
+    let cup = overlay::get_mod(&dest.conn(), "ks_mazda_mx5_cup").unwrap().unwrap();
+    assert_eq!(cup.notes_user.as_deref(), Some("cup note"));
+    assert_ne!(
+        cup.category.as_deref(),
+        Some("#old"),
+        "the category it carried is ignored"
+    );
+
+    // The next start indexes the game's content again, which computes it.
+    crate::stock::index_stock_content(&dest.conn(), &dest.cfg, &rules, false).unwrap();
+    let cup = overlay::get_mod(&dest.conn(), "ks_mazda_mx5_cup").unwrap().unwrap();
+    assert_ne!(cup.category.as_deref(), Some("#old"), "and it stays computed");
+    assert_eq!(
+        cup.category, cup.category_auto,
+        "nothing decided on it: what is shown is what the rules say"
+    );
+    assert_eq!(cup.category_source, "rules");
+}
+
 /// Rule (EXPORT§3): unchecking a part takes nothing of it, even indirectly —
 /// and Profiles goes nowhere without the library.
 #[test]

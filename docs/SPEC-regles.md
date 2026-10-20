@@ -238,7 +238,7 @@ Recalculé à la volée après chaque changement, pas au lancement seulement.
 
 # 9. Export et import
 
-**L'export ne contient que la surcouche** — règles de l'utilisateur, désactivations, dérivations, corrections manuelles. Jamais le catalogue. Les corrections manuelles, ce sont aujourd'hui **les décisions de catégorie** (une voiture forcée, les deltas d'un circuit), par identifiant de mod. Elles se fusionnent comme le reste : un mod que le destinataire a déjà décidé garde sa décision, et une décision sur un mod qu'il n'a pas est gardée pour le jour où il l'importe. Un export d'avant ces décisions s'importe tel quel.
+**L'export ne contient que la surcouche** — règles de l'utilisateur, désactivations, dérivations. Jamais le catalogue, et **jamais les corrections par mod** (niveau 4 de §3 : une catégorie forcée, un pays ou une fiche technique corrigés) : elles appartiennent à une bibliothèque, pas à une façon de classer. Elles voyagent avec l'export de la bibliothèque (`EXPORT§4`), pas avec celui des règles.
 
 Exporter le catalogue figerait le destinataire sur une version ancienne, et gonflerait le fichier de données identiques chez tout le monde.
 

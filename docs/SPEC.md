@@ -373,7 +373,7 @@ Code couleur : rouge = catégorie, vert = règle, gris = manuel, bleu = brut du 
 - **Fiche circuit** : le bloc Tags montre les catégories **telles qu'elles sont maintenant** (une catégorie calculée puis retirée ne s'y affiche pas), un `×` sur chacune, un `+` qui ouvre la liste, le fanion sur celles ajoutées à la main, et un `↺` sur le bloc qui efface tous les deltas.
 - **Le champ de tag manuel** (voitures et circuits) propose, au-dessus de la ligne grise habituelle, les catégories connues que la saisie désigne, chacune en puce rouge `#gt3 → catégorie` : la choisir force la catégorie (voiture) ou l'ajoute (circuit) ; Entrée sans rien de choisi crée un simple tag, comme avant. Un tag manuel en `#` qu'aucune catégorie ne reprend reste une puce grise, dont l'infobulle dit qu'il n'est qu'un tag.
 - **Les familles** lisent une catégorie forcée comme n'importe quel tag de la voiture.
-- Une suppression complète du mod (ESPACE§5.3) emporte la décision, comme celles de la fiche technique ; elle part aussi avec l'export de la bibliothèque (EXPORT§4) et avec celui des règles (REGLES§9).
+- Une suppression complète du mod (ESPACE§5.3) emporte la décision, comme celles de la fiche technique ; elle part avec l'export de la bibliothèque (EXPORT§4), **pas** avec l'export des règles (REGLES§9) : une correction par mod appartient à une bibliothèque, pas à une façon de classer.
 
 ### 5bis.3 Nom, marque, année et description repris à la main
 
@@ -569,7 +569,7 @@ Spec : `SPEC-index-bibliotheque.md` (`INDEX§`). **Sans puce active et sans text
 
 **L'écran `Classement › Règles`** (REGLES§8) : une liste par section **dans l'ordre d'exécution** ; par ligne, une bascule immédiate, ce que la règle cherche → ce qu'elle donne, `⚑ nouvelle version` quand la règle livrée a changé depuis une dérivation, le **compteur d'effet**, un menu ⋮. **Modifier une règle livrée demande d'abord** (REGLES§8.2) : « Modifier quand même », « Désactiver plutôt », « Annuler ». En tête, l'**interrupteur global** du catalogue (REGLES§7), qui ne concerne que les règles en liste. **Chaque geste est écrit aussitôt et réappliqué à toute la bibliothèque**, et les compteurs reviennent de cette même passe.
 
-**Exporter et importer ses règles** (REGLES§9) : l'export ne contient que les **décisions** ; **l'import fusionne, il ne remplace jamais** — en cas de conflit, la décision de l'utilisateur reste —, et rend compte. Il accepte aussi un **relevé** de bibliothèque (§10), dont seule la section `decisions` est lue.
+**Exporter et importer ses règles** (REGLES§9) : l'export ne contient que les **décisions** sur les règles — jamais les corrections par mod (catégorie forcée, pays, fiche technique), qui appartiennent à une bibliothèque ; **l'import fusionne, il ne remplace jamais** — en cas de conflit, la décision de l'utilisateur reste —, et rend compte. Il accepte aussi un **relevé** de bibliothèque (§10), dont seule la section `decisions` est lue.
 
 **Un nouveau catalogue s'applique tout seul, et le dit après** (REGLES§6, `catalog_update.rs`) : au démarrage, si l'empreinte du catalogue embarqué a changé, la bibliothèque est **reclassée**, et un **rapport** reste — règles ajoutées, corrigées, retirées, et l'effet mesuré de chacune sur les mods reclassés —, dans une notification et un bandeau des onglets de Classement, jusqu'à ce qu'on les ferme. **Jamais d'assistant qui demande avant.** « Revenir à » réinstalle le catalogue précédent, gardé jusqu'à la mise à jour suivante. Une mise à jour vue sans bibliothèque accessible est remise au démarrage suivant.
 
