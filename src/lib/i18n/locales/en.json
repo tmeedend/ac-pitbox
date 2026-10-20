@@ -2679,7 +2679,9 @@
       "warning": "warning",
       "undo": "Undo (Ctrl+Z)",
       "redo": "Redo (Ctrl+Y)",
-      "historyUnsaved": "Some edits are not saved yet: fix them first."
+      "historyUnsaved": "Some edits are not saved yet: fix them first.",
+      "copySample": "Copy the sample",
+      "copySampleHint": "The sample story, in a folder of yours: open it, change it, see how a story is made."
     },
     "events": {
       "title": "Events",
@@ -2737,7 +2739,28 @@
       "pick": "How many",
       "opponents": "Opponents",
       "addOpponents": "Add opponents",
-      "aheadOf": "Finish ahead of {name}"
+      "aheadOf": "Finish ahead of {name}",
+      "help": {
+        "session": "What the event imposes on the player. A setting left empty takes Pit Box's default; assists, damage and tyre wear stay the player's.",
+        "grid": "\"Cars on the grid\" counts the player. Beyond the opponents you place below, the remaining places drive the event's car under the liveries' names; without a number, the placed opponents are the whole grid.",
+        "success": "Every condition switched on must hold. With none, finishing the session is enough.",
+        "aheadOf": "\"Finish ahead of\" lists the named drivers you put on the grid (Opponents block).",
+        "effectsTitle": "Effects",
+        "effectsIntro": "One effect per line, applied when this outcome happens. A name is cited with its prefix.",
+        "effectReputation": "adds 2 to the reputation; followers works the same way",
+        "effectCounter": "adds 1 to a counter of the World; = sets it",
+        "effectFlag": "turns a flag of the World on; = false turns it off",
+        "effectRelation": "a character's relation, one step up the scale; = <step> sets it",
+        "effectSend": "sends a content item of the flow right away",
+        "effectMoney": "takes 100 off the player's money",
+        "advance": "Advance story time: 3 days, 2 weeks, 1 month, 1 year. Empty: time does not move.",
+        "inThisStory": "In this story",
+        "steps": "Relation steps",
+        "sendable": "Content to send",
+        "noNames": "No counter, flag or character yet: they are declared in the World.",
+        "pool": "\"Messages drawn from\": a pool of failure content, written in Contents. Each draw is a variant whose conditions hold, never the same twice until the pool is used up; \"How many\" says one or two.",
+        "failureEffects": "Effects are written like on success. Whether the event can be tried again is a story setting."
+      }
     },
     "content": {
       "title": "Contents",

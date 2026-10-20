@@ -2679,7 +2679,9 @@
       "warning": "avertissement",
       "undo": "Annuler (Ctrl+Z)",
       "redo": "Rétablir (Ctrl+Y)",
-      "historyUnsaved": "Des modifications ne sont pas encore enregistrées : corrige-les d'abord."
+      "historyUnsaved": "Des modifications ne sont pas encore enregistrées : corrige-les d'abord.",
+      "copySample": "Copier l'exemple",
+      "copySampleHint": "L'histoire d'exemple, dans un dossier à toi : l'ouvrir, la modifier, voir comment une histoire est faite."
     },
     "events": {
       "title": "Événements",
@@ -2737,7 +2739,28 @@
       "pick": "Combien",
       "opponents": "Adversaires",
       "addOpponents": "Ajouter des adversaires",
-      "aheadOf": "Finir devant {name}"
+      "aheadOf": "Finir devant {name}",
+      "help": {
+        "session": "Ce que l'épreuve impose au joueur. Un réglage laissé vide prend la valeur par défaut de Pit Box ; aides, dégâts et usure restent ceux du joueur.",
+        "grid": "« Voitures sur la grille » compte le joueur. Au-delà des adversaires posés plus bas, les places restantes roulent dans la voiture de l'épreuve, sous les noms des livrées ; sans nombre, les adversaires posés sont toute la grille.",
+        "success": "Toutes les conditions activées doivent être remplies. Sans aucune, finir la session suffit.",
+        "aheadOf": "« Finir devant » liste les pilotes nommés que tu as mis dans la grille (bloc Adversaires).",
+        "effectsTitle": "Effets",
+        "effectsIntro": "Un effet par ligne, appliqué quand cette issue arrive. Un nom se cite avec son préfixe.",
+        "effectReputation": "ajoute 2 à la réputation ; followers fonctionne de la même façon",
+        "effectCounter": "ajoute 1 à un compteur du Monde ; = le fixe",
+        "effectFlag": "allume un drapeau du Monde ; = false l'éteint",
+        "effectRelation": "la relation avec un personnage, un cran plus haut sur l'échelle ; = <cran> la fixe",
+        "effectSend": "envoie tout de suite un contenu du fil",
+        "effectMoney": "retire 100 à l'argent du joueur",
+        "advance": "Avancer le temps de l'histoire : 3 days, 2 weeks, 1 month, 1 year. Vide : le temps ne bouge pas.",
+        "inThisStory": "Dans cette histoire",
+        "steps": "Crans de relation",
+        "sendable": "Contenus à envoyer",
+        "noNames": "Pas encore de compteur, de drapeau ni de personnage : ils se déclarent dans le Monde.",
+        "pool": "« Messages tirés de » : un pool de contenus d'échec, écrits dans Contenus. Chaque tirage est une variante dont les conditions sont vraies, jamais deux fois la même avant que le pool soit épuisé ; « Combien » dit un ou deux.",
+        "failureEffects": "Les effets s'écrivent comme en cas de réussite. Pouvoir retenter l'épreuve est un réglage de l'histoire."
+      }
     },
     "content": {
       "title": "Contenus",

@@ -2,16 +2,23 @@
   // The engine's verdict on the story, re-run after every save
   // (SPEC-story-mode, Create Your Own: validation runs continuously). A
   // diagnostic about a flow node selects it; the others name their file.
-  // Each section lists the ones its own files have.
+  // Each section lists the ones its own files have, or those of one file
+  // when a screen shows a single one (an event's sheet).
   import { t } from "$lib/i18n/index.svelte";
   import { sectionOf, selectNode, studio, type StudioSection } from "$lib/story/studioState.svelte";
 
   interface Props {
     section: StudioSection;
+    /** Only this file's (a diagnostic's file may end with `:<line>`). */
+    file?: string;
   }
-  const { section }: Props = $props();
+  const { section, file }: Props = $props();
 
-  const diagnostics = $derived(studio.diagnostics.filter((d) => sectionOf(d.file) === section));
+  const diagnostics = $derived(
+    studio.diagnostics.filter((d) =>
+      file ? d.file === file || d.file.startsWith(`${file}:`) : sectionOf(d.file) === section,
+    ),
+  );
   const errors = $derived(diagnostics.filter((d) => d.severity === "error").length);
   const warnings = $derived(diagnostics.length - errors);
 </script>

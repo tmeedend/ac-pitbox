@@ -466,9 +466,10 @@ de reprendre. En cas d'écart, la spec fait foi.
         2026-10-20)** : L3.1 jouer sans course (hub, partie et sauvegarde,
         écran de jeu avec la scène, le téléphone et son fil de messages, les
         dialogues) ; L3.2 les courses (la grille devient une session, AC se
-        lance, le résultat revient, tentatives et messages d'échec) ; L3.3 les
-        autres gabarits du téléphone (boîte mail, fil d'actu, relevé) et les
-        contenus qui attendent un cadre ; L3.4 les histoires sans cadre.
+        lance, le résultat revient, tentatives et messages d'échec) ; la suite
+        a été redécoupée le 2026-10-21 (voir plus bas) : L3.3 la couche
+        dialogue, L3.4 les histoires sans cadre, L3.5 les autres applications
+        du téléphone.
         - **L3.1 — fait (2026-10-20).** Le hub liste l'histoire d'exemple et
           celles de Create Your Own, avec la partie en cours ; « Nouvelle
           partie » et « Continuer » ouvrent l'écran de jeu : la scène (fond
@@ -553,6 +554,59 @@ de reprendre. En cas d'écart, la spec fait foi.
           se lancent pas encore (aucun écran ne les montre) ; le dernier
           résultat n'est pas affiché sur la carte (seules les réactions du
           téléphone le disent).
+        - **Retours sur l'éditeur (2026-10-21)**, demandés par l'utilisateur
+          après un premier essai : la fiche d'un événement en deux colonnes,
+          une note d'aide à droite de chaque bloc (`HelpNote`, l'encadré du
+          thème ; `EffectsHelp` pour la syntaxe des effets et les noms de
+          l'histoire) et ses vérifications à droite de son nom ; « Copier
+          l'exemple » dans Create Your Own.
+          **Choisi sans demander** : les notes sont toujours visibles (pas de
+          bouton pour les masquer) ; le tableau des adversaires prend les deux
+          colonnes et n'a pas de note ; sous 820 px de fiche, une seule
+          colonne ; les vérifications de la section restent en bas quand
+          aucun événement n'est affiché ; la copie de l'exemple garde son id
+          (`sample`) et va dans un dossier vide, comme une histoire neuve.
+          Écart assumé avec la règle « un libellé n'explique jamais son
+          fonctionnement » : ces notes sont la documentation d'un langage
+          d'auteur (la syntaxe des effets), demandée explicitement.
+          **Reste** : les autres écrans du studio (Fil, Monde, Pilotes,
+          Contenus) gardent leurs vérifications en bas et n'ont pas de notes ;
+          les effets d'un nœud Beat (Fil) mériteraient la même aide.
+        - **Suite de L3 — redécoupée et décidée avec l'utilisateur
+          (2026-10-21)**, à partir de ses notes « couche dialogue et
+          histoires sans cadre ». L'ordre est libre : le plus simple pour le
+          développement. **À faire** :
+          - **L3.3, la couche dialogue.** Au début d'un dialogue (nœud
+            Message ou contenu réactif), le cadre glisse hors de l'écran, le
+            flou de la scène diminue (sur la couche de fond, prête pour les
+            scènes), portraits et boîte de texte apparaissent ; à la fin, le
+            cadre revient. Réutiliser `DialogueStage` et ses voisins (L2.5).
+            Un « Journal » relit les dialogues passés, par date, sur la scène
+            en lecture seule, depuis l'historique de la sauvegarde (comme
+            les fils du téléphone).
+          - **L3.4, les histoires sans cadre.** Moteur : un contenu d'un type
+            que le cadre actif ne peut pas montrer (ou sans cadre) **attend**
+            dans l'état, donc dans la sauvegarde, et n'est livré que quand un
+            Beat installe un cadre capable de le montrer. **Décidé** : en
+            attente, il ne compte **pas** comme livré
+            (`content.<id>.delivered` reste faux jusqu'à l'affichage) ;
+            plusieurs contenus en attente sortent **dans l'ordre d'arrivée**,
+            datés du moment où ils s'affichent. Écran : sans cadre, la carte
+            d'épreuve est sur la scène (même résumé : voiture, coût,
+            objectif) ; **avec un cadre, elle va dans le téléphone**, en tête
+            de l'écran des messages (« Prochaine épreuve ») — décidé, elle
+            est aujourd'hui à côté du téléphone. Vérifications : un nœud
+            Action atteint sans cadre est signalé (sans cadre, les actions
+            passent par les réponses des dialogues) ; au jeu, le bouton
+            « Fait » reste en secours. Histoire d'exemple : un chapitre 3
+            sans cadre (Beat `frame: none`) avec un dialogue à réponses, une
+            course lancée depuis la scène, et un message envoyé pendant ce
+            chapitre et livré quand un Beat final remet le téléphone ; tests
+            moteur qui jouent le chapitre avec cadre puis celui sans, la
+            mise en attente, la livraison, et la reprise d'une sauvegarde en
+            plein chapitre sans cadre.
+          - **L3.5, les autres applications du téléphone** (ex-L3.3) : boîte
+            mail, fil d'actu et réseaux, relevé bancaire.
       - **L3b à L8** : dans l'ordre du plan de livraison de la spec.
       **Écarts assumés par rapport au document de conception** (la spec
       publique les reprend déjà) :

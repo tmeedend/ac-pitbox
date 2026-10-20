@@ -79,7 +79,9 @@
     {/if}
   </div>
 
-  <StoryChecks section="events" />
+  <!-- An event shown has its checks beside its name; without one, the
+       section's. -->
+  {#if !shown}<StoryChecks section="events" />{/if}
 </div>
 
 <style>

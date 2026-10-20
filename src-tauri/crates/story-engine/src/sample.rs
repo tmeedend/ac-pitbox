@@ -1,7 +1,8 @@
 //! The neutral sample story, carried inside Pit Box: always something to
-//! play in Story Mode before stories come as packages (L4), and the same
-//! story the tests play. Its text files only - its media (portraits) stay in
-//! the repository, so it plays with initials where a picture would be.
+//! play in Story Mode before stories come as packages (L4), the same story
+//! the tests play, and the one an author copies into Create Your Own to see
+//! how a story is made. Played from here, it has no folder, so its
+//! characters show with initials; its media are carried for the copy.
 
 use crate::load::SourceFile;
 
@@ -53,6 +54,27 @@ const FILES: &[(&str, &str)] = &[
     ("world/variables.yaml", include_str!("../sample/world/variables.yaml")),
 ];
 
+/// The files of `media/`, as paths inside the story folder: what a copy
+/// writes beside the text files.
+const MEDIA: &[(&str, &[u8])] = &[
+    (
+        "media/portraits/friend_happy.png",
+        include_bytes!("../sample/media/portraits/friend_happy.png"),
+    ),
+    (
+        "media/portraits/friend_neutral.png",
+        include_bytes!("../sample/media/portraits/friend_neutral.png"),
+    ),
+];
+
+/// Every file of the sample folder, text and media, as bytes: what a copy
+/// writes.
+pub fn folder_files() -> Vec<(String, Vec<u8>)> {
+    (FILES.iter().map(|(p, t)| (p.to_string(), t.as_bytes().to_vec())))
+        .chain(MEDIA.iter().map(|(p, b)| (p.to_string(), b.to_vec())))
+        .collect()
+}
+
 /// The sample's files, as `load::read_dir` would read them from its folder.
 pub fn files() -> Vec<SourceFile> {
     FILES.iter().map(|(path, text)| SourceFile::new(path, text)).collect()
@@ -73,6 +95,14 @@ mod tests {
         on_disk.sort();
         embedded.sort();
         assert_eq!(embedded, on_disk, "every file of sample/, as it is on disk");
+        let mut media: Vec<String> =
+            crate::load::read_media(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("sample"))
+                .into_iter()
+                .map(|p| format!("media/{p}"))
+                .collect();
+        media.sort();
+        let carried: Vec<String> = MEDIA.iter().map(|(p, _)| p.to_string()).collect();
+        assert_eq!(carried, media, "every media file too, for the copy");
         let story = crate::Story::from_sources(files()).expect("loads");
         assert_eq!(story.manifest.id, ID);
     }

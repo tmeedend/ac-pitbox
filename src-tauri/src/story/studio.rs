@@ -154,19 +154,34 @@ pub fn create(
     frame: Frame,
     chapter_title: &str,
 ) -> Result<(), String> {
+    let files = story_engine::write::new_story(&story_id(folder), title, language, frame, chapter_title)?;
+    let files: Vec<(String, Vec<u8>)> = files.into_iter().map(|f| (f.path, f.text.into_bytes())).collect();
+    write_new_story(config_dir, folder, &files)
+}
+
+/// Copies the sample story Pit Box carries into `folder`, which must be
+/// empty, and adds it to the list: an author's own copy to read and change,
+/// the way one learns how a story is made. The copy is the author's; the
+/// sample Story Mode plays stays the one Pit Box carries.
+pub fn copy_sample(config_dir: &Path, folder: &Path) -> Result<(), String> {
+    write_new_story(config_dir, folder, &story_engine::sample::folder_files())
+}
+
+/// Writes a story's first files into `folder`, which must be empty (or not
+/// exist yet), and adds it to the list.
+fn write_new_story(config_dir: &Path, folder: &Path, files: &[(String, Vec<u8>)]) -> Result<(), String> {
     if folder.exists() {
         let mut entries = std::fs::read_dir(folder).map_err(|e| e.to_string())?;
         if entries.next().is_some() {
             return Err(errors::STORY_FOLDER_NOT_EMPTY.into());
         }
     }
-    let files = story_engine::write::new_story(&story_id(folder), title, language, frame, chapter_title)?;
-    for file in files {
-        let path = folder.join(&file.path);
+    for (file, bytes) in files {
+        let path = folder.join(file);
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
         }
-        std::fs::write(&path, file.text).map_err(|e| format!("writing {}: {e}", path.display()))?;
+        std::fs::write(&path, bytes).map_err(|e| format!("writing {}: {e}", path.display()))?;
     }
     add_to_studio(config_dir, folder)
 }
@@ -1095,6 +1110,29 @@ mod tests {
         assert_ne!(opened.characters.stamp, "", "now on disk");
         assert_eq!(list(&config)[0].title.as_deref(), Some("Renamed"), "the hub follows");
         assert!(check(&folder).diagnostics.is_empty(), "still clean");
+    }
+
+    // The sample copied into Create Your Own opens clean, portraits
+    // included, and refuses a folder that is not empty like a new story.
+    #[test]
+    fn the_sample_is_copied_whole_into_an_empty_folder() {
+        let config = temp_dir("studio-config");
+        let base = temp_dir("studio-story");
+        let folder = base.join("sample");
+        copy_sample(&config, &folder).expect("copied");
+        let opened = open(&folder).unwrap();
+        assert!(opened.diagnostics.is_empty(), "clean: {:?}", opened.diagnostics);
+        assert!(
+            opened.media.iter().any(|m| m == "portraits/friend_neutral.png"),
+            "with its portraits: {:?}",
+            opened.media
+        );
+        assert_eq!(list(&config).len(), 1, "listed in Create Your Own");
+        assert_eq!(
+            copy_sample(&config, &folder).unwrap_err(),
+            errors::STORY_FOLDER_NOT_EMPTY,
+            "never over an existing story"
+        );
     }
 
     // The roster goes through the editor like a world file: read as empty
