@@ -93,8 +93,9 @@ de reprendre. En cas d'écart, la spec fait foi.
           `ahead_of`) ne sont pas vérifiés : le paquet et le plateau
           n'existent pas encore ;
         - `wealth`, `economy` et `garage_slots` attendent l'économie (L6) ;
-        - un contenu à réponses porte ses effets dans son en-tête
-          (`replies`) : avec Ink, ils migreront dans le texte (L2.4).
+        - un contenu à réponses portait ses effets dans son en-tête
+          (`replies`) : migrés dans le texte Ink en L2.4, la clé est
+          désormais refusée.
       - **Format des dialogues — décidé (2026-10-18)** : Ink, dans une
         seule langue d'abord, pour valider tout le concept avant la
         traduction (décision de l'utilisateur, à condition que la bascule
@@ -300,10 +301,77 @@ de reprendre. En cas d'écart, la spec fait foi.
             (demandé par l'utilisateur, pas urgent).
           - L'en-tête d'un dialogue (personnages présents, scène) et les tags
             `#expression:` / `#position:` vérifiés contre les portraits :
-            avec l'écriture des contenus, L2.4.
+            faits en L2.4.
           - Un nœud Action sans cadre n'est pas signalé (en roman visuel,
             les actions du joueur passent par les réponses).
           - Le type `illustration` et les transitions arrivent avec L3b.
+        - **L2.4 — fait (2026-10-20)**, avec son complément (dialogues en
+          personne et sorties par réponse), en quatre commits : le moteur,
+          les sorties par réponse dans le Fil, la section Contenus avec la
+          vue Script, la vue Formulaire.
+          Le moteur lit le texte d'un contenu en arbre et le joue
+          (`script.rs`) : répliques avec orateur et tags, conditions
+          `check()`, effets `effect()`, choix étiquetés imbriqués, points de
+          rencontre, `-> DONE` ; tout le reste est une erreur sur sa ligne.
+          Livrer un contenu joue sa conversation jusqu'au premier choix ; la
+          réponse se donne par son étiquette ; une conversation en cours se
+          sauvegarde et se reprend (la sauvegarde garde le format 1). Un
+          dialogue déclare ses personnages présents et sa scène. Un nœud
+          Message a des sorties par réponse (`on_reply`).
+          **Décidé avec l'utilisateur** :
+          - **notre propre interpréteur du sous-ensemble plutôt que
+            blade-ink-rs**, écarté à l'essai (`bladeink` et
+            `bladeink-compiler` 2.1.0) : son compilateur refuse
+            `~ effect("x += 1")` (« unterminated string literal ») dès que le
+            texte entre guillemets contient un opérateur, et l'étiquette d'un
+            choix n'est pas accessible au moteur. Les scripts restent de
+            l'Ink valide ; aucune dépendance ajoutée ;
+          - l'orateur s'écrit par l'**identifiant** du personnage
+            (`friend: …`), pas son nom affiché : vérifiable, et un
+            renommage le fait suivre ;
+          - avec plusieurs moments de choix, `content.x.reply == yes` est
+            vrai si `yes` a été choisi à n'importe lequel, et le nœud sort par
+            l'exit de **la réponse la plus récente qui en a une** ;
+          - coupure nette pour `replies` (clé refusée, exemple converti) ;
+          - les quatre étapes enchaînées, chacune commitée.
+          **Choisi sans demander** : une réplique sans préfixe est dite par
+          l'expéditeur (un mail, un article s'écrivent en texte simple) ; un
+          préfixe qui ressemble à un nom sans être un personnage est un
+          avertissement ; seulement `*` (pas les choix collants `+`), le texte
+          d'un choix toujours entre crochets, pas de commentaires `//` ; un
+          point de choix dont aucun choix ne passe ses conditions est sauté ;
+          un dialogue à choix retient toujours le fil ; un nœud à sorties par
+          réponse attend comme `wait_reply` (la case est alors cochée et
+          verrouillée) ; livrer un contenu à nouveau ouvre une nouvelle
+          conversation et oublie les réponses de la précédente ; deux contenus
+          qui s'envoient l'un l'autre sont une boucle (erreur), pas un gel ;
+          une sauvegarde qui attend une réponse sans conversation en cours, ou
+          dont le point de choix a disparu, est refusée comme périmée ; les
+          positions sont `left`, `center`, `right` ; un nouveau contenu a son
+          fichier `content/<id>.story`, et supprimer le dernier contenu d'un
+          fichier retire le fichier ; le texte s'écrit même avec des erreurs
+          d'Ink (une conversation se tape en plusieurs fois), jamais avec une
+          ligne `---` seule ; une nouvelle réplique, un nouveau choix
+          commencent vides, pour que la vérification le montre, et un choix
+          reçoit l'étiquette `reply_<n>` libre ; l'écrivain d'Ink ajoute le
+          point de rencontre qui manque après des choix ; un texte qui ne se
+          lit pas entièrement ne s'ouvre qu'en vue Script ; la vue Formulaire
+          s'ouvre par défaut. **Refactorings en passant** : `PickList` (la
+          liste des Événements, reprise par les Contenus, commit à part) ;
+          `side_lists` de `refs.rs` généralisé en `listed` pour la liste
+          `characters` d'un dialogue, dans le commit du moteur.
+          **Limites connues** :
+          - renommer une **étiquette** ne fait pas suivre les sorties et les
+            conditions qui la citent, et renommer un **contenu** ne fait pas
+            suivre ses citations (signalées par les vérifications) ;
+          - la scène d'un dialogue est un nom non vérifié tant que les scènes
+            n'existent pas ;
+          - le texte ne s'enregistre qu'en quittant le champ (vue Script) ;
+          - `//` est refusé partout dans le texte (Ink le lit comme un
+            commentaire), donc une adresse web ne s'écrit pas encore : il
+            faudrait accepter l'échappement `\/` d'Ink, et le retirer à la
+            lecture ;
+          - l'aperçu dans le cadre et sur la scène est L2.5.
       - **L3 à L8** : dans l'ordre du plan de livraison de la spec.
       **Écarts assumés par rapport au document de conception** (la spec
       publique les reprend déjà) :

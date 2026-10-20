@@ -59,10 +59,14 @@
       : null,
   );
 
-  /** Reads the text for the form, when the form is shown: on opening, and
-   * on coming back from the Script view. */
+  /** Reads the text for the form, when the form is shown: on opening, on
+   * coming back from the Script view, and when the story is read again (an
+   * undo, a restore, a file changed elsewhere) - a tree kept from before
+   * would write the old text back at the next edit. The form's own saves do
+   * not read the story again. */
   $effect(() => {
-    if (view !== "form") return;
+    const shownFor = story;
+    if (view !== "form" || !shownFor) return;
     const body = untrack(() => doc.body);
     void readScript(body).then((r) => (read = r));
   });

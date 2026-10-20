@@ -133,11 +133,17 @@ pub struct ScriptError {
 impl Script {
     /// Every choice label, in the order written.
     pub fn labels(&self) -> Vec<&str> {
-        fn collect<'a>(items: &'a [Item], out: &mut Vec<&'a str>) {
+        self.choices_in_order().into_iter().map(|c| c.label.as_str()).collect()
+    }
+
+    /// Every choice, in the order written: a choice, then what it leads
+    /// to, then its next sibling.
+    fn choices_in_order(&self) -> Vec<&Choice> {
+        fn collect<'a>(items: &'a [Item], out: &mut Vec<&'a Choice>) {
             for item in items {
                 if let Item::Choices { choices } = item {
                     for c in choices {
-                        out.push(&c.label);
+                        out.push(c);
                         collect(&c.body, out);
                     }
                 }
@@ -149,7 +155,7 @@ impl Script {
     }
 
     pub fn has_choices(&self) -> bool {
-        !self.labels().is_empty()
+        self.items.iter().any(|i| matches!(i, Item::Choices { .. }))
     }
 
     /// Every line, wherever it is.
@@ -194,21 +200,15 @@ impl Script {
     /// unique in its content item, since it is the "reply chosen" fact.
     pub fn duplicate_labels(&self) -> Vec<(usize, &str)> {
         let mut seen = std::collections::HashSet::new();
-        let mut out = Vec::new();
-        visit(&self.items, &mut |item| {
-            if let Item::Choices { choices } = item {
-                for c in choices {
-                    if !seen.insert(c.label.as_str()) {
-                        out.push((c.line, c.label.as_str()));
-                    }
-                }
-            }
-        });
-        out
+        (self.choices_in_order().into_iter())
+            .filter(|c| !seen.insert(c.label.as_str()))
+            .map(|c| (c.line, c.label.as_str()))
+            .collect()
     }
 }
 
-/// Calls `f` on every item, choice bodies included, in the order written.
+/// Calls `f` on every item, choice bodies included: a choice point first,
+/// then the bodies of its choices.
 fn visit<'a>(items: &'a [Item], f: &mut impl FnMut(&'a Item)) {
     for item in items {
         f(item);
@@ -264,12 +264,9 @@ pub fn parse(body: &str, first_line: usize) -> (Script, Vec<ScriptError>) {
                 continue;
             }
             close_to(&mut stack, depth);
-            let parent = stack.last_mut().expect("never empty");
-            if !matches!(parent.last(), Some(Item::Choices { .. })) {
-                fail("a `-` joins the choices above it, and there are none".into());
-                continue;
-            }
-            parent.push(Item::Gather);
+            // A gather with no choice point above it joins nothing, and
+            // Ink accepts it all the same: it plays as nothing.
+            stack.last_mut().expect("never empty").push(Item::Gather);
             if rest.starts_with('(') {
                 fail("a gather has no label in the subset: labels go on choices".into());
             } else if !rest.is_empty() {
@@ -844,7 +841,6 @@ mod tests {
             ("friend: hello -> there", "divert"),
             ("friend: hi #mood:happy", "tags are"),
             ("friend: hi #position:top", "left, center or right"),
-            ("- friend: joined, but nothing to join", "none"),
             ("~ effect(\"money +== 5\")", "cannot read effect"),
         ] {
             assert!(error(body).contains(needle), "{body}: {}", error(body));
@@ -871,6 +867,27 @@ mod tests {
             unreachable!()
         };
         assert!(choices[1].body.is_empty(), "the line did not slip into `b`");
+    }
+
+    // Ink accepts a gather with nothing to join, two in a row included.
+    #[test]
+    fn a_gather_with_nothing_to_join_plays_as_nothing() {
+        let script = read("* (a) [A]\n- One.\n- Two.\n");
+        let mut host = recorder(true);
+        let Stop::Choices { at, .. } = play(&script, vec![0], &mut host).unwrap() else {
+            panic!("waits")
+        };
+        let next = after_choice(&script, &at, "a").unwrap();
+        assert_eq!(play(&script, next, &mut host).unwrap(), Stop::Ended);
+        assert_eq!(host.said, ["One.", "Two."]);
+    }
+
+    // A label used twice is reported where it is written the second time,
+    // even when the first one is nested under an earlier choice.
+    #[test]
+    fn a_duplicate_label_is_reported_on_its_second_line() {
+        let script = read("* (yes) [Y]\n    * * (no) [N]\n* (no) [No]\n");
+        assert_eq!(script.duplicate_labels(), [(3, "no")]);
     }
 
     // `- -> DONE` is a gather then the end, not two gathers.

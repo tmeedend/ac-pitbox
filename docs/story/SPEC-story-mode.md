@@ -496,16 +496,27 @@ the editor is reserved; they are translated when it opens to all.
   the library does not have is kept as written and shown as missing. A track
   with layouts starts on its first. Changing an event's type away from a race
   drops what only a race has.
+- **A content item lives in a `.story` file of `content/`**, filed as the
+  author likes. A new item gets its id from the name typed and a file of its
+  own, `content/<id>.story`; deleting a file's last item removes the file.
+  Its text is written even with Ink errors, which the checks show line by
+  line - a conversation is typed over time - but never with a line made of
+  `---` alone. Its id is not renamed in the editor yet. The text shows as a
+  **form** (lines, effects, choice points with their labels and what each
+  leads to, the end) or as **Ink** (the Script view); the form is the tree
+  the engine reads, and a text with lines outside the subset opens only in
+  the Script view.
 - **A section appears with the lot that builds it**, never as an entry that
-  opens nothing: the Story flow, the Events, the World (characters, flags,
-  counters), the Settings and the story's copies so far. Settings shows only the settings the engine applies.
+  opens nothing: the Story flow, the Events, the Contents, the World
+  (characters, flags, counters), the Settings and the story's copies so far. Settings shows only the settings the engine applies.
   Each section counts the errors of its own files.
 
 ### Story flow screen
 
 A chapter's nodes read top to bottom, in the order they play; an arrow appears
-only where a node goes elsewhere (a branch case, a failure exit, an explicit
-next). The column is laid out by that order: no box is placed by hand, so
+only where a node goes elsewhere (a branch case, a failure exit, a reply exit,
+an explicit next). A Message node's panel lists its content's reply labels,
+each with the node it leads to or none (the flow goes on). The column is laid out by that order: no box is placed by hand, so
 nothing about the layout is stored and the files change only when the story
 does. A freely arranged canvas, if a story needs one, belongs with the
 Timeline.

@@ -19,6 +19,11 @@
   const entry = $derived(story.chapters[studio.chapter]);
   const chapter = $derived(entry?.chapter ?? null);
   const isLastChapter = $derived(studio.chapter === story.chapters.length - 1);
+  /** Where the chapter's last node goes on: the first node of the next
+   * chapter that has one (the engine's fallthrough). */
+  const nextChapterStart = $derived(
+    story.chapters.slice(studio.chapter + 1).find((c) => c.chapter?.nodes.length)?.chapter?.nodes[0]?.id,
+  );
   const selectedIndex = $derived(chapter?.nodes.findIndex((n) => n.id === studio.node) ?? -1);
   const selected = $derived(selectedIndex >= 0 ? chapter!.nodes[selectedIndex] : null);
 
@@ -140,7 +145,7 @@
                 </span>
                 {#if text}<span class="sum mono">{text}</span>{/if}
               </button>
-              {#each linksOf(node, chapter.nodes[i + 1]?.id) as link, k (k)}
+              {#each linksOf(node, chapter.nodes[i + 1]?.id ?? nextChapterStart) as link, k (k)}
                 <button class="link mono" onclick={() => selectNode(link.target)}>
                   <span class="role">{t(LINK_LABEL[link.role])}</span>
                   {#if link.label}
