@@ -506,7 +506,7 @@ pub struct PreviewView {
     pub from: Option<String>,
     /// A dialogue's characters present.
     pub characters: Vec<String>,
-    pub steps: Vec<story_engine::engine::PreviewStep>,
+    pub steps: Vec<story_engine::engine::Step>,
     pub choices: Vec<story_engine::engine::Offer>,
     pub ended: bool,
     /// The other items it sent, named.

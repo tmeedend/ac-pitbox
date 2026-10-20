@@ -173,10 +173,11 @@ pub fn submit(story: &Story, state: &mut State, input: Input) -> Result<Vec<Outp
     Ok(out)
 }
 
-/// One step of a previewed conversation: a line said, or the reply chosen.
+/// One step of a conversation as the player saw it, in a preview or in a
+/// game: a line said, or the reply chosen.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-pub enum PreviewStep {
+pub enum Step {
     Said(Said),
     Chose(Offer),
 }
@@ -185,7 +186,7 @@ pub enum PreviewStep {
 /// Content, live preview).
 #[derive(Debug, Clone)]
 pub struct Preview {
-    pub steps: Vec<PreviewStep>,
+    pub steps: Vec<Step>,
     /// What the conversation offers where it stopped; empty once it ended.
     pub choices: Vec<Offer>,
     pub ended: bool,
@@ -218,12 +219,10 @@ pub fn preview(story: &Story, setup: &[Effect], id: &str, replies: &[String]) ->
     let mut steps = Vec::new();
     let mut sent = Vec::new();
     let mut offered: Vec<Offer> = Vec::new();
-    let mut collect = |out: Vec<Output>, steps: &mut Vec<PreviewStep>, offered: &mut Vec<Offer>| {
+    let mut collect = |out: Vec<Output>, steps: &mut Vec<Step>, offered: &mut Vec<Offer>| {
         for o in out {
             match o {
-                Output::Lines { content, lines } if content == id => {
-                    steps.extend(lines.into_iter().map(PreviewStep::Said))
-                }
+                Output::Lines { content, lines } if content == id => steps.extend(lines.into_iter().map(Step::Said)),
                 Output::Choices { content, choices } if content == id => *offered = choices,
                 Output::Delivered { content, .. } if content != id => sent.push(content),
                 _ => {}
@@ -239,7 +238,7 @@ pub fn preview(story: &Story, setup: &[Effect], id: &str, replies: &[String]) ->
         if !r.state.conversations.contains_key(id) {
             break;
         }
-        steps.push(PreviewStep::Chose(choice));
+        steps.push(Step::Chose(choice));
         offered.clear();
         r.reply(id.into(), label.clone())?;
         collect(std::mem::take(&mut r.out), &mut steps, &mut offered);
@@ -1347,8 +1346,8 @@ mod tests {
         let said = |p: &Preview| -> Vec<String> {
             (p.steps.iter())
                 .map(|s| match s {
-                    PreviewStep::Said(l) => l.text.clone(),
-                    PreviewStep::Chose(c) => format!("> {}", c.label),
+                    Step::Said(l) => l.text.clone(),
+                    Step::Chose(c) => format!("> {}", c.label),
                 })
                 .collect()
         };

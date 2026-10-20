@@ -5,7 +5,7 @@
 
 export type Position = "left" | "center" | "right";
 
-/** A line said, or a reply the player chose (`story_engine::engine::PreviewStep`). */
+/** A line said, or a reply the player chose (`story_engine::engine::Step`). */
 export type PlayerStep =
   | {
       kind: "said";
