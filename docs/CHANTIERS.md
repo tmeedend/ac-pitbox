@@ -1133,8 +1133,8 @@ de reprendre. En cas d'écart, la spec fait foi.
       par se séparer à nouveau. L'avertissement est écrit dans
       `docs/README.md` et au §14 de `SPEC.md` en attendant.
 
-- [ ] **Refactorings repérés, reportés (2026-09-25, revus le 2026-10-04 et le
-      2026-10-10).**
+- [ ] **Refactorings repérés, reportés (2026-09-25, revus le 2026-10-04, le
+      2026-10-10 et le 2026-10-20).**
       Classés par bénéfice sur risque ; aucun ne change le comportement,
       aucun ne touche un format persisté. Les actions de la fiche
       (`$lib/detail/actions.svelte.ts`) et la scène de l'aperçu 3D
@@ -1145,8 +1145,9 @@ de reprendre. En cas d'écart, la spec fait foi.
          caractérisation ajoutés d'abord. Restent les plus longues :
          `sweep_leftovers` (353 lignes) et `import_leftover` (225) — **le
          cœur de la règle d'or n°3**, ce qui est à côté du dossier du mod et
-         jamais dedans —, puis `exec_one`, `file_extracted` et
-         `import_one_folder` (140 à 160 chacune). Même méthode : tests
+         jamais dedans —, puis `file_extracted`, `import_one_folder` et
+         `exec_one` (140 à 160 chacune ; la dernière est passée dans
+         `importer/bulk.rs` le 2026-10-20). Même méthode : tests
          d'abord, puis un module par étape. Une session par fonction ;
          risque élevé pour les deux premières.
       2. **Deux longues fonctions rendues visibles par le découpage de
@@ -1170,3 +1171,15 @@ de reprendre. En cas d'écart, la spec fait foi.
       **Revue du 2026-10-10** : démarrage sans régression (cartes à l'écran
       en 999 ms, 1 064 ms le 2026-10-08, 385 cartes) ; `transfer/files.rs`
       découpé en un module par sujet (`0164f5c`).
+
+      **Revue du 2026-10-20** (77 commits), ses quatre points faits le jour
+      même, sans changement de comportement, un commit chacun : l'import en
+      masse sorti d'`importer.rs` vers `importer/bulk.rs` (6 073 → 5 444
+      lignes, `20d35e3`) ; une seule file d'écritures pour les onglets de
+      Classement, recopiée cinq fois (`workshop/writeQueue.ts`, `d2bb7fb`) ;
+      le repli des accents (six copies) et la distance d'édition (deux) mis
+      en commun dans `src/lib/text.ts` (`a143298`) ; l'assemblage des sources
+      de la vignette Online descendu de la façade dans `online/picture.rs`
+      (`b3319e6`). **Démarrage non mesuré** : la revue a tourné dans une
+      session distante sous Linux, sans le jeu ni la bibliothèque —
+      `npm run bench:startup` reste à lancer sur la machine de référence.

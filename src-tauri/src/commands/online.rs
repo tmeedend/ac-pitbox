@@ -245,21 +245,15 @@ pub async fn online_track_picture(
     let config_dir = config_dir(&app)?;
     let thresholds = crate::wiki::matching::Thresholds::from_prefs(&cfg.prefs);
     tauri::async_runtime::spawn_blocking(move || {
-        let matching = crate::wiki::clean::load(&config_dir);
-        let cleaner = crate::wiki::clean::Cleaner::new(&matching);
-        let curated = crate::wiki::curated::shipped()
-            .links
-            .into_iter()
-            .map(|(id, q)| (id.to_lowercase(), q))
-            .collect();
-        let sources = online::picture::Sources {
-            ac_install: cfg.ac_install_path.as_deref(),
-            curated: &curated,
-            cleaner: &cleaner,
-            thresholds: &thresholds,
-        };
-        let net = crate::wiki::api::WikiClient::new();
-        online::picture::picture(&dir, &net, &sources, &track_id, chrono::Utc::now().timestamp())
+        let now = chrono::Utc::now().timestamp();
+        online::picture::fetch(
+            &dir,
+            &config_dir,
+            cfg.ac_install_path.as_deref(),
+            &thresholds,
+            &track_id,
+            now,
+        )
     })
     .await
     .map_err(|e| e.to_string())

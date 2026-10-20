@@ -37,6 +37,7 @@
   import { bumpLibraryVersion } from "$lib/library/libraryVersion.svelte";
   import { brandProposals, mergeBrand, mergeKey, setNotBrand } from "$lib/workshop/brandEdit";
   import { keyOrigins, keysTo, removeEntry, restoreEntries, setEntry, touches } from "$lib/workshop/countryEdit";
+  import { writeQueue } from "$lib/workshop/writeQueue";
   import {
     getRulesView,
     getTaxonomy,
@@ -123,28 +124,21 @@
     notBrands = v.overlay.not_brands ?? {};
   }
 
-  let queue: Promise<void> = Promise.resolve();
+  const enqueue = writeQueue({ busy: (b) => (busy = b), error: (text) => (error = text) });
+
   /** Takes the decisions at once, writes and re-applies them, then reads the
    * library back: the counts only mean something once the stored brands
-   * moved. The `catch` keeps one failure from freezing every later write. */
+   * moved. */
   function commit(next: { aliases?: MapOverlay; ignored?: string[]; notBrands?: SetOverlay }) {
     aliases = next.aliases ?? aliases;
     ignored = next.ignored ?? ignored;
     notBrands = next.notBrands ?? notBrands;
     const [a, ig, nb] = [aliases, ignored, notBrands];
-    queue = queue
-      .then(async () => {
-        busy = true;
-        take(await saveBrandOverlay(a, ig, nb));
-        await reloadCars();
-        bumpLibraryVersion();
-        error = "";
-      })
-      .catch((e) => {
-        console.error("save_brand_overlay", e);
-        error = errorText(e);
-      })
-      .finally(() => (busy = false));
+    void enqueue("save_brand_overlay", async () => {
+      take(await saveBrandOverlay(a, ig, nb));
+      await reloadCars();
+      bumpLibraryVersion();
+    });
   }
 
   interface Row {
@@ -244,20 +238,12 @@
   /** A rules decision from this tab: the same write as the Rules screen's,
    * then the brands read back - the rule moved cars. */
   function commitRules(next: import("$lib/workshop/rules").RulesOverlay) {
-    queue = queue
-      .then(async () => {
-        busy = true;
-        rulesView = await saveRulesOverlay(next);
-        await reloadCars();
-        await loadBrandLogos();
-        bumpLibraryVersion();
-        error = "";
-      })
-      .catch((e) => {
-        console.error("save_rules_overlay", e);
-        error = errorText(e);
-      })
-      .finally(() => (busy = false));
+    void enqueue("save_rules_overlay", async () => {
+      rulesView = await saveRulesOverlay(next);
+      await reloadCars();
+      await loadBrandLogos();
+      bumpLibraryVersion();
+    });
   }
 
   /** "name contains → this brand": a rule of his, first of his rules. */

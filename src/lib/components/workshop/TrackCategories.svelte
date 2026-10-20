@@ -13,6 +13,7 @@
   // written at once, through one queue whose failures are shown and logged.
   import { onMount } from "svelte";
   import { errorText } from "$lib/errors";
+  import { writeQueue } from "$lib/workshop/writeQueue";
   import { t } from "$lib/i18n/index.svelte";
   import Switch from "$lib/components/ui/Switch.svelte";
   import TrackCategoryIcon from "$lib/components/library/TrackCategoryIcon.svelte";
@@ -76,23 +77,13 @@
 
   const nameOf = (tag: string) => categoryName(tag, looks, t);
 
-  let queue: Promise<void> = Promise.resolve();
-  /** One write at a time, in the order of the gestures. The `catch` is not
-   * optional: a rejected promise in the chain would freeze every later write
-   * until the next start. */
+  const queue = writeQueue({ busy: (b) => (busy = b), error: (text) => (error = text) });
+
+  /** One write at a time, in the order of the gestures; a gesture disarms the
+   * two-step buttons. */
   function enqueue(label: string, write: () => Promise<void>) {
     armed = null;
-    queue = queue
-      .then(async () => {
-        busy = true;
-        await write();
-        error = "";
-      })
-      .catch((e) => {
-        console.error(label, e);
-        error = errorText(e);
-      })
-      .finally(() => (busy = false));
+    void queue(label, write);
   }
 
   /** Order, on/off, a category added or removed: re-applied to the library. */
