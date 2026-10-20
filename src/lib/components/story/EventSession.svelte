@@ -7,7 +7,7 @@
   import { t } from "$lib/i18n/index.svelte";
   import { WEATHER_IDS, WEATHER_LABEL_KEYS } from "$lib/launch/weatherIntents";
   import type { ModCard, ModKind } from "$lib/library/library";
-  import { EVENT_TYPES, sessionFor } from "$lib/story/events";
+  import { EVENT_TYPES, sessionFor, successFor } from "$lib/story/events";
   import { cardOf, loadLayouts, studioLibrary } from "$lib/story/library.svelte";
   import type { EventType, GridStart, Session, StoryEvent } from "$lib/story/studio";
   import Field from "$lib/components/ui/Field.svelte";
@@ -59,6 +59,7 @@
   function setType(type: string) {
     event.type = type as EventType;
     event.session = sessionFor(event.type, event.session);
+    event.success = successFor(event.type, event.success);
     onsave();
   }
 

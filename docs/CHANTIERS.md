@@ -89,9 +89,8 @@ de reprendre. En cas d'écart, la spec fait foi.
         - le moteur a son propre type de résultat (`EventResult`) : le pont
           de L3 le remplira depuis `raceresult` (L0), sans que le moteur
           dépende du format de session de l'app ;
-        - les identifiants de voiture et de pilote (`car.<id>`,
-          `ahead_of`) ne sont pas vérifiés : le paquet et le plateau
-          n'existent pas encore ;
+        - les identifiants de voiture (`car.<id>`) ne sont pas vérifiés :
+          le paquet n'existe pas encore (ceux de pilote le sont depuis L2.6) ;
         - `wealth`, `economy` et `garage_slots` attendent l'économie (L6) ;
         - un contenu à réponses portait ses effets dans son en-tête
           (`replies`) : migrés dans le texte Ink en L2.4, la clé est
@@ -242,8 +241,8 @@ de reprendre. En cas d'écart, la spec fait foi.
           libellé « Hotlap » comme ailleurs dans l'app.
           **Limites connues** : les messages d'échec ne s'écrivent pas encore
           (L2.4) — on choisit un pool existant et on voit ses variantes ;
-          `ahead_of` n'a pas de contrôle (il attend les pilotes, L2.6) et est
-          gardé tel quel ; la bibliothèque est lue une fois par lancement de
+          `ahead_of` n'a pas de contrôle (il attend les pilotes, L2.6 ; levée,
+          L2.6 fait) ; la bibliothèque est lue une fois par lancement de
           l'app ; aucune vérification qu'un circuit accueille la taille de
           grille demandée (le jeu la plafonne au nombre de stands).
         - **L2.3b — fait (2026-10-20).** Sous-lot ajouté avant L2.4 :
@@ -410,6 +409,57 @@ de reprendre. En cas d'écart, la spec fait foi.
           **Limites connues** : pas d'aperçu pour les autres types que
           `message` dans le téléphone ; faits d'épreuve et de contenu non
           réglables ; la scène est un fond uni.
+        - **L2.6 — fait (2026-10-20).** Section **Pilotes** du studio (le
+          roster, `drivers/roster.yaml`) et bloc **Adversaires** de la fiche
+          d'une course. Le moteur lit le roster (nom, personnage, nationalité,
+          âge, rôle, niveau, agressivité), la grille d'un événement
+          (`session.opponents` : pilote, voiture, livrée, niveau, lest,
+          bride), vérifie l'une et l'autre et `ahead_of`, et sait renommer un
+          pilote (grilles et critères suivent) ; renommer un personnage fait
+          suivre le pilote qu'il est.
+          **Décidé avec l'utilisateur** : périmètre roster + grille (force par
+          chapitre, livrée par série, carrières et classements reportés) ; le
+          tableau des adversaires de l'écran de session est **extrait**
+          (`OpponentTable`, et `NationalityPicker` pour la liste des pays,
+          commit de refactoring à part) et repris tel quel avec le sélecteur
+          de voitures (`OpponentPicker`), plutôt qu'une grille Story écrite à
+          côté.
+          **Choisi sans demander** : un pilote peut **être** un personnage
+          (clé `character`), dont il prend le nom quand il n'en a pas, et un
+          personnage n'est qu'un pilote ; pas de portrait propre au pilote
+          tant que rien ne l'affiche (celui du personnage suffira) ; le
+          pilote d'une ligne se choisit dans le roster, jamais tapé, et la
+          nationalité suit le pilote (celle de la livrée sans pilote) ; une
+          ligne sans niveau à elle affiche celui de son pilote (sans
+          pilote ni niveau : `Auto`, celui de l'événement) ; passer
+          l'événement à un autre type que la course retire aussi ses
+          `ahead_of` ; pas
+          d'agressivité par ligne, c'est celle du pilote ; une voiture
+          choisie s'écrit toujours (une ligne sans `car` ne vient que d'un
+          fichier tapé à la main) ; remplacer la voiture retire la livrée ;
+          une ligne copiée n'a pas de pilote ; `grid` plus petit que la grille
+          posée est une erreur, et sans `grid` la grille posée est tout le
+          plateau ; `ahead_of` d'un pilote absent de la grille est une
+          **erreur** (l'épreuve ne se gagnerait jamais) ; un pilote sans nom
+          ni personnage est un avertissement ; niveau et agressivité de 0 à
+          100 pour le moteur, mais 70 à 100 dans l'éditeur pour le niveau
+          (la plage de Content Manager, comme l'écran de session) ; la fiche
+          d'un événement s'élargit pour le tableau (les autres blocs gardent
+          leur largeur), qui défile en largeur sous 1 040 px plutôt que
+          d'écraser le nom de la voiture ; le roster est un fichier qui
+          s'annule et se copie comme les autres.
+          **Limites connues** :
+          - la grille n'est pas encore lancée : c'est L3 qui la traduira en
+            `RaceSetup` (pilotes nommés, places restantes en noms de
+            remplissage au niveau de l'événement) ;
+          - le niveau de l'événement (`ai_level`, L2.3) s'édite encore de 0 à
+            100 dans l'éditeur, quand celui d'un pilote ou d'une ligne s'arrête
+            à 70 : à aligner ;
+          - aucune vérification qu'une livrée existe pour sa voiture (le
+            moteur ne connaît pas la bibliothèque, comme pour les voitures) ;
+          - pas de vivier ni de tirage au hasard comme dans l'écran de
+            session : l'auteur pose ses adversaires un par un (ou par lot dans
+            le sélecteur).
       - **L3 à L8** : dans l'ordre du plan de livraison de la spec.
       **Écarts assumés par rapport au document de conception** (la spec
       publique les reprend déjà) :

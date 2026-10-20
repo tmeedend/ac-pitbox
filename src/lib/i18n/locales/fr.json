@@ -2716,7 +2716,10 @@
       "onFailure": "En cas d'échec",
       "pool": "Messages tirés de",
       "noPool": "Aucun message",
-      "pick": "Combien"
+      "pick": "Combien",
+      "opponents": "Adversaires",
+      "addOpponents": "Ajouter des adversaires",
+      "aheadOf": "Finir devant {name}"
     },
     "content": {
       "title": "Contenus",
@@ -2782,6 +2785,23 @@
       "addEnd": "Fin",
       "moveUp": "Monter",
       "moveDown": "Descendre"
+    },
+    "drivers": {
+      "title": "Pilotes",
+      "roster": "Roster",
+      "none": "Aucun pilote pour l'instant : les grilles courent contre les noms des livrées.",
+      "newDriver": "Le nom d'un pilote",
+      "character": "Personnage",
+      "noCharacter": "Aucun personnage",
+      "nationality": "Nationalité",
+      "age": "Âge",
+      "role": "Rôle",
+      "role_friend": "Ami",
+      "role_rival": "Rival",
+      "role_star": "Star",
+      "role_filler": "Figurant",
+      "skill": "Niveau",
+      "aggression": "Agressivité"
     },
     "preview": {
       "title": "Aperçu",

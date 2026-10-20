@@ -31,20 +31,22 @@ import { eventFile } from "./events";
 import { contentFile, findContent } from "./content";
 
 /** The studio's sections (SPEC-story-mode, Create Your Own). */
-export type StudioSection = "flow" | "events" | "content" | "world" | "settings" | "backups";
+export type StudioSection = "flow" | "events" | "content" | "drivers" | "world" | "settings" | "backups";
 
 /** The section whose files hold `file` (a diagnostic's, say, which may end
  * with `:<line>`): `story.yaml` is the Settings', `world/` the World's,
- * `events/` the Events', `content/` the Contents', the rest the flow's. */
+ * `drivers/` the Drivers', `events/` the Events', `content/` the Contents',
+ * the rest the flow's. */
 export function sectionOf(file: string): StudioSection {
   if (file === "story.yaml") return "settings";
+  if (file.startsWith("drivers/")) return "drivers";
   if (file.startsWith("events/")) return "events";
   if (file.startsWith("content/")) return "content";
   return file.startsWith("world/") ? "world" : "flow";
 }
 
 /** The story-wide files, by their key in `OpenStory`. */
-export type StoryFileKey = "manifest" | "characters" | "variables";
+export type StoryFileKey = "manifest" | "characters" | "variables" | "drivers";
 
 export const studio = $state<{
   story: OpenStory | null;

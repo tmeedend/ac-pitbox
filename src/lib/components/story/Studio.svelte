@@ -3,8 +3,8 @@
   // editor). The side column names the story, its sections and its chapters;
   // the rest is the section shown. A section appears with the lot that
   // builds it, rather than as an entry that opens nothing: the Story flow,
-  // the Events, the Contents, the World and the Settings so far, and the
-  // story's copies.
+  // the Events, the Contents, the Drivers, the World and the Settings so
+  // far, and the story's copies.
   // Ctrl+Z and Ctrl+Y undo and redo the last edits, whatever section shows.
   import { t } from "$lib/i18n/index.svelte";
   import { allNodeIds, freshChapterId, freshNodeId, nextChapterFile } from "$lib/story/flow";
@@ -18,6 +18,7 @@
     type StudioSection,
   } from "$lib/story/studioState.svelte";
   import ContentEditor from "./ContentEditor.svelte";
+  import DriversEditor from "./DriversEditor.svelte";
   import EventsEditor from "./EventsEditor.svelte";
   import FlowEditor from "./FlowEditor.svelte";
   import SettingsEditor from "./SettingsEditor.svelte";
@@ -35,6 +36,7 @@
     { id: "flow", label: "story.studio.flow" },
     { id: "events", label: "story.events.title" },
     { id: "content", label: "story.content.title" },
+    { id: "drivers", label: "story.drivers.title" },
     { id: "world", label: "story.world.title" },
     { id: "settings", label: "story.settings.title" },
     { id: "backups", label: "story.backups.title" },
@@ -42,7 +44,15 @@
 
   /** Errors by section, for the counts beside their entries. */
   const errors = $derived.by(() => {
-    const out: Record<StudioSection, number> = { flow: 0, events: 0, content: 0, world: 0, settings: 0, backups: 0 };
+    const out: Record<StudioSection, number> = {
+      flow: 0,
+      events: 0,
+      content: 0,
+      drivers: 0,
+      world: 0,
+      settings: 0,
+      backups: 0,
+    };
     for (const d of studio.diagnostics) if (d.severity === "error") out[sectionOf(d.file)]++;
     return out;
   });
@@ -133,6 +143,8 @@
     <EventsEditor />
   {:else if studio.section === "content"}
     <ContentEditor />
+  {:else if studio.section === "drivers"}
+    <DriversEditor />
   {:else if studio.section === "backups"}
     <StoryBackups />
   {:else if studio.section === "settings"}

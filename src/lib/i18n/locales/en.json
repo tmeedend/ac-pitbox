@@ -2716,7 +2716,10 @@
       "onFailure": "On failure",
       "pool": "Messages drawn from",
       "noPool": "No message",
-      "pick": "How many"
+      "pick": "How many",
+      "opponents": "Opponents",
+      "addOpponents": "Add opponents",
+      "aheadOf": "Finish ahead of {name}"
     },
     "content": {
       "title": "Contents",
@@ -2782,6 +2785,23 @@
       "addEnd": "End",
       "moveUp": "Move up",
       "moveDown": "Move down"
+    },
+    "drivers": {
+      "title": "Drivers",
+      "roster": "Roster",
+      "none": "No driver yet: the grids race against the liveries' names.",
+      "newDriver": "A driver's name",
+      "character": "Character",
+      "noCharacter": "No character",
+      "nationality": "Nationality",
+      "age": "Age",
+      "role": "Role",
+      "role_friend": "Friend",
+      "role_rival": "Rival",
+      "role_star": "Star",
+      "role_filler": "Filler",
+      "skill": "Skill",
+      "aggression": "Aggression"
     },
     "preview": {
       "title": "Preview",
