@@ -410,6 +410,8 @@ pub fn run() {
             commands::library::set_favorite,
             commands::library::set_manual_tags,
             commands::library::set_mod_field,
+            commands::library::set_mod_brand,
+            commands::library::list_car_brands,
             commands::techsheet::save_tech_sheet,
             commands::techsheet::get_techsheet_report,
             commands::techsheet::dismiss_techsheet_report,

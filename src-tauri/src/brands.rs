@@ -102,6 +102,36 @@ pub fn canonical(raw: &str, aliases: &BTreeMap<String, String>) -> Option<String
     canonical_in(raw, aliases, &known)
 }
 
+/// Files a car under the brand the user typed in its header (`brand_user`).
+///
+/// The text goes through `canonical` like any brand does: `porsche` typed by
+/// hand joins the `Porsche` the library already has instead of opening a second
+/// one (TAXO§7.1). A brand equal to the computed one is no decision, so it
+/// leaves the car unmarked rather than pinning today's result against the
+/// rules' next one; blank goes back to the computed brand too.
+///
+/// Cars only: a track has no brand, and a write on an unknown id fails rather
+/// than loses what was typed (the caller keeps the text).
+pub fn set_user_brand(
+    conn: &rusqlite::Connection,
+    id: &str,
+    typed: Option<&str>,
+    canonical: impl Fn(&str) -> Option<String>,
+) -> Result<(), String> {
+    let row = crate::overlay::get_mod(conn, id)
+        .map_err(|e| e.to_string())?
+        .ok_or(crate::errors::MOD_NOT_FOUND)?;
+    if row.kind != "Car" {
+        return Err(format!("brand: {id} is not a car"));
+    }
+    let filed = typed.and_then(canonical);
+    let decision = filed
+        .as_deref()
+        .filter(|b| row.brand_auto.as_deref().is_none_or(|auto| fold(auto) != fold(b)));
+    crate::overlay::set_brand_user(conn, id, decision).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Whether a car whose file says `raw` names, itself, the brand it is filed
 /// under (TAXO§4): the same brand once folded or merged, or the brand's words
 /// inside what it says ("Mercedes Benz AMG" filed under Mercedes-Benz).
@@ -318,6 +348,105 @@ mod tests {
         assert_eq!(
             canonical_in("Alfa Romeo", &aliases, &known).as_deref(),
             Some("Alfa Romeo")
+        );
+    }
+
+    fn car_in_base(conn: &rusqlite::Connection, id: &str, kind: &str, brand: &str) {
+        crate::overlay::upsert_mod(conn, id, kind, Some(brand), Some(id), "h", None, "2026-10-20").unwrap();
+    }
+
+    /// A brand typed in the header is stored beside the computed one: it wins
+    /// in every listing, survives the next harmonisation and the next reindex,
+    /// and "back to original" lands on what the rules compute now.
+    #[test]
+    fn a_brand_typed_by_hand_wins_survives_and_goes_back() {
+        let base = crate::testutil::temp_dir("brand-user");
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        car_in_base(&conn, "car", "Car", "Ferrari");
+        let known = elect(["Ferrari", "Porsche", "Porsche"]);
+        let none = BTreeMap::new();
+        let canon = |b: &str| canonical_in(b, &none, &known);
+        let brand = |c: &rusqlite::Connection| crate::overlay::get_mod(c, "car").unwrap().unwrap();
+
+        set_user_brand(&conn, "car", Some("  porsche "), canon).unwrap();
+        let row = brand(&conn);
+        assert_eq!(
+            row.brand.as_deref(),
+            Some("Porsche"),
+            "the decision is what the list shows"
+        );
+        assert_eq!(
+            row.brand_user.as_deref(),
+            Some("Porsche"),
+            "typed lower case, filed as the library spells it"
+        );
+        assert_eq!(
+            row.brand_auto.as_deref(),
+            Some("Ferrari"),
+            "the computed brand stays known"
+        );
+
+        crate::overlay::update_harmonization(&conn, "car", Some("Lamborghini"), None, None, &[], None, &[]).unwrap();
+        car_in_base(&conn, "car", "Car", "Maserati");
+        let row = brand(&conn);
+        assert_eq!(
+            row.brand.as_deref(),
+            Some("Porsche"),
+            "harmonisation and reindex leave the decision alone"
+        );
+        assert_eq!(
+            row.brand_auto.as_deref(),
+            Some("Maserati"),
+            "they do move the computed one"
+        );
+
+        set_user_brand(&conn, "car", Some("MASERATI"), canon).unwrap();
+        assert_eq!(
+            brand(&conn).brand_user,
+            None,
+            "the computed brand typed again is no decision"
+        );
+        set_user_brand(&conn, "car", Some("Porsche"), canon).unwrap();
+        set_user_brand(&conn, "car", None, canon).unwrap();
+        let row = brand(&conn);
+        assert_eq!(row.brand.as_deref(), Some("Maserati"), "back to original");
+        assert_eq!(row.brand_user, None);
+    }
+
+    /// The suggestions are the brands cars are filed under now: the user's
+    /// choices count, tracks and blanks do not, each brand appears once.
+    #[test]
+    fn the_suggested_brands_are_the_ones_cars_are_filed_under() {
+        let base = crate::testutil::temp_dir("brand-suggestions");
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        car_in_base(&conn, "a", "Car", "Ferrari");
+        car_in_base(&conn, "b", "Car", "Ferrari");
+        car_in_base(&conn, "c", "Car", "Mazda");
+        car_in_base(&conn, "d", "Car", "  ");
+        car_in_base(&conn, "t", "Track", "Spa Ltd");
+        set_user_brand(&conn, "c", Some("Abarth"), |b| Some(b.to_string())).unwrap();
+        assert_eq!(
+            crate::overlay::list_car_brands(&conn).unwrap(),
+            ["Abarth", "Ferrari"],
+            "once each, sorted, the user's choice replacing the computed brand"
+        );
+    }
+
+    /// A track has no brand, and an unknown id fails instead of losing the
+    /// typed text silently.
+    #[test]
+    fn a_brand_is_refused_for_a_track_and_for_an_unknown_mod() {
+        let base = crate::testutil::temp_dir("brand-user-refused");
+        let conn = crate::overlay::open(&base.join("overlay.sqlite")).unwrap();
+        car_in_base(&conn, "spa", "Track", "");
+        let canon = |b: &str| Some(b.to_string());
+        assert!(
+            set_user_brand(&conn, "spa", Some("Ferrari"), canon).is_err(),
+            "tracks have no brand"
+        );
+        assert!(
+            set_user_brand(&conn, "ghost", Some("Ferrari"), canon).is_err(),
+            "unknown id"
         );
     }
 }

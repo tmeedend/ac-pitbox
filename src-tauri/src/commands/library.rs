@@ -251,6 +251,24 @@ pub fn set_mod_field(db: State<Db>, id: String, field: String, value: Option<Str
     crate::overlay::set_mod_field(&conn, &id, &field, value.as_deref()).map_err(|e| e.to_string())
 }
 
+/// Files a car under a brand typed by hand, or back to the computed one on
+/// `None` (header editor of the detail sheet). Stored beside the computed
+/// brand, never in the mod's `ui_car.json` (golden rule 1).
+#[tauri::command]
+pub fn set_mod_brand(app: AppHandle, db: State<Db>, id: String, brand: Option<String>) -> Result<(), String> {
+    let aliases = crate::rules::load(&app).brand_aliases;
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::brands::set_user_brand(&conn, &id, brand.as_deref(), |b| crate::brands::canonical(b, &aliases))
+}
+
+/// The brands cars are filed under, for the autocompletion of the brand field.
+/// A single query on the base: no need to leave the window's thread.
+#[tauri::command]
+pub fn list_car_brands(db: State<Db>) -> Result<Vec<String>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::overlay::list_car_brands(&conn).map_err(|e| e.to_string())
+}
+
 /// Skins d'une voiture pour la fiche détail (mod ou voiture de base, §6.3/§8).
 #[tauri::command]
 pub async fn list_mod_skins(app: AppHandle, id: String) -> Result<Vec<crate::library::SkinItem>, String> {

@@ -21,6 +21,10 @@ pub(super) fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         // Nom/description saisis par l'utilisateur (§5bis.3).
         "display_name_user TEXT",
         "description_user TEXT",
+        // The brand the user filed a car under by hand, next to the one the
+        // harmonisation computes (`brand`): that one is rewritten at every
+        // harmonisation, a decision living there would be undone by the next.
+        "brand_user TEXT",
         // Mod installé hors Pit Box, trouvé dans content/ à l'indexation (§8.2).
         "is_unmanaged INTEGER NOT NULL DEFAULT 0",
         // Where the cached spec columns came from, field → source (FICHE§6.3).
@@ -128,6 +132,9 @@ pub(super) fn init(conn: &Connection) -> rusqlite::Result<()> {
             -- vivrait serait écrasée à la première mise à jour de l'auteur.
             display_name_user TEXT,
             description_user  TEXT,
+            -- Brand chosen by the user, beside the computed `brand` above (same
+            -- reason as the name: the computed one is rewritten).
+            brand_user        TEXT,
             identity_hash     TEXT,
             car_class         TEXT,                   -- overlay-éditable (L2)
             year              INTEGER,
