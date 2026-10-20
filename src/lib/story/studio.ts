@@ -3,6 +3,7 @@
 // them aligned. A chapter travels in the shape of its YAML file
 // (`story_engine::model`): what the editor shows is what the file says.
 import { invoke } from "@tauri-apps/api/core";
+import type { PlayerChoice, PlayerStep } from "./player/types";
 
 /** What shows the story (SPEC-story-mode, Content types, templates and
  * frames): `none` (a visual novel) or a frame's name. There is no default:
@@ -389,3 +390,30 @@ export const readScript = (text: string) => invoke<ScriptRead>("story_script_rea
 /** Writes the tree back as Ink, in canonical form; refused when a sentence
  * does not read. */
 export const writeScript = (script: Script) => invoke<string>("story_script_write", { script });
+
+/** What the Content screen's preview shows for one item (`studio::PreviewView`). */
+export interface PreviewView {
+  /** A dialogue on the scene, an item in its frame, or nothing to show. */
+  view: "scene" | "frame" | "nowhere";
+  frame: string | null;
+  /** The checks' warning, for `nowhere`. */
+  nowhere: string | null;
+  kind: ContentType;
+  from: string | null;
+  characters: string[];
+  steps: PlayerStep[];
+  choices: PlayerChoice[];
+  ended: boolean;
+  sent: string[];
+  /** The variables it reads, settable for the preview, with their start value. */
+  knobs: { var: string; kind: "relation" | "flag" | "number"; start: string }[];
+  /** What the conversation changed. */
+  changes: { var: string; from: string; to: string }[];
+  date: string;
+  clock: string;
+}
+
+/** Plays content `content` for the preview, with `setup` (effect sentences)
+ * applied first and `replies` replayed. */
+export const previewContent = (folder: string, content: string, setup: string[], replies: string[]) =>
+  invoke<PreviewView>("story_preview", { folder, content, setup, replies });

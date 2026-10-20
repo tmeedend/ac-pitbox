@@ -483,6 +483,164 @@ pub fn render(file: &str, value: serde_json::Value) -> Result<String, String> {
     }
 }
 
+/// The Content screen's preview of one item (SPEC-story-mode, Create Your
+/// Own: Content): everything the preview column shows, worked out from the
+/// story as it is on disk, so it follows every save.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewView {
+    /// `scene` for a dialogue, `frame` for an item a frame shows,
+    /// `nowhere` when none of the frames it can arrive in can show it.
+    pub view: &'static str,
+    /// The frame it shows in, for `frame`.
+    pub frame: Option<String>,
+    /// Why there is nothing to show, for `nowhere`: the checks' warning.
+    pub nowhere: Option<String>,
+    /// Its content type, as a `.story` header names it.
+    pub kind: &'static str,
+    pub from: Option<String>,
+    /// A dialogue's characters present.
+    pub characters: Vec<String>,
+    pub steps: Vec<story_engine::engine::PreviewStep>,
+    pub choices: Vec<story_engine::engine::Offer>,
+    pub ended: bool,
+    /// The other items it sent, named.
+    pub sent: Vec<String>,
+    /// What the author can set to preview with: the variables it reads,
+    /// each with the story's own starting value.
+    pub knobs: Vec<Knob>,
+    /// What the conversation changed.
+    pub changes: Vec<Change>,
+    /// Story date and time of day shown on the item.
+    pub date: String,
+    pub clock: String,
+}
+
+/// A variable the preview can be set with, and its value at the start.
+#[derive(Debug, Serialize)]
+pub struct Knob {
+    pub var: String,
+    /// `relation`, `flag` or `number`.
+    pub kind: &'static str,
+    pub start: String,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub struct Change {
+    pub var: String,
+    pub from: String,
+    pub to: String,
+}
+
+/// Plays content `id` for the preview: from the story's starting state with
+/// `setup` (effect sentences, `rel.friend = warm`) applied, then `replies`.
+/// Reads the story from disk; nothing is written.
+pub fn preview(folder: &Path, id: &str, setup: &[String], replies: &[String]) -> Result<PreviewView, String> {
+    use story_engine::expr::{Effect, Var};
+    let (_, d) = draft_dir(folder).map_err(|e| e.to_string())?;
+    let story = Story::from_draft(d).map_err(|errors| {
+        errors
+            .into_iter()
+            .next()
+            .map_or_else(|| "the story does not load".to_string(), |e| e.to_string())
+    })?;
+    let item = story
+        .content_item(id)
+        .ok_or_else(|| format!("unknown content `{id}`"))?;
+    let setup: Vec<Effect> = (setup.iter()).map(|s| s.parse()).collect::<Result<_, String>>()?;
+    let played = story_engine::engine::preview(&story, &setup, id, replies).map_err(|e| e.to_string())?;
+    let (before, after) = (&played.before, &played.after);
+
+    let dialogue = item.kind == story_engine::model::ContentType::Dialogue;
+    let frames = story_engine::frame::FrameMap::new(&story).content(&story, id);
+    let nowhere = (!dialogue)
+        .then(|| story_engine::frame::nowhere(item, &frames))
+        .flatten();
+    // `none` never shows an item: the first frame that can is a named one.
+    let frame = frames.iter().find(|f| f.can_show(item.kind));
+    let view = match (dialogue, &nowhere) {
+        (true, _) => "scene",
+        (false, Some(_)) => "nowhere",
+        (false, None) => "frame",
+    };
+
+    // A knob starts from the story's own starting value, not from what the
+    // author set: the panel tells a value set from one left alone.
+    let start = story_engine::state::State::new(&story, 0);
+    let money = story.settings().money;
+    let knobs = (item.reads().into_iter())
+        .filter_map(|var| {
+            let (kind, start) = match var {
+                Var::Rel(who) => ("relation", start.relations.get(who)?.clone()),
+                Var::Flag(f) => ("flag", start.flags.contains(f).to_string()),
+                Var::Counter(c) => ("number", start.counters.get(c)?.to_string()),
+                Var::Reputation => ("number", start.reputation.to_string()),
+                Var::Followers => ("number", start.followers.to_string()),
+                Var::Money if money => ("number", start.money.to_string()),
+                _ => return None,
+            };
+            Some(Knob {
+                var: var.to_string(),
+                kind,
+                start,
+            })
+        })
+        .collect();
+
+    Ok(PreviewView {
+        view,
+        frame: frame.filter(|_| view == "frame").map(ToString::to_string),
+        nowhere,
+        kind: item.kind.name(),
+        from: item.from.clone(),
+        characters: item.characters.clone(),
+        steps: played.steps.clone(),
+        choices: played.choices.clone(),
+        ended: played.ended,
+        sent: played.sent.clone(),
+        knobs,
+        changes: changes(&story, before, after),
+        date: after.date.to_string(),
+        clock: item.clock.unwrap_or(after.clock).to_string(),
+    })
+}
+
+/// What changed between two states, in the variables an author sets.
+fn changes(story: &Story, before: &story_engine::state::State, after: &story_engine::state::State) -> Vec<Change> {
+    let mut out = Vec::new();
+    let mut push = |var: String, from: String, to: String| {
+        if from != to {
+            out.push(Change { var, from, to });
+        }
+    };
+    push(
+        "reputation".into(),
+        before.reputation.to_string(),
+        after.reputation.to_string(),
+    );
+    push(
+        "followers".into(),
+        before.followers.to_string(),
+        after.followers.to_string(),
+    );
+    if story.settings().money {
+        push("money".into(), before.money.to_string(), after.money.to_string());
+    }
+    for (who, level) in &after.relations {
+        let was = before.relations.get(who).cloned().unwrap_or_default();
+        push(format!("rel.{who}"), was, level.clone());
+    }
+    for flag in before.flags.union(&after.flags) {
+        let (was, is) = (before.flags.contains(flag), after.flags.contains(flag));
+        push(format!("flag.{flag}"), was.to_string(), is.to_string());
+    }
+    for (counter, n) in &after.counters {
+        let was = before.counters.get(counter).copied().unwrap_or_default();
+        push(format!("counter.{counter}"), was.to_string(), n.to_string());
+    }
+    out
+}
+
 /// A content item's text as the Form view edits it: its tree, and what
 /// does not read, by line of the text (1 is its first line).
 #[derive(Debug, Serialize)]
@@ -954,6 +1112,52 @@ mod tests {
         );
         remove_file(&folder, file, &stamp).expect("removed");
         assert!(!folder.join(file).exists());
+    }
+
+    // The preview (SPEC-story-mode, Create Your Own: Content): a dialogue on
+    // the scene, a message in its frame, and the checks' warning for an item
+    // no frame can show; the values it reads can be set, and what the
+    // conversation changes is listed.
+    #[test]
+    fn the_preview_picks_its_view_and_lists_what_can_be_set_and_what_changed() {
+        let sample = Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/story-engine/sample");
+        let talk = preview(&sample, "talk_01", &[], &["rest".into()]).expect("previews");
+        assert_eq!(
+            (talk.view, talk.characters.as_slice()),
+            ("scene", &["friend".to_string()][..])
+        );
+        assert!(talk.ended, "`rest` ends it");
+        assert_eq!(
+            talk.changes,
+            [Change {
+                var: "rel.friend".into(),
+                from: "neutral".into(),
+                to: "cold".into()
+            }]
+        );
+        let invite = preview(&sample, "invite_01", &[], &[]).unwrap();
+        assert_eq!((invite.view, invite.frame.as_deref()), ("frame", Some("phone")));
+        let offer = preview(&sample, "sponsor_offer", &["flag.sponsor_met = true".into()], &[]).unwrap();
+        let knobs: Vec<(&str, &str)> = offer.knobs.iter().map(|k| (k.var.as_str(), k.kind)).collect();
+        assert_eq!(knobs, [("reputation", "number"), ("flag.sponsor_met", "flag")]);
+        assert_eq!(offer.knobs[1].start, "false", "the story's own start, whatever was set");
+
+        let config = temp_dir("studio-config");
+        let base = temp_dir("studio-story");
+        let folder = base.join("s");
+        create(&config, &folder, "S", "en", Frame::None, "C").unwrap();
+        let doc = serde_json::json!({ "items": [{ "header": { "id": "note", "type": "mail", "when": [] }, "body": "Hi.\n" }] });
+        save_file(&folder, "content/note.story", None, doc).unwrap();
+        let note = preview(&folder, "note", &[], &[]).unwrap();
+        assert_eq!(note.view, "nowhere", "a visual novel has nowhere to show a mail");
+        assert!(
+            note.nowhere.unwrap().contains("no frame it can arrive in"),
+            "the checks' warning"
+        );
+        assert!(
+            preview(&folder, "note", &["money +== 1".into()], &[]).is_err(),
+            "a setting that does not read"
+        );
     }
 
     // The Form view edits the tree the engine reads, and gets back the text

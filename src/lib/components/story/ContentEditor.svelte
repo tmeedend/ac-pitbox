@@ -9,6 +9,7 @@
   import { addContent, studio } from "$lib/story/studioState.svelte";
   import { nameFrom } from "$lib/story/world";
   import AddName from "./AddName.svelte";
+  import ContentPreview from "./ContentPreview.svelte";
   import ContentSheet from "./ContentSheet.svelte";
   import PickList, { type PickGroup } from "./PickList.svelte";
   import StoryChecks from "./StoryChecks.svelte";
@@ -66,6 +67,7 @@
     {#if shown}
       {#key studio.content}
         <ContentSheet file={shown.file} index={shown.index} />
+        <ContentPreview id={studio.content!} />
       {/key}
     {:else if unreadable}
       <p class="errbox">{t("story.world.unreadable", { file: unreadable.file, reason: unreadable.error ?? "" })}</p>
@@ -94,8 +96,11 @@
     color: var(--muted);
     font-size: 12px;
   }
+  /* The preview goes below the sheet when the row runs out of room: the
+     wrap follows the width the screen really has, with no breakpoint. */
   .body {
     display: flex;
+    flex-wrap: wrap;
     gap: 28px;
     align-items: flex-start;
   }

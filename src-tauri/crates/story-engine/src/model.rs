@@ -633,6 +633,27 @@ pub struct ContentFile {
 }
 
 impl ContentItem {
+    /// The variables its conditions read - its placement's and its text's -
+    /// once each, in the order written: what the Content screen's preview
+    /// lets the author set.
+    pub fn reads(&self) -> Vec<&crate::expr::Var> {
+        let placed = match &self.placement {
+            Placement::Flow => &[][..],
+            Placement::Reactive { when, .. } | Placement::Pool { when, .. } => when.as_slice(),
+        };
+        let mut out: Vec<&crate::expr::Var> = Vec::new();
+        for var in placed
+            .iter()
+            .map(|c| &c.var)
+            .chain(self.script.conditions().into_iter().map(|(_, c)| &c.var))
+        {
+            if !out.contains(&var) {
+                out.push(var);
+            }
+        }
+        out
+    }
+
     /// The item as the editor edits it. Defaults are left out, as an author
     /// would type them: a priority of 0, `repeat: once`, no characters.
     pub fn doc(&self) -> ContentDoc {

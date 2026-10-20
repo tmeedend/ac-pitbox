@@ -372,6 +372,44 @@ de reprendre. En cas d'écart, la spec fait foi.
             faudrait accepter l'échappement `\/` d'Ink, et le retirer à la
             lecture ;
           - l'aperçu dans le cadre et sur la scène est L2.5.
+        - **L2.5 — fait (2026-10-20)**, avec son complément (l'aperçu d'un
+          dialogue). La colonne d'aperçu de la section Contenus : le contenu
+          joué par le moteur seul (`engine::preview`, hors du fil, réponses
+          rejouées depuis le début à chaque fois, donc juste quand le texte
+          change), dans le téléphone (modèle fil de discussion) ou sur la
+          scène 16:9 pour un dialogue, ou l'avertissement de la vérification
+          quand aucun cadre ne peut le montrer. « Aperçu avec » règle les
+          variables que le contenu lit ; ce que la conversation a changé et
+          ce qu'elle a envoyé s'affichent dessous. Les vues sont celles du
+          rendu joueur (`components/story/player/` : `PhoneFrame`,
+          `ThreadView`, `DialogueStage`, et leur logique pure dans
+          `src/lib/story/player/`) : elles ne connaissent pas l'éditeur, L3
+          les reprendra telles quelles.
+          **Décidé avec l'utilisateur** : l'état de l'aperçu part de l'état
+          de départ et ne règle que les variables que le contenu lit,
+          gardées en mémoire par contenu, jamais écrites ; le plateau d'un
+          dialogue (tous les présents visibles, celui qui parle mis en avant ;
+          `neutral` jusqu'à une expression, qui reste ; sans position, l'ordre
+          de `characters` à gauche, à droite, au centre, et une position
+          donnée reste). Le cadre par lequel un contenu peut arriver est
+          calculé à un seul endroit (`frame::FrameMap`), que la vérification
+          « rien pour l'afficher » et l'aperçu partagent.
+          **Choisi sans demander** : seul `message` a un modèle dans le
+          téléphone pour l'instant (la question pour `call` est restée sans
+          réponse) ; les autres types affichent « pas encore d'aperçu » ;
+          l'heure du téléphone est celle du contenu, sinon celle du départ ; la
+          date suit le réglage d'affichage (saisons de l'hémisphère nord, le
+          réglage de calendrier n'existant pas encore) ; l'avatar est le
+          portrait `neutral`, sinon les initiales ; les réponses du joueur sont
+          en bleu (le rouge a son barème) ; changer un réglage recommence la
+          conversation ; un `send` n'est que nommé ; l'aperçu passe sous la
+          fiche quand la place manque, par un simple retour à la ligne, sans
+          seuil. Le message « rien pour l'afficher » d'un contenu réactif
+          change de mots (« no frame it can arrive in »), puisque la même
+          phrase sert aux contenus envoyés par le fil.
+          **Limites connues** : pas d'aperçu pour les autres types que
+          `message` dans le téléphone ; faits d'épreuve et de contenu non
+          réglables ; la scène est un fond uni.
       - **L3 à L8** : dans l'ordre du plan de livraison de la spec.
       **Écarts assumés par rapport au document de conception** (la spec
       publique les reprend déjà) :

@@ -61,7 +61,7 @@ pub enum Output {
 }
 
 /// A line as the frame or the scene shows it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct Said {
     /// A character's id; `None`: the item's sender.
     pub speaker: Option<String>,
@@ -71,7 +71,7 @@ pub struct Said {
 }
 
 /// A choice offered: its label and its text.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct Offer {
     pub label: String,
     pub text: String,
@@ -171,6 +171,91 @@ pub fn submit(story: &Story, state: &mut State, input: Input) -> Result<Vec<Outp
     let out = r.out;
     *state = next;
     Ok(out)
+}
+
+/// One step of a previewed conversation: a line said, or the reply chosen.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum PreviewStep {
+    Said(Said),
+    Chose(Offer),
+}
+
+/// A content item played on its own (SPEC-story-mode, Create Your Own:
+/// Content, live preview).
+#[derive(Debug, Clone)]
+pub struct Preview {
+    pub steps: Vec<PreviewStep>,
+    /// What the conversation offers where it stopped; empty once it ended.
+    pub choices: Vec<Offer>,
+    pub ended: bool,
+    /// The other content items it sent (`effect("send …")`).
+    pub sent: Vec<String>,
+    /// The state once `setup` applied, and once the conversation played:
+    /// what changed between the two is what the conversation did.
+    pub before: State,
+    pub after: State,
+}
+
+/// Plays content `id` on its own, for the Content screen's preview: from the
+/// story's starting state with `setup` applied (the values the author set to
+/// preview with), then each of `replies` in turn, as long as it is offered -
+/// the preview stays right while the text changes under it. The flow never
+/// moves and no reactive content comes: only this conversation plays.
+pub fn preview(story: &Story, setup: &[Effect], id: &str, replies: &[String]) -> Result<Preview, EngineError> {
+    let mut state = State::new(story, 0);
+    let mut r = Run {
+        story,
+        state: &mut state,
+        out: Vec::new(),
+        nested: 0,
+    };
+    for effect in setup {
+        r.apply_effect(effect)?;
+    }
+    r.out.clear();
+    let before = r.state.clone();
+    let mut steps = Vec::new();
+    let mut sent = Vec::new();
+    let mut offered: Vec<Offer> = Vec::new();
+    let mut collect = |out: Vec<Output>, steps: &mut Vec<PreviewStep>, offered: &mut Vec<Offer>| {
+        for o in out {
+            match o {
+                Output::Lines { content, lines } if content == id => {
+                    steps.extend(lines.into_iter().map(PreviewStep::Said))
+                }
+                Output::Choices { content, choices } if content == id => *offered = choices,
+                Output::Delivered { content, .. } if content != id => sent.push(content),
+                _ => {}
+            }
+        }
+    };
+    r.deliver(id, Via::Flow)?;
+    collect(std::mem::take(&mut r.out), &mut steps, &mut offered);
+    for label in replies {
+        let Some(choice) = offered.iter().find(|c| &c.label == label).cloned() else {
+            break;
+        };
+        if !r.state.conversations.contains_key(id) {
+            break;
+        }
+        steps.push(PreviewStep::Chose(choice));
+        offered.clear();
+        r.reply(id.into(), label.clone())?;
+        collect(std::mem::take(&mut r.out), &mut steps, &mut offered);
+    }
+    let ended = !r.state.conversations.contains_key(id);
+    if ended {
+        offered.clear();
+    }
+    Ok(Preview {
+        steps,
+        choices: offered,
+        ended,
+        sent,
+        before,
+        after: state,
+    })
 }
 
 /// Whether a result satisfies an event's success criteria: all of them, and
@@ -1244,6 +1329,58 @@ mod tests {
         let story = story("", flow, &[("content/loop.story", content)]);
         let mut state = State::new(&story, 7);
         assert!(matches!(run(&story, &mut state), Err(EngineError::Loop { .. })));
+    }
+
+    // The Content screen's preview (SPEC-story-mode, Create Your Own): one
+    // item played on its own, the values the author set applied first, the
+    // replies chosen so far replayed; the flow never moves.
+    #[test]
+    fn a_preview_plays_one_item_on_the_values_set_and_leaves_the_flow() {
+        let content = "---\nid: ask\ntype: message\nfrom: friend\n---\n{check(\"flag.met\"): friend: Hi again.}\nfriend: Coming?\n* (yes) [Yes.]\n    ~ effect(\"rel.friend += 1\")\n    ~ effect(\"send other\")\n    friend: Great.\n* (no) [No.]\n---\nid: other\ntype: message\n---\nx\n";
+        let story = story("", ONE_EVENT, &[("content/ask.story", content)]);
+        let said = |p: &Preview| -> Vec<String> {
+            (p.steps.iter())
+                .map(|s| match s {
+                    PreviewStep::Said(l) => l.text.clone(),
+                    PreviewStep::Chose(c) => format!("> {}", c.label),
+                })
+                .collect()
+        };
+
+        let first = preview(&story, &[], "ask", &[]).unwrap();
+        assert_eq!(said(&first), ["Coming?"], "the conditional line hidden");
+        assert_eq!(
+            first.choices.iter().map(|c| c.label.as_str()).collect::<Vec<_>>(),
+            ["yes", "no"]
+        );
+        assert!(!first.ended);
+
+        let met: Effect = "flag.met = true".parse().unwrap();
+        let shown = preview(&story, &[met], "ask", &["yes".into()]).unwrap();
+        assert_eq!(
+            said(&shown),
+            ["Hi again.", "Coming?", "> yes", "Great."],
+            "set, then replayed"
+        );
+        assert!(shown.ended && shown.choices.is_empty());
+        assert_eq!(shown.sent, ["other"], "what it sent is named, not shown");
+        assert_eq!(
+            (
+                shown.before.relations["friend"].as_str(),
+                shown.after.relations["friend"].as_str()
+            ),
+            ("neutral", "warm"),
+            "what the conversation changed"
+        );
+        assert_eq!(shown.after.node, "start", "the flow did not move");
+        assert_eq!(shown.after.wait, Wait::Running);
+
+        let stale = preview(&story, &[], "ask", &["gone".into(), "yes".into()]).unwrap();
+        assert_eq!(
+            said(&stale),
+            ["Coming?"],
+            "a reply no longer offered stops the replay there"
+        );
     }
 
     // Story settings: the relation scale belongs to the story.

@@ -76,6 +76,19 @@ pub async fn story_check(app: AppHandle, folder: PathBuf) -> Result<studio::Chec
     off_window(app, move |_| Ok(studio::check(&folder))).await
 }
 
+/// Plays a content item for the Content screen's preview. Reads the story
+/// from disk, hence off the window thread.
+#[tauri::command]
+pub async fn story_preview(
+    app: AppHandle,
+    folder: PathBuf,
+    content: String,
+    setup: Vec<String>,
+    replies: Vec<String>,
+) -> Result<studio::PreviewView, String> {
+    off_window(app, move |_| studio::preview(&folder, &content, &setup, &replies)).await
+}
+
 /// Reads a content item's text into the tree the Form view edits.
 #[tauri::command]
 pub fn story_script_read(text: String) -> studio::ScriptRead {

@@ -63,6 +63,10 @@ export const studio = $state<{
   /** Shown above the flow: the story was reloaded under the author's feet. */
   notice: string | null;
   loading: boolean;
+  /** Moves each time the files on disk are known to have changed - after
+   * each check, on each reload: what a view reading the disk (the preview)
+   * follows. */
+  revision: number;
 }>({
   story: null,
   section: "flow",
@@ -74,6 +78,7 @@ export const studio = $state<{
   unsaved: {},
   notice: null,
   loading: false,
+  revision: 0,
 });
 
 /** Opens (or reopens) a story. Keeps the selection when it still exists. */
@@ -84,6 +89,7 @@ export async function openStudio(path: string): Promise<void> {
     const sameStory = studio.story?.path === path;
     studio.story = story;
     studio.diagnostics = story.diagnostics;
+    studio.revision++;
     studio.unsaved = {};
     if (!sameStory) {
       studio.notice = null;
@@ -366,6 +372,7 @@ function scheduleCheck(): void {
       studio.story.usages = usages;
       studio.story.media = media;
       studio.story.history = history;
+      studio.revision++;
     } catch (e) {
       console.warn("story studio: check failed", e);
     }

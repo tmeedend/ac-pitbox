@@ -2783,6 +2783,25 @@
       "moveUp": "Monter",
       "moveDown": "Descendre"
     },
+    "preview": {
+      "title": "Aperçu",
+      "restart": "Recommencer",
+      "setWith": "Aperçu avec",
+      "reset": "Réinitialiser",
+      "noTemplate": "Pas encore d'aperçu pour ce type.",
+      "sent": "Envoie aussi : {items}",
+      "unavailable": "Aperçu indisponible : {reason}",
+      "change": "{var} : {from} → {to}"
+    },
+    "player": {
+      "next": "Réplique suivante",
+      "end": "Fin",
+      "yearMonth": "Année {year} · mois {month}",
+      "winter": "Hiver {year}",
+      "spring": "Printemps {year}",
+      "summer": "Été {year}",
+      "autumn": "Automne {year}"
+    },
     "world": {
       "title": "Monde",
       "characters": "Personnages",

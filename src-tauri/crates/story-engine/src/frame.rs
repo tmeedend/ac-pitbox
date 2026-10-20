@@ -14,7 +14,7 @@ use std::str::FromStr;
 
 use crate::expr::Effect;
 use crate::load::Story;
-use crate::model::{ContentType, Node, NodeId, NodeKind};
+use crate::model::{ContentItem, ContentType, Node, NodeId, NodeKind};
 
 /// The active frame, as a story writes it: `none`, or a frame's name.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -107,6 +107,60 @@ pub fn frames_on_entry(story: &Story) -> BTreeMap<NodeId, BTreeSet<Frame>> {
         queue.extend(story.exits(node).into_iter().map(|next| (next, after.clone())));
     }
     on_entry
+}
+
+/// The frames that can be active across the flow, worked out once for a
+/// story: what the checks and the Content screen's preview ask of it.
+pub struct FrameMap {
+    /// The frames that can be active on arriving at each node.
+    pub on_entry: BTreeMap<NodeId, BTreeSet<Frame>>,
+    anywhere: BTreeSet<Frame>,
+}
+
+impl FrameMap {
+    pub fn new(story: &Story) -> FrameMap {
+        let on_entry = frames_on_entry(story);
+        let mut anywhere: BTreeSet<Frame> = on_entry.values().flatten().cloned().collect();
+        // The start's frame even when the start node is missing (an error of
+        // its own): no warning on every item for want of a path.
+        anywhere.insert(story.manifest.start.frame.clone());
+        FrameMap { on_entry, anywhere }
+    }
+
+    /// The frames content `id` can arrive under: those active wherever a
+    /// node sends it. Reactive content can arrive at any moment, and content
+    /// nothing sends yet could be sent anywhere: every frame the story puts
+    /// up, for both.
+    pub fn content(&self, story: &Story, id: &str) -> BTreeSet<Frame> {
+        let mut out = BTreeSet::new();
+        for node in story.nodes() {
+            let Some(frames) = self.on_entry.get(&node.id) else {
+                continue;
+            };
+            for (sent, under) in sent_by(story, node, frames) {
+                if sent == id {
+                    out.extend(under);
+                }
+            }
+        }
+        if out.is_empty() {
+            out = self.anywhere.clone();
+        }
+        out
+    }
+}
+
+/// Why `item` has nowhere to be shown, if so: none of the frames it can
+/// arrive under can show its type (SPEC-story-mode, Nowhere to show). What
+/// the checks warn about, and what the preview shows instead of the item.
+pub fn nowhere(item: &ContentItem, frames: &BTreeSet<Frame>) -> Option<String> {
+    (!frames.iter().any(|f| f.can_show(item.kind))).then(|| {
+        format!(
+            "content `{}` is a {}, and no frame it can arrive in can show it",
+            item.id,
+            item.kind.name()
+        )
+    })
 }
 
 /// What a node sends to the frame, and which frames can be active then;
@@ -210,5 +264,56 @@ mod tests {
             "one path removed the frame, the other did not"
         );
         assert_eq!(on_entry["end"], BTreeSet::from([phone]), "put back on every path");
+    }
+
+    // Where a content item can arrive: under the frames of the nodes that
+    // send it; reactive content, anywhere the story puts a frame up.
+    #[test]
+    fn a_content_item_arrives_under_the_frames_of_whatever_sends_it() {
+        let story = crate::Story::load(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("sample")).unwrap();
+        let map = FrameMap::new(&story);
+        let phone = Frame::Named("phone".into());
+        assert_eq!(
+            map.content(&story, "talk_01"),
+            BTreeSet::from([Frame::None]),
+            "after the beat removing it"
+        );
+        assert_eq!(map.content(&story, "invite_01"), BTreeSet::from([phone.clone()]));
+        assert_eq!(
+            map.content(&story, "rival_post_01"),
+            BTreeSet::from([Frame::None, phone]),
+            "reactive: every frame the story puts up"
+        );
+        let talk = story.content_item("talk_01").unwrap();
+        assert_eq!(
+            nowhere(talk, &BTreeSet::from([Frame::None])),
+            None,
+            "a dialogue needs no frame"
+        );
+        let invite = story.content_item("invite_01").unwrap();
+        assert!(
+            nowhere(invite, &BTreeSet::from([Frame::None])).is_some(),
+            "a message needs one"
+        );
+    }
+
+    // The preview lets the author set what a content item reads: its
+    // placement's conditions and its text's, once each.
+    #[test]
+    fn a_content_item_reads_its_conditions_variables_once_each() {
+        let story = crate::Story::from_sources(with(
+            minimal(),
+            "content/a.story",
+            "---\nid: a\ntype: mail\nwhen: [\"reputation >= 2\", \"not flag.met\"]\n---\n{check(\"flag.met\"): Again.}\n* (x) {check(\"rel.friend >= warm\")} [X]\n",
+        ))
+        .unwrap();
+        let reads: Vec<String> = story
+            .content_item("a")
+            .unwrap()
+            .reads()
+            .iter()
+            .map(|v| v.to_string())
+            .collect();
+        assert_eq!(reads, ["reputation", "flag.met", "rel.friend"]);
     }
 }

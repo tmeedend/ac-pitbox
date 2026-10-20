@@ -11,7 +11,7 @@ use std::collections::{BTreeSet, HashSet, VecDeque};
 use std::fmt;
 
 use crate::expr::{Condition, ContentFact, Effect, EventFact, Literal, Var};
-use crate::frame::{frames_on_entry, Frame};
+use crate::frame::{nowhere, Frame, FrameMap};
 use crate::load::Story;
 use crate::model::{Character, ContentItem, ContentType, Event, EventType, Node, NodeKind, Placement};
 
@@ -614,33 +614,25 @@ impl Checker<'_> {
     /// ever puts up can show it. Warnings: at play it waits for a frame.
     fn nowhere_to_show(&mut self) {
         let story = self.story;
-        let on_entry = frames_on_entry(story);
+        let map = FrameMap::new(story);
         for chapter in &story.chapters {
             for node in &chapter.nodes {
                 // A node no path reaches is already reported as such.
-                let Some(frames) = on_entry.get(&node.id) else { continue };
+                let Some(frames) = map.on_entry.get(&node.id) else {
+                    continue;
+                };
                 for (content, frames) in crate::frame::sent_by(story, node, frames) {
                     self.shown_under(&chapter.file, node, content, &frames);
                 }
             }
         }
-        // A beat's frame reaches the node after it; a beat with no node after
-        // it is already an error.
-        let mut anywhere: BTreeSet<&Frame> = on_entry.values().flatten().collect();
-        // The start's frame even when the start node is missing (an error
-        // of its own): no warning on every item for want of a path.
-        anywhere.insert(&story.manifest.start.frame);
-        for item in &story.content {
-            let reactive = matches!(item.placement, Placement::Reactive { .. });
-            if reactive && !anywhere.iter().any(|f| f.can_show(item.kind)) {
-                self.warning(
-                    &format!("{}:{}", item.file, item.line),
-                    format!(
-                        "content `{}` is a {}, and no frame the story puts up can show it",
-                        item.id,
-                        item.kind.name()
-                    ),
-                );
+        for item in story
+            .content
+            .iter()
+            .filter(|i| matches!(i.placement, Placement::Reactive { .. }))
+        {
+            if let Some(why) = nowhere(item, &map.content(story, &item.id)) {
+                self.warning(&format!("{}:{}", item.file, item.line), why);
             }
         }
     }
@@ -1088,14 +1080,14 @@ nodes:
         lost[0].text = lost[0].text.replace("node: start", "node: nowhere");
         let d = validate(&crate::Story::from_sources(lost).unwrap());
         assert!(
-            !has(&d, Severity::Warning, "no frame the story puts up"),
+            !has(&d, Severity::Warning, "no frame it can arrive in"),
             "a missing start node is its own error, not a frame warning per item: {d:#?}"
         );
         let mut files = with(minimal(), "content/a.story", reactive);
         files[0].text = files[0].text.replace("frame: phone", "frame: none");
         let d = validate(&crate::Story::from_sources(files).unwrap());
         assert!(
-            has(&d, Severity::Warning, "no frame the story puts up can show it"),
+            has(&d, Severity::Warning, "no frame it can arrive in can show it"),
             "a visual novel has nowhere to show an article: {d:#?}"
         );
     }

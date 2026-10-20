@@ -192,6 +192,13 @@ with none.
   checks look for. A line can name the speaker's
   expression and position with Ink tags (`#expression:happy
   #position:left`), checked against the character's portraits.
+- **On stage.** Every character present stands from the first line; one who
+  speaks without being listed steps in when they first speak. Without a
+  position they stand in the order listed - left, right, then centre - and a
+  position given stays for their next lines. A face is `neutral` until a line
+  names an expression, which stays for that character's next lines. The
+  speaker is put forward, the others dimmed; the next line shows on a click,
+  Space or Enter, and the replies once the last line is read.
 - **Replies that branch.** Every choice carries a stable Ink label
   (`* (yes) [I'm in!]`). The label is the "reply chosen" fact, readable by any
   condition, and a Message node can have **one exit per label**, shown like the
@@ -496,6 +503,17 @@ the editor is reserved; they are translated when it opens to all.
   the library does not have is kept as written and shown as missing. A track
   with layouts starts on its first. Changing an event's type away from a race
   drops what only a race has.
+- **The Content screen previews the item it shows**, played by the engine
+  on its own from the story's starting state: the flow does not move and no
+  reactive content comes. The author sets the variables the item reads
+  (relations, flags, counters, reputation, followers, money), chooses
+  replies, and sees what the conversation changed and which items it sent.
+  What is set lasts while Pit Box runs and is never written. A dialogue shows
+  on the 16:9 stage (a plain background until the scenes exist), another item
+  in the frame it can arrive in - the thread template for a message first,
+  the other templates with Story Mode - and an item no frame can show shows
+  the checks' warning instead. The preview follows every save, and its views
+  are Story Mode's own: the phone, its templates and the stage.
 - **A content item lives in a `.story` file of `content/`**, filed as the
   author likes. A new item gets its id from the name typed and a file of its
   own, `content/<id>.story`; deleting a file's last item removes the file.

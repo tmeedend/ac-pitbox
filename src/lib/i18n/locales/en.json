@@ -2783,6 +2783,25 @@
       "moveUp": "Move up",
       "moveDown": "Move down"
     },
+    "preview": {
+      "title": "Preview",
+      "restart": "Start again",
+      "setWith": "Preview with",
+      "reset": "Reset",
+      "noTemplate": "No preview for this type yet.",
+      "sent": "Also sends: {items}",
+      "unavailable": "No preview: {reason}",
+      "change": "{var}: {from} → {to}"
+    },
+    "player": {
+      "next": "Next line",
+      "end": "End",
+      "yearMonth": "Year {year} · month {month}",
+      "winter": "Winter {year}",
+      "spring": "Spring {year}",
+      "summer": "Summer {year}",
+      "autumn": "Autumn {year}"
+    },
     "world": {
       "title": "World",
       "characters": "Characters",

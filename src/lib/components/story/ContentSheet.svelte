@@ -295,7 +295,7 @@
 <style>
   .sheet {
     flex: 1;
-    min-width: 0;
+    min-width: 420px;
     max-width: 760px;
   }
   header {
