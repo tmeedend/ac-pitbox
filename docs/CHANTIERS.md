@@ -1556,6 +1556,56 @@ de reprendre. En cas d'écart, la spec fait foi.
       raccourci ou disparaissant ; et la même chose pour la description et
       la fiche technique (`↺ revenir`, `TechSheetEdit.svelte`).
 
+- [ ] **Import : un doublon est déclaré trop facilement — à corriger.**
+      Diagnostiqué le 2026-10-21, rien n'est corrigé. **Le trou.**
+      `identity::content_signature` ne regarde que les fichiers `.kn5` et
+      `.acd` — chemin relatif et taille, jamais le contenu, jamais les
+      autres fichiers. À l'import (`importer/filing.rs::over_existing`) comme
+      à l'analyse en masse (`importer/bulk.rs::classify`), une signature égale
+      à celle de la version active vaut **doublon : rien n'est rangé** — ni
+      version, ni couche —, et le rapport dit « archive identique, pas
+      réimportée » (`duplicateNote`), ce qui est faux. Sont donc ignorées,
+      sans un mot : une mise à jour qui ne change que `ui_car.json`, un
+      `data/*.ini` de physique non empaqueté, des skins, un `ext_config.ini` ;
+      et un `.kn5` ou `.acd` dont le contenu change sans changer de taille.
+      Aucun « forcer » à l'import : le seul contournement est de supprimer le
+      mod puis de le réimporter (l'overlay, indexé par id, survit).
+      **Contraintes de la correction.**
+      - **La signature ne change pas de définition.** Elle est stockée sur
+        chaque version, retrouve la version en vitrine d'un mod
+        (`version_by_signature`, `REHYDRATED`) et s'écrit dans les manifestes
+        d'export (`transfer/skeletons.rs`) : la redéfinir ferait passer tout
+        réimport pour une mise à jour et casserait la réhydratation. La
+        vérification **s'ajoute** à l'égalité des signatures, elle ne la
+        remplace pas.
+      - **Deux paliers, payés seulement quand la signature dit « identique ».**
+        Palier 1, sans lire de contenu : comparer chemin et taille de **tous**
+        les fichiers du dossier entrant avec ceux de la version active
+        (un parcours de dossiers, quelques millisecondes par mod) — attrape
+        les fichiers ajoutés, retirés ou redimensionnés, `data/*.ini` et
+        `ui_car.json` compris. Palier 2, pour les fichiers de même chemin et
+        de même taille : comparaison d'octets, arrêtée au premier écart — ni
+        hash ni colonne à migrer.
+      - **Coût.** Il dépend de la taille du mod réimporté, jamais de celle de
+        la bibliothèque. Une voiture de 800 Mo réimportée à l'identique lit
+        les deux copies : environ 3 à 5 s sur SSD, 15 s sur disque dur ; une
+        mise à jour sort au premier écart. Le pire cas est le réimport en
+        masse d'un dossier entièrement déjà présent (300 Go : environ 600 Go
+        lus, 20 min sur SSD, 1 h 30 à 2 h sur disque dur) : l'analyse en masse
+        peut se limiter au palier 1 et classer « doublon probable », au prix
+        d'un écart possible avec le résultat de l'exécution.
+      - **À trancher en le faisant** : le texte de `duplicateNote` ne doit plus
+        promettre l'identité tant que le palier 2 n'a pas tourné ; et le
+        comportement de l'analyse en masse ci-dessus.
+      **Méthode.** Zone d'import : les tests d'abord. Un test par scénario —
+      `ui_car.json` seul modifié, `data/*.ini` seul modifié de même longueur,
+      `.kn5` de même taille et de contenu différent, fichier ajouté, ré-import
+      réellement identique (toujours `DUPLICATE`, et toujours une seule
+      version) —, rouge sur le code actuel, puis le correctif. Le test
+      `a_decision_survives_the_real_import_of_an_update`
+      (`categories/tests.rs`) contourne aujourd'hui le trou en changeant la
+      taille de son `.kn5` : il y a gagné son attendu (`UPDATE_REPLACE`).
+
 - [ ] **Deux jeux de règles de tags ont divergé — à trancher.**
       `docs/default-tag-rules-enriched.json` **n'est pas ce que l'app charge** :
       elle sème `src-tauri/rules/default-tag-rules.json` dans le dossier de
