@@ -88,6 +88,8 @@ Pensé pour un lot de plusieurs dizaines de mods.
 - **Annulation** constatée **entre deux items** (7-Zip est tué s'il décompresse), jamais au milieu du rangement d'un mod. Le rapport affiche ce qui a été importé avant l'arrêt.
 - **Le rapport de fin est cliquable** : chaque contenu ouvre sa fiche, une couche ouvre son contenu de base, skins et sons sont regroupés par parent, apps et « autres mods » ouvrent leur écran ; un mod resté ambigu n'est pas cliquable. Ouvrir une fiche **replie** le rapport, qui se redéploie d'un clic sur son bandeau ; seul le `✕` le ferme. Il reste consultable sur l'écran Import jusqu'au redémarrage (en mémoire seulement).
 
+**Un toast sans détail n'a pas de corps** : le cadre (`Toast.svelte`) regarde ce que son contenu affiche et ne dessine ni le rectangle ni le chevron quand il n'y a rien (« 1 mod supprimé » sans échec à lister).
+
 **La pile de notifications** (`ToastStack.svelte`) : progression, rapports d'import et « nouveau périphérique » (§7.4) partagent une seule colonne en bas à droite. Les rapports **s'empilent**, le plus récent déplié près du coin, les précédents réduits à leur bandeau ; au-delà de trois, les plus anciens sortent. Les arbitrages qui attendent une réponse (§4.3, §4.4) restent des modales. **Une écriture de réglage qui échoue s'y voit** : une alerte jaune quand `ui_prefs.json` ne peut pas être écrit, qui ne se referme pas d'elle-même — ce n'est pas une information de passage mais une perte de données en cours.
 
 **Un lot se pipeline et garde la base libre** : l'archive suivante se décompresse pendant que la précédente se range (au plus deux dossiers temporaires vivants), et extraction comme copie de l'archive source se font hors du verrou de la base ; seul le rangement d'un mod le garde, parce qu'il entrelace décisions et écritures.
@@ -157,7 +159,7 @@ Chaque voiture d'un pack est une **entité de premier niveau** (activable, taggu
 - ses **ressources** apparaissent dans la carte Ressources de **chaque** membre, marquées « du pack » — une seule copie sur disque ;
 - ses **ajouts au jeu** sont posés dès qu'au moins un membre est actif, retirés quand aucun ne l'est (`extras::sync_pack`, après chaque activation, désactivation ou suppression). Le dernier membre supprimé emporte l'arbre du pack, ressources comprises.
 
-La fiche d'un membre porte un bloc « Source / origine » (pack cliquable, nom d'archive) et les autres voitures du même pack ; on peut filtrer par pack et désinstaller le pack en lot. Pour le contenu de base, la provenance dit **« Jeu de base »** ou le nom du DLC (`kunos_dates::pack_name`).
+La fiche d'un membre porte un bloc « Source / origine » (pack cliquable, nom d'archive) et les autres voitures du même pack — **cinq au plus**, une tuile « +N » ouvrant la fiche du pack pour le reste, et le bouton de la fiche devenant « Fiche du pack · tout voir » quand la liste est tronquée ; on peut filtrer par pack et désinstaller le pack en lot. Pour le contenu de base, la provenance dit **« Jeu de base »** ou le nom du DLC (`kunos_dates::pack_name`).
 
 **Le pack a sa fiche** (`PackDetail.svelte`), ouverte depuis le bloc « Source / origine » et posée par-dessus la fiche du mod : les **mods livrés**, les **ajouts au jeu** du pack, ses **ressources**, les tailles, la date d'entrée, la désinstallation en lot. Un pack sans aucun membre n'a pas de fiche (`errors.packNotFound`).
 
@@ -365,12 +367,18 @@ Code couleur : rouge = catégorie, vert = règle, gris = manuel, bleu = brut du 
 
 **Catégorie = tag `#` que les règles savent produire** (convention CM). Sans lui, la voiture n'a pas de catégorie, et le `#` reste parmi ses tags bruts ; l'ajouter au vocabulaire le promeut. Sert à la composition du plateau (SESSION§3.1).
 
-### 5bis.3 Nom et description repris à la main
+### 5bis.3 Nom, marque, année et description repris à la main
 
 **Le nom et la description d'un mod s'éditent** depuis la fiche (un crayon à droite du nom, un autre dans la carte « Description »). La saisie va dans l'overlay (`display_name_user`, `description_user`), à côté des champs dérivés du fichier, donc **survit à une mise à jour du mod et à une réindexation**. Le **nom effectif** est arbitré en SQL (`COALESCE`) : liste, tri, fiche, sélecteur de session, adversaires, export en profitent. La description, relue dans le fichier, est arbitrée dans `library.rs`. Le nom du fichier reste exposé à part : c'est celui auquel on reviendrait.
 
+**Le crayon de l'en-tête d'une voiture ou d'un circuit ouvre un formulaire nom · marque · année** (la marque n'existe que pour une voiture). Aucun des trois n'écrit dans les fichiers du mod (règle d'or n°1) : chacun est une décision gardée dans la base, à côté de la valeur du mod, et **chaque champ surchargé propose d'y revenir** (« Revenir à l'origine », avec la valeur d'origine montrée). Vider un champ, ou y retaper l'original, vaut aussi retour. Ne sont enregistrés que les champs modifiés.
+
+- **La marque** (`brand_user`) est une colonne à part de `brand`, que l'harmonisation réécrit à chaque passage : une décision qui y vivrait serait défaite au suivant. La marque effective est arbitrée en SQL comme le nom, donc la liste, les filtres, l'onglet Marques et l'élection des logos la suivent. Le champ propose les marques déjà en bibliothèque (liste déroulante à autocomplétion) mais accepte une marque nouvelle ; la saisie passe par `brands::canonical`, si bien que `porsche` rejoint `Porsche`. Saisir la marque que les règles calculent n'est pas une décision, et n'en laisse pas : le jour où les règles changent, la voiture suit. Une voiture dont le fichier nomme une autre marque que celle choisie ne vote pas pour le logo de celle-ci (TAXO§4).
+- **L'année** passe par les décisions de la fiche technique (FICHE§8, `tech_user`), pour une voiture comme pour un circuit : un seul endroit dit ce qu'est l'année, et la bibliothèque la lit déjà là. Quatre chiffres, entre 1800 et 2100. L'année d'origine proposée est celle de la fiche pour une voiture (une table peut en donner une que les fichiers ne donnent pas), celle du fichier pour un circuit.
+- **La fiche d'un circuit montre son année** dans la ligne d'identité, quand elle est connue.
+
 - **La carte « Description » s'affiche même vide.** Vider le champ vaut « reviens au fichier du mod ».
-- La phrase « Enregistré dans Pit Box, pas dans les fichiers du mod : conservé si le mod est mis à jour » s'affiche **sous le champ, pendant la saisie** ; le crayon garde une infobulle courte (« Renommer »).
+- La phrase « Enregistré dans Pit Box, pas dans les fichiers du mod : conservé si le mod est mis à jour » s'affiche **sous le champ, pendant la saisie** ; le crayon garde une infobulle courte (« Renommer » pour un nom seul, « Modifier » quand il ouvre aussi la marque et l'année).
 - **Une réindexation ne détruit jamais ces saisies** — ni nom, ni description, ni tags manuels, ni favori. Seules les versions synthétiques du contenu de base sont refaites ; ce qui a disparu de `content/` est retiré. Une case **décochée par défaut** rétablit l'effacement complet, derrière une confirmation qui énumère ce qui va disparaître.
 - **Le nom d'un circuit multi-layouts** est la **racine commune** des noms de ses layouts, en **mots entiers** (« Monza » pour « Monza 1966 » / « Monza 1971 », jamais « Monza 19 »), ponctuation de liaison retirée en bout, casse du premier layout ; sans mot commun, celui du premier layout. À l'import, à la réindexation et à l'indexation du contenu de base (§8.1).
 

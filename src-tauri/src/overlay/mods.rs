@@ -100,6 +100,18 @@ pub struct ModRow {
     /// Resolved in `MOD_SELECT` like the other active-version columns, so a
     /// list of cards does not ask the base twice per card.
     pub showcase: bool,
+    /// The brand the user filed the car under by hand, `None` when there is
+    /// none. `brand` above already is it: this only tells the sheet that the
+    /// brand is a decision, and offers the way back.
+    pub brand_user: Option<String>,
+    /// The brand the harmonisation computed, which `brand` hides as soon as a
+    /// decision exists: where "back to original" goes.
+    pub brand_auto: Option<String>,
+    /// The year as the mod's own files give it, which `year` hides when the
+    /// user corrected it (on the tech sheet or in the header).
+    pub year_file: Option<i64>,
+    /// The year is a decision of the user's, a forced "unknown" included.
+    pub year_edited: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -443,6 +455,28 @@ pub fn set_mod_field(conn: &Connection, id: &str, field: &str, value: Option<&st
     Ok(())
 }
 
+/// Files a car under a brand of the user's choosing, beside the computed one
+/// (`brand_user`, see `ModRow::brand_user`). `None` goes back to the computed
+/// brand. The caller has already put the text in its filed form (`brands`).
+pub fn set_brand_user(conn: &Connection, id: &str, brand: Option<&str>) -> rusqlite::Result<usize> {
+    conn.execute(
+        "UPDATE mods SET brand_user = ?2 WHERE id_interne = ?1",
+        params![id, brand],
+    )
+}
+
+/// The brands cars are filed under, sorted: what the header editor suggests
+/// (the user's own choices included, as a car filed there is in the library).
+pub fn list_car_brands(conn: &Connection) -> rusqlite::Result<Vec<String>> {
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT COALESCE(brand_user, brand) AS b FROM mods
+         WHERE kind = 'Car' AND TRIM(COALESCE(brand_user, brand, '')) <> ''
+         ORDER BY b COLLATE NOCASE",
+    )?;
+    let rows = stmt.query_map([], |r| r.get(0))?;
+    rows.collect()
+}
+
 pub fn add_history(conn: &Connection, mod_id: &str, ts: &str, event: &str, details: &str) -> rusqlite::Result<()> {
     conn.execute(
         "INSERT INTO history (mod_id, timestamp, event, details) VALUES (?1,?2,?3,?4)",
@@ -454,7 +488,11 @@ pub fn add_history(conn: &Connection, mod_id: &str, ts: &str, event: &str, detai
 // --- Lectures ---------------------------------------------------------------
 
 pub(super) const MOD_SELECT: &str = r#"
-    SELECT m.id_interne, m.kind, m.brand,
+    SELECT m.id_interne, m.kind,
+           -- Brand filed under: the user's decision wins over the computed one,
+           -- resolved here like the name so the index, the filters and the
+           -- brand logos all follow it.
+           COALESCE(m.brand_user, m.brand) AS brand,
            -- Nom effectif (§5bis.3) : la saisie de l'utilisateur l'emporte sur
            -- ce qu'annonce le `ui_*.json`. Résolu ICI et pas chez l'appelant,
            -- pour que TOUT ce qui affiche un mod en profite d'un coup — liste,
@@ -511,7 +549,11 @@ pub(super) const MOD_SELECT: &str = r#"
            m.notes_user,
            m.tech_marks,
            COALESCE((SELECT v.content_state = 'skeleton' FROM versions v
-                     WHERE v.id = m.active_version_id), 0) AS showcase
+                     WHERE v.id = m.active_version_id), 0) AS showcase,
+           m.brand_user,
+           m.brand AS brand_auto,
+           m.year AS year_file,
+           EXISTS (SELECT 1 FROM tech_user u WHERE u.mod_id = m.id_interne AND u.field = 'year') AS year_edited
     FROM mods m
 "#;
 
@@ -561,6 +603,10 @@ pub(super) fn map_mod(row: &rusqlite::Row) -> rusqlite::Result<ModRow> {
         notes_user: row.get(35)?,
         tech_marks: serde_json::from_str(&row.get::<_, String>(36)?).unwrap_or_default(),
         showcase: row.get::<_, i64>(37)? != 0,
+        brand_user: row.get(38)?,
+        brand_auto: row.get(39)?,
+        year_file: row.get(40)?,
+        year_edited: row.get::<_, i64>(41)? != 0,
     })
 }
 

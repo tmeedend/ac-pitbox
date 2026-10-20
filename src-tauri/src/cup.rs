@@ -552,6 +552,10 @@ mod tests {
             size_bytes: None,
             tech_marks: Default::default(),
             showcase: false,
+            brand_user: None,
+            brand_auto: None,
+            year_file: None,
+            year_edited: false,
         }
     }
 

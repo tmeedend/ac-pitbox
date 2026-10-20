@@ -406,6 +406,28 @@ fn a_corrected_year_reaches_the_library() {
     save_user(&conn, "car", vec![revert("year")]).unwrap();
 }
 
+/// A track has no sheet, but its year is corrected through the same decision
+/// as a car's: the listing shows it, and tells it is one with the year the
+/// mod's own files give, which "back to original" returns to.
+#[test]
+fn a_track_year_is_corrected_like_a_car_year_and_goes_back() {
+    let base = crate::testutil::temp_dir("techsheet-track-year");
+    let conn = overlay::open(&base.join("overlay.sqlite")).unwrap();
+    let now = chrono::Local::now().to_rfc3339();
+    overlay::upsert_mod(&conn, "spa", "Track", None, Some("Spa"), "h", Some(1921), &now).unwrap();
+    assert!(!row(&conn, "spa").year_edited, "untouched");
+
+    save_user(&conn, "spa", vec![edit("year", json!(1925))]).unwrap();
+    let r = row(&conn, "spa");
+    assert_eq!(r.year, Some(1925), "the decision is the year shown");
+    assert_eq!(r.year_file, Some(1921), "the file's year is kept to go back to");
+    assert!(r.year_edited);
+
+    save_user(&conn, "spa", vec![revert("year")]).unwrap();
+    let r = row(&conn, "spa");
+    assert_eq!((r.year, r.year_edited), (Some(1921), false), "back to the file");
+}
+
 /// FICHE§8 — the history tells which fields changed, never the values.
 #[test]
 fn saving_notes_the_fields_in_the_history() {
