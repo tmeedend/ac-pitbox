@@ -90,12 +90,23 @@ pub async fn import_folders(
 
 /// Analyse un dossier parent (§4.2) : classe chaque sous-dossier sans rien
 /// écrire. `async` + `spawn_blocking` comme les imports : le scan d'un dossier
-/// parent de plusieurs dizaines de mods tient le verrou base tout du long, et
-/// le tenir depuis le thread IPC gèlerait en plus la livraison des événements.
+/// parent de plusieurs dizaines de mods tient le verrou base, et le tenir
+/// depuis le thread IPC gèlerait en plus la livraison des événements.
+///
+/// **Le verrou n'est tenu que le temps de lire la base.** Un mod dont la
+/// signature dit « doublon » voit ensuite ses fichiers comparés à ceux de la
+/// version active — des octets lus, des minutes sur une bibliothèque réimportée
+/// en entier — sans que rien d'autre qui a besoin de la base n'attende.
 #[tauri::command]
 pub async fn analyze_bulk_import(app: AppHandle, parent: String) -> Result<Vec<crate::importer::BulkEntry>, String> {
-    read_off_window(app, move |conn, cfg| {
-        crate::importer::analyze_bulk(conn, cfg, std::path::Path::new(&parent))
+    off_window(app, move |app| {
+        let cfg = crate::config::load(app);
+        let plan = {
+            let db = app.state::<Db>();
+            let conn = db.0.lock().map_err(|e| e.to_string())?;
+            crate::importer::plan_bulk(&conn, &cfg, std::path::Path::new(&parent))?
+        };
+        Ok(plan.verify())
     })
     .await
 }

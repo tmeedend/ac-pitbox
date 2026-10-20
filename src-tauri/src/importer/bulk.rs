@@ -14,7 +14,7 @@ use std::time::Instant;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
-use super::filing::process_found;
+use super::filing::{active_dir, differs_from_active, process_found};
 use super::{
     auto_activate, check_disk_space, drop_unused_kept_source, failed_result, file_tail, filing_ratio, keep_source,
     mod_progress, rescue_nested_archives, resolve_conflict, size_batch, source_label, ArchiveResult, ArchiveSource,
@@ -74,15 +74,40 @@ fn bulk_addons(conn: &Connection, dir: &Path, source_name: &str) -> Vec<BulkAddo
     subs.chain(apps).collect()
 }
 
+/// What the analysis found of one mod, before its files are compared.
+struct Classified {
+    status: &'static str,
+    existing_id: Option<String>,
+    existing_name: Option<String>,
+    /// The folder of the active version, when the signature says "duplicate":
+    /// the files are compared once the base is released (`BulkPlan::verify`).
+    verify_against: Option<PathBuf>,
+}
+
+impl Classified {
+    fn of(status: &'static str) -> Self {
+        Self {
+            status,
+            existing_id: None,
+            existing_name: None,
+            verify_against: None,
+        }
+    }
+}
+
 /// Classe un mod trouvé sans rien écrire (§4.2 phase d'analyse).
+///
+/// Reads the base only (and the folders' metadata): a "duplicate" is provisional
+/// until the files are compared, which reads bytes and is done without the lock.
 fn classify(
     conn: &Connection,
+    cfg: &AppConfig,
     id: &str,
     kind: &str,
     brand: &str,
     name: &str,
     dir: &Path,
-) -> Result<(String, Option<String>, Option<String>), String> {
+) -> Result<Classified, String> {
     if crate::overlay::mod_exists(conn, id).map_err(|e| e.to_string())? {
         let sig = identity::content_signature(dir);
         let existing = crate::overlay::active_signature(conn, id).map_err(|e| e.to_string())?;
@@ -91,11 +116,17 @@ fn classify(
             .is_some_and(|v| v.is_skeleton());
         if skeleton {
             // Same classification as the import itself (ESPACE§7.3).
-            Ok(("rehydrate".into(), None, None))
+            Ok(Classified::of("rehydrate"))
         } else if existing.as_deref() == Some(sig.as_str()) {
-            Ok(("duplicate".into(), None, None))
+            // Same signature: a duplicate if the files are the same too, as the
+            // import itself decides - and where there is nothing to compare
+            // (no folder to read), the signature's answer stands.
+            Ok(Classified {
+                verify_against: active_dir(conn, cfg, id),
+                ..Classified::of("duplicate")
+            })
         } else {
-            Ok(("update".into(), None, None))
+            Ok(Classified::of("update"))
         }
     } else {
         let fuzzy = crate::overlay::find_fuzzy(conn, kind, brand, name, id)
@@ -103,8 +134,12 @@ fn classify(
             .into_iter()
             .next();
         match fuzzy {
-            Some(m) => Ok(("ambiguous".into(), Some(m.id_interne), m.display_name)),
-            None => Ok(("new".into(), None, None)),
+            Some(m) => Ok(Classified {
+                existing_id: Some(m.id_interne),
+                existing_name: m.display_name,
+                ..Classified::of("ambiguous")
+            }),
+            None => Ok(Classified::of("new")),
         }
     }
 }
@@ -123,7 +158,53 @@ fn dir_has_any_file(dir: &Path) -> bool {
 
 /// Phase d'analyse (§4.2) : scanne chaque sous-dossier direct du parent et
 /// classe les mods **sans rien écrire**. Un seul niveau de sous-dossiers.
-pub fn analyze_bulk(conn: &Connection, _cfg: &AppConfig, parent: &Path) -> Result<Vec<BulkEntry>, String> {
+///
+/// [`plan_bulk`] puis [`BulkPlan::verify`], d'un bloc. Le programme ne s'en sert
+/// pas — sa façade rend le verrou de la base entre les deux
+/// (`commands::import::analyze_bulk_import`) — : les tests, qui n'ont pas de
+/// verrou à rendre.
+#[cfg(test)]
+pub fn analyze_bulk(conn: &Connection, cfg: &AppConfig, parent: &Path) -> Result<Vec<BulkEntry>, String> {
+    Ok(plan_bulk(conn, cfg, parent)?.verify())
+}
+
+/// A mod classified "duplicate" by its signature, whose files are still to be
+/// compared with the active version's.
+struct Pending {
+    entry: usize,
+    module: usize,
+    id: String,
+    incoming: PathBuf,
+    active: PathBuf,
+}
+
+/// The analysis once the base has been read: every mod classified, the
+/// "duplicates" provisional. The files are read in [`BulkPlan::verify`], which
+/// takes no connection - the base is released first, as every command that
+/// reads files does (`library::list_cards_shared`): a library re-imported whole
+/// compares hundreds of gigabytes, and nothing else needing the base should
+/// wait for that.
+pub struct BulkPlan {
+    entries: Vec<BulkEntry>,
+    pending: Vec<Pending>,
+}
+
+impl BulkPlan {
+    /// Compares the files of every provisional duplicate: one that differs
+    /// anywhere - a file more or less, another size, other bytes - is an update.
+    /// A comparison that cannot be made keeps the duplicate (logged).
+    pub fn verify(mut self) -> Vec<BulkEntry> {
+        for p in &self.pending {
+            if differs_from_active(&p.id, &p.incoming, &p.active) {
+                self.entries[p.entry].mods[p.module].status = "update".into();
+            }
+        }
+        self.entries
+    }
+}
+
+/// The base-reading half of [`analyze_bulk`].
+pub fn plan_bulk(conn: &Connection, cfg: &AppConfig, parent: &Path) -> Result<BulkPlan, String> {
     if !parent.is_dir() {
         return Err(crate::errors::NOT_A_DIRECTORY.into());
     }
@@ -136,6 +217,7 @@ pub fn analyze_bulk(conn: &Connection, _cfg: &AppConfig, parent: &Path) -> Resul
     subs.sort();
 
     let mut entries = Vec::new();
+    let mut pending = Vec::new();
     for sub in subs {
         let subfolder = sub
             .file_name()
@@ -176,14 +258,23 @@ pub fn analyze_bulk(conn: &Connection, _cfg: &AppConfig, parent: &Path) -> Resul
             let kind_str = format!("{:?}", fm.kind);
             let brand = ui.brand.clone().unwrap_or_default();
             let name = ui.name.clone().unwrap_or_else(|| id.clone());
-            let (status, existing_id, existing_name) = classify(conn, &id, &kind_str, &brand, &name, &fm.dir)?;
+            let found = classify(conn, cfg, &id, &kind_str, &brand, &name, &fm.dir)?;
+            if let Some(active) = found.verify_against {
+                pending.push(Pending {
+                    entry: entries.len(),
+                    module: mods.len(),
+                    id: id.clone(),
+                    incoming: fm.dir.clone(),
+                    active,
+                });
+            }
             mods.push(BulkMod {
                 id,
                 kind: kind_str,
                 name: ui.name,
-                status,
-                existing_id,
-                existing_name,
+                status: found.status.into(),
+                existing_id: found.existing_id,
+                existing_name: found.existing_name,
             });
         }
         let addons = bulk_addons(conn, &sub, &subfolder);
@@ -195,7 +286,7 @@ pub fn analyze_bulk(conn: &Connection, _cfg: &AppConfig, parent: &Path) -> Resul
             addons,
         });
     }
-    Ok(entries)
+    Ok(BulkPlan { entries, pending })
 }
 
 /// Instruction d'exécution pour un sous-dossier (après arbitrage).

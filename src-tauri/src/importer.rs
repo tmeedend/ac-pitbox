@@ -20,7 +20,7 @@ use crate::{archive, identity, layers};
 
 mod bulk;
 mod filing;
-pub use bulk::{analyze_bulk, execute_bulk, BulkEntry, BulkExecItem};
+pub use bulk::{execute_bulk, plan_bulk, BulkEntry, BulkExecItem};
 use filing::process_found;
 
 #[derive(Debug, Clone, Serialize)]
@@ -2397,6 +2397,9 @@ pub(crate) fn make_temp_dir() -> std::io::Result<PathBuf> {
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
 }
+
+#[cfg(test)]
+mod duplicate_tests;
 
 #[cfg(test)]
 mod tests {
