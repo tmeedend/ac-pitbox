@@ -218,17 +218,6 @@ impl Effects {
         self.acts.get(id)
     }
 
-    /// How many rules act on at least one mod.
-    #[cfg(test)]
-    pub fn len(&self) -> usize {
-        self.acts.len()
-    }
-
-    #[cfg(test)]
-    pub fn is_empty(&self) -> bool {
-        self.acts.is_empty()
-    }
-
     /// Rule id → mods it acts on.
     #[cfg(test)]
     pub fn iter(&self) -> impl Iterator<Item = (&String, &usize)> {
@@ -631,7 +620,7 @@ mod tests {
 
         let t = std::time::Instant::now();
         let fx = effects(&conn, &cfg, &rules).unwrap();
-        println!("counters: {} rules acting, {:?}", fx.len(), t.elapsed());
+        println!("counters: {} rules acting, {:?}", fx.iter().count(), t.elapsed());
         let t = std::time::Instant::now();
         let (n, fx2) = harmonize_all_counting(&conn, &cfg, &rules).unwrap();
         println!("re-application: {n} mods, {:?}", t.elapsed());
