@@ -1,19 +1,11 @@
 <script lang="ts">
   // What the story waits for, on the scene beside the frame (SPEC-story-mode,
-  // Story Mode: player side): an event's summary (what, where, in what car,
-  // for what, at what cost) and its launch, an action to do, a reply
-  // awaited, or the end. A session launched shows as under way until the
-  // game closes; then, without a result - closed early, never started, a
-  // launch that failed - it can be launched again (no fee: the attempt is
-  // paid) or given up, which counts as not finishing.
-  import { onMount } from "svelte";
-  import { gameSession } from "$lib/launch/gameSession.svelte";
+  // Story Mode: player side): an event's summary and its launch
+  // (`EventCard`), an action to do, a reply awaited, or the end.
   import { t } from "$lib/i18n/index.svelte";
-  import { driverLabel } from "$lib/story/drivers";
-  import { cardOf, loadLibrary } from "$lib/story/library.svelte";
-  import { goals } from "$lib/story/player/game";
   import type { Waiting } from "$lib/story/play";
   import type { Character, Driver } from "$lib/story/studio";
+  import EventCard from "./EventCard.svelte";
 
   interface Props {
     waiting: Waiting;
@@ -48,13 +40,6 @@
     onleave,
   }: Props = $props();
 
-  onMount(() => void loadLibrary());
-
-  function driverName(id: string): string {
-    const d = drivers.find((x) => x.id === id);
-    return d ? driverLabel(d, characters) : id;
-  }
-
   function characterName(id: string | null): string {
     if (!id) return t("story.play.unknownSender");
     return characters.find((c) => c.id === id)?.name ?? id;
@@ -63,48 +48,17 @@
 
 <section class="card">
   {#if waiting.kind === "event"}
-    {@const track = cardOf("Track", waiting.session.track)}
-    {@const car = cardOf("Car", waiting.session.car)}
-    <div class="lbl">{t(`story.events.type_${waiting.event_type}`)}</div>
-    <div class="title">{waiting.name ?? waiting.event}</div>
-    <dl>
-      <dt>{t("story.events.track")}</dt>
-      <dd>{track?.display_name ?? waiting.session.track ?? "—"}</dd>
-      <dt>{t("story.events.car")}</dt>
-      <dd>{car?.display_name ?? waiting.session.car ?? "—"}</dd>
-      {#if waiting.session.laps}
-        <dt>{t("story.events.laps")}</dt>
-        <dd>{waiting.session.laps}</dd>
-      {/if}
-      {#if waiting.fee !== null}
-        <dt>{t("story.events.entryFee")}</dt>
-        <dd>{waiting.fee}</dd>
-      {/if}
-    </dl>
-    <div class="lbl-key">{t("story.play.goal")}</div>
-    <ul class="goals">
-      {#each goals(waiting.success, driverName) as g, i (i)}
-        <li>{t(g.key, g.values)}</li>
-      {/each}
-    </ul>
-    {#if waiting.attempt > 1}
-      <p class="attempt">{t("story.play.attempt", { n: waiting.attempt })}</p>
-    {/if}
-    {#if launched === waiting.event && gameSession.phase !== "idle"}
-      <p class="note">{t("story.play.racing")}</p>
-    {:else if launched === waiting.event && !collecting}
-      <p class="note">{t("story.play.noResult")}</p>
-      <span class="buttons">
-        <button class="btn btn-primary" disabled={busy} onclick={onlaunch}>{t("story.play.launchAgain")}</button>
-        <button class="btn" disabled={busy} onclick={ongiveup}>{t("story.play.giveUp")}</button>
-      </span>
-    {:else if launched !== waiting.event}
-      {@const short = waiting.fee !== null && money !== null && money < waiting.fee}
-      {#if short}<p class="note">{t("story.play.cannotAfford", { fee: waiting.fee ?? 0, money: money ?? 0 })}</p>{/if}
-      <button class="btn btn-primary" disabled={busy || short || gameSession.phase !== "idle"} onclick={onlaunch}
-        >{t("story.play.launch")}</button
-      >
-    {/if}
+    <EventCard
+      {waiting}
+      {characters}
+      {drivers}
+      {busy}
+      {money}
+      {launched}
+      {collecting}
+      {onlaunch}
+      {ongiveup}
+    />
   {:else if waiting.kind === "action"}
     <div class="title">{waiting.action}</div>
     <button class="btn" disabled={busy} onclick={() => onaction(waiting.action)}>{t("story.play.actionDone")}</button>
@@ -132,31 +86,6 @@
     font-weight: 600;
     color: var(--txt);
   }
-  dl {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 4px 12px;
-    margin: 0;
-    font-size: 12.5px;
-  }
-  dt {
-    color: var(--muted);
-  }
-  dd {
-    margin: 0;
-    color: var(--txt);
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .goals {
-    margin: 0;
-    padding-left: 18px;
-    font-size: 12.5px;
-    color: var(--txt);
-  }
-  .attempt,
   .note {
     margin: 0;
     font-size: 12px;
@@ -164,9 +93,5 @@
   }
   .btn {
     align-self: flex-start;
-  }
-  .buttons {
-    display: flex;
-    gap: 8px;
   }
 </style>
