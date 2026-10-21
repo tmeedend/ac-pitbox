@@ -160,7 +160,13 @@ Each frame declares which content types it can show:
 - **Nowhere to show.** Content of a type the active frame cannot show (or sent
   while there is no frame) is flagged by the checks wherever the flow makes it
   knowable, as a warning: on a path where it is sure, or on some paths only.
-  At play, it waits until a frame can show it (L3). A dialogue needs no frame.
+  At play, it waits, kept in the save and not delivered - its `delivered`
+  fact stays false - until a Beat puts up a frame that can show it; several
+  come out in the order they were sent, dated when they show (as the frame
+  goes up, before the Beat's effects), reactive content without its
+  conditions being checked again. A Message node whose content waits does not
+  hold the flow. The editor's preview plays an item wherever it would arrive.
+  A dialogue needs no frame.
 - **Frame-specific settings.** Status bar, wallpaper and UI sounds belong to the
   phone frame; another frame has its own.
 - **First version.** Only the phone frame is built at first. The data model is
@@ -213,7 +219,8 @@ with none.
 - **Stories with no frame.** When the active frame is `none`, the flow chains
   dialogues and events directly; an event is launched from a card shown on the
   scene (the same summary as in the frame: car, cost, goal); the player's
-  actions go through the replies.
+  actions go through the replies, so an Action node reached with no frame is
+  flagged by the checks, as a warning: at play, a Done button stands in.
 - **What visual novels expect, always available, with no setting**: a
   scrollable log of past lines (part of the save's history), fast-forward
   through text already read (never past a choice), auto-advance at a speed the
@@ -788,7 +795,9 @@ The player side follows each story's settings. What the engine needs:
   plays. Escape goes back to the list, then closes it.
 - **A player action** shows as a card with its name and a Done button, until
   actions have their screens (catalogs, L6). An event shows its summary: type,
-  track, car, laps, entry fee, the goal in words, the attempt.
+  track, car, laps, entry fee, the goal in words, the attempt. With a frame,
+  the summary heads the phone's messages, as the next event; with none, it is
+  a card on the scene.
 - **Going to an event** pays the attempt, then sends the session through the
   session screen's own launch (Steam check, the player's driver and livery
   for that car). The session is the player's own for that type of session -

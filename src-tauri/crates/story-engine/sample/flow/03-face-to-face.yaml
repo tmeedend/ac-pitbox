@@ -1,0 +1,26 @@
+# A chapter with no frame: the story plays on the scene only, like a visual
+# novel. A race is launched from the scene, and what only the phone can show
+# waits for the phone to come back.
+id: ch03
+title: Chapter 3
+nodes:
+  - id: face_to_face
+    beat: { frame: none }
+  - id: talk
+    message: talk_01
+    on_reply: { another: keen, rest: resting }
+  - id: keen
+    beat: { effects: ["reputation += 1"] }
+    next: race_03
+  - id: resting
+    beat: { effects: ["rel.parent += 1"] }
+  - id: race_03
+    event: race_03
+  - id: a_week_later
+    beat: { advance: 1 week }
+  - id: phone_back
+    beat: { frame: phone }
+  - id: finale
+    side_events: { close: [track_day_01] }
+  - id: the_end
+    end: finished

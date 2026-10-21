@@ -1,7 +1,8 @@
 <script lang="ts">
   // What the story waits for, on the scene beside the frame (SPEC-story-mode,
-  // Story Mode: player side): an event's summary and its launch
-  // (`EventCard`), an action to do, a reply awaited, or the end.
+  // Story Mode: player side): an action to do, a reply awaited, the end, and
+  // an event's summary and its launch (`EventCard`) when there is no frame to
+  // hold it.
   import { t } from "$lib/i18n/index.svelte";
   import type { Waiting } from "$lib/story/play";
   import type { Character, Driver } from "$lib/story/studio";

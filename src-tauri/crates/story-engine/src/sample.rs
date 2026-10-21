@@ -15,6 +15,10 @@ const FILES: &[(&str, &str)] = &[
         include_str!("../sample/content/friend/invite.story"),
     ),
     (
+        "content/friend/news.story",
+        include_str!("../sample/content/friend/news.story"),
+    ),
+    (
         "content/friend/talk.story",
         include_str!("../sample/content/friend/talk.story"),
     ),
@@ -37,6 +41,7 @@ const FILES: &[(&str, &str)] = &[
     ("drivers/roster.yaml", include_str!("../sample/drivers/roster.yaml")),
     ("events/race_01.yaml", include_str!("../sample/events/race_01.yaml")),
     ("events/race_02.yaml", include_str!("../sample/events/race_02.yaml")),
+    ("events/race_03.yaml", include_str!("../sample/events/race_03.yaml")),
     (
         "events/track_day_01.yaml",
         include_str!("../sample/events/track_day_01.yaml"),
@@ -48,6 +53,10 @@ const FILES: &[(&str, &str)] = &[
     (
         "flow/02-second-race.yaml",
         include_str!("../sample/flow/02-second-race.yaml"),
+    ),
+    (
+        "flow/03-face-to-face.yaml",
+        include_str!("../sample/flow/03-face-to-face.yaml"),
     ),
     ("story.yaml", include_str!("../sample/story.yaml")),
     ("world/characters.yaml", include_str!("../sample/world/characters.yaml")),

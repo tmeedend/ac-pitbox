@@ -537,7 +537,7 @@ settings: {}
     #[test]
     fn a_written_event_reads_back_the_same_and_writes_the_same() {
         let d = sample();
-        assert_eq!(d.events.len(), 3, "the sample's events");
+        assert_eq!(d.events.len(), 4, "the sample's events");
         for original in &d.events {
             let text = event(&original.file, original).expect("writes");
             let mut back = reread(&original.file, &text).events;

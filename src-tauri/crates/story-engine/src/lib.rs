@@ -71,8 +71,10 @@ pub(crate) mod testutil {
 mod tests {
     use std::path::Path;
 
-    use crate::engine::{run, submit, Input};
-    use crate::state::{EventResult, State, Wait};
+    use crate::engine::{run, submit, Input, Output};
+    use crate::frame::Frame;
+    use crate::save::Save;
+    use crate::state::{EventResult, Happening, State, Wait};
     use crate::validate::validate;
     use crate::Story;
 
@@ -98,15 +100,13 @@ mod tests {
         .expect("result");
     }
 
-    // L1's "done": the engine runs a sample story from start to end, the
-    // way `story-tool play` does. The sample is the shipped example of the
-    // format, so it must also be spotless.
-    #[test]
-    fn the_sample_story_is_clean_and_plays_to_its_end() {
-        let story = sample();
-        assert_eq!(validate(&story), [], "no diagnostic on the sample");
-        let mut state = State::new(&story, 1);
-        run(&story, &mut state).unwrap();
+    /// The sample played up to chapter 3's dialogue: the first two
+    /// chapters with the phone, the second race won. Chapter 3 removes the
+    /// phone, and the friend's message sent as it starts has nothing to
+    /// show it.
+    fn up_to_chapter_3(story: &Story) -> State {
+        let mut state = State::new(story, 1);
+        run(story, &mut state).unwrap();
         assert_eq!(
             state.wait,
             Wait::Reply {
@@ -114,7 +114,7 @@ mod tests {
             }
         );
         submit(
-            &story,
+            story,
             &mut state,
             Input::Reply {
                 content: "invite_01".into(),
@@ -122,13 +122,13 @@ mod tests {
             },
         )
         .unwrap();
-        drive(&story, &mut state, "race_01", 5);
+        drive(story, &mut state, "race_01", 5);
         assert_eq!(state.date.to_string(), "2001-03-01", "a failure costs no time");
-        drive(&story, &mut state, "race_01", 2);
+        drive(story, &mut state, "race_01", 2);
         assert_eq!(state.date.to_string(), "2001-04-01", "success: one month on");
         for _ in 0..2 {
             submit(
-                &story,
+                story,
                 &mut state,
                 Input::ActionDone {
                     action: "visit_garage".into(),
@@ -137,7 +137,39 @@ mod tests {
             .unwrap();
         }
         assert_eq!(state.money, 300 - 50 - 50 + 200, "paid retries, prize");
-        drive(&story, &mut state, "race_02", 1);
+        submit(
+            story,
+            &mut state,
+            Input::Launch {
+                event: "race_02".into(),
+            },
+        )
+        .unwrap();
+        let out = submit(
+            story,
+            &mut state,
+            Input::Result {
+                event: "race_02".into(),
+                result: EventResult {
+                    finished: true,
+                    position: Some(1),
+                    ..Default::default()
+                },
+            },
+        )
+        .unwrap();
+        assert_eq!(state.frame, Some(Frame::None), "chapter 3 removed the phone");
+        assert!(
+            out.contains(&Output::Held {
+                content: "results_01".into()
+            }),
+            "the message waits for a frame: {out:?}"
+        );
+        assert_eq!(
+            state.content_facts("results_01").delivered,
+            0,
+            "waiting, it is not delivered"
+        );
         assert_eq!(
             state.wait,
             Wait::Reply {
@@ -145,10 +177,16 @@ mod tests {
             },
             "the face-to-face dialogue holds the flow until it is answered"
         );
+        state
+    }
+
+    /// Answers chapter 3's dialogue: the flow goes on to the race launched
+    /// from the scene.
+    fn answer_the_dialogue(story: &Story, state: &mut State) {
         let reputation = state.reputation;
         submit(
-            &story,
-            &mut state,
+            story,
+            state,
             Input::Reply {
                 content: "talk_01".into(),
                 reply: "rest".into(),
@@ -159,14 +197,35 @@ mod tests {
         assert_eq!(state.reputation, reputation, "not to the one `another` leads to");
         assert_eq!(
             state.wait,
+            Wait::Event {
+                event: "race_03".into()
+            },
+            "a race with no frame"
+        );
+    }
+
+    // L1's "done": the engine runs a sample story from start to end, the
+    // way `story-tool play` does. The sample is the shipped example of the
+    // format, so it must also be spotless. Its chapter 3 has no frame
+    // (L3.4): a message sent then waits, undelivered, until the phone is
+    // back, and shows dated then.
+    #[test]
+    fn the_sample_story_is_clean_and_plays_to_its_end() {
+        let story = sample();
+        assert_eq!(validate(&story), [], "no diagnostic on the sample");
+        let mut state = up_to_chapter_3(&story);
+        answer_the_dialogue(&story, &mut state);
+        drive(&story, &mut state, "race_03", 4);
+        assert_eq!(
+            state.wait,
             Wait::Ended {
                 ending: "finished".into()
             }
         );
         assert_eq!(
             state.frame,
-            Some(crate::frame::Frame::Named("phone".into())),
-            "the phone put back after the face-to-face dialogue"
+            Some(Frame::Named("phone".into())),
+            "the phone put back after the face-to-face chapter"
         );
         for content in [
             "sponsor_offer",
@@ -174,13 +233,44 @@ mod tests {
             "garage_remark",
             "congrats_01",
             "talk_01",
+            "results_01",
         ] {
             assert_eq!(state.content_facts(content).delivered, 1, "{content} delivered once");
         }
+        assert!(state.held.is_empty(), "nothing left waiting");
+        let shown = (state.history.iter())
+            .find(|e| matches!(&e.what, Happening::Delivered { content, .. } if content == "results_01"))
+            .expect("delivered");
+        assert_eq!(
+            shown.date.to_string(),
+            "2001-06-08",
+            "dated when the phone showed it, a week after the race"
+        );
         assert_eq!(
             state.content_facts("invite_02").delivered,
             0,
             "the branch skipped the second ask"
         );
+    }
+
+    // A game saved in the middle of the chapter with no frame resumes with
+    // what waits for the phone, which comes out when the phone is back.
+    #[test]
+    fn a_save_in_the_chapter_with_no_frame_keeps_what_waits_for_a_frame() {
+        let story = sample();
+        let mut state = up_to_chapter_3(&story);
+        answer_the_dialogue(&story, &mut state);
+        let mut back = Save::from_json(&Save::new(&story, &state).to_json())
+            .and_then(|s| s.resume(&story))
+            .expect("the save resumes");
+        assert_eq!(back, state, "the same state, the held message included");
+        assert_eq!(back.held.len(), 1, "the message still waits");
+        drive(&story, &mut back, "race_03", 1);
+        assert_eq!(
+            back.content_facts("results_01").delivered,
+            1,
+            "out once the phone is back"
+        );
+        assert!(back.held.is_empty());
     }
 }

@@ -2896,7 +2896,8 @@
       "noResult": "Pas de résultat pour cette session.",
       "launchAgain": "Relancer",
       "giveUp": "Abandonner",
-      "cannotAfford": "Inscription {fee} : tu as {money}."
+      "cannotAfford": "Inscription {fee} : tu as {money}.",
+      "nextEvent": "Prochaine épreuve"
     },
     "world": {
       "title": "Monde",

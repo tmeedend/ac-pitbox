@@ -97,7 +97,8 @@
     if (e.key === " " || e.key === "Enter") {
       e.preventDefault();
       advance();
-    } else if (e.key === "ArrowLeft") {
+    } else if (e.key === "ArrowLeft" && !chosen) {
+      // Not while a reply is under way: its first line is shown next.
       e.preventDefault();
       at = step(-1) ?? at;
     }

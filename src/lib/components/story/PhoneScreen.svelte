@@ -3,7 +3,9 @@
   // frames): the messaging app, one thread per sender, the latest first and
   // the unread ones marked; a thread opened shows its bubbles and the replies
   // its open message offers. Opening a thread marks its messages seen. What
-  // the phone has no template for yet is listed by name (L3.5).
+  // the phone has no template for yet is listed by name (L3.5). The next
+  // event, when the story waits for one, heads the list (`next`).
+  import type { Snippet } from "svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { CONTENT_TYPE_LABEL } from "$lib/story/labels";
   import { phoneThreads, withoutTemplate, type Thread } from "$lib/story/player/game";
@@ -21,8 +23,10 @@
     speakers: Record<string, Speaker>;
     onreply: (content: string, label: string) => void;
     onseen: (content: string) => void;
+    /** The event the story waits for, shown above the threads. */
+    next?: Snippet;
   }
-  const { items, clock, date, speakers, onreply, onseen }: Props = $props();
+  const { items, clock, date, speakers, onreply, onseen, next }: Props = $props();
 
   const threads = $derived(phoneThreads(items));
   const others = $derived(withoutTemplate(items));
@@ -39,6 +43,15 @@
     const last = x.steps[x.steps.length - 1];
     return last ? last.text : "";
   }
+
+  // An event coming to wait goes back to the list it heads: from a thread,
+  // nothing would say the story waits for it.
+  let hadNext = false;
+  $effect(() => {
+    const has = next !== undefined;
+    if (has && !hadNext) open = undefined;
+    hadNext = has;
+  });
 
   // A message arriving in the open thread is read as it comes.
   $effect(() => {
@@ -68,6 +81,12 @@
 {:else}
   <PhoneFrame {clock} {date} title={t("story.play.messages")} avatar={null}>
     <ul class="list">
+      {#if next}
+        <li class="next">
+          <div class="lbl-key">{t("story.play.nextEvent")}</div>
+          {@render next()}
+        </li>
+      {/if}
       {#each threads as x (x.from ?? "")}
         {@const avatar = x.from ? speakers[x.from]?.portraits.neutral : null}
         <li>
@@ -121,6 +140,13 @@
     padding: 0;
     overflow-y: auto;
     height: 100%;
+  }
+  .next {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px 12px;
+    border-bottom: 1px solid var(--line);
   }
   .row {
     display: flex;

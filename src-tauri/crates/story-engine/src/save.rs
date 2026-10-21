@@ -143,6 +143,14 @@ impl Save {
                 ));
             }
         }
+        for held in &s.held {
+            if story.content_item(&held.content).is_none() {
+                return stale(format!(
+                    "content `{}`, waiting for a frame, no longer exists",
+                    held.content
+                ));
+            }
+        }
         for scheduled in &s.scheduled {
             if !matches!(
                 story.content_item(&scheduled.content).map(|c| &c.placement),
@@ -281,6 +289,24 @@ mod tests {
         assert_eq!(
             save.check(&story),
             Err(SaveError::Stale("node `gone` no longer exists".into()))
+        );
+    }
+
+    // Content waiting for a frame (L3.4) is part of what a save stands on:
+    // a story that lost it refuses the save, rather than deliver nothing.
+    #[test]
+    fn a_save_holding_removed_content_says_so() {
+        let story = story();
+        let mut save = Save::new(&story, &State::new(&story, 0));
+        save.state.held.push(crate::state::Held {
+            content: "gone".into(),
+            via: crate::state::Via::Effect,
+        });
+        assert_eq!(
+            save.check(&story),
+            Err(SaveError::Stale(
+                "content `gone`, waiting for a frame, no longer exists".into()
+            ))
         );
     }
 

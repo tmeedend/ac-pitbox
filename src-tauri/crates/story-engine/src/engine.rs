@@ -10,10 +10,11 @@
 use std::fmt;
 
 use crate::expr::{Criterion, Effect, Literal, Var};
+use crate::frame::Frame;
 use crate::load::Story;
 use crate::model::{Beat, ContentType, FailureMode, Node, NodeKind, Placement, Repeat, RetryCost};
 use crate::script::{self, Position, Stop};
-use crate::state::{Conversation, Entry, EventResult, Happening, Scheduled, State, Verdict, Via, Wait};
+use crate::state::{Conversation, Entry, EventResult, Happening, Held, Scheduled, State, Verdict, Via, Wait};
 use crate::time::Span;
 
 /// What the host must show or do.
@@ -28,7 +29,12 @@ pub enum Output {
     },
     /// A Beat changed the frame (`none`: removed it).
     FrameChanged {
-        to: crate::frame::Frame,
+        to: Frame,
+    },
+    /// Sent while no active frame can show it: it waits for one that can,
+    /// and is `Delivered` then.
+    Held {
+        content: String,
     },
     /// Lines of a content item's conversation, in order, with what held.
     Lines {
@@ -142,12 +148,7 @@ const MAX_NESTED: usize = 32;
 
 /// Advances the flow from where the state stands, until it waits.
 pub fn run(story: &Story, state: &mut State) -> Result<Vec<Output>, EngineError> {
-    let mut r = Run {
-        story,
-        state,
-        out: Vec::new(),
-        nested: 0,
-    };
+    let mut r = Run::new(story, state);
     r.advance()?;
     Ok(r.out)
 }
@@ -160,12 +161,7 @@ pub fn submit(story: &Story, state: &mut State, input: Input) -> Result<Vec<Outp
         return Err(EngineError::StoryEnded);
     }
     let mut next = state.clone();
-    let mut r = Run {
-        story,
-        state: &mut next,
-        out: Vec::new(),
-        nested: 0,
-    };
+    let mut r = Run::new(story, &mut next);
     r.apply(input)?;
     r.advance()?;
     let out = r.out;
@@ -205,12 +201,10 @@ pub struct Preview {
 /// moves and no reactive content comes: only this conversation plays.
 pub fn preview(story: &Story, setup: &[Effect], id: &str, replies: &[String]) -> Result<Preview, EngineError> {
     let mut state = State::new(story, 0);
-    let mut r = Run {
-        story,
-        state: &mut state,
-        out: Vec::new(),
-        nested: 0,
-    };
+    let mut r = Run::new(story, &mut state);
+    // The item plays wherever it would arrive: the preview shows the checks'
+    // warning beside it when no frame can show it.
+    r.held_by_frame = false;
     for effect in setup {
         r.apply_effect(effect)?;
     }
@@ -314,9 +308,21 @@ struct Run<'a> {
     out: Vec<Output>,
     /// How deep `deliver` is in conversations started by conversations.
     nested: usize,
+    /// Content no active frame can show waits for one (`State::held`).
+    held_by_frame: bool,
 }
 
 impl<'a> Run<'a> {
+    fn new(story: &'a Story, state: &'a mut State) -> Run<'a> {
+        Run {
+            story,
+            state,
+            out: Vec::new(),
+            nested: 0,
+            held_by_frame: true,
+        }
+    }
+
     fn log(&mut self, what: Happening) {
         self.state.history.push(Entry {
             date: self.state.date,
@@ -426,6 +432,7 @@ impl<'a> Run<'a> {
         if let Some(frame) = beat.frame.as_ref().filter(|f| self.state.frame.as_ref() != Some(*f)) {
             self.state.frame = Some(frame.clone());
             self.out.push(Output::FrameChanged { to: frame.clone() });
+            self.release_held()?;
         }
         for effect in &beat.effects {
             self.apply_effect(effect)?;
@@ -446,11 +453,46 @@ impl<'a> Run<'a> {
         self.out.push(Output::TimeMoved { to: self.state.date });
     }
 
+    /// The frame up now.
+    fn frame(&self) -> &Frame {
+        self.state.frame.as_ref().unwrap_or(&self.story.manifest.start.frame)
+    }
+
+    /// Whether the frame up now can show `content`. An unknown item can:
+    /// there is nothing to hold.
+    fn can_show(&self, content: &str) -> bool {
+        (self.story.content_item(content)).is_none_or(|item| self.frame().can_show(item.kind))
+    }
+
+    /// Delivers, in the order they were sent, the held items the frame now
+    /// up can show; dated now, when they show. The others keep waiting.
+    fn release_held(&mut self) -> Result<(), EngineError> {
+        let (now, still): (Vec<Held>, Vec<Held>) = std::mem::take(&mut self.state.held)
+            .into_iter()
+            .partition(|h| self.can_show(&h.content));
+        self.state.held = still;
+        for held in now {
+            self.deliver(&held.content, held.via)?;
+        }
+        Ok(())
+    }
+
     /// Sends a content item, and plays its conversation from the start: a
     /// new delivery is a new conversation, so the replies of the last one
     /// are forgotten, and so is having seen it - the player has not seen
-    /// this one yet.
+    /// this one yet. Content the frame up now cannot show waits for one
+    /// that can, undelivered (SPEC-story-mode, Nowhere to show).
     fn deliver(&mut self, content: &str, via: Via) -> Result<(), EngineError> {
+        if self.held_by_frame && !self.can_show(content) {
+            self.state.held.push(Held {
+                content: content.into(),
+                via,
+            });
+            self.out.push(Output::Held {
+                content: content.into(),
+            });
+            return Ok(());
+        }
         let facts = self.state.content.entry(content.to_string()).or_default();
         facts.delivered += 1;
         facts.seen = false;
@@ -644,7 +686,10 @@ impl<'a> Run<'a> {
                         holds && !was
                     }
                 };
-                if !fire || self.state.scheduled.iter().any(|s| s.content == id) {
+                // Already on its way: waiting for its delay, or for a frame.
+                let pending = self.state.scheduled.iter().any(|s| s.content == id)
+                    || self.state.held.iter().any(|h| h.content == id);
+                if !fire || pending {
                     continue;
                 }
                 match delay {

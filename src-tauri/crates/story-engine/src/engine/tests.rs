@@ -281,6 +281,121 @@ fn a_beat_changes_the_frame_before_its_effects() {
     assert_eq!(state.frame, Some(Frame::Named("phone".into())));
 }
 
+// SPEC-story-mode, Nowhere to show (L3.4): content sent while no frame can
+// show it waits in the state, undelivered - its `delivered` fact stays false
+// - and comes out when a Beat puts up a frame that can, in the order it was
+// sent, dated then. A Message node whose content waits does not hold the
+// flow: nothing could answer it.
+#[test]
+fn content_with_no_frame_waits_undelivered_and_comes_out_in_order() {
+    let content = "---
+id: first
+type: message
+---
+One.
+---
+id: second
+type: mail
+---
+Two?
+* (yes) [Yes]
+---
+id: noticed
+type: message
+when: [\"content.first.delivered\"]
+---
+Three.
+";
+    let flow = "id: ch
+nodes:
+  - id: start
+    beat: { frame: none, effects: [\"send first\"] }
+  - id: ask
+    message: second
+    wait_reply: true
+  - id: later
+    beat: { advance: 2 days }
+  - id: look
+    action: look
+  - id: back
+    beat: { frame: phone }
+  - id: end
+    end: done
+";
+    let story = story("", flow, &[("content/items.story", content)]);
+    let mut state = State::new(&story, 7);
+    let out = run(&story, &mut state).unwrap();
+    assert_eq!(
+        state.wait,
+        Wait::Action { action: "look".into() },
+        "the message node did not hold"
+    );
+    let held: Vec<&str> = state.held.iter().map(|h| h.content.as_str()).collect();
+    assert_eq!(held, ["first", "second"], "both wait, in the order sent");
+    assert!(delivered(&out).is_empty(), "nothing delivered: {out:?}");
+    assert_eq!(state.content_facts("first").delivered, 0, "`delivered` stays false");
+    assert_eq!(
+        state.content_facts("noticed").delivered,
+        0,
+        "what reads it does not come either"
+    );
+
+    let out = submit(&story, &mut state, Input::ActionDone { action: "look".into() }).unwrap();
+    assert_eq!(
+        delivered(&out),
+        ["first", "second", "noticed"],
+        "in order, then what they made true"
+    );
+    assert!(state.held.is_empty());
+    let first = (state.history.iter())
+        .find(|e| matches!(&e.what, Happening::Delivered { content, .. } if content == "first"))
+        .unwrap();
+    assert_eq!(
+        first.date.to_string(),
+        "2000-02-02",
+        "dated when shown, two days after it was sent"
+    );
+    assert!(
+        state.conversations.contains_key("second"),
+        "its choices are offered once it shows, to answer any time"
+    );
+}
+
+// A reactive item that becomes true with no frame to show it waits once:
+// waiting, it is on its way, not to be sent again at every check.
+#[test]
+fn reactive_content_with_no_frame_waits_once() {
+    let content = "---
+id: news
+type: message
+when: [\"flag.met\"]
+---
+News.
+";
+    let flow = "id: ch
+nodes:
+  - id: start
+    beat: { frame: none, effects: [\"flag.met = true\"] }
+  - id: one
+    beat: { effects: [\"counter.visits += 1\"] }
+  - id: look
+    action: look
+  - id: back
+    beat: { frame: phone }
+  - id: end
+    end: done
+";
+    let story = story("", flow, &[("content/news.story", content)]);
+    let mut state = start(&story);
+    assert_eq!(state.held.len(), 1, "held once, whatever the number of checks");
+    submit(&story, &mut state, Input::ActionDone { action: "look".into() }).unwrap();
+    assert_eq!(
+        state.content_facts("news").delivered,
+        1,
+        "delivered once the phone is back"
+    );
+}
+
 #[test]
 fn a_reply_applies_its_effects_and_releases_the_flow() {
     let content = "---\nid: invite\ntype: message\nfrom: friend\n---\nCome along?\n* (accept) [Sure.]\n    ~ effect(\"rel.friend += 1\")\n* (decline) [No.]\n    ~ effect(\"rel.friend -= 9\")\n";
@@ -508,6 +623,30 @@ fn a_preview_plays_one_item_on_the_values_set_and_leaves_the_flow() {
 }
 
 // Story settings: the relation scale belongs to the story.
+// The preview plays an item wherever it would arrive: with no frame to
+// show it, the Content screen shows the checks' warning beside it, and the
+// item itself all the same.
+#[test]
+fn a_preview_plays_an_item_no_frame_could_show() {
+    let story = Story::from_sources(with(
+        with(
+            crate::testutil::minimal(),
+            "story.yaml",
+            &MANIFEST.replace("frame: phone", "frame: none"),
+        ),
+        "content/a.story",
+        "---
+id: note
+type: message
+---
+Hello.
+",
+    ))
+    .unwrap();
+    let p = preview(&story, &[], "note", &[]).unwrap();
+    assert_eq!(p.steps.len(), 1, "played, not held: {p:?}");
+}
+
 #[test]
 fn a_story_can_bring_its_own_relation_scale() {
     let flow = "id: ch\nnodes:\n  - id: start\n    beat: { effects: [\"rel.friend += 1\"] }\n  - id: check\n    branch:\n      - if: [\"rel.friend == ally\"]\n        goto: ok\n    otherwise: ko\n  - id: ok\n    end: ok\n  - id: ko\n    end: ko\n";

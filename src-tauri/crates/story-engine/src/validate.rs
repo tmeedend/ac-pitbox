@@ -696,6 +696,8 @@ impl Checker<'_> {
     /// or failure - every path to that node counts; reactive content can
     /// arrive at any moment, so it is flagged only when no frame the story
     /// ever puts up can show it. Warnings: at play it waits for a frame.
+    /// A player action reached with no frame is flagged the same way: with
+    /// no frame, a story acts through the replies of its dialogues.
     fn nowhere_to_show(&mut self) {
         let story = self.story;
         let map = FrameMap::new(story);
@@ -707,6 +709,9 @@ impl Checker<'_> {
                 };
                 for (content, frames) in crate::frame::sent_by(story, node, frames) {
                     self.shown_under(&chapter.file, node, content, &frames);
+                }
+                if let NodeKind::Action { action } = &node.kind {
+                    self.action_under(&chapter.file, node, action, frames);
                 }
             }
         }
@@ -738,6 +743,19 @@ impl Checker<'_> {
             format!("node `{id}`: `{content}` is a {kind}, and frame {blind_list} cannot show it here; it will wait for a frame that can")
         } else {
             format!("node `{id}`: `{content}` is a {kind}, which frame {blind_list} cannot show on some paths leading here; it will wait for a frame that can")
+        };
+        self.on_node(id, |c| c.warning(file, message));
+    }
+
+    fn action_under(&mut self, file: &str, node: &Node, action: &str, frames: &BTreeSet<Frame>) {
+        if !frames.contains(&Frame::None) {
+            return;
+        }
+        let id = &node.id;
+        let message = if frames.len() == 1 {
+            format!("node `{id}`: action `{action}` is reached with no frame, where there is nothing to do it in; with no frame, offer it as the replies of a dialogue")
+        } else {
+            format!("node `{id}`: action `{action}` is reached with no frame on some paths, where there is nothing to do it in; with no frame, offer it as the replies of a dialogue")
         };
         self.on_node(id, |c| c.warning(file, message));
     }
@@ -1255,6 +1273,57 @@ nodes:
         );
         assert!(about("face_to_face").is_empty(), "a dialogue needs no frame: {d:#?}");
         assert!(about("start").is_empty() && d.len() == 3, "nothing else: {d:#?}");
+    }
+
+    // L3.4: with no frame, there is nothing to do a player action in - a
+    // story with no frame acts through the replies of its dialogues. A
+    // warning: at play, a Done button stands in.
+    #[test]
+    fn an_action_reached_with_no_frame_is_flagged() {
+        let flow = "id: ch01
+nodes:
+  - id: start
+    branch:
+      - if: [\"reputation >= 1\"]
+        goto: hide
+    otherwise: maybe
+  - id: hide
+    beat: { frame: none }
+  - id: maybe
+    action: buy_car
+  - id: gone
+    beat: { frame: none }
+  - id: sure
+    action: sell_car
+  - id: back
+    beat: { frame: phone }
+  - id: fine
+    action: wash_car
+  - id: end
+    end: done
+";
+        let d = diagnostics(&[("flow/01-one.yaml", flow)]);
+        let about = |action: &str| {
+            (d.iter())
+                .filter(|x| x.message.contains(&format!("action `{action}`")))
+                .collect::<Vec<_>>()
+        };
+        let maybe = about("buy_car");
+        assert!(
+            maybe.len() == 1 && maybe[0].message.contains("on some paths") && maybe[0].node.as_deref() == Some("maybe"),
+            "one path removed the frame: {d:#?}"
+        );
+        assert_eq!(
+            maybe[0].severity,
+            Severity::Warning,
+            "it plays: a Done button stands in"
+        );
+        let sure = about("sell_car");
+        assert!(
+            sure.len() == 1 && !sure[0].message.contains("on some paths"),
+            "every path: {d:#?}"
+        );
+        assert!(about("wash_car").is_empty(), "the phone is back: {d:#?}");
     }
 
     // Reactive content can arrive whatever the frame: only a story that never

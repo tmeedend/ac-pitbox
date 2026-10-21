@@ -597,27 +597,45 @@ de reprendre. En cas d'écart, la spec fait foi.
             d'éclaircissement de la scène en plus du flou.
             **Limites connues** : sur le fond uni d'aujourd'hui, le flou ne
             se voit pas (il attend les scènes) ; pas vu à l'écran.
-          - **L3.4, les histoires sans cadre.** Moteur : un contenu d'un type
-            que le cadre actif ne peut pas montrer (ou sans cadre) **attend**
-            dans l'état, donc dans la sauvegarde, et n'est livré que quand un
-            Beat installe un cadre capable de le montrer. **Décidé** : en
-            attente, il ne compte **pas** comme livré
-            (`content.<id>.delivered` reste faux jusqu'à l'affichage) ;
-            plusieurs contenus en attente sortent **dans l'ordre d'arrivée**,
-            datés du moment où ils s'affichent. Écran : sans cadre, la carte
-            d'épreuve est sur la scène (même résumé : voiture, coût,
-            objectif) ; **avec un cadre, elle va dans le téléphone**, en tête
-            de l'écran des messages (« Prochaine épreuve ») — décidé, elle
-            est aujourd'hui à côté du téléphone. Vérifications : un nœud
-            Action atteint sans cadre est signalé (sans cadre, les actions
-            passent par les réponses des dialogues) ; au jeu, le bouton
-            « Fait » reste en secours. Histoire d'exemple : un chapitre 3
-            sans cadre (Beat `frame: none`) avec un dialogue à réponses, une
-            course lancée depuis la scène, et un message envoyé pendant ce
-            chapitre et livré quand un Beat final remet le téléphone ; tests
-            moteur qui jouent le chapitre avec cadre puis celui sans, la
-            mise en attente, la livraison, et la reprise d'une sauvegarde en
-            plein chapitre sans cadre.
+          - **L3.4, les histoires sans cadre — fait (2026-10-21).** Un
+            contenu qu'aucun cadre ne peut montrer attend dans l'état
+            (`State::held`, sauvegardé, absent des parties écrites avant) et
+            sort au Beat qui pose un cadre capable de le montrer ; la carte
+            d'épreuve est en tête des messages du téléphone (« Prochaine
+            épreuve »), sur la scène sans cadre ; un nœud Action atteint sans
+            cadre est signalé. L'exemple a son chapitre 3 sans cadre.
+            **Décidé avec l'utilisateur** : en attente, un contenu n'est pas
+            livré (`content.<id>.delivered` reste faux) ; plusieurs sortent
+            dans l'ordre d'arrivée, datés de leur affichage ; la carte
+            d'épreuve dans le téléphone avec un cadre, sur la scène sans ; une
+            action sans cadre signalée, « Fait » en secours ; le chapitre 3
+            de l'exemple et ses tests.
+            **Choisi sans demander** : un nœud Message dont le contenu attend
+            ne retient pas le fil (rien ne pourrait y répondre ; les
+            vérifications l'annonçaient déjà) ; un contenu réactif en attente
+            compte comme parti, il n'est pas remis en attente à chaque
+            vérification ; à sa sortie, un contenu réactif n'est pas revérifié
+            (il était arrivé, il attendait seulement de quoi s'afficher) ; il
+            sort avant les effets et l'avance du temps du Beat qui pose le
+            cadre (le cadre est posé avant les effets) ; l'aperçu de l'éditeur
+            joue un contenu même sans cadre pour le montrer ; une partie qui
+            attend un contenu que l'histoire n'a plus est refusée, avec sa
+            raison ; le message de l'exemple est réactif (à l'arrivée du
+            dialogue) plutôt qu'envoyé par un Beat, pour que l'exemple reste
+            sans avertissement ; l'avertissement d'une action sans cadre dit
+            « sur certains chemins » comme celui d'un contenu sans cadre ; une
+            épreuve qui se met à attendre ramène le téléphone d'un fil ouvert
+            à la liste des messages, qu'elle coiffe ; la flèche gauche est
+            sans effet le temps qu'une réponse revienne.
+            **Limites connues** : pas vu à l'écran ; aucune indication au
+            joueur qu'un message attend son téléphone (c'est voulu : il
+            n'existe pas encore pour lui) ; un contenu réactif `each_time`
+            redevenu vrai pendant qu'une première arrivée attend ne repart
+            pas une seconde fois (comme pendant un délai) ; rien ne signale
+            un contenu qui attendrait encore à la fin de l'histoire ; un
+            message du fil mis en attente perd ses sorties par réponse (le
+            nœud est déjà quitté), ce que l'avertissement « attendra un
+            cadre » annonce sans le détailler.
           - **L3.5, les autres applications du téléphone** (ex-L3.3) : boîte
             mail, fil d'actu et réseaux, relevé bancaire.
       - **L3b à L8** : dans l'ordre du plan de livraison de la spec.

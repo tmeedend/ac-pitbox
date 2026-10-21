@@ -2896,7 +2896,8 @@
       "noResult": "No result for this session.",
       "launchAgain": "Launch again",
       "giveUp": "Give up",
-      "cannotAfford": "Entry fee {fee}: you have {money}."
+      "cannotAfford": "Entry fee {fee}: you have {money}.",
+      "nextEvent": "Next event"
     },
     "world": {
       "title": "World",

@@ -2,7 +2,9 @@
   // A game of Story Mode (SPEC-story-mode, Story Mode: player side): the
   // three layers - the scene (a plain background until the story's scenes
   // exist), the frame over it (the phone), and the dialogue layer over both
-  // while a dialogue plays - with what the story waits for beside the frame.
+  // while a dialogue plays - with what the story waits for beside the frame;
+  // the next event goes in the frame itself, heading its messages, and on
+  // the scene only when there is no frame.
   // While a dialogue plays, or the journal reads past ones again, the frame
   // slides out of view and the scene's blur is reduced; it comes back after.
   // Every move is saved as it is played, so leaving loses nothing.
@@ -24,6 +26,7 @@
   import { closeGame, move, play } from "$lib/story/playState.svelte";
   import SteamPrompt from "$lib/components/launch/SteamPrompt.svelte";
   import DialogueStage from "./player/DialogueStage.svelte";
+  import EventCard from "./EventCard.svelte";
   import Journal from "./Journal.svelte";
   import PhoneScreen from "./PhoneScreen.svelte";
   import WaitingCard from "./WaitingCard.svelte";
@@ -45,6 +48,9 @@
   });
 
   const eventWaiting = $derived(view.waiting.kind === "event" ? view.waiting : null);
+  /** With a frame, the next event is in it, heading the messages; with
+   * none, on the scene. */
+  const eventInFrame = $derived(view.frame !== "none" && eventWaiting !== null);
   /** The session's result is being read. */
   let collecting = $state(false);
   /** Why the session could not be sent or read. */
@@ -148,20 +154,22 @@
   <div class="scene" class:staged>
     <div class="backdrop"></div>
     <div class="frame-layer" class:away={staged} inert={staged}>
-      <WaitingCard
-        waiting={view.waiting}
-        characters={game.characters}
-        drivers={game.drivers}
-        {senderOf}
-        busy={play.busy || sequence.launching}
-        money={view.money}
-        launched={view.launched}
-        {collecting}
-        onaction={(action) => void move({ kind: "action_done", action })}
-        onlaunch={() => void sequence.launch()}
-        ongiveup={giveUp}
-        onleave={leave}
-      />
+      {#if !eventInFrame}
+        <WaitingCard
+          waiting={view.waiting}
+          characters={game.characters}
+          drivers={game.drivers}
+          {senderOf}
+          busy={play.busy || sequence.launching}
+          money={view.money}
+          launched={view.launched}
+          {collecting}
+          onaction={(action) => void move({ kind: "action_done", action })}
+          onlaunch={() => void sequence.launch()}
+          ongiveup={giveUp}
+          onleave={leave}
+        />
+      {/if}
       {#if view.frame !== "none"}
         <div class="device">
           <PhoneScreen
@@ -171,6 +179,7 @@
             {speakers}
             onreply={(content, reply) => void move({ kind: "reply", content, reply })}
             onseen={(content) => void move({ kind: "seen", content })}
+            next={eventInFrame ? nextEvent : undefined}
           />
         </div>
       {/if}
@@ -203,6 +212,22 @@
     {/if}
   </div>
 </div>
+
+{#snippet nextEvent()}
+  {#if eventWaiting}
+    <EventCard
+      waiting={eventWaiting}
+      characters={game.characters}
+      drivers={game.drivers}
+      busy={play.busy || sequence.launching}
+      money={view.money}
+      launched={view.launched}
+      {collecting}
+      onlaunch={() => void sequence.launch()}
+      ongiveup={giveUp}
+    />
+  {/if}
+{/snippet}
 
 <SteamPrompt {sequence} />
 

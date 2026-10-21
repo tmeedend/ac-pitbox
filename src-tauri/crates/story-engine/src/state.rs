@@ -96,6 +96,16 @@ pub struct Scheduled {
     pub due: StoryDate,
 }
 
+/// A content item sent while no active frame could show it
+/// (SPEC-story-mode, Nowhere to show): it waits here, not delivered yet -
+/// `content.<id>.delivered` stays false - until a Beat puts up a frame that
+/// can, and keeps how it was sent.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Held {
+    pub content: ContentId,
+    pub via: Via,
+}
+
 /// How a content item reached the frame.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -197,6 +207,10 @@ pub struct State {
     /// Conversations waiting for the player's choice, by content item.
     #[serde(default)]
     pub conversations: BTreeMap<ContentId, Conversation>,
+    /// Content waiting for a frame able to show it, in the order it was
+    /// sent: the order it comes out in.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub held: Vec<Held>,
     pub rng: Rng,
     pub history: Vec<Entry>,
 }
@@ -233,6 +247,7 @@ impl State {
             side_events: BTreeSet::new(),
             launched: None,
             conversations: BTreeMap::new(),
+            held: Vec::new(),
             rng: Rng::new(seed),
             history: Vec::new(),
         }
