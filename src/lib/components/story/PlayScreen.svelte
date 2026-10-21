@@ -3,6 +3,8 @@
   // three layers - the scene (a plain background until the story's scenes
   // exist), the frame over it (the phone), and the dialogue layer over both
   // while a dialogue plays - with what the story waits for beside the frame.
+  // While a dialogue plays, or the journal reads past ones again, the frame
+  // slides out of view and the scene's blur is reduced; it comes back after.
   // Every move is saved as it is played, so leaving loses nothing.
   //
   // An event goes through the session screen's own launch (the Steam gate,
@@ -10,6 +12,7 @@
   // launch started closes - or on opening, for a session left under way when
   // Pit Box was closed.
   import { onMount, untrack } from "svelte";
+  import { fade } from "svelte/transition";
   import { errorText } from "$lib/errors";
   import { gameSession, markStarting } from "$lib/launch/gameSession.svelte";
   import { LaunchSequence, startSession } from "$lib/launch/launchSequence.svelte";
@@ -21,6 +24,7 @@
   import { closeGame, move, play } from "$lib/story/playState.svelte";
   import SteamPrompt from "$lib/components/launch/SteamPrompt.svelte";
   import DialogueStage from "./player/DialogueStage.svelte";
+  import Journal from "./Journal.svelte";
   import PhoneScreen from "./PhoneScreen.svelte";
   import WaitingCard from "./WaitingCard.svelte";
 
@@ -30,6 +34,15 @@
   const date = $derived(dateLabel(view.date, view.date_display, t, i18n.locale));
 
   const speakers = $derived(speakersOf(game.characters, game.folder));
+
+  let journal = $state(false);
+  /** The scene holds the stage: the frame is out of view. */
+  const staged = $derived(dialogue !== null || journal);
+  // A dialogue arriving (a session's result read on opening) takes the
+  // scene, and the journal does not come back after it.
+  $effect(() => {
+    if (dialogue !== null) journal = false;
+  });
 
   const eventWaiting = $derived(view.waiting.kind === "event" ? view.waiting : null);
   /** The session's result is being read. */
@@ -120,6 +133,9 @@
   <header class="bar">
     <button class="btn btn-ghost" onclick={leave}>‹ {t("story.play.leave")}</button>
     <span class="title">{view.title}</span>
+    <button class="btn btn-ghost" disabled={dialogue !== null} onclick={() => (journal = !journal)}
+      >{t("story.journal.title")}</button
+    >
     <span class="stats">
       {#if date}<span>{date}</span>{/if}
       {#if view.money !== null}<span>{t("story.play.money", { n: view.money })}</span>{/if}
@@ -129,49 +145,60 @@
   {#if play.problem}<p class="errbox">{play.problem}</p>{/if}
   {#if launchProblem}<p class="errbox">{launchProblem}</p>{/if}
 
-  <div class="scene">
-    <WaitingCard
-      waiting={view.waiting}
-      characters={game.characters}
-      drivers={game.drivers}
-      {senderOf}
-      busy={play.busy || sequence.launching}
-      money={view.money}
-      launched={view.launched}
-      {collecting}
-      onaction={(action) => void move({ kind: "action_done", action })}
-      onlaunch={() => void sequence.launch()}
-      ongiveup={giveUp}
-      onleave={leave}
-    />
-    {#if view.frame !== "none"}
-      <div class="device">
-        <PhoneScreen
-          items={view.items}
-          clock={view.clock}
-          {date}
-          {speakers}
-          onreply={(content, reply) => void move({ kind: "reply", content, reply })}
-          onseen={(content) => void move({ kind: "seen", content })}
-        />
-      </div>
-    {/if}
+  <div class="scene" class:staged>
+    <div class="backdrop"></div>
+    <div class="frame-layer" class:away={staged} inert={staged}>
+      <WaitingCard
+        waiting={view.waiting}
+        characters={game.characters}
+        drivers={game.drivers}
+        {senderOf}
+        busy={play.busy || sequence.launching}
+        money={view.money}
+        launched={view.launched}
+        {collecting}
+        onaction={(action) => void move({ kind: "action_done", action })}
+        onlaunch={() => void sequence.launch()}
+        ongiveup={giveUp}
+        onleave={leave}
+      />
+      {#if view.frame !== "none"}
+        <div class="device">
+          <PhoneScreen
+            items={view.items}
+            clock={view.clock}
+            {date}
+            {speakers}
+            onreply={(content, reply) => void move({ kind: "reply", content, reply })}
+            onseen={(content) => void move({ kind: "seen", content })}
+          />
+        </div>
+      {/if}
+    </div>
 
     {#if dialogue !== null}
       {@const d = view.items[dialogue]}
-      <div class="layer">
-        {#key dialogue}
-          <DialogueStage
-            steps={d.steps}
-            choices={d.choices}
-            present={d.characters}
-            from={d.from}
-            {speakers}
-            ended={!d.open}
-            onchoose={(reply) => void move({ kind: "reply", content: d.content, reply })}
-            onend={() => void move({ kind: "seen", content: d.content })}
-          />
-        {/key}
+      <div class="layer" in:fade={{ duration: 250, delay: 200 }} out:fade={{ duration: 150 }}>
+        <div class="fit">
+          {#key dialogue}
+            <DialogueStage
+              steps={d.steps}
+              choices={d.choices}
+              present={d.characters}
+              from={d.from}
+              {speakers}
+              ended={!d.open}
+              bare
+              autofocus
+              onchoose={(reply) => void move({ kind: "reply", content: d.content, reply })}
+              onend={() => void move({ kind: "seen", content: d.content })}
+            />
+          {/key}
+        </div>
+      </div>
+    {:else if journal}
+      <div class="layer" in:fade={{ duration: 250, delay: 200 }} out:fade={{ duration: 150 }}>
+        <Journal items={view.items} dateDisplay={view.date_display} {speakers} onclose={() => (journal = false)} />
       </div>
     {/if}
   </div>
@@ -211,20 +238,45 @@
   .errbox {
     margin: 10px 18px 0;
   }
-  /* The scene: a plain background until the story's scenes exist. */
+  /* The scene: a plain background until the story's scenes exist. The
+     backdrop is its own layer, blurred behind the frame and brought nearer
+     into focus while the stage holds the scene; oversized so that the blur
+     never shows its edges. */
   .scene {
     position: relative;
     flex: 1;
     min-height: 0;
+    overflow: hidden;
+  }
+  .backdrop {
+    position: absolute;
+    inset: -16px;
+    background: radial-gradient(ellipse at 50% 30%, var(--panel2), var(--bg));
+    filter: blur(6px);
+    transition: filter 0.4s ease;
+  }
+  .staged .backdrop {
+    filter: blur(1px);
+  }
+  .frame-layer {
+    position: absolute;
+    inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 48px;
     padding: 24px;
-    background: radial-gradient(ellipse at 50% 30%, var(--panel2), var(--bg));
     overflow: auto;
+    transition:
+      transform 0.35s ease,
+      opacity 0.35s ease;
   }
-  /* Over the scene and the frame, while a dialogue plays. */
+  /* Out of view, below the scene, while the stage holds it. */
+  .frame-layer.away {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  /* Over the scene, while a dialogue plays or the journal is open. */
   .layer {
     position: absolute;
     inset: 0;
@@ -232,9 +284,10 @@
     align-items: center;
     justify-content: center;
     padding: 24px;
-    background: color-mix(in srgb, var(--bg) 70%, transparent);
+    container-type: size;
   }
-  .layer > :global(*) {
-    width: min(960px, 100%);
+  /* The stage as large as the scene allows, in 16:9 like the preview's. */
+  .fit {
+    width: min(100cqw, calc(100cqh * 16 / 9));
   }
 </style>

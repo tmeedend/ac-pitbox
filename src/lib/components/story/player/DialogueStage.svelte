@@ -3,11 +3,17 @@
   // stage with the scene behind (a plain background until the story's scenes
   // exist), the characters present as portraits, the line in a text box at
   // the bottom, and the replies once the last line is read. A click, Space
-  // or Enter shows the next line. Who stands where with which face is
-  // `stageAt`'s, so a dialogue shows the same here and in Story Mode.
+  // or Enter shows the next line, the left arrow the one before. Who stands
+  // where with which face is `stageAt`'s, so a dialogue shows the same here
+  // and in Story Mode.
+  //
+  // Story Mode plays it `bare`, over its own scene, and the journal replays a
+  // past one (`replay`): the replies chosen are paged through like lines, and
+  // nothing is offered.
+  import { onMount } from "svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { initials } from "$lib/story/player/phone";
-  import { nextLine, stageAt } from "$lib/story/player/stage";
+  import { nextLine, previousLine, stageAt } from "$lib/story/player/stage";
   import type { PlayerChoice, PlayerStep, Speaker } from "$lib/story/player/types";
 
   interface Props {
@@ -23,10 +29,35 @@
     /** The player went past the last line of an ended dialogue: Story Mode
      * closes the layer; the preview has nothing to close. */
     onend?: () => void;
+    /** No background or border of its own: the scene behind shows through. */
+    bare?: boolean;
+    /** A past dialogue, read again: every step, replies included. */
+    replay?: boolean;
+    /** Takes the keyboard when it opens, so that Space and Enter go on
+     * without a click first. Never in the editor, whose fields have it. */
+    autofocus?: boolean;
   }
-  const { steps, choices, present, from, speakers, ended, onchoose, onend }: Props = $props();
+  const {
+    steps,
+    choices,
+    present,
+    from,
+    speakers,
+    ended,
+    onchoose,
+    onend,
+    bare = false,
+    replay = false,
+    autofocus = false,
+  }: Props = $props();
 
-  /** The said line shown, as an index into `steps`. */
+  let element: HTMLDivElement;
+  onMount(() => {
+    if (autofocus) element.focus();
+  });
+
+  /** The step shown, as an index into `steps`: a said line, or in a replay
+   * a reply chosen too. */
   let at = $state(-1);
   /** A reply was chosen: show the first line it leads to when it comes. */
   let chosen = $state(false);
@@ -34,24 +65,30 @@
   // Every dependency read first (CLAUDE.md: an effect only follows what it
   // read before leaving).
   $effect(() => {
-    const [list, now, waiting] = [steps, at, chosen];
+    const [list, now, waiting, all] = [steps, at, chosen, replay];
     if (waiting) {
       const next = nextLine(list, now);
       if (next !== null) {
         at = next;
         chosen = false;
       }
-    } else if (now < 0 || now >= list.length || list[now]?.kind !== "said") {
+    } else if (now < 0 || now >= list.length || (!all && list[now]?.kind !== "said")) {
       // Opened, or the text changed under the preview: from its first line.
-      at = nextLine(list, -1) ?? -1;
+      at = all ? (list.length ? 0 : -1) : (nextLine(list, -1) ?? -1);
     }
   });
 
+  /** The step after or before the one shown, or `null` at either end. */
+  function step(by: 1 | -1): number | null {
+    if (replay) return at + by >= 0 && at + by < steps.length ? at + by : null;
+    return by > 0 ? nextLine(steps, at) : previousLine(steps, at);
+  }
+
   const stage = $derived(stageAt(present, from, steps, at));
-  const more = $derived(nextLine(steps, at) !== null);
+  const more = $derived(step(1) !== null);
 
   function advance() {
-    const next = nextLine(steps, at);
+    const next = step(1);
     if (next !== null) at = next;
     else if (ended) onend?.();
   }
@@ -60,6 +97,9 @@
     if (e.key === " " || e.key === "Enter") {
       e.preventDefault();
       advance();
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      at = step(-1) ?? at;
     }
   }
 
@@ -76,7 +116,16 @@
   }
 </script>
 
-<div class="stage" role="button" tabindex="0" aria-label={t("story.player.next")} onclick={advance} {onkeydown}>
+<div
+  class="stage"
+  class:bare
+  role="button"
+  tabindex="0"
+  aria-label={t("story.player.next")}
+  bind:this={element}
+  onclick={advance}
+  {onkeydown}
+>
   {#each stage.cast as c (c.who)}
     {@const src = picture(c.who, c.expression)}
     <div class="actor" class:speaking={c.speaking} style:left={LEFT[c.position]}>
@@ -88,7 +137,7 @@
     </div>
   {/each}
 
-  {#if !more && choices.length}
+  {#if !more && !replay && choices.length}
     <div class="choices">
       {#each choices as c (c.label)}
         <button
@@ -102,7 +151,17 @@
     </div>
   {/if}
 
-  {#if stage.line}
+  {#if stage.reply !== null}
+    <div class="box mine">
+      <div class="speaker">{t("story.player.you")}</div>
+      <div class="text">{stage.reply}</div>
+      {#if more}
+        <span class="more">▾</span>
+      {:else if ended}
+        <span class="more end">{t("story.player.end")}</span>
+      {/if}
+    </div>
+  {:else if stage.line}
     {@const who = stage.line.speaker ?? from}
     <div class="box">
       {#if who}<div class="speaker">{speakers[who]?.name ?? who}</div>{/if}
@@ -127,8 +186,16 @@
     cursor: pointer;
     user-select: none;
   }
+  .stage.bare {
+    background: transparent;
+    border: none;
+  }
   .stage:focus-visible {
     outline: 1px solid var(--mat-line);
+  }
+  /* Bare, the stage is the whole scene: no outline around it. */
+  .stage.bare:focus-visible {
+    outline: none;
   }
   .actor {
     position: absolute;
@@ -169,6 +236,10 @@
     padding: 10px 14px;
     background: color-mix(in srgb, var(--bg) 88%, transparent);
     border: 1px solid var(--mat-line);
+  }
+  /* The player's reply, in the blue of their replies everywhere else. */
+  .box.mine {
+    border-left: 2px solid var(--blue);
   }
   .speaker {
     color: var(--txt);

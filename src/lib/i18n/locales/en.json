@@ -2861,7 +2861,8 @@
       "winter": "Winter {year}",
       "spring": "Spring {year}",
       "summer": "Summer {year}",
-      "autumn": "Autumn {year}"
+      "autumn": "Autumn {year}",
+      "you": "You"
     },
     "play": {
       "sample": "The sample story, carried by Pit Box",
@@ -2979,6 +2980,11 @@
       "files": "Files: {count}",
       "restore": "Restore",
       "restoreConfirm": "Put the story back as it was on {when}? Its current state is copied first."
+    },
+    "journal": {
+      "title": "Journal",
+      "close": "Close",
+      "empty": "No dialogue yet."
     }
   }
 }

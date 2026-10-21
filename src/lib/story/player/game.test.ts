@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SeenItem } from "../play";
-import { currentDialogue, goals, phoneThreads, withoutTemplate } from "./game";
+import { currentDialogue, goals, pastDialogues, phoneThreads, withoutTemplate } from "./game";
 
 function item(content: string, o: Partial<SeenItem> = {}): SeenItem {
   return {
@@ -47,6 +47,18 @@ describe("currentDialogue", () => {
     expect(currentDialogue([{ ...talk, seen: true, open: true }])).toBe(0);
     expect(currentDialogue([talk, { ...talk, seen: true }])).toBeNull();
     expect(currentDialogue([item("a")])).toBeNull();
+  });
+});
+
+describe("pastDialogues", () => {
+  // L3.3, the journal: every dialogue played, latest first, never the one
+  // the scene plays now, nor one that said nothing.
+  it("lists the dialogues played, latest first, without the one under way", () => {
+    const talk = (content: string, o: Partial<SeenItem> = {}) => item(content, { kind: "dialogue", ...o });
+    const items = [talk("first"), item("a"), talk("silent", { steps: [] }), talk("second"), talk("now", { seen: false })];
+    expect(pastDialogues(items)).toEqual([3, 0]);
+    expect(pastDialogues(items.slice(0, 4))).toEqual([3, 0]);
+    expect(pastDialogues([item("a")])).toEqual([]);
   });
 });
 

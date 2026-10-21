@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { dateLabel, initials } from "./phone";
-import { nextLine, stageAt } from "./stage";
+import { nextLine, previousLine, stageAt } from "./stage";
 import { bubbles } from "./thread";
 import type { PlayerStep, Position } from "./types";
 
@@ -50,6 +50,19 @@ describe("the dialogue stage", () => {
     expect(nextLine(steps, -1)).toBe(0);
     expect(nextLine(steps, 0)).toBe(2);
     expect(nextLine(steps, 2)).toBeNull();
+    expect(previousLine(steps, 2)).toBe(0);
+    expect(previousLine(steps, 0)).toBeNull();
+  });
+
+  // The journal pages through the replies too: a reply is the player's,
+  // nobody on stage speaks it.
+  it("shows a reply chosen as the player's, with nobody speaking", () => {
+    const steps: PlayerStep[] = [said("a", "1"), { kind: "chose", label: "x", text: "X" }];
+    const stage = stageAt(["a"], null, steps, 1);
+    expect(stage.reply).toBe("X");
+    expect(stage.line).toBeNull();
+    expect(stage.cast.some((c) => c.speaking)).toBe(false);
+    expect(stageAt(["a"], null, steps, 0).reply).toBeNull();
   });
 });
 

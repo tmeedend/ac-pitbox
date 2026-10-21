@@ -576,14 +576,27 @@ de reprendre. En cas d'écart, la spec fait foi.
           (2026-10-21)**, à partir de ses notes « couche dialogue et
           histoires sans cadre ». L'ordre est libre : le plus simple pour le
           développement. **À faire** :
-          - **L3.3, la couche dialogue.** Au début d'un dialogue (nœud
-            Message ou contenu réactif), le cadre glisse hors de l'écran, le
-            flou de la scène diminue (sur la couche de fond, prête pour les
-            scènes), portraits et boîte de texte apparaissent ; à la fin, le
-            cadre revient. Réutiliser `DialogueStage` et ses voisins (L2.5).
-            Un « Journal » relit les dialogues passés, par date, sur la scène
-            en lecture seule, depuis l'historique de la sauvegarde (comme
-            les fils du téléphone).
+          - **L3.3, la couche dialogue — fait (2026-10-21).** Au début d'un
+            dialogue, le cadre et la carte d'attente glissent sous l'écran, le
+            flou de la couche de fond passe de 6 à 1 px, puis la scène
+            (`DialogueStage` nu, sans fond ni bordure) apparaît en fondu ; à
+            la fin, le cadre remonte. Le « Journal » de la barre relit les
+            dialogues passés sur la scène, réponses choisies comprises.
+            **Choisi sans demander** : le dialogue garde le 16:9 de l'aperçu
+            (même composition pour l'auteur et le joueur), aussi grand que la
+            scène le permet ; il prend le clavier dès qu'il s'ouvre ; la
+            flèche gauche revient d'une réplique (en jeu comme au journal) ;
+            au journal, une réponse choisie est une page à elle, au nom de
+            « Vous », personne ne parlant sur scène ; le journal liste du plus
+            récent au plus ancien, avec la date telle que l'histoire l'affiche
+            et l'heure, et les personnages présents ; un dialogue sans
+            réplique n'y figure pas ; son bouton est grisé pendant un
+            dialogue ; Échap revient à la liste puis ferme (le B de la manette
+            aussi) ; aller au bout d'un dialogue relu ramène à la liste ;
+            fondu de 250 ms après 200 ms, glissement de 350 ms ; pas
+            d'éclaircissement de la scène en plus du flou.
+            **Limites connues** : sur le fond uni d'aujourd'hui, le flou ne
+            se voit pas (il attend les scènes) ; pas vu à l'écran.
           - **L3.4, les histoires sans cadre.** Moteur : un contenu d'un type
             que le cadre actif ne peut pas montrer (ou sans cadre) **attend**
             dans l'état, donc dans la sauvegarde, et n'est livré que quand un

@@ -57,8 +57,21 @@ export function currentDialogue(items: SeenItem[]): number | null {
   return null;
 }
 
+/** The dialogues the journal rereads, latest first, as indexes into
+ * `items`: every one played, except the one the scene plays now - it is not
+ * past yet. A dialogue that said nothing has nothing to reread. */
+export function pastDialogues(items: SeenItem[]): number[] {
+  const current = currentDialogue(items);
+  const past: number[] = [];
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i];
+    if (item.kind === "dialogue" && i !== current && item.steps.length > 0) past.push(i);
+  }
+  return past;
+}
+
 /** Items of the types the phone has no template for yet: listed, not shown
- * (the inbox, the feed and the statement come with L3.3). */
+ * (the inbox, the feed and the statement come with L3.5). */
 export function withoutTemplate(items: SeenItem[]): SeenItem[] {
   return items.filter((i) => i.kind !== "message" && i.kind !== "dialogue");
 }

@@ -8,7 +8,9 @@
 //   centre; a position given stays for their next lines;
 // - a face is `neutral` until a line names an expression, which stays for
 //   that character's next lines;
-// - the speaker is the line's, or the item's sender for a line without one.
+// - the speaker is the line's, or the item's sender for a line without one;
+// - a reply chosen, shown only when replaying a past dialogue (the journal),
+//   is the player's: nobody on stage speaks it.
 import type { PlayerStep, Position } from "./types";
 
 export interface OnStage {
@@ -20,8 +22,11 @@ export interface OnStage {
 
 export interface Stage {
   cast: OnStage[];
-  /** The line shown in the text box; none before the first. */
+  /** The line shown in the text box; none before the first, or while a
+   * reply is shown. */
   line: Extract<PlayerStep, { kind: "said" }> | null;
+  /** The reply the player chose, when the step shown is one. */
+  reply: string | null;
 }
 
 const ORDER: Position[] = ["left", "right", "center"];
@@ -51,12 +56,23 @@ export function stageAt(present: string[], from: string | null, steps: PlayerSte
     if (step.expression) actor.expression = step.expression;
     if (step.position) actor.position = step.position;
   }
-  return { cast, line };
+  const shown = steps[upTo];
+  if (shown?.kind === "chose") {
+    for (const c of cast) c.speaking = false;
+    return { cast, line: null, reply: shown.text };
+  }
+  return { cast, line, reply: null };
 }
 
 /** The index of the next said line after `at`, or `null` when there is none:
  * a reply already chosen is passed, as the stage only plays lines. */
 export function nextLine(steps: PlayerStep[], at: number): number | null {
   for (let i = at + 1; i < steps.length; i++) if (steps[i].kind === "said") return i;
+  return null;
+}
+
+/** The index of the said line before `at`, or `null` when there is none. */
+export function previousLine(steps: PlayerStep[], at: number): number | null {
+  for (let i = Math.min(at, steps.length) - 1; i >= 0; i--) if (steps[i].kind === "said") return i;
   return null;
 }

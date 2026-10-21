@@ -3,7 +3,7 @@
   // frames): the messaging app, one thread per sender, the latest first and
   // the unread ones marked; a thread opened shows its bubbles and the replies
   // its open message offers. Opening a thread marks its messages seen. What
-  // the phone has no template for yet is listed by name (L3.3).
+  // the phone has no template for yet is listed by name (L3.5).
   import { t } from "$lib/i18n/index.svelte";
   import { CONTENT_TYPE_LABEL } from "$lib/story/labels";
   import { phoneThreads, withoutTemplate, type Thread } from "$lib/story/player/game";

@@ -198,7 +198,8 @@ with none.
   position given stays for their next lines. A face is `neutral` until a line
   names an expression, which stays for that character's next lines. The
   speaker is put forward, the others dimmed; the next line shows on a click,
-  Space or Enter, and the replies once the last line is read.
+  Space or Enter, the left arrow goes back a line, and the replies show once
+  the last line is read.
 - **Replies that branch.** Every choice carries a stable Ink label
   (`* (yes) [I'm in!]`). The label is the "reply chosen" fact, readable by any
   condition, and a Message node can have **one exit per label**, shown like the
@@ -776,7 +777,15 @@ The player side follows each story's settings. What the engine needs:
   template for yet are listed by name.
 - **The dialogue layer** plays the latest dialogue while it waits for a reply,
   then until the player reads past its last line, which closes it and marks it
-  seen; a dialogue closed does not come back on reload.
+  seen; a dialogue closed does not come back on reload. While it plays, the
+  frame and what the story waits for slide out of view and the scene's blur is
+  reduced; the stage keeps the preview's 16:9 shape, as large as the scene
+  allows, and takes the keyboard at once.
+- **The journal** reads the dialogues played so far again, latest first, each
+  with its date and who was there: on the scene, as it was played, the
+  replies chosen included, with nothing to answer. It is rebuilt from the
+  save's history, like the phone's threads, and is closed while a dialogue
+  plays. Escape goes back to the list, then closes it.
 - **A player action** shows as a card with its name and a Done button, until
   actions have their screens (catalogs, L6). An event shows its summary: type,
   track, car, laps, entry fee, the goal in words, the attempt.
