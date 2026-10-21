@@ -9,11 +9,11 @@
   import { t } from "$lib/i18n/index.svelte";
   import { CONTENT_TYPE_LABEL } from "$lib/story/labels";
   import { phoneThreads, withoutTemplate, type Thread } from "$lib/story/player/game";
-  import { initials } from "$lib/story/player/phone";
   import type { Speaker } from "$lib/story/player/types";
   import type { SeenItem } from "$lib/story/play";
   import PhoneFrame from "$lib/components/story/player/PhoneFrame.svelte";
   import ThreadView from "$lib/components/story/player/ThreadView.svelte";
+  import ListRow from "./ListRow.svelte";
 
   interface Props {
     items: SeenItem[];
@@ -88,23 +88,15 @@
         </li>
       {/if}
       {#each threads as x (x.from ?? "")}
-        {@const avatar = x.from ? speakers[x.from]?.portraits.neutral : null}
         <li>
-          <button class="row" onclick={() => (open = x.from)}>
-            {#if avatar}
-              <img class="avatar" src={avatar} alt="" />
-            {:else}
-              <span class="avatar initials">{initials(nameOf(x.from))}</span>
-            {/if}
-            <span class="text">
-              <span class="who">{nameOf(x.from)}</span>
-              <span class="last">{lastLine(x)}</span>
-            </span>
-            <span class="meta">
-              <span class="time">{x.clock}</span>
-              {#if x.unseen.length || x.choices.length}<span class="dot" aria-label={t("story.play.unread")}></span>{/if}
-            </span>
-          </button>
+          <ListRow
+            name={nameOf(x.from)}
+            avatar={x.from ? (speakers[x.from]?.portraits.neutral ?? null) : null}
+            preview={lastLine(x)}
+            time={x.clock}
+            unread={x.unseen.length > 0 || x.choices.length > 0}
+            onclick={() => (open = x.from)}
+          />
         </li>
       {/each}
       {#each others as o, i (o.content + ":" + i)}
@@ -147,70 +139,6 @@
     gap: 8px;
     padding: 10px 12px 12px;
     border-bottom: 1px solid var(--line);
-  }
-  .row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-    padding: 9px 10px;
-    background: transparent;
-    border-bottom: 1px solid var(--line);
-    text-align: left;
-  }
-  .row:hover {
-    background: var(--raised);
-  }
-  .avatar {
-    flex: none;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    object-fit: cover;
-  }
-  .initials {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--raised);
-    color: var(--txt2);
-    font-size: 11px;
-  }
-  .text {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .who {
-    font-size: 12.5px;
-    color: var(--txt);
-  }
-  .last {
-    font-size: 11.5px;
-    color: var(--muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .meta {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 4px;
-  }
-  .time {
-    font-size: 10.5px;
-    color: var(--muted);
-  }
-  /* The phone's blue, like the player's replies: the red has its scale
-     (§7.2ter), and an unread thread is not on it. */
-  .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--blue);
   }
   .other,
   .none {
