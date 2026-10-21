@@ -3,7 +3,7 @@
   // templates and frames): one thread per sender, the latest first and
   // the unread ones marked; a thread opened shows its bubbles and the replies
   // its open message offers. Opening a thread marks its messages seen. What
-  // the phone has no template for yet is listed by name (L3.5). The next
+  // the phone has no app for yet (a call, a video…) is listed by name. The next
   // event, when the story waits for one, heads the list (`next`).
   import type { Snippet } from "svelte";
   import { t } from "$lib/i18n/index.svelte";
@@ -13,6 +13,7 @@
   import type { SeenItem } from "$lib/story/play";
   import PhoneFrame from "$lib/components/story/player/PhoneFrame.svelte";
   import ThreadView from "$lib/components/story/player/ThreadView.svelte";
+  import BackButton from "./BackButton.svelte";
   import ListRow from "./ListRow.svelte";
 
   interface Props {
@@ -25,8 +26,11 @@
     onseen: (content: string) => void;
     /** The event the story waits for, shown above the threads. */
     next?: Snippet;
+    /** Another app calls for the player. */
+    elsewhere: boolean;
+    onhome: () => void;
   }
-  const { items, clock, date, speakers, onreply, onseen, next }: Props = $props();
+  const { items, clock, date, speakers, onreply, onseen, next, elsewhere, onhome }: Props = $props();
 
   const threads = $derived(phoneThreads(items));
   const others = $derived(withoutTemplate(items));
@@ -67,8 +71,8 @@
     title={nameOf(thread.from)}
     avatar={thread.from ? (speakers[thread.from]?.portraits.neutral ?? null) : null}
   >
-    <div class="thread">
-      <button class="back" onclick={() => (open = undefined)}>‹ {t("story.play.messages")}</button>
+    <div class="screen">
+      <BackButton label={t("story.play.messages")} onclick={() => (open = undefined)} />
       <ThreadView
         steps={thread.steps}
         choices={thread.choices}
@@ -80,58 +84,52 @@
   </PhoneFrame>
 {:else}
   <PhoneFrame {clock} {date} title={t("story.play.messages")} avatar={null}>
-    <ul class="list">
-      {#if next}
-        <li class="next">
-          <div class="lbl-key">{t("story.play.nextEvent")}</div>
-          {@render next()}
-        </li>
-      {/if}
-      {#each threads as x (x.from ?? "")}
-        <li>
-          <ListRow
-            name={nameOf(x.from)}
-            avatar={x.from ? (speakers[x.from]?.portraits.neutral ?? null) : null}
-            preview={lastLine(x)}
-            time={x.clock}
-            unread={x.unseen.length > 0 || x.choices.length > 0}
-            onclick={() => (open = x.from)}
-          />
-        </li>
-      {/each}
-      {#each others as o, i (o.content + ":" + i)}
-        <li class="other">{t("story.play.noTemplate", { kind: t(CONTENT_TYPE_LABEL[o.kind]), from: nameOf(o.from) })}</li>
-      {/each}
-      {#if threads.length === 0 && others.length === 0}
-        <li class="none">{t("story.play.noMessage")}</li>
-      {/if}
-    </ul>
+    <div class="screen">
+      <BackButton label={t("story.play.apps")} dot={elsewhere} onclick={onhome} />
+      <ul class="list">
+        {#if next}
+          <li class="next">
+            <div class="lbl-key">{t("story.play.nextEvent")}</div>
+            {@render next()}
+          </li>
+        {/if}
+        {#each threads as x (x.from ?? "")}
+          <li>
+            <ListRow
+              name={nameOf(x.from)}
+              avatar={x.from ? (speakers[x.from]?.portraits.neutral ?? null) : null}
+              preview={lastLine(x)}
+              time={x.clock}
+              unread={x.unseen.length > 0 || x.choices.length > 0}
+              onclick={() => (open = x.from)}
+            />
+          </li>
+        {/each}
+        {#each others as o, i (o.content + ":" + i)}
+          <li class="other">{t("story.play.noTemplate", { kind: t(CONTENT_TYPE_LABEL[o.kind]), from: nameOf(o.from) })}</li>
+        {/each}
+        {#if threads.length === 0 && others.length === 0}
+          <li class="none">{t("story.play.noMessage")}</li>
+        {/if}
+      </ul>
+    </div>
   </PhoneFrame>
 {/if}
 
 <style>
-  .thread {
+  .screen {
     display: flex;
     flex-direction: column;
     height: 100%;
     min-height: 0;
-  }
-  .back {
-    align-self: flex-start;
-    background: transparent;
-    color: var(--txt2);
-    font-size: 11.5px;
-    padding: 4px 8px;
-  }
-  .back:hover {
-    color: var(--txt);
   }
   .list {
     list-style: none;
     margin: 0;
     padding: 0;
     overflow-y: auto;
-    height: 100%;
+    flex: 1;
+    min-height: 0;
   }
   .next {
     display: flex;

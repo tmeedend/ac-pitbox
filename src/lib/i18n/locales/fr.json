@@ -2897,7 +2897,13 @@
       "launchAgain": "Relancer",
       "giveUp": "Abandonner",
       "cannotAfford": "Inscription {fee} : tu as {money}.",
-      "nextEvent": "Prochaine épreuve"
+      "nextEvent": "Prochaine épreuve",
+      "apps": "Applications",
+      "appMail": "Mail",
+      "appNews": "Actualités",
+      "appSocial": "Réseaux",
+      "appBank": "Banque",
+      "balance": "Solde"
     },
     "world": {
       "title": "Monde",

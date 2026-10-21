@@ -3,6 +3,7 @@
 // per sender, and the dialogue the scene plays now.
 import { criteriaOf } from "../events";
 import type { SeenItem } from "../play";
+import { appOf } from "./apps";
 import type { PlayerChoice, PlayerStep } from "./types";
 
 /** A sender's messages, as one thread of the messaging app. */
@@ -70,10 +71,10 @@ export function pastDialogues(items: SeenItem[]): number[] {
   return past;
 }
 
-/** Items of the types the phone has no template for yet: listed, not shown
- * (the inbox, the feed and the statement come with L3.5). */
+/** Items of the types the phone has no app for yet: listed by name, not
+ * shown. A dialogue is played on the scene. */
 export function withoutTemplate(items: SeenItem[]): SeenItem[] {
-  return items.filter((i) => i.kind !== "message" && i.kind !== "dialogue");
+  return items.filter((i) => appOf(i.kind) === null && i.kind !== "dialogue");
 }
 
 /** One line of an event's goal, as an i18n key and its values. */

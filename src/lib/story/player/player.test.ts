@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dateLabel, initials } from "./phone";
+import { dateLabel, initials, whenLabel } from "./phone";
 import { nextLine, previousLine, stageAt } from "./stage";
 import { bubbles } from "./thread";
 import type { PlayerStep, Position } from "./types";
@@ -92,6 +92,13 @@ describe("the phone's status bar", () => {
     expect(dateLabel("2001-12-15", "seasons", t, "en")).toBe('story.player.winter:{"year":2001}');
     expect(dateLabel("2001-03-01", "none", t, "en")).toBe("");
     expect(dateLabel("2001-03-01", "real", t, "en")).toContain("2001");
+  });
+
+  it("says when an item came, the time alone when the story shows no date", () => {
+    expect(whenLabel("0003-05-01", "09:12", "relative", t, "en")).toBe(
+      'story.player.yearMonth:{"year":3,"month":5} · 09:12',
+    );
+    expect(whenLabel("2001-03-01", "09:12", "none", t, "en")).toBe("09:12");
   });
 
   it("falls back on initials for an avatar", () => {

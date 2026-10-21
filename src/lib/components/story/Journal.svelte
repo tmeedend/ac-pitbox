@@ -6,7 +6,7 @@
   // Escape (the gamepad's B too) goes back to the list, then closes.
   import { i18n, t } from "$lib/i18n/index.svelte";
   import { pastDialogues } from "$lib/story/player/game";
-  import { dateLabel, type DateDisplay } from "$lib/story/player/phone";
+  import { whenLabel, type DateDisplay } from "$lib/story/player/phone";
   import type { Speaker } from "$lib/story/player/types";
   import type { SeenItem } from "$lib/story/play";
   import DialogueStage from "./player/DialogueStage.svelte";
@@ -25,8 +25,7 @@
   const shown = $derived(open === null ? null : items[open]);
 
   function when(item: SeenItem): string {
-    const date = dateLabel(item.date, dateDisplay, t, i18n.locale);
-    return date ? `${date} · ${item.clock}` : item.clock;
+    return whenLabel(item.date, item.clock, dateDisplay, t, i18n.locale);
   }
 
   function who(item: SeenItem): string {

@@ -636,8 +636,29 @@ de reprendre. En cas d'écart, la spec fait foi.
             message du fil mis en attente perd ses sorties par réponse (le
             nœud est déjà quitté), ce que l'avertissement « attendra un
             cadre » annonce sans le détailler.
-          - **L3.5, les autres applications du téléphone** (ex-L3.3) : boîte
-            mail, fil d'actu et réseaux, relevé bancaire.
+          - **L3.5, les autres applications du téléphone — fait
+            (2026-10-21).** Un écran d'accueil d'applications : Messages,
+            Mail (boîte de réception), Actualités et Réseaux (fils), Banque
+            (relevé, sous le solde). Les modèles (`MailView`, `FeedView`,
+            `StatementView`) servent aussi à l'aperçu de l'éditeur.
+            **Choisi sans demander** : une application apparaît avec son
+            premier contenu, Messages toujours ; le téléphone s'ouvre sur
+            Messages (la prochaine épreuve y est) et y revient quand une
+            épreuve se met à attendre ; chaque application porte le nombre de
+            contenus non lus ou en attente de réponse, et son retour à
+            l'accueil une pastille quand une autre en a ; un mail est lu à
+            l'ouverture, un fil ou un relevé en entier dès qu'il est ouvert ;
+            les articles vont dans Actualités, les posts dans Réseaux, deux
+            applications du même modèle ; une vidéo, un appel, une annonce et
+            une entrée d'agenda restent nommés dans Messages (pas
+            d'application encore : la vidéo attend les cinématiques, l'annonce
+            les catalogues) ; un mail n'a pas d'objet (le format n'en a pas),
+            sa première ligne en tient lieu dans la liste ; une ligne de relevé
+            est le texte du contenu, le montant dans les mots de l'auteur ;
+            les icônes sont les initiales du nom de l'application, dans le
+            thème par défaut.
+            **Limites connues** : pas vu à l'écran ; l'exemple n'a ni article
+            ni relevé (Actualités et Banque n'y apparaissent pas).
       - **L3b à L8** : dans l'ordre du plan de livraison de la spec.
       **Écarts assumés par rapport au document de conception** (la spec
       publique les reprend déjà) :

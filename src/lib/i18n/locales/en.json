@@ -2897,7 +2897,13 @@
       "launchAgain": "Launch again",
       "giveUp": "Give up",
       "cannotAfford": "Entry fee {fee}: you have {money}.",
-      "nextEvent": "Next event"
+      "nextEvent": "Next event",
+      "apps": "Apps",
+      "appMail": "Mail",
+      "appNews": "News",
+      "appSocial": "Social",
+      "appBank": "Bank",
+      "balance": "Balance"
     },
     "world": {
       "title": "World",

@@ -29,3 +29,22 @@ export interface Speaker {
   /** Expression → picture URL. */
   portraits: Record<string, string>;
 }
+
+/** An article or a post, as the feed template shows it. */
+export interface Post {
+  /** Tells the posts apart, and says which one a reply answers. */
+  key: string;
+  from: string | null;
+  /** The author's name. */
+  author: string;
+  when: string;
+  steps: PlayerStep[];
+  choices: PlayerChoice[];
+}
+
+/** A line of the statement template. */
+export interface StatementLine {
+  key: string;
+  when: string;
+  steps: PlayerStep[];
+}

@@ -64,7 +64,14 @@ describe("pastDialogues", () => {
 
 describe("withoutTemplate", () => {
   it("lists what the phone cannot show yet", () => {
-    expect(withoutTemplate([item("a"), item("m", { kind: "mail" }), item("d", { kind: "dialogue" })])).toHaveLength(1);
+    const kinds = withoutTemplate([
+      item("a"),
+      item("m", { kind: "mail" }),
+      item("d", { kind: "dialogue" }),
+      item("c", { kind: "call" }),
+      item("v", { kind: "video" }),
+    ]).map((i) => i.kind);
+    expect(kinds).toEqual(["call", "video"]);
   });
 });
 

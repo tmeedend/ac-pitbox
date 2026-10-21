@@ -176,7 +176,9 @@
             items={view.items}
             clock={view.clock}
             {date}
+            dateDisplay={view.date_display}
             {speakers}
+            money={view.money}
             onreply={(content, reply) => void move({ kind: "reply", content, reply })}
             onseen={(content) => void move({ kind: "seen", content })}
             next={eventInFrame ? nextEvent : undefined}

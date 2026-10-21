@@ -548,9 +548,9 @@ the editor is reserved; they are translated when it opens to all.
   replies, and sees what the conversation changed and which items it sent.
   What is set lasts while Pit Box runs and is never written. A dialogue shows
   on the 16:9 stage (a plain background until the scenes exist), another item
-  in the frame it can arrive in - the thread template for a message first,
-  the other templates with Story Mode - and an item no frame can show shows
-  the checks' warning instead. The preview follows every save, and its views
+  in the frame it can arrive in, in the template of the phone app showing it
+  (thread, inbox, feed, statement; a type with no app yet says so), and an
+  item no frame can show shows the checks' warning instead. The preview follows every save, and its views
   are Story Mode's own: the phone, its templates and the stage.
 - **A content item lives in a `.story` file of `content/`**, filed as the
   author likes. A new item gets its id from the name typed and a file of its
@@ -778,10 +778,20 @@ The player side follows each story's settings. What the engine needs:
   own data; a new game replaces it after a confirmation. The story's `saves`
   setting (autosave per day or manual slots, reload) is not applied yet. A
   game resumes on the story as it is now, or is refused with the reason.
-- **The phone's messaging app** lists one thread per sender, the latest
+- **The phone** has a home screen of apps, each for the content types it has
+  a template for: Messages (threads) for messages, Mail (inbox) for mails,
+  News and Social (feeds) for articles and social posts, Bank (statement) for
+  statements, under the balance when the story has money. An app appears with
+  its first item, Messages always; each shows how many of its items are
+  unread or wait for a reply, and an app's way back home is marked when
+  another one has some. The phone opens on Messages, and goes back to it when
+  an event comes to wait. Messages lists one thread per sender, the latest
   first, the unread ones marked; a thread opened marks its messages seen and
-  offers the replies of its open message. The content types the phone has no
-  template for yet are listed by name.
+  offers the replies of its open message. Mail lists the latest first; a mail
+  opened is seen and offers its replies. A feed or a statement opened is read
+  as a whole, and a post offers its replies under it. The content types with
+  no app yet (call, video, listing, calendar entry) are listed by name in
+  Messages.
 - **The dialogue layer** plays the latest dialogue while it waits for a reply,
   then until the player reads past its last line, which closes it and marks it
   seen; a dialogue closed does not come back on reload. While it plays, the

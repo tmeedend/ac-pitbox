@@ -32,6 +32,20 @@ export function dateLabel(
   }
 }
 
+/** When an item arrived, as the phone and the journal show it: the date as
+ * the story shows it, then the time; the time alone when the story shows no
+ * date. */
+export function whenLabel(
+  date: string,
+  clock: string,
+  display: DateDisplay,
+  t: (key: string, values?: Record<string, string | number>) => string,
+  locale: string,
+): string {
+  const day = dateLabel(date, display, t, locale);
+  return day ? `${day} · ${clock}` : clock;
+}
+
 /** i18n keys written out in full, for the key check. */
 const SEASON: Record<string, string> = {
   winter: "story.player.winter",
