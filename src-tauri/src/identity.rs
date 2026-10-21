@@ -252,8 +252,10 @@ mod tests {
         put(&b, "data/engine.ini", b"LIMITER=8300");
         assert!(!content_differs(&a, &b).unwrap(), "put back");
 
+        // Removed before it is written again: on a case-insensitive disk,
+        // `DATA/Engine.INI` would be the very file `data/engine.ini` is.
+        std::fs::remove_dir_all(b.join("data")).unwrap();
         put(&b, "DATA/Engine.INI", b"LIMITER=8300");
-        std::fs::remove_file(b.join("data/engine.ini")).unwrap();
         assert!(
             !content_differs(&a, &b).unwrap(),
             "paths are compared as the rest of the import does: lower case"
