@@ -6,6 +6,7 @@
   import { tick } from "svelte";
   import { bubbles } from "$lib/story/player/thread";
   import type { PlayerChoice, PlayerStep } from "$lib/story/player/types";
+  import ReplyChoices from "./ReplyChoices.svelte";
 
   interface Props {
     steps: PlayerStep[];
@@ -36,13 +37,7 @@
     <div class="bubble {b.side}">{b.text}</div>
   {/each}
 </div>
-{#if choices.length}
-  <div class="replies">
-    {#each choices as c (c.label)}
-      <button class="reply" onclick={() => onchoose(c.label)}>{c.text}</button>
-    {/each}
-  </div>
-{/if}
+<ReplyChoices {choices} {onchoose} />
 
 <style>
   .thread {
@@ -80,25 +75,5 @@
     color: var(--txt);
     border: 1px solid var(--blue-border);
     border-bottom-right-radius: 4px;
-  }
-  .replies {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 10px;
-    border-top: 1px solid var(--line);
-  }
-  .reply {
-    text-align: left;
-    padding: 8px 11px;
-    border-radius: 12px;
-    background: transparent;
-    color: var(--txt2);
-    border: 1px solid var(--mat-line);
-    font-size: 12.5px;
-  }
-  .reply:hover {
-    border-color: var(--blue-border);
-    color: var(--txt);
   }
 </style>
