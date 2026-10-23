@@ -126,8 +126,9 @@ classified ads. So content is written by **type**, never by app, and a
 **frame** decides how each type is shown.
 
 **Content types**: message, call, mail, article, social post, video, listing,
-statement, calendar entry, and **dialogue** (two or more characters talking face
-to face, see In-person dialogues). The author writes "a message from a
+statement, calendar entry, **dialogue** (two or more characters talking face
+to face, see In-person dialogues) and **illustration** (a full-screen picture,
+same section). The author writes "a message from a
 character", never "an SMS".
 
 **Six templates** display them, whatever the era: thread, inbox, feed,
@@ -227,7 +228,11 @@ with none.
   player picks. Saving at any moment during a dialogue follows the story's
   `saves` setting.
 - **Illustrations.** A content type `illustration` shows a full-screen picture,
-  with optional text, for the big moments, with or without a frame.
+  with optional text, for the big moments, with or without a frame. Its
+  `picture` is a file inside `media/`, checked like a portrait; its text says
+  what it shows and offers no reply, so it never holds the flow. On the
+  scene, dialogues and illustrations play one after the other, in the order
+  they came, each until the player closes it.
 - **Transitions** are options in the editor, never story settings: fade or cut
   between scenes, a portrait entering or leaving, a change of expression.
 - **Seeing the shape of a branching story.** The Story flow screen stays a
@@ -634,6 +639,8 @@ visible in it:
 - A portrait's path is relative to `media/` and stays inside it, with `/`
   between folders; it is matched with the case it has on disk, since a shared
   story is a zip.
+- `picture` belongs to an illustration only, as `characters` and `scene`
+  belong to a dialogue.
 - A content header has no `replies`: replies are the labels of its text. A
   Message node's reply exits are `on_reply: { <label>: <node> }`; a node with
   reply exits waits for the conversation to end, as does `wait_reply: true`.
@@ -794,9 +801,10 @@ The player side follows each story's settings. What the engine needs:
   as a whole, and a post offers its replies under it. The content types with
   no app yet (call, video, listing, calendar entry) are listed by name in
   Messages.
-- **The dialogue layer** plays the latest dialogue while it waits for a reply,
-  then until the player reads past its last line, which closes it and marks it
-  seen; a dialogue closed does not come back on reload. While it plays, the
+- **The dialogue layer** plays the dialogues and illustrations in the order
+  they came, the first not closed yet: a dialogue while it waits for a reply,
+  then until the player reads past its last line, an illustration until a
+  click; closing marks it seen, and it does not come back on reload. While it plays, the
   frame and what the story waits for slide out of view and the scene's blur is
   reduced; the stage keeps the preview's 16:9 shape, as large as the scene
   allows, and takes the keyboard at once.

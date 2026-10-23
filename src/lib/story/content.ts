@@ -17,7 +17,13 @@ export const CONTENT_TYPES: ContentType[] = [
   "statement",
   "calendar_entry",
   "dialogue",
+  "illustration",
 ];
+
+/** Played on the scene, outside any frame (`ContentType::on_scene`). */
+export function onScene(kind: ContentType): boolean {
+  return kind === "dialogue" || kind === "illustration";
+}
 
 export type Placement = "flow" | "reactive" | "pool";
 
@@ -47,13 +53,14 @@ export function setPlacement(h: ContentHeader, p: Placement): void {
 }
 
 /** `h` as type `kind`: what only a dialogue has (the characters present,
- * the scene) goes with the type. */
+ * the scene), or only an illustration (its picture), goes with the type. */
 export function setType(h: ContentHeader, kind: ContentType): void {
   h.type = kind;
   if (kind !== "dialogue") {
     delete h.characters;
     delete h.scene;
   }
+  if (kind !== "illustration") delete h.picture;
 }
 
 /** The file of a new item: named after its id, at the top of `content/`;

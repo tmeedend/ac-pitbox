@@ -565,6 +565,9 @@ pub enum ContentType {
     /// Characters face to face, played on the scene outside any frame
     /// (SPEC-story-mode, In-person dialogues): it needs no frame.
     Dialogue,
+    /// A full-screen picture with optional text, for the big moments: shown
+    /// on the scene too, with or without a frame.
+    Illustration,
 }
 
 impl ContentType {
@@ -581,7 +584,13 @@ impl ContentType {
             ContentType::Statement => "statement",
             ContentType::CalendarEntry => "calendar_entry",
             ContentType::Dialogue => "dialogue",
+            ContentType::Illustration => "illustration",
         }
+    }
+
+    /// Played on the scene, outside any frame: it needs none.
+    pub fn on_scene(self) -> bool {
+        matches!(self, ContentType::Dialogue | ContentType::Illustration)
     }
 }
 
@@ -599,6 +608,8 @@ pub struct ContentItem {
     /// Dialogue only: where it is played; the current scene otherwise. A
     /// name kept as written until the story's scenes exist.
     pub scene: Option<String>,
+    /// Illustration only: its picture, a path inside the story's `media/`.
+    pub picture: Option<String>,
     /// The text as written, in Ink (SPEC-story-mode, Dialogue text).
     pub body: String,
     /// The text, read (`script.rs`); what did not read is in
@@ -654,6 +665,8 @@ pub struct ContentHeader {
     pub characters: Option<Vec<CharacterId>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scene: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub picture: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pool: Option<PoolId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -714,6 +727,7 @@ impl ContentItem {
             clock: self.clock,
             characters: (!self.characters.is_empty()).then(|| self.characters.clone()),
             scene: self.scene.clone(),
+            picture: self.picture.clone(),
             pool: None,
             when: None,
             delay: None,
@@ -791,6 +805,7 @@ impl ContentHeader {
             placement,
             characters: self.characters.unwrap_or_default(),
             scene: self.scene,
+            picture: self.picture,
             body,
             script,
             script_errors,

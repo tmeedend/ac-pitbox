@@ -16,6 +16,8 @@ nodes:
     beat: { effects: ["rel.parent += 1"] }
   - id: race_03
     event: race_03
+  - id: crossing_the_line
+    message: finish_line
   - id: a_week_later
     beat: { advance: 1 week }
   - id: phone_back

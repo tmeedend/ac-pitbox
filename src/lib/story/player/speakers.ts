@@ -12,12 +12,18 @@ export function speakersOf(characters: Character[], folder: string | null): Reco
   const out: Record<string, Speaker> = {};
   for (const c of characters) {
     const portraits: Record<string, string> = {};
-    if (folder) {
-      for (const [expression, file] of Object.entries(c.portraits ?? {})) {
-        portraits[expression] = convertFileSrc(`${folder}/media/${file}`);
-      }
+    for (const [expression, file] of Object.entries(c.portraits ?? {})) {
+      const url = mediaUrl(folder, file);
+      if (url) portraits[expression] = url;
     }
     out[c.id] = { name: c.name ?? c.id, portraits };
   }
   return out;
+}
+
+/** A file of the story's `media/` (`path` inside it) as a URL the page can
+ * show; `null` for a story without media on disk (the sample Pit Box
+ * carries) or without a path. */
+export function mediaUrl(folder: string | null, path: string | null | undefined): string | null {
+  return folder && path ? convertFileSrc(`${folder}/media/${path}`) : null;
 }

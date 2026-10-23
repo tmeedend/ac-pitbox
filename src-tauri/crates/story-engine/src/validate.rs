@@ -510,6 +510,7 @@ impl Checker<'_> {
         if !dialogue && item.scene.is_some() {
             self.error(&header, format!("{at}: `scene` is for a dialogue"));
         }
+        self.picture(item, &header, &at);
         for who in item.characters.iter().filter(|w| story.character(w).is_none()) {
             self.error(&header, format!("{at}: unknown character `{who}` among those present"));
         }
@@ -546,6 +547,28 @@ impl Checker<'_> {
                     Some(_) => {}
                 }
             }
+        }
+    }
+
+    /// An illustration's picture (SPEC-story-mode, In-person dialogues): a
+    /// file inside `media/`, as a portrait is; and nothing to answer - an
+    /// illustration is looked at, its text only says what it shows.
+    fn picture(&mut self, item: &ContentItem, header: &str, at: &str) {
+        let illustration = item.kind == ContentType::Illustration;
+        match (&item.picture, illustration) {
+            (Some(_), false) => self.error(header, format!("{at}: `picture` is for an illustration")),
+            (None, true) => self.error(header, format!("{at}: an illustration needs a `picture` in `media/`")),
+            (Some(path), true) => {
+                if let Some(why) = media_path_problem(path) {
+                    self.error(header, format!("{at}: picture `{path}`: {why}"));
+                } else if self.story.media.as_ref().is_some_and(|m| !m.contains(path)) {
+                    self.error(header, format!("{at}: `media/{path}` does not exist"));
+                }
+            }
+            (None, false) => {}
+        }
+        if illustration && item.script.has_choices() {
+            self.error(header, format!("{at}: an illustration offers no reply"));
         }
     }
 

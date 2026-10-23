@@ -74,11 +74,11 @@ impl Frame {
     }
 
     /// Whether content of `kind` has somewhere to be shown while this frame
-    /// is active. A dialogue is played on the scene, outside any frame, so
-    /// it needs none. An unknown frame answers yes: it is reported once as
+    /// is active. A dialogue or an illustration is played on the scene,
+    /// outside any frame, so it needs none. An unknown frame answers yes: it is reported once as
     /// unknown, not again for every item it would show.
     pub fn can_show(&self, kind: ContentType) -> bool {
-        if kind == ContentType::Dialogue {
+        if kind.on_scene() {
             return true;
         }
         match self {
@@ -239,6 +239,10 @@ mod tests {
     fn a_dialogue_needs_no_frame_and_the_rest_needs_one() {
         let phone = Frame::Named("phone".into());
         assert!(Frame::None.can_show(ContentType::Dialogue));
+        assert!(
+            Frame::None.can_show(ContentType::Illustration),
+            "an illustration is shown on the scene too"
+        );
         assert!(!Frame::None.can_show(ContentType::Message));
         assert!(phone.can_show(ContentType::Message) && phone.can_show(ContentType::Dialogue));
         assert!(phone.is_known() && Frame::None.is_known());

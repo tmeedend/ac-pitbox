@@ -22,6 +22,14 @@ describe("placement", () => {
     setType(h, "message");
     expect(h).toEqual({ id: "a", type: "message" });
   });
+
+  it("a type other than illustration drops the picture", () => {
+    const h: ContentHeader = { id: "a", type: "illustration", picture: "big/moment.png" };
+    setType(h, "illustration");
+    expect(h.picture).toBe("big/moment.png");
+    setType(h, "dialogue");
+    expect(h).toEqual({ id: "a", type: "dialogue" });
+  });
 });
 
 describe("finding an item", () => {

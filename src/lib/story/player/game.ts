@@ -3,6 +3,7 @@
 // per sender, and the dialogue the scene plays now.
 import { criteriaOf } from "../events";
 import type { SeenItem } from "../play";
+import { onScene } from "../content";
 import { appOf } from "./apps";
 import { lineKey } from "./stage";
 import type { PlayerChoice, PlayerStep } from "./types";
@@ -47,23 +48,21 @@ export function phoneThreads(items: SeenItem[]): Thread[] {
   return threads.sort((a, b) => order(b).localeCompare(order(a)));
 }
 
-/** The dialogue the scene plays, as an index into `items`: the latest one,
- * while it waits for a reply or until the player has read it to its end (and
- * closed it, which marks it seen). An index rather than the item, so that a
- * new delivery of the same dialogue is told from the last. `null` when none. */
-export function currentDialogue(items: SeenItem[]): number | null {
-  for (let i = items.length - 1; i >= 0; i--) {
-    if (items[i].kind !== "dialogue") continue;
-    return items[i].open || !items[i].seen ? i : null;
-  }
-  return null;
+/** What the scene plays, as an index into `items`: the first dialogue or
+ * illustration, in the order they came, that waits for a reply or that the
+ * player has not closed yet (closing marks it seen) - so several come one
+ * after the other. An index rather than the item, so that a new delivery of
+ * the same item is told from the last. `null` when none. */
+export function onStage(items: SeenItem[]): number | null {
+  const i = items.findIndex((item) => onScene(item.kind) && (item.open || !item.seen));
+  return i < 0 ? null : i;
 }
 
 /** The dialogues the journal rereads, latest first, as indexes into
  * `items`: every one played, except the one the scene plays now - it is not
  * past yet. A dialogue that said nothing has nothing to reread. */
 export function pastDialogues(items: SeenItem[]): number[] {
-  const current = currentDialogue(items);
+  const current = onStage(items);
   const past: number[] = [];
   for (let i = items.length - 1; i >= 0; i--) {
     const item = items[i];
@@ -73,9 +72,9 @@ export function pastDialogues(items: SeenItem[]): number[] {
 }
 
 /** Items of the types the phone has no app for yet: listed by name, not
- * shown. A dialogue is played on the scene. */
+ * shown. A dialogue or an illustration is played on the scene. */
 export function withoutTemplate(items: SeenItem[]): SeenItem[] {
-  return items.filter((i) => appOf(i.kind) === null && i.kind !== "dialogue");
+  return items.filter((i) => appOf(i.kind) === null && !onScene(i.kind));
 }
 
 /** One line of an event's goal, as an i18n key and its values. */

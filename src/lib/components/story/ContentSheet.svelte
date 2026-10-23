@@ -1,7 +1,7 @@
 <script lang="ts">
   // One content item (SPEC-story-mode, Content types; Dialogue text): its
-  // header - type, sender, placement, and for a dialogue the characters
-  // present and the scene - and its text, in Ink. Each edit saves the whole
+  // header - type, sender, placement, for a dialogue the characters present
+  // and the scene, for an illustration its picture - and its text, in Ink. Each edit saves the whole
   // `.story` file at once; the engine checks the text after every save, line
   // by line (StoryChecks). Its id is not renamed here: renaming a content
   // item does not follow its citations yet. The text shows as a form or as
@@ -11,6 +11,8 @@
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
   import { CONTENT_TYPES, placementOf, setPlacement, setType, type Placement } from "$lib/story/content";
+  import { mediaUrl } from "$lib/story/player/speakers";
+  import { mediaImages } from "$lib/story/world";
   import { setOptional } from "$lib/story/fields";
   import { parseLines } from "$lib/story/flow";
   import { CONTENT_TYPE_LABEL } from "$lib/story/labels";
@@ -18,6 +20,7 @@
   import { readScript, writeScript, type ContentHeader, type ScriptRead } from "$lib/story/studio";
   import { removeContent, saveContentFile, studio } from "$lib/story/studioState.svelte";
   import Field from "$lib/components/ui/Field.svelte";
+  import ImageSelectDropdown from "$lib/components/ui/ImageSelectDropdown.svelte";
   import NumberStepper from "$lib/components/ui/NumberStepper.svelte";
   import Seg from "$lib/components/ui/Seg.svelte";
   import FileStatus from "./FileStatus.svelte";
@@ -92,7 +95,12 @@
   }
 
   /** Sets or removes an optional header key: an empty field writes nothing. */
-  function setOpt<K extends "from" | "clock" | "scene" | "delay" | "pool">(key: K, v: string) {
+  /** The pictures an illustration can show: the images of `media/`. */
+  const pictures = $derived(
+    mediaImages(story.media).map((p) => ({ id: p, name: p, image: mediaUrl(story.path, p) ?? "" })),
+  );
+
+  function setOpt<K extends "from" | "clock" | "scene" | "picture" | "delay" | "pool">(key: K, v: string) {
     setOptional(h, key, v);
     save();
   }
@@ -185,6 +193,19 @@
         </Field>
         <Field label={t("story.content.scene")}>
           <input class="input mono" value={h.scene ?? ""} onchange={(e) => setOpt("scene", value(e))} />
+        </Field>
+      {:else if h.type === "illustration"}
+        <Field label={t("story.content.picture")}>
+          <ImageSelectDropdown
+            options={pictures}
+            selectedId={h.picture ?? null}
+            placeholder={t("story.content.pickPicture")}
+            emptyText={t("story.world.noImagesShort")}
+            onselect={(p) => setOpt("picture", p)}
+          />
+          {#if h.picture && !story.media.includes(h.picture)}
+            <span class="missing" title={`media/${h.picture}`}>{t("story.content.pictureMissing")}</span>
+          {/if}
         </Field>
       {/if}
 
@@ -293,6 +314,10 @@
 </div>
 
 <style>
+  .missing {
+    color: var(--yellow);
+    font-size: 12px;
+  }
   .sheet {
     flex: 1;
     min-width: 420px;

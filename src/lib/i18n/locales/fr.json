@@ -2825,7 +2825,11 @@
       "addEffect": "Effet",
       "addEnd": "Fin",
       "moveUp": "Monter",
-      "moveDown": "Descendre"
+      "moveDown": "Descendre",
+      "typeIllustration": "Illustration",
+      "picture": "Image",
+      "pickPicture": "Choisir une image",
+      "pictureMissing": "introuvable"
     },
     "drivers": {
       "title": "Pilotes",

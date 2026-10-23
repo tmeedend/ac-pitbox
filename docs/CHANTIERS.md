@@ -698,7 +698,25 @@ de reprendre. En cas d'écart, la spec fait foi.
           (sauvegarde par jour ou emplacements, rechargement) n'est toujours
           pas appliqué : quand il le sera, chaque emplacement devra porter
           sa position ; pas vu à l'écran.
-        - **Reste** L3b.3 à L3b.5.
+        - **L3b.3 — fait (2026-10-23).** Type de contenu `illustration`
+          (moteur, éditeur, aperçu, jeu) : une image de `media/` en plein
+          cadre de scène, son texte dans une boîte en bas, fermée d'un clic.
+          L'exemple en a une à l'arrivée de la course 03.
+          **Choisi sans demander** : la clé `picture` (chemin dans `media/`,
+          vérifié comme un portrait), obligatoire et réservée à
+          l'illustration ; une illustration ne propose pas de réponse
+          (erreur) et ne retient donc jamais le fil ; elle n'a pas besoin de
+          cadre ; la scène joue dialogues et illustrations **dans l'ordre
+          d'arrivée**, le premier non fermé d'abord — avant, seul le dernier
+          dialogue jouait, et un dialogue plus ancien encore non lu ne se
+          montrait jamais (l'attendu du test correspondant a changé, voulu) ;
+          l'image couvre la scène (recadrée plutôt que bordée) ; tout le
+          texte s'affiche d'un coup ; le journal et l'historique ne
+          reprennent pas les illustrations ; l'exemple joué depuis Pit Box
+          n'a pas ses médias, son illustration n'a donc que son texte (comme
+          ses portraits, des initiales).
+          **Limites connues** : pas vu à l'écran.
+        - **Reste** L3b.4 et L3b.5.
       - **L4 à L8** : dans l'ordre du plan de livraison de la spec.
       **Écarts assumés par rapport au document de conception** (la spec
       publique les reprend déjà) :

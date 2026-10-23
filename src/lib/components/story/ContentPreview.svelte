@@ -13,11 +13,12 @@
   import { inputsOf } from "$lib/story/preview.svelte";
   import { appOf, APP_LABEL } from "$lib/story/player/apps";
   import { dateLabel, whenLabel } from "$lib/story/player/phone";
-  import { speakersOf } from "$lib/story/player/speakers";
+  import { mediaUrl, speakersOf } from "$lib/story/player/speakers";
   import { previewContent, type PreviewView } from "$lib/story/studio";
   import { studio } from "$lib/story/studioState.svelte";
   import NumberStepper from "$lib/components/ui/NumberStepper.svelte";
   import DialogueStage from "./player/DialogueStage.svelte";
+  import IllustrationView from "./player/IllustrationView.svelte";
   import FeedView from "./player/FeedView.svelte";
   import MailView from "./player/MailView.svelte";
   import PhoneFrame from "./player/PhoneFrame.svelte";
@@ -94,6 +95,8 @@
   {:else if view}
     {#if view.view === "nowhere"}
       <p class="warnbox">{view.nowhere}</p>
+    {:else if view.view === "scene" && view.kind === "illustration"}
+      <IllustrationView picture={mediaUrl(story.path, view.picture)} steps={view.steps} />
     {:else if view.view === "scene"}
       <DialogueStage
         steps={view.steps}

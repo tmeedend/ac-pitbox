@@ -14,6 +14,7 @@ const FILES: &[(&str, &str)] = &[
         "content/friend/invite.story",
         include_str!("../sample/content/friend/invite.story"),
     ),
+    ("content/finish.story", include_str!("../sample/content/finish.story")),
     (
         "content/friend/news.story",
         include_str!("../sample/content/friend/news.story"),
@@ -66,6 +67,10 @@ const FILES: &[(&str, &str)] = &[
 /// The files of `media/`, as paths inside the story folder: what a copy
 /// writes beside the text files.
 const MEDIA: &[(&str, &[u8])] = &[
+    (
+        "media/illustrations/finish_line.png",
+        include_bytes!("../sample/media/illustrations/finish_line.png"),
+    ),
     (
         "media/portraits/friend_happy.png",
         include_bytes!("../sample/media/portraits/friend_happy.png"),

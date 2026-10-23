@@ -43,6 +43,8 @@ pub struct SeenItem {
     pub from: Option<String>,
     /// A dialogue's characters present.
     pub characters: Vec<String>,
+    /// An illustration's picture, a path inside the story's `media/`.
+    pub picture: Option<String>,
     /// When it arrived; an item's own clock wins over the story's.
     pub date: String,
     pub clock: String,
@@ -95,6 +97,7 @@ pub fn play_view(story: &Story, state: &State) -> PlayView {
                     kind: item.map_or("message", |i| i.kind.name()),
                     from: item.and_then(|i| i.from.clone()),
                     characters: item.map(|i| i.characters.clone()).unwrap_or_default(),
+                    picture: item.and_then(|i| i.picture.clone()),
                     date: entry.date.to_string(),
                     clock: item.and_then(|i| i.clock).unwrap_or(entry.clock).to_string(),
                     steps: Vec::new(),

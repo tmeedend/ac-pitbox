@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { SeenItem } from "../play";
 import {
-  currentDialogue,
   dialogueLog,
   goals,
+  onStage,
   pastDialogues,
   phoneThreads,
   readBefore,
@@ -16,6 +16,7 @@ function item(content: string, o: Partial<SeenItem> = {}): SeenItem {
     kind: "message",
     from: "friend",
     characters: [],
+    picture: null,
     date: "2001-03-01",
     clock: "09:00",
     steps: [{ kind: "said", speaker: null, text: content, expression: null, position: null }],
@@ -45,16 +46,19 @@ describe("phoneThreads", () => {
   });
 });
 
-describe("currentDialogue", () => {
-  // The scene plays the latest dialogue until it is answered and read;
-  // once closed (seen), it is part of the past.
-  it("is the latest dialogue while open or unread", () => {
+describe("onStage", () => {
+  // The scene plays a dialogue until it is answered and read; once closed
+  // (seen), it is part of the past. L3b.3: dialogues and illustrations
+  // queue, the first one not closed yet plays.
+  it("plays the first dialogue or illustration still open or unread", () => {
     const talk = item("talk", { kind: "dialogue", seen: false });
-    expect(currentDialogue([item("a"), talk, item("b")])).toBe(1);
-    expect(currentDialogue([{ ...talk, seen: true }])).toBeNull();
-    expect(currentDialogue([{ ...talk, seen: true, open: true }])).toBe(0);
-    expect(currentDialogue([talk, { ...talk, seen: true }])).toBeNull();
-    expect(currentDialogue([item("a")])).toBeNull();
+    expect(onStage([item("a"), talk, item("b")])).toBe(1);
+    expect(onStage([{ ...talk, seen: true }])).toBeNull();
+    expect(onStage([{ ...talk, seen: true, open: true }])).toBe(0);
+    expect(onStage([item("a")])).toBeNull();
+    const picture = item("big", { kind: "illustration", seen: false });
+    expect(onStage([{ ...talk, seen: true }, picture, talk])).toBe(1);
+    expect(onStage([{ ...talk, seen: true }, { ...picture, seen: true }, talk])).toBe(2);
   });
 });
 

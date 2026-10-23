@@ -27,6 +27,8 @@ export interface SeenItem {
   kind: ContentType;
   from: string | null;
   characters: string[];
+  /** An illustration's picture, a path inside the story's `media/`. */
+  picture: string | null;
   date: string;
   clock: string;
   steps: PlayerStep[];

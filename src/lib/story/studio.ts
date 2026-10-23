@@ -62,7 +62,8 @@ export type ContentType =
   | "listing"
   | "statement"
   | "calendar_entry"
-  | "dialogue";
+  | "dialogue"
+  | "illustration";
 
 /** A `.story` item's header, as written (`story_engine::model::ContentHeader`):
  * a key left out is absent from the file. Its placement is told by which keys
@@ -77,6 +78,8 @@ export interface ContentHeader {
   characters?: string[];
   /** Dialogue only: a name, until the story's scenes exist. */
   scene?: string;
+  /** Illustration only: its picture, a path inside `media/`. */
+  picture?: string;
   pool?: string;
   /** Sentences, all of which must hold. */
   when?: string[];
@@ -449,6 +452,8 @@ export interface PreviewView {
   kind: ContentType;
   from: string | null;
   characters: string[];
+  /** An illustration's picture, a path inside `media/`. */
+  picture: string | null;
   steps: PlayerStep[];
   choices: PlayerChoice[];
   ended: boolean;

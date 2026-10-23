@@ -234,6 +234,7 @@ mod tests {
             "congrats_01",
             "talk_01",
             "results_01",
+            "finish_line",
         ] {
             assert_eq!(state.content_facts(content).delivered, 1, "{content} delivered once");
         }

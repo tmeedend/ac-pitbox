@@ -516,7 +516,8 @@ pub fn render(file: &str, value: serde_json::Value) -> Result<String, String> {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PreviewView {
-    /// `scene` for a dialogue, `frame` for an item a frame shows,
+    /// `scene` for a dialogue or an illustration, `frame` for an item a
+    /// frame shows,
     /// `nowhere` when none of the frames it can arrive in can show it.
     pub view: &'static str,
     /// The frame it shows in, for `frame`.
@@ -528,6 +529,8 @@ pub struct PreviewView {
     pub from: Option<String>,
     /// A dialogue's characters present.
     pub characters: Vec<String>,
+    /// An illustration's picture, a path inside the story's `media/`.
+    pub picture: Option<String>,
     pub steps: Vec<story_engine::engine::Step>,
     pub choices: Vec<story_engine::engine::Offer>,
     pub ended: bool,
@@ -578,14 +581,14 @@ pub fn preview(folder: &Path, id: &str, setup: &[String], replies: &[String]) ->
     let played = story_engine::engine::preview(&story, &setup, id, replies).map_err(|e| e.to_string())?;
     let (before, after) = (&played.before, &played.after);
 
-    let dialogue = item.kind == story_engine::model::ContentType::Dialogue;
+    let on_scene = item.kind.on_scene();
     let frames = story_engine::frame::FrameMap::new(&story).content(&story, id);
-    let nowhere = (!dialogue)
+    let nowhere = (!on_scene)
         .then(|| story_engine::frame::nowhere(item, &frames))
         .flatten();
     // `none` never shows an item: the first frame that can is a named one.
     let frame = frames.iter().find(|f| f.can_show(item.kind));
-    let view = match (dialogue, &nowhere) {
+    let view = match (on_scene, &nowhere) {
         (true, _) => "scene",
         (false, Some(_)) => "nowhere",
         (false, None) => "frame",
@@ -621,6 +624,7 @@ pub fn preview(folder: &Path, id: &str, setup: &[String], replies: &[String]) ->
         kind: item.kind.name(),
         from: item.from.clone(),
         characters: item.characters.clone(),
+        picture: item.picture.clone(),
         steps: played.steps.clone(),
         choices: played.choices.clone(),
         ended: played.ended,

@@ -2,7 +2,7 @@
   // A game of Story Mode (SPEC-story-mode, Story Mode: player side): the
   // three layers - the scene (a plain background until the story's scenes
   // exist), the frame over it (the phone), and the dialogue layer over both
-  // while a dialogue plays - with what the story waits for beside the frame;
+  // while a dialogue or an illustration plays - with what the story waits for beside the frame;
   // the next event goes in the frame itself, heading its messages, and on
   // the scene only when there is no frame.
   // While a dialogue plays, or the journal reads past ones again, the frame
@@ -20,15 +20,16 @@
   import { LaunchSequence, startSession } from "$lib/launch/launchSequence.svelte";
   import { i18n, t } from "$lib/i18n/index.svelte";
   import { buildSetup, sessionResult } from "$lib/story/raceLaunch";
-  import { currentDialogue, dialogueLog, readBefore } from "$lib/story/player/game";
+  import { dialogueLog, onStage, readBefore } from "$lib/story/player/game";
   import { autoSpeed } from "$lib/story/playPrefs";
   import { dateLabel } from "$lib/story/player/phone";
-  import { speakersOf } from "$lib/story/player/speakers";
+  import { mediaUrl, speakersOf } from "$lib/story/player/speakers";
   import { closeGame, keepReading, move, play } from "$lib/story/playState.svelte";
   import SteamPrompt from "$lib/components/launch/SteamPrompt.svelte";
   import DialogueStage from "./player/DialogueStage.svelte";
   import DialogueControls from "./DialogueControls.svelte";
   import DialogueLog from "./DialogueLog.svelte";
+  import IllustrationView from "./player/IllustrationView.svelte";
   import EventCard from "./EventCard.svelte";
   import Journal from "./Journal.svelte";
   import PhoneScreen from "./PhoneScreen.svelte";
@@ -36,18 +37,19 @@
 
   const game = $derived(play.game!);
   const view = $derived(game.view);
-  const dialogue = $derived(currentDialogue(view.items));
+  /** The dialogue or illustration the scene plays, as an index into the items. */
+  const played = $derived(onStage(view.items));
   const date = $derived(dateLabel(view.date, view.date_display, t, i18n.locale));
 
   const speakers = $derived(speakersOf(game.characters, game.folder));
 
   let journal = $state(false);
   /** The scene holds the stage: the frame is out of view. */
-  const staged = $derived(dialogue !== null || journal);
+  const staged = $derived(played !== null || journal);
   // A dialogue arriving (a session's result read on opening) takes the
   // scene, and the journal does not come back after it.
   $effect(() => {
-    if (dialogue !== null) journal = false;
+    if (played !== null) journal = false;
   });
 
   // Reading the dialogue under way: fast-forward, auto-advance, the log and
@@ -59,7 +61,7 @@
   // Another dialogue, or none: fast-forward and the log were for the last
   // one. Auto-advance is the player's way of reading: it stays.
   $effect(() => {
-    void dialogue;
+    void played;
     skip = false;
     log = false;
   });
@@ -156,7 +158,7 @@
   <header class="bar">
     <button class="btn btn-ghost" onclick={leave}>‹ {t("story.play.leave")}</button>
     <span class="title">{view.title}</span>
-    <button class="btn btn-ghost" disabled={dialogue !== null} onclick={() => (journal = !journal)}
+    <button class="btn btn-ghost" disabled={played !== null} onclick={() => (journal = !journal)}
       >{t("story.journal.title")}</button
     >
     <span class="stats">
@@ -204,37 +206,51 @@
       {/if}
     </div>
 
-    {#if dialogue !== null}
-      {@const d = view.items[dialogue]}
+    {#if played !== null}
+      {@const d = view.items[played]}
       <div class="layer" in:fade={{ duration: 250, delay: 200 }} out:fade={{ duration: 150 }}>
-        <div class="reading"><DialogueControls bind:skip bind:auto onlog={() => (log = true)} /></div>
-        <div class="fit" inert={log}>
-          {#key dialogue}
-            <DialogueStage
-              steps={d.steps}
-              choices={d.choices}
-              present={d.characters}
-              from={d.from}
-              {speakers}
-              ended={!d.open}
-              bare
-              autofocus
-              auto={auto && !log ? autoSpeed() : null}
-              bind:skip
-              readKeys={readBefore(view.items, dialogue)}
-              onlog={() => (log = true)}
-              startAt={game.reading?.item === dialogue ? game.reading.at : undefined}
-              onat={(at) => {
-                reading = at;
-                if (at >= 0) keepReading({ item: dialogue, at });
-              }}
-              onchoose={(reply) => void move({ kind: "reply", content: d.content, reply })}
-              onend={() => void move({ kind: "seen", content: d.content })}
-            />
-          {/key}
-        </div>
-        {#if log}
-          <DialogueLog lines={dialogueLog(view.items, dialogue, reading)} {speakers} onclose={() => (log = false)} />
+        {#if d.kind === "illustration"}
+          <div class="fit">
+            {#key played}
+              <IllustrationView
+                picture={mediaUrl(game.folder, d.picture)}
+                steps={d.steps}
+                bare
+                autofocus
+                onend={() => void move({ kind: "seen", content: d.content })}
+              />
+            {/key}
+          </div>
+        {:else}
+          <div class="reading"><DialogueControls bind:skip bind:auto onlog={() => (log = true)} /></div>
+          <div class="fit" inert={log}>
+            {#key played}
+              <DialogueStage
+                steps={d.steps}
+                choices={d.choices}
+                present={d.characters}
+                from={d.from}
+                {speakers}
+                ended={!d.open}
+                bare
+                autofocus
+                auto={auto && !log ? autoSpeed() : null}
+                bind:skip
+                readKeys={readBefore(view.items, played)}
+                onlog={() => (log = true)}
+                startAt={game.reading?.item === played ? game.reading.at : undefined}
+                onat={(at) => {
+                  reading = at;
+                  if (at >= 0) keepReading({ item: played, at });
+                }}
+                onchoose={(reply) => void move({ kind: "reply", content: d.content, reply })}
+                onend={() => void move({ kind: "seen", content: d.content })}
+              />
+            {/key}
+          </div>
+          {#if log}
+            <DialogueLog lines={dialogueLog(view.items, played, reading)} {speakers} onclose={() => (log = false)} />
+          {/if}
         {/if}
       </div>
     {:else if journal}

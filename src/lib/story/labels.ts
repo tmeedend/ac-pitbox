@@ -34,4 +34,5 @@ export const CONTENT_TYPE_LABEL: Record<ContentType, string> = {
   statement: "story.content.typeStatement",
   calendar_entry: "story.content.typeCalendarEntry",
   dialogue: "story.content.typeDialogue",
+  illustration: "story.content.typeIllustration",
 };

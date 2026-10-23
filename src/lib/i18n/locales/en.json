@@ -2825,7 +2825,11 @@
       "addEffect": "Effect",
       "addEnd": "End",
       "moveUp": "Move up",
-      "moveDown": "Move down"
+      "moveDown": "Move down",
+      "typeIllustration": "Illustration",
+      "picture": "Picture",
+      "pickPicture": "Pick a picture",
+      "pictureMissing": "missing"
     },
     "drivers": {
       "title": "Drivers",

@@ -582,3 +582,60 @@ fn reply_exits_and_reply_conditions_name_real_labels() {
         assert!(has(&d, Severity::Error, needle), "{needle} in {d:#?}");
     }
 }
+
+// L3b.3, illustrations: a picture inside `media/`, required for an
+// illustration and for it only, and nothing to answer.
+#[test]
+fn an_illustration_needs_a_picture_in_media_and_offers_no_reply() {
+    let content = "---
+id: good
+type: illustration
+picture: big/moment.png
+---
+The finish.
+---
+id: missing
+type: illustration
+picture: big/gone.png
+---
+---
+id: without
+type: illustration
+---
+---
+id: outside
+type: illustration
+picture: ../moment.png
+---
+---
+id: asking
+type: illustration
+picture: big/moment.png
+---
+* (yes) [Yes]
+---
+id: message
+type: message
+picture: big/moment.png
+---
+Hello.
+";
+    let mut d = draft(with(minimal(), "content/a.story", content));
+    d.media = Some(BTreeSet::from(["big/moment.png".to_string()]));
+    let diags = validate(&crate::Story::from_draft(d).unwrap());
+    for needle in [
+        "content `missing`: `media/big/gone.png` does not exist",
+        "content `without`: an illustration needs a `picture`",
+        "content `outside`: picture `../moment.png`: a path inside `media/` cannot leave it",
+        "content `asking`: an illustration offers no reply",
+        "content `message`: `picture` is for an illustration",
+    ] {
+        assert!(has(&diags, Severity::Error, needle), "{needle} in {diags:#?}");
+    }
+    assert!(
+        !diags
+            .iter()
+            .any(|x| x.message.contains("content `good`") && x.severity == Severity::Error),
+        "the good one is fine: {diags:#?}"
+    );
+}
