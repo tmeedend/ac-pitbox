@@ -6,7 +6,7 @@
   // stays as written and says so; the checks report it too.
   import { convertFileSrc } from "@tauri-apps/api/core";
   import { t } from "$lib/i18n/index.svelte";
-  import { expressionsInOrder, nameProblem, portraitImages } from "$lib/story/world";
+  import { expressionsInOrder, mediaImages, nameProblem } from "$lib/story/world";
   import type { Character } from "$lib/story/studio";
   import ImageSelectDropdown from "$lib/components/ui/ImageSelectDropdown.svelte";
   import AddName from "./AddName.svelte";
@@ -22,7 +22,7 @@
   const { character, media, folder, onchange }: Props = $props();
 
   const expressions = $derived(expressionsInOrder(character.portraits));
-  const images = $derived(portraitImages(media));
+  const images = $derived(mediaImages(media));
   const options = $derived(
     images.map((p) => ({ id: p, name: p, image: convertFileSrc(`${folder}/media/${p}`) })),
   );

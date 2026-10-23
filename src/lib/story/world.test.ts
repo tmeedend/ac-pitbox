@@ -3,10 +3,10 @@ import {
   expressionsInOrder,
   fileCount,
   isName,
+  mediaImages,
   nameFrom,
   nameProblem,
   parseList,
-  portraitImages,
   usagesOf,
   variableNames,
 } from "./world";
@@ -72,7 +72,7 @@ it("a comma-separated list drops blanks", () => {
 
 describe("portraits", () => {
   it("are picked among the pictures of media/", () => {
-    expect(portraitImages(["portraits/a.png", "photos/b.JPG", "c.webp", "music/d.ogg", "e.txt"])).toEqual([
+    expect(mediaImages(["portraits/a.png", "photos/b.JPG", "c.webp", "music/d.ogg", "e.txt"])).toEqual([
       "portraits/a.png",
       "photos/b.JPG",
       "c.webp",

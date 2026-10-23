@@ -58,8 +58,9 @@ export function parseList(text: string): string[] {
     .filter((s) => s.length > 0);
 }
 
-/** The pictures of `media/` a portrait can be: the image files, by path. */
-export function portraitImages(media: string[]): string[] {
+/** The pictures of `media/` - what a portrait or an illustration can be: the
+ * image files, by path. */
+export function mediaImages(media: string[]): string[] {
   return media.filter((p) => /\.(png|jpe?g|webp)$/i.test(p));
 }
 
