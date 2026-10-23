@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { SeenItem } from "../play";
-import { currentDialogue, goals, pastDialogues, phoneThreads, withoutTemplate } from "./game";
+import {
+  currentDialogue,
+  dialogueLog,
+  goals,
+  pastDialogues,
+  phoneThreads,
+  readBefore,
+  withoutTemplate,
+} from "./game";
 
 function item(content: string, o: Partial<SeenItem> = {}): SeenItem {
   return {
@@ -84,5 +92,34 @@ describe("goals", () => {
       { key: "story.play.goalAhead", values: { name: "RIVAL" } },
     ]);
     expect(goals([], (id) => id)).toEqual([{ key: "story.play.goalFinish", values: {} }]);
+  });
+});
+
+describe("reading a dialogue", () => {
+  const said = (text: string) => ({ kind: "said" as const, speaker: "friend", text, expression: null, position: null });
+
+  // L3b: fast-forward goes through what an earlier delivery of the same
+  // dialogue already said, nothing else.
+  it("knows the lines an earlier delivery already said", () => {
+    const items = [
+      item("talk", { kind: "dialogue", steps: [said("Hi."), said("Again?")] }),
+      item("other", { kind: "dialogue", steps: [said("Elsewhere.")] }),
+      item("talk", { kind: "dialogue", steps: [said("Hi."), said("New.")] }),
+    ];
+    const read = readBefore(items, 2);
+    expect(read.size).toBe(2);
+    expect([...read].some((k) => k.endsWith("Elsewhere."))).toBe(false);
+    expect(readBefore(items, 0).size).toBe(0);
+  });
+
+  // The log: every dialogue played, the one under way up to the line shown.
+  it("logs the dialogues played, the one under way up to its line", () => {
+    const items = [
+      item("a", { kind: "dialogue", steps: [said("1"), { kind: "chose", label: "x", text: "X" }] }),
+      item("m"),
+      item("b", { kind: "dialogue", steps: [said("2"), said("3")] }),
+    ];
+    expect(dialogueLog(items, 2, 0).map((l) => l.step.text)).toEqual(["1", "X", "2"]);
+    expect(dialogueLog(items, null, 0)).toHaveLength(4);
   });
 });

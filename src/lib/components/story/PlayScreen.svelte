@@ -20,12 +20,15 @@
   import { LaunchSequence, startSession } from "$lib/launch/launchSequence.svelte";
   import { i18n, t } from "$lib/i18n/index.svelte";
   import { buildSetup, sessionResult } from "$lib/story/raceLaunch";
-  import { currentDialogue } from "$lib/story/player/game";
+  import { currentDialogue, dialogueLog, readBefore } from "$lib/story/player/game";
+  import { autoSpeed } from "$lib/story/playPrefs";
   import { dateLabel } from "$lib/story/player/phone";
   import { speakersOf } from "$lib/story/player/speakers";
   import { closeGame, move, play } from "$lib/story/playState.svelte";
   import SteamPrompt from "$lib/components/launch/SteamPrompt.svelte";
   import DialogueStage from "./player/DialogueStage.svelte";
+  import DialogueControls from "./DialogueControls.svelte";
+  import DialogueLog from "./DialogueLog.svelte";
   import EventCard from "./EventCard.svelte";
   import Journal from "./Journal.svelte";
   import PhoneScreen from "./PhoneScreen.svelte";
@@ -45,6 +48,20 @@
   // scene, and the journal does not come back after it.
   $effect(() => {
     if (dialogue !== null) journal = false;
+  });
+
+  // Reading the dialogue under way: fast-forward, auto-advance, the log and
+  // the step shown, which the log stops at.
+  let skip = $state(false);
+  let auto = $state(false);
+  let log = $state(false);
+  let reading = $state(-1);
+  // Another dialogue, or none: fast-forward and the log were for the last
+  // one. Auto-advance is the player's way of reading: it stays.
+  $effect(() => {
+    void dialogue;
+    skip = false;
+    log = false;
   });
 
   const eventWaiting = $derived(view.waiting.kind === "event" ? view.waiting : null);
@@ -190,7 +207,8 @@
     {#if dialogue !== null}
       {@const d = view.items[dialogue]}
       <div class="layer" in:fade={{ duration: 250, delay: 200 }} out:fade={{ duration: 150 }}>
-        <div class="fit">
+        <div class="reading"><DialogueControls bind:skip bind:auto onlog={() => (log = true)} /></div>
+        <div class="fit" inert={log}>
           {#key dialogue}
             <DialogueStage
               steps={d.steps}
@@ -201,11 +219,19 @@
               ended={!d.open}
               bare
               autofocus
+              auto={auto && !log ? autoSpeed() : null}
+              bind:skip
+              readKeys={readBefore(view.items, dialogue)}
+              onlog={() => (log = true)}
+              onat={(at) => (reading = at)}
               onchoose={(reply) => void move({ kind: "reply", content: d.content, reply })}
               onend={() => void move({ kind: "seen", content: d.content })}
             />
           {/key}
         </div>
+        {#if log}
+          <DialogueLog lines={dialogueLog(view.items, dialogue, reading)} {speakers} onclose={() => (log = false)} />
+        {/if}
       </div>
     {:else if journal}
       <div class="layer" in:fade={{ duration: 250, delay: 200 }} out:fade={{ duration: 150 }}>
@@ -312,6 +338,13 @@
     justify-content: center;
     padding: 24px;
     container-type: size;
+  }
+  /* The reading controls, in the scene's corner above the stage. */
+  .reading {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    z-index: 1;
   }
   /* The stage as large as the scene allows, in 16:9 like the preview's. */
   .fit {

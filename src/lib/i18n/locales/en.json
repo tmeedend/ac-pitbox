@@ -2862,7 +2862,13 @@
       "spring": "Spring {year}",
       "summer": "Summer {year}",
       "autumn": "Autumn {year}",
-      "you": "You"
+      "you": "You",
+      "log": "Log",
+      "skip": "Skip",
+      "auto": "Auto",
+      "speedSlow": "Slow",
+      "speedNormal": "Normal",
+      "speedFast": "Fast"
     },
     "play": {
       "sample": "The sample story, carried by Pit Box",

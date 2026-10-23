@@ -798,6 +798,16 @@ The player side follows each story's settings. What the engine needs:
   frame and what the story waits for slide out of view and the scene's blur is
   reduced; the stage keeps the preview's 16:9 shape, as large as the scene
   allows, and takes the keyboard at once.
+- **Reading a dialogue.** The log (a button, or the wheel up on the stage)
+  lists the lines of the dialogues played so far, the replies chosen
+  included, up to the line shown; it pauses auto-advance. Fast-forward (a
+  button, or Ctrl held) runs through the lines already read - passed in this
+  conversation, or said by an earlier delivery of the same item - and stops,
+  turning itself off, at the first new line, at a choice or at the end.
+  Auto-advance moves on after a pause that grows with the line, at the speed
+  the player picks (slow, normal, fast: a preference of the player, kept by
+  Pit Box, not by a game); it waits at a choice and never closes a dialogue.
+  Fast-forward and the log end with their dialogue; auto-advance stays on.
 - **The journal** reads the dialogues played so far again, latest first, each
   with its date and who was there: on the scene, as it was played, the
   replies chosen included, with nothing to answer. It is rebuilt from the

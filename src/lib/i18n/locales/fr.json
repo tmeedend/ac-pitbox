@@ -2862,7 +2862,13 @@
       "spring": "Printemps {year}",
       "summer": "Été {year}",
       "autumn": "Automne {year}",
-      "you": "Vous"
+      "you": "Vous",
+      "log": "Historique",
+      "skip": "Avance rapide",
+      "auto": "Auto",
+      "speedSlow": "Lente",
+      "speedNormal": "Normale",
+      "speedFast": "Rapide"
     },
     "play": {
       "sample": "L'histoire d'exemple, livrée avec Pit Box",

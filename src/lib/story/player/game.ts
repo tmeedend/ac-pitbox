@@ -4,6 +4,7 @@
 import { criteriaOf } from "../events";
 import type { SeenItem } from "../play";
 import { appOf } from "./apps";
+import { lineKey } from "./stage";
 import type { PlayerChoice, PlayerStep } from "./types";
 
 /** A sender's messages, as one thread of the messaging app. */
@@ -95,5 +96,38 @@ export function goals(success: string[], driverName: (id: string) => string): Go
   for (const d of c.aheadOf) out.push({ key: "story.play.goalAhead", values: { name: driverName(d) } });
   for (const other of c.others) out.push({ key: "story.play.goalOther", values: { text: other } });
   if (out.length === 0) out.push({ key: "story.play.goalFinish", values: {} });
+  return out;
+}
+
+/** The lines of item `index` the player has already read in an earlier
+ * delivery of the same item, as `lineKey`s: what fast-forward goes through
+ * when a conversation comes back. */
+export function readBefore(items: SeenItem[], index: number): Set<string> {
+  const read = new Set<string>();
+  const content = items[index]?.content;
+  for (const item of items.slice(0, index)) {
+    if (item.content !== content) continue;
+    for (const s of item.steps) if (s.kind === "said") read.add(lineKey(s));
+  }
+  return read;
+}
+
+/** One line of the dialogue log. */
+export interface LogLine {
+  step: PlayerStep;
+  /** The item's sender: who says a line without a speaker. */
+  from: string | null;
+}
+
+/** The dialogue log (SPEC-story-mode, In-person dialogues): every line of the
+ * dialogues played, in order, the replies chosen included; for the dialogue
+ * under way, item `current`, only up to the step shown, `at`. */
+export function dialogueLog(items: SeenItem[], current: number | null, at: number): LogLine[] {
+  const out: LogLine[] = [];
+  items.forEach((item, i) => {
+    if (item.kind !== "dialogue") return;
+    const steps = i === current ? item.steps.slice(0, at + 1) : item.steps;
+    for (const step of steps) out.push({ step, from: item.from });
+  });
   return out;
 }

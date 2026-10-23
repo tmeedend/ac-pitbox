@@ -84,6 +84,9 @@ export const StorageKey = {
    * (`$lib/story/access.ts`). Absent everywhere else: a user who never saw
    * the entry has no trace of it. Born in `ui_prefs.json`. */
   storyStudio: `${PREFIX}.story.studio`,
+  /** How fast a dialogue moves on by itself in Story Mode
+   * (`slow` | `normal` | `fast`). Born in `ui_prefs.json`. */
+  storyAutoSpeed: `${PREFIX}.story.autoSpeed`,
   preferredSkin: (carId: string) => `${PREFIX}.skin.${carId}`,
   preferredLayout: (trackId: string) => `${PREFIX}.layout.${trackId}`,
   /** Tenue de pilote choisie pour cette voiture (PILOTE§1.4).

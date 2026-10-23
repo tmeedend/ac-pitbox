@@ -76,3 +76,21 @@ export function previousLine(steps: PlayerStep[], at: number): number | null {
   for (let i = Math.min(at, steps.length) - 1; i >= 0; i--) if (steps[i].kind === "said") return i;
   return null;
 }
+
+/** How fast the player lets lines go by on their own. */
+export type AutoSpeed = "slow" | "normal" | "fast";
+
+export const AUTO_SPEEDS: AutoSpeed[] = ["slow", "normal", "fast"];
+
+const AUTO_FACTOR: Record<AutoSpeed, number> = { slow: 1.6, normal: 1, fast: 0.55 };
+
+/** How long a line stays before auto-advance moves on: a pause, then time to
+ * read it, longer for a longer line. */
+export function autoDelay(text: string, speed: AutoSpeed): number {
+  return Math.round((1000 + 45 * text.length) * AUTO_FACTOR[speed]);
+}
+
+/** A said line as fast-forward tells it from another: who says it and what. */
+export function lineKey(step: Extract<PlayerStep, { kind: "said" }>): string {
+  return `${step.speaker ?? ""}\u0000${step.text}`;
+}

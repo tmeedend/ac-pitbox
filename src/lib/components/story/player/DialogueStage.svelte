@@ -10,10 +10,17 @@
   // Story Mode plays it `bare`, over its own scene, and the journal replays a
   // past one (`replay`): the replies chosen are paged through like lines, and
   // nothing is offered.
+  //
+  // Reading (SPEC-story-mode, In-person dialogues): auto-advance moves on by
+  // itself at the speed given; fast-forward - `skip`, or Ctrl held - runs
+  // through the lines already read and stops at the first new one, at a
+  // choice or at the end, where it turns itself off. A line is read when the
+  // player has been past it in this conversation, or when an earlier
+  // delivery of the item said it (`readKeys`). Wheel up opens the log.
   import { onMount } from "svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { initials } from "$lib/story/player/phone";
-  import { nextLine, previousLine, stageAt } from "$lib/story/player/stage";
+  import { autoDelay, lineKey, nextLine, previousLine, stageAt, type AutoSpeed } from "$lib/story/player/stage";
   import type { PlayerChoice, PlayerStep, Speaker } from "$lib/story/player/types";
 
   interface Props {
@@ -36,8 +43,19 @@
     /** Takes the keyboard when it opens, so that Space and Enter go on
      * without a click first. Never in the editor, whose fields have it. */
     autofocus?: boolean;
+    /** Auto-advance, at this speed; `null`: off. */
+    auto?: AutoSpeed | null;
+    /** Fast-forward through the lines already read. */
+    skip?: boolean;
+    /** Lines an earlier delivery of the item said, as `lineKey`s. */
+    readKeys?: Set<string>;
+    /** Wheel up on the stage. */
+    onlog?: () => void;
+    /** The step shown changed: the log follows it. */
+    onat?: (at: number) => void;
   }
-  const {
+  // `let`: `skip` is bindable - fast-forward turns itself off.
+  let {
     steps,
     choices,
     present,
@@ -49,6 +67,11 @@
     bare = false,
     replay = false,
     autofocus = false,
+    auto = null,
+    skip = $bindable(false),
+    readKeys = new Set<string>(),
+    onlog,
+    onat,
   }: Props = $props();
 
   let element: HTMLDivElement;
@@ -87,6 +110,45 @@
   const stage = $derived(stageAt(present, from, steps, at));
   const more = $derived(step(1) !== null);
 
+  $effect(() => {
+    const now = at;
+    onat?.(now);
+  });
+
+  /** The furthest step shown in this conversation: what lies before it is read. */
+  let furthest = $state(-1);
+  $effect(() => {
+    const now = at;
+    if (now > furthest) furthest = now;
+  });
+
+  /** Ctrl held: fast-forward while it is. */
+  let held = $state(false);
+
+  function isRead(i: number): boolean {
+    const s = steps[i];
+    return replay || i <= furthest || (s?.kind === "said" && readKeys.has(lineKey(s)));
+  }
+
+  // Auto-advance and fast-forward: one timer to the next line. Every
+  // dependency read first (CLAUDE.md).
+  $effect(() => {
+    const [now, list, speed, skipping, ctrl, waiting] = [at, steps, auto, skip, held, chosen];
+    void furthest;
+    const next = step(1);
+    if (waiting || next === null) {
+      if (skipping) skip = false;
+      return;
+    }
+    const fast = (skipping || ctrl) && isRead(next);
+    if (skipping && !fast) skip = false;
+    if (!fast && !speed) return;
+    const line = list[now];
+    const delay = fast ? 70 : autoDelay(line && line.kind !== "chose" ? line.text : "", speed!);
+    const timer = setTimeout(() => (at = next), delay);
+    return () => clearTimeout(timer);
+  });
+
   function advance() {
     const next = step(1);
     if (next !== null) at = next;
@@ -94,7 +156,9 @@
   }
 
   function onkeydown(e: KeyboardEvent) {
-    if (e.key === " " || e.key === "Enter") {
+    if (e.key === "Control") {
+      held = true;
+    } else if (e.key === " " || e.key === "Enter") {
       e.preventDefault();
       advance();
     } else if (e.key === "ArrowLeft" && !chosen) {
@@ -126,6 +190,9 @@
   bind:this={element}
   onclick={advance}
   {onkeydown}
+  onkeyup={(e) => e.key === "Control" && (held = false)}
+  onblur={() => (held = false)}
+  onwheel={(e) => e.deltaY < 0 && onlog?.()}
 >
   {#each stage.cast as c (c.who)}
     {@const src = picture(c.who, c.expression)}

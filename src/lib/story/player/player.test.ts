@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { dateLabel, initials, whenLabel } from "./phone";
-import { nextLine, previousLine, stageAt } from "./stage";
+import { autoDelay, nextLine, previousLine, stageAt } from "./stage";
 import { bubbles } from "./thread";
 import type { PlayerStep, Position } from "./types";
 
@@ -63,6 +63,15 @@ describe("the dialogue stage", () => {
     expect(stage.line).toBeNull();
     expect(stage.cast.some((c) => c.speaking)).toBe(false);
     expect(stageAt(["a"], null, steps, 0).reply).toBeNull();
+  });
+});
+
+describe("auto-advance", () => {
+  // A longer line stays longer; a slower speed waits longer.
+  it("waits longer for a longer line and a slower speed", () => {
+    expect(autoDelay("a much longer line to read", "normal")).toBeGreaterThan(autoDelay("short", "normal"));
+    expect(autoDelay("line", "slow")).toBeGreaterThan(autoDelay("line", "normal"));
+    expect(autoDelay("line", "fast")).toBeLessThan(autoDelay("line", "normal"));
   });
 });
 

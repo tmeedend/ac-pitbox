@@ -659,7 +659,31 @@ de reprendre. En cas d'écart, la spec fait foi.
             thème par défaut.
             **Limites connues** : pas vu à l'écran ; l'exemple n'a ni article
             ni relevé (Actualités et Banque n'y apparaissent pas).
-      - **L3b à L8** : dans l'ordre du plan de livraison de la spec.
+      - **L3b, le roman visuel — découpé en cinq sous-lots (2026-10-23)**,
+        à la demande de l'utilisateur avant L4 : L3b.1 la lecture d'un
+        dialogue (historique, avance rapide, avance automatique) ; L3b.2 la
+        reprise en plein dialogue ; L3b.3 les illustrations ; L3b.4 les
+        transitions ; L3b.5 la vue en graphe du fil.
+        - **L3b.1 — fait (2026-10-23).** Une barre au coin de la scène :
+          Historique, Avance rapide, Auto et sa vitesse.
+          **Choisi sans demander** : l'historique couvre tous les dialogues
+          joués, pas seulement celui en cours, et s'ouvre aussi à la molette
+          vers le haut ; il suspend l'avance automatique ; l'avance rapide
+          se fait au bouton ou Ctrl maintenu (l'usage des romans visuels), à
+          une réplique toutes les 70 ms, et s'éteint d'elle-même sur une
+          réplique nouvelle, un choix ou la fin ; une réplique est « lue »
+          quand le joueur l'a dépassée dans cette conversation ou qu'une
+          livraison précédente du même contenu l'a dite (même personnage,
+          même texte) ; l'avance automatique attend 1 s plus 45 ms par
+          caractère (×1,6 en lente, ×0,55 en rapide), ne ferme jamais un
+          dialogue et reste allumée d'un dialogue à l'autre ; la vitesse
+          est un réglage du joueur dans `ui_prefs.json`
+          (`pitbox.story.autoSpeed`), « normale » par défaut ; un clic sur
+          la barre ne prend pas le clavier à la scène.
+          **Limites connues** : pas vu à l'écran ; l'aperçu de l'éditeur et
+          le journal n'ont pas la barre.
+        - **Reste** L3b.2 à L3b.5.
+      - **L4 à L8** : dans l'ordre du plan de livraison de la spec.
       **Écarts assumés par rapport au document de conception** (la spec
       publique les reprend déjà) :
       - Le drapeau qu'il plaçait dans la base SQLite est dans
