@@ -50,6 +50,15 @@ pub async fn story_play_move(app: AppHandle, source: play::Source, input: play::
     .await
 }
 
+/// Keeps the line the dialogue under way is read at, beside the save.
+#[tauri::command]
+pub async fn story_play_reading(app: AppHandle, source: play::Source, reading: play::Reading) -> Result<(), String> {
+    off_window(app, move |app| {
+        play::set_reading(&crate::rules::config_dir(app)?, &source, &reading)
+    })
+    .await
+}
+
 // ------------------------------------------------- Create Your Own (studio)
 //
 // Façades over `crate::story::studio`. The story files live in a folder of

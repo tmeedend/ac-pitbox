@@ -73,6 +73,23 @@ pub struct Game {
     /// When the session under way was launched (ms since the epoch): the
     /// game's result file is the session's only if it is newer.
     pub launched_at_ms: Option<u64>,
+    /// Where the player stood in the dialogue under way when last seen.
+    pub reading: Option<Reading>,
+}
+
+/// The line a dialogue was being read at (SPEC-story-mode, In-person
+/// dialogues: saving during a dialogue). The engine plays a conversation from
+/// choice to choice; which of its lines the player has read so far is the
+/// screen's, kept beside the save so that a game reopened goes on from that
+/// line. The screen keeps it only while that item is still the dialogue
+/// under way.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Reading {
+    /// The item, as an index into the game's view: a dialogue delivered again
+    /// is another item.
+    pub item: usize,
+    /// The step shown, as an index into the item's steps.
+    pub at: usize,
 }
 
 /// What the player did, as the screen sends it. A session's result is read
@@ -164,14 +181,31 @@ pub fn new_game(config_dir: &Path, source: &Source, seed: u64) -> Result<Game, S
     let mut state = State::new(&story, seed);
     engine::run(&story, &mut state).map_err(|e| e.to_string())?;
     write_save(config_dir, source, &story, &state)?;
-    // The replaced game may have been left in the middle of a session.
-    let stamp = launch_stamp(config_dir, source, &story);
-    if stamp.is_file() {
-        if let Err(e) = std::fs::remove_file(&stamp) {
-            log::warn!("story mode: {} not removed: {e}", stamp.display());
+    // The replaced game may have been left in the middle of a session, or of
+    // a dialogue.
+    for beside in [
+        launch_stamp(config_dir, source, &story),
+        reading_path(config_dir, source, &story),
+    ] {
+        if beside.is_file() {
+            if let Err(e) = std::fs::remove_file(&beside) {
+                log::warn!("story mode: {} not removed: {e}", beside.display());
+            }
         }
     }
-    Ok(game(&story, &state, source))
+    Ok(game_in(config_dir, &story, &state, source))
+}
+
+/// Keeps where the dialogue under way is being read. Written synchronously,
+/// the whole file: when the command returns, it is on disk.
+pub fn set_reading(config_dir: &Path, source: &Source, reading: &Reading) -> Result<(), String> {
+    let story = read(source)?;
+    let path = reading_path(config_dir, source, &story);
+    let text = serde_json::to_string(reading).map_err(|e| e.to_string())?;
+    std::fs::write(&path, text).map_err(|e| {
+        log::warn!("story mode: {} not written: {e}", path.display());
+        format!("writing {}: {e}", path.display())
+    })
 }
 
 /// The game under way, as it was left.
@@ -215,9 +249,18 @@ fn launch_stamp(config_dir: &Path, source: &Source, story: &Story) -> PathBuf {
     save_path(config_dir, source, story).with_extension("launched")
 }
 
-/// `game`, with the launch time of the session under way.
+/// Beside the save: where the dialogue under way is being read.
+fn reading_path(config_dir: &Path, source: &Source, story: &Story) -> PathBuf {
+    save_path(config_dir, source, story).with_extension("reading")
+}
+
+/// `game`, with the launch time of the session under way and where its
+/// dialogue is being read.
 fn game_in(config_dir: &Path, story: &Story, state: &State, source: &Source) -> Game {
     let mut g = game(story, state, source);
+    // Unreadable: the dialogue starts again from its first line, no worse.
+    g.reading = (std::fs::read_to_string(reading_path(config_dir, source, story)).ok())
+        .and_then(|t| serde_json::from_str(&t).ok());
     if state.launched.is_some() {
         g.launched_at_ms =
             (std::fs::read_to_string(launch_stamp(config_dir, source, story)).ok()).and_then(|t| t.trim().parse().ok());
@@ -235,6 +278,7 @@ fn game(story: &Story, state: &State, source: &Source) -> Game {
             Source::Folder { path } => Some(path.clone()),
         },
         launched_at_ms: None,
+        reading: None,
     }
 }
 
@@ -473,6 +517,23 @@ mod tests {
             !config.join("story/saves/builtin/sample.launched").exists(),
             "its time goes with it"
         );
+    }
+
+    // L3b.2: where a dialogue is being read is kept beside the save, comes
+    // back with the game, and goes with a new game.
+    #[test]
+    fn where_a_dialogue_is_read_comes_back_with_the_game() {
+        let config = temp_dir("story-play");
+        new_game(&config, &Source::Sample, 7).unwrap();
+        let reading = Reading { item: 0, at: 1 };
+        set_reading(&config, &Source::Sample, &reading).expect("kept");
+        assert_eq!(resume(&config, &Source::Sample).unwrap().reading, Some(reading));
+        assert_eq!(
+            new_game(&config, &Source::Sample, 7).unwrap().reading,
+            None,
+            "a new game starts no dialogue half-read"
+        );
+        assert!(!config.join("story/saves/builtin/sample.reading").exists());
     }
 
     // A move the engine refuses changes nothing on disk: the save is the one

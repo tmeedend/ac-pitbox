@@ -3,7 +3,7 @@
 // flight would play on the same save and the second would undo the first.
 // A refused move leaves the game as it was, with the reason on screen.
 import { errorText } from "$lib/errors";
-import { newGame, playMove, resumeGame, type Game, type Move, type Source } from "./play";
+import { keepReadingAt, newGame, playMove, resumeGame, type Game, type Move, type Reading, type Source } from "./play";
 
 export const play = $state<{
   source: Source | null;
@@ -38,6 +38,7 @@ export async function openGame(source: Source, fresh: boolean): Promise<string |
 }
 
 export function closeGame(): void {
+  flushReading();
   session++;
   play.game = null;
   play.source = null;
@@ -70,4 +71,28 @@ export function move(m: Move): Promise<void> {
   // Already caught above; kept so that one failure never stalls the queue.
   queue = run.catch((e) => console.warn("story mode: move failed", e));
   return run;
+}
+
+/** The line read, not written yet: a click every second need not rewrite
+ * the file every second. */
+let reading: { source: Source; at: Reading } | null = null;
+let readingTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Keeps where the dialogue under way is read, a moment after the last line
+ * moved - at once when the game is left (`closeGame`). */
+export function keepReading(at: Reading): void {
+  if (!play.source) return;
+  reading = { source: play.source, at };
+  clearTimeout(readingTimer);
+  readingTimer = setTimeout(flushReading, 400);
+}
+
+function flushReading(): void {
+  clearTimeout(readingTimer);
+  const due = reading;
+  reading = null;
+  if (!due) return;
+  // Not a setting the player made: a failure costs a dialogue started again
+  // from its first line. Logged by the backend; retried at the next line.
+  keepReadingAt(due.source, due.at).catch((e) => console.warn("story mode: reading position not kept", e));
 }

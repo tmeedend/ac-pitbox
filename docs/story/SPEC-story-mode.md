@@ -777,7 +777,9 @@ The player side follows each story's settings. What the engine needs:
 - **One game per story**, saved after every move of the player, in Pit Box's
   own data; a new game replaces it after a confirmation. The story's `saves`
   setting (autosave per day or manual slots, reload) is not applied yet. A
-  game resumes on the story as it is now, or is refused with the reason.
+  game resumes on the story as it is now, or is refused with the reason. A
+  game reopened in the middle of a dialogue goes on from the line the player
+  was reading, the lines before it counting as read; a new game forgets it.
 - **The phone** has a home screen of apps, each for the content types it has
   a template for: Messages (threads) for messages, Mail (inbox) for mails,
   News and Social (feeds) for articles and social posts, Bank (statement) for

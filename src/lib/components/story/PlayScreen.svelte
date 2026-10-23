@@ -24,7 +24,7 @@
   import { autoSpeed } from "$lib/story/playPrefs";
   import { dateLabel } from "$lib/story/player/phone";
   import { speakersOf } from "$lib/story/player/speakers";
-  import { closeGame, move, play } from "$lib/story/playState.svelte";
+  import { closeGame, keepReading, move, play } from "$lib/story/playState.svelte";
   import SteamPrompt from "$lib/components/launch/SteamPrompt.svelte";
   import DialogueStage from "./player/DialogueStage.svelte";
   import DialogueControls from "./DialogueControls.svelte";
@@ -223,7 +223,11 @@
               bind:skip
               readKeys={readBefore(view.items, dialogue)}
               onlog={() => (log = true)}
-              onat={(at) => (reading = at)}
+              startAt={game.reading?.item === dialogue ? game.reading.at : undefined}
+              onat={(at) => {
+                reading = at;
+                if (at >= 0) keepReading({ item: dialogue, at });
+              }}
               onchoose={(reply) => void move({ kind: "reply", content: d.content, reply })}
               onend={() => void move({ kind: "seen", content: d.content })}
             />

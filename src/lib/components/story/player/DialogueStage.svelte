@@ -17,7 +17,7 @@
   // choice or at the end, where it turns itself off. A line is read when the
   // player has been past it in this conversation, or when an earlier
   // delivery of the item said it (`readKeys`). Wheel up opens the log.
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { initials } from "$lib/story/player/phone";
   import { autoDelay, lineKey, nextLine, previousLine, stageAt, type AutoSpeed } from "$lib/story/player/stage";
@@ -51,8 +51,11 @@
     readKeys?: Set<string>;
     /** Wheel up on the stage. */
     onlog?: () => void;
-    /** The step shown changed: the log follows it. */
+    /** The step shown changed: the log follows it, the save keeps it. */
     onat?: (at: number) => void;
+    /** The line to open on, where a game reopened left this dialogue: the
+     * lines before it count as read. */
+    startAt?: number;
   }
   // `let`: `skip` is bindable - fast-forward turns itself off.
   let {
@@ -72,6 +75,7 @@
     readKeys = new Set<string>(),
     onlog,
     onat,
+    startAt,
   }: Props = $props();
 
   let element: HTMLDivElement;
@@ -84,6 +88,8 @@
   let at = $state(-1);
   /** A reply was chosen: show the first line it leads to when it comes. */
   let chosen = $state(false);
+  /** The furthest step shown in this conversation: what lies before it is read. */
+  let furthest = $state(-1);
 
   // Every dependency read first (CLAUDE.md: an effect only follows what it
   // read before leaving).
@@ -96,8 +102,15 @@
         chosen = false;
       }
     } else if (now < 0 || now >= list.length || (!all && list[now]?.kind !== "said")) {
-      // Opened, or the text changed under the preview: from its first line.
-      at = all ? (list.length ? 0 : -1) : (nextLine(list, -1) ?? -1);
+      // Opened, or the text changed under the preview: from its first line,
+      // or the line a game reopened left it at.
+      const start = untrack(() => startAt);
+      if (start !== undefined && start < list.length && (all || list[start]?.kind === "said")) {
+        at = start;
+        furthest = start;
+      } else {
+        at = all ? (list.length ? 0 : -1) : (nextLine(list, -1) ?? -1);
+      }
     }
   });
 
@@ -115,8 +128,6 @@
     onat?.(now);
   });
 
-  /** The furthest step shown in this conversation: what lies before it is read. */
-  let furthest = $state(-1);
   $effect(() => {
     const now = at;
     if (now > furthest) furthest = now;

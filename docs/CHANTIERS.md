@@ -682,7 +682,23 @@ de reprendre. En cas d'écart, la spec fait foi.
           la barre ne prend pas le clavier à la scène.
           **Limites connues** : pas vu à l'écran ; l'aperçu de l'éditeur et
           le journal n'ont pas la barre.
-        - **Reste** L3b.2 à L3b.5.
+        - **L3b.2 — fait (2026-10-23).** La réplique lue est gardée à côté
+          de la partie (`saves/…reading`, comme `.launched`) et une partie
+          rouverte en plein dialogue y reprend.
+          **Choisi sans demander** : un fichier à côté de la sauvegarde
+          plutôt que dans l'état du moteur (la réplique lue est l'affaire de
+          l'écran, le moteur joue d'un choix à l'autre ; le simulateur n'en a
+          que faire) ; écrit 0,4 s après la dernière réplique, tout de suite
+          en quittant la partie ; un échec d'écriture est journalisé et
+          coûte au pire un dialogue repris à sa première réplique ; la
+          position ne vaut que pour le même contenu livré au même rang (une
+          nouvelle livraison repart du début) ; les répliques d'avant la
+          position comptent comme lues pour l'avance rapide.
+          **Limites connues** : le réglage `saves` de l'histoire
+          (sauvegarde par jour ou emplacements, rechargement) n'est toujours
+          pas appliqué : quand il le sera, chaque emplacement devra porter
+          sa position ; pas vu à l'écran.
+        - **Reste** L3b.3 à L3b.5.
       - **L4 à L8** : dans l'ordre du plan de livraison de la spec.
       **Écarts assumés par rapport au document de conception** (la spec
       publique les reprend déjà) :

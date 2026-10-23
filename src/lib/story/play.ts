@@ -81,6 +81,15 @@ export interface Game {
   folder: string | null;
   /** When the session under way was launched (ms since the epoch). */
   launched_at_ms: number | null;
+  /** Where the dialogue under way was being read, when last seen. */
+  reading: Reading | null;
+}
+
+/** The line a dialogue is read at: `item` into the view's items, `at` into
+ * its steps (`story::play::Reading`). */
+export interface Reading {
+  item: number;
+  at: number;
 }
 
 /** What the player did. */
@@ -101,3 +110,7 @@ export const resumeGame = (source: Source) => invoke<Game>("story_play_resume", 
 
 /** Plays a move and saves; resolves to where the game now stands. */
 export const playMove = (source: Source, input: Move) => invoke<Game>("story_play_move", { source, input });
+
+/** Keeps, beside the save, the line the dialogue under way is read at. */
+export const keepReadingAt = (source: Source, reading: Reading) =>
+  invoke<void>("story_play_reading", { source, reading });
