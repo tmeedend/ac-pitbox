@@ -8,8 +8,8 @@
 
 use std::path::Path;
 
-use story_engine::frame::Template;
-use story_engine::skin::{self, SKINS};
+use story_engine::frame::{FrameDecl, Template};
+use story_engine::skin::{self, Skin, SKINS};
 use story_engine::validate::{Diagnostic, Severity};
 use story_engine::Story;
 
@@ -74,29 +74,42 @@ fn size_of(path: &Path) -> Option<(u32, u32)> {
 /// The checks only the pictures can answer, for every frame and skin of
 /// `story` read from `folder`.
 pub fn image_checks(folder: &Path, story: &Story) -> Vec<Diagnostic> {
-    let mut out = Vec::new();
-    let mut say = |severity, file: &str, message: String| {
-        out.push(Diagnostic {
+    let mut found = Found(Vec::new());
+    for frame in &story.frames {
+        found.frame(folder, frame);
+    }
+    for s in &story.skins {
+        found.skin(folder, s);
+    }
+    found.0
+}
+
+/// What the pictures said.
+struct Found(Vec<Diagnostic>);
+
+impl Found {
+    fn say(&mut self, severity: Severity, file: &str, message: String) {
+        self.0.push(Diagnostic {
             severity,
             file: file.into(),
             node: None,
             message,
-        })
-    };
-    let media = |p: &str| size_of(&folder.join("media").join(p));
-    let frames_file = story_engine::frame::FRAMES;
-    for frame in &story.frames {
+        });
+    }
+
+    /// A phone: its screen inside its body, a wallpaper of its screen's
+    /// shape and size, square icons big enough.
+    fn frame(&mut self, folder: &Path, frame: &FrameDecl) {
+        let file = story_engine::frame::FRAMES;
+        let media = |p: &str| size_of(&folder.join("media").join(p));
         let at = format!("frame `{}`", frame.id);
         let screen = frame.body.as_ref().map(|b| b.screen);
         if let Some(body) = &frame.body {
             if let Some((w, h)) = media(&body.file) {
                 let s = body.screen;
                 if s.x + s.width > w || s.y + s.height > h {
-                    say(
-                        Severity::Error,
-                        frames_file,
-                        format!("{at}: the screen goes past the body's picture ({w} × {h})"),
-                    );
+                    let message = format!("{at}: the screen goes past the body's picture ({w} × {h})");
+                    self.say(Severity::Error, file, message);
                 }
             }
         }
@@ -104,24 +117,18 @@ pub fn image_checks(folder: &Path, story: &Story) -> Vec<Diagnostic> {
             if let Some((w, h)) = media(wallpaper) {
                 let (want, got) = (s.width as f64 / s.height as f64, w as f64 / h as f64);
                 if (want - got).abs() / want > 0.05 {
-                    say(
-                        Severity::Warning,
-                        frames_file,
-                        format!(
-                            "{at}: the wallpaper ({w} × {h}) is not the shape of its screen ({} × {}): it is cropped",
-                            s.width, s.height
-                        ),
+                    let message = format!(
+                        "{at}: the wallpaper ({w} × {h}) is not the shape of its screen ({} × {}): it is cropped",
+                        s.width, s.height
                     );
+                    self.say(Severity::Warning, file, message);
                 }
                 if w < s.width {
-                    say(
-                        Severity::Warning,
-                        frames_file,
-                        format!(
-                            "{at}: the wallpaper ({w} px wide) is smaller than its screen ({} px): it shows blurred",
-                            s.width
-                        ),
+                    let message = format!(
+                        "{at}: the wallpaper ({w} px wide) is smaller than its screen ({} px): it shows blurred",
+                        s.width
                     );
+                    self.say(Severity::Warning, file, message);
                 }
             }
         }
@@ -131,21 +138,18 @@ pub fn image_checks(folder: &Path, story: &Story) -> Vec<Diagnostic> {
             };
             let at = format!("{at}, app `{}`", app.id);
             if w != h {
-                say(
-                    Severity::Warning,
-                    frames_file,
-                    format!("{at}: its icon ({w} × {h}) is not square: it is stretched"),
-                );
+                let message = format!("{at}: its icon ({w} × {h}) is not square: it is stretched");
+                self.say(Severity::Warning, file, message);
             } else if w < ICON_MIN {
-                say(
-                    Severity::Warning,
-                    frames_file,
-                    format!("{at}: its icon ({w} px) is smaller than {ICON_MIN} px: it shows blurred"),
-                );
+                let message = format!("{at}: its icon ({w} px) is smaller than {ICON_MIN} px: it shows blurred");
+                self.say(Severity::Warning, file, message);
             }
         }
     }
-    for s in &story.skins {
+
+    /// A skin: margins that leave something to stretch, a background drawn
+    /// big enough for what it fills.
+    fn skin(&mut self, folder: &Path, s: &Skin) {
         let file = format!("{SKINS}{}/skin.yaml", s.id);
         let reference = if s.template.is_app() {
             skin::REFERENCE_WIDTH
@@ -158,25 +162,21 @@ pub fn image_checks(folder: &Path, story: &Story) -> Vec<Diagnostic> {
             };
             if let Some([t, r, b, l]) = slot.slice {
                 if t + b >= h || l + r >= w {
-                    say(
-                        Severity::Error,
-                        &file,
-                        format!("slot `{name}`: its margins ({t}, {r}, {b}, {l}) leave nothing to stretch in a {w} × {h} picture"),
+                    let message = format!(
+                        "slot `{name}`: its margins ({t}, {r}, {b}, {l}) leave nothing to stretch in a {w} × {h} picture"
                     );
+                    self.say(Severity::Error, &file, message);
                 }
             }
             let fills = matches!(name.as_str(), "background" | "paper" | "set");
             if fills && w < reference / 2 {
                 let what = if s.template == Template::Tv { "scene" } else { "screen" };
-                say(
-                    Severity::Warning,
-                    &file,
-                    format!("slot `{name}`: {w} px wide, drawn for a {what} {reference} px wide: it shows blurred"),
-                );
+                let message =
+                    format!("slot `{name}`: {w} px wide, drawn for a {what} {reference} px wide: it shows blurred");
+                self.say(Severity::Warning, &file, message);
             }
         }
     }
-    out
 }
 
 #[cfg(test)]
