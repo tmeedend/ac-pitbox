@@ -33,6 +33,31 @@ export interface AppShown {
   shows: string[];
   /** On the home screen now. */
   available: boolean;
+  /** Its look now; `null`, Pit Box's theme. */
+  skin: SkinShown | null;
+}
+
+/** A skin as the screen draws it (`story_engine::view::SkinShown`): its
+ * files as paths inside the story. */
+export interface SkinShown {
+  id: string;
+  /** `background`, `text`, `muted`, `accent` -> `#rrggbb`. */
+  colors: Record<string, string>;
+  font: string | null;
+  slots: Record<string, { file: string; slice?: [number, number, number, number] | null }>;
+}
+
+/** The phone up, as its frame and the Beats make it look
+ * (`story_engine::view::PhoneLook`). */
+export interface PhoneLook {
+  /** Its picture, a path inside `media/`, and the screen's rectangle in its
+   * pixels; `null`, Pit Box draws one. */
+  body: { file: string; screen: { x: number; y: number; width: number; height: number; radius?: number } } | null;
+  wallpaper: string | null;
+  status_bar: "full" | "simple" | "none";
+  status: { date: string | null; battery: number; signal: number; wifi: boolean; airplane: boolean };
+  /** Paths inside `media/`. */
+  sounds: { tap?: string; send?: string };
 }
 
 /** A place as it shows now (`story_engine::scene::Shown`). */
@@ -93,6 +118,8 @@ export interface PlayView {
   frame: string;
   /** Its apps, in the order the home screen shows them. */
   apps: AppShown[];
+  /** The phone's look; `null` without a frame. */
+  phone: PhoneLook | null;
   /** The place behind the frame; `null`, a plain background. */
   scene: SceneShown | null;
   date: string;

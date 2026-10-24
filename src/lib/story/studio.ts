@@ -4,7 +4,7 @@
 // (`story_engine::model`): what the editor shows is what the file says.
 import { invoke } from "@tauri-apps/api/core";
 import type { PlayerChoice, PlayerStep } from "./player/types";
-import type { AppShown, SceneShown } from "./play";
+import type { AppShown, PhoneLook, SceneShown } from "./play";
 import type { ScenesFile } from "./scenes";
 
 /** What shows the story (SPEC-story-mode, Content types, templates and
@@ -486,6 +486,8 @@ export interface PreviewView {
   frame: string | null;
   /** The app of that frame showing it; `null` when it is listed by name. */
   app: AppShown | null;
+  /** That frame's look, as the story starts it. */
+  phone: PhoneLook | null;
   /** The checks' warning, for `nowhere`. */
   nowhere: string | null;
   kind: ContentType;

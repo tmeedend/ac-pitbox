@@ -36,6 +36,7 @@ pub mod sample;
 pub mod save;
 pub mod scene;
 pub mod script;
+pub mod skin;
 pub mod state;
 pub mod time;
 pub mod validate;
@@ -233,6 +234,20 @@ mod tests {
         let apps = crate::view::play_view(&story, &state).apps;
         let available: Vec<&str> = (apps.iter().filter(|a| a.available)).map(|a| a.id.as_str()).collect();
         assert_eq!(available, ["messages", "mail", "news", "social"]);
+        // Its look: the picture, the battery and Wi-Fi the last Beat set, the
+        // messages in the night skin it put on.
+        let view = crate::view::play_view(&story, &state);
+        let phone = view.phone.expect("a phone is up");
+        assert_eq!(
+            phone.body.map(|b| b.file).as_deref(),
+            Some("frames/smartphone/body.png")
+        );
+        assert_eq!(
+            (phone.status.battery, phone.status.wifi, phone.status.signal),
+            (9, false, 4)
+        );
+        let messages = view.apps.iter().find(|a| a.id == "messages").unwrap();
+        assert_eq!(messages.skin.as_ref().map(|s| s.id.as_str()), Some("chat_night"));
         for content in [
             "sponsor_offer",
             "rival_post_01",

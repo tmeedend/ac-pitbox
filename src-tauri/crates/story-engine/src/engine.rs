@@ -445,6 +445,10 @@ impl<'a> Run<'a> {
         }
         self.set_scene(beat);
         self.state.unlocked.extend(beat.unlock.iter().cloned());
+        if let Some(status) = &beat.status {
+            self.state.status.apply(status);
+        }
+        (self.state.skins).extend(beat.skins.iter().map(|(a, s)| (a.clone(), s.clone())));
         for effect in &beat.effects {
             self.apply_effect(effect)?;
         }

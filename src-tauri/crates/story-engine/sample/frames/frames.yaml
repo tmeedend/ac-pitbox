@@ -6,6 +6,13 @@ frames:
   - id: basic_phone
     kind: phone
     name: Basic phone
+    # The picture of the phone, its screen left transparent, and where that
+    # screen is in the picture's pixels.
+    body:
+      file: frames/basic_phone/body.png
+      screen: { x: 60, y: 110, width: 400, height: 470, radius: 12 }
+    # An old phone: the clock alone.
+    status_bar: simple
     apps:
       - id: messages
         name: Messages
@@ -15,27 +22,41 @@ frames:
   - id: smartphone
     kind: phone
     name: Smartphone
+    body:
+      file: frames/smartphone/body.png
+      screen: { x: 50, y: 50, width: 1080, height: 2300, radius: 90 }
+    wallpaper: frames/smartphone/wallpaper.webp
+    sounds:
+      tap: frames/smartphone/sounds/tap.ogg
+      send: frames/smartphone/sounds/send.ogg
     apps:
       - id: messages
         name: Messages
+        icon: frames/smartphone/icons/messages.png
         template: thread
         shows: [message]
         appears: always
+        # Its look: a skin of frames/skins/, for a thread.
+        skin: chat_blue
       - id: mail
         name: Mail
+        icon: frames/smartphone/icons/mail.png
         template: inbox
         shows: [mail]
       # Shown from the Beat that hands the phone over, before any article.
       - id: news
         name: Motorsport News
+        icon: frames/smartphone/icons/news.png
         template: feed
         shows: [article]
         appears: beat
       - id: social
         name: Paddock
+        icon: frames/smartphone/icons/social.png
         template: feed
         shows: [social_post]
       - id: bank
         name: Bank
+        icon: frames/smartphone/icons/bank.png
         template: statement
         shows: [statement]

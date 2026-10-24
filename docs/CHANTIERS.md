@@ -941,11 +941,41 @@ de reprendre. En cas d'écart, la spec fait foi.
           ses erreurs comptent dans la section Fil ; les modèles `agenda` et
           `call` n'existent pas encore (une app qui les nomme ne se lit pas).
           **Pas vu à l'écran** : le téléphone de l'exemple aux deux étapes.
-        - **L3d.2, le téléphone habillé.** Le corps en image et sa zone
-          d'écran, le fond d'écran, la barre d'état (posée par Beat), les
-          icônes ; `skin.yaml` (couleurs, polices, emplacements en 9-slice)
-          pour les modèles existants ; le thème par défaut en repli ; les
-          sons d'interface ; un Beat qui change l'habillage d'une app.
+        - **L3d.2, le téléphone habillé — fait (2026-10-24).** `body`,
+          `wallpaper`, `status_bar`, `sounds` dans `frames.yaml` ; les
+          habillages `frames/skins/<id>/skin.yaml` (`skin.rs`), leurs
+          fichiers portés par l'exemple (`build.rs`) et listés
+          (`read_skin_files`) ; le Beat gagne `status` et `skins`, gardés dans
+          la sauvegarde ; la vue porte `PlayView.phone` et le `skin` de chaque
+          app ; `PhoneFrame` place l'écran dans l'image du corps, dessine la
+          barre d'état et le fond d'écran, et porte l'habillage par le
+          contexte `phoneDress` (`skins.ts` : couleurs en jetons de l'app,
+          emplacements en `border-image`) ; la police passe par la commande
+          `story_skin_font` ; `storymedia` sert les fichiers d'un habillage
+          de l'exemple (`/file/`). Les contrôles des cadres et des habillages
+          sont dans `validate/frames.rs`. Exemple : les deux corps, un fond
+          d'écran, cinq icônes, deux sons, l'habillage `chat_blue` (bulles,
+          bouton de réponse, Inter) et `chat_night` (couleurs seules) posé
+          au retour du téléphone ; la batterie à 64 %, puis 9 % sans Wi-Fi.
+          **Choisi sans demander** (dans la spec) : le téléphone dessiné à
+          640 px de haut ; par défaut une batterie pleine, quatre barres et
+          le Wi-Fi ; un `date` vide rend la date de l'histoire ; les sons du
+          téléphone coupés par le même bouton « Son » que l'ambiance, qui
+          s'affiche aussi pour eux ; une image de corps qui ne se charge pas
+          laisse le téléphone dessiné.
+          **Choisi sans demander** (détails) : la police lue par commande
+          (une police d'une autre origine exige CORS) ; les couleurs d'un
+          habillage posées sur les jetons de l'app (`--txt`, `--blue`…) plutôt
+          qu'une règle par vue ; les médias de l'exemple dessinés par un
+          script Python hors du dépôt (à ranger avec le kit, L3d.5) ;
+          l'habillage du dialogue (zone de texte, plaque du nom) va avec les
+          autres habillages de la scène, en L3d.3 ; la barre d'état et les
+          habillages s'écrivent à la main jusqu'à l'écran Cadre.
+          **Pas vu à l'écran** : tout le rendu (corps, barre d'état, 9-slice,
+          police, sons).
+          **À voir avec l'utilisateur** : `media/CREDITS.md` décrit encore
+          comme provisoires les six images qu'il a remplacées (portraits,
+          illustration, scènes) ; leur source et leur licence sont à écrire.
         - **L3d.3, les modèles qui manquent.** L'agenda, l'écran d'appel, le
           type `document` sur la scène (`newspaper`, `letter`), la vidéo
           `tv` et l'appel `landline` sur la scène.

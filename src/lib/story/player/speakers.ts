@@ -20,6 +20,14 @@ export function speakersOf(characters: Character[], folder: string | null): Reco
   return out;
 }
 
+/** A file of the story's own skins (`frames/skins/<id>/<file>`, `path`
+ * inside the story) as a URL the page can show; `null` without a path. */
+export function storyFileUrl(folder: string | null, path: string | null | undefined): string | null {
+  if (!path) return null;
+  if (folder) return convertFileSrc(`${folder}/${path}`);
+  return `http://storymedia.localhost/file/${path.split("/").map(encodeURIComponent).join("/")}`;
+}
+
 /** A file of the story's `media/` (`path` inside it) as a URL the page can
  * show; `null` without a path. `folder` is the story's, read through the
  * asset protocol; `null` for the sample Pit Box carries, whose media are

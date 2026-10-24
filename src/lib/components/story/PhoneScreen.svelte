@@ -13,6 +13,8 @@
   import type { Post, Speaker, StatementLine } from "$lib/story/player/types";
   import type { AppShown, SeenItem } from "$lib/story/play";
   import { mediaUrl } from "$lib/story/player/speakers";
+  import { playPhoneSound, providePhoneDress } from "$lib/story/player/phoneDress";
+  import type { PhoneLook } from "$lib/story/play";
   import FeedView from "./player/FeedView.svelte";
   import PhoneFrame from "./player/PhoneFrame.svelte";
   import StatementView from "./player/StatementView.svelte";
@@ -25,6 +27,10 @@
     apps: AppShown[];
     /** The story's folder, for the apps' icons; `null` for the sample. */
     folder: string | null;
+    /** How the phone looks: its picture, status bar, wallpaper, sounds. */
+    look: PhoneLook | null;
+    /** The story's sound is off. */
+    muted: boolean;
     items: SeenItem[];
     clock: string;
     /** The date as the story shows it. */
@@ -38,7 +44,8 @@
     /** The event the story waits for, heading the messages. */
     next?: Snippet;
   }
-  const { apps, folder, items, clock, date, dateDisplay, speakers, money, onreply, onseen, next }: Props = $props();
+  const { apps, folder, look, muted, items, clock, date, dateDisplay, speakers, money, onreply, onseen, next }: Props =
+    $props();
 
   /** The screen shown: the home screen, or an app, by id. */
   let screen = $state<string>(untrack(() => homeApp(apps)?.id ?? "home"));
@@ -48,6 +55,20 @@
   const open = $derived(apps.find((a) => a.id === screen) ?? null);
   /** Another app than the one shown calls for the player. */
   const elsewhere = $derived(shownApps.some((app) => app.id !== screen && pendingIn(items, app) > 0));
+
+  providePhoneDress(() => ({ look, skin: open?.skin ?? null, folder, home: open === null }));
+
+  /** Opens an app, with the phone's tap. */
+  function openApp(id: string) {
+    screen = id;
+    playPhoneSound(folder, look?.sounds.tap, muted);
+  }
+
+  /** Sends a reply, with the phone's own sound. */
+  function reply(content: string, label: string) {
+    playPhoneSound(folder, look?.sounds.send, muted);
+    onreply(content, label);
+  }
 
   function when(item: SeenItem): string {
     return whenLabel(item.date, item.clock, dateDisplay, t, i18n.locale);
@@ -102,7 +123,7 @@
     {clock}
     {date}
     {speakers}
-    {onreply}
+    onreply={reply}
     {onseen}
     {next}
     {elsewhere}
@@ -117,7 +138,7 @@
     {dateDisplay}
     {speakers}
     {elsewhere}
-    {onreply}
+    onreply={reply}
     {onseen}
     onhome={() => (screen = "home")}
   />
@@ -128,7 +149,7 @@
         {@const pending = pendingIn(items, app)}
         {@const name = appName(app, t)}
         {@const icon = mediaUrl(folder, app.icon)}
-        <button class="app" onclick={() => (screen = app.id)}>
+        <button class="app" onclick={() => openApp(app.id)}>
           {#if icon}
             <img class="icon" src={icon} alt="" />
           {:else}
@@ -150,7 +171,7 @@
         <FeedView
           {posts}
           {speakers}
-          onchoose={(key, label) => onreply(items[Number(key)].content, label)}
+          onchoose={(key, label) => reply(items[Number(key)].content, label)}
         />
       {/if}
     </div>

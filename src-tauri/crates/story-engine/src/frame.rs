@@ -32,7 +32,8 @@ pub struct Frames {
 }
 
 /// A frame a story declares: a device of a kind Pit Box ships, with its
-/// apps. Its look (body, wallpaper, skins) comes with the skins.
+/// look and its apps. Every part of the look is optional: what is left out
+/// takes Pit Box's theme.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FrameDecl {
@@ -42,8 +43,121 @@ pub struct FrameDecl {
     /// Display name in the source language; opaque to the engine.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// A picture of the device, its screen left transparent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body: Option<Body>,
+    /// Behind the home screen, a path inside `media/`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wallpaper: Option<String>,
+    #[serde(default, skip_serializing_if = "StatusStyle::is_default")]
+    pub status_bar: StatusStyle,
+    #[serde(default, skip_serializing_if = "Sounds::is_empty")]
+    pub sounds: Sounds,
     /// In the order the home screen shows them.
     pub apps: Vec<App>,
+}
+
+/// A device's picture and where its screen is in it.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Body {
+    /// A path inside `media/`: PNG or WebP, the screen transparent.
+    pub file: String,
+    pub screen: Screen,
+}
+
+/// The screen's rectangle in the body picture's pixels, and the radius of
+/// its corners.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Screen {
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub radius: u32,
+}
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
+}
+
+/// How much the status bar shows.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StatusStyle {
+    /// Clock, date, signal, Wi-Fi, battery.
+    #[default]
+    Full,
+    /// The clock alone: an old phone.
+    Simple,
+    None,
+}
+
+impl StatusStyle {
+    fn is_default(&self) -> bool {
+        *self == StatusStyle::Full
+    }
+}
+
+/// The phone's own sounds, paths inside `media/`: an app opened, a reply sent.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Sounds {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tap: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub send: Option<String>,
+}
+
+impl Sounds {
+    fn is_empty(&self) -> bool {
+        self.tap.is_none() && self.send.is_none()
+    }
+
+    pub fn files(&self) -> impl Iterator<Item = (&'static str, &String)> {
+        [("tap", &self.tap), ("send", &self.send)]
+            .into_iter()
+            .filter_map(|(k, v)| v.as_ref().map(|v| (k, v)))
+    }
+}
+
+/// What a Beat sets in the status bar; what it leaves out stays as it was.
+/// A date label of `""` gives the story's date back.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct StatusBar {
+    /// Shown instead of the story's date: "Mon 12 March".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub date: Option<String>,
+    /// Percent, 0 to 100.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub battery: Option<u8>,
+    /// Bars, 0 to 4.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signal: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wifi: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub airplane: Option<bool>,
+}
+
+impl StatusBar {
+    pub fn is_empty(&self) -> bool {
+        *self == StatusBar::default()
+    }
+
+    /// `patch` over this one.
+    pub fn apply(&mut self, patch: &StatusBar) {
+        if let Some(d) = &patch.date {
+            self.date = (!d.is_empty()).then(|| d.clone());
+        }
+        self.battery = patch.battery.or(self.battery);
+        self.signal = patch.signal.or(self.signal);
+        self.wifi = patch.wifi.or(self.wifi);
+        self.airplane = patch.airplane.or(self.airplane);
+    }
 }
 
 /// The kinds of frame Pit Box ships: what a declared frame builds on.
@@ -71,6 +185,10 @@ pub struct App {
     pub shows: Vec<ContentType>,
     #[serde(default, skip_serializing_if = "Appears::is_default")]
     pub appears: Appears,
+    /// Its look, a skin of `frames/skins/` for its template; left out, Pit
+    /// Box's theme. A Beat can swap it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skin: Option<String>,
 }
 
 /// The templates an app can be (SPEC-story-mode, Content types, templates
@@ -135,6 +253,7 @@ pub fn phone_apps() -> Vec<App> {
         template,
         shows,
         appears,
+        skin: None,
     };
     vec![
         app("messages", Template::Thread, vec![C::Message], Appears::Always),

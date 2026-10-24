@@ -60,6 +60,18 @@ pub async fn story_play_reading(app: AppHandle, source: play::Source, reading: p
     .await
 }
 
+/// The bytes of a skin's font, for the page to load (`story/media.rs`).
+#[tauri::command]
+pub async fn story_skin_font(
+    app: AppHandle,
+    source: play::Source,
+    path: String,
+) -> Result<tauri::ipc::Response, String> {
+    off_window(app, move |_| crate::story::media::skin_font(&source, &path))
+        .await
+        .map(tauri::ipc::Response::new)
+}
+
 // ------------------------------------------------- Create Your Own (studio)
 //
 // Façades over `crate::story::studio`. The story files live in a folder of

@@ -9,8 +9,9 @@ use crate::load::SourceFile;
 /// Its id, as `story.yaml` declares it.
 pub const ID: &str = "sample";
 
-// `FILES`: every file of `sample/` outside `media/`, as text; `MEDIA`: the
-// files of `media/`, as bytes, with their paths inside the story folder.
+// `FILES`: every file of `sample/` the engine reads, as text; `MEDIA`: the
+// files of `media/` and the skins' own files, as bytes, with their paths
+// inside the story folder.
 // Listed by `build.rs`, so that a file added to the folder is carried.
 include!(concat!(env!("OUT_DIR"), "/sample_files.rs"));
 
@@ -29,6 +30,12 @@ pub fn media(path: &str) -> Option<&'static [u8]> {
         .iter()
         .find(|(p, _)| p.strip_prefix("media/") == Some(path))
         .map(|(_, bytes)| *bytes)
+}
+
+/// A file the sample carries as bytes - a media file or a skin's - by its
+/// path inside the story folder (`frames/skins/chat/bubble.png`).
+pub fn file(path: &str) -> Option<&'static [u8]> {
+    MEDIA.iter().find(|(p, _)| *p == path).map(|(_, bytes)| *bytes)
 }
 
 /// The sample's files, as `load::read_dir` would read them from its folder.
@@ -52,16 +59,21 @@ mod tests {
         on_disk.sort();
         embedded.sort();
         assert_eq!(embedded, on_disk, "every file of sample/, as it is on disk");
-        let mut media: Vec<String> =
-            crate::load::read_media(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("sample"))
-                .into_iter()
-                .map(|p| format!("media/{p}"))
-                .collect();
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("sample");
+        let mut media: Vec<String> = (crate::load::read_media(&root).into_iter())
+            .map(|p| format!("media/{p}"))
+            .chain(crate::load::read_skin_files(&root))
+            .collect();
         media.sort();
         let carried: Vec<String> = MEDIA.iter().map(|(p, _)| p.to_string()).collect();
-        assert_eq!(carried, media, "every media file too, for the copy");
+        assert_eq!(carried, media, "every media file and skin file too, for the copy");
         let story = crate::Story::from_sources(files()).expect("loads");
         assert_eq!(story.manifest.id, ID);
+        // Read from its folder, with its media and its skins' files listed,
+        // the checks that look for files find every one.
+        let (_, d) = crate::load::draft_dir(&root).expect("reads");
+        let from_folder = crate::Story::from_draft(d).expect("loads");
+        assert_eq!(crate::validate::validate(&from_folder), [], "clean, files included");
     }
 
     // Story Mode shows the sample's pictures by their path in `media/`, the

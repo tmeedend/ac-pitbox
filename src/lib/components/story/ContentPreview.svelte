@@ -13,6 +13,7 @@
   import { setupSentences } from "$lib/story/preview";
   import { inputsOf } from "$lib/story/preview.svelte";
   import { appName } from "$lib/story/player/apps";
+  import { providePhoneDress } from "$lib/story/player/phoneDress";
   import { dateLabel, whenLabel } from "$lib/story/player/phone";
   import { mediaUrl, speakersOf } from "$lib/story/player/speakers";
   import { previewContent, type PreviewView } from "$lib/story/studio";
@@ -65,6 +66,8 @@
   });
 
   const speakers = $derived(speakersOf(story.characters.value?.characters ?? [], story.path));
+  // The phone dressed as the story starts it, in the item's app's skin.
+  providePhoneDress(() => ({ look: view?.phone ?? null, skin: view?.app?.skin ?? null, folder: story.path, home: false }));
   const names = $derived(Object.fromEntries(Object.entries(speakers).map(([k, s]) => [k, s.name])));
   const scale = $derived(story.manifest.value?.settings.relations.scale ?? []);
   const dateDisplay = $derived(story.manifest.value?.settings.date ?? "none");

@@ -409,6 +409,14 @@ pub struct Beat {
     /// (`frame::Appears::Beat`).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub unlock: Vec<String>,
+    /// What the phone's status bar shows from this beat on; what it leaves
+    /// out stays as it was.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<crate::frame::StatusBar>,
+    /// App id -> skin: an app's look from this beat on, in whichever frame
+    /// has the app.
+    #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub skins: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

@@ -79,8 +79,8 @@ describe("pastDialogues", () => {
 describe("withoutTemplate", () => {
   it("lists what the phone cannot show yet", () => {
     const apps: AppShown[] = [
-      { id: "messages", name: null, icon: null, template: "thread", shows: ["message"], available: true },
-      { id: "mail", name: null, icon: null, template: "inbox", shows: ["mail"], available: true },
+      { id: "messages", name: null, icon: null, template: "thread", shows: ["message"], available: true, skin: null },
+      { id: "mail", name: null, icon: null, template: "inbox", shows: ["mail"], available: true, skin: null },
     ];
     const kinds = withoutTemplate(
       [

@@ -1,0 +1,14 @@
+# The smartphone's messages: blue bubbles, drawn as images that stretch by
+# their 40 px corners (9-slice), the Inter font, and colours for the rest.
+# Every file is in this folder, so the skin can be copied to another story.
+template: thread
+colors:
+  background: "#0e1117"
+  text: "#eef1f5"
+  muted: "#8b95a5"
+  accent: "#0a84ff"
+font: Inter.ttf
+slots:
+  bubble_in: { file: bubble_in.png, slice: [40, 40, 40, 40] }
+  bubble_out: { file: bubble_out.png, slice: [40, 40, 40, 40] }
+  reply: { file: reply.png, slice: [40, 40, 40, 40] }

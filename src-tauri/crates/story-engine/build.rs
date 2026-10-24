@@ -27,7 +27,12 @@ fn main() {
     let mut paths = Vec::new();
     walk(&root, "", &mut paths);
     paths.sort();
-    let (media, text): (Vec<_>, Vec<_>) = paths.iter().partition(|p| p.starts_with("media/"));
+    // Carried as bytes: `media/`, and a skin's own files beside its
+    // `skin.yaml` - the same rule as `load::read_skin_files`, which this
+    // script cannot call.
+    let (media, text): (Vec<_>, Vec<_>) = paths
+        .iter()
+        .partition(|p| p.starts_with("media/") || (p.starts_with("frames/skins/") && !p.ends_with(".yaml")));
     let source = |p: &str| root.join(p).to_string_lossy().into_owned();
     let mut code = String::from("const FILES: &[(&str, &str)] = &[\n");
     for p in text {

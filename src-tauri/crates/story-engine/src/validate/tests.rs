@@ -859,3 +859,76 @@ nodes:
         "the story's frames named first: {d:#?}"
     );
 }
+
+// A phone's look and its skins (SPEC-story-mode, Skins: how a frame gets its
+// look): pictures and sounds of the kinds the phone shows and plays; a skin
+// for its app's template, with the colours a skin gives written #rrggbb, its
+// template's slots, and files of its own folder; a Beat dressing and setting
+// what exists, within range.
+#[test]
+fn skins_dress_their_template_with_files_of_their_own_folder() {
+    let frames = "frames:
+  - id: p
+    kind: phone
+    body: { file: body.gif, screen: { x: 0, y: 0, width: 0, height: 10 } }
+    wallpaper: wall.webp
+    sounds: { tap: tap.txt }
+    apps:
+      - { id: chat, template: thread, shows: [message], skin: mail_look }
+      - { id: inbox, template: inbox, shows: [mail], skin: ghost }
+";
+    let mail_look = "template: inbox
+colors: { background: \"#000000\", glow: \"#ffffff\", text: blue }
+font: font.exe
+slots:
+  row: { file: row.png }
+  bubble_in: { file: missing.png }
+  header: { file: ../escape.png }
+";
+    let flow = "id: ch01
+nodes:
+  - id: start
+    beat: { frame: p, skins: { chat: mail_look, nobody: mail_look }, status: { battery: 120, signal: 5 } }
+  - id: end
+    end: done
+";
+    let mut d = draft(with(
+        with(
+            with(minimal(), crate::frame::FRAMES, frames),
+            "frames/skins/mail_look/skin.yaml",
+            mail_look,
+        ),
+        "flow/01-one.yaml",
+        flow,
+    ));
+    d.media = Some(BTreeSet::from(["body.gif", "wall.webp", "tap.txt"].map(String::from)));
+    d.skin_files = Some(BTreeSet::from(
+        ["frames/skins/mail_look/row.png", "frames/skins/mail_look/font.exe"].map(String::from),
+    ));
+    let diags = validate(&crate::Story::from_draft(d).unwrap());
+    for needle in [
+        "body `body.gif` is not one of png, webp",
+        "the body's screen has no width or no height",
+        "tap `tap.txt` is not one of ogg, mp3, wav",
+        "app `chat`: skin `mail_look` dresses a inbox, not a thread",
+        "app `inbox`: unknown skin `ghost`",
+        "no colour `glow`",
+        "colour `text`: `blue` is not written #rrggbb",
+        "font: `font.exe` is not one of ttf, otf, woff2",
+        "a inbox has no slot `bubble_in`",
+        "`frames/skins/mail_look/missing.png` does not exist",
+        "`../escape.png` is a file of the skin's own folder",
+        "skins: no frame has an app `nobody`",
+        "skins: app `chat`: skin `mail_look` dresses a inbox",
+        "the battery is a percentage",
+        "the signal is 0 to 4 bars",
+    ] {
+        assert!(has(&diags, Severity::Error, needle), "{needle} in {diags:#?}");
+    }
+    assert!(
+        !diags
+            .iter()
+            .any(|x| x.message.contains("row.png") || x.message.contains("wall.webp")),
+        "what is there is fine: {diags:#?}"
+    );
+}

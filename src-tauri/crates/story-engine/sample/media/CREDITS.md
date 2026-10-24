@@ -19,3 +19,8 @@ Scenes, frame and sound: assets come from anywhere).
 | `scenes/bedroom.webp` | Made for Pit Box: a plain gradient placeholder, to be replaced | Pit Box contributors | CC0 1.0 |
 | `scenes/garage_day.webp` | Made for Pit Box: a plain gradient placeholder, to be replaced | Pit Box contributors | CC0 1.0 |
 | `scenes/garage_night.webp` | Made for Pit Box: a plain gradient placeholder, to be replaced | Pit Box contributors | CC0 1.0 |
+| `frames/basic_phone/body.png` | Made for Pit Box: drawn by program (a candy-bar phone, its screen cut out) | Pit Box contributors | CC0 1.0 |
+| `frames/smartphone/body.png` | Made for Pit Box: drawn by program (a smartphone, its screen cut out) | Pit Box contributors | CC0 1.0 |
+| `frames/smartphone/wallpaper.webp` | Made for Pit Box: drawn by program (soft circles on a gradient) | Pit Box contributors | CC0 1.0 |
+| `frames/smartphone/icons/*.png` | Made for Pit Box: drawn by program (five app icons) | Pit Box contributors | CC0 1.0 |
+| `frames/smartphone/sounds/tap.ogg`, `send.ogg` | Made for Pit Box: synthesised beeps | Pit Box contributors | CC0 1.0 |

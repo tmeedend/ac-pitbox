@@ -22,7 +22,7 @@ function item(content: string, o: Partial<SeenItem> = {}): SeenItem {
 }
 
 function app(id: string, template: AppShown["template"], shows: string[], o: Partial<AppShown> = {}): AppShown {
-  return { id, name: null, icon: null, template, shows, available: true, ...o };
+  return { id, name: null, icon: null, template, shows, available: true, skin: null, ...o };
 }
 
 const phone = [

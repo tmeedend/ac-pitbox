@@ -199,6 +199,12 @@ pub struct State {
     /// The apps a Beat unlocked, by id; absent from a save made before.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub unlocked: BTreeSet<String>,
+    /// The status bar as the Beats set it; absent from a save made before.
+    #[serde(default, skip_serializing_if = "crate::frame::StatusBar::is_empty")]
+    pub status: crate::frame::StatusBar,
+    /// App id -> the skin a Beat put on it.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub skins: BTreeMap<String, String>,
     pub reputation: i64,
     pub followers: i64,
     pub money: i64,
@@ -249,6 +255,8 @@ impl State {
             weather: None,
             mood: None,
             unlocked: BTreeSet::new(),
+            status: Default::default(),
+            skins: BTreeMap::new(),
             reputation: start.reputation,
             followers: start.followers,
             money: start.money,

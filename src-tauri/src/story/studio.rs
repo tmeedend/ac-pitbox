@@ -565,6 +565,8 @@ pub struct PreviewView {
     /// The app of that frame showing it; none when the frame has no app
     /// for its type and lists it by name.
     pub app: Option<story_engine::view::AppShown>,
+    /// That frame's look: its body, status bar and sounds.
+    pub phone: Option<story_engine::view::PhoneLook>,
     /// Why there is nothing to show, for `nowhere`: the checks' warning.
     pub nowhere: Option<String>,
     /// Its content type, as a `.story` header names it.
@@ -640,7 +642,12 @@ pub fn preview(folder: &Path, id: &str, setup: &[String], replies: &[String]) ->
     // it by name, having no app for its type.
     let app = (frame.filter(|_| !on_scene))
         .and_then(|f| f.apps(&story).into_iter().find(|a| a.shows.contains(&item.kind)))
-        .map(|a| story_engine::view::AppShown::of(a, true));
+        .map(|a| {
+            let skin = (a.skin.as_deref()).and_then(|s| story_engine::view::skin_shown(&story, s, a.template));
+            story_engine::view::AppShown::of(a, true, skin)
+        });
+    // The phone it shows in, dressed as the story starts it.
+    let phone = (frame.filter(|_| !on_scene)).and_then(|f| story_engine::view::phone_look(&story, before, f));
     let view = match (on_scene, &nowhere) {
         (true, _) => "scene",
         (false, Some(_)) => "nowhere",
@@ -674,6 +681,7 @@ pub fn preview(folder: &Path, id: &str, setup: &[String], replies: &[String]) ->
         view,
         frame: frame.filter(|_| view == "frame").map(ToString::to_string),
         app,
+        phone,
         nowhere,
         kind: item.kind.name(),
         from: item.from.clone(),

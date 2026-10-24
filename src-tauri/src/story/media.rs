@@ -8,15 +8,32 @@
 //! A story of the author's has its media on disk and goes through the asset
 //! protocol instead (`mediaUrl` in `src/lib/story/player/speakers.ts`).
 //! `http://storymedia.localhost/sample/<path inside media/>`, each segment of
-//! the path URL-encoded. A scene's video loop and its ambient sound are read
+//! the path URL-encoded; a skin's own files (`frames/skins/<id>/<file>`) at
+//! `http://storymedia.localhost/file/<path inside the story>`.
+//!
+//! A skin's font is the exception, sample or not: it is read by
+//! `skin_font` and handed over the IPC. A font a page loads from another
+//! origin needs CORS headers, which the asset protocol does not promise. A scene's video loop and its ambient sound are read
 //! in parts (`Range`, `byte_range.rs`), as a `<video>` or an `<audio>` asks.
 
+use std::path::Path;
+
+use story_engine::skin::{FONT, SKINS};
 use tauri::http::{header, Request, Response, StatusCode};
+
+use super::play::Source;
 
 /// The sample's media file a request asks for, if there is one.
 fn requested(path: &str) -> Option<(&'static [u8], &'static str)> {
-    let inside = crate::archive::percent_decode(path.strip_prefix("/sample/")?);
-    let bytes = story_engine::sample::media(&inside)?;
+    let (inside, bytes) = if let Some(media) = path.strip_prefix("/sample/") {
+        let inside = crate::archive::percent_decode(media);
+        let bytes = story_engine::sample::media(&inside)?;
+        (inside, bytes)
+    } else {
+        let inside = crate::archive::percent_decode(path.strip_prefix("/file/")?);
+        let bytes = story_engine::sample::file(&inside).filter(|_| inside.starts_with(SKINS))?;
+        (inside, bytes)
+    };
     // The type follows the extension: the webview shows an image, or plays a
     // video or a sound, only when told it is one. The list holds what the
     // checks let a story use (`story_engine::scene`, IMAGE, VIDEO, AUDIO).
@@ -32,6 +49,31 @@ fn requested(path: &str) -> Option<(&'static [u8], &'static str)> {
         _ => "application/octet-stream",
     };
     Some((bytes, content_type))
+}
+
+/// The bytes of a skin's font, `path` inside the story
+/// (`frames/skins/<id>/<file>`): from the sample Pit Box carries, or from the
+/// story's folder. Nothing outside a skin's folder, and nothing but a font.
+pub fn skin_font(source: &Source, path: &str) -> Result<Vec<u8>, String> {
+    let inside = path.strip_prefix(SKINS).and_then(|rest| rest.split_once('/'));
+    let fits = inside.is_some_and(|(id, file)| {
+        !id.is_empty()
+            && ![id, file]
+                .iter()
+                .any(|p| p.contains(['/', '\\', ':']) || p.starts_with('.'))
+    });
+    let kind = story_engine::scene::extension(path).unwrap_or_default();
+    if !fits || !FONT.contains(&kind.as_str()) {
+        return Err(format!("not a skin's font: {path}"));
+    }
+    match source {
+        Source::Sample => {
+            (story_engine::sample::file(path).map(<[u8]>::to_vec)).ok_or_else(|| format!("no {path} in the sample"))
+        }
+        Source::Folder { path: folder } => {
+            std::fs::read(Path::new(folder).join(path)).map_err(|e| format!("{path}: {e}"))
+        }
+    }
 }
 
 pub fn serve(request: &Request<Vec<u8>>) -> Response<Vec<u8>> {
@@ -88,6 +130,31 @@ mod tests {
             "/sample/",
         ] {
             assert_eq!(get(path).status(), StatusCode::NOT_FOUND, "{path} is not served");
+        }
+    }
+
+    // A skin's files are served by their path inside the story, and only
+    // theirs; its font is read whole for the page, never anything else.
+    #[test]
+    fn a_skin_s_files_are_served_and_its_font_read() {
+        let bubble = get("/file/frames/skins/chat_blue/bubble_out.png");
+        assert_eq!(bubble.status(), StatusCode::OK, "a skin's image");
+        assert_eq!(bubble.headers()[header::CONTENT_TYPE], "image/png");
+        assert_eq!(get("/file/story.yaml").status(), StatusCode::NOT_FOUND, "not a skin's");
+        assert_eq!(
+            get("/file/media/scenes/bedroom.webp").status(),
+            StatusCode::NOT_FOUND,
+            "media keep their own route"
+        );
+        let font = skin_font(&Source::Sample, "frames/skins/chat_blue/Inter.ttf").expect("the font");
+        assert!(font.len() > 100_000, "the whole file");
+        for path in [
+            "frames/skins/chat_blue/bubble_out.png",
+            "frames/skins/../story.ttf",
+            "frames/frames.ttf",
+            "media/a.ttf",
+        ] {
+            assert!(skin_font(&Source::Sample, path).is_err(), "{path} refused");
         }
     }
 

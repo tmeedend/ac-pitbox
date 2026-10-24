@@ -53,6 +53,8 @@
   const scene = $derived(sceneShown(view.scene, onStageItem));
   const ambient = $derived(mediaUrl(game.folder, scene?.ambient));
   const muted = $derived(ambientMuted());
+  /** Something to mute: the scene's ambience, or the phone's own sounds. */
+  const hasSound = $derived(ambient !== null || !!view.phone?.sounds.tap || !!view.phone?.sounds.send);
 
   let journal = $state(false);
   /** The scene holds the stage: the frame is out of view. */
@@ -172,7 +174,7 @@
     <button class="btn btn-ghost" disabled={played !== null} onclick={() => (journal = !journal)}
       >{t("story.journal.title")}</button
     >
-    {#if ambient}
+    {#if hasSound}
       <button class="btn btn-ghost" aria-pressed={muted} onclick={() => setAmbientMuted(!muted)}
         >{t(muted ? "story.play.soundOff" : "story.play.sound")}</button
       >
@@ -211,6 +213,8 @@
           <PhoneScreen
             apps={view.apps}
             folder={game.folder}
+            look={view.phone}
+            {muted}
             items={view.items}
             clock={view.clock}
             {date}

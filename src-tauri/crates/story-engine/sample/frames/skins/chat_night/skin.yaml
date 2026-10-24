@@ -1,0 +1,6 @@
+# The same messages at night, after the race: colours only - a skin can be
+# that small, every slot left out keeps Pit Box's look.
+template: thread
+colors:
+  background: "#05060a"
+  accent: "#bf5af2"

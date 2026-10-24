@@ -16,6 +16,7 @@ use serde::de::DeserializeOwned;
 use crate::frame::{FrameDecl, Frames, FRAMES};
 use crate::model::*;
 use crate::scene::{Place, Scenes, SCENES};
+use crate::skin::Skin;
 
 /// The story's drivers (SPEC-story-mode, Drivers).
 pub const ROSTER: &str = "drivers/roster.yaml";
@@ -65,9 +66,14 @@ pub struct Story {
     pub scenes: Vec<Place>,
     /// `frames/frames.yaml`: the frames the story declares; empty without one.
     pub frames: Vec<FrameDecl>,
+    /// `frames/skins/<id>/skin.yaml`, in folder order.
+    pub skins: Vec<Skin>,
     /// The files under `media/`, as paths inside it; `None` for a story
     /// built in memory, whose media nobody listed.
     pub media: Option<BTreeSet<String>>,
+    /// The skins' own files, as paths inside the story (`read_skin_files`);
+    /// `None` like `media`.
+    pub skin_files: Option<BTreeSet<String>>,
     nodes: HashMap<NodeId, (usize, usize)>,
     content_index: HashMap<ContentId, usize>,
     event_index: HashMap<EventId, usize>,
@@ -103,6 +109,29 @@ pub fn read_media(root: &Path) -> BTreeSet<String> {
     }
     let mut out = BTreeSet::new();
     walk(&root.join("media"), "", &mut out);
+    out
+}
+
+/// The files of the story's skins beside their `skin.yaml`, as paths inside
+/// the story (`frames/skins/chat/bubble.png`): what the checks need to tell
+/// a slot that points to nothing.
+pub fn read_skin_files(root: &Path) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    let Ok(skins) = std::fs::read_dir(root.join(crate::skin::SKINS)) else {
+        return out;
+    };
+    for skin in skins.flatten().filter(|e| e.path().is_dir()) {
+        let id = skin.file_name().to_string_lossy().into_owned();
+        let Ok(files) = std::fs::read_dir(skin.path()) else {
+            continue;
+        };
+        for f in files.flatten().filter(|e| e.path().is_file()) {
+            let name = f.file_name().to_string_lossy().into_owned();
+            if !name.ends_with(".yaml") {
+                out.insert(format!("{}{id}/{name}", crate::skin::SKINS));
+            }
+        }
+    }
     out
 }
 
@@ -231,7 +260,9 @@ pub struct Draft {
     pub events: Vec<Event>,
     pub scenes: Scenes,
     pub frames: Frames,
+    pub skins: Vec<Skin>,
     /// Filled by whoever read the folder (`read_media`), not by `draft`.
+    pub skin_files: Option<BTreeSet<String>>,
     pub media: Option<BTreeSet<String>>,
     pub errors: Vec<LoadError>,
 }
@@ -262,6 +293,11 @@ pub fn draft(mut files: Vec<SourceFile>) -> Draft {
             parse_yaml(file).map(|s| p.scenes = s)
         } else if path == FRAMES {
             parse_yaml(file).map(|f| p.frames = f)
+        } else if let Some(id) = crate::skin::skin_id(path) {
+            parse_yaml::<Skin>(file).map(|mut s| {
+                s.id = id.into();
+                p.skins.push(s)
+            })
         } else if in_dir(path, "flow", ".yaml").is_some_and(|rest| !rest.contains('/')) {
             parse_yaml::<Chapter>(file).map(|mut c| {
                 c.file = file.path.clone();
@@ -290,6 +326,7 @@ pub fn draft_dir(root: &Path) -> Result<(Vec<SourceFile>, Draft), LoadError> {
     let files = read_dir(root)?;
     let mut d = draft(files.clone());
     d.media = Some(read_media(root));
+    d.skin_files = Some(read_skin_files(root));
     Ok((files, d))
 }
 
@@ -343,7 +380,9 @@ impl Story {
             events,
             scenes,
             frames,
+            skins,
             media,
+            skin_files,
             mut errors,
         } = draft;
 
@@ -421,7 +460,9 @@ impl Story {
             events,
             scenes: scenes.scenes,
             frames: frames.frames,
+            skins,
             media,
+            skin_files,
             nodes,
             content_index,
             event_index,
@@ -500,6 +541,10 @@ impl Story {
 
     pub fn scene(&self, id: &str) -> Option<&Place> {
         self.scenes.iter().find(|s| s.id == id)
+    }
+
+    pub fn skin(&self, id: &str) -> Option<&Skin> {
+        self.skins.iter().find(|s| s.id == id)
     }
 
     /// A frame the story declares.

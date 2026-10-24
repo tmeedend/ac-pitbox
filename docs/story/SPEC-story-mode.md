@@ -216,6 +216,34 @@ type in two apps of a frame, an icon not in `media/`, a Beat unlocking an app
 no frame has (errors); an app waiting for a Beat none gives (a warning).
 Notifications other than an app's count of unread items wait for a later lot.
 
+**Built so far** (L3d.2): a phone's look. Its `body` is a picture of the
+device (PNG or WebP in `media/`) with its screen cut out, and the screen's
+rectangle in the picture's pixels with its corners' radius: the phone is
+drawn 640 px high, the screen placed in it and the picture over it; a
+picture that does not load leaves Pit Box's drawn phone. Its `wallpaper`
+shows behind the home screen; its `status_bar` is `full` (clock, date,
+signal, Wi-Fi, battery), `simple` (the clock alone) or `none`; its `sounds`
+are a `tap` when an app opens and a `send` when a reply goes, muted by the
+game's sound button. A Beat's `status` sets the date label (`""` gives the
+story's date back), the battery (0-100), the signal (0-4 bars), Wi-Fi and
+airplane mode; each stays until a Beat changes it, from a full battery, full
+signal and Wi-Fi on. An app's `skin` names a folder `frames/skins/<id>/`:
+`skin.yaml` says the template it dresses, its colours (`background`, `text`,
+`muted`, `accent`, `#rrggbb`), its font (TTF, OTF, WOFF2) and its slots, each
+an image of the folder with, for one that stretches, its four fixed margins
+(9-slice) in a picture drawn for a screen 1080 px wide. The slots: a
+thread's `background`, `header`, `bubble_in`, `bubble_out`, `reply`; an
+inbox's and a statement's `background`, `header`, `row`; a feed's
+`background`, `header`, `post`. A colour left out, a slot left out, the font
+left out keep Pit Box's. A Beat's `skins` puts another skin on an app, by
+its id, in whichever phone has it. The checks: a picture or a sound of a
+kind the phone cannot show or play, a screen with no size, a skin unknown or
+for another template, a colour unknown or not `#rrggbb`, a slot its template
+has not, a skin's file outside its folder or missing, a status out of range
+(errors). The editor's preview of a content item shows its phone dressed as
+the story starts it. The status bar and the skins are typed in the files
+until the Frame screen.
+
 ### Skins: how a frame gets its look
 
 A skin is images, colours, fonts and sounds placed on a template. It never
@@ -1043,8 +1071,8 @@ any story, and each is optional (see Story settings).
   ambient sound if any. Because the background is blurred, a modest resolution
   and bitrate are enough, which keeps the package smaller.
 - **Phone state.** With the phone frame, each beat can set the status bar:
-  clock, date label, battery, signal, Wi-Fi, airplane mode. The scene gives
-  defaults and the beat can override them.
+  clock, date label, battery, signal, Wi-Fi, airplane mode, each staying
+  until a beat changes it.
 - **New phones.** A new phone is a change of frame placed on a beat; each phone
   frame has its own status bar style, app skins and UI sounds. Apps appear as
   the story unlocks them.

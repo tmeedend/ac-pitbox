@@ -8,10 +8,13 @@
 use serde::Serialize;
 
 use crate::engine::{difficulty_step, fee_due, offers, Offer, Step};
-use crate::frame::{App, Appears, Template};
+use std::collections::BTreeMap;
+
+use crate::frame::{App, Appears, Body, Frame, Sounds, StatusStyle, Template};
 use crate::load::Story;
 use crate::model::{DateDisplay, EventType, Session, Transition};
 use crate::scene::Shown;
+use crate::skin::{Slot, SKINS};
 use crate::state::{Happening, State, Wait};
 
 /// The game as the screen shows it.
@@ -23,6 +26,8 @@ pub struct PlayView {
     /// Its apps, in the order the home screen shows them; none without a
     /// frame.
     pub apps: Vec<AppShown>,
+    /// The look of the phone up; none without a frame.
+    pub phone: Option<PhoneLook>,
     /// The place behind the frame, as it shows now; none, a plain
     /// background.
     pub scene: Option<Shown>,
@@ -56,11 +61,90 @@ pub struct AppShown {
     /// On the home screen now: always, once a Beat unlocked it, or once it
     /// has an item.
     pub available: bool,
+    /// Its look now: the skin a Beat put on it, else its own; none, Pit
+    /// Box's theme.
+    pub skin: Option<SkinShown>,
+}
+
+/// A skin as the screen draws it, its files as paths inside the story
+/// (`frames/skins/<id>/<file>`).
+#[derive(Debug, Clone, Serialize)]
+pub struct SkinShown {
+    pub id: String,
+    pub colors: BTreeMap<String, String>,
+    pub font: Option<String>,
+    pub slots: BTreeMap<String, Slot>,
+}
+
+/// Skin `id` as `template` wears it; none for a skin that does not exist
+/// or dresses another template - the checks report both.
+pub fn skin_shown(story: &Story, id: &str, template: Template) -> Option<SkinShown> {
+    let skin = story.skin(id).filter(|s| s.template == template)?;
+    let inside = |file: &str| format!("{SKINS}{id}/{file}");
+    Some(SkinShown {
+        id: id.into(),
+        colors: skin.colors.clone(),
+        font: skin.font.as_deref().map(inside),
+        slots: (skin.slots.iter())
+            .map(|(name, slot)| {
+                let slot = Slot {
+                    file: inside(&slot.file),
+                    slice: slot.slice,
+                };
+                (name.clone(), slot)
+            })
+            .collect(),
+    })
+}
+
+/// The phone up, as its frame and the Beats make it look.
+#[derive(Debug, Clone, Serialize)]
+pub struct PhoneLook {
+    /// Its picture; none, Pit Box draws one.
+    pub body: Option<Body>,
+    /// A path inside `media/`.
+    pub wallpaper: Option<String>,
+    pub status_bar: StatusStyle,
+    pub status: StatusShown,
+    pub sounds: Sounds,
+}
+
+/// The status bar's values: what the Beats set, the rest at its default -
+/// a full battery, full signal, Wi-Fi on.
+#[derive(Debug, Clone, Serialize)]
+pub struct StatusShown {
+    /// Shown instead of the story's date.
+    pub date: Option<String>,
+    pub battery: u8,
+    pub signal: u8,
+    pub wifi: bool,
+    pub airplane: bool,
+}
+
+/// The look of `frame` in `state`; none without a frame.
+pub fn phone_look(story: &Story, state: &State, frame: &Frame) -> Option<PhoneLook> {
+    let Frame::Named(name) = frame else { return None };
+    let declared = story.frame(name);
+    let s = &state.status;
+    Some(PhoneLook {
+        body: declared.and_then(|f| f.body.clone()),
+        wallpaper: declared.and_then(|f| f.wallpaper.clone()),
+        status_bar: declared.map_or_else(StatusStyle::default, |f| f.status_bar),
+        status: StatusShown {
+            date: s.date.clone(),
+            battery: s.battery.unwrap_or(100),
+            signal: s.signal.unwrap_or(4),
+            wifi: s.wifi.unwrap_or(true),
+            airplane: s.airplane.unwrap_or(false),
+        },
+        sounds: declared.map(|f| f.sounds.clone()).unwrap_or_default(),
+    })
 }
 
 impl AppShown {
-    pub fn of(app: App, available: bool) -> AppShown {
+    pub fn of(app: App, available: bool, skin: Option<SkinShown>) -> AppShown {
         AppShown {
+            skin,
             shows: app.shows.iter().map(|k| k.name()).collect(),
             id: app.id,
             name: app.name,
@@ -188,13 +272,16 @@ pub fn play_view(story: &Story, state: &State) -> PlayView {
                 Appears::Beat if state.unlocked.contains(&app.id) => true,
                 _ => items.iter().any(|i| app.shows.iter().any(|k| k.name() == i.kind)),
             };
-            AppShown::of(app, available)
+            let skin =
+                (state.skins.get(&app.id).or(app.skin.as_ref())).and_then(|id| skin_shown(story, id, app.template));
+            AppShown::of(app, available, skin)
         })
         .collect();
     PlayView {
         title: story.manifest.title.clone(),
         frame: frame.to_string(),
         apps,
+        phone: phone_look(story, state, frame),
         scene: (state.scene.as_deref()).and_then(|p| state.scene_shown(story, p)),
         date: state.date.to_string(),
         clock: state.clock.to_string(),
