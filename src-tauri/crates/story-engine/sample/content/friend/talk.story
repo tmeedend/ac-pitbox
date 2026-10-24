@@ -9,4 +9,4 @@ friend: [line] Another race, or a break?
     friend: [line] That's the spirit. #expression:happy
 * (rest) [A break.]
     ~ effect("rel.friend -= 1")
-    friend: [line] Fair enough. #expression:neutral
+    friend: [line] Fair enough. #expression:neutral #leave

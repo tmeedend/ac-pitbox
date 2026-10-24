@@ -511,15 +511,21 @@ impl Checker<'_> {
             self.error(&header, format!("{at}: `scene` is for a dialogue"));
         }
         self.picture(item, &header, &at);
+        if item.transition.is_some() && !item.kind.on_scene() {
+            self.error(
+                &header,
+                format!("{at}: `transition` is for a dialogue or an illustration"),
+            );
+        }
         for who in item.characters.iter().filter(|w| story.character(w).is_none()) {
             self.error(&header, format!("{at}: unknown character `{who}` among those present"));
         }
         for line in item.script.lines() {
             let place = on(line.line);
-            if !dialogue && (line.expression.is_some() || line.position.is_some()) {
+            if !dialogue && (line.expression.is_some() || line.position.is_some() || line.leave) {
                 self.error(
                     &place,
-                    format!("{at}: `#expression:` and `#position:` are for a dialogue"),
+                    format!("{at}: `#expression:`, `#position:` and `#leave` are for a dialogue"),
                 );
             }
             if let Some(who) = line.speaker.as_deref().filter(|w| story.character(w).is_none()) {

@@ -553,7 +553,7 @@ fn dialogue_speakers_and_portraits_are_checked() {
         "`friend` has no portrait `angry`",
         "`rival` speaks but is not among the `characters` present",
         "`scene` is for a dialogue",
-        "`#expression:` and `#position:` are for a dialogue",
+        "`#expression:`, `#position:` and `#leave` are for a dialogue",
     ] {
         assert!(has(&d, Severity::Error, needle), "{needle} in {d:#?}");
     }
@@ -637,5 +637,49 @@ Hello.
             .iter()
             .any(|x| x.message.contains("content `good`") && x.severity == Severity::Error),
         "the good one is fine: {diags:#?}"
+    );
+}
+
+// L3b.4: `#leave` belongs to a dialogue, as the other stage tags do, and
+// `transition` to what plays on the scene.
+#[test]
+fn stage_tags_and_transitions_belong_to_the_scene() {
+    let content = "---
+id: talk
+type: dialogue
+transition: cut
+---
+friend: Bye. #leave
+---
+id: note
+type: message
+transition: fade
+---
+friend: Bye. #leave
+";
+    let chars = "characters:
+  - id: friend
+";
+    let d = diagnostics(&[("content/a.story", content), ("world/characters.yaml", chars)]);
+    assert!(
+        has(
+            &d,
+            Severity::Error,
+            "content `note`: `transition` is for a dialogue or an illustration"
+        ),
+        "{d:#?}"
+    );
+    assert!(
+        has(
+            &d,
+            Severity::Error,
+            "content `note`: `#expression:`, `#position:` and `#leave` are for a dialogue"
+        ),
+        "{d:#?}"
+    );
+    assert!(
+        !d.iter()
+            .any(|x| x.message.contains("content `talk`") && x.severity == Severity::Error),
+        "the dialogue is fine: {d:#?}"
     );
 }

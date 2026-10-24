@@ -18,10 +18,12 @@
   // player has been past it in this conversation, or when an earlier
   // delivery of the item said it (`readKeys`). Wheel up opens the log.
   import { onMount, untrack } from "svelte";
+  import { fade } from "svelte/transition";
   import { t } from "$lib/i18n/index.svelte";
   import { initials } from "$lib/story/player/phone";
   import { autoDelay, lineKey, nextLine, previousLine, stageAt, type AutoSpeed } from "$lib/story/player/stage";
   import type { PlayerChoice, PlayerStep, Speaker } from "$lib/story/player/types";
+  import type { Transition } from "$lib/story/studio";
 
   interface Props {
     steps: PlayerStep[];
@@ -56,6 +58,8 @@
     /** The line to open on, where a game reopened left this dialogue: the
      * lines before it count as read. */
     startAt?: number;
+    /** How portraits come, go and change face. */
+    transition?: Transition;
   }
   // `let`: `skip` is bindable - fast-forward turns itself off.
   let {
@@ -76,7 +80,11 @@
     onlog,
     onat,
     startAt,
+    transition = "fade",
   }: Props = $props();
+
+  /** A fade's length; a cut is at once. */
+  const fadeMs = $derived(transition === "cut" ? 0 : 200);
 
   let element: HTMLDivElement;
   onMount(() => {
@@ -207,9 +215,17 @@
 >
   {#each stage.cast as c (c.who)}
     {@const src = picture(c.who, c.expression)}
-    <div class="actor" class:speaking={c.speaking} style:left={LEFT[c.position]}>
+    <div
+      class="actor"
+      class:speaking={c.speaking}
+      style:left={LEFT[c.position]}
+      transition:fade={{ duration: fadeMs }}
+    >
       {#if src}
-        <img {src} alt={speakers[c.who]?.name ?? c.who} />
+        <!-- A new face fades over the last one. -->
+        {#key src}
+          <img {src} alt={speakers[c.who]?.name ?? c.who} transition:fade={{ duration: fadeMs }} />
+        {/key}
       {:else}
         <span class="silhouette">{initials(speakers[c.who]?.name ?? c.who)}</span>
       {/if}
@@ -276,15 +292,23 @@
   .stage.bare:focus-visible {
     outline: none;
   }
+  /* One cell: during a change of face, the old picture and the new one
+     stack in place while one fades over the other. */
   .actor {
     position: absolute;
     bottom: 0;
     height: 78%;
     transform: translateX(-50%);
-    display: flex;
-    align-items: flex-end;
+    display: grid;
+    grid-template-rows: 100%;
+    align-items: end;
+    justify-items: center;
     opacity: 0.45;
     transition: opacity 0.15s;
+  }
+  .actor > img,
+  .actor > .silhouette {
+    grid-area: 1 / 1;
   }
   .actor.speaking {
     opacity: 1;

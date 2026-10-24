@@ -102,6 +102,7 @@
         steps={view.steps}
         choices={view.choices}
         present={view.characters}
+        transition={view.transition}
         from={view.from}
         {speakers}
         ended={view.ended}

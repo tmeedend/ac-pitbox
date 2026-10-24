@@ -9,7 +9,7 @@ use serde::Serialize;
 
 use crate::engine::{difficulty_step, fee_due, offers, Offer, Step};
 use crate::load::Story;
-use crate::model::{DateDisplay, EventType, Session};
+use crate::model::{DateDisplay, EventType, Session, Transition};
 use crate::state::{Happening, State, Wait};
 
 /// The game as the screen shows it.
@@ -45,6 +45,8 @@ pub struct SeenItem {
     pub characters: Vec<String>,
     /// An illustration's picture, a path inside the story's `media/`.
     pub picture: Option<String>,
+    /// How a dialogue or an illustration comes on the scene.
+    pub transition: Transition,
     /// When it arrived; an item's own clock wins over the story's.
     pub date: String,
     pub clock: String,
@@ -98,6 +100,7 @@ pub fn play_view(story: &Story, state: &State) -> PlayView {
                     from: item.and_then(|i| i.from.clone()),
                     characters: item.map(|i| i.characters.clone()).unwrap_or_default(),
                     picture: item.and_then(|i| i.picture.clone()),
+                    transition: item.and_then(|i| i.transition).unwrap_or_default(),
                     date: entry.date.to_string(),
                     clock: item.and_then(|i| i.clock).unwrap_or(entry.clock).to_string(),
                     steps: Vec::new(),

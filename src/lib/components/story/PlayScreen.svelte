@@ -208,7 +208,12 @@
 
     {#if played !== null}
       {@const d = view.items[played]}
-      <div class="layer" in:fade={{ duration: 250, delay: 200 }} out:fade={{ duration: 150 }}>
+      {@const cut = d.transition === "cut"}
+      <div
+        class="layer"
+        in:fade={{ duration: cut ? 0 : 250, delay: cut ? 0 : 200 }}
+        out:fade={{ duration: cut ? 0 : 150 }}
+      >
         {#if d.kind === "illustration"}
           <div class="fit">
             {#key played}
@@ -232,6 +237,7 @@
                 from={d.from}
                 {speakers}
                 ended={!d.open}
+                transition={d.transition}
                 bare
                 autofocus
                 auto={auto && !log ? autoSpeed() : null}

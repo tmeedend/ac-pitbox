@@ -4,7 +4,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { PlayerChoice, PlayerStep } from "./player/types";
 import type { EventResult } from "./race";
-import type { Character, ContentType, DateDisplay, Driver, EventType, Session } from "./studio";
+import type { Character, ContentType, DateDisplay, Driver, EventType, Session, Transition } from "./studio";
 
 /** Where a story is read from. */
 export type Source = { kind: "sample" } | { kind: "folder"; path: string };
@@ -29,6 +29,8 @@ export interface SeenItem {
   characters: string[];
   /** An illustration's picture, a path inside the story's `media/`. */
   picture: string | null;
+  /** How a dialogue or an illustration comes on the scene. */
+  transition: Transition;
   date: string;
   clock: string;
   steps: PlayerStep[];

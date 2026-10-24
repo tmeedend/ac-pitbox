@@ -52,6 +52,10 @@ export interface ChapterFile {
   error: string | null;
 }
 
+/** How a dialogue or an illustration comes on the scene, and how a
+ * dialogue's portraits come, go and change face. */
+export type Transition = "fade" | "cut";
+
 export type ContentType =
   | "message"
   | "call"
@@ -80,6 +84,9 @@ export interface ContentHeader {
   scene?: string;
   /** Illustration only: its picture, a path inside `media/`. */
   picture?: string;
+  /** Dialogue or illustration only: how it comes on the scene; a fade when
+   * absent. */
+  transition?: Transition;
   pool?: string;
   /** Sentences, all of which must hold. */
   when?: string[];
@@ -410,6 +417,8 @@ export type ScriptItem =
       text: string;
       expression?: string;
       position?: "left" | "center" | "right";
+      /** Dialogue only: the speaker leaves the stage after this line. */
+      leave?: boolean;
       line?: number;
     }
   | { kind: "effect"; effect: string; line?: number }
@@ -454,6 +463,7 @@ export interface PreviewView {
   characters: string[];
   /** An illustration's picture, a path inside `media/`. */
   picture: string | null;
+  transition: Transition;
   steps: PlayerStep[];
   choices: PlayerChoice[];
   ended: boolean;

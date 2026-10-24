@@ -14,6 +14,8 @@ export type PlayerStep =
       text: string;
       expression: string | null;
       position: Position | null;
+      /** The speaker leaves the stage after this line. */
+      leave?: boolean;
     }
   | { kind: "chose"; label: string; text: string };
 

@@ -594,6 +594,19 @@ impl ContentType {
     }
 }
 
+/// How a dialogue or an illustration comes on the scene, and how a
+/// dialogue's portraits come, go and change face (SPEC-story-mode,
+/// In-person dialogues: transitions are options, never story settings).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Transition {
+    /// A short fade: what an item does when nothing is said.
+    #[default]
+    Fade,
+    /// At once.
+    Cut,
+}
+
 /// One content item of a `.story` file: its header, and its text.
 #[derive(Debug, Clone)]
 pub struct ContentItem {
@@ -610,6 +623,9 @@ pub struct ContentItem {
     pub scene: Option<String>,
     /// Illustration only: its picture, a path inside the story's `media/`.
     pub picture: Option<String>,
+    /// Dialogue or illustration only: how it comes on the scene; a fade
+    /// when not said.
+    pub transition: Option<Transition>,
     /// The text as written, in Ink (SPEC-story-mode, Dialogue text).
     pub body: String,
     /// The text, read (`script.rs`); what did not read is in
@@ -667,6 +683,8 @@ pub struct ContentHeader {
     pub scene: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub picture: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transition: Option<Transition>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pool: Option<PoolId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -728,6 +746,7 @@ impl ContentItem {
             characters: (!self.characters.is_empty()).then(|| self.characters.clone()),
             scene: self.scene.clone(),
             picture: self.picture.clone(),
+            transition: self.transition,
             pool: None,
             when: None,
             delay: None,
@@ -806,6 +825,7 @@ impl ContentHeader {
             characters: self.characters.unwrap_or_default(),
             scene: self.scene,
             picture: self.picture,
+            transition: self.transition,
             body,
             script,
             script_errors,

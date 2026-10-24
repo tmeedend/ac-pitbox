@@ -53,7 +53,8 @@ export function setPlacement(h: ContentHeader, p: Placement): void {
 }
 
 /** `h` as type `kind`: what only a dialogue has (the characters present,
- * the scene), or only an illustration (its picture), goes with the type. */
+ * the scene), only an illustration (its picture), or only what plays on the
+ * scene (its transition), goes with the type. */
 export function setType(h: ContentHeader, kind: ContentType): void {
   h.type = kind;
   if (kind !== "dialogue") {
@@ -61,6 +62,7 @@ export function setType(h: ContentHeader, kind: ContentType): void {
     delete h.scene;
   }
   if (kind !== "illustration") delete h.picture;
+  if (!onScene(kind)) delete h.transition;
 }
 
 /** The file of a new item: named after its id, at the top of `content/`;

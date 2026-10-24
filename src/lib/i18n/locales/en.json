@@ -2829,7 +2829,11 @@
       "typeIllustration": "Illustration",
       "picture": "Picture",
       "pickPicture": "Pick a picture",
-      "pictureMissing": "missing"
+      "pictureMissing": "missing",
+      "leaves": "Leaves",
+      "transition": "Transition",
+      "transitionFade": "Fade",
+      "transitionCut": "Cut"
     },
     "drivers": {
       "title": "Drivers",

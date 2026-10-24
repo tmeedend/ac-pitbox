@@ -136,6 +136,18 @@
               <option value="center">{t("story.content.positionCenter")}</option>
               <option value="right">{t("story.content.positionRight")}</option>
             </select>
+            <label class="leave">
+              <input
+                type="checkbox"
+                checked={item.leave ?? false}
+                onchange={(e) => {
+                  if ((e.currentTarget as HTMLInputElement).checked) item.leave = true;
+                  else delete item.leave;
+                  onchange();
+                }}
+              />
+              {t("story.content.leaves")}
+            </label>
           {/if}
         </div>
       {:else if item.kind === "effect"}
@@ -232,6 +244,14 @@
 </div>
 
 <style>
+  .leave {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--txt2);
+    white-space: nowrap;
+  }
   .items {
     list-style: none;
     margin: 0;

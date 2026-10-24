@@ -30,6 +30,14 @@ describe("placement", () => {
     setType(h, "dialogue");
     expect(h).toEqual({ id: "a", type: "dialogue" });
   });
+
+  it("a type played elsewhere than on the scene drops the transition", () => {
+    const h: ContentHeader = { id: "a", type: "illustration", transition: "cut" };
+    setType(h, "dialogue");
+    expect(h.transition).toBe("cut");
+    setType(h, "mail");
+    expect(h).toEqual({ id: "a", type: "mail" });
+  });
 });
 
 describe("finding an item", () => {

@@ -2829,7 +2829,11 @@
       "typeIllustration": "Illustration",
       "picture": "Image",
       "pickPicture": "Choisir une image",
-      "pictureMissing": "introuvable"
+      "pictureMissing": "introuvable",
+      "leaves": "Sort",
+      "transition": "Transition",
+      "transitionFade": "Fondu",
+      "transitionCut": "Coupe"
     },
     "drivers": {
       "title": "Pilotes",

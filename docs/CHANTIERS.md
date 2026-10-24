@@ -716,7 +716,27 @@ de reprendre. En cas d'écart, la spec fait foi.
           n'a pas ses médias, son illustration n'a donc que son texte (comme
           ses portraits, des initiales).
           **Limites connues** : pas vu à l'écran.
-        - **Reste** L3b.4 et L3b.5.
+        - **L3b.4 — fait (2026-10-23).** Clé `transition` (`fade`, le
+          défaut, non écrit ; `cut`) sur un dialogue ou une illustration, et
+          étiquette Ink `#leave` (le personnage quitte la scène après sa
+          réplique) ; éditeur (choix Fondu / Coupe, case « Sort » par
+          réplique), aperçu et jeu. L'exemple a les deux.
+          **Choisi sans demander** : une seule option par contenu plutôt
+          qu'une par geste (entrée, sortie, changement d'expression) : la
+          même pour l'apparition du dialogue, ses portraits et ses visages,
+          ce qui garde un format court tant qu'aucune histoire ne demande
+          plus fin ; fondu de 200 ms pour un portrait ou un visage, celui de
+          la couche (250 ms) inchangé ; « coupe » = sans délai ni fondu ;
+          l'entrée d'un personnage n'a pas d'étiquette (il entre en parlant,
+          ou présent dès le début) ; un personnage sorti revient s'il parle
+          à nouveau ; « entre les scènes » attend les scènes.
+          **Limites connues** : pas vu à l'écran ; aucune transition dans
+          le journal (relecture) ni entre deux contenus du téléphone ; un
+          personnage revenu après `#leave` reprend la première place libre
+          et un visage neutre (pas ceux qu'il avait), sauf étiquettes sur sa
+          réplique ; un `#leave` sur la dernière réplique ne change rien (le
+          dialogue se ferme).
+        - **Reste** L3b.5.
       - **L4 à L8** : dans l'ordre du plan de livraison de la spec.
       **Écarts assumés par rapport au document de conception** (la spec
       publique les reprend déjà) :

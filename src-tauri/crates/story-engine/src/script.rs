@@ -84,6 +84,10 @@ pub struct Line {
     pub expression: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub position: Option<Position>,
+    /// Dialogue only: the speaker leaves the stage after this line
+    /// (`#leave`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub leave: bool,
     /// 1-based line in the `.story` file; 0 for a line built by the editor.
     #[serde(default)]
     pub line: usize,
@@ -458,6 +462,7 @@ fn said(text: &str, line: usize) -> Result<Line, String> {
         text: text.into(),
         expression: None,
         position: None,
+        leave: false,
         line,
     };
     apply_tags(&mut l, tags)?;
@@ -521,9 +526,13 @@ fn apply_tags(l: &mut Line, tags: Vec<&str>) -> Result<(), String> {
             if l.position.replace(position).is_some() {
                 return Err("two `#position:` tags on one line".into());
             }
+        } else if tag == "leave" {
+            if std::mem::replace(&mut l.leave, true) {
+                return Err("two `#leave` tags on one line".into());
+            }
         } else {
             return Err(format!(
-                "`#{tag}`: the subset's tags are `#expression:` and `#position:`"
+                "`#{tag}`: the subset's tags are `#expression:`, `#position:` and `#leave`"
             ));
         }
     }
@@ -592,6 +601,9 @@ fn print_line(l: &Line) -> String {
     }
     if let Some(p) = l.position {
         let _ = write!(text, " #position:{}", p.name());
+    }
+    if l.leave {
+        text.push_str(" #leave");
     }
     text
 }
@@ -761,7 +773,7 @@ mod tests {
         friend: Deal.
     * * (maybe) [We'll see.]
 * (no) [Not this time.]
-    friend: Your loss.
+    friend: Your loss. #leave
 - friend: See you.
 -> DONE
 ";
@@ -818,6 +830,7 @@ mod tests {
             text.contains("    * * (sure) {check(\"money >= 100\")} [Next one too.]"),
             "{text}"
         );
+        assert!(text.contains("friend: Your loss. #leave"), "`#leave` kept: {text}");
         assert!(
             text.contains("{check(\"rel.friend >= warm\"): friend: You know I count on you.}"),
             "{text}"
@@ -841,6 +854,7 @@ mod tests {
             ("friend: hello -> there", "divert"),
             ("friend: hi #mood:happy", "tags are"),
             ("friend: hi #position:top", "left, center or right"),
+            ("friend: bye #leave #leave", "two `#leave`"),
             ("~ effect(\"money +== 5\")", "cannot read effect"),
         ] {
             assert!(error(body).contains(needle), "{body}: {}", error(body));

@@ -74,6 +74,10 @@ pub struct Said {
     pub text: String,
     pub expression: Option<String>,
     pub position: Option<Position>,
+    /// The speaker leaves the stage after this line. Left out of a save
+    /// when false, as a save written before it existed reads it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub leave: bool,
 }
 
 /// A choice offered: its label and its text.
@@ -929,6 +933,7 @@ impl script::Host for Speaking<'_, '_> {
             text: line.text.clone(),
             expression: line.expression.clone(),
             position: line.position,
+            leave: line.leave,
         });
     }
 }

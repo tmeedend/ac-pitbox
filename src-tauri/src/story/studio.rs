@@ -531,6 +531,8 @@ pub struct PreviewView {
     pub characters: Vec<String>,
     /// An illustration's picture, a path inside the story's `media/`.
     pub picture: Option<String>,
+    /// How a dialogue or an illustration comes on the scene.
+    pub transition: story_engine::model::Transition,
     pub steps: Vec<story_engine::engine::Step>,
     pub choices: Vec<story_engine::engine::Offer>,
     pub ended: bool,
@@ -625,6 +627,7 @@ pub fn preview(folder: &Path, id: &str, setup: &[String], replies: &[String]) ->
         from: item.from.clone(),
         characters: item.characters.clone(),
         picture: item.picture.clone(),
+        transition: item.transition.unwrap_or_default(),
         steps: played.steps.clone(),
         choices: played.choices.clone(),
         ended: played.ended,

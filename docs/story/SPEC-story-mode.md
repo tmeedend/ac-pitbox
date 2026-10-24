@@ -200,7 +200,9 @@ with none.
   expression and position with Ink tags (`#expression:happy
   #position:left`), checked against the character's portraits.
 - **On stage.** Every character present stands from the first line; one who
-  speaks without being listed steps in when they first speak. Without a
+  speaks without being listed steps in when they first speak; a line tagged
+  `#leave` is the speaker's last on stage - gone from the next line, back if
+  they speak again. Without a
   position they stand in the order listed - left, right, then centre - and a
   position given stays for their next lines. A face is `neutral` until a line
   names an expression, which stays for that character's next lines. The
@@ -235,6 +237,10 @@ with none.
   they came, each until the player closes it.
 - **Transitions** are options in the editor, never story settings: fade or cut
   between scenes, a portrait entering or leaving, a change of expression.
+  Today a dialogue or an illustration says `transition: cut`, or nothing for
+  a fade: how it comes on the scene and leaves it and, for a dialogue, how
+  its portraits come, go and change face. Between scenes waits for the
+  scenes.
 - **Seeing the shape of a branching story.** The Story flow screen stays a
   column for editing. A read-only graph view, laid out automatically each time
   it opens (nothing stored), shows a chapter as a map: branches side by side,
@@ -640,7 +646,7 @@ visible in it:
   between folders; it is matched with the case it has on disk, since a shared
   story is a zip.
 - `picture` belongs to an illustration only, as `characters` and `scene`
-  belong to a dialogue.
+  belong to a dialogue; `transition` (`fade` or `cut`) to either.
 - A content header has no `replies`: replies are the labels of its text. A
   Message node's reply exits are `on_reply: { <label>: <node> }`; a node with
   reply exits waits for the conversation to end, as does `wait_reply: true`.
@@ -693,8 +699,8 @@ rewrite. Three rules keep it so:
   with who speaks), choices (each with a label, `* (label) [text]`, nested
   with `* *`), what a choice changes, lines and choices shown on a condition
   (`{check("…"): …}`, `* (label) {check("…")} [text]`), joining up again
-  after a choice (`-`), `-> DONE`, and the `#expression:` and `#position:`
-  (`left`, `center`, `right`) tags of a dialogue. Anything else in the Script
+  after a choice (`-`), `-> DONE`, and the `#expression:`, `#position:`
+  (`left`, `center`, `right`) and `#leave` tags of a dialogue. Anything else in the Script
   view is an error on its line - sticky `+` choices, other diverts, knots,
   Ink's own variables, comments: the subset is what a later format must be
   able to hold. A choice point whose choices all fail their conditions is

@@ -10,7 +10,9 @@
 //   that character's next lines;
 // - the speaker is the line's, or the item's sender for a line without one;
 // - a reply chosen, shown only when replaying a past dialogue (the journal),
-//   is the player's: nobody on stage speaks it.
+//   is the player's: nobody on stage speaks it;
+// - a line tagged `#leave` is the speaker's last on stage: they are gone from
+//   the next line on, until they speak again and step back in.
 import type { PlayerStep, Position } from "./types";
 
 export interface OnStage {
@@ -34,17 +36,24 @@ const ORDER: Position[] = ["left", "right", "center"];
 /** The stage once the said lines of `steps` up to `upTo` (an index into
  * `steps`, included) are played. */
 export function stageAt(present: string[], from: string | null, steps: PlayerStep[], upTo: number): Stage {
-  const cast: OnStage[] = present.map((who, i) => ({
+  let cast: OnStage[] = present.map((who, i) => ({
     who,
     expression: "neutral",
     position: ORDER[Math.min(i, ORDER.length - 1)],
     speaking: false,
   }));
   let line: Stage["line"] = null;
+  /** Who said their last line on stage. */
+  let leaving: string | null = null;
   for (const step of steps.slice(0, upTo + 1)) {
     if (step.kind !== "said") continue;
     line = step;
     const who = step.speaker ?? from;
+    if (leaving !== null) {
+      const gone = leaving;
+      cast = cast.filter((c) => c.who !== gone);
+      leaving = null;
+    }
     for (const c of cast) c.speaking = false;
     if (!who) continue;
     let actor = cast.find((c) => c.who === who);
@@ -55,6 +64,7 @@ export function stageAt(present: string[], from: string | null, steps: PlayerSte
     actor.speaking = true;
     if (step.expression) actor.expression = step.expression;
     if (step.position) actor.position = step.position;
+    if (step.leave) leaving = who;
   }
   const shown = steps[upTo];
   if (shown?.kind === "chose") {

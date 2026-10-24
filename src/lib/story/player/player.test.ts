@@ -54,6 +54,20 @@ describe("the dialogue stage", () => {
     expect(previousLine(steps, 0)).toBeNull();
   });
 
+  // L3b.4: `#leave` - the speaker is on stage for that line, gone from the
+  // next, and back when they speak again.
+  it("takes a speaker off the stage after their leaving line", () => {
+    const steps: PlayerStep[] = [
+      { kind: "said", speaker: "friend", text: "Bye.", expression: null, position: null, leave: true },
+      said("rival", "Gone."),
+      said("friend", "Back."),
+    ];
+    const who = (upTo: number) => stageAt(["friend", "rival"], null, steps, upTo).cast.map((c) => c.who);
+    expect(who(0)).toEqual(["friend", "rival"]);
+    expect(who(1)).toEqual(["rival"]);
+    expect(who(2)).toEqual(["rival", "friend"]);
+  });
+
   // The journal pages through the replies too: a reply is the player's,
   // nobody on stage speaks it.
   it("shows a reply chosen as the player's, with nobody speaking", () => {

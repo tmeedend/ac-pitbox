@@ -10,14 +10,14 @@
   import { untrack } from "svelte";
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
-  import { CONTENT_TYPES, placementOf, setPlacement, setType, type Placement } from "$lib/story/content";
+  import { CONTENT_TYPES, onScene, placementOf, setPlacement, setType, type Placement } from "$lib/story/content";
   import { mediaUrl } from "$lib/story/player/speakers";
   import { mediaImages } from "$lib/story/world";
   import { setOptional } from "$lib/story/fields";
   import { parseLines } from "$lib/story/flow";
   import { CONTENT_TYPE_LABEL } from "$lib/story/labels";
   import type { FormContext } from "$lib/story/script";
-  import { readScript, writeScript, type ContentHeader, type ScriptRead } from "$lib/story/studio";
+  import { readScript, writeScript, type ContentHeader, type ScriptRead, type Transition } from "$lib/story/studio";
   import { removeContent, saveContentFile, studio } from "$lib/story/studioState.svelte";
   import Field from "$lib/components/ui/Field.svelte";
   import ImageSelectDropdown from "$lib/components/ui/ImageSelectDropdown.svelte";
@@ -130,6 +130,10 @@
     { value: "reactive", label: t("story.content.placementReactive") },
     { value: "pool", label: t("story.content.placementPool") },
   ]);
+  const transitions = $derived([
+    { value: "fade", label: t("story.content.transitionFade") },
+    { value: "cut", label: t("story.content.transitionCut") },
+  ]);
   const repeats = $derived([
     { value: "once", label: t("story.content.repeatOnce") },
     { value: "each_time", label: t("story.content.repeatEachTime") },
@@ -206,6 +210,21 @@
           {#if h.picture && !story.media.includes(h.picture)}
             <span class="missing" title={`media/${h.picture}`}>{t("story.content.pictureMissing")}</span>
           {/if}
+        </Field>
+      {/if}
+
+      {#if onScene(h.type)}
+        <Field label={t("story.content.transition")}>
+          <Seg
+            items={transitions}
+            value={h.transition ?? "fade"}
+            onselect={(v) => {
+              // A fade is what an item does when nothing is said: not written.
+              if (v === "fade") delete h.transition;
+              else h.transition = v as Transition;
+              save();
+            }}
+          />
         </Field>
       {/if}
 
