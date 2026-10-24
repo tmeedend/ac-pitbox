@@ -1,7 +1,10 @@
 id: ch02
 title: Chapter 2
 nodes:
+  # A new phone: the smartphone's apps, the news shown at once.
   - id: chapter_2
+    beat: { frame: smartphone, unlock: [news] }
+  - id: season_opens
     side_events: { open: [track_day_01] }
   - id: money_check
     branch:

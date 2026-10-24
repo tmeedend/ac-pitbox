@@ -9,7 +9,7 @@ version: "1"
 languages: [en]
 start:
   node: intro
-  frame: phone
+  frame: basic_phone
   scene: bedroom
   date: 2001-03-01
   clock: "09:00"

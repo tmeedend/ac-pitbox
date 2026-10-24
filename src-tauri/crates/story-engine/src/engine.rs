@@ -444,6 +444,7 @@ impl<'a> Run<'a> {
             self.release_held()?;
         }
         self.set_scene(beat);
+        self.state.unlocked.extend(beat.unlock.iter().cloned());
         for effect in &beat.effects {
             self.apply_effect(effect)?;
         }
@@ -499,7 +500,7 @@ impl<'a> Run<'a> {
     /// Whether the frame up now can show `content`. An unknown item can:
     /// there is nothing to hold.
     fn can_show(&self, content: &str) -> bool {
-        (self.story.content_item(content)).is_none_or(|item| self.frame().can_show(item.kind))
+        (self.story.content_item(content)).is_none_or(|item| self.frame().can_show(self.story, item.kind))
     }
 
     /// Delivers, in the order they were sent, the held items the frame now

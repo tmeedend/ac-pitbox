@@ -225,9 +225,14 @@ mod tests {
         );
         assert_eq!(
             state.frame,
-            Some(Frame::Named("phone".into())),
-            "the phone put back after the face-to-face chapter"
+            Some(Frame::Named("smartphone".into())),
+            "the smartphone put back after the face-to-face chapter"
         );
+        // Its home screen: Messages always, the news unlocked at chapter 2
+        // with no article yet, the bank with no statement not.
+        let apps = crate::view::play_view(&story, &state).apps;
+        let available: Vec<&str> = (apps.iter().filter(|a| a.available)).map(|a| a.id.as_str()).collect();
+        assert_eq!(available, ["messages", "mail", "news", "social"]);
         for content in [
             "sponsor_offer",
             "rival_post_01",

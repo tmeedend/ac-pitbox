@@ -22,7 +22,7 @@ nodes:
     # A week later, the garage by day whatever the clock says.
     beat: { advance: 1 week, mood: none, scene: garage, variant: day }
   - id: phone_back
-    beat: { frame: phone, scene: bedroom }
+    beat: { frame: smartphone, scene: bedroom }
   - id: finale
     side_events: { close: [track_day_01] }
   - id: the_end

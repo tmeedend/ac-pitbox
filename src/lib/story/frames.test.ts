@@ -10,6 +10,20 @@ describe("framesWith", () => {
     expect(framesWith("phone")).toEqual([...FRAMES]);
     expect(framesWith("pager")).toEqual(["pager", ...FRAMES]);
   });
+
+  // The story's own frames first; one named like a shipped frame is the
+  // story's, offered once.
+  it("offers the story's own frames first", () => {
+    const own = {
+      frames: [
+        { id: "basic", kind: "phone", apps: [] },
+        { id: "phone", kind: "phone", name: "Mine", apps: [] },
+      ],
+    };
+    expect(framesWith(undefined, own)).toEqual(["basic", "phone", "none"]);
+    expect(frameLabel("phone", own)).toBe("Mine");
+    expect(frameLabel("basic", own), "unnamed: its id").toBe("basic");
+  });
 });
 
 describe("frameLabel", () => {

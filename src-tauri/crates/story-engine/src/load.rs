@@ -13,6 +13,7 @@ use std::path::Path;
 
 use serde::de::DeserializeOwned;
 
+use crate::frame::{FrameDecl, Frames, FRAMES};
 use crate::model::*;
 use crate::scene::{Place, Scenes, SCENES};
 
@@ -62,6 +63,8 @@ pub struct Story {
     pub events: Vec<Event>,
     /// `scenes/scenes.yaml`; empty without one.
     pub scenes: Vec<Place>,
+    /// `frames/frames.yaml`: the frames the story declares; empty without one.
+    pub frames: Vec<FrameDecl>,
     /// The files under `media/`, as paths inside it; `None` for a story
     /// built in memory, whose media nobody listed.
     pub media: Option<BTreeSet<String>>,
@@ -70,10 +73,11 @@ pub struct Story {
     event_index: HashMap<EventId, usize>,
 }
 
-/// The folders this lot reads. `catalogs/`, `frames/` and `package/` belong
-/// to later lots and are left alone, as is any file of `drivers/` but the
-/// roster (careers come later); `media/` is only listed (`read_media`).
-const READ: [&str; 6] = ["flow", "content", "events", "world", "drivers", "scenes"];
+/// The folders this lot reads. `catalogs/` and `package/` belong to later
+/// lots and are left alone, as is any file of `drivers/` but the roster
+/// (careers come later) and of `frames/` but `frames.yaml` (skins come
+/// later); `media/` is only listed (`read_media`).
+const READ: [&str; 7] = ["flow", "content", "events", "world", "drivers", "scenes", "frames"];
 
 /// The files under the story's `media/` folder, as paths inside it with
 /// forward slashes (`portraits/a.png`): what the checks need to tell a
@@ -226,6 +230,7 @@ pub struct Draft {
     pub content: Vec<ContentItem>,
     pub events: Vec<Event>,
     pub scenes: Scenes,
+    pub frames: Frames,
     /// Filled by whoever read the folder (`read_media`), not by `draft`.
     pub media: Option<BTreeSet<String>>,
     pub errors: Vec<LoadError>,
@@ -255,6 +260,8 @@ pub fn draft(mut files: Vec<SourceFile>) -> Draft {
             parse_yaml(file).map(|r| p.roster = r)
         } else if path == SCENES {
             parse_yaml(file).map(|s| p.scenes = s)
+        } else if path == FRAMES {
+            parse_yaml(file).map(|f| p.frames = f)
         } else if in_dir(path, "flow", ".yaml").is_some_and(|rest| !rest.contains('/')) {
             parse_yaml::<Chapter>(file).map(|mut c| {
                 c.file = file.path.clone();
@@ -335,6 +342,7 @@ impl Story {
             content,
             events,
             scenes,
+            frames,
             media,
             mut errors,
         } = draft;
@@ -386,6 +394,19 @@ impl Story {
             scenes.scenes.iter().map(|s| (s.id.as_str(), SCENES)),
             &mut errors,
         );
+        index_by_id(
+            "frame",
+            frames.frames.iter().map(|f| (f.id.as_str(), FRAMES)),
+            &mut errors,
+        );
+        // `none` is no frame: a frame declared under that name could never
+        // be put up.
+        if frames.frames.iter().any(|f| f.id == "none") {
+            errors.push(LoadError {
+                file: FRAMES.into(),
+                message: "`none` means no frame: a frame cannot take that name".into(),
+            });
+        }
 
         if !errors.is_empty() {
             return Err(errors);
@@ -399,6 +420,7 @@ impl Story {
             content,
             events,
             scenes: scenes.scenes,
+            frames: frames.frames,
             media,
             nodes,
             content_index,
@@ -478,6 +500,11 @@ impl Story {
 
     pub fn scene(&self, id: &str) -> Option<&Place> {
         self.scenes.iter().find(|s| s.id == id)
+    }
+
+    /// A frame the story declares.
+    pub fn frame(&self, id: &str) -> Option<&FrameDecl> {
+        self.frames.iter().find(|f| f.id == id)
     }
 
     pub fn character(&self, id: &str) -> Option<&Character> {

@@ -5,6 +5,7 @@ import { criteriaOf } from "../events";
 import type { SeenItem } from "../play";
 import { onScene } from "../content";
 import { appOf } from "./apps";
+import type { AppShown } from "../play";
 import { lineKey } from "./stage";
 import type { PlayerChoice, PlayerStep } from "./types";
 
@@ -71,10 +72,11 @@ export function pastDialogues(items: SeenItem[]): number[] {
   return past;
 }
 
-/** Items of the types the phone has no app for yet: listed by name, not
- * shown. A dialogue or an illustration is played on the scene. */
-export function withoutTemplate(items: SeenItem[]): SeenItem[] {
-  return items.filter((i) => appOf(i.kind) === null && !onScene(i.kind));
+/** Items of the types the frame's `apps` have no app for: listed by name,
+ * not shown - the phone Pit Box ships takes every type. A dialogue or an
+ * illustration is played on the scene. */
+export function withoutTemplate(items: SeenItem[], apps: AppShown[]): SeenItem[] {
+  return items.filter((i) => appOf(apps, i.kind) === null && !onScene(i.kind));
 }
 
 /** One line of an event's goal, as an i18n key and its values. */

@@ -21,7 +21,7 @@ use std::path::{Path, PathBuf};
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use story_engine::frame::Frame;
+use story_engine::frame::{Frame, Frames, FRAMES};
 use story_engine::load::{draft_dir, read_dir, Draft, SourceFile, ROSTER};
 use story_engine::model::{Chapter, Characters, ContentFile, Event, Manifest, Placement, Roster, Variables};
 use story_engine::refs::{self, NameKind, NameUsages};
@@ -299,6 +299,9 @@ pub struct OpenStory {
     pub drivers: EditedFile<Roster>,
     /// `scenes/scenes.yaml`: optional, read as empty until the first place.
     pub scenes: EditedFile<Scenes>,
+    /// `frames/frames.yaml`: the story's own frames; read as empty without
+    /// one. Edited by hand until the Frame screen.
+    pub frames: EditedFile<Frames>,
     pub chapters: Vec<ChapterFile>,
     pub content: Vec<ContentRef>,
     /// One per file of `events/`, in file-name order.
@@ -350,6 +353,7 @@ pub fn open(folder: &Path) -> Result<OpenStory, String> {
     let variables = edited(&files, &d.errors, VARIABLES, Some(std::mem::take(&mut d.variables)));
     let drivers = edited(&files, &d.errors, ROSTER, Some(std::mem::take(&mut d.roster)));
     let scenes = edited(&files, &d.errors, SCENES, Some(std::mem::take(&mut d.scenes)));
+    let frames = edited(&files, &d.errors, FRAMES, Some(std::mem::take(&mut d.frames)));
     let chapters = chapter_files
         .iter()
         .map(|f| {
@@ -388,6 +392,7 @@ pub fn open(folder: &Path) -> Result<OpenStory, String> {
         variables,
         drivers,
         scenes,
+        frames,
         chapters,
         content,
         events,
@@ -557,6 +562,9 @@ pub struct PreviewView {
     pub view: &'static str,
     /// The frame it shows in, for `frame`.
     pub frame: Option<String>,
+    /// The app of that frame showing it; none when the frame has no app
+    /// for its type and lists it by name.
+    pub app: Option<story_engine::view::AppShown>,
     /// Why there is nothing to show, for `nowhere`: the checks' warning.
     pub nowhere: Option<String>,
     /// Its content type, as a `.story` header names it.
@@ -624,10 +632,15 @@ pub fn preview(folder: &Path, id: &str, setup: &[String], replies: &[String]) ->
     let on_scene = item.kind.on_scene();
     let frames = story_engine::frame::FrameMap::new(&story).content(&story, id);
     let nowhere = (!on_scene)
-        .then(|| story_engine::frame::nowhere(item, &frames))
+        .then(|| story_engine::frame::nowhere(&story, item, &frames))
         .flatten();
     // `none` never shows an item: the first frame that can is a named one.
-    let frame = frames.iter().find(|f| f.can_show(item.kind));
+    let frame = frames.iter().find(|f| f.can_show(&story, item.kind));
+    // The app of that frame the item shows in; none in a frame that lists
+    // it by name, having no app for its type.
+    let app = (frame.filter(|_| !on_scene))
+        .and_then(|f| f.apps(&story).into_iter().find(|a| a.shows.contains(&item.kind)))
+        .map(|a| story_engine::view::AppShown::of(a, true));
     let view = match (on_scene, &nowhere) {
         (true, _) => "scene",
         (false, Some(_)) => "nowhere",
@@ -660,6 +673,7 @@ pub fn preview(folder: &Path, id: &str, setup: &[String], replies: &[String]) ->
     Ok(PreviewView {
         view,
         frame: frame.filter(|_| view == "frame").map(ToString::to_string),
+        app,
         nowhere,
         kind: item.kind.name(),
         from: item.from.clone(),
@@ -1310,7 +1324,13 @@ mod tests {
             }]
         );
         let invite = preview(&sample, "invite_01", &[], &[]).unwrap();
-        assert_eq!((invite.view, invite.frame.as_deref()), ("frame", Some("phone")));
+        assert_eq!((invite.view, invite.frame.as_deref()), ("frame", Some("basic_phone")));
+        let app = invite.app.expect("the app showing it");
+        assert_eq!(
+            (app.id.as_str(), app.name.as_deref()),
+            ("messages", Some("Messages")),
+            "the basic phone's own"
+        );
         assert!(invite.scene.is_none(), "a message has no place of its own");
         let offer = preview(&sample, "sponsor_offer", &["flag.sponsor_met = true".into()], &[]).unwrap();
         let knobs: Vec<(&str, &str)> = offer.knobs.iter().map(|k| (k.var.as_str(), k.kind)).collect();

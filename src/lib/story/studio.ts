@@ -4,7 +4,7 @@
 // (`story_engine::model`): what the editor shows is what the file says.
 import { invoke } from "@tauri-apps/api/core";
 import type { PlayerChoice, PlayerStep } from "./player/types";
-import type { SceneShown } from "./play";
+import type { AppShown, SceneShown } from "./play";
 import type { ScenesFile } from "./scenes";
 
 /** What shows the story (SPEC-story-mode, Content types, templates and
@@ -29,6 +29,8 @@ export interface FlowNode {
     /** `none` clears them. */
     weather?: string;
     mood?: string;
+    /** Apps that show from this beat on, by id. */
+    unlock?: string[];
   };
   message?: string;
   wait_reply?: boolean;
@@ -297,6 +299,12 @@ export interface EditedFile<T> {
   error: string | null;
 }
 
+/** `frames/frames.yaml`, as far as the editor reads it: the frames' ids and
+ * names (`story_engine::frame::Frames`). */
+export interface FramesFile {
+  frames: { id: string; kind: string; name?: string; apps: { id: string; name?: string }[] }[];
+}
+
 export type NameKind = "character" | "flag" | "counter" | "step" | "event" | "driver" | "scene";
 
 /** A line citing a name. */
@@ -346,6 +354,8 @@ export interface OpenStory {
   drivers: EditedFile<Roster>;
   /** `scenes/scenes.yaml`: read as empty until its first save. */
   scenes: EditedFile<ScenesFile>;
+  /** `frames/frames.yaml`: the story's own frames, edited by hand so far. */
+  frames: EditedFile<FramesFile>;
   chapters: ChapterFile[];
   content: ContentRef[];
   /** One per file of `events/`, in file-name order. */
@@ -474,6 +484,8 @@ export interface PreviewView {
   /** A dialogue on the scene, an item in its frame, or nothing to show. */
   view: "scene" | "frame" | "nowhere";
   frame: string | null;
+  /** The app of that frame showing it; `null` when it is listed by name. */
+  app: AppShown | null;
   /** The checks' warning, for `nowhere`. */
   nowhere: string | null;
   kind: ContentType;

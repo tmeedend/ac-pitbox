@@ -24,6 +24,7 @@
   import { dialogueLog, onStage, readBefore } from "$lib/story/player/game";
   import { ambientMuted, autoSpeed, setAmbientMuted } from "$lib/story/playPrefs";
   import { sceneShown } from "$lib/story/player/scene";
+  import { homeApp } from "$lib/story/player/apps";
   import { dateLabel } from "$lib/story/player/phone";
   import { mediaUrl, speakersOf } from "$lib/story/player/speakers";
   import { closeGame, keepReading, move, play } from "$lib/story/playState.svelte";
@@ -77,9 +78,9 @@
   });
 
   const eventWaiting = $derived(view.waiting.kind === "event" ? view.waiting : null);
-  /** With a frame, the next event is in it, heading the messages; with
-   * none, on the scene. */
-  const eventInFrame = $derived(view.frame !== "none" && eventWaiting !== null);
+  /** With a frame, the next event is in it, heading its messages; with
+   * none - or a frame with no messaging app - on the scene. */
+  const eventInFrame = $derived(view.frame !== "none" && homeApp(view.apps) !== null && eventWaiting !== null);
   /** The session's result is being read. */
   let collecting = $state(false);
   /** Why the session could not be sent or read. */
@@ -208,6 +209,8 @@
       {#if view.frame !== "none"}
         <div class="device">
           <PhoneScreen
+            apps={view.apps}
+            folder={game.folder}
             items={view.items}
             clock={view.clock}
             {date}

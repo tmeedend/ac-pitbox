@@ -142,8 +142,8 @@
                 save();
               }}
             >
-              {#each framesWith(manifest.start.frame) as f (f)}
-                <option value={f}>{frameLabel(f)}</option>
+              {#each framesWith(manifest.start.frame, studio.story?.frames.value ?? null) as f (f)}
+                <option value={f}>{frameLabel(f, studio.story?.frames.value ?? null)}</option>
               {/each}
             </select>
           </Field>

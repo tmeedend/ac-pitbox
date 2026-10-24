@@ -2,19 +2,148 @@
 //! a story's content - a phone, a desk with letters, or nothing at all (a
 //! visual novel).
 //!
-//! The engine is frame-agnostic: a frame is only a name and the content types
-//! it can show. The frames Pit Box ships are a table here (`BUILT_IN`), not
-//! cases in the engine, so a frame a story declares itself (`frames/`, a later
-//! lot) slots in beside them. **None of them is a default**: a story names its
-//! starting frame, and the phone is one frame among others.
+//! The engine is frame-agnostic: a frame is only a name, its apps and the
+//! content types they show. The frames Pit Box ships are a table here
+//! (`BUILT_IN`), not cases in the engine, and a story declares its own in
+//! `frames/frames.yaml` - several phones, from the most basic to the latest -
+//! each built on a kind Pit Box ships (`phone` so far). A declared frame
+//! named like a shipped one replaces it in that story. **None of them is a
+//! default**: a story names its starting frame, and the phone is one frame
+//! among others.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt;
 use std::str::FromStr;
 
+use serde::{Deserialize, Serialize};
+
 use crate::expr::Effect;
 use crate::load::Story;
 use crate::model::{ContentItem, ContentType, Node, NodeId, NodeKind};
+
+/// Where a story declares its own frames.
+pub const FRAMES: &str = "frames/frames.yaml";
+
+/// `frames/frames.yaml`.
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Frames {
+    pub frames: Vec<FrameDecl>,
+}
+
+/// A frame a story declares: a device of a kind Pit Box ships, with its
+/// apps. Its look (body, wallpaper, skins) comes with the skins.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FrameDecl {
+    /// What a story's start and its Beats name it by.
+    pub id: String,
+    pub kind: Kind,
+    /// Display name in the source language; opaque to the engine.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// In the order the home screen shows them.
+    pub apps: Vec<App>,
+}
+
+/// The kinds of frame Pit Box ships: what a declared frame builds on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Kind {
+    /// A home screen of apps.
+    Phone,
+}
+
+/// An app of a phone: a template showing some content types.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct App {
+    pub id: String,
+    /// Display name in the source language; left out, Pit Box names it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Its icon, a path inside `media/`; left out, its template's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    pub template: Template,
+    /// The content types it shows: each its template can show, and each in
+    /// one app of the frame only.
+    pub shows: Vec<ContentType>,
+    #[serde(default, skip_serializing_if = "Appears::is_default")]
+    pub appears: Appears,
+}
+
+/// The templates an app can be (SPEC-story-mode, Content types, templates
+/// and frames). The agenda and the call screen come later.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Template {
+    Thread,
+    Inbox,
+    Feed,
+    Statement,
+}
+
+impl Template {
+    /// The content types the template can show.
+    pub fn can_show(self, kind: ContentType) -> bool {
+        use ContentType as C;
+        match self {
+            Template::Thread => kind == C::Message,
+            Template::Inbox => kind == C::Mail,
+            Template::Feed => matches!(kind, C::Article | C::SocialPost),
+            Template::Statement => kind == C::Statement,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Template::Thread => "thread",
+            Template::Inbox => "inbox",
+            Template::Feed => "feed",
+            Template::Statement => "statement",
+        }
+    }
+}
+
+/// When an app shows on the home screen.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Appears {
+    /// With its first item.
+    #[default]
+    FirstItem,
+    Always,
+    /// From the Beat that unlocks it - or with its first item, if that
+    /// comes first: an item never lands in an app the player cannot open.
+    Beat,
+}
+
+impl Appears {
+    fn is_default(&self) -> bool {
+        *self == Appears::FirstItem
+    }
+}
+
+/// The apps of the phone Pit Box ships, for a story that declares none.
+pub fn phone_apps() -> Vec<App> {
+    use ContentType as C;
+    let app = |id: &str, template, shows: Vec<C>, appears| App {
+        id: id.into(),
+        name: None,
+        icon: None,
+        template,
+        shows,
+        appears,
+    };
+    vec![
+        app("messages", Template::Thread, vec![C::Message], Appears::Always),
+        app("mail", Template::Inbox, vec![C::Mail], Appears::FirstItem),
+        app("news", Template::Feed, vec![C::Article], Appears::FirstItem),
+        app("social", Template::Feed, vec![C::SocialPost], Appears::FirstItem),
+        app("bank", Template::Statement, vec![C::Statement], Appears::FirstItem),
+    ]
+}
 
 /// The active frame, as a story writes it: `none`, or a frame's name.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -47,17 +176,19 @@ impl FromStr for Frame {
 
 serde_as_text!(Frame);
 
-/// A frame Pit Box ships, and the content types it can show.
+/// A frame Pit Box ships, the content types it can show, and its apps.
 pub struct BuiltIn {
     pub name: &'static str,
     pub shows: fn(ContentType) -> bool,
+    pub apps: fn() -> Vec<App>,
 }
 
 /// The frames Pit Box ships. The phone shows every type a frame can show:
-/// it has an app for each.
+/// those its apps have no template for are listed by name in its messages.
 pub const BUILT_IN: &[BuiltIn] = &[BuiltIn {
     name: "phone",
     shows: |_| true,
+    apps: phone_apps,
 }];
 
 fn built_in(name: &str) -> Option<&'static BuiltIn> {
@@ -65,25 +196,42 @@ fn built_in(name: &str) -> Option<&'static BuiltIn> {
 }
 
 impl Frame {
-    /// Whether the story can use this frame: `none`, or a frame that exists.
-    pub fn is_known(&self) -> bool {
+    /// Whether the story can use this frame: `none`, one it declares, or one
+    /// Pit Box ships.
+    pub fn is_known(&self, story: &Story) -> bool {
         match self {
             Frame::None => true,
-            Frame::Named(name) => built_in(name).is_some(),
+            Frame::Named(name) => story.frame(name).is_some() || built_in(name).is_some(),
         }
     }
 
     /// Whether content of `kind` has somewhere to be shown while this frame
     /// is active. A dialogue or an illustration is played on the scene,
-    /// outside any frame, so it needs none. An unknown frame answers yes: it is reported once as
+    /// outside any frame, so it needs none; a declared frame shows what its
+    /// apps show. An unknown frame answers yes: it is reported once as
     /// unknown, not again for every item it would show.
-    pub fn can_show(&self, kind: ContentType) -> bool {
+    pub fn can_show(&self, story: &Story, kind: ContentType) -> bool {
         if kind.on_scene() {
             return true;
         }
         match self {
             Frame::None => false,
-            Frame::Named(name) => built_in(name).is_none_or(|b| (b.shows)(kind)),
+            Frame::Named(name) => match story.frame(name) {
+                Some(declared) => declared.apps.iter().any(|a| a.shows.contains(&kind)),
+                None => built_in(name).is_none_or(|b| (b.shows)(kind)),
+            },
+        }
+    }
+
+    /// Its apps, in the order the home screen shows them; none for `none`
+    /// or an unknown frame.
+    pub fn apps(&self, story: &Story) -> Vec<App> {
+        match self {
+            Frame::None => Vec::new(),
+            Frame::Named(name) => match story.frame(name) {
+                Some(declared) => declared.apps.clone(),
+                None => built_in(name).map_or_else(Vec::new, |b| (b.apps)()),
+            },
         }
     }
 }
@@ -153,8 +301,8 @@ impl FrameMap {
 /// Why `item` has nowhere to be shown, if so: none of the frames it can
 /// arrive under can show its type (SPEC-story-mode, Nowhere to show). What
 /// the checks warn about, and what the preview shows instead of the item.
-pub fn nowhere(item: &ContentItem, frames: &BTreeSet<Frame>) -> Option<String> {
-    (!frames.iter().any(|f| f.can_show(item.kind))).then(|| {
+pub fn nowhere(story: &Story, item: &ContentItem, frames: &BTreeSet<Frame>) -> Option<String> {
+    (!frames.iter().any(|f| f.can_show(story, item.kind))).then(|| {
         format!(
             "content `{}` is a {}, and no frame it can arrive in can show it",
             item.id,
@@ -237,16 +385,48 @@ mod tests {
     // A dialogue needs no frame; everything else needs one able to show it.
     #[test]
     fn a_dialogue_needs_no_frame_and_the_rest_needs_one() {
+        let story = crate::Story::from_sources(minimal()).unwrap();
         let phone = Frame::Named("phone".into());
-        assert!(Frame::None.can_show(ContentType::Dialogue));
+        assert!(Frame::None.can_show(&story, ContentType::Dialogue));
         assert!(
-            Frame::None.can_show(ContentType::Illustration),
+            Frame::None.can_show(&story, ContentType::Illustration),
             "an illustration is shown on the scene too"
         );
-        assert!(!Frame::None.can_show(ContentType::Message));
-        assert!(phone.can_show(ContentType::Message) && phone.can_show(ContentType::Dialogue));
-        assert!(phone.is_known() && Frame::None.is_known());
-        assert!(!Frame::Named("desk".into()).is_known(), "not shipped, not declared");
+        assert!(!Frame::None.can_show(&story, ContentType::Message));
+        assert!(phone.can_show(&story, ContentType::Message) && phone.can_show(&story, ContentType::Dialogue));
+        assert!(phone.is_known(&story) && Frame::None.is_known(&story));
+        assert!(
+            !Frame::Named("desk".into()).is_known(&story),
+            "not shipped, not declared"
+        );
+        let apps: Vec<String> = phone.apps(&story).into_iter().map(|a| a.id).collect();
+        assert_eq!(
+            apps,
+            ["messages", "mail", "news", "social", "bank"],
+            "the shipped phone's apps"
+        );
+    }
+
+    // A story's own phone shows what its apps show, nothing more; one named
+    // like the shipped phone replaces it in that story.
+    #[test]
+    fn a_declared_frame_shows_what_its_apps_show() {
+        let frames = "frames:\n  - id: basic\n    kind: phone\n    apps:\n      - { id: sms, template: thread, shows: [message], appears: always }\n  - id: phone\n    kind: phone\n    apps:\n      - { id: inbox, template: inbox, shows: [mail] }\n";
+        let story = crate::Story::from_sources(with(minimal(), FRAMES, frames)).unwrap();
+        let basic = Frame::Named("basic".into());
+        assert!(basic.is_known(&story), "declared");
+        assert!(basic.can_show(&story, ContentType::Message), "its app's type");
+        assert!(!basic.can_show(&story, ContentType::Mail), "no app for it");
+        assert!(
+            basic.can_show(&story, ContentType::Dialogue),
+            "on the scene, whatever the frame"
+        );
+        let phone = Frame::Named("phone".into());
+        assert!(
+            !phone.can_show(&story, ContentType::Message),
+            "the story's own `phone` replaces Pit Box's"
+        );
+        assert_eq!(phone.apps(&story)[0].id, "inbox");
     }
 
     // The frame follows the flow: a Beat changes it for every node after
@@ -276,28 +456,38 @@ mod tests {
     fn a_content_item_arrives_under_the_frames_of_whatever_sends_it() {
         let story = crate::Story::load(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("sample")).unwrap();
         let map = FrameMap::new(&story);
-        let phone = Frame::Named("phone".into());
+        let (basic, smart) = (Frame::Named("basic_phone".into()), Frame::Named("smartphone".into()));
         assert_eq!(
             map.content(&story, "talk_01"),
             BTreeSet::from([Frame::None]),
             "after the beat removing it"
         );
-        assert_eq!(map.content(&story, "invite_01"), BTreeSet::from([phone.clone()]));
+        assert_eq!(map.content(&story, "invite_01"), BTreeSet::from([basic.clone()]));
         assert_eq!(
             map.content(&story, "rival_post_01"),
-            BTreeSet::from([Frame::None, phone]),
+            BTreeSet::from([Frame::None, basic.clone(), smart.clone()]),
             "reactive: every frame the story puts up"
         );
         let talk = story.content_item("talk_01").unwrap();
         assert_eq!(
-            nowhere(talk, &BTreeSet::from([Frame::None])),
+            nowhere(&story, talk, &BTreeSet::from([Frame::None])),
             None,
             "a dialogue needs no frame"
         );
         let invite = story.content_item("invite_01").unwrap();
         assert!(
-            nowhere(invite, &BTreeSet::from([Frame::None])).is_some(),
+            nowhere(&story, invite, &BTreeSet::from([Frame::None])).is_some(),
             "a message needs one"
+        );
+        let post = story.content_item("rival_post_01").unwrap();
+        assert!(
+            nowhere(&story, post, &BTreeSet::from([basic])).is_some(),
+            "the basic phone has no social network"
+        );
+        assert_eq!(
+            nowhere(&story, post, &BTreeSet::from([smart])),
+            None,
+            "the smartphone has"
         );
     }
 

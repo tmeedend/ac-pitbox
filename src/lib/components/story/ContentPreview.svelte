@@ -12,7 +12,7 @@
   import { i18n, t } from "$lib/i18n/index.svelte";
   import { setupSentences } from "$lib/story/preview";
   import { inputsOf } from "$lib/story/preview.svelte";
-  import { appOf, APP_LABEL } from "$lib/story/player/apps";
+  import { appName } from "$lib/story/player/apps";
   import { dateLabel, whenLabel } from "$lib/story/player/phone";
   import { mediaUrl, speakersOf } from "$lib/story/player/speakers";
   import { previewContent, type PreviewView } from "$lib/story/studio";
@@ -70,7 +70,9 @@
   const dateDisplay = $derived(story.manifest.value?.settings.date ?? "none");
   const dateShown = $derived(view ? dateLabel(view.date, dateDisplay, t, i18n.locale) : "");
   const when = $derived(view ? whenLabel(view.date, view.clock, dateDisplay, t, i18n.locale) : "");
-  const app = $derived(view ? appOf(view.kind) : null);
+  /** The template of the frame's app showing the item; `null` when the
+   * frame lists it by name. */
+  const template = $derived(view?.app?.template ?? null);
   const sender = $derived(view?.from ? (names[view.from] ?? view.from) : t("story.play.unknownSender"));
 
   function choose(label: string) {
@@ -121,12 +123,12 @@
         <PhoneFrame
           clock={view.clock}
           date={dateShown}
-          title={app === "messages" || app === null ? (view.from ? sender : "—") : t(APP_LABEL[app])}
-          avatar={app === "messages" && view.from ? (speakers[view.from]?.portraits.neutral ?? null) : null}
+          title={template === "thread" || !view.app ? (view.from ? sender : "—") : appName(view.app, t)}
+          avatar={template === "thread" && view.from ? (speakers[view.from]?.portraits.neutral ?? null) : null}
         >
-          {#if app === "messages"}
+          {#if template === "thread"}
             <ThreadView steps={view.steps} choices={view.choices} from={view.from} {names} onchoose={choose} />
-          {:else if app === "mail"}
+          {:else if template === "inbox"}
             <MailView
               {sender}
               {when}
@@ -136,7 +138,7 @@
               {names}
               onchoose={choose}
             />
-          {:else if app === "news" || app === "social"}
+          {:else if template === "feed"}
             <FeedView
               posts={[
                 {
@@ -151,7 +153,7 @@
               {speakers}
               onchoose={(_, label) => choose(label)}
             />
-          {:else if app === "bank"}
+          {:else if template === "statement"}
             <StatementView lines={[{ key: id, when, steps: view.steps }]} balance={null} />
           {:else}
             <p class="soon">{t("story.preview.noTemplate")}</p>

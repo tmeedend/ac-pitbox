@@ -70,6 +70,7 @@ pub fn validate(story: &Story) -> Vec<Diagnostic> {
     c.manifest_and_world();
     c.drivers();
     c.scenes();
+    c.frames();
     c.flow();
     c.content();
     c.events();
@@ -115,7 +116,7 @@ impl Checker<'_> {
         if story.node(&m.start.node).is_none() {
             self.error("story.yaml", format!("start node `{}` does not exist", m.start.node));
         }
-        if let Some(why) = unknown_frame(&m.start.frame) {
+        if let Some(why) = unknown_frame(story, &m.start.frame) {
             self.error("story.yaml", format!("start: {why}"));
         }
         if let Some(why) = m.start.scene.as_deref().and_then(|p| unknown_scene(story, p)) {
@@ -295,6 +296,77 @@ impl Checker<'_> {
                 file,
                 format!("{at}: ambient `{path}` is not a sound ({})", kinds.join(", ")),
             );
+        }
+    }
+
+    /// The frames a story declares (SPEC-story-mode, Skins: how a frame gets
+    /// its look): each with apps, each app showing what its template can, a
+    /// content type in one app of the frame only - two would leave the item
+    /// nowhere to be told apart - its icon a file of `media/`, and one that
+    /// appears from a Beat unlocked by one.
+    fn frames(&mut self) {
+        use crate::frame::{Appears, FRAMES as FILE};
+        let story = self.story;
+        let unlocked: HashSet<&str> = (story.nodes())
+            .filter_map(|n| match &n.kind {
+                NodeKind::Beat(beat) => Some(beat.unlock.iter().map(String::as_str)),
+                _ => None,
+            })
+            .flatten()
+            .collect();
+        for frame in &story.frames {
+            let at = format!("frame `{}`", frame.id);
+            if frame.apps.is_empty() {
+                self.error(FILE, format!("{at} has no app: nothing could show in it"));
+            }
+            let (mut ids, mut shown) = (HashSet::new(), std::collections::HashMap::new());
+            for app in &frame.apps {
+                let at = format!("{at}, app `{}`", app.id);
+                if !ids.insert(app.id.as_str()) {
+                    self.error(FILE, format!("{at} is declared twice"));
+                }
+                if app.shows.is_empty() {
+                    self.error(FILE, format!("{at} shows no content type"));
+                }
+                for kind in &app.shows {
+                    if !app.template.can_show(*kind) {
+                        self.error(
+                            FILE,
+                            format!("{at}: a {} cannot show a {}", app.template.name(), kind.name()),
+                        );
+                    }
+                    if let Some(first) = shown.insert(kind.name(), app.id.as_str()) {
+                        self.error(
+                            FILE,
+                            format!(
+                                "{at}: app `{first}` already shows {}: a type goes to one app",
+                                kind.name()
+                            ),
+                        );
+                    }
+                }
+                if let Some(icon) = &app.icon {
+                    self.media_file(FILE, &at, Some("icon"), icon);
+                }
+                if app.appears == Appears::Beat && !unlocked.contains(app.id.as_str()) {
+                    self.warning(
+                        FILE,
+                        format!("{at} appears from a Beat, and no Beat unlocks it: it shows with its first item only"),
+                    );
+                }
+            }
+        }
+    }
+
+    /// A Beat's apps to unlock: apps one of the story's frames has.
+    fn beat_unlock(&mut self, file: &str, at: &str, beat: &Beat) {
+        let story = self.story;
+        for id in &beat.unlock {
+            let known = (story.frames.iter()).any(|f| f.apps.iter().any(|a| &a.id == id))
+                || (story.frame("phone").is_none() && crate::frame::phone_apps().iter().any(|a| &a.id == id));
+            if !known {
+                self.error(file, format!("{at}: unlock: no frame has an app `{id}`"));
+            }
         }
     }
 
@@ -493,9 +565,10 @@ impl Checker<'_> {
                         for e in &beat.effects {
                             self.effect(file, &at, e);
                         }
-                        if let Some(why) = beat.frame.as_ref().and_then(unknown_frame) {
+                        if let Some(why) = beat.frame.as_ref().and_then(|f| unknown_frame(self.story, f)) {
                             self.error(file, format!("{at}: {why}"));
                         }
+                        self.beat_unlock(file, &at, beat);
                         self.beat_scene(file, &at, beat);
                     }
                     NodeKind::Message {
@@ -857,7 +930,7 @@ impl Checker<'_> {
             .iter()
             .filter(|i| matches!(i.placement, Placement::Reactive { .. }))
         {
-            if let Some(why) = nowhere(item, &map.content(story, &item.id)) {
+            if let Some(why) = nowhere(story, item, &map.content(story, &item.id)) {
                 self.warning(&format!("{}:{}", item.file, item.line), why);
             }
         }
@@ -869,7 +942,7 @@ impl Checker<'_> {
             return;
         };
         let blind: Vec<String> = (frames.iter())
-            .filter(|f| !f.can_show(item.kind))
+            .filter(|f| !f.can_show(self.story, item.kind))
             .map(|f| format!("`{f}`"))
             .collect();
         if blind.is_empty() {
@@ -967,11 +1040,14 @@ impl Checker<'_> {
 }
 
 /// Why a story cannot use `frame`, if it cannot.
-fn unknown_frame(frame: &Frame) -> Option<String> {
-    (!frame.is_known()).then(|| {
-        let shipped: Vec<String> = (crate::frame::BUILT_IN.iter())
-            .map(|b| format!("`{}`", b.name))
-            .collect();
+fn unknown_frame(story: &Story, frame: &Frame) -> Option<String> {
+    (!frame.is_known(story)).then(|| {
+        let declared: Vec<&str> = (story.frames.iter()).map(|f| f.id.as_str()).collect();
+        let shipped = (crate::frame::BUILT_IN.iter())
+            .map(|b| b.name)
+            .filter(|b| !declared.contains(b));
+        let names: Vec<&str> = declared.iter().copied().chain(shipped).collect();
+        let shipped: Vec<String> = names.iter().map(|n| format!("`{n}`")).collect();
         format!(
             "unknown frame `{frame}` (the frames are {}, or `none`)",
             shipped.join(", ")

@@ -901,6 +901,60 @@ de reprendre. En cas d'écart, la spec fait foi.
           Une clé `when` sur le lieu ou la variante pourra s'ajouter plus
           tard sans migration (clé ajoutée, « toujours disponible » par
           défaut). La liste des médias ci-dessus est validée.
+      - **L3d, cadres et habillages — découpage validé (2026-10-24).**
+        - **Décidé avec l'utilisateur** : un cadre est l'appareil que le
+          personnage porte (ses téléphones, déclarés dans `frames.yaml` sur
+          le genre `phone`, du plus basique au plus récent) ; le journal, la
+          lettre, le JT et l'appel sur un fixe sont des contenus joués sur la
+          scène, chacun avec sa mise en page (`newspaper`, `letter`, `tv`,
+          `landline`). La question « un cadre dessiné à la main tient-il dans
+          le modèle ? » était une erreur de la spec : il n'y aura pas de
+          croquis d'auteur, les images arrivent par import. Rien n'est
+          obligatoire pour un téléphone : sans image, le thème de Pit Box.
+          Les polices OFL (Inter, Playfair Display) se téléchargent en
+          L3d.2, avec un accord redemandé juste avant. L'éditeur saura
+          importer un fichier dans l'histoire à partir de L3d.4.
+        - **Pour plus tard (hors L3d)** : les notifications. Proposé : un
+          style par téléphone, `banner` (bandeau en haut de l'écran avec
+          icône, expéditeur et début du texte, un son, le compteur ; un clic
+          ouvre l'app) ou `quiet` (un bip et le compteur, sans bandeau). En
+          attendant, seul le compteur de l'app existe.
+        - **L3d.1, le format et le moteur — fait (2026-10-24).**
+          `frames/frames.yaml` lu (`frame.rs` : `Frames`, `FrameDecl`, `App`,
+          `Template`, `Appears`) ; `Frame::can_show`, `is_known` et `apps`
+          prennent l'histoire ; le Beat gagne `unlock`, l'état `unlocked`
+          (absent d'une ancienne sauvegarde) ; la vue joueur porte les apps
+          du cadre (`PlayView.apps`, `AppShown`) et l'aperçu d'un contenu
+          son app ; le téléphone de `PhoneScreen` se dessine depuis ces apps
+          (nom, icône, modèle), plus depuis une liste fixe ; les choix de
+          cadre de l'éditeur offrent ceux de l'histoire ; le panneau d'un
+          Beat a ses apps débloquées. Exemple : un téléphone basique
+          (Messages seuls) au départ, un smartphone au chapitre 2, qui
+          débloque les actualités.
+          **Choisi sans demander** (dans la spec) : un cadre déclaré au nom
+          de `phone` remplace celui de Pit Box ; une app `beat` apparaît au
+          plus tard avec son premier item ; une app débloquée l'est dans
+          tous les téléphones qui ont cet id ; sans app de messagerie,
+          l'épreuve suivante est une carte sur la scène.
+          **Choisi sans demander** (détails) : `frames/frames.yaml` n'est
+          pas encore écrit par l'éditeur (à la main jusqu'à l'écran Cadre) ;
+          ses erreurs comptent dans la section Fil ; les modèles `agenda` et
+          `call` n'existent pas encore (une app qui les nomme ne se lit pas).
+          **Pas vu à l'écran** : le téléphone de l'exemple aux deux étapes.
+        - **L3d.2, le téléphone habillé.** Le corps en image et sa zone
+          d'écran, le fond d'écran, la barre d'état (posée par Beat), les
+          icônes ; `skin.yaml` (couleurs, polices, emplacements en 9-slice)
+          pour les modèles existants ; le thème par défaut en repli ; les
+          sons d'interface ; un Beat qui change l'habillage d'une app.
+        - **L3d.3, les modèles qui manquent.** L'agenda, l'écran d'appel, le
+          type `document` sur la scène (`newspaper`, `letter`), la vidéo
+          `tv` et l'appel `landline` sur la scène.
+        - **L3d.4, l'écran Cadre.** Les apps d'un cadre, leurs emplacements,
+          l'import d'un fichier dans l'histoire, un aperçu au contenu
+          factice, les contrôles (fichier absent, ratio, taille).
+        - **L3d.5, le kit et le guide.** Les planches PNG et SVG générées
+          par programme, `docs/story/authoring/`, les médias de l'exemple
+          faits par Claude (liste plus haut).
       - **L4 à L8** : dans l'ordre du plan de livraison de la spec, après L3c
         et L3d.
       **Écarts assumés par rapport au document de conception** (la spec

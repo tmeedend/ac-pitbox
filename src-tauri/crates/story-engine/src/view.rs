@@ -8,6 +8,7 @@
 use serde::Serialize;
 
 use crate::engine::{difficulty_step, fee_due, offers, Offer, Step};
+use crate::frame::{App, Appears, Template};
 use crate::load::Story;
 use crate::model::{DateDisplay, EventType, Session, Transition};
 use crate::scene::Shown;
@@ -19,6 +20,9 @@ pub struct PlayView {
     pub title: String,
     /// The active frame: `none`, or a frame's name.
     pub frame: String,
+    /// Its apps, in the order the home screen shows them; none without a
+    /// frame.
+    pub apps: Vec<AppShown>,
     /// The place behind the frame, as it shows now; none, a plain
     /// background.
     pub scene: Option<Shown>,
@@ -36,6 +40,35 @@ pub struct PlayView {
     pub waiting: Waiting,
     /// The event a session was launched for, until its result comes back.
     pub launched: Option<String>,
+}
+
+/// An app of the frame up, as its home screen shows it.
+#[derive(Debug, Clone, Serialize)]
+pub struct AppShown {
+    pub id: String,
+    /// As the story names it; none, Pit Box names it.
+    pub name: Option<String>,
+    /// A path inside the story's `media/`; none, its template's.
+    pub icon: Option<String>,
+    pub template: Template,
+    /// The content types it shows, as a `.story` header names them.
+    pub shows: Vec<&'static str>,
+    /// On the home screen now: always, once a Beat unlocked it, or once it
+    /// has an item.
+    pub available: bool,
+}
+
+impl AppShown {
+    pub fn of(app: App, available: bool) -> AppShown {
+        AppShown {
+            shows: app.shows.iter().map(|k| k.name()).collect(),
+            id: app.id,
+            name: app.name,
+            icon: app.icon,
+            template: app.template,
+            available,
+        }
+    }
 }
 
 /// One delivery of a content item and what was said in it since.
@@ -147,9 +180,21 @@ pub fn play_view(story: &Story, state: &State) -> PlayView {
         let latest = met.insert(seen.content.clone());
         seen.seen = !latest || state.content_facts(&seen.content).seen;
     }
+    let frame = state.frame.as_ref().unwrap_or(&story.manifest.start.frame);
+    let apps = (frame.apps(story).into_iter())
+        .map(|app| {
+            let available = match app.appears {
+                Appears::Always => true,
+                Appears::Beat if state.unlocked.contains(&app.id) => true,
+                _ => items.iter().any(|i| app.shows.iter().any(|k| k.name() == i.kind)),
+            };
+            AppShown::of(app, available)
+        })
+        .collect();
     PlayView {
         title: story.manifest.title.clone(),
-        frame: state.frame.as_ref().unwrap_or(&story.manifest.start.frame).to_string(),
+        frame: frame.to_string(),
+        apps,
         scene: (state.scene.as_deref()).and_then(|p| state.scene_shown(story, p)),
         date: state.date.to_string(),
         clock: state.clock.to_string(),

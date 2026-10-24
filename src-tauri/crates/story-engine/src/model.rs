@@ -405,6 +405,10 @@ pub struct Beat {
     pub weather: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mood: Option<String>,
+    /// Apps that show from this beat on, by id, in whichever frame has them
+    /// (`frame::Appears::Beat`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub unlock: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

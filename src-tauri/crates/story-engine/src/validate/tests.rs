@@ -791,3 +791,71 @@ fn a_place_or_variant_named_must_be_declared() {
         "a declared place and variant: {diags:#?}"
     );
 }
+
+// A story's frames (SPEC-story-mode, Skins: how a frame gets its look): each
+// with apps, each app showing what its template can, a type in one app of the
+// frame only, its icon a file of `media/`; a Beat unlocks only an app some
+// frame has, and an app waiting for a Beat no Beat unlocks is said so. A
+// frame the story declares can be put up.
+#[test]
+fn frames_have_apps_that_show_what_their_template_can() {
+    let frames = "frames:
+  - id: empty
+    kind: phone
+    apps: []
+  - id: basic
+    kind: phone
+    apps:
+      - { id: sms, template: thread, shows: [message, mail], icon: icons/sms.png }
+      - { id: sms, template: inbox, shows: [mail], icon: icons/gone.png }
+      - { id: later, template: feed, shows: [article], appears: beat }
+      - { id: nothing, template: statement, shows: [] }
+";
+    let flow = "id: ch01
+nodes:
+  - id: start
+    beat: { frame: basic, unlock: [ghost] }
+  - id: end
+    end: done
+";
+    let mut d = draft(with(
+        with(minimal(), crate::frame::FRAMES, frames),
+        "flow/01-one.yaml",
+        flow,
+    ));
+    d.media = Some(BTreeSet::from(["icons/sms.png".to_string()]));
+    let diags = validate(&crate::Story::from_draft(d).unwrap());
+    for needle in [
+        "frame `empty` has no app",
+        "app `sms` is declared twice",
+        "a thread cannot show a mail",
+        "app `sms` already shows mail",
+        "app `nothing` shows no content type",
+        "`media/icons/gone.png` does not exist",
+        "unlock: no frame has an app `ghost`",
+    ] {
+        assert!(has(&diags, Severity::Error, needle), "{needle} in {diags:#?}");
+    }
+    assert!(
+        has(
+            &diags,
+            Severity::Warning,
+            "app `later` appears from a Beat, and no Beat unlocks it"
+        ),
+        "{diags:#?}"
+    );
+    assert!(
+        !diags.iter().any(|d| d.message.contains("unknown frame")),
+        "a declared frame can be put up: {diags:#?}"
+    );
+    let typo = "id: ch01\nnodes:\n  - id: start\n    beat: { frame: basci }\n  - id: end\n    end: done\n";
+    let d = diagnostics(&[(crate::frame::FRAMES, frames), ("flow/01-one.yaml", typo)]);
+    assert!(
+        has(
+            &d,
+            Severity::Error,
+            "unknown frame `basci` (the frames are `empty`, `basic`, `phone`, or `none`)"
+        ),
+        "the story's frames named first: {d:#?}"
+    );
+}

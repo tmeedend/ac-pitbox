@@ -10,13 +10,17 @@
   import { CONTENT_TYPE_LABEL } from "$lib/story/labels";
   import { phoneThreads, withoutTemplate, type Thread } from "$lib/story/player/game";
   import type { Speaker } from "$lib/story/player/types";
-  import type { SeenItem } from "$lib/story/play";
+  import type { AppShown, SeenItem } from "$lib/story/play";
   import PhoneFrame from "$lib/components/story/player/PhoneFrame.svelte";
   import ThreadView from "$lib/components/story/player/ThreadView.svelte";
   import BackButton from "./BackButton.svelte";
   import ListRow from "./ListRow.svelte";
 
   interface Props {
+    /** The app's name. */
+    title: string;
+    /** The frame's apps: what none of them shows is listed here by name. */
+    apps: AppShown[];
     items: SeenItem[];
     clock: string;
     /** The date as the story shows it. */
@@ -30,10 +34,10 @@
     elsewhere: boolean;
     onhome: () => void;
   }
-  const { items, clock, date, speakers, onreply, onseen, next, elsewhere, onhome }: Props = $props();
+  const { title, apps, items, clock, date, speakers, onreply, onseen, next, elsewhere, onhome }: Props = $props();
 
   const threads = $derived(phoneThreads(items));
-  const others = $derived(withoutTemplate(items));
+  const others = $derived(withoutTemplate(items, apps));
   const names = $derived(Object.fromEntries(Object.entries(speakers).map(([k, s]) => [k, s.name])));
   /** The thread open, by its sender; `undefined`: the app's list. */
   let open = $state<string | null | undefined>(undefined);
@@ -72,7 +76,7 @@
     avatar={thread.from ? (speakers[thread.from]?.portraits.neutral ?? null) : null}
   >
     <div class="screen">
-      <BackButton label={t("story.play.messages")} onclick={() => (open = undefined)} />
+      <BackButton label={title} onclick={() => (open = undefined)} />
       <ThreadView
         steps={thread.steps}
         choices={thread.choices}
@@ -83,7 +87,7 @@
     </div>
   </PhoneFrame>
 {:else}
-  <PhoneFrame {clock} {date} title={t("story.play.messages")} avatar={null}>
+  <PhoneFrame {clock} {date} {title} avatar={null}>
     <div class="screen">
       <BackButton label={t("story.play.apps")} dot={elsewhere} onclick={onhome} />
       <ul class="list">

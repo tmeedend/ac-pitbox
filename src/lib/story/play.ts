@@ -21,6 +21,20 @@ export interface Playable {
   game: { ended: boolean; problem: string | null } | null;
 }
 
+/** An app of the frame up (`story_engine::view::AppShown`). */
+export interface AppShown {
+  id: string;
+  /** As the story names it; `null`, Pit Box names it (`appName`). */
+  name: string | null;
+  /** A path inside the story's `media/`; `null`, its template's. */
+  icon: string | null;
+  template: "thread" | "inbox" | "feed" | "statement";
+  /** The content types it shows. */
+  shows: string[];
+  /** On the home screen now. */
+  available: boolean;
+}
+
 /** A place as it shows now (`story_engine::scene::Shown`). */
 export interface SceneShown {
   place: string;
@@ -77,6 +91,8 @@ export interface PlayView {
   title: string;
   /** `none`, or a frame's name. */
   frame: string;
+  /** Its apps, in the order the home screen shows them. */
+  apps: AppShown[];
   /** The place behind the frame; `null`, a plain background. */
   scene: SceneShown | null;
   date: string;

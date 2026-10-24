@@ -196,6 +196,9 @@ pub struct State {
     pub weather: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mood: Option<String>,
+    /// The apps a Beat unlocked, by id; absent from a save made before.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub unlocked: BTreeSet<String>,
     pub reputation: i64,
     pub followers: i64,
     pub money: i64,
@@ -245,6 +248,7 @@ impl State {
             variant: None,
             weather: None,
             mood: None,
+            unlocked: BTreeSet::new(),
             reputation: start.reputation,
             followers: start.followers,
             money: start.money,

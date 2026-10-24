@@ -411,13 +411,19 @@ mod tests {
             "all four saved"
         );
 
+        state.unlocked.insert("news".into());
         let mut json: serde_json::Value = serde_json::from_str(&Save::new(&story, &state).to_json()).unwrap();
-        for key in ["scene", "variant", "weather", "mood"] {
+        assert!(json["state"]["unlocked"].is_array(), "the apps unlocked are saved");
+        for key in ["scene", "variant", "weather", "mood", "unlocked"] {
             json["state"].as_object_mut().unwrap().remove(key);
         }
         let old = Save::from_json(&json.to_string()).expect("a save without a scene reads");
         let resumed = old.resume(&story).expect("resumes");
         assert_eq!(resumed.scene, None, "no place invented");
+        assert!(
+            resumed.unlocked.is_empty(),
+            "a save from before frames: no app unlocked"
+        );
     }
 
     // A game saved at a choice point resumes there; a story update that

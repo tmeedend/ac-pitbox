@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SeenItem } from "../play";
+import type { AppShown, SeenItem } from "../play";
 import {
   dialogueLog,
   goals,
@@ -78,13 +78,20 @@ describe("pastDialogues", () => {
 
 describe("withoutTemplate", () => {
   it("lists what the phone cannot show yet", () => {
-    const kinds = withoutTemplate([
-      item("a"),
-      item("m", { kind: "mail" }),
-      item("d", { kind: "dialogue" }),
-      item("c", { kind: "call" }),
-      item("v", { kind: "video" }),
-    ]).map((i) => i.kind);
+    const apps: AppShown[] = [
+      { id: "messages", name: null, icon: null, template: "thread", shows: ["message"], available: true },
+      { id: "mail", name: null, icon: null, template: "inbox", shows: ["mail"], available: true },
+    ];
+    const kinds = withoutTemplate(
+      [
+        item("a"),
+        item("m", { kind: "mail" }),
+        item("d", { kind: "dialogue" }),
+        item("c", { kind: "call" }),
+        item("v", { kind: "video" }),
+      ],
+      apps,
+    ).map((i) => i.kind);
     expect(kinds).toEqual(["call", "video"]);
   });
 });

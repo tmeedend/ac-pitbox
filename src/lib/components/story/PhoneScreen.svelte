@@ -1,17 +1,18 @@
 <script lang="ts">
   // The phone in a game (SPEC-story-mode, Content types, templates and
-  // frames): a home screen with its apps, each showing the content types it
-  // has a template for - the messages (threads), the mail (inbox), the news
-  // and the social network (feeds), the bank (statement). An app appears with
-  // its first item, the messages always. The phone opens on the messages,
-  // which the next event heads, and goes back to them when an event comes to
-  // wait. A feed or a statement opened is read as a whole.
-  import type { Snippet } from "svelte";
+  // frames): a home screen with the frame's apps, each a template showing
+  // some content types - a thread, an inbox, a feed, a statement. Which apps,
+  // their names and icons, and when each appears are the frame's (`apps`,
+  // from the engine). The phone opens on its first messaging app, which the
+  // next event heads, and goes back to it when an event comes to wait. A feed
+  // or a statement opened is read as a whole.
+  import { untrack, type Snippet } from "svelte";
   import { i18n, t } from "$lib/i18n/index.svelte";
-  import { APP_LABEL, appItems, appsShown, pendingIn, type PhoneApp } from "$lib/story/player/apps";
+  import { appItems, appName, appsShown, homeApp, pendingIn } from "$lib/story/player/apps";
   import { initials, whenLabel, type DateDisplay } from "$lib/story/player/phone";
   import type { Post, Speaker, StatementLine } from "$lib/story/player/types";
-  import type { SeenItem } from "$lib/story/play";
+  import type { AppShown, SeenItem } from "$lib/story/play";
+  import { mediaUrl } from "$lib/story/player/speakers";
   import FeedView from "./player/FeedView.svelte";
   import PhoneFrame from "./player/PhoneFrame.svelte";
   import StatementView from "./player/StatementView.svelte";
@@ -20,6 +21,10 @@
   import MessagesApp from "./phone/MessagesApp.svelte";
 
   interface Props {
+    /** The frame's apps, in the home screen's order. */
+    apps: AppShown[];
+    /** The story's folder, for the apps' icons; `null` for the sample. */
+    folder: string | null;
     items: SeenItem[];
     clock: string;
     /** The date as the story shows it. */
@@ -33,13 +38,16 @@
     /** The event the story waits for, heading the messages. */
     next?: Snippet;
   }
-  const { items, clock, date, dateDisplay, speakers, money, onreply, onseen, next }: Props = $props();
+  const { apps, folder, items, clock, date, dateDisplay, speakers, money, onreply, onseen, next }: Props = $props();
 
-  /** The screen shown: the home screen, or an app. */
-  let screen = $state<PhoneApp | "home">("messages");
-  const apps = $derived(appsShown(items));
+  /** The screen shown: the home screen, or an app, by id. */
+  let screen = $state<string>(untrack(() => homeApp(apps)?.id ?? "home"));
+  const shownApps = $derived(appsShown(apps));
+  /** The app open; `null` on the home screen, or for an app the frame put
+   * up since no longer has. */
+  const open = $derived(apps.find((a) => a.id === screen) ?? null);
   /** Another app than the one shown calls for the player. */
-  const elsewhere = $derived(apps.some((app) => app !== screen && pendingIn(items, app) > 0));
+  const elsewhere = $derived(shownApps.some((app) => app.id !== screen && pendingIn(items, app) > 0));
 
   function when(item: SeenItem): string {
     return whenLabel(item.date, item.clock, dateDisplay, t, i18n.locale);
@@ -50,8 +58,8 @@
   }
 
   const posts = $derived(
-    screen === "news" || screen === "social"
-      ? appItems(items, screen).map(
+    open?.template === "feed"
+      ? appItems(items, open).map(
           (i): Post => ({
             key: String(i),
             from: items[i].from,
@@ -64,8 +72,8 @@
       : [],
   );
   const lines = $derived(
-    screen === "bank"
-      ? appItems(items, "bank").map((i): StatementLine => ({ key: String(i), when: when(items[i]), steps: items[i].steps }))
+    open?.template === "statement"
+      ? appItems(items, open).map((i): StatementLine => ({ key: String(i), when: when(items[i]), steps: items[i].steps }))
       : [],
   );
 
@@ -73,23 +81,36 @@
   let hadNext = false;
   $effect(() => {
     const has = next !== undefined;
-    if (has && !hadNext) screen = "messages";
+    if (has && !hadNext) screen = untrack(() => homeApp(apps)?.id ?? "home");
     hadNext = has;
   });
 
   // A feed or a statement is read as a whole once open, what arrives in it
   // included.
   $effect(() => {
-    const [shown, list] = [screen, items];
-    if (shown !== "news" && shown !== "social" && shown !== "bank") return;
-    for (const i of appItems(list, shown)) if (!list[i].seen) onseen(list[i].content);
+    const [app, list] = [open, items];
+    if (app?.template !== "feed" && app?.template !== "statement") return;
+    for (const i of appItems(list, app)) if (!list[i].seen) onseen(list[i].content);
   });
 </script>
 
-{#if screen === "messages"}
-  <MessagesApp {items} {clock} {date} {speakers} {onreply} {onseen} {next} {elsewhere} onhome={() => (screen = "home")} />
-{:else if screen === "mail"}
+{#if open?.template === "thread"}
+  <MessagesApp
+    title={appName(open, t)}
+    {apps}
+    {items}
+    {clock}
+    {date}
+    {speakers}
+    {onreply}
+    {onseen}
+    {next}
+    {elsewhere}
+    onhome={() => (screen = "home")}
+  />
+{:else if open?.template === "inbox"}
   <MailApp
+    app={open}
     {items}
     {clock}
     {date}
@@ -100,24 +121,30 @@
     {onseen}
     onhome={() => (screen = "home")}
   />
-{:else if screen === "home"}
+{:else if open === null}
   <PhoneFrame {clock} {date} title={t("story.play.apps")} avatar={null}>
     <div class="home">
-      {#each apps as app (app)}
+      {#each shownApps as app (app.id)}
         {@const pending = pendingIn(items, app)}
-        <button class="app" onclick={() => (screen = app)}>
-          <span class="icon">{initials(t(APP_LABEL[app]))}</span>
-          <span class="name">{t(APP_LABEL[app])}</span>
+        {@const name = appName(app, t)}
+        {@const icon = mediaUrl(folder, app.icon)}
+        <button class="app" onclick={() => (screen = app.id)}>
+          {#if icon}
+            <img class="icon" src={icon} alt="" />
+          {:else}
+            <span class="icon">{initials(name)}</span>
+          {/if}
+          <span class="name">{name}</span>
           {#if pending}<span class="badge" aria-label={t("story.play.unread")}>{pending}</span>{/if}
         </button>
       {/each}
     </div>
   </PhoneFrame>
 {:else}
-  <PhoneFrame {clock} {date} title={t(APP_LABEL[screen])} avatar={null}>
+  <PhoneFrame {clock} {date} title={appName(open, t)} avatar={null}>
     <div class="screen">
       <BackButton label={t("story.play.apps")} dot={elsewhere} onclick={() => (screen = "home")} />
-      {#if screen === "bank"}
+      {#if open.template === "statement"}
         <StatementView {lines} balance={money} />
       {:else}
         <FeedView
@@ -158,6 +185,9 @@
     color: var(--txt);
     font-size: 14px;
     font-weight: 600;
+  }
+  img.icon {
+    object-fit: cover;
   }
   .app:hover .icon {
     background: var(--mat-hi);

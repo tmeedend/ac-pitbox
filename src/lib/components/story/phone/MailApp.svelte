@@ -4,16 +4,18 @@
   // marked; a mail opened shows its text and the replies it offers, and is
   // marked seen.
   import { i18n, t } from "$lib/i18n/index.svelte";
-  import { appItems } from "$lib/story/player/apps";
+  import { appItems, appName } from "$lib/story/player/apps";
   import { whenLabel, type DateDisplay } from "$lib/story/player/phone";
   import type { Speaker } from "$lib/story/player/types";
-  import type { SeenItem } from "$lib/story/play";
+  import type { AppShown, SeenItem } from "$lib/story/play";
   import MailView from "$lib/components/story/player/MailView.svelte";
   import PhoneFrame from "$lib/components/story/player/PhoneFrame.svelte";
   import BackButton from "./BackButton.svelte";
   import ListRow from "./ListRow.svelte";
 
   interface Props {
+    /** The app shown: an inbox. */
+    app: AppShown;
     items: SeenItem[];
     clock: string;
     date: string;
@@ -25,9 +27,9 @@
     onseen: (content: string) => void;
     onhome: () => void;
   }
-  const { items, clock, date, dateDisplay, speakers, elsewhere, onreply, onseen, onhome }: Props = $props();
+  const { app, items, clock, date, dateDisplay, speakers, elsewhere, onreply, onseen, onhome }: Props = $props();
 
-  const inbox = $derived(appItems(items, "mail"));
+  const inbox = $derived(appItems(items, app));
   const names = $derived(Object.fromEntries(Object.entries(speakers).map(([k, s]) => [k, s.name])));
   /** The mail open, as an index into `items`. */
   let open = $state<number | null>(null);
@@ -53,9 +55,9 @@
 </script>
 
 {#if mail}
-  <PhoneFrame {clock} {date} title={t("story.play.appMail")} avatar={null}>
+  <PhoneFrame {clock} {date} title={appName(app, t)} avatar={null}>
     <div class="screen">
-      <BackButton label={t("story.play.appMail")} onclick={() => (open = null)} />
+      <BackButton label={appName(app, t)} onclick={() => (open = null)} />
       <MailView
         sender={nameOf(mail.from)}
         when={when(mail)}
@@ -68,7 +70,7 @@
     </div>
   </PhoneFrame>
 {:else}
-  <PhoneFrame {clock} {date} title={t("story.play.appMail")} avatar={null}>
+  <PhoneFrame {clock} {date} title={appName(app, t)} avatar={null}>
     <div class="screen">
       <BackButton label={t("story.play.apps")} dot={elsewhere} onclick={onhome} />
       <ul class="list">

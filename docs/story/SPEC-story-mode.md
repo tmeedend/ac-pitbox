@@ -145,12 +145,19 @@ championship calendar is an agenda (entries dated in story time).
   and plays in the frame's call screen: the dialogue template inside the frame.
 - **On the scene.** A dialogue, an illustration and a document play on the
   scene, outside the frame, which slides away meanwhile; they need no frame.
-  A document uses the `page` layout (a newspaper) or a `letter` one, with its
-  own skin.
+  A document uses the `newspaper` layout (a `page`) or a `letter` one, with
+  its own skin. A video can play there too, in a `tv` layout (a news
+  broadcast), and a call in a `landline` one (a fixed phone), when no frame
+  takes them.
+- **A frame is the device the character carries**; what they read, watch
+  or answer in person is content played on the scene. A story of 1985 has a
+  newspaper, a TV report and a landline call with no frame at all; one of
+  2020 can send the same paper as a `document` on the scene or as an
+  `article` in its phone's news app - the author picks, item by item.
 
 **A frame** is a skin for those templates plus the overall picture around them
-(a phone screen; a desk with the post, the paper and the answering machine).
-Each frame declares which content types it can show:
+(a phone screen; later perhaps a desk with the post and the answering
+machine). Each frame declares which content types it can show:
 
 | Content type | Phone frame | Desk frame (older period) |
 | --- | --- | --- |
@@ -184,13 +191,30 @@ Each frame declares which content types it can show:
   A dialogue needs no frame.
 - **Frame-specific settings.** Status bar, wallpaper and UI sounds belong to the
   phone frame; another frame has its own.
-- **First version.** Only the phone frame is built at first. The data model is
-  frame-agnostic from day one, so other frames can be added later without
+- **First version.** Only the phone kind is built at first. The data model is
+  frame-agnostic from day one, so other kinds can be added later without
   touching the engine or existing stories.
 
 A new app is a skin and a configuration of one of the templates within a frame,
 with no code. Apps can change look as the story advances by switching skins at
 chosen beats.
+
+**Built so far** (L3d.1): a story declares its own phones in
+`frames/frames.yaml`, each of kind `phone` with its apps in the home screen's
+order - an id, a name, an icon (a file of `media/`), a template (thread,
+inbox, feed, statement) and the content types it shows. An app appears
+`always`, with its first item (the default), or from the Beat that unlocks it
+(`unlock: [<app>]`), at the latest with its first item, so an item never lands
+in an app the player cannot open; an app unlocked stays so, in every phone
+having that id. A declared frame shows what its apps show, so a basic phone
+with Messages only leaves a mail waiting for the smartphone. One named like
+Pit Box's `phone` replaces it in that story. A story with no `frames.yaml`
+keeps Pit Box's phone: Messages, Mail, News, Social and Bank, taking every
+type, those with no app listed by name in Messages. The checks: a frame with
+no app, an app twice, an app showing nothing or what its template cannot, a
+type in two apps of a frame, an icon not in `media/`, a Beat unlocking an app
+no frame has (errors); an app waiting for a Beat none gives (a warning).
+Notifications other than an app's count of unread items wait for a later lot.
 
 ### Skins: how a frame gets its look
 
@@ -202,7 +226,8 @@ changes what the template does, and it never contains code.
   screen area (a rectangle in the image's pixels, and the corners' radius),
   its wallpaper, its status bar style and its UI sounds, then its apps. An app
   has an id, a name, an icon, a template and a layout, the content types it
-  shows, a skin, and when it appears (with its first item, or from a Beat).
+  shows, a skin, and when it appears (always, with its first item, or from a
+  Beat).
 - **A skin** is a folder, `frames/skins/<id>/`, holding `skin.yaml` and its
   files. It is self-contained, so a skin can be copied from one story to
   another. `skin.yaml` gives the colours, the fonts and the **slots** it fills.
@@ -229,8 +254,8 @@ changes what the template does, and it never contains code.
   skin.
 - **The starter kit.** For each template and layout, a template sheet (PNG and
   SVG) shows the slots, their reference sizes, the stretch margins and the
-  safe areas. The author draws over it, cuts the pieces and drops them in the
-  Frame screen. The sheets ship with Pit Box and can be saved from the Frame
+  safe areas: what images to make, whatever the tool, to drop in the Frame
+  screen. The sheets ship with Pit Box and can be saved from the Frame
   screen.
 - **The Frame screen** lists a frame's apps and, for each, its slots as drop
   zones, with a live preview filled with sample content and the checks
@@ -903,14 +928,16 @@ The player side follows each story's settings. What the engine needs:
   game resumes on the story as it is now, or is refused with the reason. A
   game reopened in the middle of a dialogue goes on from the line the player
   was reading, the lines before it counting as read; a new game forgets it.
-- **The phone** has a home screen of apps, each for the content types it has
-  a template for: Messages (threads) for messages, Mail (inbox) for mails,
-  News and Social (feeds) for articles and social posts, Bank (statement) for
-  statements, under the balance when the story has money. An app appears with
-  its first item, Messages always; each shows how many of its items are
-  unread or wait for a reply, and an app's way back home is marked when
-  another one has some. The phone opens on Messages, and goes back to it when
-  an event comes to wait. Messages lists one thread per sender, the latest
+- **The phone** has a home screen of the frame's apps, each a template for
+  some content types - with Pit Box's phone: Messages (threads) for messages,
+  Mail (inbox) for mails, News and Social (feeds) for articles and social
+  posts, Bank (statement) for statements, under the balance when the story
+  has money. A story's own phone shows its apps, with their names and icons
+  (initials without one), as its `frames.yaml` says. Each app shows how many
+  of its items are unread or wait for a reply, and an app's way back home is
+  marked when another one has some. The phone opens on its first messaging
+  app, and goes back to it when an event comes to wait; a phone without one
+  opens on its home screen, and the next event is then a card on the scene. Messages lists one thread per sender, the latest
   first, the unread ones marked; a thread opened marks its messages seen and
   offers the replies of its open message. Mail lists the latest first; a mail
   opened is seen and offers its replies. A feed or a statement opened is read
@@ -1082,7 +1109,7 @@ The settings live in the `settings` part of each story's `story.yaml`.
 | L3 | Story Mode: hub, phone with thread, inbox, feed and statement templates, events with retries and failure pools; the dialogue layer and stories with no frame | A first chapter is playable end to end |
 | L3b | Visual novel: line log, fast-forward and auto-advance, illustrations, transitions, saving during a dialogue, read-only graph view of the flow | A story with no frame plays like a visual novel |
 | L3c | Scenes: places and variants, still image or video loop, ambient sound, blur, the Scenes screen and its preview; examples in the sample | Dialogues and the frame stand in a place |
-| L3d | Frames and skins: `frames.yaml`, successive phones, apps (name, icon, template, layout, content types), skins and their slots, status bar, wallpaper, UI sounds, the Frame screen, the starter kit and the author guide; the agenda template, the call screen, documents on the scene and the `page` layout; examples in the sample | An author gives the story the look they drew |
+| L3d | Frames and skins: `frames.yaml`, successive phones, apps (name, icon, template, layout, content types), skins and their slots, status bar, wallpaper, UI sounds, the Frame screen, the starter kit and the author guide; the agenda template, the call screen, documents on the scene and the `page` layout, a TV and a landline on the scene; examples in the sample | An author gives the story the look they drew |
 | L4 | Story package: build, permissions, download, install and update (mechanism chosen at implementation) | A player installs a bundled story in one click |
 | L5 | Playtest and Timeline | An author checks years of story in minutes |
 | L6 | Balance simulator, catalogs, economy, side events | Money pressure is tuned on numbers |
@@ -1102,6 +1129,4 @@ The settings live in the `settings` part of each story's `story.yaml`.
       textures) versus what CSP configs can already do (seasonal looks, hiding
       objects).
 - [ ] **Platform scope**: which story settings to expose in the first version.
-- [ ] **Hand-drawn frames**: whether a frame drawn by hand fits in images,
-      colours, fonts and stretch margins over the templates, or needs more;
-      to try with an author's sketch on the starter kit before L3d.
+

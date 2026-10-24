@@ -29,7 +29,7 @@
   } from "$lib/story/studioState.svelte";
   import { storyNames, variantIds } from "$lib/story/scenes";
   import { contentIds, newContent } from "$lib/story/content";
-  import { nameFrom } from "$lib/story/world";
+  import { nameFrom, parseList } from "$lib/story/world";
   import { KIND_LABEL } from "$lib/story/labels";
   import { frameLabel, framesWith } from "$lib/story/frames";
   import { setOptional } from "$lib/story/fields";
@@ -60,6 +60,8 @@
    * in use, and `none`, which clears them. */
   const weathers = $derived(["none", ...storyNames(story.scenes.value, chapters, "weather")]);
   const moods = $derived(["none", ...storyNames(story.scenes.value, chapters, "mood")]);
+  /** The apps a Beat can unlock: those of the story's own phones. */
+  const appIds = $derived([...new Set((story.frames.value?.frames ?? []).flatMap((f) => f.apps.map((a) => a.id)))]);
 
   let idError = $state<string | null>(null);
 
@@ -192,8 +194,8 @@
     <Field label={t("story.studio.frame")}>
       <select class="input" value={beat.frame ?? ""} onchange={(e) => setOpt(beat, "frame", value(e))}>
         <option value="">{t("story.studio.frameUnchanged")}</option>
-        {#each framesWith(beat.frame) as f (f)}
-          <option value={f}>{frameLabel(f)}</option>
+        {#each framesWith(beat.frame, story.frames.value) as f (f)}
+          <option value={f}>{frameLabel(f, story.frames.value)}</option>
         {/each}
       </select>
     </Field>
@@ -239,6 +241,19 @@
         />
       </Field>
     </div>
+    <Field label={t("story.studio.unlock")}>
+      <input
+        class="input mono"
+        value={(beat.unlock ?? []).join(", ")}
+        placeholder={appIds.join(", ")}
+        onchange={(e) => {
+          const ids = parseList(value(e));
+          if (ids.length) beat.unlock = ids;
+          else delete beat.unlock;
+          save();
+        }}
+      />
+    </Field>
     <datalist id="beat-weathers">{#each weathers as w (w)}<option value={w}></option>{/each}</datalist>
     <datalist id="beat-moods">{#each moods as m (m)}<option value={m}></option>{/each}</datalist>
   {:else if kind === "message"}

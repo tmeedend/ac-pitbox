@@ -1,0 +1,41 @@
+# The phones the character owns over the story, each built on the kind of
+# frame Pit Box ships (`phone`). The story starts on a basic phone with
+# messages only; a Beat hands over a smartphone at chapter 2. What a frame
+# has no app for waits for one that has.
+frames:
+  - id: basic_phone
+    kind: phone
+    name: Basic phone
+    apps:
+      - id: messages
+        name: Messages
+        template: thread
+        shows: [message]
+        appears: always
+  - id: smartphone
+    kind: phone
+    name: Smartphone
+    apps:
+      - id: messages
+        name: Messages
+        template: thread
+        shows: [message]
+        appears: always
+      - id: mail
+        name: Mail
+        template: inbox
+        shows: [mail]
+      # Shown from the Beat that hands the phone over, before any article.
+      - id: news
+        name: Motorsport News
+        template: feed
+        shows: [article]
+        appears: beat
+      - id: social
+        name: Paddock
+        template: feed
+        shows: [social_post]
+      - id: bank
+        name: Bank
+        template: statement
+        shows: [statement]
