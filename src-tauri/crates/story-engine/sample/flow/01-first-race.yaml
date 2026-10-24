@@ -20,7 +20,7 @@ nodes:
   - id: garage
     action: visit_garage
   - id: count_visit
-    beat: { effects: ["counter.garage_visits += 1"] }
+    beat: { effects: ["counter.garage_visits += 1"], scene: garage }
   - id: enough_visits
     branch:
       - if: ["counter.garage_visits >= 2"]

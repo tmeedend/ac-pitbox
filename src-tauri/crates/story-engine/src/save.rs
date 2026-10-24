@@ -366,6 +366,60 @@ mod tests {
         );
     }
 
+    // The place, its forced variant, the weather and the mood are saved; a
+    // save written before scenes existed has none of them, reads, and
+    // resumes with no place - a plain background until a Beat sets one,
+    // rather than a starting place that may belong to another chapter.
+    #[test]
+    fn the_scene_is_saved_and_a_save_from_before_scenes_has_none() {
+        let mut files = minimal();
+        files[0].text = files[0].text.replace(
+            "frame: phone",
+            "frame: phone
+  scene: garage",
+        );
+        files.push(crate::load::SourceFile::new(
+            crate::scene::SCENES,
+            "scenes:
+  - id: garage
+    variants:
+      - { id: day, file: day.webp }
+",
+        ));
+        let story = Story::from_sources(files).unwrap();
+        let mut state = State::new(&story, 0);
+        assert_eq!(
+            state.scene.as_deref(),
+            Some("garage"),
+            "a new game starts on the starting place"
+        );
+        (state.variant, state.weather, state.mood) = (Some("day".into()), Some("rain".into()), Some("calm".into()));
+        let back = Save::from_json(&Save::new(&story, &state).to_json()).unwrap();
+        assert_eq!(
+            (
+                back.state.scene,
+                back.state.variant,
+                back.state.weather,
+                back.state.mood
+            ),
+            (
+                state.scene.clone(),
+                state.variant.clone(),
+                state.weather.clone(),
+                state.mood.clone()
+            ),
+            "all four saved"
+        );
+
+        let mut json: serde_json::Value = serde_json::from_str(&Save::new(&story, &state).to_json()).unwrap();
+        for key in ["scene", "variant", "weather", "mood"] {
+            json["state"].as_object_mut().unwrap().remove(key);
+        }
+        let old = Save::from_json(&json.to_string()).expect("a save without a scene reads");
+        let resumed = old.resume(&story).expect("resumes");
+        assert_eq!(resumed.scene, None, "no place invented");
+    }
+
     // A game saved at a choice point resumes there; a story update that
     // removed that choice point says so instead of resuming somewhere else.
     #[test]

@@ -34,6 +34,7 @@ pub mod model;
 pub mod refs;
 pub mod sample;
 pub mod save;
+pub mod scene;
 pub mod script;
 pub mod state;
 pub mod time;
@@ -251,6 +252,40 @@ mod tests {
             state.content_facts("invite_02").delivered,
             0,
             "the branch skipped the second ask"
+        );
+    }
+
+    // The sample shows its places (SPEC-story-mode, Scenes, frame and
+    // sound): the bedroom at the start, the garage once visited; in chapter
+    // 3 the dialogue plays in its own place, the garage, at night since the
+    // Beat before it set the clock to the evening, while the current place
+    // stays the bedroom.
+    #[test]
+    fn the_sample_shows_its_places_and_their_variants() {
+        let story = sample();
+        let mut state = State::new(&story, 1);
+        assert_eq!(state.scene.as_deref(), Some("bedroom"), "the starting place");
+        state = up_to_chapter_3(&story);
+        let view = crate::view::play_view(&story, &state);
+        let current = view.scene.expect("a place");
+        assert_eq!(
+            (current.place.as_str(), current.variant.as_str()),
+            ("bedroom", "default")
+        );
+        let talk = (view.items.iter()).find(|i| i.content == "talk_01").unwrap();
+        let own = talk.scene.as_ref().expect("its own place");
+        assert_eq!(
+            (own.place.as_str(), own.variant.as_str()),
+            ("garage", "night"),
+            "21:30 is the evening"
+        );
+        assert_eq!(own.file, "scenes/garage_night.webp");
+        answer_the_dialogue(&story, &mut state);
+        drive(&story, &mut state, "race_03", 4);
+        assert_eq!(state.scene.as_deref(), Some("bedroom"), "back home with the phone");
+        assert_eq!(
+            state.variant, None,
+            "the forced daylight ended with the place set again"
         );
     }
 

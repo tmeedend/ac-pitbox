@@ -14,6 +14,7 @@ use std::path::Path;
 use serde::de::DeserializeOwned;
 
 use crate::model::*;
+use crate::scene::{Place, Scenes, SCENES};
 
 /// The story's drivers (SPEC-story-mode, Drivers).
 pub const ROSTER: &str = "drivers/roster.yaml";
@@ -59,6 +60,8 @@ pub struct Story {
     pub chapters: Vec<Chapter>,
     pub content: Vec<ContentItem>,
     pub events: Vec<Event>,
+    /// `scenes/scenes.yaml`; empty without one.
+    pub scenes: Vec<Place>,
     /// The files under `media/`, as paths inside it; `None` for a story
     /// built in memory, whose media nobody listed.
     pub media: Option<BTreeSet<String>>,
@@ -70,7 +73,7 @@ pub struct Story {
 /// The folders this lot reads. `catalogs/`, `frames/` and `package/` belong
 /// to later lots and are left alone, as is any file of `drivers/` but the
 /// roster (careers come later); `media/` is only listed (`read_media`).
-const READ: [&str; 5] = ["flow", "content", "events", "world", "drivers"];
+const READ: [&str; 6] = ["flow", "content", "events", "world", "drivers", "scenes"];
 
 /// The files under the story's `media/` folder, as paths inside it with
 /// forward slashes (`portraits/a.png`): what the checks need to tell a
@@ -222,6 +225,7 @@ pub struct Draft {
     pub chapters: Vec<Chapter>,
     pub content: Vec<ContentItem>,
     pub events: Vec<Event>,
+    pub scenes: Scenes,
     /// Filled by whoever read the folder (`read_media`), not by `draft`.
     pub media: Option<BTreeSet<String>>,
     pub errors: Vec<LoadError>,
@@ -249,6 +253,8 @@ pub fn draft(mut files: Vec<SourceFile>) -> Draft {
             parse_yaml(file).map(|c| p.characters = c)
         } else if path == ROSTER {
             parse_yaml(file).map(|r| p.roster = r)
+        } else if path == SCENES {
+            parse_yaml(file).map(|s| p.scenes = s)
         } else if in_dir(path, "flow", ".yaml").is_some_and(|rest| !rest.contains('/')) {
             parse_yaml::<Chapter>(file).map(|mut c| {
                 c.file = file.path.clone();
@@ -328,6 +334,7 @@ impl Story {
             chapters,
             content,
             events,
+            scenes,
             media,
             mut errors,
         } = draft;
@@ -374,6 +381,11 @@ impl Story {
             events.iter().map(|e| (e.id.as_str(), e.file.as_str())),
             &mut errors,
         );
+        index_by_id(
+            "scene",
+            scenes.scenes.iter().map(|s| (s.id.as_str(), SCENES)),
+            &mut errors,
+        );
 
         if !errors.is_empty() {
             return Err(errors);
@@ -386,6 +398,7 @@ impl Story {
             chapters,
             content,
             events,
+            scenes: scenes.scenes,
             media,
             nodes,
             content_index,
@@ -461,6 +474,10 @@ impl Story {
 
     pub fn event(&self, id: &str) -> Option<&Event> {
         self.event_index.get(id).map(|&i| &self.events[i])
+    }
+
+    pub fn scene(&self, id: &str) -> Option<&Place> {
+        self.scenes.iter().find(|s| s.id == id)
     }
 
     pub fn character(&self, id: &str) -> Option<&Character> {

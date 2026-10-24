@@ -15,7 +15,19 @@ export interface FlowNode {
   id: string;
   /** `frame`: the frame from this beat on (`none` removes it); left out,
    * it does not change. */
-  beat?: { effects?: string[]; advance?: string; clock?: string; frame?: Frame };
+  beat?: {
+    effects?: string[];
+    advance?: string;
+    clock?: string;
+    frame?: Frame;
+    /** A place of `scenes/scenes.yaml`, from this beat on. */
+    scene?: string;
+    /** A variant of the place forced until a place is set again. */
+    variant?: string;
+    /** `none` clears them. */
+    weather?: string;
+    mood?: string;
+  };
   message?: string;
   wait_reply?: boolean;
   /** Reply label → the node it leads to; a label left out takes `next`. */
@@ -80,7 +92,7 @@ export interface ContentHeader {
   clock?: string;
   /** Dialogue only. */
   characters?: string[];
-  /** Dialogue only: a name, until the story's scenes exist. */
+  /** Dialogue only: the place it plays in, a scene of `scenes/scenes.yaml`. */
   scene?: string;
   /** Illustration only: its picture, a path inside `media/`. */
   picture?: string;
@@ -224,6 +236,8 @@ export interface Start {
   node: string;
   /** Required: the platform never picks a frame for the author. */
   frame: Frame;
+  /** The place at first; none, a plain background. */
+  scene?: string;
   /** `YYYY-MM-DD`; a relative story starts on `0001-01-01`. */
   date: string;
   /** `HH:MM`. */

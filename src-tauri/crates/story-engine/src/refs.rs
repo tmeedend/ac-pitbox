@@ -670,7 +670,10 @@ mod tests {
             ],
             "{found:#?}"
         );
-        assert_eq!(found[1].text, "beat: { effects: [\"counter.garage_visits += 1\"] }");
+        assert_eq!(
+            found[1].text,
+            "beat: { effects: [\"counter.garage_visits += 1\"], scene: garage }"
+        );
         assert_eq!(
             usages(&sample(), NameKind::Character, "sponsor").len(),
             2,

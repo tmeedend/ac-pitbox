@@ -200,6 +200,8 @@ struct StartYaml<'a> {
     /// Always written: there is no default frame to leave out.
     frame: &'a Frame,
     #[serde(skip_serializing_if = "Option::is_none")]
+    scene: Option<&'a String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     date: Option<&'a StoryDate>,
     #[serde(skip_serializing_if = "Option::is_none")]
     clock: Option<&'a Clock>,
@@ -270,6 +272,7 @@ impl<'a> ManifestYaml<'a> {
             start: StartYaml {
                 node: &m.start.node,
                 frame: &m.start.frame,
+                scene: m.start.scene.as_ref(),
                 date: unless(&m.start.date, &StoryDate::RELATIVE_START),
                 clock: unless(&m.start.clock, &Clock::default()),
                 reputation: nonzero(m.start.reputation),
@@ -304,6 +307,7 @@ pub fn new_story(
         start: Start {
             node: "start".into(),
             frame,
+            scene: None,
             date: StoryDate::RELATIVE_START,
             clock: Clock::default(),
             reputation: 0,

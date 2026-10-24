@@ -10,6 +10,7 @@ function item(content: string, o: Partial<SeenItem> = {}): SeenItem {
     characters: [],
     picture: null,
     transition: "fade",
+    scene: null,
     date: "2001-03-01",
     clock: "09:00",
     steps: [],

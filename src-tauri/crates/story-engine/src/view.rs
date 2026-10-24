@@ -10,6 +10,7 @@ use serde::Serialize;
 use crate::engine::{difficulty_step, fee_due, offers, Offer, Step};
 use crate::load::Story;
 use crate::model::{DateDisplay, EventType, Session, Transition};
+use crate::scene::Shown;
 use crate::state::{Happening, State, Wait};
 
 /// The game as the screen shows it.
@@ -18,6 +19,9 @@ pub struct PlayView {
     pub title: String,
     /// The active frame: `none`, or a frame's name.
     pub frame: String,
+    /// The place behind the frame, as it shows now; none, a plain
+    /// background.
+    pub scene: Option<Shown>,
     /// `YYYY-MM-DD` and `HH:MM`, in the story's time.
     pub date: String,
     pub clock: String,
@@ -47,6 +51,8 @@ pub struct SeenItem {
     pub picture: Option<String>,
     /// How a dialogue or an illustration comes on the scene.
     pub transition: Transition,
+    /// A dialogue's own place, as it shows now; none, the current one.
+    pub scene: Option<Shown>,
     /// When it arrived; an item's own clock wins over the story's.
     pub date: String,
     pub clock: String,
@@ -101,6 +107,7 @@ pub fn play_view(story: &Story, state: &State) -> PlayView {
                     characters: item.map(|i| i.characters.clone()).unwrap_or_default(),
                     picture: item.and_then(|i| i.picture.clone()),
                     transition: item.and_then(|i| i.transition).unwrap_or_default(),
+                    scene: (item.and_then(|i| i.scene.as_deref())).and_then(|p| state.scene_shown(story, p)),
                     date: entry.date.to_string(),
                     clock: item.and_then(|i| i.clock).unwrap_or(entry.clock).to_string(),
                     steps: Vec::new(),
@@ -143,6 +150,7 @@ pub fn play_view(story: &Story, state: &State) -> PlayView {
     PlayView {
         title: story.manifest.title.clone(),
         frame: state.frame.as_ref().unwrap_or(&story.manifest.start.frame).to_string(),
+        scene: (state.scene.as_deref()).and_then(|p| state.scene_shown(story, p)),
         date: state.date.to_string(),
         clock: state.clock.to_string(),
         date_display: story.settings().date,

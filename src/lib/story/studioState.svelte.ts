@@ -36,7 +36,7 @@ export type StudioSection = "flow" | "events" | "content" | "drivers" | "world" 
 /** The section whose files hold `file` (a diagnostic's, say, which may end
  * with `:<line>`): `story.yaml` is the Settings', `world/` the World's,
  * `drivers/` the Drivers', `events/` the Events', `content/` the Contents',
- * the rest the flow's. */
+ * the rest the flow's - `scenes/` included, until it has a screen. */
 export function sectionOf(file: string): StudioSection {
   if (file === "story.yaml") return "settings";
   if (file.startsWith("drivers/")) return "drivers";

@@ -107,14 +107,15 @@ fn check(story: &Story) -> ExitCode {
     let ok = report(story);
     let m = &story.manifest;
     println!(
-        "{} ({} v{}): {} chapters, {} nodes, {} content items, {} events",
+        "{} ({} v{}): {} chapters, {} nodes, {} content items, {} events, {} scenes",
         m.title,
         m.id,
         m.version,
         story.chapters.len(),
         story.nodes().count(),
         story.content.len(),
-        story.events.len()
+        story.events.len(),
+        story.scenes.len()
     );
     if ok {
         ExitCode::SUCCESS
@@ -286,6 +287,11 @@ fn show(story: &Story, state: &State, out: &[Output]) {
             }
             Output::TimeMoved { to } => println!("\n—— {to} ——"),
             Output::FrameChanged { to } => println!("[frame: {to}]"),
+            // The variant as it shows once the beat is over, its clock set.
+            Output::SceneChanged { place, .. } => match state.scene_shown(story, place) {
+                Some(shown) => println!("[scene: {place}, {} — {}]", shown.variant, shown.file),
+                None => println!("[scene: {place}, not declared]"),
+            },
             Output::Held { content } => println!("[{content} waits for a frame that can show it]"),
             // The prompt says what is awaited.
             Output::AwaitEvent { .. }

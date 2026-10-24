@@ -5,12 +5,12 @@ id: ch03
 title: Chapter 3
 nodes:
   - id: face_to_face
-    beat: { frame: none }
+    beat: { frame: none, scene: bedroom, clock: "21:30" }
   - id: talk
     message: talk_01
     on_reply: { another: keen, rest: resting }
   - id: keen
-    beat: { effects: ["reputation += 1"] }
+    beat: { effects: ["reputation += 1"], scene: garage, mood: tense }
     next: race_03
   - id: resting
     beat: { effects: ["rel.parent += 1"] }
@@ -19,9 +19,10 @@ nodes:
   - id: crossing_the_line
     message: finish_line
   - id: a_week_later
-    beat: { advance: 1 week }
+    # A week later, the garage by day whatever the clock says.
+    beat: { advance: 1 week, mood: none, scene: garage, variant: day }
   - id: phone_back
-    beat: { frame: phone }
+    beat: { frame: phone, scene: bedroom }
   - id: finale
     side_events: { close: [track_day_01] }
   - id: the_end

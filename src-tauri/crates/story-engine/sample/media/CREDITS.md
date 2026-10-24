@@ -16,3 +16,6 @@ Scenes, frame and sound: assets come from anywhere).
 | `portraits/friend_neutral.png` | Made for Pit Box: a 1 × 1 placeholder, to be replaced | Pit Box contributors | CC0 1.0 |
 | `portraits/friend_happy.png` | Made for Pit Box: a 1 × 1 placeholder, to be replaced | Pit Box contributors | CC0 1.0 |
 | `illustrations/finish_line.png` | Made for Pit Box: a 1 × 1 placeholder, to be replaced | Pit Box contributors | CC0 1.0 |
+| `scenes/bedroom.webp` | Made for Pit Box: a plain gradient placeholder, to be replaced | Pit Box contributors | CC0 1.0 |
+| `scenes/garage_day.webp` | Made for Pit Box: a plain gradient placeholder, to be replaced | Pit Box contributors | CC0 1.0 |
+| `scenes/garage_night.webp` | Made for Pit Box: a plain gradient placeholder, to be replaced | Pit Box contributors | CC0 1.0 |

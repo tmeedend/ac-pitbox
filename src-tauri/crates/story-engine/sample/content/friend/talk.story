@@ -2,6 +2,7 @@
 id: talk_01
 type: dialogue
 characters: [friend]
+scene: garage
 ---
 friend: Face to face, no phone this time. #expression:happy #position:left
 friend: Another race, or a break?

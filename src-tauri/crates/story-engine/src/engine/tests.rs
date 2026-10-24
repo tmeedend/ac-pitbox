@@ -832,3 +832,64 @@ fn success_criteria_all_hold_and_a_forced_verdict_wins() {
         }
     ));
 }
+
+// SPEC-story-mode, Scenes, frame and sound: a Beat sets the place, forces
+// one of its variants, and sets the weather and the mood, each kept until a
+// Beat changes it; a place set again lets the state pick its variant again,
+// and `none` clears a weather or a mood. The place and a forced variant are
+// said when they change.
+#[test]
+fn beats_set_the_place_its_variant_the_weather_and_the_mood() {
+    let flow = "id: ch\nnodes:
+  - id: start
+    beat: { scene: garage, weather: rain, mood: tense }
+  - id: one
+    action: a
+  - id: forced
+    beat: { variant: day }
+  - id: two
+    action: b
+  - id: again
+    beat: { scene: garage, weather: none }
+  - id: three
+    action: c
+  - id: end
+    end: done
+";
+    let story = story("", flow, &[]);
+    let mut state = State::new(&story, 7);
+    assert_eq!(state.scene, None, "no starting place: a plain background");
+    let said = |out: &[Output]| -> Vec<Output> {
+        (out.iter())
+            .filter(|o| matches!(o, Output::SceneChanged { .. }))
+            .cloned()
+            .collect()
+    };
+    let out = run(&story, &mut state).unwrap();
+    assert_eq!(
+        said(&out),
+        [Output::SceneChanged {
+            place: "garage".into(),
+            variant: None
+        }]
+    );
+    assert_eq!(
+        (state.weather.as_deref(), state.mood.as_deref()),
+        (Some("rain"), Some("tense"))
+    );
+
+    let out = submit(&story, &mut state, Input::ActionDone { action: "a".into() }).unwrap();
+    assert_eq!(state.variant.as_deref(), Some("day"), "forced on the current place");
+    assert_eq!(
+        said(&out),
+        [Output::SceneChanged {
+            place: "garage".into(),
+            variant: Some("day".into())
+        }]
+    );
+
+    submit(&story, &mut state, Input::ActionDone { action: "b".into() }).unwrap();
+    assert_eq!(state.variant, None, "the place set again picks its variant again");
+    assert_eq!(state.weather, None, "`none` clears the weather");
+    assert_eq!(state.mood.as_deref(), Some("tense"), "the mood is kept");
+}

@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::expr::{Condition, Criterion, Effect};
 use crate::frame::Frame;
+use crate::scene::SceneId;
 use crate::script::{self, Script, ScriptError};
 use crate::time::{Clock, Span, StoryDate};
 
@@ -68,6 +69,10 @@ pub struct Start {
     /// What shows the story at first, `none` for a visual novel. Required,
     /// with no default: the platform never picks a frame for the author.
     pub frame: Frame,
+    /// The place behind the frame at first (`scenes/scenes.yaml`); none,
+    /// a plain background until a Beat sets one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scene: Option<SceneId>,
     #[serde(default = "relative_start")]
     pub date: StoryDate,
     #[serde(default)]
@@ -386,6 +391,20 @@ pub struct Beat {
     /// `send` in the same beat goes to the new frame.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub frame: Option<Frame>,
+    /// The place from this beat on (SPEC-story-mode, Scenes, frame and
+    /// sound), its variant picked by the state again.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scene: Option<SceneId>,
+    /// A variant of the place - this beat's, else the current one - shown
+    /// whatever the state, until a Beat sets a place again.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub variant: Option<String>,
+    /// The story's weather and mood from this beat on, which scene variants
+    /// can ask for; `none` clears it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub weather: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mood: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -618,9 +637,9 @@ pub struct ContentItem {
     pub placement: Placement,
     /// Dialogue only: the characters present, shown as portraits.
     pub characters: Vec<CharacterId>,
-    /// Dialogue only: where it is played; the current scene otherwise. A
-    /// name kept as written until the story's scenes exist.
-    pub scene: Option<String>,
+    /// Dialogue only: the place it is played in, a scene of
+    /// `scenes/scenes.yaml`; the current place otherwise.
+    pub scene: Option<SceneId>,
     /// Illustration only: its picture, a path inside the story's `media/`.
     pub picture: Option<String>,
     /// Dialogue or illustration only: how it comes on the scene; a fade

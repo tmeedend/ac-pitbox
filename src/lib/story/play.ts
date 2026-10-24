@@ -21,6 +21,18 @@ export interface Playable {
   game: { ended: boolean; problem: string | null } | null;
 }
 
+/** A place as it shows now (`story_engine::scene::Shown`). */
+export interface SceneShown {
+  place: string;
+  variant: string;
+  /** A path inside the story's `media/`. */
+  file: string;
+  /** A video loop rather than a still image. */
+  video: boolean;
+  blur: boolean;
+  ambient: string | null;
+}
+
 /** One delivery of a content item and what was said in it since. */
 export interface SeenItem {
   content: string;
@@ -31,6 +43,8 @@ export interface SeenItem {
   picture: string | null;
   /** How a dialogue or an illustration comes on the scene. */
   transition: Transition;
+  /** A dialogue's own place; `null`, the current one. */
+  scene: SceneShown | null;
   date: string;
   clock: string;
   steps: PlayerStep[];
@@ -63,6 +77,8 @@ export interface PlayView {
   title: string;
   /** `none`, or a frame's name. */
   frame: string;
+  /** The place behind the frame; `null`, a plain background. */
+  scene: SceneShown | null;
   date: string;
   clock: string;
   date_display: DateDisplay;

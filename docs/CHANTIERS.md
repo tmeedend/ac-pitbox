@@ -817,16 +817,35 @@ de reprendre. En cas d'écart, la spec fait foi.
           `documents/race_photo.webp` (1200 × 800, une course sans livrée
           reconnaissable).
       - **L3c, les scènes — découpage validé (2026-10-24).**
-        - **L3c.1, le moteur.** `scenes/scenes.yaml` : des lieux, chacun avec
-          ses variantes (saison, heure, météo, humeur), un fichier dans
-          `media/scenes/`, un flou et une ambiance. Un Beat pose la scène
-          courante et peut imposer une variante ; la `scene` d'un dialogue
-          devient un lieu vérifié. Le moteur choisit la variante d'après le
-          temps de l'histoire et l'horloge ; la scène courante va dans la
-          sauvegarde (champ ajouté, valeur par défaut). Contrôles : lieu
-          inconnu, fichier absent, lieu sans variante par défaut. Exemple :
-          une chambre, et un garage de jour et de nuit, posés par les Beats
-          des chapitres 1 et 3.
+        - **L3c.1, le moteur — fait (2026-10-24).** `scenes/scenes.yaml`
+          lu (`scene.rs`), le lieu courant, la variante imposée, la météo et
+          l'humeur dans l'état (champs ajoutés, absents d'une ancienne
+          sauvegarde), posés par `start.scene` et les Beats ; la `scene`
+          d'un dialogue devient un lieu vérifié ; la vue joueur porte la
+          scène courante et celle d'un dialogue (`PlayView.scene`,
+          `SeenItem.scene`), que rien n'affiche encore ; `story-tool` dit les
+          changements de lieu. Exemple : la chambre au départ, le garage
+          après la visite (chapitre 1), le dialogue du chapitre 3 au garage
+          de nuit, une variante « tendue » par l'humeur, le jour imposé une
+          semaine plus tard, retour à la chambre avec le téléphone. Les
+          images sont des dégradés provisoires ; l'ambiance attend
+          `scenes/garage.ogg`.
+          **Choisi sans demander** (dans la spec) : la première variante qui
+          convient, dans l'ordre du fichier, la dernière en repli ; saisons
+          de l'hémisphère nord, tranches horaires 5 h / 12 h / 18 h / 22 h ;
+          `none` efface météo et humeur ; une variante imposée ne vaut que
+          pour le lieu courant et tombe quand un Beat repose un lieu ; une
+          sauvegarde d'avant les scènes reprend sans lieu ; flou par défaut.
+          **Choisi sans demander** (détails) : une variante a un `id`
+          obligatoire ; la scène propre d'un dialogue se calcule sur l'état
+          du moment, pas sur celui de son arrivée ; les erreurs de `scenes/`
+          comptent dans la section Fil de l'éditeur, faute d'écran Scènes ;
+          pas de sortie moteur pour un changement de météo ou d'humeur.
+          **Reste pour plus tard** : l'hémisphère sud (un réglage d'histoire) ;
+          un Beat qui impose une variante sans nommer de lieu n'est vérifié
+          que contre l'ensemble des lieux (le lieu courant n'est pas connu
+          sans jouer) : imposée sur un lieu qui ne l'a pas, elle est ignorée
+          sans un mot.
         - **L3c.2, le joueur.** Le fond de `PlayScreen` devient la scène :
           image ou boucle vidéo, flou réglable (plus net quand la scène
           occupe l'écran), fondu ou coupe au changement, l'ambiance en

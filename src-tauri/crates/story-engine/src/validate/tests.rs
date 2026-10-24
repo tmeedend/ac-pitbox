@@ -683,3 +683,111 @@ friend: Bye. #leave
         "the dialogue is fine: {d:#?}"
     );
 }
+
+const SCENES: &str = "scenes:
+  - id: garage
+    ambient: garage.wav
+    variants:
+      - { id: day, file: day.webp }
+      - { id: night, time: [night], file: night.webm }
+      - { id: day, file: day.gif, ambient: hum.txt }
+      - { id: rain, weather: [rain], mood: [calm], file: gone.webp }
+      - { id: flashback, mood: [lost], file: day.webp }
+  - id: empty
+    variants: []
+";
+
+// The scenes (SPEC-story-mode, Scenes, frame and sound): each place has
+// something to show, each variant once; a variant after one that always
+// holds never shows; files are inside `media/` and of a kind the scene
+// plays; a weather or mood no Beat sets is never met.
+#[test]
+fn scenes_have_reachable_variants_with_files_the_scene_can_play() {
+    // `flashback` comes after an always-holding variant and asks for a mood
+    // no Beat sets, but a Beat forces it: it shows, nothing to say.
+    let flow = "id: ch01
+nodes:
+  - id: start
+    beat: { scene: garage, variant: flashback }
+  - id: end
+    end: done
+";
+    let mut d = draft(with(
+        with(minimal(), crate::scene::SCENES, SCENES),
+        "flow/01-one.yaml",
+        flow,
+    ));
+    d.media = Some(BTreeSet::from(
+        ["day.webp", "night.webm", "day.gif", "garage.wav", "hum.txt"].map(String::from),
+    ));
+    let diags = validate(&crate::Story::from_draft(d).unwrap());
+    for needle in [
+        "scene `empty` has no variant",
+        "variant `day` is declared twice",
+        "`day.gif` is neither an image",
+        "ambient `hum.txt` is not a sound",
+        "variant `rain`: `media/gone.webp` does not exist",
+    ] {
+        assert!(has(&diags, Severity::Error, needle), "{needle} in {diags:#?}");
+    }
+    for needle in [
+        "variant `night` never shows: `day`, before it, always does",
+        "no Beat sets the weather `rain`",
+        "no Beat sets the mood `calm`",
+    ] {
+        assert!(has(&diags, Severity::Warning, needle), "{needle} in {diags:#?}");
+    }
+    assert!(
+        !has(&diags, Severity::Error, "garage.wav"),
+        "a listed sound is fine: {diags:#?}"
+    );
+    assert!(
+        !diags.iter().any(|d| d.message.contains("flashback")),
+        "a forced variant shows: {diags:#?}"
+    );
+}
+
+// A place is named where it is used - the start, a Beat, a dialogue - and
+// must be declared; a forced variant must be one of the place's, or of
+// some place when the Beat names none.
+#[test]
+fn a_place_or_variant_named_must_be_declared() {
+    let manifest = minimal()[0]
+        .text
+        .replace("frame: phone", "frame: phone\n  scene: attic");
+    let flow = "id: ch01\nnodes:
+  - id: start
+    beat: { scene: cellar }
+  - id: forced
+    beat: { scene: garage, variant: dusk }
+  - id: anywhere
+    beat: { variant: noon, mood: calm }
+  - id: fine
+    beat: { scene: garage, variant: day }
+  - id: end
+    end: done
+";
+    let talk = "---\nid: talk\ntype: dialogue\nscene: roof\n---\nHello.\n";
+    let diags = diagnostics(&[
+        ("story.yaml", &manifest),
+        (
+            crate::scene::SCENES,
+            "scenes:\n  - id: garage\n    variants:\n      - { id: day, file: day.webp }\n",
+        ),
+        ("flow/01-one.yaml", flow),
+        ("content/talk.story", talk),
+    ]);
+    for needle in [
+        "start: unknown scene `attic`",
+        "unknown scene `cellar` (declare it in scenes/scenes.yaml)",
+        "scene `garage` has no variant `dusk`",
+        "no scene has a variant `noon`",
+        "unknown scene `roof`",
+    ] {
+        assert!(has(&diags, Severity::Error, needle), "{needle} in {diags:#?}");
+    }
+    assert!(
+        !diags.iter().any(|d| d.node.as_deref() == Some("fine")),
+        "a declared place and variant: {diags:#?}"
+    );
+}

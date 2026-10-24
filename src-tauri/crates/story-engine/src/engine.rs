@@ -31,6 +31,11 @@ pub enum Output {
     FrameChanged {
         to: Frame,
     },
+    /// A Beat set the place behind the frame, or forced one of its variants.
+    SceneChanged {
+        place: String,
+        variant: Option<String>,
+    },
     /// Sent while no active frame can show it: it waits for one that can,
     /// and is `Delivered` then.
     Held {
@@ -438,6 +443,7 @@ impl<'a> Run<'a> {
             self.out.push(Output::FrameChanged { to: frame.clone() });
             self.release_held()?;
         }
+        self.set_scene(beat);
         for effect in &beat.effects {
             self.apply_effect(effect)?;
         }
@@ -455,6 +461,34 @@ impl<'a> Run<'a> {
         self.state.date = from.advance(span);
         self.log(Happening::TimeMoved { from });
         self.out.push(Output::TimeMoved { to: self.state.date });
+    }
+
+    /// The place, its forced variant, the weather and the mood a Beat sets
+    /// (SPEC-story-mode, Scenes, frame and sound). A place set again lets
+    /// the state pick its variant again; `none` clears the weather or mood.
+    fn set_scene(&mut self, beat: &Beat) {
+        let state = &mut *self.state;
+        let before = (state.scene.clone(), state.variant.clone());
+        if let Some(place) = &beat.scene {
+            state.scene = Some(place.clone());
+            state.variant = None;
+        }
+        if let Some(variant) = &beat.variant {
+            state.variant = Some(variant.clone());
+        }
+        for (value, into) in [(&beat.weather, &mut state.weather), (&beat.mood, &mut state.mood)] {
+            match value.as_deref() {
+                Some("none") => *into = None,
+                Some(v) => *into = Some(v.to_string()),
+                None => {}
+            }
+        }
+        let after = (state.scene.clone(), state.variant.clone());
+        if after != before {
+            if let (Some(place), variant) = after {
+                self.out.push(Output::SceneChanged { place, variant });
+            }
+        }
     }
 
     /// The frame up now.

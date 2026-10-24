@@ -254,8 +254,8 @@ with none.
   flow, or reactive content). The header of the `.story` item adds the scene
   (optional: the current scene otherwise) and the characters present
   (`characters`); whoever speaks must be among them. A dialogue with choices
-  always holds the flow until it ends. Until the story's scenes exist, a scene
-  is a name kept as written.
+  always holds the flow until it ends. Its scene is a place of
+  `scenes/scenes.yaml` (see Scenes, frame and sound).
 - **Portraits.** A character has one portrait per expression (at least
   `neutral`), picked from the story's media: a file inside `media/`, which the
   checks look for. A line can name the speaker's
@@ -623,7 +623,7 @@ the editor is reserved; they are translated when it opens to all.
   (relations, flags, counters, reputation, followers, money), chooses
   replies, and sees what the conversation changed and which items it sent.
   What is set lasts while Pit Box runs and is never written. A dialogue shows
-  on the 16:9 stage (a plain background until the scenes exist), another item
+  on the 16:9 stage (a plain background: scenes are not drawn yet), another item
   in the frame it can arrive in, in the template of the phone app showing it
   (thread, inbox, feed, statement; a type with no app yet says so), and an
   item no frame can show shows the checks' warning instead. The preview follows every save, and its views
@@ -727,6 +727,11 @@ What is not visible in it:
 - `start.frame` is required: `none`, or a frame Pit Box ships (`phone` so far;
   a story's own frames come with `frames/`). A Beat's `frame` applies before
   its effects, so a `send` in the same Beat goes to the new frame.
+- A place is `start.scene`, a Beat's `scene` or a dialogue's `scene`; a
+  Beat's `variant` forces one, and its `weather` and `mood` are free names.
+  A variant's file is an image (`png`, `webp`, `jpg`) or a video loop
+  (`webm`, `mp4`), an ambient sound an `ogg`, `mp3` or `wav`, each a path
+  inside `media/` like a portrait's.
 - A portrait's path is relative to `media/` and stays inside it, with `/`
   between folders; it is matched with the case it has on disk, since a shared
   story is a zip.
@@ -949,10 +954,31 @@ any story, and each is optional (see Story settings).
 
 - **Scenes.** A scene is a place (a bedroom, a garage, a hotel room) with
   variants by season, time of day, weather and mood, declared in
-  `scenes/scenes.yaml` with their files in `media/scenes/`. A Beat sets the
-  current scene; a dialogue's `scene` names one. The engine picks the
-  variant from story time, the in-story clock and the current beat; a beat can
-  force one. Garage scenes can show the player's current car.
+  `scenes/scenes.yaml` with their files in `media/scenes/`. The start can
+  name the first place; a Beat sets the current one, and a dialogue's
+  `scene` names the place it plays in, the current one staying as it was.
+  Without a place, the background is plain. Garage scenes can show the
+  player's current car.
+  - **Which variant.** The first one, in the order the file lists them,
+    whose criteria all hold - a criterion left out holds always; when none
+    holds, the last one, which is therefore the place's default. A Beat can
+    force a variant of the current place, until a Beat sets a place again.
+  - **What decides.** The season comes from the story's date (northern
+    hemisphere: December to February is winter); the time of day from the
+    clock (morning from 05:00, afternoon from 12:00, evening from 18:00,
+    night from 22:00). Weather and mood are the story's own: a Beat sets
+    them, they stay until a Beat changes them, and `none` clears them. An
+    event's weather is the session's, never the scene's.
+  - **What a variant carries**: its file, whether it is blurred behind the
+    frame (yes unless the variant or the place says otherwise) and its
+    ambient sound, the place's unless it has its own.
+  - **The checks**: a place, a forced variant or a file that does not exist
+    is an error, as is a place with no variant or a file the scene cannot
+    play; a variant after one that always holds, or one asking for a
+    weather or a mood no Beat sets, is a warning: it never shows - unless a
+    Beat forces it.
+  - **A game saved before** the story had scenes resumes with no place,
+    until a Beat sets one.
 - **Media.** A variant is a still image or a seamless video loop, with its
   ambient sound if any. Because the background is blurred, a modest resolution
   and bitrate are enough, which keeps the package smaller.

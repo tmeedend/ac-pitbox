@@ -1,0 +1,23 @@
+# The places behind the frame and the dialogues. A place's variants are
+# tried in order and the first that fits the moment shows; the last one is
+# the default, so the general case comes last.
+scenes:
+  - id: bedroom
+    name: Bedroom
+    variants:
+      - id: default
+        file: scenes/bedroom.webp
+  - id: garage
+    name: Garage
+    variants:
+      # The night before a race, when a Beat says the mood is tense: sharp,
+      # not blurred.
+      - id: tense
+        mood: [tense]
+        file: scenes/garage_night.webp
+        blur: false
+      - id: night
+        time: [evening, night]
+        file: scenes/garage_night.webp
+      - id: day
+        file: scenes/garage_day.webp

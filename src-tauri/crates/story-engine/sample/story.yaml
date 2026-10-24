@@ -10,6 +10,7 @@ languages: [en]
 start:
   node: intro
   frame: phone
+  scene: bedroom
   date: 2001-03-01
   clock: "09:00"
   money: 300

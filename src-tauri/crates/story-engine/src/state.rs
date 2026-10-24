@@ -14,6 +14,7 @@ use crate::expr::{Condition, ContentFact, EventFact, Literal, Var};
 use crate::frame::Frame;
 use crate::load::Story;
 use crate::model::{ContentId, EventId, NodeId, PoolId};
+use crate::scene::{self, SceneId};
 use crate::time::{Clock, StoryDate};
 
 /// What the flow is waiting for. `Running` only exists between two steps of
@@ -183,6 +184,18 @@ pub struct State {
     /// frame, never a frame of the platform's choosing.
     #[serde(default)]
     pub frame: Option<Frame>,
+    /// The place behind the frame (SPEC-story-mode, Scenes, frame and
+    /// sound); none until the start or a Beat sets one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scene: Option<SceneId>,
+    /// The place's variant a Beat forced, until a Beat sets a place again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub variant: Option<String>,
+    /// The story's weather and mood, as the last Beat setting them said.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub weather: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mood: Option<String>,
     pub reputation: i64,
     pub followers: i64,
     pub money: i64,
@@ -228,6 +241,10 @@ impl State {
             date: start.date,
             clock: start.clock,
             frame: Some(start.frame.clone()),
+            scene: start.scene.clone(),
+            variant: None,
+            weather: None,
+            mood: None,
             reputation: start.reputation,
             followers: start.followers,
             money: start.money,
@@ -251,6 +268,20 @@ impl State {
             rng: Rng::new(seed),
             history: Vec::new(),
         }
+    }
+
+    /// Place `id` as it shows now (SPEC-story-mode, Scenes, frame and
+    /// sound); a forced variant is the current place's only.
+    pub fn scene_shown(&self, story: &Story, id: &str) -> Option<scene::Shown> {
+        let forced = self.variant.as_deref().filter(|_| self.scene.as_deref() == Some(id));
+        let now = scene::Now {
+            date: self.date,
+            clock: self.clock,
+            weather: self.weather.as_deref(),
+            mood: self.mood.as_deref(),
+            forced,
+        };
+        scene::shown(story, id, &now)
     }
 
     pub fn event(&self, id: &str) -> EventFacts {

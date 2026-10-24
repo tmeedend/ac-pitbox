@@ -13,7 +13,7 @@ use std::fmt;
 use crate::expr::{Condition, ContentFact, Criterion, Effect, EventFact, Literal, Var};
 use crate::frame::{nowhere, Frame, FrameMap};
 use crate::load::Story;
-use crate::model::{Character, ContentItem, ContentType, Event, EventType, Node, NodeKind, Placement};
+use crate::model::{Beat, Character, ContentItem, ContentType, Event, EventType, Node, NodeKind, Placement};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -69,6 +69,7 @@ pub fn validate(story: &Story) -> Vec<Diagnostic> {
     };
     c.manifest_and_world();
     c.drivers();
+    c.scenes();
     c.flow();
     c.content();
     c.events();
@@ -115,6 +116,9 @@ impl Checker<'_> {
             self.error("story.yaml", format!("start node `{}` does not exist", m.start.node));
         }
         if let Some(why) = unknown_frame(&m.start.frame) {
+            self.error("story.yaml", format!("start: {why}"));
+        }
+        if let Some(why) = m.start.scene.as_deref().and_then(|p| unknown_scene(story, p)) {
             self.error("story.yaml", format!("start: {why}"));
         }
         let scale = &m.settings.relations;
@@ -212,6 +216,104 @@ impl Checker<'_> {
                 self.error(FILE, format!("{at}: an expression is a name, without spaces"));
             }
             self.media_file(FILE, &at, None, path);
+        }
+    }
+
+    /// The scenes (SPEC-story-mode, Scenes, frame and sound): each place
+    /// with something to show, each variant once and reachable, its files
+    /// inside `media/` and of a kind the scene plays, the weather and mood
+    /// it asks for ones a Beat sets - unless a Beat forces it, which shows
+    /// it whatever the state.
+    fn scenes(&mut self) {
+        use crate::scene::{AUDIO, IMAGE, SCENES as FILE, VIDEO};
+        let story = self.story;
+        let set_by_beats = |pick: fn(&Beat) -> &Option<String>| -> HashSet<&str> {
+            (story.nodes())
+                .filter_map(|n| match &n.kind {
+                    NodeKind::Beat(beat) => pick(beat).as_deref().filter(|v| *v != "none"),
+                    _ => None,
+                })
+                .collect()
+        };
+        let (weathers, moods) = (set_by_beats(|b| &b.weather), set_by_beats(|b| &b.mood));
+        let forced = set_by_beats(|b| &b.variant);
+        for place in &story.scenes {
+            let at = format!("scene `{}`", place.id);
+            if place.variants.is_empty() {
+                self.error(FILE, format!("{at} has no variant: nothing to show"));
+            }
+            if let Some(path) = &place.ambient {
+                self.sound(FILE, &at, path, &AUDIO);
+            }
+            let (mut ids, mut always) = (HashSet::new(), None);
+            for v in &place.variants {
+                let at = format!("{at}, variant `{}`", v.id);
+                if !ids.insert(&v.id) {
+                    self.error(FILE, format!("{at} is declared twice"));
+                }
+                let is_forced = forced.contains(v.id.as_str());
+                match always {
+                    Some(first) if !is_forced => {
+                        self.warning(FILE, format!("{at} never shows: `{first}`, before it, always does"))
+                    }
+                    None if v.always() => always = Some(&v.id),
+                    _ => {}
+                }
+                self.media_file(FILE, &at, None, &v.file);
+                let kind = crate::scene::extension(&v.file).unwrap_or_default();
+                if !IMAGE.contains(&kind.as_str()) && !VIDEO.contains(&kind.as_str()) {
+                    self.error(
+                        FILE,
+                        format!(
+                            "{at}: `{}` is neither an image ({}) nor a video loop ({})",
+                            v.file,
+                            IMAGE.join(", "),
+                            VIDEO.join(", ")
+                        ),
+                    );
+                }
+                if let Some(path) = &v.ambient {
+                    self.sound(FILE, &at, path, &AUDIO);
+                }
+                for (what, wanted, set) in [("weather", &v.weather, &weathers), ("mood", &v.mood, &moods)] {
+                    for w in wanted.iter().filter(|w| !is_forced && !set.contains(w.as_str())) {
+                        self.warning(
+                            FILE,
+                            format!("{at}: no Beat sets the {what} `{w}`, so it never shows on it"),
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// An ambient sound: a file inside `media/`, of a kind the scene plays.
+    fn sound(&mut self, file: &str, at: &str, path: &str, kinds: &[&str]) {
+        self.media_file(file, at, Some("ambient"), path);
+        if !kinds.contains(&crate::scene::extension(path).unwrap_or_default().as_str()) {
+            self.error(
+                file,
+                format!("{at}: ambient `{path}` is not a sound ({})", kinds.join(", ")),
+            );
+        }
+    }
+
+    /// A Beat's place and forced variant: ones the scenes declare.
+    fn beat_scene(&mut self, file: &str, at: &str, beat: &Beat) {
+        let story = self.story;
+        if let Some(why) = beat.scene.as_deref().and_then(|p| unknown_scene(story, p)) {
+            self.error(file, format!("{at}: {why}"));
+        }
+        let Some(variant) = &beat.variant else { return };
+        let has = |p: &crate::scene::Place| p.variants.iter().any(|v| &v.id == variant);
+        match beat.scene.as_deref().map(|p| story.scene(p)) {
+            Some(Some(place)) if !has(place) => {
+                self.error(file, format!("{at}: scene `{}` has no variant `{variant}`", place.id))
+            }
+            None if !story.scenes.iter().any(has) => {
+                self.error(file, format!("{at}: no scene has a variant `{variant}`"))
+            }
+            _ => {}
         }
     }
 
@@ -394,6 +496,7 @@ impl Checker<'_> {
                         if let Some(why) = beat.frame.as_ref().and_then(unknown_frame) {
                             self.error(file, format!("{at}: {why}"));
                         }
+                        self.beat_scene(file, &at, beat);
                     }
                     NodeKind::Message {
                         content,
@@ -517,6 +620,9 @@ impl Checker<'_> {
         }
         if !dialogue && item.scene.is_some() {
             self.error(&header, format!("{at}: `scene` is for a dialogue"));
+        }
+        if let Some(why) = item.scene.as_deref().and_then(|p| unknown_scene(story, p)) {
+            self.error(&header, format!("{at}: {why}"));
         }
         self.picture(item, &header, &at);
         if item.transition.is_some() && !item.kind.on_scene() {
@@ -871,6 +977,14 @@ fn unknown_frame(frame: &Frame) -> Option<String> {
             shipped.join(", ")
         )
     })
+}
+
+/// Why a story cannot name place `id`, if it cannot.
+fn unknown_scene(story: &Story, id: &str) -> Option<String> {
+    story
+        .scene(id)
+        .is_none()
+        .then(|| format!("unknown scene `{id}` (declare it in {})", crate::scene::SCENES))
 }
 
 /// Why `path` is not a file inside `media/`, if it is not: a shared story
