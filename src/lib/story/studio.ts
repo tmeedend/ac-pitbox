@@ -1,5 +1,5 @@
 // Typed bridge to the Create Your Own commands (`commands/story.rs`, over
-// `src-tauri/src/story/studio.rs`). Every type mirrors its Rust twin - keep
+// `src-tauri/src/story/studio/`). Every type mirrors its Rust twin - keep
 // them aligned. A chapter travels in the shape of its YAML file
 // (`story_engine::model`): what the editor shows is what the file says.
 import { invoke } from "@tauri-apps/api/core";

@@ -121,7 +121,7 @@ de reprendre. En cas d'écart, la spec fait foi.
           le fil de l'un d'eux, nœud par nœud, avec le panneau du nœud
           sélectionné et la vérification du moteur relancée après chaque
           enregistrement. Le moteur entre dans l'app par le seul domaine
-          Story (`src-tauri/src/story/studio.rs`, `commands/story.rs`,
+          Story (`src-tauri/src/story/studio/`, `commands/story.rs`,
           `src/lib/story/`). Il sait désormais **écrire** un chapitre
           (`write.rs`, forme canonique relue avant d'être rendue) et
           rattache un diagnostic à son nœud. **Choisi en route, avec
