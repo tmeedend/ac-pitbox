@@ -193,86 +193,68 @@ pub fn svg(sheet: &Sheet) -> String {
         );
     }
     for (i, p) in sheet.pieces.iter().enumerate() {
-        // The background is the whole sheet: drawn as its outline, the rest
-        // over it in a colour of their own.
-        let whole = p.w == w && p.h == h;
-        let (fill, stroke) = if whole {
-            ("none", "#9a9aa8")
-        } else {
-            (["#dce8ff", "#ffe2d6", "#dff3df", "#f1e2fb"][i % 4], "#3b4a6b")
-        };
-        let _ = writeln!(
-            out,
-            r##"<rect x="{}" y="{}" width="{}" height="{}" fill="{fill}" stroke="{stroke}" stroke-width="3"/>"##,
-            p.x, p.y, p.w, p.h
-        );
-        let [t, r, b, l] = p.margins;
-        let dash = r##"stroke="#d0533a" stroke-width="2" stroke-dasharray="10 8""##;
-        if t > 0 {
-            let _ = writeln!(
-                out,
-                r#"<line x1="{}" y1="{}" x2="{}" y2="{}" {dash}/>"#,
-                p.x,
-                p.y + t,
-                p.x + p.w,
-                p.y + t
-            );
-        }
-        if b > 0 {
-            let y = p.y + p.h - b;
-            let _ = writeln!(
-                out,
-                r#"<line x1="{}" y1="{y}" x2="{}" y2="{y}" {dash}/>"#,
-                p.x,
-                p.x + p.w
-            );
-        }
-        if l > 0 {
-            let _ = writeln!(
-                out,
-                r#"<line x1="{}" y1="{}" x2="{}" y2="{}" {dash}/>"#,
-                p.x + l,
-                p.y,
-                p.x + l,
-                p.y + p.h
-            );
-        }
-        if r > 0 {
-            let x = p.x + p.w - r;
-            let _ = writeln!(
-                out,
-                r#"<line x1="{x}" y1="{}" x2="{x}" y2="{}" {dash}/>"#,
-                p.y,
-                p.y + p.h
-            );
-        }
-        // Named at its top, or at its bottom when it holds other pieces -
-        // the paper, the TV set, the background - so names never overlap.
-        let holds = (sheet.pieces.iter()).any(|o| {
-            !std::ptr::eq(o, p) && o.x >= p.x && o.y >= p.y && o.x + o.w <= p.x + p.w && o.y + o.h <= p.y + p.h
-        });
-        let (tx, ty) = if holds || whole {
-            (p.x + 14, p.y + p.h - 46)
-        } else {
-            (p.x + 14, p.y + 34)
-        };
-        let size = format!("{} × {} px", p.w, p.h);
-        let margins = if p.margins == [0; 4] {
-            "stretched whole".to_string()
-        } else {
-            format!("margins {t} {r} {b} {l}")
-        };
-        let _ = writeln!(
-            out,
-            r##"<text x="{tx}" y="{ty}" font-size="28" font-weight="bold" fill="#1d2433">{}</text><text x="{tx}" y="{}" font-size="22" fill="#3b4a6b">{size} - {margins}</text>"##,
-            p.slot,
-            ty + 28
-        );
+        out.push_str(&piece_svg(sheet, i, p));
     }
     let _ = writeln!(
         out,
         r##"</g>
 </svg>"##
+    );
+    out
+}
+
+/// One slot on its sheet: its box, its suggested margins dashed, and its
+/// name, size and margins written in it.
+fn piece_svg(sheet: &Sheet, i: usize, p: &Piece) -> String {
+    let mut out = String::new();
+    // The background is the whole sheet: drawn as its outline, the rest over
+    // it in a colour of their own.
+    let whole = p.w == sheet.width && p.h == sheet.height;
+    let (fill, stroke) = if whole {
+        ("none", "#9a9aa8")
+    } else {
+        (["#dce8ff", "#ffe2d6", "#dff3df", "#f1e2fb"][i % 4], "#3b4a6b")
+    };
+    let _ = writeln!(
+        out,
+        r##"<rect x="{}" y="{}" width="{}" height="{}" fill="{fill}" stroke="{stroke}" stroke-width="3"/>"##,
+        p.x, p.y, p.w, p.h
+    );
+    let [t, r, b, l] = p.margins;
+    let (x0, y0, x1, y1) = (p.x, p.y, p.x + p.w, p.y + p.h);
+    // Each margin as a line across the piece, where it is not zero.
+    let lines = [
+        (t, (x0, y0 + t, x1, y0 + t)),
+        (b, (x0, y1 - b, x1, y1 - b)),
+        (l, (x0 + l, y0, x0 + l, y1)),
+        (r, (x1 - r, y0, x1 - r, y1)),
+    ];
+    for (_, (ax, ay, bx, by)) in lines.iter().filter(|(m, _)| *m > 0) {
+        let _ = writeln!(
+            out,
+            r##"<line x1="{ax}" y1="{ay}" x2="{bx}" y2="{by}" stroke="#d0533a" stroke-width="2" stroke-dasharray="10 8"/>"##
+        );
+    }
+    // Named at its top, or at its bottom when it holds other pieces - the
+    // paper, the TV set, the background - so names never overlap.
+    let holds = (sheet.pieces.iter())
+        .any(|o| !std::ptr::eq(o, p) && o.x >= x0 && o.y >= y0 && o.x + o.w <= x1 && o.y + o.h <= y1);
+    let (tx, ty) = if holds || whole {
+        (x0 + 14, y1 - 46)
+    } else {
+        (x0 + 14, y0 + 34)
+    };
+    let size = format!("{} × {} px", p.w, p.h);
+    let margins = if p.margins == [0; 4] {
+        "stretched whole".to_string()
+    } else {
+        format!("margins {t} {r} {b} {l}")
+    };
+    let _ = writeln!(
+        out,
+        r##"<text x="{tx}" y="{ty}" font-size="28" font-weight="bold" fill="#1d2433">{}</text><text x="{tx}" y="{}" font-size="22" fill="#3b4a6b">{size} - {margins}</text>"##,
+        p.slot,
+        ty + 28
     );
     out
 }
