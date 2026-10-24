@@ -798,7 +798,7 @@ mod tests {
         assert!(story.driver("the_rival").is_some() && story.driver("rival_driver").is_none());
         let text = file(&after, race);
         assert!(
-            text.contains("{ driver: the_rival, skin: red_livery }"),
+            text.contains("{ driver: the_rival, skin: Henna_Red }"),
             "the grid, as typed: {text}"
         );
         assert!(text.contains("\"ahead_of the_rival\""), "the criterion: {text}");

@@ -1,5 +1,5 @@
-# The story's own drivers, the ones a grid can name. Placeholders, like
-# everything in the sample.
+# The story's own drivers, the ones a grid can name: invented, like every
+# name in the sample - only the cars and tracks are real, Kunos's base game.
 drivers:
   - id: rival_driver
     character: rival

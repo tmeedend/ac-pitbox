@@ -578,4 +578,29 @@ mod tests {
             "listed, with its errors"
         );
     }
+
+    // The sample plays on any install of Assetto Corsa (SPEC-story-mode,
+    // Engine file format: the sample shows how everything is made): every
+    // track and car its events name is Kunos's base game, never a DLC or a
+    // mod. Liveries and layouts are not in the table: they were checked on
+    // the game when the sample was written.
+    #[test]
+    fn the_sample_races_on_the_base_game_alone() {
+        use crate::modscan::ModKind;
+        let story = Story::from_sources(story_engine::sample::files()).expect("loads");
+        let base = |kind: ModKind, id: &str| {
+            assert!(
+                crate::kunos_dates::is_official(kind, id) && crate::kunos_dates::pack_name(kind, id).is_none(),
+                "{id} is base game content"
+            )
+        };
+        for event in &story.events {
+            let s = &event.session;
+            base(ModKind::Track, s.track.as_deref().expect("a track"));
+            base(ModKind::Car, s.car.as_deref().expect("a car"));
+            for car in s.opponents.iter().filter_map(|o| o.car.as_deref()) {
+                base(ModKind::Car, car);
+            }
+        }
+    }
 }

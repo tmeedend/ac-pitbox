@@ -1,7 +1,7 @@
 id: track_day_01
 name: Track day
 type: track_day
-session: { track: some_track, car: some_car }
+session: { track: mugello, car: lotus_elise_sc }
 on_success:
   effects: ["money += 60"]
 entry_fee: 20

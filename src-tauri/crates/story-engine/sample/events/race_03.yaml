@@ -1,7 +1,7 @@
 id: race_03
 name: Race 03
 type: race
-session: { track: some_track, car: some_car, laps: 6, grid: 10 }
+session: { track: imola, car: abarth500, laps: 6, grid: 10 }
 success: ["finished"]
 on_success:
   effects: ["reputation += 1"]
