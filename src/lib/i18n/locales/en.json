@@ -2958,6 +2958,8 @@
       "soundTap": "Sound: app opened",
       "soundSend": "Sound: reply sent",
       "noSound": "None",
+      "playSound": "Listen",
+      "pauseSound": "Pause",
       "apps": "Apps",
       "template": "Template",
       "appears": "Appears",

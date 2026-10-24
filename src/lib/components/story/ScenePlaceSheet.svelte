@@ -22,6 +22,7 @@
   import Field from "$lib/components/ui/Field.svelte";
   import AddName from "./AddName.svelte";
   import NameRow from "./NameRow.svelte";
+  import SoundPlay from "./SoundPlay.svelte";
 
   interface Props {
     /** Index of the place in `scenes/scenes.yaml`. */
@@ -133,28 +134,29 @@
     </NameRow>
   </ul>
 
-  <div class="pair">
-    <Field label={t("story.scenes.ambient")}>
+  <Field label={t("story.scenes.ambient")}>
+    <div class="sound">
       <select class="input mono" value={place.ambient ?? ""} onchange={(e) => setText(place, "ambient", value(e))}>
         <option value="">{t("story.scenes.noAmbient")}</option>
         {#if place.ambient && !sounds.includes(place.ambient)}<option value={place.ambient}>{place.ambient}</option>{/if}
         {#each sounds as s (s)}<option value={s}>{s}</option>{/each}
       </select>
-      {#if place.ambient && !story.media.includes(place.ambient)}
-        <span class="missing">{t("story.scenes.fileMissing")}</span>
-      {/if}
-    </Field>
-    <Field>
-      <label class="check">
-        <input
-          type="checkbox"
-          checked={place.blur !== false}
-          onchange={(e) => setBlur(place, (e.currentTarget as HTMLInputElement).checked ? "" : "off")}
-        />
-        {t("story.scenes.blurred")}
-      </label>
-    </Field>
-  </div>
+      <SoundPlay folder={story.path} path={place.ambient ?? ""} />
+    </div>
+    {#if place.ambient && !story.media.includes(place.ambient)}
+      <span class="missing">{t("story.scenes.fileMissing")}</span>
+    {/if}
+  </Field>
+  <Field>
+    <label class="check">
+      <input
+        type="checkbox"
+        checked={place.blur !== false}
+        onchange={(e) => setBlur(place, (e.currentTarget as HTMLInputElement).checked ? "" : "off")}
+      />
+      {t("story.scenes.blurred")}
+    </label>
+  </Field>
 
   <section class="blk">
     <div class="blk-h">
@@ -255,11 +257,15 @@
                 </select>
               </Field>
               <Field label={t("story.scenes.ambient")}>
-                <select class="input mono" value={v.ambient ?? ""} onchange={(e) => setText(v, "ambient", value(e))}>
-                  <option value="">{t("story.scenes.likePlace")}</option>
-                  {#if v.ambient && !sounds.includes(v.ambient)}<option value={v.ambient}>{v.ambient}</option>{/if}
-                  {#each sounds as s (s)}<option value={s}>{s}</option>{/each}
-                </select>
+                <div class="sound">
+                  <select class="input mono" value={v.ambient ?? ""} onchange={(e) => setText(v, "ambient", value(e))}>
+                    <option value="">{t("story.scenes.likePlace")}</option>
+                    {#if v.ambient && !sounds.includes(v.ambient)}<option value={v.ambient}>{v.ambient}</option>{/if}
+                    {#each sounds as s (s)}<option value={s}>{s}</option>{/each}
+                  </select>
+                  <!-- What the variant plays: its own sound, else the place's. -->
+                  <SoundPlay folder={story.path} path={v.ambient ?? place.ambient ?? ""} />
+                </div>
               </Field>
             </div>
           </li>
@@ -290,6 +296,16 @@
     gap: 16px;
     flex-wrap: wrap;
     align-items: flex-end;
+  }
+  /* A sound and the button to listen to it, on one line. */
+  .sound {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sound select {
+    flex: 1;
+    min-width: 0;
   }
   .check {
     display: flex;

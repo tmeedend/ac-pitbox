@@ -320,9 +320,10 @@ changes what the template does, and it never contains code.
   `media/frames/<phone>/` for a phone, into the skin's own folder for a
   skin; a file of the same name and bytes is the one already there, another
   gets a number, nothing is overwritten. Not by dropping a file on the
-  window, which installs a mod everywhere in Pit Box. Beside the sheet, a
-  live preview filled with sample content: the game's own phone with the
-  phone's look and apps, or a skin worn by an app of its template or by
+  window, which installs a mod everywhere in Pit Box. A sound is listened
+  to from beside its choice. Beside the sheet, a live preview filled with
+  sample content: the game's own phone with the phone's look and apps,
+  its sounds playing as the author taps through it, or a skin worn by an app of its template or by
   what plays on the scene its way. The checks the pictures alone can
   answer come with the engine's: a screen past its body's picture and
   margins that leave nothing to stretch (errors); a wallpaper of another
@@ -749,6 +750,8 @@ the editor is reserved; they are translated when it opens to all.
   the author sets season, time of day, weather and mood - offered among the
   names the variants and the Beats use - and the engine picks the variant,
   on the place as edited, saved or not; the phone over it or not, silent.
+  A sound - the place's, a variant's - is listened to from beside its
+  choice, one at a time across the editor.
   A Beat's panel picks its place, a variant to force among that place's (or
   among all, without a place: the current one is known only by playing), and
   types its weather and mood among the names in use or `none`; a dialogue's

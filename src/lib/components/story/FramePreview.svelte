@@ -5,7 +5,8 @@
   // frame's look and apps, each app holding a sample of what it shows. A
   // skin is worn by what it dresses: an app of its template on Pit Box's
   // phone, or what plays on the scene in its way. It follows each edit
-  // before it is saved; nothing here is written.
+  // before it is saved; nothing here is written. The phone's sounds play
+  // as the author taps through it, whatever the game's sound button says.
   import { t } from "$lib/i18n/index.svelte";
   import { appShownOf, lookOf, sampleItem, sampleKind, skinShownOf } from "$lib/story/frameEdit";
   import { mediaUrl } from "$lib/story/player/speakers";
@@ -66,7 +67,7 @@
           {apps}
           folder={story.path}
           look={frame ? lookOf(frame) : null}
-          muted
+          muted={false}
           {items}
           clock="09:41"
           date=""

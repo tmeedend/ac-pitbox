@@ -19,6 +19,7 @@
   import Seg from "$lib/components/ui/Seg.svelte";
   import AddName from "./AddName.svelte";
   import FilePick from "./FilePick.svelte";
+  import SoundPlay from "./SoundPlay.svelte";
   import TargetSelect from "./TargetSelect.svelte";
 
   interface Props {
@@ -173,24 +174,30 @@
       </Field>
       <div class="pair">
         <Field label={t("story.frames.soundTap")}>
-          <FilePick
-            value={frame.sounds?.tap ?? ""}
-            options={story.media}
-            {into}
-            kinds={SOUNDS}
-            emptyLabel={t("story.frames.noSound")}
-            onpick={(f) => setSound("tap", f)}
-          />
+          <div class="sound">
+            <FilePick
+              value={frame.sounds?.tap ?? ""}
+              options={story.media}
+              {into}
+              kinds={SOUNDS}
+              emptyLabel={t("story.frames.noSound")}
+              onpick={(f) => setSound("tap", f)}
+            />
+            <SoundPlay folder={story.path} path={frame.sounds?.tap ?? ""} />
+          </div>
         </Field>
         <Field label={t("story.frames.soundSend")}>
-          <FilePick
-            value={frame.sounds?.send ?? ""}
-            options={story.media}
-            {into}
-            kinds={SOUNDS}
-            emptyLabel={t("story.frames.noSound")}
-            onpick={(f) => setSound("send", f)}
-          />
+          <div class="sound">
+            <FilePick
+              value={frame.sounds?.send ?? ""}
+              options={story.media}
+              {into}
+              kinds={SOUNDS}
+              emptyLabel={t("story.frames.noSound")}
+              onpick={(f) => setSound("send", f)}
+            />
+            <SoundPlay folder={story.path} path={frame.sounds?.send ?? ""} />
+          </div>
         </Field>
       </div>
     </div>
@@ -328,6 +335,16 @@
     flex-wrap: wrap;
     gap: 10px 16px;
     align-items: flex-end;
+  }
+  /* A sound and the button to listen to it, on one line. */
+  .sound {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .sound :global(.pick) {
+    flex: 1;
+    min-width: 0;
   }
   .num {
     display: flex;

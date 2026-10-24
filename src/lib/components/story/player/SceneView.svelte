@@ -40,7 +40,12 @@
     const [s, tr] = [scene, transition];
     untrack(() => {
       const how = changes.next(s, tr);
-      if (how === null) return;
+      // The same picture: no fade, but what else changed - its blur, said
+      // anew - applies to the picture shown at once.
+      if (how === null) {
+        if (layers.length) layers = [...layers.slice(0, -1), { ...layers[layers.length - 1], scene: s }];
+        return;
+      }
       const layer = { id: next++, scene: s, fading: how === "fade" };
       layers = how === "cut" ? [layer] : [...layers, layer];
     });
