@@ -8,6 +8,7 @@ mod attach;
 mod backup;
 mod brands;
 mod bulk;
+mod byte_range;
 mod cardata;
 mod catalog_update;
 mod categories;

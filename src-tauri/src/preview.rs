@@ -1369,12 +1369,7 @@ pub fn serve(dir: &Path, request: &tauri::http::Request<Vec<u8>>) -> tauri::http
         return not_found();
     };
 
-    let total = bytes.len() as u64;
-    let range = request
-        .headers()
-        .get(header::RANGE)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| parse_range(v, total));
+    let range = request.headers().get(header::RANGE).and_then(|v| v.to_str().ok());
 
     // Le type suit l'extension : la webview refuse une image servie en
     // `model/gltf-binary`, et sans type correct sur le `.bin` certains chemins
@@ -1388,36 +1383,9 @@ pub fn serve(dir: &Path, request: &tauri::http::Request<Vec<u8>>) -> tauri::http
     let builder = with_cors(
         Response::builder()
             .header(header::CONTENT_TYPE, content_type)
-            .header(header::CACHE_CONTROL, "public, max-age=31536000, immutable")
-            .header(header::ACCEPT_RANGES, "bytes"),
+            .header(header::CACHE_CONTROL, "public, max-age=31536000, immutable"),
     );
-
-    match range {
-        Some((start, end)) => builder
-            .status(StatusCode::PARTIAL_CONTENT)
-            .header(header::CONTENT_RANGE, format!("bytes {start}-{end}/{total}"))
-            .body(bytes[start as usize..=end as usize].to_vec())
-            .unwrap_or_else(|_| not_found()),
-        None => builder.body(bytes).unwrap_or_else(|_| not_found()),
-    }
-}
-
-/// `bytes=start-end`, bornes incluses, `end` optionnel. Renvoie `None` sur
-/// tout ce qui n'est pas une plage simple : une plage multiple ou illisible
-/// se sert entière, ce qui reste correct.
-fn parse_range(value: &str, total: u64) -> Option<(u64, u64)> {
-    let spec = value.strip_prefix("bytes=")?;
-    if spec.contains(',') || total == 0 {
-        return None;
-    }
-    let (start, end) = spec.split_once('-')?;
-    let start: u64 = start.trim().parse().ok()?;
-    let end: u64 = match end.trim() {
-        "" => total - 1,
-        text => text.parse().ok()?,
-    };
-    let end = end.min(total - 1);
-    (start <= end).then_some((start, end))
+    crate::byte_range::respond(builder, bytes.into(), range).unwrap_or_else(|_| not_found())
 }
 
 /// Dossier de la voiture, bibliothèque d'abord et `content/` ensuite.
@@ -2084,27 +2052,6 @@ INSERT = part.kn5",
             partial.headers().contains_key(ACCESS_CONTROL_ALLOW_ORIGIN),
             "réponse partielle porte les en-têtes CORS"
         );
-    }
-
-    // Règle : une plage `Range` correcte est honorée, et tout ce qui sort du
-    // fichier ou du format simple retombe sur la réponse entière — jamais sur
-    // une tranche fausse, qui donnerait un glTF tronqué illisible.
-    #[test]
-    fn range_header_is_parsed_or_ignored() {
-        assert_eq!(parse_range("bytes=0-99", 1000), Some((0, 99)), "plage explicite");
-        assert_eq!(parse_range("bytes=500-", 1000), Some((500, 999)), "fin implicite");
-        assert_eq!(
-            parse_range("bytes=900-5000", 1000),
-            Some((900, 999)),
-            "fin au-delà du fichier, ramenée à la dernière position"
-        );
-        assert_eq!(parse_range("bytes=0-0", 1), Some((0, 0)), "fichier d'un seul octet");
-
-        assert_eq!(parse_range("bytes=100-50", 1000), None, "plage inversée");
-        assert_eq!(parse_range("bytes=0-10,20-30", 1000), None, "plages multiples");
-        assert_eq!(parse_range("octets=0-10", 1000), None, "unité inconnue");
-        assert_eq!(parse_range("bytes=0-10", 0), None, "fichier vide");
-        assert_eq!(parse_range("bytes=abc-10", 1000), None, "borne illisible");
     }
 
     // Règle : une entrée servie depuis le cache voit sa date d'usage
