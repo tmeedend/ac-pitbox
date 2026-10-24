@@ -211,11 +211,19 @@ impl Checker<'_> {
             if expression.is_empty() || expression.chars().any(char::is_whitespace) {
                 self.error(FILE, format!("{at}: an expression is a name, without spaces"));
             }
-            if let Some(why) = media_path_problem(path) {
-                self.error(FILE, format!("{at}: `{path}`: {why}"));
-            } else if self.story.media.as_ref().is_some_and(|m| !m.contains(path)) {
-                self.error(FILE, format!("{at}: `media/{path}` does not exist"));
-            }
+            self.media_file(FILE, &at, None, path);
+        }
+    }
+
+    /// A file a story shows - a portrait, a picture, a scene - named by its
+    /// path inside `media/`: inside that folder, so that a shared story
+    /// carries it, and there. `label` says which of the item's files it is.
+    fn media_file(&mut self, file: &str, at: &str, label: Option<&str>, path: &str) {
+        if let Some(why) = media_path_problem(path) {
+            let label = label.map(|l| format!("{l} ")).unwrap_or_default();
+            self.error(file, format!("{at}: {label}`{path}`: {why}"));
+        } else if self.story.media.as_ref().is_some_and(|m| !m.contains(path)) {
+            self.error(file, format!("{at}: `media/{path}` does not exist"));
         }
     }
 
@@ -564,13 +572,7 @@ impl Checker<'_> {
         match (&item.picture, illustration) {
             (Some(_), false) => self.error(header, format!("{at}: `picture` is for an illustration")),
             (None, true) => self.error(header, format!("{at}: an illustration needs a `picture` in `media/`")),
-            (Some(path), true) => {
-                if let Some(why) = media_path_problem(path) {
-                    self.error(header, format!("{at}: picture `{path}`: {why}"));
-                } else if self.story.media.as_ref().is_some_and(|m| !m.contains(path)) {
-                    self.error(header, format!("{at}: `media/{path}` does not exist"));
-                }
-            }
+            (Some(path), true) => self.media_file(header, at, Some("picture"), path),
             (None, false) => {}
         }
         if illustration && item.script.has_choices() {
@@ -872,7 +874,7 @@ fn unknown_frame(frame: &Frame) -> Option<String> {
 }
 
 /// Why `path` is not a file inside `media/`, if it is not: a shared story
-/// carries its own folder only, so a portrait must live in it.
+/// carries its own folder only, so what it shows must live in it.
 fn media_path_problem(path: &str) -> Option<&'static str> {
     if path.is_empty() {
         Some("no file")
