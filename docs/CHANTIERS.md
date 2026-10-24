@@ -794,7 +794,7 @@ de reprendre. En cas d'écart, la spec fait foi.
           ni polices ; le téléphone est dessiné en CSS au thème de l'app.
         - L'exemple n'a ni scène, ni habillage, ni second téléphone, ni journal
           en page, ni appel, ni agenda.
-      - **Les médias de l'exemple : qui les fait (proposé le 2026-10-24).**
+      - **Les médias de l'exemple : qui les fait (validé le 2026-10-24).**
         Tailles de référence de la spec : écran du téléphone large de 1080 px,
         scène en 1920 × 1080.
         - **Faits par Claude** (dessinés par programme, CC0), avec L3d :
@@ -816,8 +816,7 @@ de reprendre. En cas d'écart, la spec fait foi.
           (boucle d'ambiance sans couture, 20 à 60 s) ;
           `documents/race_photo.webp` (1200 × 800, une course sans livrée
           reconnaissable).
-      - **L3c, les scènes — découpage proposé (2026-10-24), en attente de
-        l'accord de l'utilisateur.**
+      - **L3c, les scènes — découpage validé (2026-10-24).**
         - **L3c.1, le moteur.** `scenes/scenes.yaml` : des lieux, chacun avec
           ses variantes (saison, heure, météo, humeur), un fichier dans
           `media/scenes/`, un flou et une ambiance. Un Beat pose la scène
@@ -840,10 +839,13 @@ de reprendre. En cas d'écart, la spec fait foi.
           dialogue choisissent le lieu dans une liste.
         - **Hors de L3c** : le garage qui montre la voiture du joueur attend
           le garage de l'histoire (L6).
-        - **Questions** : d'où viennent la météo et l'humeur (l'histoire n'en
-          a pas encore : un champ de Beat qui reste posé ?) ; « quand chaque
-          scène est disponible » est-il une condition sur le lieu, ou sur la
-          variante ?
+        - **Décidé avec l'utilisateur (2026-10-24)** : la météo et l'humeur
+          sont des champs de Beat qui restent posés jusqu'au Beat suivant qui
+          les change ; pas de condition de disponibilité en L3c, au plus
+          simple : un lieu se montre quand un Beat ou un dialogue le nomme.
+          Une clé `when` sur le lieu ou la variante pourra s'ajouter plus
+          tard sans migration (clé ajoutée, « toujours disponible » par
+          défaut). La liste des médias ci-dessus est validée.
       - **L4 à L8** : dans l'ordre du plan de livraison de la spec, après L3c
         et L3d.
       **Écarts assumés par rapport au document de conception** (la spec
