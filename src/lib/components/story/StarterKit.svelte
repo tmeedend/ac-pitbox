@@ -2,12 +2,14 @@
   // The starter kit, offered where the Frames screen's images are made
   // (SPEC-story-mode, Skins: how a frame gets its look): what it is and what
   // saving it does are said before the folder is asked for, and once saved,
-  // where the files went, with the way to open that folder.
+  // where the files went, with the way to open that folder. The kit goes
+  // outside the story - a drawing aid, not part of what the story carries -
+  // in a `starter-kit` folder of its own.
   import { open } from "@tauri-apps/plugin-dialog";
   import { revealItemInDir } from "@tauri-apps/plugin-opener";
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
-  import { saveKit } from "$lib/story/kit";
+  import { besideStory, insideStory, kitFolder, saveKit } from "$lib/story/kit";
   import { studio } from "$lib/story/studioState.svelte";
 
   let saving = $state(false);
@@ -16,8 +18,19 @@
   let problem = $state<string | null>(null);
 
   async function save() {
-    const dir = await open({ directory: true, title: t("story.frames.kitPick") });
-    if (!dir || typeof dir !== "string") return;
+    const story = studio.story?.path ?? null;
+    // Opened beside the story: the kit belongs next to it, not in it.
+    const picked = await open({
+      directory: true,
+      title: t("story.frames.kitPick"),
+      defaultPath: story ? besideStory(story) : undefined,
+    });
+    if (!picked || typeof picked !== "string") return;
+    if (story && insideStory(picked, story)) {
+      problem = t("story.frames.kitNotInside");
+      return;
+    }
+    const dir = kitFolder(picked);
     saving = true;
     problem = null;
     try {

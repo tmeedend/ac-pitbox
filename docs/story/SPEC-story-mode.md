@@ -309,8 +309,10 @@ changes what the template does, and it never contains code.
   the Frame screen. Pit Box draws the sheets beside its slot table, so a
   sheet shows every slot of its template and nothing else. A block at the
   top of the Frame screen says what the kit is for and what saving it does
-  before asking for a folder, then saves the sheets there and offers to
-  open that folder.
+  before asking for a folder - outside the story's, the picker opening
+  beside it, since the kit is a drawing aid and not part of what the story
+  carries; one inside is refused - then saves the sheets in a
+  `starter-kit` folder there and offers to open it.
 - **The Frame screen** lists the story's phones and its skins. A phone's
   sheet sets its name, its look (the picture of the device and the screen's
   rectangle in it, the wallpaper, the status bar, its two sounds) and its

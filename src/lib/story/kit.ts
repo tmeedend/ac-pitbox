@@ -39,3 +39,24 @@ export async function saveKit(dir: string): Promise<number> {
   }
   return invoke<number>("story_save_kit", { dir, pngs });
 }
+
+/** The folder the kit goes in: a `starter-kit` folder inside the one
+ * picked, so its sheets never mix with what is there already. */
+export function kitFolder(picked: string): string {
+  return `${picked.replace(/[\\/]+$/, "")}${picked.includes("\\") ? "\\" : "/"}starter-kit`;
+}
+
+/** Whether `dir` is the story's folder or inside it: the kit is a drawing
+ * aid, kept out of what the story carries when it is shared. */
+export function insideStory(dir: string, story: string): boolean {
+  const norm = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  const [d, s] = [norm(dir), norm(story)];
+  return d === s || d.startsWith(`${s}/`);
+}
+
+/** The folder holding the story's: where the folder picker opens, beside
+ * the story. */
+export function besideStory(story: string): string {
+  const cut = story.replace(/[\\/]+$/, "").search(/[\\/][^\\/]*$/);
+  return cut > 0 ? story.slice(0, cut) : story;
+}

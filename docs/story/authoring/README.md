@@ -18,8 +18,10 @@ next.
 ## The starter kit
 
 The **Starter kit** block, at the top of the Frames screen, saves it in a
-folder you pick (**Save the starter kit…**): one sheet per template, as SVG
-and PNG; **Open the folder** shows them. A sheet shows each slot of
+folder you pick (**Save the starter kit…**) - outside the story's folder,
+next to it say: the kit is for drawing, not part of what you share. The
+sheets land in a `starter-kit` folder there, one per template, as SVG and
+PNG; **Open the folder** shows them. A sheet shows each slot of
 that template where it sits, at its reference size, with the stretch margins
 we suggest drawn dashed, and what to keep clear hatched. Draw over a sheet in
 any tool, cut each slot to its own file, and import them in the Frames
