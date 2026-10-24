@@ -810,7 +810,7 @@ pub fn save_file(
     expected: Option<&str>,
     value: serde_json::Value,
 ) -> Result<String, String> {
-    let writes = matches!(file, MANIFEST | CHARACTERS | VARIABLES | ROSTER)
+    let writes = matches!(file, MANIFEST | CHARACTERS | VARIABLES | ROSTER | SCENES)
         || is_chapter_path(file)
         || is_event_path(file)
         || is_content_path(file);
@@ -1330,6 +1330,17 @@ mod tests {
             scene_pick(serde_json::json!({ "id": "x" }), &m).is_err(),
             "a place that does not read says why"
         );
+
+        // The Scenes screen saves the file: a story without one gets it.
+        let config = temp_dir("studio-scenes-config");
+        let base = temp_dir("studio-scenes");
+        let folder = base.join("s");
+        create(&config, &folder, "S", "en", Frame::None, "C").unwrap();
+        let places =
+            serde_json::json!({ "scenes": [{ "id": "attic", "variants": [{ "id": "default", "file": "a.webp" }] }] });
+        save_file(&folder, SCENES, None, places).expect("the editor writes scenes/scenes.yaml");
+        let opened = open(&folder).unwrap();
+        assert_eq!(opened.scenes.value.unwrap().scenes[0].id, "attic", "read back");
     }
 
     // The preview (SPEC-story-mode, Create Your Own: Content): a dialogue on
