@@ -359,6 +359,11 @@ mod tests {
             "21:30 is the evening"
         );
         assert_eq!(own.file, "scenes/garage_night.webp");
+        assert_eq!(
+            own.ambient.as_deref(),
+            Some("scenes/garage.mp3"),
+            "the garage's sound, an MP3"
+        );
         answer_the_dialogue(&story, &mut state);
         race_03_and_the_landline(&story, &mut state, 4);
         assert_eq!(state.scene.as_deref(), Some("bedroom"), "back home with the phone");

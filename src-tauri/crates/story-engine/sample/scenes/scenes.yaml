@@ -9,6 +9,9 @@ scenes:
         file: scenes/bedroom.webp
   - id: garage
     name: Garage
+    # Looped while the garage shows, whichever variant: the variants have
+    # no sound of their own.
+    ambient: scenes/garage.mp3
     variants:
       # The night before a race, when a Beat says the mood is tense: sharp,
       # not blurred.

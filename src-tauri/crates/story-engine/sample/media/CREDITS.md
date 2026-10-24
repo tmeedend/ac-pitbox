@@ -24,3 +24,4 @@ Scenes, frame and sound: assets come from anywhere).
 | `frames/smartphone/wallpaper.webp` | Made for Pit Box: drawn by program (soft circles on a gradient) | Pit Box contributors | CC0 1.0 |
 | `frames/smartphone/icons/*.png` | Made for Pit Box: drawn by program (seven app icons) | Pit Box contributors | CC0 1.0 |
 | `frames/smartphone/sounds/tap.ogg`, `send.ogg` | Made for Pit Box: synthesised beeps | Pit Box contributors | CC0 1.0 |
+| `scenes/garage.mp3` | Found by the user: source and licence to record | — | to record |

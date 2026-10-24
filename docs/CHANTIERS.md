@@ -831,7 +831,10 @@ de reprendre. En cas d'écart, la spec fait foi.
           de nuit, une variante « tendue » par l'humeur, le jour imposé une
           semaine plus tard, retour à la chambre avec le téléphone. Les
           images sont des dégradés provisoires ; l'ambiance attend
-          `scenes/garage.ogg`.
+          `scenes/garage.ogg`. **Depuis (2026-10-24)** : l'utilisateur a
+          fourni `scenes/garage.mp3` (près de 3 min, 256 kb/s, 5,6 Mo
+          embarqués dans l'installateur), branché sur le garage ; sa source
+          et sa licence restent à écrire dans `CREDITS.md`.
           **Choisi sans demander** (dans la spec) : la première variante qui
           convient, dans l'ordre du fichier, la dernière en repli ; saisons
           de l'hémisphère nord, tranches horaires 5 h / 12 h / 18 h / 22 h ;
