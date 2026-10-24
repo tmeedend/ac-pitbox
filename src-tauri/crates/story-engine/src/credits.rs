@@ -151,6 +151,25 @@ impl Register {
     }
 }
 
+/// What keeps one line from letting its files travel.
+fn line_problems(line: &Credit) -> Vec<&'static str> {
+    let blank = |field: &Option<String>| field.as_deref().is_none_or(|v| v.trim().is_empty());
+    let mut problems = Vec::new();
+    if line.files.is_empty() {
+        problems.push("names no file");
+    }
+    if blank(&line.author) {
+        problems.push("no author");
+    }
+    if blank(&line.licence) {
+        problems.push("no licence");
+    }
+    if !line.permission.lets_travel() {
+        problems.push("the build waits for its permission");
+    }
+    problems
+}
+
 /// The register of a story whose files are `paths` (inside the story) and
 /// whose registers read as `registers`, by path.
 pub fn check(paths: &BTreeSet<String>, registers: &BTreeMap<String, Result<Vec<Credit>, String>>) -> Register {
@@ -172,21 +191,11 @@ pub fn check(paths: &BTreeSet<String>, registers: &BTreeMap<String, Result<Vec<C
             Err(e) => said(Severity::Error, register, format!("does not read: {e}")),
             Ok(lines) => {
                 for (n, line) in lines.iter().enumerate() {
-                    let at = format!("line {} ({})", n + 1, line.files.join(", "));
-                    if line.files.is_empty() {
-                        said(Severity::Error, register, format!("line {}: names no file", n + 1));
-                    }
-                    if line.author.as_deref().is_none_or(|a| a.trim().is_empty()) {
-                        said(Severity::Error, register, format!("{at}: no author"));
-                    }
-                    if line.licence.as_deref().is_none_or(|l| l.trim().is_empty()) {
-                        said(Severity::Error, register, format!("{at}: no licence"));
-                    }
-                    if !line.permission.lets_travel() {
+                    for problem in line_problems(line) {
                         said(
                             Severity::Error,
                             register,
-                            format!("{at}: the build waits for its permission"),
+                            format!("line {} ({}): {problem}", n + 1, line.files.join(", ")),
                         );
                     }
                 }
