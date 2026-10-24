@@ -533,6 +533,9 @@ pub struct PreviewView {
     pub picture: Option<String>,
     /// How a dialogue or an illustration comes on the scene.
     pub transition: story_engine::model::Transition,
+    /// A dialogue's own place, as it shows with the values set to preview
+    /// with; none without one - where the flow stands is not played here.
+    pub scene: Option<story_engine::scene::Shown>,
     pub steps: Vec<story_engine::engine::Step>,
     pub choices: Vec<story_engine::engine::Offer>,
     pub ended: bool,
@@ -628,6 +631,7 @@ pub fn preview(folder: &Path, id: &str, setup: &[String], replies: &[String]) ->
         characters: item.characters.clone(),
         picture: item.picture.clone(),
         transition: item.transition.unwrap_or_default(),
+        scene: (item.scene.as_deref()).and_then(|p| before.scene_shown(&story, p)),
         steps: played.steps.clone(),
         choices: played.choices.clone(),
         ended: played.ended,
@@ -1217,6 +1221,12 @@ mod tests {
             ("scene", &["friend".to_string()][..])
         );
         assert!(talk.ended, "`rest` ends it");
+        let place = talk.scene.as_ref().expect("its own place");
+        assert_eq!(
+            (place.place.as_str(), place.variant.as_str()),
+            ("garage", "day"),
+            "the garage at the story's start, 09:00"
+        );
         assert_eq!(
             talk.changes,
             [Change {
@@ -1227,6 +1237,7 @@ mod tests {
         );
         let invite = preview(&sample, "invite_01", &[], &[]).unwrap();
         assert_eq!((invite.view, invite.frame.as_deref()), ("frame", Some("phone")));
+        assert!(invite.scene.is_none(), "a message has no place of its own");
         let offer = preview(&sample, "sponsor_offer", &["flag.sponsor_met = true".into()], &[]).unwrap();
         let knobs: Vec<(&str, &str)> = offer.knobs.iter().map(|k| (k.var.as_str(), k.kind)).collect();
         assert_eq!(knobs, [("reputation", "number"), ("flag.sponsor_met", "flag")]);

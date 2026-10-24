@@ -4,6 +4,7 @@
 // (`story_engine::model`): what the editor shows is what the file says.
 import { invoke } from "@tauri-apps/api/core";
 import type { PlayerChoice, PlayerStep } from "./player/types";
+import type { SceneShown } from "./play";
 
 /** What shows the story (SPEC-story-mode, Content types, templates and
  * frames): `none` (a visual novel) or a frame's name. There is no default:
@@ -478,6 +479,9 @@ export interface PreviewView {
   /** An illustration's picture, a path inside `media/`. */
   picture: string | null;
   transition: Transition;
+  /** A dialogue's own place, with the values set to preview with; `null`
+   * without one. */
+  scene: SceneShown | null;
   steps: PlayerStep[];
   choices: PlayerChoice[];
   ended: boolean;
