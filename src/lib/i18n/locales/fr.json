@@ -1760,7 +1760,11 @@
     "storyHasErrors": "Cette histoire a des erreurs : ouvre-la dans Create Your Own pour les voir.",
     "storyNoGame": "Aucune partie en cours dans cette histoire.",
     "storySaveStale": "L'histoire a changé depuis l'enregistrement de cette partie : elle ne peut pas reprendre. Commence une nouvelle partie.",
-    "storySaveUnreadable": "La sauvegarde de cette partie est illisible (abîmée, ou écrite par un Pit Box plus récent)."
+    "storySaveUnreadable": "La sauvegarde de cette partie est illisible (abîmée, ou écrite par un Pit Box plus récent).",
+    "storyPackageUnreadable": "Ce fichier n'est pas un paquet d'histoire, ou il est incomplet.",
+    "storyPackageTooNew": "Ce paquet vient d'une version plus récente de Pit Box : mets Pit Box à jour pour l'installer.",
+    "storyPackageDamaged": "Ce paquet est abîmé : un de ses fichiers ne correspond pas à ce qu'il annonce. Télécharge-le à nouveau.",
+    "storyPackageHasErrors": "L'histoire de ce paquet a des erreurs : elle n'a pas été installée."
   },
   "pack": {
     "tabMembers": "Mods",
@@ -2934,7 +2938,15 @@
       "appCalendar": "Agenda",
       "onCall": "En ligne",
       "landline": "Au téléphone fixe",
-      "balance": "Solde"
+      "balance": "Solde",
+      "install": "Installer une histoire…",
+      "packageFile": "Histoire Pit Box",
+      "installedVersion": "Installée · version {version}",
+      "installDone": "« {title} » installée (version {version}).",
+      "updateDone": "« {title} » mise à jour : version {previous} → {version}.",
+      "losesGameConfirm": "La version {version} de « {title} » ne peut pas reprendre ta partie en cours : elle a retiré ce sur quoi la partie s'est arrêtée. L'installer quand même ? La partie sera gardée, mais ne pourra plus continuer.",
+      "uninstall": "Désinstaller",
+      "uninstallConfirm": "Désinstaller « {title} » ? La partie en cours est gardée : réinstallée, l'histoire la reprend."
     },
     "frames": {
       "title": "Cadres",

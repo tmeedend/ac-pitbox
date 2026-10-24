@@ -32,6 +32,7 @@ pub mod frame;
 pub mod kit;
 pub mod load;
 pub mod model;
+pub mod package;
 pub mod refs;
 pub mod sample;
 pub mod save;

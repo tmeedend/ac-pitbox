@@ -6,14 +6,17 @@ import type { PlayerChoice, PlayerStep } from "./player/types";
 import type { EventResult } from "./race";
 import type { Character, ContentType, DateDisplay, Driver, EventType, Session, Transition } from "./studio";
 
-/** Where a story is read from. */
-export type Source = { kind: "sample" } | { kind: "folder"; path: string };
+/** Where a story is read from: the sample Pit Box carries, a story folder
+ * of Create Your Own, or a package the player installed. */
+export type Source = { kind: "sample" } | { kind: "folder"; path: string } | { kind: "installed"; id: string };
 
 /** A story the hub offers, and the game under way in it. */
 export interface Playable {
   source: Source;
   /** `null` when the story does not read. */
   title: string | null;
+  /** As its `story.yaml` says; `null` when the story does not read. */
+  version: string | null;
   /** Errors the checks find: a story with any does not start. */
   errors: number;
   /** The game under way; `ended` once the story reached an ending,
@@ -183,3 +186,17 @@ export const playMove = (source: Source, input: Move) => invoke<Game>("story_pla
 /** Keeps, beside the save, the line the dialogue under way is read at. */
 export const keepReadingAt = (source: Source, reading: Reading) =>
   invoke<void>("story_play_reading", { source, reading });
+
+/** What installing a package did (`story::packages::Outcome`). */
+export type InstallOutcome =
+  | { kind: "installed"; id: string; title: string; version: string; previous: string | null }
+  /** The game under way would not resume on this version: nothing changed. */
+  | { kind: "loses_game"; title: string; version: string; previous: string };
+
+/** Installs a `.pitstory`, or updates the story it carries; `loseGame` goes
+ * ahead when the game under way would not resume on it. */
+export const installPackage = (file: string, loseGame: boolean) =>
+  invoke<InstallOutcome>("story_package_install", { file, loseGame });
+
+/** Removes an installed story; its game is kept for a new install. */
+export const uninstallStory = (id: string) => invoke<void>("story_package_uninstall", { id });

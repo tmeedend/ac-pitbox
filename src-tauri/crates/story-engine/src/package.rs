@@ -1,0 +1,308 @@
+//! A story package (SPEC-story-mode, Content: story package and
+//! dependencies): what a story is cut into on its way to a player.
+//!
+//! **A manifest and one zip per item.** The manifest (`manifest.json`) names
+//! each item with its size and SHA-256; an item is a zip of its own. Only the
+//! story's own files are an item so far; cars and tracks come with L4.3.
+//! Cut this way, an update downloads the items whose fingerprint changed
+//! (L4.4) and a new player the whole list - the requirements of the spec - and
+//! every item is checked against the manifest before anything lands.
+//!
+//! **A `.pitstory` is that set in one file**: the manifest and the items
+//! under `items/`, all stored, for a story shared by hand rather than from a
+//! URL. The same installer reads both.
+//!
+//! **An item's zip is reproducible**: entries in path order, one fixed date,
+//! the same compression. An item whose files did not change keeps its
+//! fingerprint from one build to the next - which is what lets an update skip
+//! it. The file name carries the fingerprint, so two versions of an item
+//! never share a name on a host.
+
+use std::collections::BTreeMap;
+use std::io::{Cursor, Write};
+use std::path::Path;
+
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+
+/// The container's format: an older Pit Box refuses a newer one rather than
+/// half-reading it.
+pub const FORMAT: u32 = 1;
+/// The manifest, at the root of a `.pitstory`.
+pub const MANIFEST: &str = "manifest.json";
+/// Where the items are, in a `.pitstory`.
+pub const ITEMS: &str = "items/";
+/// A package file's extension.
+pub const EXTENSION: &str = "pitstory";
+
+/// What a story is made of, by its first segment: `story.yaml`, the folders
+/// the engine reads, and `media/`. Anything else in the author's folder - a
+/// `.git`, notes, a draft - stays out of the package, and a package carrying
+/// anything else is refused.
+const CARRIED: [&str; 9] = [
+    "story.yaml",
+    "flow",
+    "content",
+    "events",
+    "world",
+    "drivers",
+    "scenes",
+    "frames",
+    "media",
+];
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Manifest {
+    pub format: u32,
+    /// The story's id, as its `story.yaml` says: what an update is matched by.
+    pub id: String,
+    pub title: String,
+    pub version: String,
+    pub items: Vec<Item>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Item {
+    pub kind: ItemKind,
+    /// The item's file, beside the manifest (under `items/` in a `.pitstory`).
+    pub file: String,
+    pub size: u64,
+    /// Lower-case hex.
+    pub sha256: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ItemKind {
+    /// The story's own files.
+    Story,
+    /// A kind this Pit Box does not know: the package is a newer one's.
+    #[serde(other)]
+    Unknown,
+}
+
+impl Manifest {
+    pub fn from_json(text: &str) -> Result<Manifest, String> {
+        serde_json::from_str(text).map_err(|e| format!("{MANIFEST}: {e}"))
+    }
+}
+
+/// An id a package may carry: it names a folder on the player's machine, so
+/// letters, digits, `_` and `-` only, and never one of the names Windows
+/// keeps for its devices.
+pub fn valid_id(id: &str) -> bool {
+    const DEVICES: [&str; 4] = ["con", "prn", "aux", "nul"];
+    let lower = id.to_ascii_lowercase();
+    let device = DEVICES.contains(&lower.as_str())
+        || ((lower.starts_with("com") || lower.starts_with("lpt"))
+            && lower.len() == 4
+            && lower.as_bytes()[3].is_ascii_digit());
+    (1..=64).contains(&id.len()) && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') && !device
+}
+
+/// Whether `path`, `/` between folders, is a file a story package carries:
+/// inside one of the story's parts, with no segment that could leave the
+/// folder it lands in or that is hidden.
+pub fn carried(path: &str) -> bool {
+    let segments: Vec<&str> = path.split('/').collect();
+    CARRIED.contains(&segments[0])
+        && (segments.len() == 1) == (segments[0] == "story.yaml")
+        // `..` starts with a dot too.
+        && (segments.iter()).all(|s| !s.is_empty() && !s.starts_with('.') && !s.contains(['\\', ':']))
+}
+
+/// The files of a story folder a package carries, as paths with `/` and
+/// their bytes, in path order.
+pub fn folder_files(root: &Path) -> std::io::Result<Vec<(String, Vec<u8>)>> {
+    fn walk(dir: &Path, prefix: &str, out: &mut Vec<(String, Vec<u8>)>) -> std::io::Result<()> {
+        for entry in std::fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = format!("{prefix}{}", entry.file_name().to_string_lossy());
+            if entry.path().is_dir() {
+                walk(&entry.path(), &format!("{path}/"), out)?;
+            } else if carried(&path) {
+                out.push((path, std::fs::read(entry.path())?));
+            }
+        }
+        Ok(())
+    }
+    let mut out = Vec::new();
+    walk(root, "", &mut out)?;
+    out.sort();
+    Ok(out)
+}
+
+/// The SHA-256 of `bytes`, in lower-case hex.
+pub fn sha256_hex(bytes: &[u8]) -> String {
+    hex(&Sha256::digest(bytes))
+}
+
+pub fn hex(digest: &[u8]) -> String {
+    digest.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// The story's own files as an item's zip, reproducibly (see the module).
+/// Files outside what a package carries are left out.
+pub fn story_item(files: &[(String, Vec<u8>)]) -> Result<Vec<u8>, String> {
+    let sorted: BTreeMap<&str, &[u8]> = (files.iter())
+        .filter(|(p, _)| carried(p))
+        .map(|(p, b)| (p.as_str(), b.as_slice()))
+        .collect();
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated)
+        .last_modified_time(zip::DateTime::default())
+        .unix_permissions(0o644);
+    let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    for (path, bytes) in sorted {
+        zip.start_file(path, options).map_err(|e| e.to_string())?;
+        zip.write_all(bytes).map_err(|e| e.to_string())?;
+    }
+    Ok(zip.finish().map_err(|e| e.to_string())?.into_inner())
+}
+
+/// A `.pitstory` of a story whose files are `files`: its manifest, from the
+/// story's `story.yaml`, and its one item. The caller checks the story first:
+/// a story with errors is never packed.
+pub fn pack(manifest: &crate::model::Manifest, files: &[(String, Vec<u8>)]) -> Result<Vec<u8>, String> {
+    if !valid_id(&manifest.id) {
+        return Err(format!(
+            "story id `{}`: a package needs letters, digits, `_` or `-` only",
+            manifest.id
+        ));
+    }
+    let story = story_item(files)?;
+    let sha256 = sha256_hex(&story);
+    let item = Item {
+        kind: ItemKind::Story,
+        file: format!("story-{}.zip", &sha256[..16]),
+        size: story.len() as u64,
+        sha256,
+    };
+    let built = Manifest {
+        format: FORMAT,
+        id: manifest.id.clone(),
+        title: manifest.title.clone(),
+        version: manifest.version.clone(),
+        items: vec![item.clone()],
+    };
+    let stored = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Stored)
+        .last_modified_time(zip::DateTime::default())
+        .unix_permissions(0o644);
+    let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    let json = serde_json::to_string_pretty(&built).map_err(|e| e.to_string())?;
+    zip.start_file(MANIFEST, stored).map_err(|e| e.to_string())?;
+    zip.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
+    zip.start_file(format!("{ITEMS}{}", item.file), stored)
+        .map_err(|e| e.to_string())?;
+    zip.write_all(&story).map_err(|e| e.to_string())?;
+    Ok(zip.finish().map_err(|e| e.to_string())?.into_inner())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Story;
+
+    fn sample_manifest() -> crate::model::Manifest {
+        Story::from_sources(crate::sample::files())
+            .expect("the sample reads")
+            .manifest
+    }
+
+    // An update downloads only the items whose fingerprint changed: an item
+    // built twice from the same files must be the same bytes (module doc).
+    #[test]
+    fn an_item_built_twice_from_the_same_files_is_the_same() {
+        let mut files = crate::sample::folder_files();
+        let first = story_item(&files).unwrap();
+        files.reverse();
+        assert_eq!(first, story_item(&files).unwrap(), "order of the files does not matter");
+        files[0].1.push(b'\n');
+        assert_ne!(first, story_item(&files).unwrap(), "a changed file changes the item");
+    }
+
+    // Only what a story is made of travels; a path that could leave the
+    // folder it lands in never does (SPEC-story-mode, Content).
+    #[test]
+    fn a_package_carries_the_story_and_nothing_else() {
+        for ok in [
+            "story.yaml",
+            "flow/01.yaml",
+            "media/scenes/a b.webp",
+            "frames/skins/x/Inter.ttf",
+        ] {
+            assert!(carried(ok), "{ok} is carried");
+        }
+        for not in [
+            ".git/config",
+            "notes.txt",
+            "story.yaml/x",
+            "media",
+            "media/../story.yaml",
+            "media/.hidden.png",
+            "media//a.png",
+            "media/a\\..\\b.png",
+            "media/c:x.png",
+            "/media/a.png",
+        ] {
+            assert!(!carried(not), "{not} is not carried");
+        }
+    }
+
+    #[test]
+    fn a_package_id_names_a_folder_safely() {
+        for ok in ["sample", "race_01", "my-story", "Com10"] {
+            assert!(valid_id(ok), "{ok} accepted");
+        }
+        for not in ["", "a b", "../x", "é", "con", "NUL", "com1", "lpt9", &"x".repeat(65)] {
+            assert!(!valid_id(not), "{not} refused");
+        }
+    }
+
+    // The manifest names its item with the fingerprint the item has.
+    #[test]
+    fn a_pitstory_holds_its_manifest_and_its_checked_item() {
+        let files = crate::sample::folder_files();
+        let bytes = pack(&sample_manifest(), &files).unwrap();
+        let mut zip = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+        let manifest = {
+            let mut text = String::new();
+            std::io::Read::read_to_string(&mut zip.by_name(MANIFEST).unwrap(), &mut text).unwrap();
+            Manifest::from_json(&text).unwrap()
+        };
+        assert_eq!((manifest.format, manifest.id.as_str()), (FORMAT, "sample"));
+        let [item] = manifest.items.as_slice() else {
+            panic!("one item: {:?}", manifest.items)
+        };
+        let mut story = Vec::new();
+        std::io::Read::read_to_end(&mut zip.by_name(&format!("{ITEMS}{}", item.file)).unwrap(), &mut story).unwrap();
+        assert_eq!(story.len() as u64, item.size, "size as declared");
+        assert_eq!(sha256_hex(&story), item.sha256, "fingerprint as declared");
+        assert!(
+            item.file.contains(&item.sha256[..16]),
+            "the name carries the fingerprint"
+        );
+    }
+
+    // A package from a newer Pit Box is told apart from a damaged one.
+    #[test]
+    fn an_unknown_item_kind_still_reads() {
+        let text = r#"{"format":1,"id":"a","title":"A","version":"1",
+            "items":[{"kind":"car","file":"x.zip","size":1,"sha256":"00"}]}"#;
+        assert_eq!(Manifest::from_json(text).unwrap().items[0].kind, ItemKind::Unknown);
+        assert!(
+            Manifest::from_json(r#"{"format":1}"#).is_err(),
+            "an incomplete manifest does not read"
+        );
+    }
+
+    #[test]
+    fn an_id_unfit_for_a_folder_is_not_packed() {
+        let mut manifest = sample_manifest();
+        manifest.id = "my story".into();
+        assert!(pack(&manifest, &crate::sample::folder_files()).is_err());
+    }
+}

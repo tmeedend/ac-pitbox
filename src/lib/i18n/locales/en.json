@@ -1760,7 +1760,11 @@
     "storyHasErrors": "This story has errors: open it in Create Your Own to see them.",
     "storyNoGame": "No game under way in this story.",
     "storySaveStale": "The story changed since this game was saved: it cannot resume. Start a new game.",
-    "storySaveUnreadable": "This game's save does not read (damaged, or from a newer Pit Box)."
+    "storySaveUnreadable": "This game's save does not read (damaged, or from a newer Pit Box).",
+    "storyPackageUnreadable": "This file is not a story package, or it is incomplete.",
+    "storyPackageTooNew": "This package comes from a newer Pit Box: update Pit Box to install it.",
+    "storyPackageDamaged": "This package is damaged: one of its files is not what it says. Download it again.",
+    "storyPackageHasErrors": "The story in this package has errors: it was not installed."
   },
   "pack": {
     "tabMembers": "Mods",
@@ -2934,7 +2938,15 @@
       "appCalendar": "Calendar",
       "onCall": "On call",
       "landline": "On the landline",
-      "balance": "Balance"
+      "balance": "Balance",
+      "install": "Install a story…",
+      "packageFile": "Pit Box story",
+      "installedVersion": "Installed · version {version}",
+      "installDone": "“{title}” installed (version {version}).",
+      "updateDone": "“{title}” updated: version {previous} → {version}.",
+      "losesGameConfirm": "Version {version} of “{title}” cannot resume your game under way: it removed what the game stopped on. Install it anyway? The game will be kept, but can no longer go on.",
+      "uninstall": "Uninstall",
+      "uninstallConfirm": "Uninstall “{title}”? The game under way is kept: installed again, the story resumes it."
     },
     "frames": {
       "title": "Frames",

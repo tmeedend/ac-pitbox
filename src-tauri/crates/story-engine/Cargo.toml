@@ -8,7 +8,8 @@ license = "MIT"
 # Pure: no Tauri, no access to the application. The app will depend on this
 # crate (Story Mode, L2), never the reverse - so nothing in here can break a
 # screen that does not use it (CLAUDE.md, « Chantiers longs derrière un
-# drapeau »). Its only I/O is reading a story folder (`load::read_dir`).
+# drapeau »). Its only I/O is reading a story folder (`load::read_dir`,
+# `package::folder_files`).
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -19,3 +20,7 @@ serde_json = "1"
 # data - and reports line and column. Its serializer is what the editor
 # (Create Your Own, L2) writes the files back with (`write.rs`).
 serde-saphyr = { version = "2", default-features = false, features = ["deserialize", "serialize"] }
+# A story package (`package.rs`): items zipped reproducibly and fingerprinted.
+# The same versions as the app's, so the workspace gains no crate.
+zip = { version = "2", default-features = false, features = ["deflate"] }
+sha2 = "0.10"

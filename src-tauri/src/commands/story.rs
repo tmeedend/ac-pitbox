@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use super::prelude::*;
-use crate::story::{backups, play, studio};
+use crate::story::{backups, packages, play, studio};
 use story_engine::scene::Shown;
 
 /// The Story switch asked for on this launch's command line, if any
@@ -47,6 +47,28 @@ pub async fn story_play_resume(app: AppHandle, source: play::Source) -> Result<p
 pub async fn story_play_move(app: AppHandle, source: play::Source, input: play::Move) -> Result<play::Game, String> {
     off_window(app, move |app| {
         play::play(&crate::rules::config_dir(app)?, &source, input)
+    })
+    .await
+}
+
+/// Installs a story package (`.pitstory`), or updates the story it carries;
+/// `lose_game` goes ahead when the game under way would not resume on it.
+#[tauri::command]
+pub async fn story_package_install(
+    app: AppHandle,
+    file: PathBuf,
+    lose_game: bool,
+) -> Result<packages::Outcome, String> {
+    off_window(app, move |app| {
+        packages::install(&crate::rules::config_dir(app)?, &file, lose_game)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn story_package_uninstall(app: AppHandle, id: String) -> Result<(), String> {
+    off_window(app, move |app| {
+        packages::uninstall(&crate::rules::config_dir(app)?, &id)
     })
     .await
 }
@@ -96,9 +118,11 @@ pub async fn story_skin_font(
     source: play::Source,
     path: String,
 ) -> Result<tauri::ipc::Response, String> {
-    off_window(app, move |_| crate::story::media::skin_font(&source, &path))
-        .await
-        .map(tauri::ipc::Response::new)
+    off_window(app, move |app| {
+        crate::story::media::skin_font(&crate::rules::config_dir(app)?, &source, &path)
+    })
+    .await
+    .map(tauri::ipc::Response::new)
 }
 
 // ------------------------------------------------- Create Your Own (studio)

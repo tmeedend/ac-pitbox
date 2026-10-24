@@ -186,3 +186,12 @@ pub const STORY_NO_GAME: &str = "errors.storyNoGame";
 pub const STORY_SAVE_STALE: &str = "errors.storySaveStale";
 /// The save file does not read: damaged, or from a newer Pit Box.
 pub const STORY_SAVE_UNREADABLE: &str = "errors.storySaveUnreadable";
+// Story packages (`story::packages`).
+/// Not a story package, or one missing its manifest.
+pub const STORY_PACKAGE_UNREADABLE: &str = "errors.storyPackageUnreadable";
+/// A package from a newer Pit Box: a format or an item kind unknown here.
+pub const STORY_PACKAGE_TOO_NEW: &str = "errors.storyPackageTooNew";
+/// A file of the package is not what its manifest says.
+pub const STORY_PACKAGE_DAMAGED: &str = "errors.storyPackageDamaged";
+/// The packaged story does not read, or its checks find errors: not installed.
+pub const STORY_PACKAGE_HAS_ERRORS: &str = "errors.storyPackageHasErrors";

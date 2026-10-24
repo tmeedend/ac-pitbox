@@ -101,10 +101,7 @@
       <div class="lbl-screen">{t("story.title")}</div>
     </header>
 
-    <section class="blk">
-      <div class="blk-h"><span class="blk-t">{t("story.modeTitle")}</span></div>
-      <div class="blk-b"><StoryShelf /></div>
-    </section>
+    <StoryShelf />
 
     <section class="blk">
       <div class="blk-h">

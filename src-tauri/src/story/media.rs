@@ -54,7 +54,7 @@ fn requested(path: &str) -> Option<(&'static [u8], &'static str)> {
 /// The bytes of a skin's font, `path` inside the story
 /// (`frames/skins/<id>/<file>`): from the sample Pit Box carries, or from the
 /// story's folder. Nothing outside a skin's folder, and nothing but a font.
-pub fn skin_font(source: &Source, path: &str) -> Result<Vec<u8>, String> {
+pub fn skin_font(config_dir: &Path, source: &Source, path: &str) -> Result<Vec<u8>, String> {
     let inside = path.strip_prefix(SKINS).and_then(|rest| rest.split_once('/'));
     let fits = inside.is_some_and(|(id, file)| {
         !id.is_empty()
@@ -66,13 +66,11 @@ pub fn skin_font(source: &Source, path: &str) -> Result<Vec<u8>, String> {
     if !fits || !FONT.contains(&kind.as_str()) {
         return Err(format!("not a skin's font: {path}"));
     }
-    match source {
-        Source::Sample => {
+    match source.folder(config_dir)? {
+        None => {
             (story_engine::sample::file(path).map(<[u8]>::to_vec)).ok_or_else(|| format!("no {path} in the sample"))
         }
-        Source::Folder { path: folder } => {
-            std::fs::read(Path::new(folder).join(path)).map_err(|e| format!("{path}: {e}"))
-        }
+        Some(folder) => std::fs::read(folder.join(path)).map_err(|e| format!("{path}: {e}")),
     }
 }
 
@@ -146,7 +144,8 @@ mod tests {
             StatusCode::NOT_FOUND,
             "media keep their own route"
         );
-        let font = skin_font(&Source::Sample, "frames/skins/chat_blue/Inter.ttf").expect("the font");
+        let font =
+            skin_font(Path::new("unused"), &Source::Sample, "frames/skins/chat_blue/Inter.ttf").expect("the font");
         assert!(font.len() > 100_000, "the whole file");
         for path in [
             "frames/skins/chat_blue/bubble_out.png",
@@ -154,7 +153,10 @@ mod tests {
             "frames/frames.ttf",
             "media/a.ttf",
         ] {
-            assert!(skin_font(&Source::Sample, path).is_err(), "{path} refused");
+            assert!(
+                skin_font(Path::new("unused"), &Source::Sample, path).is_err(),
+                "{path} refused"
+            );
         }
     }
 

@@ -581,9 +581,8 @@ DLCs required are listed.
 author and a permission status (granted, requested, not asked, not needed). An
 item without permission blocks the build.
 
-**Installation and updates: requirements now, mechanism at implementation.**
-Pit Box's existing versions, layers and library export/import are the natural
-starting points. Whatever the mechanism, it must meet these requirements:
+**Installation and updates: the requirements.** Whatever the mechanism, it
+must meet these:
 
 - One action installs everything a story needs before play.
 - The player's own mods and versions stay untouched: nothing renamed, nothing
@@ -594,6 +593,37 @@ starting points. Whatever the mechanism, it must meet these requirements:
   particular host.
 - Updates download only what changed; a new player gets the latest complete
   package; files are checked after download.
+
+**The mechanism (decided October 2026).** A package is a **manifest and one
+zip per item** - the story's own files, and with L4.3 each car and each
+track - every item named with its size and SHA-256. An item is zipped
+reproducibly, so an item whose files did not change keeps its fingerprint
+and an update downloads only the others; its file name carries the
+fingerprint. A **`.pitstory`** is the same set in one file, for a story
+shared by hand; the same installer reads both.
+
+- **What a story package carries** is what the story is made of:
+  `story.yaml`, `flow/`, `content/`, `events/`, `world/`, `drivers/`,
+  `scenes/`, `frames/` and `media/`. The rest of the author's folder (a
+  `.git`, notes, drafts, hidden files) stays out; a package carrying anything
+  else, or a path that could leave its folder, is refused whole.
+- **Nothing lands before it is checked**: each item has the size and the
+  fingerprint the manifest gives it, and the story reads with no error and
+  is the one the manifest names. A package from a newer Pit Box (its format
+  or an item kind unknown here) says so instead of half-installing.
+- **An installed story** lives in Pit Box's own data, apart from the
+  author's stories, and is matched by its id: installing a package of the
+  same id is an update, whatever its version, and replaces the story whole.
+- **An update and the game under way**: when the game would not resume on
+  the new version, nothing changes until the player says to install it
+  anyway; the game is then kept, and says why it cannot resume. A game that
+  ended, or that did not resume already, asks nothing.
+- **Uninstalling** removes the story and keeps its game: installed again,
+  the story resumes it.
+- **A car the player already has** (L4.3): the same version is used as it is; another
+  version is played and the hub says so - the player's own is never replaced.
+  Playing the story's own version for the session only comes later (L4.5),
+  with the story's own changes to a mod.
 
 **Dependency list.** The story names cars, tracks and assets with version
 fingerprints and known sources; Pit Box's Missing Content state guides the
@@ -783,7 +813,8 @@ Timeline.
 
 The author never needs to see these files, but they are what makes a story
 shareable, diffable and safe to edit by two people. The editor reads and writes
-them; a published story is the folder zipped as a `.pitstory`.
+them; a published story is a package of it (Content: story package and
+dependencies), in one file a `.pitstory`.
 
 ```
 my-story/
@@ -999,9 +1030,10 @@ The player side follows each story's settings. What the engine needs:
 
 **Today** (L3, under way):
 
-- **Stories offered.** Until stories come as packages (L4), Story Mode offers
-  the sample story Pit Box carries and the author's own stories, played as
-  they are on disk. A story the checks find errors in does not start.
+- **Stories offered.** The sample story Pit Box carries, the packages the
+  player installed (each with its version, and Uninstall), and the author's
+  own stories, played as they are on disk. A `.pitstory` is installed from
+  the Story Mode block. A story the checks find errors in does not start.
 - **One game per story**, saved after every move of the player, in Pit Box's
   own data; a new game replaces it after a confirmation. The story's `saves`
   setting (autosave per day or manual slots, reload) is not applied yet. A
@@ -1195,7 +1227,7 @@ The settings live in the `settings` part of each story's `story.yaml`.
 | L3b | Visual novel: line log, fast-forward and auto-advance, illustrations, transitions, saving during a dialogue, read-only graph view of the flow | A story with no frame plays like a visual novel |
 | L3c | Scenes: places and variants, still image or video loop, ambient sound, blur, the Scenes screen and its preview; examples in the sample | Dialogues and the frame stand in a place |
 | L3d | Frames and skins: `frames.yaml`, successive phones, apps (name, icon, template, layout, content types), skins and their slots, status bar, wallpaper, UI sounds, the Frame screen, the starter kit and the author guide; the agenda template, the call screen, documents on the scene and the `page` layout, a TV and a landline on the scene; examples in the sample | An author gives the story the look they drew |
-| L4 | Story package: build, permissions, download, install and update (mechanism chosen at implementation) | A player installs a bundled story in one click |
+| L4 | Story package: a manifest and one zip per item. L4.1 install a `.pitstory`; L4.2 the permission register (`credits.yaml` per folder that travels, `package/manifest.yaml`) and the Package screen's build; L4.3 cars and tracks in the package, imported when missing; L4.4 download from a URL, items by fingerprint, updates; L4.5 a story's own changes to a mod, for its sessions only | A player installs a bundled story in one click |
 | L5 | Playtest and Timeline | An author checks years of story in minutes |
 | L6 | Balance simulator, catalogs, economy, side events | Money pressure is tuned on numbers |
 | L7 | Authored cinematics: CSP playback app, replays, CamTool files, music | Scripted moments are staged |
@@ -1208,8 +1240,8 @@ The settings live in the `settings` part of each story's `story.yaml`.
 - [ ] **Translation format**: Ink with an id on every line, or a format of
       Pit Box's own with line ids, once a story is proven in one language
       (Dialogue text).
-- [ ] **Updates**: mechanism chosen at implementation, against the requirements
-      listed in Content.
+- [x] **Updates**: a manifest and one zip per item, fingerprinted (Content:
+      the mechanism, October 2026).
 - [ ] **Track evolution**: story layers per period (hidden objects, new
       textures) versus what CSP configs can already do (seasonal looks, hiding
       objects).

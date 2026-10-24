@@ -2,11 +2,12 @@
 //! Mode: player side »): the stories a player can play, one game in each, and
 //! what moves a game on.
 //!
-//! Until stories come as packages (L4), the stories offered are the sample
-//! Pit Box carries (`story_engine::sample`) and the author's own, those of
-//! Create Your Own, played as they are on disk - an author plays what they
-//! write. A story the checks find errors in does not start: it would stop
-//! half-way on what the checks already know.
+//! The stories offered are the sample Pit Box carries
+//! (`story_engine::sample`), the packages the player installed
+//! (`packages.rs`), and the author's own, those of Create Your Own, played as
+//! they are on disk - an author plays what they write. A story the checks
+//! find errors in does not start: it would stop half-way on what the checks
+//! already know.
 //!
 //! **One game per story**, saved after every move of the player
 //! (`app_config_dir/story/saves/`), so that closing Pit Box never loses one.
@@ -39,6 +40,19 @@ pub enum Source {
     Sample,
     /// A story folder of Create Your Own.
     Folder { path: PathBuf },
+    /// A package the player installed, by its story's id (`packages.rs`).
+    Installed { id: String },
+}
+
+impl Source {
+    /// The story's folder, where its media are; none for the sample.
+    pub fn folder(&self, config_dir: &Path) -> Result<Option<PathBuf>, String> {
+        match self {
+            Source::Sample => Ok(None),
+            Source::Folder { path } => Ok(Some(path.clone())),
+            Source::Installed { id } => super::packages::folder(config_dir, id).map(Some),
+        }
+    }
 }
 
 /// A story the hub offers, and the game under way in it.
@@ -47,6 +61,8 @@ pub struct Playable {
     pub source: Source,
     /// `None` when the story does not read.
     pub title: Option<String>,
+    /// As its `story.yaml` says; `None` when the story does not read.
+    pub version: Option<String>,
     /// Errors the checks find: a story with any does not start.
     pub errors: usize,
     pub game: Option<GameInfo>,
@@ -129,9 +145,15 @@ impl From<Move> for Input {
     }
 }
 
-/// The sample, then the author's stories in the order of their list.
+/// The sample, the installed packages, then the author's stories in the
+/// order of their list.
 pub fn list(config_dir: &Path) -> Vec<Playable> {
     let mut sources = vec![Source::Sample];
+    sources.extend(
+        super::packages::ids(config_dir)
+            .into_iter()
+            .map(|id| Source::Installed { id }),
+    );
     sources.extend(
         (super::studio::folders(config_dir).into_iter())
             .filter(|p| p.join("story.yaml").is_file())
@@ -139,7 +161,7 @@ pub fn list(config_dir: &Path) -> Vec<Playable> {
     );
     sources
         .into_iter()
-        .map(|source| match read(&source) {
+        .map(|source| match read(config_dir, &source) {
             Ok(story) => {
                 let errors = (validate(&story).iter())
                     .filter(|d| d.severity == Severity::Error)
@@ -159,6 +181,7 @@ pub fn list(config_dir: &Path) -> Vec<Playable> {
                 };
                 Playable {
                     title: Some(story.manifest.title.clone()),
+                    version: Some(story.manifest.version.clone()),
                     errors,
                     game,
                     source,
@@ -167,6 +190,7 @@ pub fn list(config_dir: &Path) -> Vec<Playable> {
             Err(_) => Playable {
                 source,
                 title: None,
+                version: None,
                 errors: 1,
                 game: None,
             },
@@ -177,7 +201,7 @@ pub fn list(config_dir: &Path) -> Vec<Playable> {
 /// Starts a new game, replacing the one under way. `seed` makes its draws:
 /// stored in the save, so a reload replays them.
 pub fn new_game(config_dir: &Path, source: &Source, seed: u64) -> Result<Game, String> {
-    let story = playable(source)?;
+    let story = playable(config_dir, source)?;
     let mut state = State::new(&story, seed);
     engine::run(&story, &mut state).map_err(|e| e.to_string())?;
     write_save(config_dir, source, &story, &state)?;
@@ -199,7 +223,7 @@ pub fn new_game(config_dir: &Path, source: &Source, seed: u64) -> Result<Game, S
 /// Keeps where the dialogue under way is being read. Written synchronously,
 /// the whole file: when the command returns, it is on disk.
 pub fn set_reading(config_dir: &Path, source: &Source, reading: &Reading) -> Result<(), String> {
-    let story = read(source)?;
+    let story = read(config_dir, source)?;
     let path = reading_path(config_dir, source, &story);
     let text = serde_json::to_string(reading).map_err(|e| e.to_string())?;
     std::fs::write(&path, text).map_err(|e| {
@@ -210,7 +234,7 @@ pub fn set_reading(config_dir: &Path, source: &Source, reading: &Reading) -> Res
 
 /// The game under way, as it was left.
 pub fn resume(config_dir: &Path, source: &Source) -> Result<Game, String> {
-    let story = playable(source)?;
+    let story = playable(config_dir, source)?;
     let state = resumed(config_dir, source, &story)?;
     Ok(game_in(config_dir, &story, &state, source))
 }
@@ -220,7 +244,7 @@ pub fn resume(config_dir: &Path, source: &Source) -> Result<Game, String> {
 /// story is not checked again: it was at the start of the game, and the
 /// save is checked against it (`Save::check`) at every move.
 pub fn play(config_dir: &Path, source: &Source, m: Move) -> Result<Game, String> {
-    let story = read(source)?;
+    let story = read(config_dir, source)?;
     let mut state = resumed(config_dir, source, &story)?;
     let launch = matches!(m, Move::Launch { .. });
     let was_launched = state.launched.clone();
@@ -257,7 +281,7 @@ fn reading_path(config_dir: &Path, source: &Source, story: &Story) -> PathBuf {
 /// `game`, with the launch time of the session under way and where its
 /// dialogue is being read.
 fn game_in(config_dir: &Path, story: &Story, state: &State, source: &Source) -> Game {
-    let mut g = game(story, state, source);
+    let mut g = game(config_dir, story, state, source);
     // Unreadable: the dialogue starts again from its first line, no worse.
     g.reading = (std::fs::read_to_string(reading_path(config_dir, source, story)).ok())
         .and_then(|t| serde_json::from_str(&t).ok());
@@ -268,24 +292,22 @@ fn game_in(config_dir: &Path, story: &Story, state: &State, source: &Source) -> 
     g
 }
 
-fn game(story: &Story, state: &State, source: &Source) -> Game {
+fn game(config_dir: &Path, story: &Story, state: &State, source: &Source) -> Game {
     Game {
         view: play_view(story, state),
         characters: story.characters.clone(),
         drivers: story.drivers.clone(),
-        folder: match source {
-            Source::Sample => None,
-            Source::Folder { path } => Some(path.clone()),
-        },
+        // The story was read from it a moment ago.
+        folder: source.folder(config_dir).ok().flatten(),
         launched_at_ms: None,
         reading: None,
     }
 }
 
-fn read(source: &Source) -> Result<Story, String> {
-    let read = match source {
-        Source::Sample => Story::from_sources(story_engine::sample::files()),
-        Source::Folder { path } => Story::load(path),
+fn read(config_dir: &Path, source: &Source) -> Result<Story, String> {
+    let read = match source.folder(config_dir)? {
+        None => Story::from_sources(story_engine::sample::files()),
+        Some(folder) => Story::load(&folder),
     };
     read.map_err(|errors| {
         // Shown as the checks' count in the hub; the first is enough to log.
@@ -296,8 +318,8 @@ fn read(source: &Source) -> Result<Story, String> {
 }
 
 /// The story, if the checks find no error in it.
-fn playable(source: &Source) -> Result<Story, String> {
-    let story = read(source)?;
+fn playable(config_dir: &Path, source: &Source) -> Result<Story, String> {
+    let story = read(config_dir, source)?;
     if validate(&story).iter().any(|d| d.severity == Severity::Error) {
         return Err(errors::STORY_HAS_ERRORS.into());
     }
@@ -307,11 +329,14 @@ fn playable(source: &Source) -> Result<Story, String> {
 /// `saves/<story id>-<folder>.json` for a story of the author's, where
 /// `<folder>` is a fingerprint of its folder: a copy of a story keeps its id,
 /// and must not share its game. `saves/builtin/` for the sample: an author's
-/// story may well be called `sample` too.
+/// story may well be called `sample` too. `saves/installed/<story id>.json`
+/// for a package: an update keeps its id, and its game.
 fn save_path(config_dir: &Path, source: &Source, story: &Story) -> PathBuf {
     let dir = config_dir.join("story/saves");
     match source {
         Source::Sample => dir.join("builtin").join(format!("{}.json", story_engine::sample::ID)),
+        // The id names a folder already (`package::valid_id`).
+        Source::Installed { id } => dir.join("installed").join(format!("{id}.json")),
         Source::Folder { path } => {
             let id: String = (story.manifest.id.chars())
                 .map(|c| {
@@ -349,6 +374,29 @@ fn save_problem(source: &Source, e: SaveError) -> String {
         }
     }
     .into()
+}
+
+/// Whether the game under way in `source` would no longer resume on
+/// `story`: what an update asks about before it replaces the story
+/// (`packages::install`). Not when there is no game, when it ended, or when
+/// it did not resume already - nothing is lost then.
+pub(super) fn loses_game(config_dir: &Path, source: &Source, story: &Story) -> bool {
+    let Ok(Some(save)) = read_save(config_dir, source, story) else {
+        return false;
+    };
+    if matches!(save.state.wait, Wait::Ended { .. }) {
+        return false;
+    }
+    match save.check(story) {
+        Ok(()) => false,
+        Err(e) => {
+            log::warn!(
+                "story mode: the game of {source:?} would not resume on version {}: {e}",
+                story.manifest.version
+            );
+            true
+        }
+    }
 }
 
 fn resumed(config_dir: &Path, source: &Source, story: &Story) -> Result<State, String> {

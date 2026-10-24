@@ -1070,8 +1070,58 @@ de reprendre. En cas d'écart, la spec fait foi.
           **Pas vu à l'écran** : le bouton du kit et les fichiers enregistrés
           (les planches, elles, ont été regardées une à une).
         - **L3d terminé.**
-      - **L4 à L8** : dans l'ordre du plan de livraison de la spec, après L3c
-        et L3d.
+      - **L4, les histoires en paquets — découpage validé (2026-10-25).**
+        - **Décidé avec l'utilisateur** : un paquet est un **manifeste et un
+          zip par élément** (l'histoire, puis chaque voiture et chaque
+          circuit), chacun avec sa taille et son SHA-256 ; un `.pitstory` est
+          le même ensemble en un seul fichier. Les fichiers de l'histoire
+          s'installent dans `app_config_dir/story/installed/<id>/` ; voitures
+          et circuits par l'import ordinaire quand le joueur ne les a pas ; une
+          version différente chez le joueur est jouée telle quelle et
+          signalée, la substitution le temps d'une session venant avec L4.5.
+          Le registre des permissions : un `credits.yaml` par dossier qui
+          voyage (`media/`, chaque habillage, qui garde ainsi ses crédits
+          quand on le copie) et les voitures et circuits dans
+          `package/manifest.yaml` ; un fichier embarqué qu'aucune ligne ne
+          couvre, ou une ligne ni `granted` ni `not_needed`, bloque la
+          construction. Une mise à jour vérifie la partie en cours avant de
+          remplacer quoi que ce soit, et demande si elle ne reprendrait pas.
+          Pour plus tard : la liste de dépendances (avec les sources de la
+          page Online), les configs CSP embarquées (`gamebackup.rs`), un lien
+          `pitbox://`.
+        - **L4.1, installer un `.pitstory` — fait (2026-10-25).** Le format
+          (`story_engine::package` : manifeste, élément reproductible,
+          `carried`, `valid_id`, `pack`) ; `story-tool pack` fabrique un
+          paquet en attendant l'écran Paquet ; l'installateur
+          (`story/packages.rs`) : copie de l'élément avec son empreinte
+          vérifiée, dépaquetage dans un dossier d'attente, contrôles, puis
+          échange avec l'ancienne version, rattrapé à la lecture suivante de
+          la liste s'il s'arrête à mi-chemin ; la source `Installed` de Story Mode, sa sauvegarde
+          (`saves/installed/<id>.json`) ; « Installer une histoire… » et
+          « Désinstaller » dans le hub.
+          **Choisi sans demander** (dans la spec) : ce qu'un paquet emporte
+          est une liste fermée des dossiers d'une histoire (le reste du
+          dossier de l'auteur, `.git` compris, reste dehors) ; une même id
+          est une mise à jour quelle que soit la version, y compris une
+          version plus ancienne ou la même (réinstaller répare) ;
+          désinstaller garde la partie ; une partie terminée, ou qui ne
+          reprenait déjà plus, ne fait rien demander.
+          **Choisi sans demander** (détails) : l'élément de l'histoire est
+          construit en mémoire (l'exemple pèse 5 Mo ; les voitures de L4.3
+          devront passer par un fichier temporaire) ; le manifeste installé
+          est gardé à côté (`<id>.package.json`) pour L4.4 ; l'empreinte du
+          nom de fichier sur 16 caractères ; un id de paquet en lettres,
+          chiffres, `_` et `-`, sans nom de périphérique Windows ; pas de
+          barre de progression (quelques secondes au plus sans médias
+          lourds) ; `zip` et `sha2` entrent dans la crate du moteur, aux
+          versions de l'app (aucune crate de plus dans l'arbre).
+          **Pas vu à l'écran** : le bouton, les deux confirmations, une
+          histoire installée jouée avec ses médias.
+        - **Reste** : L4.2 (registre et construction, l'écran Paquet), L4.3
+          (voitures et circuits), L4.4 (téléchargement et mises à jour),
+          L4.5 (retouches propres à l'histoire, zone des règles d'or, à
+          trancher le moment venu).
+      - **L5 à L8** : dans l'ordre du plan de livraison de la spec.
       **Écarts assumés par rapport au document de conception** (la spec
       publique les reprend déjà) :
       - Le drapeau qu'il plaçait dans la base SQLite est dans

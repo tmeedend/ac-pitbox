@@ -8,6 +8,7 @@
 //! ```text
 //! story-tool check <story_dir>
 //! story-tool play <story_dir> [--seed=<n>] [--load=<save.json>]
+//! story-tool pack <story_dir> [--out=<file.pitstory>]
 //! ```
 
 mod input;
@@ -17,6 +18,7 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use story_engine::engine::{run, submit, EngineError, Input, Output};
+use story_engine::package;
 use story_engine::save::Save;
 use story_engine::state::{State, Via, Wait};
 use story_engine::validate::{validate, Severity};
@@ -30,10 +32,12 @@ story-tool — check and play a Pit Box story folder
 USAGE:
     story-tool check <story_dir>
     story-tool play <story_dir> [--seed=<n>] [--load=<save.json>]
+    story-tool pack <story_dir> [--out=<file.pitstory>]
 
 COMMANDS:
     check   Load and validate the story; exit code 1 on any error.
     play    Play it. Type `help` at the prompt for what can be typed.
+    pack    Build its package, `<id>-<version>.pitstory` unless --out says.
 ";
 
 const PLAY_HELP: &str = "\
@@ -75,6 +79,7 @@ fn main() -> ExitCode {
             };
             play(&story, seed, option("load").as_deref())
         }
+        "pack" => pack(&story, Path::new(dir), option("out")),
         _ => {
             eprint!("{USAGE}");
             ExitCode::from(2)
@@ -121,6 +126,34 @@ fn check(story: &Story) -> ExitCode {
         ExitCode::SUCCESS
     } else {
         ExitCode::FAILURE
+    }
+}
+
+/// The story's package, until the editor's Package screen builds it
+/// (SPEC-story-mode, Create Your Own). A story with errors is never packed.
+fn pack(story: &Story, dir: &Path, out: Option<String>) -> ExitCode {
+    if !report(story) {
+        eprintln!("the story has errors: fix them first (`story-tool check`)");
+        return ExitCode::FAILURE;
+    }
+    let m = &story.manifest;
+    let out = out.unwrap_or_else(|| format!("{}-{}.{}", m.id, m.version, package::EXTENSION));
+    let built = (package::folder_files(dir).map_err(|e| e.to_string()))
+        .and_then(|files| package::pack(m, &files))
+        .and_then(|bytes| {
+            std::fs::write(&out, &bytes)
+                .map(|_| bytes.len())
+                .map_err(|e| format!("{out}: {e}"))
+        });
+    match built {
+        Ok(size) => {
+            println!("{out}: {} v{}, {size} bytes", m.title, m.version);
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("{e}");
+            ExitCode::FAILURE
+        }
     }
 }
 

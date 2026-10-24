@@ -1,5 +1,5 @@
 //! The neutral sample story, carried inside Pit Box: always something to
-//! play in Story Mode before stories come as packages (L4), the same story
+//! play in Story Mode, whatever packages are installed, the same story
 //! the tests play, and the one an author copies into Create Your Own to see
 //! how a story is made. Played from here, it has no folder: its media are
 //! served from the bytes carried here (`media`), and written out by a copy.

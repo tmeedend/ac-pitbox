@@ -10,6 +10,7 @@ pub mod backups;
 pub mod frames;
 pub mod history;
 pub mod media;
+pub mod packages;
 pub mod play;
 pub mod studio;
 
