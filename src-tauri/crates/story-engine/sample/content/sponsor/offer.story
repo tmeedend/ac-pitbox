@@ -6,4 +6,4 @@ when: ["reputation >= 2", "not flag.sponsor_met"]
 delay: 3 days
 priority: 1
 ---
-sponsor: [line] We saw your result. Let's talk.
+sponsor: We saw your result. Let's talk.

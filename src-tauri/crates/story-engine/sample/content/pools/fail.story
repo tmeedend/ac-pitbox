@@ -5,7 +5,7 @@ from: friend
 pool: fail_01
 when: ["rel.friend >= warm"]
 ---
-friend: [line] A teasing line, only between friends.
+friend: Was that a race or a Sunday drive?
 ---
 id: fail_01_close
 type: message
@@ -13,28 +13,28 @@ from: friend
 pool: fail_01
 when: ["event.race_01.position == 4"]
 ---
-friend: [line] So close.
+friend: So close.
 ---
 id: fail_01_family
 type: message
 from: parent
 pool: fail_01
 ---
-parent: [line] An encouraging line.
+parent: Keep at it, you are getting there.
 ---
 id: fail_02_friend
 type: message
 from: friend
 pool: fail_02
 ---
-friend: [line] Next time.
+friend: Next time.
 ---
 id: fail_02_parent
 type: message
 from: parent
 pool: fail_02
 ---
-parent: [line] Proud of you anyway.
+parent: Proud of you anyway.
 ---
 id: fail_02_rival
 type: social_post
@@ -42,4 +42,4 @@ from: rival
 pool: fail_02
 when: ["rel.rival <= cold"]
 ---
-rival: [line] As expected.
+rival: As expected.
