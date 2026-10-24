@@ -774,7 +774,9 @@ de reprendre. En cas d'écart, la spec fait foi.
           choix) ; `CREDITS.md` vit dans `media/`, donc une copie de l'exemple
           l'emporte avec les images ; `storymedia` ne sert pas les plages
           (`Range`) : à ajouter avec la première vidéo de scène.
-        - **Reste** : les trois images de l'exemple font 1 × 1 pixel. Qui fait
+        - **Fait (2026-10-24)** : les portraits, l'illustration et les trois
+          scènes sont des images générées par IA, fournies par l'utilisateur et
+          créditées comme telles. Qui fait
           quoi, avec noms et tailles : la liste ci-dessous.
       - **Écarts entre la spec (habillages, L3c, L3d) et le code, relevés le
         2026-10-24.** Rien de contradictoire : tout ce qui manque est attribué
@@ -973,9 +975,10 @@ de reprendre. En cas d'écart, la spec fait foi.
           habillages s'écrivent à la main jusqu'à l'écran Cadre.
           **Pas vu à l'écran** : tout le rendu (corps, barre d'état, 9-slice,
           police, sons).
-          **À voir avec l'utilisateur** : `media/CREDITS.md` décrit encore
-          comme provisoires les six images qu'il a remplacées (portraits,
-          illustration, scènes) ; leur source et leur licence sont à écrire.
+          **Réglé avec l'utilisateur (2026-10-24)** : les six images qu'il a
+          remplacées sont générées par IA ; `CREDITS.md` le dit, sous CC0
+          pour ce qui peut en relever - la ligne sert au registre des
+          permissions de L4 plus qu'à créditer quelqu'un.
         - **L3d.3, les modèles qui manquent.** En deux temps.
           **L3d.3a, l'agenda et l'appel — fait (2026-10-24).** Les modèles
           `agenda` (entrées de calendrier) et `call` (l'écran d'appel) ;
