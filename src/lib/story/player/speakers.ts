@@ -5,9 +5,8 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import type { Character } from "../studio";
 import type { Speaker } from "./types";
 
-/** `characters` as speakers; `folder` is the story's, `null` for a story
- * without media on disk (the sample Pit Box carries), whose characters show
- * as initials. */
+/** `characters` as speakers; `folder` is the story's, `null` for the
+ * sample Pit Box carries. A character without a portrait shows as initials. */
 export function speakersOf(characters: Character[], folder: string | null): Record<string, Speaker> {
   const out: Record<string, Speaker> = {};
   for (const c of characters) {
@@ -22,8 +21,11 @@ export function speakersOf(characters: Character[], folder: string | null): Reco
 }
 
 /** A file of the story's `media/` (`path` inside it) as a URL the page can
- * show; `null` for a story without media on disk (the sample Pit Box
- * carries) or without a path. */
+ * show; `null` without a path. `folder` is the story's, read through the
+ * asset protocol; `null` for the sample Pit Box carries, whose media are
+ * served from the bytes it carries (`storymedia`, `story/media.rs`). */
 export function mediaUrl(folder: string | null, path: string | null | undefined): string | null {
-  return folder && path ? convertFileSrc(`${folder}/media/${path}`) : null;
+  if (!path) return null;
+  if (folder) return convertFileSrc(`${folder}/media/${path}`);
+  return `http://storymedia.localhost/sample/${path.split("/").map(encodeURIComponent).join("/")}`;
 }

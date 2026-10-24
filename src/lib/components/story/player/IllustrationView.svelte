@@ -9,8 +9,7 @@
   import type { PlayerStep } from "$lib/story/player/types";
 
   interface Props {
-    /** The picture's URL; `null` when there is none to show (the sample
-     * played from inside Pit Box carries no media). */
+    /** The picture's URL; `null` when there is none to show. */
     picture: string | null;
     steps: PlayerStep[];
     /** No background or border of its own: the scene behind shows through. */

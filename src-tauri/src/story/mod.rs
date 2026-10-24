@@ -8,6 +8,7 @@
 
 pub mod backups;
 pub mod history;
+pub mod media;
 pub mod play;
 pub mod studio;
 

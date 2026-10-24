@@ -329,7 +329,8 @@ fn last_segment(url: &str) -> Option<String> {
     segment.contains('.').then_some(segment)
 }
 
-fn percent_decode(s: &str) -> String {
+/// A URL's `%xx` escapes decoded; a malformed one is kept as written.
+pub(crate) fn percent_decode(s: &str) -> String {
     let bytes = s.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;

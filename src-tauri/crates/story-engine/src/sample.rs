@@ -1,8 +1,8 @@
 //! The neutral sample story, carried inside Pit Box: always something to
 //! play in Story Mode before stories come as packages (L4), the same story
 //! the tests play, and the one an author copies into Create Your Own to see
-//! how a story is made. Played from here, it has no folder, so its
-//! characters show with initials; its media are carried for the copy.
+//! how a story is made. Played from here, it has no folder: its media are
+//! served from the bytes carried here (`media`), and written out by a copy.
 
 use crate::load::SourceFile;
 
@@ -20,6 +20,15 @@ pub fn folder_files() -> Vec<(String, Vec<u8>)> {
     (FILES.iter().map(|(p, t)| (p.to_string(), t.as_bytes().to_vec())))
         .chain(MEDIA.iter().map(|(p, b)| (p.to_string(), b.to_vec())))
         .collect()
+}
+
+/// A file of the sample's `media/`, by its path inside that folder
+/// (`portraits/friend_happy.png`), as Story Mode shows it.
+pub fn media(path: &str) -> Option<&'static [u8]> {
+    MEDIA
+        .iter()
+        .find(|(p, _)| p.strip_prefix("media/") == Some(path))
+        .map(|(_, bytes)| *bytes)
 }
 
 /// The sample's files, as `load::read_dir` would read them from its folder.
@@ -53,5 +62,21 @@ mod tests {
         assert_eq!(carried, media, "every media file too, for the copy");
         let story = crate::Story::from_sources(files()).expect("loads");
         assert_eq!(story.manifest.id, ID);
+    }
+
+    // Story Mode shows the sample's pictures by their path in `media/`, the
+    // one a portrait or an illustration names - and nothing outside it.
+    #[test]
+    fn a_media_file_is_found_by_its_path_inside_media() {
+        assert!(
+            media("portraits/friend_happy.png").is_some(),
+            "a portrait, as a character names it"
+        );
+        assert!(
+            media("media/portraits/friend_happy.png").is_none(),
+            "the path is inside media/"
+        );
+        assert!(media("story.yaml").is_none(), "a text file is not a media file");
+        assert!(media("portraits/nobody.png").is_none(), "nothing for a missing file");
     }
 }

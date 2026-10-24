@@ -131,6 +131,9 @@ pub fn run() {
         .register_uri_scheme_protocol("carpreview", |ctx, request| {
             preview::serve_request(ctx.app_handle(), &request)
         })
+        // The sample story's pictures, from the bytes Pit Box carries
+        // (`story/media.rs`).
+        .register_uri_scheme_protocol("storymedia", |_, request| story::media::serve(&request))
         .setup(|app| {
             timing::mark("setup.begin", None);
             // The order of these four is the one that matters (`startup.rs`).

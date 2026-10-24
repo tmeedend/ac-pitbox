@@ -708,7 +708,10 @@ are neutral and free to redistribute from a public repository - the
 project's own work, or a licence that allows it (CC0 or similar), with the
 origin and licence of each file recorded - and show no brand, logo, real
 person or real story. They are carried inside Pit Box with the sample, so
-Story Mode plays the sample with its pictures, not only its copy.
+Story Mode plays the sample with its pictures, not only its copy; each file's
+origin and licence is in `media/CREDITS.md`, which a copy takes along. Its
+events race only on cars and tracks of Assetto Corsa's base game, so the
+sample plays on any install as it is.
 
 What is not visible in it:
 

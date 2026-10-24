@@ -756,7 +756,96 @@ de reprendre. En cas d'écart, la spec fait foi.
           défile en largeur sans réduction ; les flèches peuvent encore se
           croiser (un seul passage de réordonnancement par sens).
         - **L3b terminé.**
-      - **L4 à L8** : dans l'ordre du plan de livraison de la spec.
+      - **L'histoire d'exemple, avant L3c (2026-10-24).** La spec ajoute
+        « The sample shows how everything is made » : chaque lot qui donne
+        quelque chose à l'auteur en met un exemple dans l'histoire d'exemple,
+        contenu et médias, et Story Mode la joue avec ses images.
+        - **Fait** : les répliques sans la marque `[line]` ; des voitures et
+          des circuits du jeu de base (Magione, Imola, Mugello, Vallelunga
+          `club_circuit` ; Abarth 500, Lotus Elise SC, BMW M3 E30, BMW 1M),
+          vérifiés par un test dans `docs/kunos_content_dates.json` — les
+          liveries et le layout, absents de la table, ont été vérifiés sur
+          une install ; la liste des fichiers embarqués dressée par
+          `story-engine/build.rs` ; les médias de l'exemple servis par le
+          protocole `storymedia` (`story/media.rs`), depuis les octets
+          embarqués, sans rien écrire sur disque ; `sample/media/CREDITS.md`.
+        - **Choisi sans demander** : CC0 pour les fichiers faits pour Pit Box
+          (un auteur qui copie l'exemple les réutilise sous la licence de son
+          choix) ; `CREDITS.md` vit dans `media/`, donc une copie de l'exemple
+          l'emporte avec les images ; `storymedia` ne sert pas les plages
+          (`Range`) : à ajouter avec la première vidéo de scène.
+        - **Reste** : les trois images de l'exemple font 1 × 1 pixel. Qui fait
+          quoi, avec noms et tailles : la liste ci-dessous.
+      - **Écarts entre la spec (habillages, L3c, L3d) et le code, relevés le
+        2026-10-24.** Rien de contradictoire : tout ce qui manque est attribué
+        à L3c ou L3d.
+        - Le type `document` n'existe pas (moteur, contrôles, éditeur) ;
+          `on_scene()` ne couvre que le dialogue et l'illustration.
+        - Modèles présents : fil, boîte de réception, fil d'actu (`list`),
+          relevé, et la scène. Absents : agenda, catalogue (L6), les
+          layouts `page` et `letter`, l'écran d'appel.
+        - Le cadre `phone` déclare montrer tous les types (`frame.rs`), mais
+          l'appel, la vidéo, l'annonce et l'entrée d'agenda n'y ont pas d'app :
+          ils sont livrés et nommés dans Messages.
+        - `frames/` et `scenes/` sont ignorés à la lecture (`load.rs`, `READ`) ;
+          un Beat n'a pas de `scene` ; la `scene` d'un dialogue est un nom
+          libre, non vérifié.
+        - Rien des habillages : ni `frames.yaml`, ni emplacements, ni 9-slice,
+          ni polices ; le téléphone est dessiné en CSS au thème de l'app.
+        - L'exemple n'a ni scène, ni habillage, ni second téléphone, ni journal
+          en page, ni appel, ni agenda.
+      - **Les médias de l'exemple : qui les fait (proposé le 2026-10-24).**
+        Tailles de référence de la spec : écran du téléphone large de 1080 px,
+        scène en 1920 × 1080.
+        - **Faits par Claude** (dessinés par programme, CC0), avec L3d :
+          les corps des deux téléphones et leurs fonds d'écran abstraits, les
+          icônes d'app (192 × 192), les bulles, l'en-tête et le bouton de
+          réponse en 9-slice, la manchette d'un journal inventé, les planches
+          du kit de départ (PNG et SVG), et les sons d'interface simples
+          (bips synthétisés). La police : une police OFL existante (Inter pour
+          le téléphone, Playfair Display pour le journal), à télécharger avec
+          l'accord de l'utilisateur.
+        - **À trouver par l'utilisateur** (photos, visages, lieux réalistes ;
+          CC0, ou une licence qui permet la redistribution ; sans marque, logo
+          ni personne réelle), dans `sample/media/` :
+          `portraits/friend_neutral.png` et `portraits/friend_happy.png`
+          (800 × 1200, fond transparent, coupés à la taille, en bas de
+          l'image) ; `illustrations/finish_line.png` (1920 × 1080) ;
+          `scenes/bedroom.webp`, `scenes/garage_day.webp`,
+          `scenes/garage_night.webp` (1920 × 1080) ; `scenes/garage.ogg`
+          (boucle d'ambiance sans couture, 20 à 60 s) ;
+          `documents/race_photo.webp` (1200 × 800, une course sans livrée
+          reconnaissable).
+      - **L3c, les scènes — découpage proposé (2026-10-24), en attente de
+        l'accord de l'utilisateur.**
+        - **L3c.1, le moteur.** `scenes/scenes.yaml` : des lieux, chacun avec
+          ses variantes (saison, heure, météo, humeur), un fichier dans
+          `media/scenes/`, un flou et une ambiance. Un Beat pose la scène
+          courante et peut imposer une variante ; la `scene` d'un dialogue
+          devient un lieu vérifié. Le moteur choisit la variante d'après le
+          temps de l'histoire et l'horloge ; la scène courante va dans la
+          sauvegarde (champ ajouté, valeur par défaut). Contrôles : lieu
+          inconnu, fichier absent, lieu sans variante par défaut. Exemple :
+          une chambre, et un garage de jour et de nuit, posés par les Beats
+          des chapitres 1 et 3.
+        - **L3c.2, le joueur.** Le fond de `PlayScreen` devient la scène :
+          image ou boucle vidéo, flou réglable (plus net quand la scène
+          occupe l'écran), fondu ou coupe au changement, l'ambiance en
+          boucle avec un bouton muet gardé dans `ui_prefs.json`. `storymedia`
+          gagne les plages pour la vidéo.
+        - **L3c.3, l'éditeur.** L'écran Scènes : la liste des lieux, leurs
+          variantes et leurs fichiers, et un aperçu côté joueur où l'on règle
+          saison, heure, météo et humeur pour voir la variante choisie, le
+          téléphone par-dessus. Le panneau d'un Beat et la fiche d'un
+          dialogue choisissent le lieu dans une liste.
+        - **Hors de L3c** : le garage qui montre la voiture du joueur attend
+          le garage de l'histoire (L6).
+        - **Questions** : d'où viennent la météo et l'humeur (l'histoire n'en
+          a pas encore : un champ de Beat qui reste posé ?) ; « quand chaque
+          scène est disponible » est-il une condition sur le lieu, ou sur la
+          variante ?
+      - **L4 à L8** : dans l'ordre du plan de livraison de la spec, après L3c
+        et L3d.
       **Écarts assumés par rapport au document de conception** (la spec
       publique les reprend déjà) :
       - Le drapeau qu'il plaçait dans la base SQLite est dans
