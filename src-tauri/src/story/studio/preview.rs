@@ -109,7 +109,7 @@ pub struct Change {
 /// `setup` (effect sentences, `rel.friend = warm`) applied, then `replies`.
 /// Reads the story from disk; nothing is written.
 pub fn preview(folder: &Path, id: &str, setup: &[String], replies: &[String]) -> Result<PreviewView, String> {
-    use story_engine::expr::{Effect, Var};
+    use story_engine::expr::Effect;
     let (_, d) = draft_dir(folder).map_err(|e| e.to_string())?;
     let story = Story::from_draft(d).map_err(|errors| {
         errors
@@ -151,28 +151,7 @@ pub fn preview(folder: &Path, id: &str, setup: &[String], replies: &[String]) ->
         (false, None) => "frame",
     };
 
-    // A knob starts from the story's own starting value, not from what the
-    // author set: the panel tells a value set from one left alone.
-    let start = story_engine::state::State::new(&story, 0);
-    let money = story.settings().money;
-    let knobs = (item.reads().into_iter())
-        .filter_map(|var| {
-            let (kind, start) = match var {
-                Var::Rel(who) => ("relation", start.relations.get(who)?.clone()),
-                Var::Flag(f) => ("flag", start.flags.contains(f).to_string()),
-                Var::Counter(c) => ("number", start.counters.get(c)?.to_string()),
-                Var::Reputation => ("number", start.reputation.to_string()),
-                Var::Followers => ("number", start.followers.to_string()),
-                Var::Money if money => ("number", start.money.to_string()),
-                _ => return None,
-            };
-            Some(Knob {
-                var: var.to_string(),
-                kind,
-                start,
-            })
-        })
-        .collect();
+    let knobs = knobs(&story, item);
 
     Ok(PreviewView {
         view,
@@ -197,6 +176,33 @@ pub fn preview(folder: &Path, id: &str, setup: &[String], replies: &[String]) ->
         date: after.date.to_string(),
         clock: item.clock.unwrap_or(after.clock).to_string(),
     })
+}
+
+/// What the author can set to preview `item` with: the variables it reads,
+/// each with the story's own starting value - not what the author set, so
+/// the panel tells a value set from one left alone.
+fn knobs(story: &Story, item: &story_engine::model::ContentItem) -> Vec<Knob> {
+    use story_engine::expr::Var;
+    let start = story_engine::state::State::new(story, 0);
+    let money = story.settings().money;
+    (item.reads().into_iter())
+        .filter_map(|var| {
+            let (kind, start) = match var {
+                Var::Rel(who) => ("relation", start.relations.get(who)?.clone()),
+                Var::Flag(f) => ("flag", start.flags.contains(f).to_string()),
+                Var::Counter(c) => ("number", start.counters.get(c)?.to_string()),
+                Var::Reputation => ("number", start.reputation.to_string()),
+                Var::Followers => ("number", start.followers.to_string()),
+                Var::Money if money => ("number", start.money.to_string()),
+                _ => return None,
+            };
+            Some(Knob {
+                var: var.to_string(),
+                kind,
+                start,
+            })
+        })
+        .collect()
 }
 
 /// What changed between two states, in the variables an author sets.

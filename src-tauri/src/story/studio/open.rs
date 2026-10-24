@@ -195,15 +195,6 @@ fn edited<T>(files: &[SourceFile], errors: &[LoadError], file: &str, value: Opti
 
 pub fn open(folder: &Path) -> Result<OpenStory, String> {
     let (files, mut d) = draft_dir(folder).map_err(|e| e.to_string())?;
-    let chapter_files: Vec<SourceFile> = files.iter().filter(|f| is_chapter_path(&f.path)).cloned().collect();
-    let event_files: Vec<String> = (files.iter())
-        .filter(|f| is_event_path(&f.path))
-        .map(|f| f.path.clone())
-        .collect();
-    let story_files: Vec<String> = (files.iter())
-        .filter(|f| is_content_path(&f.path))
-        .map(|f| f.path.clone())
-        .collect();
     // Drafted once, then both shown and checked: the screen and its
     // diagnostics describe the same state of the folder, read once.
     let media = media_list(&d);
@@ -223,37 +214,12 @@ pub fn open(folder: &Path) -> Result<OpenStory, String> {
             edited(&files, &d.errors, &f.path, skin)
         })
         .collect();
-    let chapters = chapter_files
-        .iter()
-        .map(|f| {
-            let chapter = d.chapters.iter().find(|c| c.file == f.path).cloned();
-            let error = (d.errors.iter()).find(|e| e.file == f.path).map(|e| e.message.clone());
-            ChapterFile {
-                file: f.path.clone(),
-                stamp: stamp(&f.text),
-                chapter,
-                error,
-            }
-        })
-        .collect();
     let content = d.content.iter().map(ContentRef::of).collect();
-    let mut events: Vec<EditedFile<Event>> = (event_files.iter())
-        .map(|file| {
-            let event = d.events.iter().find(|e| &e.file == file).cloned();
-            edited(&files, &d.errors, file, event)
-        })
-        .collect();
-    events.sort_by(|a, b| a.file.cmp(&b.file));
-    let mut content_files: Vec<EditedFile<ContentFile>> = (story_files.iter())
-        .map(|file| {
-            let items = (d.content.iter())
-                .filter(|c| &c.file == file)
-                .map(|c| c.doc())
-                .collect();
-            edited(&files, &d.errors, file, Some(ContentFile { items }))
-        })
-        .collect();
-    content_files.sort_by(|a, b| a.file.cmp(&b.file));
+    let (chapters, events, content_files) = (
+        chapter_files(&files, &d),
+        event_files(&files, &d),
+        content_files(&files, &d),
+    );
     Ok(OpenStory {
         path: folder.to_path_buf(),
         manifest,
@@ -274,6 +240,45 @@ pub fn open(folder: &Path) -> Result<OpenStory, String> {
         media,
         history: history::with(folder, |h| h.status()),
     })
+}
+
+/// The chapters, each readable or not, in path order.
+fn chapter_files(files: &[SourceFile], d: &Draft) -> Vec<ChapterFile> {
+    (files.iter().filter(|f| is_chapter_path(&f.path)))
+        .map(|f| ChapterFile {
+            file: f.path.clone(),
+            stamp: stamp(&f.text),
+            chapter: d.chapters.iter().find(|c| c.file == f.path).cloned(),
+            error: (d.errors.iter()).find(|e| e.file == f.path).map(|e| e.message.clone()),
+        })
+        .collect()
+}
+
+/// One per file of `events/`, in file-name order.
+fn event_files(files: &[SourceFile], d: &Draft) -> Vec<EditedFile<Event>> {
+    let mut events: Vec<EditedFile<Event>> = (files.iter().filter(|f| is_event_path(&f.path)))
+        .map(|f| {
+            let event = d.events.iter().find(|e| e.file == f.path).cloned();
+            edited(files, &d.errors, &f.path, event)
+        })
+        .collect();
+    events.sort_by(|a, b| a.file.cmp(&b.file));
+    events
+}
+
+/// One per `.story` file of `content/`, all its items, in file-name order.
+fn content_files(files: &[SourceFile], d: &Draft) -> Vec<EditedFile<ContentFile>> {
+    let mut out: Vec<EditedFile<ContentFile>> = (files.iter().filter(|f| is_content_path(&f.path)))
+        .map(|f| {
+            let items = (d.content.iter())
+                .filter(|c| c.file == f.path)
+                .map(|c| c.doc())
+                .collect();
+            edited(files, &d.errors, &f.path, Some(ContentFile { items }))
+        })
+        .collect();
+    out.sort_by(|a, b| a.file.cmp(&b.file));
+    out
 }
 
 pub(super) fn media_list(d: &Draft) -> Vec<String> {
