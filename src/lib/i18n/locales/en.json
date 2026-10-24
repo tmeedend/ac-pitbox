@@ -2888,6 +2888,8 @@
       "finished": "Finished",
       "replaceConfirm": "Start again from the beginning? The game under way is replaced.",
       "leave": "Leave",
+      "sound": "Sound",
+      "soundOff": "Sound off",
       "money": "Money: {n}",
       "reputation": "Reputation: {n}",
       "messages": "Messages",

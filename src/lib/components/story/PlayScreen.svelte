@@ -1,7 +1,8 @@
 <script lang="ts">
   // A game of Story Mode (SPEC-story-mode, Story Mode: player side): the
-  // three layers - the scene (a plain background until the story's scenes
-  // exist), the frame over it (the phone), and the dialogue layer over both
+  // three layers - the scene (the current place, or the one the dialogue on
+  // stage plays in; plain without one), with its ambient sound, the frame
+  // over it (the phone), and the dialogue layer over both
   // while a dialogue or an illustration plays - with what the story waits for beside the frame;
   // the next event goes in the frame itself, heading its messages, and on
   // the scene only when there is no frame.
@@ -21,7 +22,8 @@
   import { i18n, t } from "$lib/i18n/index.svelte";
   import { buildSetup, sessionResult } from "$lib/story/raceLaunch";
   import { dialogueLog, onStage, readBefore } from "$lib/story/player/game";
-  import { autoSpeed } from "$lib/story/playPrefs";
+  import { ambientMuted, autoSpeed, setAmbientMuted } from "$lib/story/playPrefs";
+  import { sceneShown } from "$lib/story/player/scene";
   import { dateLabel } from "$lib/story/player/phone";
   import { mediaUrl, speakersOf } from "$lib/story/player/speakers";
   import { closeGame, keepReading, move, play } from "$lib/story/playState.svelte";
@@ -30,6 +32,8 @@
   import DialogueControls from "./DialogueControls.svelte";
   import DialogueLog from "./DialogueLog.svelte";
   import IllustrationView from "./player/IllustrationView.svelte";
+  import SceneAmbient from "./player/SceneAmbient.svelte";
+  import SceneView from "./player/SceneView.svelte";
   import EventCard from "./EventCard.svelte";
   import Journal from "./Journal.svelte";
   import PhoneScreen from "./PhoneScreen.svelte";
@@ -42,6 +46,12 @@
   const date = $derived(dateLabel(view.date, view.date_display, t, i18n.locale));
 
   const speakers = $derived(speakersOf(game.characters, game.folder));
+
+  /** The item on stage, a dialogue or an illustration. */
+  const onStageItem = $derived(played !== null ? view.items[played] : null);
+  const scene = $derived(sceneShown(view.scene, onStageItem));
+  const ambient = $derived(mediaUrl(game.folder, scene?.ambient));
+  const muted = $derived(ambientMuted());
 
   let journal = $state(false);
   /** The scene holds the stage: the frame is out of view. */
@@ -161,6 +171,11 @@
     <button class="btn btn-ghost" disabled={played !== null} onclick={() => (journal = !journal)}
       >{t("story.journal.title")}</button
     >
+    {#if ambient}
+      <button class="btn btn-ghost" aria-pressed={muted} onclick={() => setAmbientMuted(!muted)}
+        >{t(muted ? "story.play.soundOff" : "story.play.sound")}</button
+      >
+    {/if}
     <span class="stats">
       {#if date}<span>{date}</span>{/if}
       {#if view.money !== null}<span>{t("story.play.money", { n: view.money })}</span>{/if}
@@ -170,8 +185,9 @@
   {#if play.problem}<p class="errbox">{play.problem}</p>{/if}
   {#if launchProblem}<p class="errbox">{launchProblem}</p>{/if}
 
-  <div class="scene" class:staged>
-    <div class="backdrop"></div>
+  <div class="scene">
+    <SceneView {scene} folder={game.folder} {staged} transition={onStageItem?.transition ?? null} />
+    <SceneAmbient src={ambient} {muted} />
     <div class="frame-layer" class:away={staged} inert={staged}>
       {#if !eventInFrame}
         <WaitingCard
@@ -317,25 +333,12 @@
   .errbox {
     margin: 10px 18px 0;
   }
-  /* The scene: a plain background until the story's scenes exist. The
-     backdrop is its own layer, blurred behind the frame and brought nearer
-     into focus while the stage holds the scene; oversized so that the blur
-     never shows its edges. */
+  /* The scene, its pictures drawn by `SceneView`, the layers over them. */
   .scene {
     position: relative;
     flex: 1;
     min-height: 0;
     overflow: hidden;
-  }
-  .backdrop {
-    position: absolute;
-    inset: -16px;
-    background: radial-gradient(ellipse at 50% 30%, var(--panel2), var(--bg));
-    filter: blur(6px);
-    transition: filter 0.4s ease;
-  }
-  .staged .backdrop {
-    filter: blur(1px);
   }
   .frame-layer {
     position: absolute;

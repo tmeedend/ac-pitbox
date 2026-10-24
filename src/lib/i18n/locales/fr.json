@@ -2888,6 +2888,8 @@
       "finished": "Terminée",
       "replaceConfirm": "Recommencer depuis le début ? La partie en cours est remplacée.",
       "leave": "Quitter",
+      "sound": "Son",
+      "soundOff": "Son coupé",
       "money": "Argent : {n}",
       "reputation": "Réputation : {n}",
       "messages": "Messages",

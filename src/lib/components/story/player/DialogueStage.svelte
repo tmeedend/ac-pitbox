@@ -1,7 +1,7 @@
 <script lang="ts">
   // A dialogue on the scene (SPEC-story-mode, In-person dialogues): a 16:9
-  // stage with the scene behind (a plain background until the story's scenes
-  // exist), the characters present as portraits, the line in a text box at
+  // stage - bare over the place it plays in (`SceneView`), on a plain panel
+  // otherwise - the characters present as portraits, the line in a text box at
   // the bottom, and the replies once the last line is read. A click, Space
   // or Enter shows the next line, the left arrow the one before. Who stands
   // where with which face is `stageAt`'s, so a dialogue shows the same here

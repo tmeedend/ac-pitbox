@@ -14,3 +14,12 @@ export function autoSpeed(): AutoSpeed {
 export function setAutoSpeed(speed: AutoSpeed): void {
   setUiPref(StorageKey.storyAutoSpeed, speed);
 }
+
+/** The scenes' ambient sound is muted: the player said so. */
+export function ambientMuted(): boolean {
+  return peekUiPref(StorageKey.storyAmbientMuted) === "1";
+}
+
+export function setAmbientMuted(muted: boolean): void {
+  setUiPref(StorageKey.storyAmbientMuted, muted ? "1" : "0");
+}

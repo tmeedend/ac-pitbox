@@ -846,11 +846,26 @@ de reprendre. En cas d'écart, la spec fait foi.
           que contre l'ensemble des lieux (le lieu courant n'est pas connu
           sans jouer) : imposée sur un lieu qui ne l'a pas, elle est ignorée
           sans un mot.
-        - **L3c.2, le joueur.** Le fond de `PlayScreen` devient la scène :
-          image ou boucle vidéo, flou réglable (plus net quand la scène
-          occupe l'écran), fondu ou coupe au changement, l'ambiance en
-          boucle avec un bouton muet gardé dans `ui_prefs.json`. `storymedia`
-          gagne les plages pour la vidéo.
+        - **L3c.2, le joueur — fait (2026-10-24).** Le fond de `PlayScreen`
+          est la scène (`player/SceneView.svelte`) : image ou boucle vidéo,
+          un calque par image pour que deux tiennent pendant un fondu, flou
+          par calque (`player/scene.ts`) ; l'ambiance
+          (`player/SceneAmbient.svelte`, fondu de volume d'une seconde) et
+          son bouton muet (`pitbox.story.ambientMuted` dans `ui_prefs.json`).
+          `storymedia` sert vidéos et sons, par plages (`byte_range.rs`,
+          partagé avec `carpreview`). L'aperçu de l'éditeur montre un
+          dialogue devant son propre lieu.
+          **Choisi sans demander** (dans la spec) : la coupe d'un dialogue
+          vaut aussi à sa sortie ; la scène apparaît sans fondu à
+          l'ouverture ; le journal relit devant le lieu courant, pas devant
+          celui du dialogue relu ; l'aperçu ne montre que le lieu propre du
+          dialogue, muet. **Choisi sans demander** (détails) : flou de 6 px
+          derrière le cadre, 1 px quand la scène occupe l'écran (les valeurs
+          d'avant) ; fondu d'image de 0,6 s ; le son au volume du fichier ; le
+          bouton muet n'apparaît que quand la scène a un son.
+          **Pas vu** : aucune vidéo ni aucun son dans l'exemple (`garage.ogg`
+          attendu) ; le fondu, la coupe et la lecture d'une vidéo par plages
+          ne sont prouvés que par les tests de la logique et du protocole.
         - **L3c.3, l'éditeur.** L'écran Scènes : la liste des lieux, leurs
           variantes et leurs fichiers, et un aperçu côté joueur où l'on règle
           saison, heure, météo et humeur pour voir la variante choisie, le

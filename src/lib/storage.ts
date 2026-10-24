@@ -87,6 +87,9 @@ export const StorageKey = {
   /** How fast a dialogue moves on by itself in Story Mode
    * (`slow` | `normal` | `fast`). Born in `ui_prefs.json`. */
   storyAutoSpeed: `${PREFIX}.story.autoSpeed`,
+  /** `"1"` when the player muted the scenes' ambient sound in Story Mode.
+   * Born in `ui_prefs.json`. */
+  storyAmbientMuted: `${PREFIX}.story.ambientMuted`,
   preferredSkin: (carId: string) => `${PREFIX}.skin.${carId}`,
   preferredLayout: (trackId: string) => `${PREFIX}.layout.${trackId}`,
   /** Tenue de pilote choisie pour cette voiture (PILOTE§1.4).

@@ -301,8 +301,10 @@ with none.
   between scenes, a portrait entering or leaving, a change of expression.
   Today a dialogue or an illustration says `transition: cut`, or nothing for
   a fade: how it comes on the scene and leaves it and, for a dialogue, how
-  its portraits come, go and change face. Between scenes waits for the
-  scenes.
+  its portraits come, go and change face. A change of place or variant fades
+  too, and cuts when the dialogue or illustration that comes on stage with
+  it, or that leaves it, says `cut`; a Beat's change between two dialogues
+  fades.
 - **Seeing the shape of a branching story.** The Story flow screen stays a
   column for editing. A read-only graph view, laid out automatically each time
   it opens (nothing stored), shows a chapter as a map: branches side by side,
@@ -919,6 +921,19 @@ The player side follows each story's settings. What the engine needs:
   replies chosen included, with nothing to answer. It is rebuilt from the
   save's history, like the phone's threads, and is closed while a dialogue
   plays. Escape goes back to the list, then closes it.
+- **The scene** stands behind the frame: the current place's variant, a
+  still image or a video loop filling the view, or a plain background with
+  no place. A dialogue with a place of its own plays in front of it, the
+  current one coming back after it; the journal rereads in front of the
+  current place. The scene is blurred behind the frame and nearer into
+  focus while it holds the stage, never for a variant with `blur: false`; it
+  appears at once when the game opens. The ambient sound loops while its
+  place shows, fades out and the next one in when it changes; a button of
+  the game's bar, shown while there is a sound, mutes it - a preference of
+  the player, kept by Pit Box, not by a game. The Content screen's preview
+  shows a dialogue in front of its own place, silent, with the values set to
+  preview with; without one, on a plain stage: where the flow stands is not
+  played there.
 - **A player action** shows as a card with its name and a Done button, until
   actions have their screens (catalogs, L6). An event shows its summary: type,
   track, car, laps, entry fee, the goal in words, the attempt. With a frame,

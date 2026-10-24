@@ -2,7 +2,8 @@
   // The Content screen's live preview (SPEC-story-mode, Create Your Own:
   // Content): the item played by the engine on its own, shown by the very
   // views Story Mode uses - the phone and the template of the app showing the
-  // item (thread, inbox, feed, statement), or the dialogue stage.
+  // item (thread, inbox, feed, statement), or the dialogue stage - in front
+  // of its own place when it has one, silent.
   // It follows every save (`studio.revision`). The author sets what the item
   // reads to preview with, chooses replies, and sees what the conversation
   // changed. An item no frame can show shows the checks' warning instead.
@@ -22,6 +23,7 @@
   import FeedView from "./player/FeedView.svelte";
   import MailView from "./player/MailView.svelte";
   import PhoneFrame from "./player/PhoneFrame.svelte";
+  import SceneView from "./player/SceneView.svelte";
   import StatementView from "./player/StatementView.svelte";
   import ThreadView from "./player/ThreadView.svelte";
 
@@ -98,16 +100,22 @@
     {:else if view.view === "scene" && view.kind === "illustration"}
       <IllustrationView picture={mediaUrl(story.path, view.picture)} steps={view.steps} />
     {:else if view.view === "scene"}
-      <DialogueStage
-        steps={view.steps}
-        choices={view.choices}
-        present={view.characters}
-        transition={view.transition}
-        from={view.from}
-        {speakers}
-        ended={view.ended}
-        onchoose={choose}
-      />
+      <div class="placed" class:framed={view.scene !== null}>
+        {#if view.scene}
+          <SceneView scene={view.scene} folder={story.path} staged transition={view.transition} />
+        {/if}
+        <DialogueStage
+          steps={view.steps}
+          choices={view.choices}
+          present={view.characters}
+          transition={view.transition}
+          from={view.from}
+          {speakers}
+          ended={view.ended}
+          bare={view.scene !== null}
+          onchoose={choose}
+        />
+      </div>
     {:else}
       <div class="device">
         <PhoneFrame
@@ -210,6 +218,15 @@
     align-items: center;
     justify-content: space-between;
     margin-bottom: 8px;
+  }
+  /* A dialogue in front of its place: the scene drawn under the bare stage,
+     the stage's own border kept around both. */
+  .placed {
+    position: relative;
+  }
+  .placed.framed {
+    border: 1px solid var(--line);
+    overflow: hidden;
   }
   .device {
     display: flex;
