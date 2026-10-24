@@ -9,77 +9,10 @@ use crate::load::SourceFile;
 /// Its id, as `story.yaml` declares it.
 pub const ID: &str = "sample";
 
-const FILES: &[(&str, &str)] = &[
-    (
-        "content/friend/invite.story",
-        include_str!("../sample/content/friend/invite.story"),
-    ),
-    ("content/finish.story", include_str!("../sample/content/finish.story")),
-    (
-        "content/friend/news.story",
-        include_str!("../sample/content/friend/news.story"),
-    ),
-    (
-        "content/friend/talk.story",
-        include_str!("../sample/content/friend/talk.story"),
-    ),
-    (
-        "content/parent/broke.story",
-        include_str!("../sample/content/parent/broke.story"),
-    ),
-    (
-        "content/pools/fail.story",
-        include_str!("../sample/content/pools/fail.story"),
-    ),
-    (
-        "content/rival/posts.story",
-        include_str!("../sample/content/rival/posts.story"),
-    ),
-    (
-        "content/sponsor/offer.story",
-        include_str!("../sample/content/sponsor/offer.story"),
-    ),
-    ("drivers/roster.yaml", include_str!("../sample/drivers/roster.yaml")),
-    ("events/race_01.yaml", include_str!("../sample/events/race_01.yaml")),
-    ("events/race_02.yaml", include_str!("../sample/events/race_02.yaml")),
-    ("events/race_03.yaml", include_str!("../sample/events/race_03.yaml")),
-    (
-        "events/track_day_01.yaml",
-        include_str!("../sample/events/track_day_01.yaml"),
-    ),
-    (
-        "flow/01-first-race.yaml",
-        include_str!("../sample/flow/01-first-race.yaml"),
-    ),
-    (
-        "flow/02-second-race.yaml",
-        include_str!("../sample/flow/02-second-race.yaml"),
-    ),
-    (
-        "flow/03-face-to-face.yaml",
-        include_str!("../sample/flow/03-face-to-face.yaml"),
-    ),
-    ("story.yaml", include_str!("../sample/story.yaml")),
-    ("world/characters.yaml", include_str!("../sample/world/characters.yaml")),
-    ("world/variables.yaml", include_str!("../sample/world/variables.yaml")),
-];
-
-/// The files of `media/`, as paths inside the story folder: what a copy
-/// writes beside the text files.
-const MEDIA: &[(&str, &[u8])] = &[
-    (
-        "media/illustrations/finish_line.png",
-        include_bytes!("../sample/media/illustrations/finish_line.png"),
-    ),
-    (
-        "media/portraits/friend_happy.png",
-        include_bytes!("../sample/media/portraits/friend_happy.png"),
-    ),
-    (
-        "media/portraits/friend_neutral.png",
-        include_bytes!("../sample/media/portraits/friend_neutral.png"),
-    ),
-];
+// `FILES`: every file of `sample/` outside `media/`, as text; `MEDIA`: the
+// files of `media/`, as bytes, with their paths inside the story folder.
+// Listed by `build.rs`, so that a file added to the folder is carried.
+include!(concat!(env!("OUT_DIR"), "/sample_files.rs"));
 
 /// Every file of the sample folder, text and media, as bytes: what a copy
 /// writes.
@@ -99,7 +32,8 @@ mod tests {
     use super::*;
     use crate::load::read_dir;
 
-    // A file added to the sample folder and forgotten here would make the
+    // What `build.rs` carries is the folder as the engine reads it: a file
+    // carried but never read (or read but not carried) would make the
     // played sample differ from the tested one.
     #[test]
     fn the_embedded_sample_is_the_sample_folder() {
