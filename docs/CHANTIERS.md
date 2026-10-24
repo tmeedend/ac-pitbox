@@ -1117,10 +1117,43 @@ de reprendre. En cas d'écart, la spec fait foi.
           versions de l'app (aucune crate de plus dans l'arbre).
           **Pas vu à l'écran** : le bouton, les deux confirmations, une
           histoire installée jouée avec ses médias.
-        - **Reste** : L4.2 (registre et construction, l'écran Paquet), L4.3
-          (voitures et circuits), L4.4 (téléchargement et mises à jour),
-          L4.5 (retouches propres à l'histoire, zone des règles d'or, à
-          trancher le moment venu).
+        - **L4.2, le registre et la construction — fait (2026-10-25).** Le
+          registre (`story_engine::credits` : ligne, permission, ce qui
+          demande un crédit, couverture, ce qui bloque) ; l'écriture
+          canonique d'un registre (`write::credits`) ; la section Paquet du
+          Studio (`PackageEditor`, `story/package.ts`) : registres, lignes,
+          fichiers sans crédit, « Construire le paquet… »
+          (`studio::build_package`) ; `story-tool pack` vérifie aussi le
+          registre ; les copies du Studio emportent `media/credits.yaml`.
+          Les trois `CREDITS.md` de l'exemple sont devenus des
+          `credits.yaml` (les mentions de `CREDITS.md` plus haut dans ce
+          journal sont l'historique).
+          **Choisi sans demander** (dans la spec) : ce qui demande un crédit
+          est ce qu'on voit ou entend (image, vidéo, son, police), pas un
+          texte de licence ni un readme ; une ligne sans auteur ou sans
+          licence bloque la construction ; un fichier nommé par deux lignes
+          ou une ligne qui ne nomme rien ne sont qu'un avertissement ; le
+          registre bloque la construction, jamais le jeu, et ses erreurs se
+          comptent à part de celles de l'histoire ; une ligne ajoutée pour un
+          fichier part en « pas demandée » ; les fichiers d'une ligne se
+          tapent séparés par des virgules.
+          **Écart avec la proposition validée** : pas de `CREDITS.md`
+          généré. Le YAML se lit tel quel, et une copie générée serait une
+          seconde source à tenir à jour ; un écran de crédits côté joueur
+          lira les registres le jour où il viendra.
+          **Choisi sans demander** (détails) : le registre est relu à chaque
+          vérification du Studio (`Checked.package`), mais seul ce qu'il dit
+          est remplacé, pas les lignes en cours d'édition ; le paquet
+          s'écrit par un fichier temporaire renommé ; « Construire » ouvre
+          la boîte « Enregistrer sous » sur `<id>-<version>.pitstory`.
+          **Pas vu à l'écran** : toute la section Paquet.
+          **Repéré, non traité** : la copie « Sample story theo » de
+          l'utilisateur garde son ancien `CREDITS.md` ; sa section Paquet
+          listera ses médias sans crédit jusqu'à ce qu'il les remplisse (ou
+          recopie l'exemple).
+        - **Reste** : L4.3 (voitures et circuits), L4.4 (téléchargement et
+          mises à jour), L4.5 (retouches propres à l'histoire, zone des
+          règles d'or, à trancher le moment venu).
       - **L5 à L8** : dans l'ordre du plan de livraison de la spec.
       **Écarts assumés par rapport au document de conception** (la spec
       publique les reprend déjà) :

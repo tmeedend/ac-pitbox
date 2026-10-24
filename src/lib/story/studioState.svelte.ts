@@ -23,6 +23,8 @@ import {
   undoEdit,
   type Chapter,
   type ContentDoc,
+  type Credit,
+  type EditedFile,
   type Diagnostic,
   type NameKind,
   type OpenStory,
@@ -42,14 +44,17 @@ export type StudioSection =
   | "scenes"
   | "frames"
   | "settings"
+  | "package"
   | "backups";
 
 /** The section whose files hold `file` (a diagnostic's, say, which may end
- * with `:<line>`): `story.yaml` is the Settings', `world/` the World's,
- * `drivers/` the Drivers', `scenes/` the Scenes', `frames/` the Frames',
- * `events/` the Events', `content/` the Contents', the rest the flow's. */
+ * with `:<line>`): `story.yaml` is the Settings', a permission register the
+ * Package's, `world/` the World's, `drivers/` the Drivers', `scenes/` the
+ * Scenes', `frames/` the Frames', `events/` the Events', `content/` the
+ * Contents', the rest the flow's. */
 export function sectionOf(file: string): StudioSection {
   if (file === "story.yaml") return "settings";
+  if (file === "media/credits.yaml" || /^frames\/skins\/[^/]+\/credits\.yaml$/.test(file)) return "package";
   if (file.startsWith("drivers/")) return "drivers";
   if (file.startsWith("scenes/")) return "scenes";
   if (file.startsWith("frames/")) return "frames";
@@ -261,6 +266,28 @@ export function removeContent(id: string): Promise<string | null> {
   });
 }
 
+/** The register `file` as the editor holds it. One the story does not have
+ * yet is added empty, its stamp empty: its first save creates it. */
+export function registerEntry(file: string): EditedFile<Credit[]> | null {
+  const registers = studio.story?.package.registers;
+  if (!registers) return null;
+  let entry = registers.find((r) => r.file === file);
+  if (!entry) {
+    registers.push({ file, stamp: "", value: [], error: null });
+    registers.sort((a, b) => a.file.localeCompare(b.file));
+    entry = registers.find((r) => r.file === file)!;
+  }
+  return entry;
+}
+
+/** Queues a save of the register `file`, like a chapter. */
+export function saveRegister(file: string): Promise<void> {
+  return enqueue(async () => {
+    const entry = studio.story?.package.registers.find((r) => r.file === file);
+    if (entry?.value) await write(entry, entry.value);
+  });
+}
+
 /** Queues a save of the skin whose `skin.yaml` is `file`, like a chapter. */
 export function saveSkinFile(file: string): Promise<void> {
   return enqueue(async () => {
@@ -458,13 +485,16 @@ function scheduleCheck(): void {
     const path = studio.story?.path;
     if (!path) return;
     try {
-      const { diagnostics, usages, media, skin_files, history } = await checkStory(path);
+      const { diagnostics, usages, media, skin_files, history, package: pkg } = await checkStory(path);
       if (studio.story?.path !== path) return;
       studio.diagnostics = diagnostics;
       studio.story.usages = usages;
       studio.story.media = media;
       studio.story.skin_files = skin_files;
       studio.story.history = history;
+      // What the registers say, not the registers themselves: those are the
+      // editor's copy, which an edit may have changed since this check.
+      studio.story.package.register = pkg.register;
       studio.revision++;
     } catch (e) {
       console.warn("story studio: check failed", e);

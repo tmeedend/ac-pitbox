@@ -1,8 +1,8 @@
 """Draws the sample story's phone media (Story Mode, L3d): two phone bodies
 with their screen cut out, a wallpaper, seven app icons, the `chat_blue`
 skin's 9-slice bubbles and reply button, and the phone's two beeps. Every
-file is CC0, made for Pit Box, and listed in `media/CREDITS.md` and the
-skin's own `CREDITS.md`.
+file is CC0, made for Pit Box, and listed in `media/credits.yaml` and the
+skin's own `credits.yaml`.
 
 Not run by the build: the files it makes are committed. Run it again only to
 change them, from the repository's root:

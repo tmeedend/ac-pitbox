@@ -113,17 +113,17 @@ pub fn carried(path: &str) -> bool {
         && (segments.iter()).all(|s| !s.is_empty() && !s.starts_with('.') && !s.contains(['\\', ':']))
 }
 
-/// The files of a story folder a package carries, as paths with `/` and
-/// their bytes, in path order.
-pub fn folder_files(root: &Path) -> std::io::Result<Vec<(String, Vec<u8>)>> {
-    fn walk(dir: &Path, prefix: &str, out: &mut Vec<(String, Vec<u8>)>) -> std::io::Result<()> {
+/// The files of a story folder a package carries, as paths with `/`, in
+/// path order.
+pub fn folder_paths(root: &Path) -> std::io::Result<Vec<String>> {
+    fn walk(dir: &Path, prefix: &str, out: &mut Vec<String>) -> std::io::Result<()> {
         for entry in std::fs::read_dir(dir)? {
             let entry = entry?;
             let path = format!("{prefix}{}", entry.file_name().to_string_lossy());
             if entry.path().is_dir() {
                 walk(&entry.path(), &format!("{path}/"), out)?;
             } else if carried(&path) {
-                out.push((path, std::fs::read(entry.path())?));
+                out.push(path);
             }
         }
         Ok(())
@@ -132,6 +132,14 @@ pub fn folder_files(root: &Path) -> std::io::Result<Vec<(String, Vec<u8>)>> {
     walk(root, "", &mut out)?;
     out.sort();
     Ok(out)
+}
+
+/// The files of a story folder a package carries, with their bytes, in
+/// path order.
+pub fn folder_files(root: &Path) -> std::io::Result<Vec<(String, Vec<u8>)>> {
+    (folder_paths(root)?.into_iter())
+        .map(|p| std::fs::read(root.join(&p)).map(|bytes| (p, bytes)))
+        .collect()
 }
 
 /// The SHA-256 of `bytes`, in lower-case hex.

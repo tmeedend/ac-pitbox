@@ -40,6 +40,15 @@ screen.
 What a story carries goes with it when it is shared. Every file you add needs
 a licence that lets it be redistributed with the story: your own work, CC0,
 CC BY (credited), or similar. A font usually comes with its licence file:
-keep it beside the font, in the skin's folder. The sample lists each of its
-files with its source and licence in `media/CREDITS.md`, and each skin in its
-own `CREDITS.md` - do the same.
+keep it beside the font, in the skin's folder.
+
+Each file the player sees or hears - a picture, a video, a sound, a font -
+has a line in a `credits.yaml`: `media/credits.yaml` for the files of
+`media/`, and one in each skin's folder for the skin's own files, so a skin
+copied to another story keeps its credits. A line says which files (by path
+inside that folder, `*` for any part of a name), where they come from, who
+made them, under which licence, and whether you may carry them: `granted`
+(the author said yes), `not_needed` (the licence allows it, or you made it),
+`requested` or `not_asked`. The Package section of the editor fills these
+lines with you, and builds the package only once every file has one that is
+`granted` or `not_needed`. The sample's registers show the form.

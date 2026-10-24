@@ -1764,7 +1764,8 @@
     "storyPackageUnreadable": "Ce fichier n'est pas un paquet d'histoire, ou il est incomplet.",
     "storyPackageTooNew": "Ce paquet vient d'une version plus récente de Pit Box : mets Pit Box à jour pour l'installer.",
     "storyPackageDamaged": "Ce paquet est abîmé : un de ses fichiers ne correspond pas à ce qu'il annonce. Télécharge-le à nouveau.",
-    "storyPackageHasErrors": "L'histoire de ce paquet a des erreurs : elle n'a pas été installée."
+    "storyPackageHasErrors": "L'histoire de ce paquet a des erreurs : elle n'a pas été installée.",
+    "storyBuildBlocked": "L'histoire ou son registre des permissions a des erreurs : le paquet n'est pas construit. Voir la section Paquet."
   },
   "pack": {
     "tabMembers": "Mods",
@@ -3203,6 +3204,33 @@
       "title": "Journal",
       "close": "Fermer",
       "empty": "Aucun dialogue pour l'instant."
+    },
+    "package": {
+      "title": "Paquet",
+      "buildTitle": "Construction",
+      "build": "Construire le paquet…",
+      "built": "Paquet écrit : {path} ({size}).",
+      "storyErrors": "L'histoire a des erreurs : {count}",
+      "registerErrors": "Le registre a des erreurs : {count}",
+      "mediaRegister": "Crédits des médias",
+      "skinRegister": "Crédits de l'habillage {skin}",
+      "unreadable": "Ce registre est illisible : corrige-le dans un éditeur de texte (voir les vérifications plus bas).",
+      "files": "Fichiers",
+      "named": "Fichiers couverts : {count}",
+      "removeLine": "Retirer cette ligne",
+      "author": "Auteur",
+      "licence": "Licence",
+      "permission": "Permission",
+      "source": "Source",
+      "proof": "Preuve",
+      "granted": "Accordée",
+      "notNeeded": "Pas nécessaire",
+      "requested": "Demandée",
+      "notAsked": "Pas demandée",
+      "uncredited": "Sans crédit : {count}",
+      "addLine": "Ajouter une ligne",
+      "noLine": "Aucune ligne.",
+      "nothingToCredit": "Aucun fichier à créditer : l'histoire n'a ni image, ni vidéo, ni son, ni police."
     }
   }
 }

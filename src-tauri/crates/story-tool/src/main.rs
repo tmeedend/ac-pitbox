@@ -18,11 +18,11 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use story_engine::engine::{run, submit, EngineError, Input, Output};
-use story_engine::package;
 use story_engine::save::Save;
 use story_engine::state::{State, Via, Wait};
 use story_engine::validate::{validate, Severity};
 use story_engine::Story;
+use story_engine::{credits, package};
 
 use input::{parse_command, Command};
 
@@ -129,22 +129,36 @@ fn check(story: &Story) -> ExitCode {
     }
 }
 
-/// The story's package, until the editor's Package screen builds it
-/// (SPEC-story-mode, Create Your Own). A story with errors is never packed.
+/// The story's package, as the editor's Package section builds it
+/// (SPEC-story-mode, Create Your Own). A story with errors, or a file
+/// without its credit and permission, is never packed.
 fn pack(story: &Story, dir: &Path, out: Option<String>) -> ExitCode {
     if !report(story) {
         eprintln!("the story has errors: fix them first (`story-tool check`)");
         return ExitCode::FAILURE;
     }
+    let files = match package::folder_files(dir) {
+        Ok(files) => files,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let register = credits::check_files(&files);
+    for d in &register.diagnostics {
+        eprintln!("{d}");
+    }
+    if register.blocks() {
+        eprintln!("the permission register has errors: fix them first");
+        return ExitCode::FAILURE;
+    }
     let m = &story.manifest;
     let out = out.unwrap_or_else(|| format!("{}-{}.{}", m.id, m.version, package::EXTENSION));
-    let built = (package::folder_files(dir).map_err(|e| e.to_string()))
-        .and_then(|files| package::pack(m, &files))
-        .and_then(|bytes| {
-            std::fs::write(&out, &bytes)
-                .map(|_| bytes.len())
-                .map_err(|e| format!("{out}: {e}"))
-        });
+    let built = package::pack(m, &files).and_then(|bytes| {
+        std::fs::write(&out, &bytes)
+            .map(|_| bytes.len())
+            .map_err(|e| format!("{out}: {e}"))
+    });
     match built {
         Ok(size) => {
             println!("{out}: {} v{}, {size} bytes", m.title, m.version);

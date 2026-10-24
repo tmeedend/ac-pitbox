@@ -122,6 +122,8 @@ pub struct OpenStory {
     /// The files under `media/`, as paths inside it: what a portrait can be.
     pub media: Vec<String>,
     pub history: HistoryStatus,
+    /// The permission register and what it says (`package.rs`).
+    pub package: PackageView,
 }
 
 /// A template as the Frame screen offers it (`story_engine::frame::Template`,
@@ -227,6 +229,7 @@ pub fn open(folder: &Path) -> Result<OpenStory, String> {
         usages,
         media,
         history: history::with(folder, |h| h.status()),
+        package: package_view(folder),
     })
 }
 
@@ -285,6 +288,8 @@ pub struct Checked {
     /// Re-listed too, like `media`.
     pub skin_files: Vec<String>,
     pub history: HistoryStatus,
+    /// Re-read too: a register written, or a file added to `media/`.
+    pub package: PackageView,
 }
 
 /// Everything wrong with the story, where its names are cited, and what can
@@ -298,6 +303,7 @@ pub fn check(folder: &Path) -> Checked {
             skin_files: (d.skin_files.iter()).flatten().cloned().collect(),
             diagnostics: verdict(folder, d),
             history,
+            package: package_view(folder),
         },
         Err(e) => Checked {
             diagnostics: vec![load_error(e)],
@@ -305,6 +311,7 @@ pub fn check(folder: &Path) -> Checked {
             media: Vec::new(),
             skin_files: Vec::new(),
             history,
+            package: package_view(folder),
         },
     }
 }

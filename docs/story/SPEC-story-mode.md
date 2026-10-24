@@ -581,6 +581,23 @@ DLCs required are listed.
 author and a permission status (granted, requested, not asked, not needed). An
 item without permission blocks the build.
 
+- **One `credits.yaml` per folder that travels**: `media/credits.yaml` for
+  the files of `media/`, and one in each skin's folder for the skin's own
+  files, so a skin copied to another story keeps its credits. Cars and
+  tracks get theirs with L4.3.
+- **A line** names its files by path inside that folder, `*` standing for
+  any part of a name, and says where they come from, who made them, under
+  which licence, the permission and, if any, its proof.
+- **What needs a line** is what the player sees or hears: a picture, a
+  video, a sound, a font. A licence text, a readme or the story's own text
+  travel without one.
+- **What blocks the build**: a file with no line, a line whose permission is
+  neither granted nor not needed, a line without its author or its licence,
+  a register that does not read. A line naming no file, or a file two lines
+  name (the first counts), is a warning.
+- **The register blocks the build, never the play**: an author plays a story
+  long before asking anyone for a permission.
+
 **Installation and updates: the requirements.** Whatever the mechanism, it
 must meet these:
 
@@ -793,10 +810,21 @@ the editor is reserved; they are translated when it opens to all.
   among all, without a place: the current one is known only by playing), and
   types its weather and mood among the names in use or `none`; a dialogue's
   sheet and the Settings' start pick their place in a list.
+- **The Package section** shows each register the story has or needs,
+  `media/`'s first, then the skins' by name: its lines, how many files
+  each covers, and the files without a line, each offering to start one -
+  a line naming that file, its permission not asked. A register a file
+  needs but that does not exist yet is created by its first line. A line's
+  files are typed as a comma-separated list; an emptied field is left out
+  of the file. The register's checks list beside it and count apart from
+  the story's: they block the build, not the story. **Build the package**
+  writes a `.pitstory`, named `<id>-<version>.pitstory` unless the author
+  picks another name; it waits while the story or its register has an
+  error. A package carries the register with the files.
 - **A section appears with the lot that builds it**, never as an entry that
   opens nothing: the Story flow, the Events, the Contents, the Drivers, the
-  World (characters, flags, counters), the Scenes, the Frames, the Settings
-  and the story's copies so far. Settings shows only the settings the engine applies.
+  World (characters, flags, counters), the Scenes, the Frames, the Settings,
+  the Package and the story's copies so far. Settings shows only the settings the engine applies.
   Each section counts the errors of its own files.
 
 ### Story flow screen
@@ -836,12 +864,14 @@ my-story/
     wealth_01.yaml
   frames/
     frames.yaml         frames used over the story, their apps and skins
-    skins/<id>/         skin.yaml and the skin's images, fonts and sounds
+    skins/<id>/         skin.yaml and the skin's images, fonts and sounds,
+                        credits.yaml (the skin's permission register)
   scenes/
     scenes.yaml         places, their variants and ambient sounds
   package/
-    manifest.yaml       items, versions, checksums, authors, permissions
+    manifest.yaml       cars and tracks: versions, authors, permissions (L4.3)
   media/
+    credits.yaml        the media's permission register
     photos/ avatars/ scenes/ music/ replays/ camtool/
 ```
 
@@ -865,7 +895,8 @@ project's own work, or a licence that allows it (CC0 or similar), with the
 origin and licence of each file recorded - and show no brand, logo, real
 person or real story. They are carried inside Pit Box with the sample, so
 Story Mode plays the sample with its pictures, not only its copy; each file's
-origin and licence is in `media/CREDITS.md`, which a copy takes along. Its
+origin and licence is in its permission register (`media/credits.yaml`, and
+each skin's own), which a copy takes along. Its
 events race only on cars and tracks of Assetto Corsa's base game, so the
 sample plays on any install as it is.
 

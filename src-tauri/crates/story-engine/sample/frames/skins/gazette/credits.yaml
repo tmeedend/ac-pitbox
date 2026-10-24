@@ -1,0 +1,6 @@
+- files:
+    - PlayfairDisplay.ttf
+  source: Playfair Display, https://github.com/google/fonts/tree/main/ofl/playfairdisplay, PlayfairDisplay[wght].ttf
+  author: The Playfair Display Project Authors
+  licence: SIL Open Font License 1.1, in OFL.txt
+  permission: not_needed

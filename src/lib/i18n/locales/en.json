@@ -1764,7 +1764,8 @@
     "storyPackageUnreadable": "This file is not a story package, or it is incomplete.",
     "storyPackageTooNew": "This package comes from a newer Pit Box: update Pit Box to install it.",
     "storyPackageDamaged": "This package is damaged: one of its files is not what it says. Download it again.",
-    "storyPackageHasErrors": "The story in this package has errors: it was not installed."
+    "storyPackageHasErrors": "The story in this package has errors: it was not installed.",
+    "storyBuildBlocked": "The story or its permission register has errors: the package is not built. See the Package section."
   },
   "pack": {
     "tabMembers": "Mods",
@@ -3203,6 +3204,33 @@
       "title": "Journal",
       "close": "Close",
       "empty": "No dialogue yet."
+    },
+    "package": {
+      "title": "Package",
+      "buildTitle": "Build",
+      "build": "Build the package…",
+      "built": "Package written: {path} ({size}).",
+      "storyErrors": "The story has errors: {count}",
+      "registerErrors": "The register has errors: {count}",
+      "mediaRegister": "Media credits",
+      "skinRegister": "Credits of the skin {skin}",
+      "unreadable": "This register does not read: fix it in a text editor (see the checks below).",
+      "files": "Files",
+      "named": "Files covered: {count}",
+      "removeLine": "Remove this line",
+      "author": "Author",
+      "licence": "Licence",
+      "permission": "Permission",
+      "source": "Source",
+      "proof": "Proof",
+      "granted": "Granted",
+      "notNeeded": "Not needed",
+      "requested": "Requested",
+      "notAsked": "Not asked",
+      "uncredited": "Without a credit: {count}",
+      "addLine": "Add a line",
+      "noLine": "No line.",
+      "nothingToCredit": "Nothing to credit: the story has no picture, video, sound or font."
     }
   }
 }

@@ -4,6 +4,7 @@
 use std::path::Path;
 
 use serde::de::DeserializeOwned;
+use story_engine::credits::Credit;
 use story_engine::frame::FRAMES;
 use story_engine::load::{read_dir, ROSTER};
 use story_engine::model::{Chapter, ContentFile, Event};
@@ -84,6 +85,7 @@ pub fn render(file: &str, value: serde_json::Value) -> Result<String, String> {
         SCENES => write::scenes(&from(value)?),
         FRAMES => write::frames(&from(value)?),
         _ if story_engine::skin::skin_id(file).is_some() => write::skin(file, &from::<Skin>(value)?),
+        _ if story_engine::credits::is_register(file) => write::credits(file, &from::<Vec<Credit>>(value)?),
         _ if is_chapter_path(file) => write::chapter(file, &from::<Chapter>(value)?),
         _ if is_event_path(file) => write::event(file, &from::<Event>(value)?),
         _ if is_content_path(file) => write::content_file(file, &from::<ContentFile>(value)?),
@@ -102,6 +104,7 @@ pub fn save_file(
 ) -> Result<String, String> {
     let writes = matches!(file, MANIFEST | CHARACTERS | VARIABLES | ROSTER | SCENES | FRAMES)
         || story_engine::skin::skin_id(file).is_some()
+        || story_engine::credits::is_register(file)
         || is_chapter_path(file)
         || is_event_path(file)
         || is_content_path(file);

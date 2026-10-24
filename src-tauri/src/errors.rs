@@ -195,3 +195,5 @@ pub const STORY_PACKAGE_TOO_NEW: &str = "errors.storyPackageTooNew";
 pub const STORY_PACKAGE_DAMAGED: &str = "errors.storyPackageDamaged";
 /// The packaged story does not read, or its checks find errors: not installed.
 pub const STORY_PACKAGE_HAS_ERRORS: &str = "errors.storyPackageHasErrors";
+/// The story or its permission register has errors: the package is not built.
+pub const STORY_BUILD_BLOCKED: &str = "errors.storyBuildBlocked";

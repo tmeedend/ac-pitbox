@@ -4,8 +4,9 @@
 //!
 //! A copy is taken the first time a story is opened on a given day, and
 //! before every restore. It holds the files the editor reads and writes -
-//! `story.yaml`, `flow/`, `content/`, `events/`, `world/` - never the media,
-//! which the editor does not touch. Copies live in Pit Box's own data
+//! `story.yaml`, `flow/`, `content/`, `events/`, `world/`, the scenes, the
+//! frames and the permission registers - never the media, which the editor
+//! does not touch. Copies live in Pit Box's own data
 //! (`app_config_dir/story/backups/<story>/<date_time>/`), not in the story's
 //! folder: a story is often a git repository, and copies inside it would
 //! end up committed. The ten most recent are kept.
@@ -14,7 +15,7 @@ use std::path::{Path, PathBuf};
 
 use chrono::NaiveDateTime;
 use serde::Serialize;
-use story_engine::load::read_dir;
+use story_engine::load::{read_dir, SourceFile};
 
 use super::history::{self, FileChange};
 use super::studio::stamp;
@@ -88,10 +89,22 @@ pub fn take_daily(config_dir: &Path, folder: &Path, now: NaiveDateTime) -> Resul
     take(config_dir, folder, now).map(Some)
 }
 
+/// The files a copy holds: those the engine reads, and the register of
+/// `media/`, which the editor writes in a folder the engine never reads
+/// (`story_engine::credits`).
+fn copied_files(folder: &Path) -> Result<Vec<SourceFile>, String> {
+    let mut files = read_dir(folder).map_err(|e| e.to_string())?;
+    let media = "media/credits.yaml";
+    if let Ok(text) = std::fs::read_to_string(folder.join(media)) {
+        files.push(SourceFile::new(media, &text));
+    }
+    Ok(files)
+}
+
 /// Copies the story's files now, then drops the copies beyond the ten most
 /// recent.
 fn take(config_dir: &Path, folder: &Path, now: NaiveDateTime) -> Result<String, String> {
-    let files = read_dir(folder).map_err(|e| e.to_string())?;
+    let files = copied_files(folder)?;
     let id = now.format(ID_FORMAT).to_string();
     let root = root(config_dir, folder);
     let dest = root.join(&id);
@@ -148,7 +161,7 @@ pub fn restore(config_dir: &Path, folder: &Path, id: &str, now: NaiveDateTime) -
         return Err(format!("copy {id} not found"));
     }
     take(config_dir, folder, now)?;
-    let current = read_dir(folder).map_err(|e| e.to_string())?;
+    let current = copied_files(folder)?;
     let mut edit: Vec<FileChange> = copy
         .iter()
         .map(|(file, text)| FileChange {
@@ -227,6 +240,39 @@ mod tests {
             root(&config, &folder).starts_with(&*config),
             "copies live in Pit Box's data, not in the story"
         );
+    }
+
+    // The media's register is written by the editor: a restore brings it
+    // back like any file the editor writes.
+    #[test]
+    fn a_copy_holds_the_media_register() {
+        let (config, base) = (temp_dir("backups-config"), temp_dir("backups-story"));
+        let folder = new_story(&base, &config);
+        let register = folder.join("media/credits.yaml");
+        std::fs::create_dir_all(register.parent().unwrap()).unwrap();
+        std::fs::write(
+            &register, "[]
+",
+        )
+        .unwrap();
+        std::fs::write(folder.join("media/a.png"), b"picture").unwrap();
+        take_daily(&config, &folder, at("2026-10-19_08-00-00")).unwrap();
+        std::fs::write(
+            &register,
+            "- files: [a.png]
+  permission: requested
+",
+        )
+        .unwrap();
+
+        restore(&config, &folder, "2026-10-19_08-00-00", at("2026-10-19_09-00-00")).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&register).unwrap(),
+            "[]
+",
+            "the register as it was"
+        );
+        assert!(folder.join("media/a.png").is_file(), "the media left alone");
     }
 
     #[test]

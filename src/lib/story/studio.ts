@@ -424,7 +424,46 @@ export interface OpenStory {
   /** The files under `media/`, as paths inside it. */
   media: string[];
   history: HistoryStatus;
+  /** The permission register and what it says. */
+  package: PackageView;
 }
+
+/** Whether the author of a file let it travel in a package
+ * (`story_engine::credits::Permission`). */
+export type Permission = "granted" | "requested" | "not_asked" | "not_needed";
+
+/** One line of a `credits.yaml` (`story_engine::credits::Credit`). */
+export interface Credit {
+  /** Paths inside the register's folder; `*` stands for any part of a name. */
+  files: string[];
+  source?: string;
+  author?: string;
+  licence?: string;
+  permission: Permission;
+  proof?: string;
+}
+
+/** A file that needs a credit, and the line giving it one. */
+export interface Coverage {
+  /** Inside the story. */
+  file: string;
+  /** The register it belongs in. */
+  register: string;
+  /** Index of the first line naming it; `null`, no credit. */
+  line: number | null;
+}
+
+/** The story's registers and what they say (`story::studio::PackageView`). */
+export interface PackageView {
+  /** The registers the story has; one a file needs but that does not exist
+   * yet is created by its first line. */
+  registers: EditedFile<Credit[]>[];
+  register: { coverage: Coverage[]; diagnostics: Diagnostic[] };
+}
+
+/** Builds the story's package into `out`; resolves to its size in bytes. */
+export const buildPackage = (folder: string, out: string) =>
+  invoke<number>("story_build_package", { folder, out });
 
 export interface StorySummary {
   path: string;
@@ -458,6 +497,7 @@ export interface Checked {
   media: string[];
   skin_files: string[];
   history: HistoryStatus;
+  package: PackageView;
 }
 
 export const checkStory = (folder: string) => invoke<Checked>("story_check", { folder });

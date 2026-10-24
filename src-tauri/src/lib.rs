@@ -168,6 +168,7 @@ pub fn run() {
             commands::story::story_play_reading,
             commands::story::story_package_install,
             commands::story::story_package_uninstall,
+            commands::story::story_build_package,
             commands::story::story_list,
             commands::story::story_register,
             commands::story::story_forget,

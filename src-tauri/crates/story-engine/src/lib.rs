@@ -26,6 +26,7 @@ macro_rules! serde_as_text {
     };
 }
 
+pub mod credits;
 pub mod engine;
 pub mod expr;
 pub mod frame;

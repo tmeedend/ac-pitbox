@@ -4,7 +4,7 @@
   // the rest is the section shown. A section appears with the lot that
   // builds it, rather than as an entry that opens nothing: the Story flow,
   // the Events, the Contents, the Drivers, the World, the Scenes, the
-  // Frames and the Settings so far, and the story's copies.
+  // Frames, the Settings and the Package so far, and the story's copies.
   // Ctrl+Z and Ctrl+Y undo and redo the last edits, whatever section shows.
   import { t } from "$lib/i18n/index.svelte";
   import { allNodeIds, freshChapterId, freshNodeId, nextChapterFile } from "$lib/story/flow";
@@ -23,6 +23,7 @@
   import FlowEditor from "./FlowEditor.svelte";
   import ScenesEditor from "./ScenesEditor.svelte";
   import FramesEditor from "./FramesEditor.svelte";
+  import PackageEditor from "./PackageEditor.svelte";
   import SettingsEditor from "./SettingsEditor.svelte";
   import StoryBackups from "./StoryBackups.svelte";
   import WorldEditor from "./WorldEditor.svelte";
@@ -43,6 +44,7 @@
     { id: "scenes", label: "story.scenes.title" },
     { id: "frames", label: "story.frames.title" },
     { id: "settings", label: "story.settings.title" },
+    { id: "package", label: "story.package.title" },
     { id: "backups", label: "story.backups.title" },
   ];
 
@@ -57,9 +59,12 @@
       scenes: 0,
       frames: 0,
       settings: 0,
+      package: 0,
       backups: 0,
     };
     for (const d of studio.diagnostics) if (d.severity === "error") out[sectionOf(d.file)]++;
+    // The register's own errors: they block the build, not the story.
+    for (const d of story.package.register.diagnostics) if (d.severity === "error") out.package++;
     return out;
   });
 
@@ -159,6 +164,8 @@
     <StoryBackups />
   {:else if studio.section === "settings"}
     <SettingsEditor />
+  {:else if studio.section === "package"}
+    <PackageEditor />
   {:else}
     <FlowEditor />
   {/if}

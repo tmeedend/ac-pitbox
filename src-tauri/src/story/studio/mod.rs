@@ -19,15 +19,18 @@
 //!
 //! Split by what changes together: `registry` (the list of stories),
 //! `open` (a story opened and checked), `files` (what the editor writes),
-//! `preview` (what it shows without writing).
+//! `preview` (what it shows without writing), `package` (the permission
+//! register and the build).
 
 mod files;
 mod open;
+mod package;
 mod preview;
 mod registry;
 
 pub use files::*;
 pub use open::*;
+pub use package::*;
 pub use preview::*;
 pub use registry::*;
 

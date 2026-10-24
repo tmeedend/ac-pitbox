@@ -1,0 +1,14 @@
+- files:
+    - bubble_in.png
+    - bubble_out.png
+    - reply.png
+  source: "Made for Pit Box: drawn by program"
+  author: Pit Box contributors
+  licence: CC0 1.0
+  permission: not_needed
+- files:
+    - Inter.ttf
+  source: Inter, https://github.com/google/fonts/tree/main/ofl/inter, Inter[opsz,wght].ttf
+  author: The Inter Project Authors
+  licence: SIL Open Font License 1.1, in OFL.txt
+  permission: not_needed

@@ -80,6 +80,19 @@ pub fn skin(path: &str, skin: &crate::skin::Skin) -> Result<String, String> {
     yaml(path, skin)
 }
 
+/// A register (`credits.rs`), read back to be sure it reads.
+pub fn credits(path: &str, lines: &[crate::credits::Credit]) -> Result<String, String> {
+    if !crate::credits::is_register(path) {
+        return Err(format!("not a register: {path}"));
+    }
+    let text = serde_saphyr::to_string_with_options(&lines, options()).map_err(|e| e.to_string())?;
+    match crate::credits::parse(&text) {
+        Ok(back) if back == lines => Ok(text),
+        Ok(_) => Err(format!("{path}: written, it reads back otherwise")),
+        Err(e) => Err(format!("{path}: written, it does not read back: {e}")),
+    }
+}
+
 /// `drivers/roster.yaml`, read back to be sure it loads.
 pub fn roster(roster: &Roster) -> Result<String, String> {
     yaml(crate::load::ROSTER, roster)

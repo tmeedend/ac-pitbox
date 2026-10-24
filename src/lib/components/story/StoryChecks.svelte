@@ -3,21 +3,26 @@
   // (SPEC-story-mode, Create Your Own: validation runs continuously). A
   // diagnostic about a flow node selects it; the others name their file.
   // Each section lists the ones its own files have, or those of one file
-  // when a screen shows a single one (an event's sheet).
+  // when a screen shows a single one (an event's sheet), or a verdict of
+  // their own (the Package section's register, which only blocks the build).
   import { t } from "$lib/i18n/index.svelte";
+  import type { Diagnostic } from "$lib/story/studio";
   import { sectionOf, selectNode, studio, type StudioSection } from "$lib/story/studioState.svelte";
 
   interface Props {
     section: StudioSection;
     /** Only this file's (a diagnostic's file may end with `:<line>`). */
     file?: string;
+    /** These instead of the story's checks. */
+    list?: Diagnostic[];
   }
-  const { section, file }: Props = $props();
+  const { section, file, list }: Props = $props();
 
   const diagnostics = $derived(
-    studio.diagnostics.filter((d) =>
-      file ? d.file === file || d.file.startsWith(`${file}:`) : sectionOf(d.file) === section,
-    ),
+    list ??
+      studio.diagnostics.filter((d) =>
+        file ? d.file === file || d.file.startsWith(`${file}:`) : sectionOf(d.file) === section,
+      ),
   );
   const errors = $derived(diagnostics.filter((d) => d.severity === "error").length);
   const warnings = $derived(diagnostics.length - errors);

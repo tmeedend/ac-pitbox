@@ -73,6 +73,13 @@ pub async fn story_package_uninstall(app: AppHandle, id: String) -> Result<(), S
     .await
 }
 
+/// Builds the package of the story in `folder` into `out`, and says its
+/// size; refused while the story or its permission register has an error.
+#[tauri::command]
+pub async fn story_build_package(app: AppHandle, folder: PathBuf, out: PathBuf) -> Result<u64, String> {
+    off_window(app, move |_| studio::build_package(&folder, &out)).await
+}
+
 /// Keeps the line the dialogue under way is read at, beside the save.
 #[tauri::command]
 pub async fn story_play_reading(app: AppHandle, source: play::Source, reading: play::Reading) -> Result<(), String> {
