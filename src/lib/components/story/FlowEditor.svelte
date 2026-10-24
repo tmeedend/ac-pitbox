@@ -3,7 +3,8 @@
   // nodes, top to bottom in the order they play, an arrow only where a node
   // jumps elsewhere. A column laid out by the order itself rather than a
   // canvas: nothing to store about where a box sits, and a file that changes
-  // only when the story does.
+  // only when the story does. The graph shows the same chapter as a map,
+  // read-only (`FlowGraph`); a box clicked there opens in the column.
   import { t } from "$lib/i18n/index.svelte";
   import { allNodeIds, freshNodeId, hasNext, insertNode, kindOf, linksOf, newNode, NODE_KINDS } from "$lib/story/flow";
   import type { NodeKind } from "$lib/story/flow";
@@ -11,6 +12,8 @@
   import type { FlowNode } from "$lib/story/studio";
   import { saveChapterAt, selectNode, studio } from "$lib/story/studioState.svelte";
   import { KIND_LABEL, LINK_LABEL } from "$lib/story/labels";
+  import Seg from "$lib/components/ui/Seg.svelte";
+  import FlowGraph from "./FlowGraph.svelte";
   import NodePanel from "./NodePanel.svelte";
   import StoryChecks from "./StoryChecks.svelte";
 
@@ -26,6 +29,15 @@
   );
   const selectedIndex = $derived(chapter?.nodes.findIndex((n) => n.id === studio.node) ?? -1);
   const selected = $derived(selectedIndex >= 0 ? chapter!.nodes[selectedIndex] : null);
+  /** The column, where the chapter is edited, or its map. */
+  let view = $state<"column" | "graph">("column");
+
+  /** A box of the map opens its node in the column - in its own chapter for
+   * a way out of this one. */
+  function openFromGraph(id: string) {
+    view = "column";
+    selectNode(id);
+  }
 
   /** Diagnostics by node, for the marks on the cards. */
   const eventNames = $derived(eventLabels(story.events));
@@ -107,6 +119,15 @@
           />
         {/if}
         <span class="file mono">{entry.file}</span>
+        <Seg
+          items={[
+            { value: "column", label: t("story.studio.viewColumn") },
+            { value: "graph", label: t("story.studio.viewGraph") },
+          ]}
+          value={view}
+          onselect={(v) => (view = v as "column" | "graph")}
+          tone="neutral"
+        />
       </header>
 
       {#if studio.notice}<p class="warnbox">{studio.notice}</p>{/if}
@@ -116,6 +137,14 @@
 
       {#if !chapter}
         <p class="errbox">{t("story.studio.unreadable", { reason: entry.error ?? "" })}</p>
+      {:else if view === "graph"}
+        <FlowGraph
+          nodes={chapter.nodes}
+          after={isLastChapter ? undefined : nextChapterStart}
+          {start}
+          {marks}
+          onopen={openFromGraph}
+        />
       {:else}
         <div class="addbar">
           <span class="lbl-key">{t("story.studio.add")}</span>
@@ -172,7 +201,7 @@
     <StoryChecks section="flow" />
   </div>
 
-  {#if selected && chapter}
+  {#if selected && chapter && view === "column"}
     {#key selected.id}
       <NodePanel index={selectedIndex} />
     {/key}

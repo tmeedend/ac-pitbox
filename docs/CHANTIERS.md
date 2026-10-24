@@ -736,7 +736,26 @@ de reprendre. En cas d'écart, la spec fait foi.
           et un visage neutre (pas ceux qu'il avait), sauf étiquettes sur sa
           réplique ; un `#leave` sur la dernière réplique ne change rien (le
           dialogue se ferme).
-        - **Reste** L3b.5.
+        - **L3b.5 — fait (2026-10-24).** « Colonne / Graphe » dans l'en-tête
+          du fil : le chapitre en carte, en lecture seule (`flowGraph.ts`,
+          `FlowGraph.svelte`).
+          **Choisi sans demander** : la mise en page est faite maison (environ
+          150 lignes, testées) plutôt qu'une bibliothèque de
+          graphes : un chapitre a quelques dizaines de nœuds, et une
+          dépendance de plus pour ça ne se justifie pas ; un nœud est sur la
+          rangée de son plus long chemin d'entrée ; une flèche qui saute des
+          rangées passe par un point de passage qui prend sa place dans
+          chaque rangée, si bien que les branches restent côte à côte ; une
+          boucle est une flèche de retour en pointillés à droite ; la sortie
+          vers un autre chapitre est une boîte en pointillés ; la flèche
+          d'échec est jaune, les autres grises ; les conditions d'un cas
+          s'affichent sur sa flèche, coupées à 28 caractères ; le choix de
+          vue n'est pas retenu (on revient en colonne en rouvrant) ; le
+          panneau du nœud ne s'ouvre pas en vue graphe.
+          **Limites connues** : pas vu à l'écran ; un graphe très large
+          défile en largeur sans réduction ; les flèches peuvent encore se
+          croiser (un seul passage de réordonnancement par sens).
+        - **L3b terminé.**
       - **L4 à L8** : dans l'ordre du plan de livraison de la spec.
       **Écarts assumés par rapport au document de conception** (la spec
       publique les reprend déjà) :

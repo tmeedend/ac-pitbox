@@ -245,6 +245,9 @@ with none.
   column for editing. A read-only graph view, laid out automatically each time
   it opens (nothing stored), shows a chapter as a map: branches side by side,
   where they join, the endings. A click on a box opens that node in the column.
+  A node stands below everything leading to it; a loop is drawn as a dashed
+  return beside the boxes; a way out to another chapter ends on a box naming
+  the node it goes to, which opens that node in its chapter.
 
 ## Events, retries and failure
 

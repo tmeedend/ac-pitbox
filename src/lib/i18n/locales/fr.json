@@ -2681,7 +2681,9 @@
       "redo": "Rétablir (Ctrl+Y)",
       "historyUnsaved": "Des modifications ne sont pas encore enregistrées : corrige-les d'abord.",
       "copySample": "Copier l'exemple",
-      "copySampleHint": "L'histoire d'exemple, dans un dossier à toi : l'ouvrir, la modifier, voir comment une histoire est faite."
+      "copySampleHint": "L'histoire d'exemple, dans un dossier à toi : l'ouvrir, la modifier, voir comment une histoire est faite.",
+      "viewColumn": "Colonne",
+      "viewGraph": "Graphe"
     },
     "events": {
       "title": "Événements",

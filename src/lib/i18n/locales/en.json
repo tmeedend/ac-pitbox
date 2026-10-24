@@ -2681,7 +2681,9 @@
       "redo": "Redo (Ctrl+Y)",
       "historyUnsaved": "Some edits are not saved yet: fix them first.",
       "copySample": "Copy the sample",
-      "copySampleHint": "The sample story, in a folder of yours: open it, change it, see how a story is made."
+      "copySampleHint": "The sample story, in a folder of yours: open it, change it, see how a story is made.",
+      "viewColumn": "Column",
+      "viewGraph": "Graph"
     },
     "events": {
       "title": "Events",
