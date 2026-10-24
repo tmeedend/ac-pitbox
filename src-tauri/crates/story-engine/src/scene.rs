@@ -74,14 +74,14 @@ impl Variant {
         self.season.is_empty() && self.time.is_empty() && self.weather.is_empty() && self.mood.is_empty()
     }
 
-    fn holds(&self, now: &Now) -> bool {
+    fn holds(&self, m: &Moment) -> bool {
         let fits = |wanted: &[String], current: Option<&str>| {
             wanted.is_empty() || current.is_some_and(|c| wanted.iter().any(|w| w == c))
         };
-        (self.season.is_empty() || self.season.contains(&Season::of(now.date)))
-            && (self.time.is_empty() || self.time.contains(&Period::of(now.clock)))
-            && fits(&self.weather, now.weather)
-            && fits(&self.mood, now.mood)
+        (self.season.is_empty() || self.season.contains(&m.season))
+            && (self.time.is_empty() || self.time.contains(&m.period))
+            && fits(&self.weather, m.weather)
+            && fits(&self.mood, m.mood)
     }
 }
 
@@ -129,10 +129,33 @@ impl Period {
     }
 }
 
-/// What picks a variant.
+/// What picks a variant, in story time.
 pub struct Now<'a> {
     pub date: StoryDate,
     pub clock: Clock,
+    pub weather: Option<&'a str>,
+    pub mood: Option<&'a str>,
+    /// A variant a Beat forced.
+    pub forced: Option<&'a str>,
+}
+
+impl<'a> Now<'a> {
+    pub fn moment(&self) -> Moment<'a> {
+        Moment {
+            season: Season::of(self.date),
+            period: Period::of(self.clock),
+            weather: self.weather,
+            mood: self.mood,
+            forced: self.forced,
+        }
+    }
+}
+
+/// What picks a variant, as its criteria name it: the editor's preview sets
+/// these directly, without a date or a clock.
+pub struct Moment<'a> {
+    pub season: Season,
+    pub period: Period,
     pub weather: Option<&'a str>,
     pub mood: Option<&'a str>,
     /// A variant a Beat forced.
@@ -171,10 +194,14 @@ pub fn extension(path: &str) -> Option<String> {
 /// Place `id` as it shows `now`; `None` for a place the story does not
 /// declare, or one with no variant - the checks report both.
 pub fn shown(story: &Story, id: &str, now: &Now) -> Option<Shown> {
-    let place = story.scene(id)?;
-    let forced = now.forced.and_then(|f| place.variants.iter().find(|v| v.id == f));
+    pick(story.scene(id)?, &now.moment())
+}
+
+/// `place` as it shows at moment `m`; `None` when it has no variant.
+pub fn pick(place: &Place, m: &Moment) -> Option<Shown> {
+    let forced = m.forced.and_then(|f| place.variants.iter().find(|v| v.id == f));
     let variant = forced
-        .or_else(|| place.variants.iter().find(|v| v.holds(now)))
+        .or_else(|| place.variants.iter().find(|v| v.holds(m)))
         .or(place.variants.last())?;
     Some(Shown {
         place: place.id.clone(),
