@@ -60,8 +60,10 @@ pub struct Slot {
 /// quieter text, and the accent (the player's own bubbles, the buttons).
 pub const COLORS: [&str; 4] = ["background", "text", "muted", "accent"];
 
-/// The width the images of a skin are drawn for: the phone screen's.
+/// The width the images of a skin are drawn for: the phone screen's, or
+/// the scene's for what plays there.
 pub const REFERENCE_WIDTH: u32 = 1080;
+pub const SCENE_WIDTH: u32 = 1920;
 
 /// The images a skin can be.
 pub const IMAGE: [&str; 2] = ["png", "webp"];
@@ -78,6 +80,10 @@ pub fn slots(template: Template) -> &'static [&'static str] {
         Template::Statement => &["background", "header", "row"],
         Template::Agenda => &["background", "header", "row"],
         Template::Call => &["background", "header", "bubble_in", "bubble_out", "reply"],
+        Template::Dialogue | Template::Landline => &["textbox", "nameplate", "choice"],
+        Template::Newspaper => &["paper", "masthead", "photo"],
+        Template::Letter => &["paper"],
+        Template::Tv => &["set", "lower_third"],
     }
 }
 

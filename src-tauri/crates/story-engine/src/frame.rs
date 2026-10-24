@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::expr::Effect;
 use crate::load::Story;
-use crate::model::{ContentItem, ContentType, Node, NodeId, NodeKind};
+use crate::model::{ContentItem, ContentType, Layout, Node, NodeId, NodeKind};
 
 /// Where a story declares its own frames.
 pub const FRAMES: &str = "frames/frames.yaml";
@@ -191,8 +191,10 @@ pub struct App {
     pub skin: Option<String>,
 }
 
-/// The templates an app can be (SPEC-story-mode, Content types, templates
-/// and frames). The catalog comes with the catalogs (L6).
+/// The templates content is shown in (SPEC-story-mode, Content types,
+/// templates and frames): those an app can be, then the ways content plays
+/// on the scene, which a skin can dress too. The catalog comes with the
+/// catalogs (L6).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Template {
@@ -204,6 +206,16 @@ pub enum Template {
     Agenda,
     /// The call screen: a call played in the frame.
     Call,
+    /// On the scene: characters face to face.
+    Dialogue,
+    /// On the scene: a document laid out as a newspaper's page.
+    Newspaper,
+    /// On the scene: a document laid out as a letter.
+    Letter,
+    /// On the scene: a video no app shows, as a TV report.
+    Tv,
+    /// On the scene: a call no app takes, on a landline.
+    Landline,
 }
 
 impl Template {
@@ -217,7 +229,21 @@ impl Template {
             Template::Statement => kind == C::Statement,
             Template::Agenda => kind == C::CalendarEntry,
             Template::Call => kind == C::Call,
+            Template::Dialogue | Template::Newspaper | Template::Letter | Template::Tv | Template::Landline => false,
         }
+    }
+
+    /// An app can be it: it is shown in a frame, not on the scene.
+    pub fn is_app(self) -> bool {
+        matches!(
+            self,
+            Template::Thread
+                | Template::Inbox
+                | Template::Feed
+                | Template::Statement
+                | Template::Agenda
+                | Template::Call
+        )
     }
 
     pub fn name(self) -> &'static str {
@@ -228,6 +254,11 @@ impl Template {
             Template::Statement => "statement",
             Template::Agenda => "agenda",
             Template::Call => "call",
+            Template::Dialogue => "dialogue",
+            Template::Newspaper => "newspaper",
+            Template::Letter => "letter",
+            Template::Tv => "tv",
+            Template::Landline => "landline",
         }
     }
 }
@@ -248,6 +279,23 @@ pub enum Appears {
 impl Appears {
     fn is_default(&self) -> bool {
         *self == Appears::FirstItem
+    }
+}
+
+/// How content of `kind` (laid out as `layout`, for a document) plays on the
+/// scene while `frame` is up: the template a skin for it dresses; `None`
+/// when it shows in the frame instead.
+pub fn on_scene_as(story: &Story, frame: &Frame, kind: ContentType, layout: Option<Layout>) -> Option<Template> {
+    let in_app = || frame.apps(story).iter().any(|a| a.shows.contains(&kind));
+    match kind {
+        ContentType::Dialogue => Some(Template::Dialogue),
+        ContentType::Document => Some(match layout.unwrap_or_default() {
+            Layout::Newspaper => Template::Newspaper,
+            Layout::Letter => Template::Letter,
+        }),
+        ContentType::Video if !in_app() => Some(Template::Tv),
+        ContentType::Call if !in_app() => Some(Template::Landline),
+        _ => None,
     }
 }
 
@@ -335,12 +383,13 @@ impl Frame {
     }
 
     /// Whether content of `kind` has somewhere to be shown while this frame
-    /// is active. A dialogue or an illustration is played on the scene,
-    /// outside any frame, so it needs none; a declared frame shows what its
-    /// apps show. An unknown frame answers yes: it is reported once as
-    /// unknown, not again for every item it would show.
+    /// is active. A dialogue, an illustration or a document is played on
+    /// the scene, outside any frame, so it needs none, and a video or a call
+    /// no app takes plays there too; a declared frame shows what its apps
+    /// show. An unknown frame answers yes: it is reported once as unknown,
+    /// not again for every item it would show.
     pub fn can_show(&self, story: &Story, kind: ContentType) -> bool {
-        if kind.on_scene() {
+        if kind.on_scene() || kind.falls_to_scene() {
             return true;
         }
         match self {

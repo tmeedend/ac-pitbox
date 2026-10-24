@@ -15,6 +15,8 @@ function dialogue(scene: SceneShown | null): SeenItem {
     picture: null,
     transition: "fade",
     scene,
+    staged_as: "dialogue",
+    skin: null,
     date: "2001-03-01",
     clock: "09:00",
     steps: [],

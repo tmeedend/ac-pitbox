@@ -599,6 +599,8 @@ pub enum ContentType {
     /// A full-screen picture with optional text, for the big moments: shown
     /// on the scene too, with or without a frame.
     Illustration,
+    /// Something read in person - a newspaper, a letter - on the scene.
+    Document,
 }
 
 impl ContentType {
@@ -616,13 +618,34 @@ impl ContentType {
             ContentType::CalendarEntry => "calendar_entry",
             ContentType::Dialogue => "dialogue",
             ContentType::Illustration => "illustration",
+            ContentType::Document => "document",
         }
     }
 
     /// Played on the scene, outside any frame: it needs none.
     pub fn on_scene(self) -> bool {
-        matches!(self, ContentType::Dialogue | ContentType::Illustration)
+        matches!(
+            self,
+            ContentType::Dialogue | ContentType::Illustration | ContentType::Document
+        )
     }
+
+    /// Played on the scene when the frame up has no app for it - a video as
+    /// a TV report, a call on a landline - so it never waits for a frame.
+    pub fn falls_to_scene(self) -> bool {
+        matches!(self, ContentType::Video | ContentType::Call)
+    }
+}
+
+/// How a document is laid out on the scene (SPEC-story-mode, Content
+/// types, templates and frames).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Layout {
+    /// A newspaper's page: its masthead, a headline, columns, a photo.
+    Newspaper,
+    #[default]
+    Letter,
 }
 
 /// How a dialogue or an illustration comes on the scene, and how a
@@ -657,6 +680,11 @@ pub struct ContentItem {
     /// Dialogue or illustration only: how it comes on the scene; a fade
     /// when not said.
     pub transition: Option<Transition>,
+    /// Document only: how it is laid out; a letter when not said.
+    pub layout: Option<Layout>,
+    /// What plays on the scene only: its look, a skin of `frames/skins/`
+    /// for the way it is laid out.
+    pub skin: Option<String>,
     /// The text as written, in Ink (SPEC-story-mode, Dialogue text).
     pub body: String,
     /// The text, read (`script.rs`); what did not read is in
@@ -716,6 +744,10 @@ pub struct ContentHeader {
     pub picture: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transition: Option<Transition>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layout: Option<Layout>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skin: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pool: Option<PoolId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -778,6 +810,8 @@ impl ContentItem {
             scene: self.scene.clone(),
             picture: self.picture.clone(),
             transition: self.transition,
+            layout: self.layout,
+            skin: self.skin.clone(),
             pool: None,
             when: None,
             delay: None,
@@ -857,6 +891,8 @@ impl ContentHeader {
             scene: self.scene,
             picture: self.picture,
             transition: self.transition,
+            layout: self.layout,
+            skin: self.skin,
             body,
             script,
             script_errors,

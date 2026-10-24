@@ -25,6 +25,9 @@
   import MailView from "./player/MailView.svelte";
   import PhoneFrame from "./player/PhoneFrame.svelte";
   import SceneView from "./player/SceneView.svelte";
+  import DocumentView from "./player/DocumentView.svelte";
+  import SceneSkin from "./player/SceneSkin.svelte";
+  import TvView from "./player/TvView.svelte";
   import StatementView from "./player/StatementView.svelte";
   import AgendaView from "./player/AgendaView.svelte";
   import ThreadView from "./player/ThreadView.svelte";
@@ -107,7 +110,27 @@
       <p class="warnbox">{view.nowhere}</p>
     {:else if view.view === "scene" && view.kind === "illustration"}
       <IllustrationView picture={mediaUrl(story.path, view.picture)} steps={view.steps} />
+    {:else if view.view === "scene" && (view.staged_as === "newspaper" || view.staged_as === "letter")}
+      <SceneSkin skin={view.skin} folder={story.path}>
+        <DocumentView
+          layout={view.staged_as}
+          from={view.from ? (names[view.from] ?? view.from) : null}
+          picture={mediaUrl(story.path, view.picture)}
+          steps={view.steps}
+        />
+      </SceneSkin>
+    {:else if view.view === "scene" && view.staged_as === "tv"}
+      <SceneSkin skin={view.skin} folder={story.path}>
+        {#key view.steps}
+          <TvView
+            channel={view.from ? (names[view.from] ?? view.from) : null}
+            picture={mediaUrl(story.path, view.picture)}
+            steps={view.steps}
+          />
+        {/key}
+      </SceneSkin>
     {:else if view.view === "scene"}
+      <SceneSkin skin={view.skin} folder={story.path}>
       <div class="placed" class:framed={view.scene !== null}>
         {#if view.scene}
           <SceneView scene={view.scene} folder={story.path} staged transition={view.transition} />
@@ -115,7 +138,7 @@
         <DialogueStage
           steps={view.steps}
           choices={view.choices}
-          present={view.characters}
+          present={view.characters.length || !view.from ? view.characters : [view.from]}
           transition={view.transition}
           from={view.from}
           {speakers}
@@ -124,6 +147,7 @@
           onchoose={choose}
         />
       </div>
+      </SceneSkin>
     {:else}
       <div class="device">
         <PhoneFrame

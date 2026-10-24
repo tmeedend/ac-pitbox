@@ -627,10 +627,11 @@ impl Checker<'_> {
             self.error(&header, format!("{at}: {why}"));
         }
         self.picture(item, &header, &at);
+        self.scene_look(item, &header, &at);
         if item.transition.is_some() && !item.kind.on_scene() {
             self.error(
                 &header,
-                format!("{at}: `transition` is for a dialogue or an illustration"),
+                format!("{at}: `transition` is for what plays on the scene: a dialogue, an illustration, a document"),
             );
         }
         for who in item.characters.iter().filter(|w| story.character(w).is_none()) {
@@ -672,19 +673,57 @@ impl Checker<'_> {
         }
     }
 
-    /// An illustration's picture (SPEC-story-mode, In-person dialogues): a
-    /// file inside `media/`, as a portrait is; and nothing to answer - an
-    /// illustration is looked at, its text only says what it shows.
+    /// A picture (SPEC-story-mode, In-person dialogues): a file inside
+    /// `media/`, as a portrait is - an illustration's, which needs one, a
+    /// document's photo, a video's still. And nothing to answer in an
+    /// illustration or a document: they are looked at and read.
     fn picture(&mut self, item: &ContentItem, header: &str, at: &str) {
-        let illustration = item.kind == ContentType::Illustration;
-        match (&item.picture, illustration) {
-            (Some(_), false) => self.error(header, format!("{at}: `picture` is for an illustration")),
-            (None, true) => self.error(header, format!("{at}: an illustration needs a `picture` in `media/`")),
+        use ContentType as C;
+        let illustration = item.kind == C::Illustration;
+        let may = illustration || matches!(item.kind, C::Document | C::Video);
+        match (&item.picture, may) {
+            (Some(_), false) => self.error(
+                header,
+                format!("{at}: `picture` is for an illustration, a document or a video"),
+            ),
             (Some(path), true) => self.media_file(header, at, Some("picture"), path),
-            (None, false) => {}
+            (None, _) if illustration => {
+                self.error(header, format!("{at}: an illustration needs a `picture` in `media/`"))
+            }
+            (None, _) => {}
         }
-        if illustration && item.script.has_choices() {
-            self.error(header, format!("{at}: an illustration offers no reply"));
+        if matches!(item.kind, C::Illustration | C::Document) && item.script.has_choices() {
+            let what = if illustration { "an illustration" } else { "a document" };
+            self.error(header, format!("{at}: {what} offers no reply"));
+        }
+    }
+
+    /// How an item plays on the scene: a layout for a document only, and a
+    /// skin only for what can play there, made for the way it plays.
+    fn scene_look(&mut self, item: &ContentItem, header: &str, at: &str) {
+        use crate::frame::Template as T;
+        use ContentType as C;
+        if item.layout.is_some() && item.kind != C::Document {
+            self.error(header, format!("{at}: `layout` is for a document"));
+        }
+        let Some(skin) = item.skin.as_deref() else { return };
+        let dresses = match item.kind {
+            C::Dialogue => T::Dialogue,
+            C::Document => match item.layout.unwrap_or_default() {
+                crate::model::Layout::Newspaper => T::Newspaper,
+                crate::model::Layout::Letter => T::Letter,
+            },
+            C::Video => T::Tv,
+            C::Call => T::Landline,
+            _ => {
+                return self.error(
+                    header,
+                    format!("{at}: `skin` is for what plays on the scene: a dialogue, a document, a video or a call"),
+                )
+            }
+        };
+        if let Some(why) = self.skin_problem(skin, dresses) {
+            self.error(header, format!("{at}: {why}"));
         }
     }
 

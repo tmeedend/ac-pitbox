@@ -2831,6 +2831,12 @@
       "moveUp": "Monter",
       "moveDown": "Descendre",
       "typeIllustration": "Illustration",
+      "typeDocument": "Document",
+      "layout": "Mise en page",
+      "layoutNewspaper": "Journal",
+      "layoutLetter": "Lettre",
+      "skin": "Habillage",
+      "noSkin": "L'aspect de Pit Box",
       "picture": "Image",
       "pickPicture": "Choisir une image",
       "pictureMissing": "introuvable",
@@ -2926,6 +2932,7 @@
       "appCalls": "Appels",
       "appCalendar": "Agenda",
       "onCall": "En ligne",
+      "landline": "Au téléphone fixe",
       "balance": "Solde"
     },
     "scenes": {

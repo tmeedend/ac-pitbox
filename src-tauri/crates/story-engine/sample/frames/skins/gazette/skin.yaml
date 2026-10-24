@@ -1,0 +1,9 @@
+# The Paddock Gazette: newsprint colours and a serif for the headline and
+# columns. A skin for a document laid out as a newspaper.
+template: newspaper
+colors:
+  background: "#f3eee3"
+  text: "#1c1a17"
+  muted: "#6a6255"
+  accent: "#8b1a1a"
+font: PlayfairDisplay.ttf

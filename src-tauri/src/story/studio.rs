@@ -302,6 +302,9 @@ pub struct OpenStory {
     /// `frames/frames.yaml`: the story's own frames; read as empty without
     /// one. Edited by hand until the Frame screen.
     pub frames: EditedFile<Frames>,
+    /// The skins of `frames/skins/`, and what each dresses: what an app or
+    /// an item can wear.
+    pub skins: Vec<SkinRef>,
     pub chapters: Vec<ChapterFile>,
     pub content: Vec<ContentRef>,
     /// One per file of `events/`, in file-name order.
@@ -315,6 +318,13 @@ pub struct OpenStory {
     /// The files under `media/`, as paths inside it: what a portrait can be.
     pub media: Vec<String>,
     pub history: HistoryStatus,
+}
+
+/// A skin, and the template it dresses.
+#[derive(Debug, Serialize)]
+pub struct SkinRef {
+    pub id: String,
+    pub template: story_engine::frame::Template,
 }
 
 /// `file` as the editor shows it. `value` is what the draft read from it - a
@@ -354,6 +364,12 @@ pub fn open(folder: &Path) -> Result<OpenStory, String> {
     let drivers = edited(&files, &d.errors, ROSTER, Some(std::mem::take(&mut d.roster)));
     let scenes = edited(&files, &d.errors, SCENES, Some(std::mem::take(&mut d.scenes)));
     let frames = edited(&files, &d.errors, FRAMES, Some(std::mem::take(&mut d.frames)));
+    let skins = (d.skins.iter())
+        .map(|s| SkinRef {
+            id: s.id.clone(),
+            template: s.template,
+        })
+        .collect();
     let chapters = chapter_files
         .iter()
         .map(|f| {
@@ -393,6 +409,7 @@ pub fn open(folder: &Path) -> Result<OpenStory, String> {
         drivers,
         scenes,
         frames,
+        skins,
         chapters,
         content,
         events,
@@ -556,9 +573,10 @@ pub fn scene_pick(place: serde_json::Value, m: &SceneMoment) -> Result<Option<Sh
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PreviewView {
-    /// `scene` for a dialogue or an illustration, `frame` for an item a
-    /// frame shows,
-    /// `nowhere` when none of the frames it can arrive in can show it.
+    /// `scene` for what plays on the scene (a dialogue, an illustration, a
+    /// document, a video or a call no app takes), `frame` for an item a
+    /// frame shows, `nowhere` when none of the frames it can arrive in can
+    /// show it.
     pub view: &'static str,
     /// The frame it shows in, for `frame`.
     pub frame: Option<String>,
@@ -567,6 +585,10 @@ pub struct PreviewView {
     pub app: Option<story_engine::view::AppShown>,
     /// That frame's look: its body, status bar and sounds.
     pub phone: Option<story_engine::view::PhoneLook>,
+    /// How it plays on the scene (`dialogue`, `newspaper`, `tv`…), and its
+    /// skin there.
+    pub staged_as: Option<story_engine::frame::Template>,
+    pub skin: Option<story_engine::view::SkinShown>,
     /// Why there is nothing to show, for `nowhere`: the checks' warning.
     pub nowhere: Option<String>,
     /// Its content type, as a `.story` header names it.
@@ -631,13 +653,17 @@ pub fn preview(folder: &Path, id: &str, setup: &[String], replies: &[String]) ->
     let played = story_engine::engine::preview(&story, &setup, id, replies).map_err(|e| e.to_string())?;
     let (before, after) = (&played.before, &played.after);
 
-    let on_scene = item.kind.on_scene();
     let frames = story_engine::frame::FrameMap::new(&story).content(&story, id);
+    // `none` never shows an item: the first frame that can is a named one.
+    let frame = frames.iter().find(|f| f.can_show(&story, item.kind));
+    // How it plays on the scene, if it does there: a video or a call does
+    // when that frame has no app for it.
+    let staged_as = story_engine::frame::on_scene_as(&story, frame.unwrap_or(&Frame::None), item.kind, item.layout);
+    let on_scene = item.kind.on_scene() || staged_as.is_some();
     let nowhere = (!on_scene)
         .then(|| story_engine::frame::nowhere(&story, item, &frames))
         .flatten();
-    // `none` never shows an item: the first frame that can is a named one.
-    let frame = frames.iter().find(|f| f.can_show(&story, item.kind));
+    let skin = (staged_as.zip(item.skin.as_deref())).and_then(|(t, s)| story_engine::view::skin_shown(&story, s, t));
     // The app of that frame the item shows in; none in a frame that lists
     // it by name, having no app for its type.
     let app = (frame.filter(|_| !on_scene))
@@ -682,6 +708,8 @@ pub fn preview(folder: &Path, id: &str, setup: &[String], replies: &[String]) ->
         frame: frame.filter(|_| view == "frame").map(ToString::to_string),
         app,
         phone,
+        staged_as,
+        skin,
         nowhere,
         kind: item.kind.name(),
         from: item.from.clone(),

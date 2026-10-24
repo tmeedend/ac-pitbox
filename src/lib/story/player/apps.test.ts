@@ -11,6 +11,9 @@ function item(content: string, o: Partial<SeenItem> = {}): SeenItem {
     picture: null,
     transition: "fade",
     scene: null,
+    // A dialogue plays on the scene, as the engine says of it.
+    staged_as: o.kind === "dialogue" ? "dialogue" : null,
+    skin: null,
     date: "2001-03-01",
     clock: "09:00",
     steps: [],
@@ -74,5 +77,14 @@ describe("the phone's apps", () => {
     expect(appItems(items, phone[1])).toEqual([3, 1, 0]);
     expect(pendingIn(items, phone[1])).toBe(2);
     expect(pendingIn(items, phone[0])).toBe(0);
+  });
+});
+
+describe("appItems on the scene", () => {
+  // A call taken on the landline stays out of a later phone's call log.
+  it("leaves out what played on the scene", () => {
+    const calls = app("calls", "call", ["call"]);
+    const items = [item("a", { kind: "call", staged_as: "landline" }), item("b", { kind: "call" })];
+    expect(appItems(items, calls)).toEqual([1]);
   });
 });

@@ -10,12 +10,18 @@
 // (`100cqw`, the phone being a size container).
 import type { SkinShown } from "../play";
 
-/** The width a skin's images are drawn for (`story_engine::skin::REFERENCE_WIDTH`). */
+/** The width a skin's images are drawn for: the phone's screen, or the
+ * scene's for what plays there (`story_engine::skin`). */
 export const REFERENCE_WIDTH = 1080;
+export const SCENE_WIDTH = 1920;
 
 /** The tokens each colour of a skin stands for. */
 const TOKENS: Record<string, (c: string) => [string, string][]> = {
-  background: (c) => [["--panel2", c]],
+  // `--bg` too: the scene's text boxes are drawn on it.
+  background: (c) => [
+    ["--panel2", c],
+    ["--bg", c],
+  ],
   text: (c) => [
     ["--txt", c],
     ["--txt2", c],
@@ -43,9 +49,15 @@ export function fontFamily(key: string): string {
   return `pitbox-skin-${(h >>> 0).toString(36)}`;
 }
 
-/** `skin` as the phone's root wears it; `url` turns a path inside the story
- * into one the page can load, `font` is the family its font is under. */
-export function skinDress(skin: SkinShown | null, url: (path: string) => string | null, font: string | null): SkinDress {
+/** `skin` as the phone's root (or the scene's stage) wears it; `url` turns
+ * a path inside the story into one the page can load, `font` is the family
+ * its font is under, `width` the width its images are drawn for. */
+export function skinDress(
+  skin: SkinShown | null,
+  url: (path: string) => string | null,
+  font: string | null,
+  width = REFERENCE_WIDTH,
+): SkinDress {
   if (!skin) return { style: "", classes: "" };
   const decl: [string, string][] = [];
   for (const [name, colour] of Object.entries(skin.colors)) decl.push(...(TOKENS[name]?.(colour) ?? []));
@@ -57,7 +69,7 @@ export function skinDress(skin: SkinShown | null, url: (path: string) => string 
     decl.push([`--slot-${name}`, `url("${src}")`]);
     const [t, r, b, l] = slot.slice ?? [0, 0, 0, 0];
     decl.push([`--slot-${name}-slice`, `${t} ${r} ${b} ${l} fill`]);
-    const scaled = (n: number) => `calc(${n} * 100cqw / ${REFERENCE_WIDTH})`;
+    const scaled = (n: number) => `calc(${n} * 100cqw / ${width})`;
     decl.push([`--slot-${name}-width`, [t, r, b, l].map(scaled).join(" ")]);
   }
   if (font) decl.push(["--skin-font", `"${font}", system-ui, sans-serif`]);

@@ -12,3 +12,8 @@ characters:
   - id: rival
     name: A rival
     relation: cold
+  # Not people: the paper and the channel that report on the races.
+  - id: gazette
+    name: The Paddock Gazette
+  - id: motor_tv
+    name: Motor TV

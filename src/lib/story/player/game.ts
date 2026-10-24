@@ -3,7 +3,6 @@
 // per sender, and the dialogue the scene plays now.
 import { criteriaOf } from "../events";
 import type { SeenItem } from "../play";
-import { onScene } from "../content";
 import { appOf } from "./apps";
 import type { AppShown } from "../play";
 import { lineKey } from "./stage";
@@ -49,13 +48,20 @@ export function phoneThreads(items: SeenItem[]): Thread[] {
   return threads.sort((a, b) => order(b).localeCompare(order(a)));
 }
 
-/** What the scene plays, as an index into `items`: the first dialogue or
- * illustration, in the order they came, that waits for a reply or that the
+/** Played on the scene rather than in the frame: an illustration, and what
+ * the engine says came on the scene - a dialogue, a document, a video or a
+ * call no app took (`staged_as`). */
+export function playsOnScene(item: SeenItem): boolean {
+  return item.kind === "illustration" || item.staged_as !== null;
+}
+
+/** What the scene plays, as an index into `items`: the first item played
+ * on the scene, in the order they came, that waits for a reply or that the
  * player has not closed yet (closing marks it seen) - so several come one
  * after the other. An index rather than the item, so that a new delivery of
  * the same item is told from the last. `null` when none. */
 export function onStage(items: SeenItem[]): number | null {
-  const i = items.findIndex((item) => onScene(item.kind) && (item.open || !item.seen));
+  const i = items.findIndex((item) => playsOnScene(item) && (item.open || !item.seen));
   return i < 0 ? null : i;
 }
 
@@ -76,7 +82,7 @@ export function pastDialogues(items: SeenItem[]): number[] {
  * not shown - the phone Pit Box ships takes every type. A dialogue or an
  * illustration is played on the scene. */
 export function withoutTemplate(items: SeenItem[], apps: AppShown[]): SeenItem[] {
-  return items.filter((i) => appOf(apps, i.kind) === null && !onScene(i.kind));
+  return items.filter((i) => appOf(apps, i.kind) === null && !playsOnScene(i));
 }
 
 /** One line of an event's goal, as an i18n key and its values. */

@@ -542,9 +542,11 @@ impl<'a> Run<'a> {
         facts.reply = None;
         facts.chosen.clear();
         self.state.conversations.remove(content);
+        let frame = Some(self.frame().clone());
         self.log(Happening::Delivered {
             content: content.into(),
             via: via.clone(),
+            frame,
         });
         self.out.push(Output::Delivered {
             content: content.into(),

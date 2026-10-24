@@ -84,6 +84,12 @@ export interface SeenItem {
   transition: Transition;
   /** A dialogue's own place; `null`, the current one. */
   scene: SceneShown | null;
+  /** How it played on the scene (`dialogue`, `newspaper`, `letter`, `tv`,
+   * `landline`), with the frame up when it came; `null` in the frame, or
+   * an illustration. */
+  staged_as: string | null;
+  /** Its skin, for what plays on the scene. */
+  skin: SkinShown | null;
   date: string;
   clock: string;
   steps: PlayerStep[];

@@ -707,8 +707,8 @@ mod tests {
         );
         assert_eq!(
             usages(&sample(), NameKind::Character, "sponsor").len(),
-            2,
-            "a sender counts, `from: sponsor`, and so does a speaker, `sponsor: …`"
+            3,
+            "a sender counts, `from: sponsor` (a mail, a letter), and so does a speaker, `sponsor: …`"
         );
     }
 

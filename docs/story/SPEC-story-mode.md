@@ -245,6 +245,28 @@ has not, a skin's file outside its folder or missing, a status out of range
 the story starts it. The status bar and the skins are typed in the files
 until the Frame screen.
 
+**Built so far** (L3d.3): the `agenda` and `call` templates, and what plays
+on the scene. Pit Box's phone gains Phone (calls) and Calendar. A
+`document` plays on the scene, laid out by its `layout`: a `newspaper` (the
+sender's name on the masthead, the first line as the headline, its
+`picture` as the photo, the rest in two columns) or a `letter` (the
+default); like an illustration it offers no reply and closes on a click. A
+`video` or a `call` the frame up has no app for plays on the scene too - a
+video as a TV report (its still in a set, the channel and each line in a
+strip at the bottom, a click for the next), a call on a landline (as a
+dialogue with the caller present) - so neither ever waits for a frame. Where
+an item played is decided by the frame up when it came, and kept in the
+save's history: a call taken on the landline stays out of a later phone's
+call log (a save made before reads with the frame up now). A `picture` is an
+illustration's, a document's or a video's. What plays on the scene can wear
+a `skin` made for the way it plays - `dialogue`, `newspaper`, `letter`,
+`tv`, `landline` - drawn for a scene 1920 px wide, with the slots
+`textbox`, `nameplate`, `choice` (a dialogue, a landline), `paper`,
+`masthead`, `photo` (a newspaper), `paper` (a letter), `set`, `lower_third`
+(a TV report). The checks: a `layout` on anything but a document, a `skin`
+on what cannot play on the scene or made for another way of playing, a
+document offering a reply (errors).
+
 ### Skins: how a frame gets its look
 
 A skin is images, colours, fonts and sounds placed on a template. It never
@@ -353,7 +375,7 @@ with none.
   they came, each until the player closes it.
 - **Transitions** are options in the editor, never story settings: fade or cut
   between scenes, a portrait entering or leaving, a change of expression.
-  Today a dialogue or an illustration says `transition: cut`, or nothing for
+  Today a dialogue, an illustration or a document says `transition: cut`, or nothing for
   a fade: how it comes on the scene and leaves it and, for a dialogue, how
   its portraits come, go and change face. A change of place or variant fades
   too, and cuts when the dialogue or illustration that comes on stage with
@@ -977,10 +999,11 @@ The player side follows each story's settings. What the engine needs:
   post offers its replies under it; an agenda lists its entries the earliest
   first, each under its date. The content types with no app yet (video,
   listing) are listed by name in Messages.
-- **The dialogue layer** plays the dialogues and illustrations in the order
-  they came, the first not closed yet: a dialogue while it waits for a reply,
-  then until the player reads past its last line, an illustration until a
-  click; closing marks it seen, and it does not come back on reload. While it plays, the
+- **The dialogue layer** plays what comes on the scene - dialogues,
+  illustrations, documents, TV reports, landline calls - in the order
+  they came, the first not closed yet: a dialogue or a call while it waits
+  for a reply, then until the player reads past its last line, an
+  illustration or a document until a click, a TV report past its last line; closing marks it seen, and it does not come back on reload. While it plays, the
   frame and what the story waits for slide out of view and the scene's blur is
   reduced; the stage keeps the preview's 16:9 shape, as large as the scene
   allows, and takes the keyboard at once.

@@ -2831,6 +2831,12 @@
       "moveUp": "Move up",
       "moveDown": "Move down",
       "typeIllustration": "Illustration",
+      "typeDocument": "Document",
+      "layout": "Layout",
+      "layoutNewspaper": "Newspaper",
+      "layoutLetter": "Letter",
+      "skin": "Skin",
+      "noSkin": "Pit Box's look",
       "picture": "Picture",
       "pickPicture": "Pick a picture",
       "pictureMissing": "missing",
@@ -2926,6 +2932,7 @@
       "appCalls": "Calls",
       "appCalendar": "Calendar",
       "onCall": "On call",
+      "landline": "On the landline",
       "balance": "Balance"
     },
     "scenes": {

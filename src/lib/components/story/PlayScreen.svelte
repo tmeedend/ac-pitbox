@@ -33,6 +33,9 @@
   import DialogueControls from "./DialogueControls.svelte";
   import DialogueLog from "./DialogueLog.svelte";
   import IllustrationView from "./player/IllustrationView.svelte";
+  import DocumentView from "./player/DocumentView.svelte";
+  import SceneSkin from "./player/SceneSkin.svelte";
+  import TvView from "./player/TvView.svelte";
   import SceneAmbient from "./player/SceneAmbient.svelte";
   import SceneView from "./player/SceneView.svelte";
   import EventCard from "./EventCard.svelte";
@@ -156,6 +159,11 @@
     if (gameSession.phase === "idle") void collect();
   });
 
+  /** Who a document or a TV report is from, as the story names them. */
+  function nameOf(who: string | null): string | null {
+    return who ? (speakers[who]?.name ?? who) : null;
+  }
+
   function senderOf(content: string): string | null {
     return [...view.items].reverse().find((i) => i.content === content)?.from ?? null;
   }
@@ -249,14 +257,49 @@
               />
             {/key}
           </div>
+        {:else if d.staged_as === "newspaper" || d.staged_as === "letter"}
+          <div class="fit">
+            <SceneSkin skin={d.skin} folder={game.folder}>
+              {#key played}
+                <DocumentView
+                  layout={d.staged_as}
+                  from={nameOf(d.from)}
+                  picture={mediaUrl(game.folder, d.picture)}
+                  steps={d.steps}
+                  bare
+                  autofocus
+                  onend={() => void move({ kind: "seen", content: d.content })}
+                />
+              {/key}
+            </SceneSkin>
+          </div>
+        {:else if d.staged_as === "tv"}
+          <div class="fit">
+            <SceneSkin skin={d.skin} folder={game.folder}>
+              {#key played}
+                <TvView
+                  channel={nameOf(d.from)}
+                  picture={mediaUrl(game.folder, d.picture)}
+                  steps={d.steps}
+                  bare
+                  autofocus
+                  onend={() => void move({ kind: "seen", content: d.content })}
+                />
+              {/key}
+            </SceneSkin>
+          </div>
         {:else}
+          {#if d.staged_as === "landline"}
+            <div class="landline">☎ {t("story.play.landline")}</div>
+          {/if}
           <div class="reading"><DialogueControls bind:skip bind:auto onlog={() => (log = true)} /></div>
           <div class="fit" inert={log}>
+            <SceneSkin skin={d.skin} folder={game.folder}>
             {#key played}
               <DialogueStage
                 steps={d.steps}
                 choices={d.choices}
-                present={d.characters}
+                present={d.characters.length || !d.from ? d.characters : [d.from]}
                 from={d.from}
                 {speakers}
                 ended={!d.open}
@@ -276,6 +319,7 @@
                 onend={() => void move({ kind: "seen", content: d.content })}
               />
             {/key}
+            </SceneSkin>
           </div>
           {#if log}
             <DialogueLog lines={dialogueLog(view.items, played, reading)} {speakers} onclose={() => (log = false)} />
@@ -374,6 +418,15 @@
     justify-content: center;
     padding: 24px;
     container-type: size;
+  }
+  /* A call on the landline: said in the corner, over the stage. */
+  .landline {
+    position: absolute;
+    top: 10px;
+    left: 14px;
+    z-index: 1;
+    color: var(--txt2);
+    font-size: 12px;
   }
   /* The reading controls, in the scene's corner above the stage. */
   .reading {

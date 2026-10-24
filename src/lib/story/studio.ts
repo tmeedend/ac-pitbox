@@ -4,7 +4,7 @@
 // (`story_engine::model`): what the editor shows is what the file says.
 import { invoke } from "@tauri-apps/api/core";
 import type { PlayerChoice, PlayerStep } from "./player/types";
-import type { AppShown, PhoneLook, SceneShown } from "./play";
+import type { AppShown, PhoneLook, SceneShown, SkinShown } from "./play";
 import type { ScenesFile } from "./scenes";
 
 /** What shows the story (SPEC-story-mode, Content types, templates and
@@ -83,7 +83,8 @@ export type ContentType =
   | "statement"
   | "calendar_entry"
   | "dialogue"
-  | "illustration";
+  | "illustration"
+  | "document";
 
 /** A `.story` item's header, as written (`story_engine::model::ContentHeader`):
  * a key left out is absent from the file. Its placement is told by which keys
@@ -100,6 +101,10 @@ export interface ContentHeader {
   scene?: string;
   /** Illustration only: its picture, a path inside `media/`. */
   picture?: string;
+  /** Document only: how it is laid out; a letter when absent. */
+  layout?: "newspaper" | "letter";
+  /** What plays on the scene only: its look, a skin of `frames/skins/`. */
+  skin?: string;
   /** Dialogue or illustration only: how it comes on the scene; a fade when
    * absent. */
   transition?: Transition;
@@ -356,6 +361,8 @@ export interface OpenStory {
   scenes: EditedFile<ScenesFile>;
   /** `frames/frames.yaml`: the story's own frames, edited by hand so far. */
   frames: EditedFile<FramesFile>;
+  /** The skins of `frames/skins/`, and the template each dresses. */
+  skins: { id: string; template: string }[];
   chapters: ChapterFile[];
   content: ContentRef[];
   /** One per file of `events/`, in file-name order. */
@@ -488,6 +495,10 @@ export interface PreviewView {
   app: AppShown | null;
   /** That frame's look, as the story starts it. */
   phone: PhoneLook | null;
+  /** How it plays on the scene (`dialogue`, `newspaper`, `tv`…); `null`
+   * in a frame, or an illustration. */
+  staged_as: string | null;
+  skin: SkinShown | null;
   /** The checks' warning, for `nowhere`. */
   nowhere: string | null;
   kind: ContentType;

@@ -6,6 +6,7 @@ import {
   onStage,
   pastDialogues,
   phoneThreads,
+  playsOnScene,
   readBefore,
   withoutTemplate,
 } from "./game";
@@ -19,6 +20,9 @@ function item(content: string, o: Partial<SeenItem> = {}): SeenItem {
     picture: null,
     transition: "fade",
     scene: null,
+    // A dialogue plays on the scene, as the engine says of it.
+    staged_as: o.kind === "dialogue" ? "dialogue" : null,
+    skin: null,
     date: "2001-03-01",
     clock: "09:00",
     steps: [{ kind: "said", speaker: null, text: content, expression: null, position: null }],
@@ -134,5 +138,18 @@ describe("reading a dialogue", () => {
     ];
     expect(dialogueLog(items, 2, 0).map((l) => l.step.text)).toEqual(["1", "X", "2"]);
     expect(dialogueLog(items, null, 0)).toHaveLength(4);
+  });
+});
+
+describe("playsOnScene", () => {
+  // What the engine says came on the scene plays there - a call on the
+  // landline, a newspaper - and the same call taken by a phone app does not.
+  it("follows what the engine says came on the scene", () => {
+    const landline = item("ring", { kind: "call", staged_as: "landline", seen: false });
+    const mobile = item("ring2", { kind: "call", seen: false });
+    expect(playsOnScene(landline)).toBe(true);
+    expect(playsOnScene(mobile)).toBe(false);
+    expect(playsOnScene(item("pic", { kind: "illustration" })), "an illustration, always").toBe(true);
+    expect(onStage([mobile, landline])).toBe(1);
   });
 });

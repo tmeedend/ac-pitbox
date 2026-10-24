@@ -18,11 +18,34 @@ export const CONTENT_TYPES: ContentType[] = [
   "calendar_entry",
   "dialogue",
   "illustration",
+  "document",
 ];
 
 /** Played on the scene, outside any frame (`ContentType::on_scene`). */
 export function onScene(kind: ContentType): boolean {
-  return kind === "dialogue" || kind === "illustration";
+  return kind === "dialogue" || kind === "illustration" || kind === "document";
+}
+
+/** Can play on the scene - always, or a video or a call when no app takes
+ * it (`ContentType::falls_to_scene`): what a scene skin can dress. */
+export function canPlayOnScene(kind: ContentType): boolean {
+  return (onScene(kind) && kind !== "illustration") || kind === "video" || kind === "call";
+}
+
+/** The template a scene skin for `h` dresses (`frame::on_scene_as`). */
+export function sceneTemplate(h: ContentHeader): string | null {
+  switch (h.type) {
+    case "dialogue":
+      return "dialogue";
+    case "document":
+      return h.layout ?? "letter";
+    case "video":
+      return "tv";
+    case "call":
+      return "landline";
+    default:
+      return null;
+  }
 }
 
 export type Placement = "flow" | "reactive" | "pool";
@@ -53,16 +76,21 @@ export function setPlacement(h: ContentHeader, p: Placement): void {
 }
 
 /** `h` as type `kind`: what only a dialogue has (the characters present,
- * the scene), only an illustration (its picture), or only what plays on the
- * scene (its transition), goes with the type. */
+ * the scene), only a document (its layout), what only some types have (a
+ * picture, a scene skin), or only what plays on the scene (its
+ * transition), goes with the type. A skin made for another way of playing
+ * goes too. */
 export function setType(h: ContentHeader, kind: ContentType): void {
+  const before = sceneTemplate(h);
   h.type = kind;
   if (kind !== "dialogue") {
     delete h.characters;
     delete h.scene;
   }
-  if (kind !== "illustration") delete h.picture;
+  if (kind !== "illustration" && kind !== "document" && kind !== "video") delete h.picture;
+  if (kind !== "document") delete h.layout;
   if (!onScene(kind)) delete h.transition;
+  if (sceneTemplate(h) !== before) delete h.skin;
 }
 
 /** The file of a new item: named after its id, at the top of `content/`;

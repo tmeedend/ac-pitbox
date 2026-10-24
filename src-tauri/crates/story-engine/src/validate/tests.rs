@@ -665,7 +665,7 @@ friend: Bye. #leave
         has(
             &d,
             Severity::Error,
-            "content `note`: `transition` is for a dialogue or an illustration"
+            "content `note`: `transition` is for what plays on the scene"
         ),
         "{d:#?}"
     );
@@ -930,5 +930,53 @@ nodes:
             .iter()
             .any(|x| x.message.contains("row.png") || x.message.contains("wall.webp")),
         "what is there is fine: {diags:#?}"
+    );
+}
+
+// What plays on the scene (SPEC-story-mode, Content types, templates and
+// frames): a layout for a document only; a skin only for what can play
+// there, made for the way it plays; a document, like an illustration,
+// offers no reply.
+#[test]
+fn a_scene_skin_is_made_for_the_way_the_item_plays() {
+    let content = "---
+id: paper
+type: document
+layout: newspaper
+skin: letter_look
+---
+Headline
+* (x) [Answer]
+---
+id: note
+type: message
+layout: letter
+skin: letter_look
+---
+Hi.
+---
+id: letter
+type: document
+skin: letter_look
+---
+Dear you.
+";
+    let skin = "template: letter\n";
+    let d = diagnostics(&[
+        ("content/a.story", content),
+        ("frames/skins/letter_look/skin.yaml", skin),
+    ]);
+    for needle in [
+        "content `paper`: skin `letter_look` dresses a letter, not a newspaper",
+        "content `paper`: a document offers no reply",
+        "content `note`: `layout` is for a document",
+        "content `note`: `skin` is for what plays on the scene",
+    ] {
+        assert!(has(&d, Severity::Error, needle), "{needle} in {d:#?}");
+    }
+    assert!(
+        !d.iter()
+            .any(|x| x.message.contains("content `letter`") && x.severity == Severity::Error),
+        "a letter when not said, in a letter's skin: {d:#?}"
     );
 }

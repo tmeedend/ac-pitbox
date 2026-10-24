@@ -137,6 +137,10 @@ pub enum Happening {
     Delivered {
         content: ContentId,
         via: Via,
+        /// The frame up when it came: what decided whether it showed in the
+        /// frame or on the scene. Absent from a save made before.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        frame: Option<Frame>,
     },
     /// Lines of a conversation, as the player saw them: the frame is the
     /// record of the character's life, rebuilt from these on reload.

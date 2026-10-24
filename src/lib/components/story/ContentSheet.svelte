@@ -1,7 +1,8 @@
 <script lang="ts">
   // One content item (SPEC-story-mode, Content types; Dialogue text): its
   // header - type, sender, placement, for a dialogue the characters present
-  // and the scene, for an illustration its picture - and its text, in Ink. Each edit saves the whole
+  // and the scene, for an illustration its picture, for a document its
+  // layout, for what plays on the scene its skin - and its text, in Ink. Each edit saves the whole
   // `.story` file at once; the engine checks the text after every save, line
   // by line (StoryChecks). Its id is not renamed here: renaming a content
   // item does not follow its citations yet. The text shows as a form or as
@@ -10,7 +11,16 @@
   import { untrack } from "svelte";
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
-  import { CONTENT_TYPES, onScene, placementOf, setPlacement, setType, type Placement } from "$lib/story/content";
+  import {
+    CONTENT_TYPES,
+    canPlayOnScene,
+    onScene,
+    placementOf,
+    sceneTemplate,
+    setPlacement,
+    setType,
+    type Placement,
+  } from "$lib/story/content";
   import { mediaUrl } from "$lib/story/player/speakers";
   import { mediaImages } from "$lib/story/world";
   import { setOptional } from "$lib/story/fields";
@@ -101,7 +111,7 @@
     mediaImages(story.media).map((p) => ({ id: p, name: p, image: mediaUrl(story.path, p) ?? "" })),
   );
 
-  function setOpt<K extends "from" | "clock" | "scene" | "picture" | "delay" | "pool">(key: K, v: string) {
+  function setOpt<K extends "from" | "clock" | "scene" | "picture" | "skin" | "delay" | "pool">(key: K, v: string) {
     setOptional(h, key, v);
     save();
   }
@@ -130,6 +140,10 @@
     { value: "flow", label: t("story.content.placementFlow") },
     { value: "reactive", label: t("story.content.placementReactive") },
     { value: "pool", label: t("story.content.placementPool") },
+  ]);
+  const layouts = $derived([
+    { value: "letter", label: t("story.content.layoutLetter") },
+    { value: "newspaper", label: t("story.content.layoutNewspaper") },
   ]);
   const transitions = $derived([
     { value: "fade", label: t("story.content.transitionFade") },
@@ -205,7 +219,25 @@
             onchange={(v) => setOpt("scene", v)}
           />
         </Field>
-      {:else if h.type === "illustration"}
+      {/if}
+      {#if h.type === "document"}
+        <Field label={t("story.content.layout")}>
+          <Seg
+            items={layouts}
+            value={h.layout ?? "letter"}
+            onselect={(v) => {
+              // A letter is what a document is when nothing is said: not
+              // written. A skin for the other layout goes with it.
+              const before = sceneTemplate(h);
+              if (v === "letter") delete h.layout;
+              else h.layout = v as "newspaper";
+              if (sceneTemplate(h) !== before) delete h.skin;
+              save();
+            }}
+          />
+        </Field>
+      {/if}
+      {#if h.type === "illustration" || h.type === "document" || h.type === "video"}
         <Field label={t("story.content.picture")}>
           <ImageSelectDropdown
             options={pictures}
@@ -217,6 +249,18 @@
           {#if h.picture && !story.media.includes(h.picture)}
             <span class="missing" title={`media/${h.picture}`}>{t("story.content.pictureMissing")}</span>
           {/if}
+        </Field>
+      {/if}
+
+      {#if canPlayOnScene(h.type)}
+        {@const dresses = sceneTemplate(h)}
+        <Field label={t("story.content.skin")}>
+          <TargetSelect
+            value={h.skin ?? ""}
+            options={story.skins.filter((s) => s.template === dresses).map((s) => s.id)}
+            emptyLabel={t("story.content.noSkin")}
+            onchange={(v) => setOpt("skin", v)}
+          />
         </Field>
       {/if}
 

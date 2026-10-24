@@ -38,10 +38,14 @@ export function appOf(apps: AppShown[], kind: string): AppShown | null {
   return apps.find((a) => a.shows.includes(kind)) ?? null;
 }
 
-/** The items app `app` shows, latest first, as indexes into `items`. */
+/** The items app `app` shows, latest first, as indexes into `items`: those
+ * of its types that did not play on the scene - a call taken on a landline
+ * stays out of the phone's call log. */
 export function appItems(items: SeenItem[], app: AppShown): number[] {
   const out: number[] = [];
-  for (let i = items.length - 1; i >= 0; i--) if (app.shows.includes(items[i].kind)) out.push(i);
+  for (let i = items.length - 1; i >= 0; i--) {
+    if (app.shows.includes(items[i].kind) && items[i].staged_as === null) out.push(i);
+  }
   return out;
 }
 

@@ -55,6 +55,15 @@ impl Checker<'_> {
                 if !ids.insert(app.id.as_str()) {
                     self.error(FILE, format!("{at} is declared twice"));
                 }
+                if !app.template.is_app() {
+                    self.error(
+                        FILE,
+                        format!(
+                            "{at}: a {} plays on the scene, an app cannot be one",
+                            app.template.name()
+                        ),
+                    );
+                }
                 if app.shows.is_empty() {
                     self.error(FILE, format!("{at} shows no content type"));
                 }
@@ -107,7 +116,7 @@ impl Checker<'_> {
     }
 
     /// Why an app of `template` cannot wear skin `id`, if it cannot.
-    fn skin_problem(&self, id: &str, template: Template) -> Option<String> {
+    pub(super) fn skin_problem(&self, id: &str, template: Template) -> Option<String> {
         match self.story.skin(id) {
             None => Some(format!(
                 "unknown skin `{id}` (a skin is a folder {SKINS}{id}/ with its skin.yaml)"

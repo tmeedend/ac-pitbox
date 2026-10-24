@@ -102,6 +102,25 @@ mod tests {
         .expect("result");
     }
 
+    /// Chapter 3's race, then what plays on the scene after it - the paper,
+    /// the TV, a letter - and the call on the landline, answered: the flow
+    /// waits for it.
+    fn race_03_and_the_landline(story: &Story, state: &mut State, position: u32) {
+        drive(story, state, "race_03", position);
+        assert_eq!(
+            state.wait,
+            Wait::Reply {
+                content: "parent_call".into()
+            },
+            "the landline rings"
+        );
+        let reply = Input::Reply {
+            content: "parent_call".into(),
+            reply: "fine".into(),
+        };
+        submit(story, state, reply).expect("answered");
+    }
+
     /// The sample played up to chapter 3's dialogue: the first two
     /// chapters with the phone, the second race won. Chapter 3 removes the
     /// phone, and the friend's message sent as it starts has nothing to
@@ -233,7 +252,7 @@ mod tests {
         assert_eq!(validate(&story), [], "no diagnostic on the sample");
         let mut state = up_to_chapter_3(&story);
         answer_the_dialogue(&story, &mut state);
-        drive(&story, &mut state, "race_03", 4);
+        race_03_and_the_landline(&story, &mut state, 4);
         assert_eq!(
             state.wait,
             Wait::Ended {
@@ -263,6 +282,29 @@ mod tests {
             (phone.status.battery, phone.status.wifi, phone.status.signal),
             (9, false, 4)
         );
+        // Chapter 3 had no phone: the paper, the TV report, the letter and
+        // the call played on the scene, each laid out as what it is.
+        let staged = |id: &str| {
+            let item = view.items.iter().find(|i| i.content == id).unwrap();
+            (
+                item.staged_as.map(|t| t.name()),
+                item.skin.as_ref().map(|s| s.id.as_str()),
+            )
+        };
+        assert_eq!(staged("race_report"), (Some("newspaper"), Some("gazette")));
+        assert_eq!(
+            staged("sponsor_letter"),
+            (Some("letter"), None),
+            "a letter when not said"
+        );
+        assert_eq!(staged("talk_01"), (Some("dialogue"), None));
+        assert_eq!(staged("tv_report"), (Some("tv"), None), "no video app: a TV report");
+        assert_eq!(
+            staged("parent_call"),
+            (Some("landline"), None),
+            "taken on the landline, it stays so once the smartphone and its Phone app are back"
+        );
+        assert_eq!(staged("finish_line"), (None, None), "an illustration is itself");
         let messages = view.apps.iter().find(|a| a.id == "messages").unwrap();
         assert_eq!(messages.skin.as_ref().map(|s| s.id.as_str()), Some("chat_night"));
         for content in [
@@ -318,7 +360,7 @@ mod tests {
         );
         assert_eq!(own.file, "scenes/garage_night.webp");
         answer_the_dialogue(&story, &mut state);
-        drive(&story, &mut state, "race_03", 4);
+        race_03_and_the_landline(&story, &mut state, 4);
         assert_eq!(state.scene.as_deref(), Some("bedroom"), "back home with the phone");
         assert_eq!(
             state.variant, None,
@@ -338,7 +380,7 @@ mod tests {
             .expect("the save resumes");
         assert_eq!(back, state, "the same state, the held message included");
         assert_eq!(back.held.len(), 1, "the message still waits");
-        drive(&story, &mut back, "race_03", 1);
+        race_03_and_the_landline(&story, &mut back, 1);
         assert_eq!(
             back.content_facts("results_01").delivered,
             1,

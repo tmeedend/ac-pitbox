@@ -18,6 +18,17 @@ nodes:
     event: race_03
   - id: crossing_the_line
     message: finish_line
+  # No phone in this chapter: the paper, the TV and the landline play on the
+  # scene, as do a letter and a dialogue.
+  - id: next_morning
+    message: race_report
+  - id: evening_news
+    message: tv_report
+  - id: a_letter
+    message: sponsor_letter
+  - id: home_rings
+    message: parent_call
+    wait_reply: true
   - id: a_week_later
     # A week later, the garage by day whatever the clock says.
     beat: { advance: 1 week, mood: none, scene: garage, variant: day }

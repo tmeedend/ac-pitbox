@@ -10,7 +10,7 @@ use serde::Serialize;
 use crate::engine::{difficulty_step, fee_due, offers, Offer, Step};
 use std::collections::BTreeMap;
 
-use crate::frame::{App, Appears, Body, Frame, Sounds, StatusStyle, Template};
+use crate::frame::{on_scene_as, App, Appears, Body, Frame, Sounds, StatusStyle, Template};
 use crate::load::Story;
 use crate::model::{DateDisplay, EventType, Session, Transition};
 use crate::scene::Shown;
@@ -170,6 +170,12 @@ pub struct SeenItem {
     pub transition: Transition,
     /// A dialogue's own place, as it shows now; none, the current one.
     pub scene: Option<Shown>,
+    /// How it plays on the scene - `dialogue`, `newspaper`, `letter`, `tv`,
+    /// `landline` - with the frame up now; none, it shows in the frame (or,
+    /// for an illustration, on the scene as itself).
+    pub staged_as: Option<Template>,
+    /// Its skin, for what plays on the scene.
+    pub skin: Option<SkinShown>,
     /// When it arrived; an item's own clock wins over the story's.
     pub date: String,
     pub clock: String,
@@ -212,11 +218,22 @@ pub enum Waiting {
 }
 
 pub fn play_view(story: &Story, state: &State) -> PlayView {
+    let frame = state.frame.as_ref().unwrap_or(&story.manifest.start.frame);
     let mut items: Vec<SeenItem> = Vec::new();
     for entry in &state.history {
         match &entry.what {
-            Happening::Delivered { content, .. } => {
+            Happening::Delivered {
+                content,
+                frame: came_in,
+                ..
+            } => {
                 let item = story.content_item(content);
+                // Where it played is decided by the frame up when it came
+                // (the one now, for a save made before that was kept): a
+                // call taken on the landline stays out of a later phone's
+                // call log.
+                let came_in = came_in.as_ref().unwrap_or(frame);
+                let staged_as = item.and_then(|i| on_scene_as(story, came_in, i.kind, i.layout));
                 items.push(SeenItem {
                     content: content.clone(),
                     kind: item.map_or("message", |i| i.kind.name()),
@@ -225,6 +242,9 @@ pub fn play_view(story: &Story, state: &State) -> PlayView {
                     picture: item.and_then(|i| i.picture.clone()),
                     transition: item.and_then(|i| i.transition).unwrap_or_default(),
                     scene: (item.and_then(|i| i.scene.as_deref())).and_then(|p| state.scene_shown(story, p)),
+                    staged_as,
+                    skin: (staged_as.zip(item.and_then(|i| i.skin.as_deref())))
+                        .and_then(|(t, s)| skin_shown(story, s, t)),
                     date: entry.date.to_string(),
                     clock: item.and_then(|i| i.clock).unwrap_or(entry.clock).to_string(),
                     steps: Vec::new(),
@@ -264,7 +284,6 @@ pub fn play_view(story: &Story, state: &State) -> PlayView {
         let latest = met.insert(seen.content.clone());
         seen.seen = !latest || state.content_facts(&seen.content).seen;
     }
-    let frame = state.frame.as_ref().unwrap_or(&story.manifest.start.frame);
     let apps = (frame.apps(story).into_iter())
         .map(|app| {
             let available = match app.appears {

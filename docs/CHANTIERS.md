@@ -990,10 +990,32 @@ de reprendre. En cas d'écart, la spec fait foi.
           en fil (comme un message, sous un « En ligne »), pas sur la scène à
           16:9 du dialogue ; un appel ouvert compte comme décroché (vu) ;
           l'agenda se lit en entier à l'ouverture, comme un relevé.
-          **L3d.3b, sur la scène.** Le type `document` (`newspaper`,
-          `letter`), la vidéo `tv` et l'appel `landline` quand aucun cadre ne
-          les prend, l'habillage du dialogue et de ce qui se joue sur la
-          scène.
+          **L3d.3b, sur la scène — fait (2026-10-24).** Le type `document`
+          (`layout` : `newspaper`, `letter`) ; la vidéo et l'appel tombent
+          sur la scène quand le cadre n'a pas d'app pour eux
+          (`ContentType::falls_to_scene`, `frame::on_scene_as`) ; le cadre au
+          moment de la livraison est gardé dans l'historique
+          (`Happening::Delivered.frame`) ; `SeenItem.staged_as` et `skin` ;
+          les modèles d'habillage de la scène (`dialogue`, `newspaper`,
+          `letter`, `tv`, `landline`) et leurs emplacements, portés par
+          `SceneSkin` ; `DocumentView`, `TvView` ; le fixe joue le dialogue
+          avec l'appelant présent. La fiche d'un contenu choisit la mise en
+          page, l'image d'un document ou d'une vidéo, et l'habillage
+          (`OpenStory.skins`). Exemple, au chapitre 3 sans téléphone : le
+          journal du lendemain (habillage `gazette`, Playfair Display), le
+          JT, une lettre du sponsor et l'appel d'un parent sur le fixe, qui
+          attend sa réponse.
+          **Choisi sans demander** (dans la spec) : une lettre par défaut ;
+          le journal prend le premier vers comme titre et le reste en deux
+          colonnes, le nom de l'expéditeur en manchette (d'où deux
+          personnages de l'exemple qui n'en sont pas : le journal et la
+          chaîne) ; un document n'offre pas de réponse ; une sauvegarde
+          d'avant relit avec le cadre du moment.
+          **Choisi sans demander** (détails) : la couleur de fond d'un
+          habillage pose aussi `--bg` (les zones de texte de la scène) ; le
+          fixe se signale par un « ☎ Au téléphone fixe » en coin de scène.
+          **Pas vu à l'écran** : le journal, la lettre, le JT, le fixe et
+          leurs habillages.
         - **L3d.4, l'écran Cadre.** Les apps d'un cadre, leurs emplacements,
           l'import d'un fichier dans l'histoire, un aperçu au contenu
           factice, les contrôles (fichier absent, ratio, taille).
