@@ -3,8 +3,12 @@
   // the story's phones - `frames/frames.yaml` - and its skins, each a folder
   // of `frames/skins/`. The one selected is edited in its sheet, and shown
   // beside it as the player sees it. A new phone or skin gets its id from
-  // the name typed.
+  // the name typed. The starter kit - a sheet per template - is saved from
+  // here.
+  import { open } from "@tauri-apps/plugin-dialog";
+  import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
+  import { saveKit } from "$lib/story/kit";
   import { newFrame, skinFile, skinIdOf } from "$lib/story/frameEdit";
   import { addSkin, saveStoryFile, studio } from "$lib/story/studioState.svelte";
   import { nameFrom } from "$lib/story/world";
@@ -49,6 +53,25 @@
   );
   const skin = $derived(story.skins.find((s) => s.file === studio.frame) ?? null);
 
+  let savingKit = $state(false);
+  /** What saving the kit came to: where it went, or why it did not. */
+  let kitSaid = $state<string | null>(null);
+
+  /** The template sheets, in SVG and PNG, in a folder the author picks. */
+  async function saveStarterKit() {
+    const dir = await open({ directory: true, title: t("story.frames.saveKit") });
+    if (!dir || typeof dir !== "string") return;
+    savingKit = true;
+    try {
+      const count = await saveKit(dir);
+      kitSaid = t("story.frames.kitSaved", { count, dir });
+    } catch (e) {
+      kitSaid = errorText(e);
+    } finally {
+      savingKit = false;
+    }
+  }
+
   function addFrame(name: string): string | null {
     if (!frames) return null;
     const id = nameFrom(name, [...frameIds, "phone", "none"], "phone");
@@ -68,7 +91,9 @@
 <div class="main">
   <header>
     <span class="lbl-screen">{t("story.frames.title")}</span>
+    <button class="btn btn-ghost kit" disabled={savingKit} onclick={saveStarterKit}>{t("story.frames.saveKit")}</button>
   </header>
+  {#if kitSaid}<p class="kit-said">{kitSaid}</p>{/if}
   {#if studio.notice}<p class="warnbox">{studio.notice}</p>{/if}
   <FileStatus entry={story.frames} />
 
@@ -110,6 +135,14 @@
     align-items: baseline;
     gap: 10px;
     margin-bottom: 14px;
+  }
+  .kit {
+    margin-left: auto;
+  }
+  .kit-said {
+    margin: -6px 0 12px;
+    color: var(--txt2);
+    font-size: 12px;
   }
   .body {
     display: flex;

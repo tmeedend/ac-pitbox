@@ -285,6 +285,14 @@ dans un commentaire de code.
     quelle histoire. Ses titres ne sont pas numérotés, d'où l'absence
     d'étiquette `§` : le code y renvoie par le nom du fichier et le titre de
     la section (« SPEC-story-mode.md, *Events, retries and failure* »).
+  - **`story/authoring/`** — le **guide d'auteur**, en anglais : donner son
+    aspect à une histoire, pas à pas, sur une copie de l'exemple.
+    - **`story/authoring/README.md`** — l'index, le kit de départ, les
+      fichiers et leurs licences.
+    - **`story/authoring/frames-and-skins.md`** — les téléphones, leurs apps,
+      les habillages, ce qu'un Beat change dans le téléphone.
+    - **`story/authoring/scenes.md`** — les lieux, leurs variantes, le flou et
+      le son, où se trouve l'histoire.
   - **Rien de ce qui appartient à une histoire n'entre dans ce dépôt
     public** — personnages, intrigue, dialogues, lieux, réglages choisis par
     un auteur. Le document de conception complet et les maquettes d'écran,

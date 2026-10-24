@@ -1052,9 +1052,24 @@ de reprendre. En cas d'écart, la spec fait foi.
           **Corrigé en passant** (commit à part) : l'écran Scènes
           n'enregistrait pas `scenes.yaml` depuis L3c.3.
           **Pas vu à l'écran** : tout l'écran Cadres et le panneau d'un Beat.
-        - **L3d.5, le kit et le guide.** Les planches PNG et SVG générées
-          par programme, `docs/story/authoring/`, les médias de l'exemple
-          faits par Claude (liste plus haut).
+        - **L3d.5, le kit et le guide — fait (2026-10-24).** Le kit de
+          départ : une planche par modèle, dessinée par le moteur à côté de
+          la table des emplacements (`story_engine::kit`), un test les tient
+          ensemble ; l'écran Cadres l'enregistre (« Kit de départ… ») en SVG
+          et en PNG, le PNG rendu par la page (`kit.ts`, canvas). Le guide
+          d'auteur, `docs/story/authoring/` (index et kit, téléphones et
+          habillages, scènes). Le script des médias de l'exemple rangé dans
+          `scripts/story-sample-media.py` (Pillow et ffmpeg), avec les
+          icônes et les sons ajoutés depuis.
+          **Choisi sans demander** : la géométrie des planches (place et
+          taille de chaque emplacement, marges suggérées : 48 px pour une
+          bulle, 60 pour une zone de texte de scène…) ; le titre et la légende
+          dans un bandeau au-dessus du dessin, qui garde ses coordonnées ;
+          les planches en anglais, comme le guide ; le PNG rendu côté page
+          plutôt qu'avec une dépendance Rust de plus.
+          **Pas vu à l'écran** : le bouton du kit et les fichiers enregistrés
+          (les planches, elles, ont été regardées une à une).
+        - **L3d terminé.**
       - **L4 à L8** : dans l'ordre du plan de livraison de la spec, après L3c
         et L3d.
       **Écarts assumés par rapport au document de conception** (la spec

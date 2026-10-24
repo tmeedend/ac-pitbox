@@ -177,6 +177,8 @@ pub fn run() {
             commands::story::story_scene_pick,
             commands::story::story_skin_font,
             commands::story::story_import_file,
+            commands::story::story_kit_sheets,
+            commands::story::story_save_kit,
             commands::story::story_script_read,
             commands::story::story_script_write,
             commands::story::story_save_file,

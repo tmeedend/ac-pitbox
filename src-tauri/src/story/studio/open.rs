@@ -155,27 +155,15 @@ fn templates() -> Vec<TemplateInfo> {
         C::Illustration,
         C::Document,
     ];
-    [
-        T::Thread,
-        T::Inbox,
-        T::Feed,
-        T::Statement,
-        T::Agenda,
-        T::Call,
-        T::Dialogue,
-        T::Newspaper,
-        T::Letter,
-        T::Tv,
-        T::Landline,
-    ]
-    .into_iter()
-    .map(|t| TemplateInfo {
-        name: t.name(),
-        app: t.is_app(),
-        shows: TYPES.iter().filter(|k| t.can_show(**k)).map(|k| k.name()).collect(),
-        slots: story_engine::skin::slots(t),
-    })
-    .collect()
+    T::ALL
+        .into_iter()
+        .map(|t| TemplateInfo {
+            name: t.name(),
+            app: t.is_app(),
+            shows: TYPES.iter().filter(|k| t.can_show(**k)).map(|k| k.name()).collect(),
+            slots: story_engine::skin::slots(t),
+        })
+        .collect()
 }
 
 /// `file` as the editor shows it. `value` is what the draft read from it - a

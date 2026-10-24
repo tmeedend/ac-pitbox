@@ -29,6 +29,7 @@ macro_rules! serde_as_text {
 pub mod engine;
 pub mod expr;
 pub mod frame;
+pub mod kit;
 pub mod load;
 pub mod model;
 pub mod refs;

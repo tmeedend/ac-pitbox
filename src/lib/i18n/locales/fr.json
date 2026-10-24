@@ -2958,6 +2958,8 @@
       "soundTap": "Son : app ouverte",
       "soundSend": "Son : réponse envoyée",
       "noSound": "Aucun",
+      "saveKit": "Kit de départ…",
+      "kitSaved": "{count} fichiers enregistrés dans {dir}.",
       "playSound": "Écouter",
       "pauseSound": "Pause",
       "apps": "Apps",

@@ -72,6 +72,23 @@ pub async fn story_import_file(
     off_window(app, move |_| crate::story::frames::import_file(&folder, &source, &into)).await
 }
 
+/// The starter kit's sheets, as the engine draws them: SVG by file name.
+#[tauri::command]
+pub fn story_kit_sheets() -> Vec<(String, String)> {
+    story_engine::kit::sheets()
+}
+
+/// Saves the starter kit in a folder the author picked: the SVG sheets and
+/// the PNGs the page made of them.
+#[tauri::command]
+pub async fn story_save_kit(
+    app: AppHandle,
+    dir: PathBuf,
+    pngs: Vec<crate::story::frames::KitPng>,
+) -> Result<usize, String> {
+    off_window(app, move |_| crate::story::frames::save_kit(&dir, &pngs)).await
+}
+
 /// The bytes of a skin's font, for the page to load (`story/media.rs`).
 #[tauri::command]
 pub async fn story_skin_font(

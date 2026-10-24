@@ -66,6 +66,34 @@ pub fn import_file(folder: &Path, source: &Path, into: &str) -> Result<String, S
     })
 }
 
+/// A starter kit sheet drawn as a PNG by the page (`kit.ts`), which has the
+/// browser to rasterise an SVG with.
+#[derive(Debug, serde::Deserialize)]
+pub struct KitPng {
+    pub name: String,
+    pub png: Vec<u8>,
+}
+
+/// Saves the starter kit in `dir`, a folder the author picked: each sheet as
+/// the engine draws it (`story_engine::kit`), in SVG, and as the PNG the page
+/// made of it. Only the kit's own file names are written. Resolves to how
+/// many files were.
+pub fn save_kit(dir: &Path, pngs: &[KitPng]) -> Result<usize, String> {
+    std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let mut written = 0;
+    for (name, svg) in story_engine::kit::sheets() {
+        let at = dir.join(format!("{name}.svg"));
+        std::fs::write(&at, svg).map_err(|e| format!("{}: {e}", at.display()))?;
+        written += 1;
+        if let Some(png) = pngs.iter().find(|p| p.name == name) {
+            let at = dir.join(format!("{name}.png"));
+            std::fs::write(&at, &png.png).map_err(|e| format!("{}: {e}", at.display()))?;
+            written += 1;
+        }
+    }
+    Ok(written)
+}
+
 /// The size of a picture of the story, if it reads.
 fn size_of(path: &Path) -> Option<(u32, u32)> {
     image::image_dimensions(path).ok()
@@ -228,6 +256,35 @@ mod tests {
                 "{into} refused"
             );
         }
+    }
+
+    // The kit lands in the folder picked: every sheet in SVG, and in PNG
+    // when the page sent one - never a file of another name.
+    #[test]
+    fn the_starter_kit_is_saved_as_svg_and_png() {
+        let base = temp_dir("story-kit");
+        let dir = base.join("kit");
+        let pngs = [
+            KitPng {
+                name: "thread-sheet".into(),
+                png: vec![1, 2, 3],
+            },
+            KitPng {
+                name: "../escape".into(),
+                png: vec![9],
+            },
+        ];
+        let n = save_kit(&dir, &pngs).expect("saved");
+        assert_eq!(
+            n,
+            story_engine::frame::Template::ALL.len() + 1,
+            "every SVG, and the one PNG"
+        );
+        assert!(std::fs::read_to_string(dir.join("newspaper-sheet.svg"))
+            .unwrap()
+            .starts_with("<svg"));
+        assert_eq!(std::fs::read(dir.join("thread-sheet.png")).unwrap(), [1, 2, 3]);
+        assert!(!base.join("escape.png").exists(), "only the kit's own names");
     }
 
     // The pictures say what the engine cannot: a screen past its body, a

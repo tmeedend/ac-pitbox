@@ -219,6 +219,21 @@ pub enum Template {
 }
 
 impl Template {
+    /// Every template, those an app can be first.
+    pub const ALL: [Template; 11] = [
+        Template::Thread,
+        Template::Inbox,
+        Template::Feed,
+        Template::Statement,
+        Template::Agenda,
+        Template::Call,
+        Template::Dialogue,
+        Template::Newspaper,
+        Template::Letter,
+        Template::Tv,
+        Template::Landline,
+    ];
+
     /// The content types the template can show.
     pub fn can_show(self, kind: ContentType) -> bool {
         use ContentType as C;

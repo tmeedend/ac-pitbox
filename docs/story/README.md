@@ -2,6 +2,8 @@
 
 - **`SPEC-story-mode.md`** — the engine and editor spec, generic: what Pit Box
   must do for **any** story. Written in English.
+- **`authoring/`** — the author guide: giving a story its look (phones, apps,
+  skins, scenes), step by step on a copy of the sample.
 
 **What is not here, on purpose.** This repository is public, and a story stays
 private until its release. So nothing that belongs to a story itself enters

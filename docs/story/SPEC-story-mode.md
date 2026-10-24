@@ -302,11 +302,13 @@ changes what the template does, and it never contains code.
   player; and a story that only fills slots keeps working as Pit Box evolves.
 - **Over time**, a Beat puts up another frame (a new phone) or swaps an app's
   skin.
-- **The starter kit.** For each template and layout, a template sheet (PNG and
-  SVG) shows the slots, their reference sizes, the stretch margins and the
-  safe areas: what images to make, whatever the tool, to drop in the Frame
-  screen. The sheets ship with Pit Box and can be saved from the Frame
-  screen.
+- **The starter kit.** For each template, a template sheet (PNG and SVG)
+  shows the slots where they sit, their reference sizes (a phone screen
+  1080 × 2340, the scene 1920 × 1080), the stretch margins we suggest and
+  what to keep clear: what images to make, whatever the tool, to import in
+  the Frame screen. Pit Box draws the sheets beside its slot table, so a
+  sheet shows every slot of its template and nothing else, and saves them
+  from the Frame screen (**Starter kit…**) into a folder the author picks.
 - **The Frame screen** lists the story's phones and its skins. A phone's
   sheet sets its name, its look (the picture of the device and the screen's
   rectangle in it, the wallpaper, the status bar, its two sounds) and its
@@ -332,9 +334,9 @@ changes what the template does, and it never contains code.
   width (warnings). A Beat's panel sets the status bar and the skin each
   app of the story's phones wears from it.
 - **The author guide**, `docs/story/authoring/`, explains step by step how to
-  make a frame, an app and a skin, pointing at the sample story's files. It is
-  generic, so it lives in the repository, and it is written by the lot that
-  builds skins, against what was built.
+  make a phone, its apps, a skin and a scene, pointing at the sample story's
+  files. It is generic, so it lives in the repository, and it follows what
+  is built: a change to the Frames or Scenes screen changes it too.
 
 ### In-person dialogues and visual novels
 
