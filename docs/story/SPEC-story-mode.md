@@ -127,14 +127,26 @@ classified ads. So content is written by **type**, never by app, and a
 
 **Content types**: message, call, mail, article, social post, video, listing,
 statement, calendar entry, **dialogue** (two or more characters talking face
-to face, see In-person dialogues) and **illustration** (a full-screen picture,
-same section). The author writes "a message from a
+to face, see In-person dialogues), **illustration** (a full-screen picture,
+same section) and **document** (something read in person: a newspaper, a
+letter, a contract). The author writes "a message from a
 character", never "an SMS".
 
-**Six templates** display them, whatever the era: thread, inbox, feed,
-catalog, statement, and dialogue. A newspaper is a feed; classified ads are a
-catalog. The dialogue template is the only one no frame shows: it is played on
-the scene, outside the frame.
+**Seven templates** display them, whatever the era: thread, inbox, feed,
+catalog, statement, agenda and dialogue. Classified ads are a catalog; a
+championship calendar is an agenda (entries dated in story time).
+
+- **Layouts.** A template can have several layouts, all shipped by Pit Box:
+  a feed is a `list` (a social network, a news site) or a `page` (a newspaper
+  or magazine page: masthead, columns, headline, photos). A layout belongs to
+  Pit Box, never to a story: one that no template has is added to Pit Box, for
+  every story.
+- **A call** is written like a dialogue - same Ink, same labelled replies -
+  and plays in the frame's call screen: the dialogue template inside the frame.
+- **On the scene.** A dialogue, an illustration and a document play on the
+  scene, outside the frame, which slides away meanwhile; they need no frame.
+  A document uses the `page` layout (a newspaper) or a `letter` one, with its
+  own skin.
 
 **A frame** is a skin for those templates plus the overall picture around them
 (a phone screen; a desk with the post, the paper and the answering machine).
@@ -149,6 +161,8 @@ Each frame declares which content types it can show:
 | Listing | Used-car app | Newspaper classifieds |
 | Statement | Bank app | Paper statement |
 | Social post | Social network | Not available |
+| Calendar entry | Calendar app | Wall calendar, diary |
+| Document | On the scene | On the scene |
 
 - **The frame is part of the state.** The start state in `story.yaml` holds the
   starting frame, alongside the starting date and money; a Beat node can change
@@ -177,6 +191,54 @@ Each frame declares which content types it can show:
 A new app is a skin and a configuration of one of the templates within a frame,
 with no code. Apps can change look as the story advances by switching skins at
 chosen beats.
+
+### Skins: how a frame gets its look
+
+A skin is images, colours, fonts and sounds placed on a template. It never
+changes what the template does, and it never contains code.
+
+- **Frames and apps** are declared in `frames/frames.yaml`. A frame names the
+  kind Pit Box ships it builds on (`phone` so far), its body image with the
+  screen area (a rectangle in the image's pixels, and the corners' radius),
+  its wallpaper, its status bar style and its UI sounds, then its apps. An app
+  has an id, a name, an icon, a template and a layout, the content types it
+  shows, a skin, and when it appears (with its first item, or from a Beat).
+- **A skin** is a folder, `frames/skins/<id>/`, holding `skin.yaml` and its
+  files. It is self-contained, so a skin can be copied from one story to
+  another. `skin.yaml` gives the colours, the fonts and the **slots** it fills.
+- **Slots** are the named places each template and layout offers: for a
+  thread, its background, header, incoming and outgoing bubbles, avatar mask
+  and reply button; for a `page`, its paper, masthead, column rule and photo
+  frame; for the dialogue, its text box, name plate and choices; and so on
+  for every template. The full list per template is kept with the starter kit
+  (below) and checked by the engine.
+- **Images** are PNG or WebP, drawn at a reference size (the phone screen
+  1080 px wide, the scene 1920 × 1080) and scaled. A slot that must stretch
+  (a bubble, a header, a text box) declares its four fixed margins (9-slice),
+  so a hand-drawn edge stays as drawn.
+- **Fonts** (TTF, OTF, WOFF2) come with the story, their licence recorded like
+  any asset's. Text always stays text over the skin, never inside an image:
+  it is translated and it changes with the state.
+- **What is missing falls back.** A slot left empty takes the frame's default
+  theme, so a skin can start with one image. A slot no template has, or a file
+  that is not there, is flagged by the checks.
+- **No code, on purpose**: no HTML, CSS, JavaScript or shader in a story. A
+  shared story is a downloaded file, and code in it would be a risk for the
+  player; and a story that only fills slots keeps working as Pit Box evolves.
+- **Over time**, a Beat puts up another frame (a new phone) or swaps an app's
+  skin.
+- **The starter kit.** For each template and layout, a template sheet (PNG and
+  SVG) shows the slots, their reference sizes, the stretch margins and the
+  safe areas. The author draws over it, cuts the pieces and drops them in the
+  Frame screen. The sheets ship with Pit Box and can be saved from the Frame
+  screen.
+- **The Frame screen** lists a frame's apps and, for each, its slots as drop
+  zones, with a live preview filled with sample content and the checks
+  (missing file, wrong ratio, image too small for its reference size).
+- **The author guide**, `docs/story/authoring/`, explains step by step how to
+  make a frame, an app and a skin, pointing at the sample story's files. It is
+  generic, so it lives in the repository, and it is written by the lot that
+  builds skins, against what was built.
 
 ### In-person dialogues and visual novels
 
@@ -471,7 +533,7 @@ users later.
 | Catalogs | What can be bought | By wealth level or seller; price, picture, gameplay effect (e.g. +2 garage slots) |
 | Media | Pictures, music, replays | Where each file is used; unused or missing files flagged |
 | Scenes | What is behind the frame | Places with variants by season, time, weather and mood; ambient sound; blur; player-view preview; when each scene is available |
-| Frame | What shows the story | Frames over the story, content types each one shows; for the phone frame: status bar presets, wallpapers, UI sounds |
+| Frame | What shows the story | Frames over the story, their apps and the content types each shows; each app's skin as slots to drop images in, with a live preview and the starter kit's sheets; for the phone frame: status bar presets, wallpapers, UI sounds |
 | Economy | Money in and out | Loans and repayments, debt recovery order, resale values, side income, written stock prices |
 | Settings | The rules of this story | Languages and translation progress, saves, adaptive difficulty, calendar, branching warning, money options |
 
@@ -618,6 +680,9 @@ my-story/
     wealth_01.yaml
   frames/
     frames.yaml         frames used over the story, their apps and skins
+    skins/<id>/         skin.yaml and the skin's images, fonts and sounds
+  scenes/
+    scenes.yaml         places, their variants and ambient sounds
   package/
     manifest.yaml       items, versions, checksums, authors, permissions
   media/
@@ -630,8 +695,22 @@ conditions, delay) followed by the text of that content.
 ### Engine file format
 
 The reference is the sample story, `src-tauri/crates/story-engine/sample/`: it
-uses every part of the format and the tests play it to its end. What is not
-visible in it:
+uses every part of the format and the tests play it to its end.
+
+**The sample shows how everything is made.** An author learns by copying it
+(Copy the sample), so each lot that adds something an author can use adds an
+example of it to the sample, content and media both. Once scenes and skins
+exist, it shows at least: two scenes, one with variants by time of day; a
+phone frame with its own skin and icons; a second phone put up by a Beat; a
+newspaper read on the scene in the `page` layout; a call; a calendar with an
+event's dates; portraits with two expressions; an illustration. Its media
+are neutral and free to redistribute from a public repository - the
+project's own work, or a licence that allows it (CC0 or similar), with the
+origin and licence of each file recorded - and show no brand, logo, real
+person or real story. They are carried inside Pit Box with the sample, so
+Story Mode plays the sample with its pictures, not only its copy.
+
+What is not visible in it:
 
 - Unknown keys are errors, so a misspelt field never changes a story silently.
 - A flow node without `next` leads to the one written after it, then to the
@@ -866,7 +945,9 @@ background that shows where the character is. Each layer below is available to
 any story, and each is optional (see Story settings).
 
 - **Scenes.** A scene is a place (a bedroom, a garage, a hotel room) with
-  variants by season, time of day, weather and mood. The engine picks the
+  variants by season, time of day, weather and mood, declared in
+  `scenes/scenes.yaml` with their files in `media/scenes/`. A Beat sets the
+  current scene; a dialogue's `scene` names one. The engine picks the
   variant from story time, the in-story clock and the current beat; a beat can
   force one. Garage scenes can show the player's current car.
 - **Media.** A variant is a still image or a seamless video loop, with its
@@ -938,6 +1019,8 @@ The settings live in the `settings` part of each story's `story.yaml`.
 | L2 | Create Your Own: Story flow, Content, Events, Drivers, World, validation, preview in the phone frame; with L2.3b (dialogue content type, portraits, starting frame and Beat frame), reply labels and exits per reply in L2.4, the dialogue preview on the scene in L2.5, the roster and the race grids in L2.6 | An author builds a first chapter in the editor (behind the switch) |
 | L3 | Story Mode: hub, phone with thread, inbox, feed and statement templates, events with retries and failure pools; the dialogue layer and stories with no frame | A first chapter is playable end to end |
 | L3b | Visual novel: line log, fast-forward and auto-advance, illustrations, transitions, saving during a dialogue, read-only graph view of the flow | A story with no frame plays like a visual novel |
+| L3c | Scenes: places and variants, still image or video loop, ambient sound, blur, the Scenes screen and its preview; examples in the sample | Dialogues and the frame stand in a place |
+| L3d | Frames and skins: `frames.yaml`, successive phones, apps (name, icon, template, layout, content types), skins and their slots, status bar, wallpaper, UI sounds, the Frame screen, the starter kit and the author guide; the agenda template, the call screen, documents on the scene and the `page` layout; examples in the sample | An author gives the story the look they drew |
 | L4 | Story package: build, permissions, download, install and update (mechanism chosen at implementation) | A player installs a bundled story in one click |
 | L5 | Playtest and Timeline | An author checks years of story in minutes |
 | L6 | Balance simulator, catalogs, economy, side events | Money pressure is tuned on numbers |
@@ -957,3 +1040,6 @@ The settings live in the `settings` part of each story's `story.yaml`.
       textures) versus what CSP configs can already do (seasonal looks, hiding
       objects).
 - [ ] **Platform scope**: which story settings to expose in the first version.
+- [ ] **Hand-drawn frames**: whether a frame drawn by hand fits in images,
+      colours, fonts and stretch margins over the templates, or needs more;
+      to try with an author's sketch on the starter kit before L3d.
