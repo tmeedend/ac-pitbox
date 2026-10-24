@@ -57,10 +57,11 @@ export interface SceneMoment {
 export const pickVariant = (place: ScenePlace, moment: SceneMoment) =>
   invoke<SceneShown | null>("story_scene_pick", { place, moment });
 
-/** A new place, with one variant to fill: its file is picked next, and the
- * checks say so until it is. */
+/** A new place, sharp behind the frame (its box unticked: written, since
+ * a place says nothing is blurred), with one variant to fill: its file is
+ * picked next, and the checks say so until it is. */
 export function newPlace(id: string, name: string): ScenePlace {
-  return { id, name, variants: [{ id: "default", file: "" }] };
+  return { id, name, blur: false, variants: [{ id: "default", file: "" }] };
 }
 
 /** What a variant can show: the images and video loops of `media/`. */

@@ -1,24 +1,28 @@
 # The places behind the frame and the dialogues. A place's variants are
 # tried in order and the first that fits the moment shows; the last one is
-# the default, so the general case comes last.
+# the default, so the general case comes last. The places are sharp behind
+# the frame (`blur: false`); a variant can say otherwise.
 scenes:
   - id: bedroom
     name: Bedroom
+    blur: false
     variants:
       - id: default
         file: scenes/bedroom.webp
   - id: garage
     name: Garage
+    blur: false
     # Looped while the garage shows, whichever variant: the variants have
     # no sound of their own.
     ambient: scenes/garage.mp3
     variants:
-      # The night before a race, when a Beat says the mood is tense: sharp,
-      # not blurred.
+      # The night before a race, when a Beat says the mood is tense: the
+      # garage blurred, the mind elsewhere - a variant's own blur wins over
+      # the place's.
       - id: tense
         mood: [tense]
         file: scenes/garage_night.webp
-        blur: false
+        blur: true
       - id: night
         time: [evening, night]
         file: scenes/garage_night.webp

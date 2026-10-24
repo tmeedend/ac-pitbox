@@ -76,10 +76,11 @@ describe("media", () => {
     expect(soundFiles(media)).toEqual(["scenes/c.ogg"]);
   });
 
-  it("starts a place with one variant to fill", () => {
+  it("starts a place sharp, with one variant to fill", () => {
     expect(newPlace("attic", "Attic")).toEqual({
       id: "attic",
       name: "Attic",
+      blur: false,
       variants: [{ id: "default", file: "" }],
     });
   });

@@ -739,7 +739,8 @@ the editor is reserved; they are translated when it opens to all.
 - **The Scenes screen** edits `scenes/scenes.yaml`: the places in the
   file's order, a new one getting its id from the name typed, like a
   character; renaming a place renames the Beats and dialogues playing in it
-  and the story's start. A place has a display name, a blur and an ambient
+  and the story's start. A place has a display name, a blur (a new place is
+  sharp: the editor writes `blur: false`) and an ambient
   sound; its variants come in the order the engine tries them, the last
   marked as the default, and a new variant goes before it. A variant has its
   file, its criteria (seasons and times of day ticked, weathers and moods

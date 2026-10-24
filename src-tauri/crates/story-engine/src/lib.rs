@@ -359,6 +359,7 @@ mod tests {
             "21:30 is the evening"
         );
         assert_eq!(own.file, "scenes/garage_night.webp");
+        assert!(!own.blur, "the sample's places are sharp behind the frame");
         assert_eq!(
             own.ambient.as_deref(),
             Some("scenes/garage.mp3"),

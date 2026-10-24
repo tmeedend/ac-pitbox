@@ -24,10 +24,4 @@ Scenes, frame and sound: assets come from anywhere).
 | `frames/smartphone/wallpaper.webp` | Made for Pit Box: drawn by program (soft circles on a gradient) | Pit Box contributors | CC0 1.0 |
 | `frames/smartphone/icons/*.png` | Made for Pit Box: drawn by program (seven app icons) | Pit Box contributors | CC0 1.0 |
 | `frames/smartphone/sounds/tap.ogg`, `send.ogg` | Made for Pit Box: synthesised beeps | Pit Box contributors | CC0 1.0 |
-| `scenes/garage.mp3` | [Pixabay, "UK Garage"](https://pixabay.com/fr/music/danse-uk-garage-601105/) | alex-morgan | [Pixabay Content License](https://pixabay.com/service/license-summary/) - not CC0: see below |
-
-**`scenes/garage.mp3` is under review.** The Pixabay Content License allows
-using the music in a work, but not distributing it on its own, as it is -
-which a public repository and "Copy the sample" both do. Until that is
-settled (`docs/CHANTIERS.md`), this file is the one exception to the rule
-above.
+| `scenes/garage.mp3` | [Freesound, "Parking Garage - Ambiance, Electrical Hum 2"](https://freesound.org/people/sndadv/sounds/187287/), converted to MP3 | sndadv | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/): credit sndadv |

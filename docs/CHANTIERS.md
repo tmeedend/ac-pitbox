@@ -832,16 +832,13 @@ de reprendre. En cas d'écart, la spec fait foi.
           semaine plus tard, retour à la chambre avec le téléphone. Les
           images sont des dégradés provisoires ; l'ambiance attend
           `scenes/garage.ogg`. **Depuis (2026-10-24)** : l'utilisateur a
-          fourni `scenes/garage.mp3` (près de 3 min, 256 kb/s, 5,6 Mo
-          embarqués dans l'installateur), branché sur le garage. Source :
-          Pixabay, « UK Garage » d'alex-morgan, licence de contenu Pixabay.
-          **À trancher avec l'utilisateur** : cette licence permet d'utiliser
-          la musique dans une œuvre mais interdit de la distribuer seule,
-          telle quelle - ce que font le dépôt public et « Copier l'exemple »,
-          et `CREDITS.md` demande CC0 ou une licence qui permet la
-          redistribution. Options : une boucle CC0 à la place, ou garder le
-          fichier hors de ce qui se copie et se distribue (un exemple sans
-          son, le son téléchargé à part).
+          fourni `scenes/garage.mp3` (37 s en boucle, 120 kb/s, 570 Ko),
+          branché sur le garage. Un premier titre de Pixabay a été écarté : sa licence interdit de distribuer le
+          fichier tel quel, ce que font le dépôt public et « Copier
+          l'exemple ». Remplacé par « Parking Garage - Ambiance, Electrical
+          Hum 2 » de sndadv (Freesound, CC BY 4.0, crédité). **Reste** :
+          l'ancien fichier est encore dans l'historique local non poussé
+          (`8afe066`) ; il doit en sortir avant le prochain push.
           **Choisi sans demander** (dans la spec) : la première variante qui
           convient, dans l'ordre du fichier, la dernière en repli ; saisons
           de l'hémisphère nord, tranches horaires 5 h / 12 h / 18 h / 22 h ;
