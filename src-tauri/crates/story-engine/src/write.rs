@@ -66,6 +66,20 @@ pub fn scenes(scenes: &crate::scene::Scenes) -> Result<String, String> {
     yaml(crate::scene::SCENES, scenes)
 }
 
+/// `frames/frames.yaml`, read back to be sure it loads.
+pub fn frames(frames: &crate::frame::Frames) -> Result<String, String> {
+    yaml(crate::frame::FRAMES, frames)
+}
+
+/// A skin's `skin.yaml` at `path` (`frames/skins/<id>/skin.yaml`), read back
+/// to be sure it loads. Its id is its folder's, never written in it.
+pub fn skin(path: &str, skin: &crate::skin::Skin) -> Result<String, String> {
+    if crate::skin::skin_id(path).is_none() {
+        return Err(format!("not a skin's file: {path}"));
+    }
+    yaml(path, skin)
+}
+
 /// `drivers/roster.yaml`, read back to be sure it loads.
 pub fn roster(roster: &Roster) -> Result<String, String> {
     yaml(crate::load::ROSTER, roster)
@@ -411,6 +425,24 @@ mod tests {
         let back = reread(crate::scene::SCENES, &text).scenes;
         assert_eq!(format!("{back:?}"), format!("{:?}", d.scenes), "scenes read back");
         assert_eq!(scenes(&back).unwrap(), text, "scenes written again");
+
+        let story = crate::Story::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("sample")).unwrap();
+        let declared = crate::frame::Frames {
+            frames: story.frames.clone(),
+        };
+        let text = frames(&declared).unwrap();
+        let back = reread(crate::frame::FRAMES, &text).frames;
+        assert_eq!(format!("{back:?}"), format!("{declared:?}"), "frames read back");
+        assert_eq!(frames(&back).unwrap(), text, "frames written again");
+
+        let chat = story.skin("chat_blue").unwrap();
+        let path = "frames/skins/chat_blue/skin.yaml";
+        let text = skin(path, chat).unwrap();
+        let mut back = reread(path, &text).skins.pop().expect("a skin");
+        assert_eq!(back.id, "chat_blue", "named by its folder");
+        back.id = chat.id.clone();
+        assert_eq!(format!("{back:?}"), format!("{chat:?}"), "skin read back");
+        assert!(skin("frames/chat/skin.yaml", chat).is_err(), "only in a skin's folder");
     }
 
     // A grid as written: one opponent per item, its keys in the order an

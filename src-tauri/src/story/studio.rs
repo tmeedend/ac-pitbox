@@ -26,6 +26,7 @@ use story_engine::load::{draft_dir, read_dir, Draft, SourceFile, ROSTER};
 use story_engine::model::{Chapter, Characters, ContentFile, Event, Manifest, Placement, Roster, Variables};
 use story_engine::refs::{self, NameKind, NameUsages};
 use story_engine::scene::{self, Period, Scenes, Season, Shown, SCENES};
+use story_engine::skin::Skin;
 use story_engine::validate::{validate, Diagnostic, Severity};
 use story_engine::write;
 use story_engine::LoadError;
@@ -113,7 +114,7 @@ pub fn list(config_dir: &Path) -> Vec<StorySummary> {
             let (title, chapters, diagnostics) = match draft_dir(&path) {
                 Ok((_, d)) => {
                     let (title, chapters) = (d.manifest.as_ref().map(|m| m.title.clone()), d.chapters.len());
-                    (title, chapters, verdict(d))
+                    (title, chapters, verdict(&path, d))
                 }
                 Err(e) => (None, 0, vec![load_error(e)]),
             };
@@ -302,9 +303,14 @@ pub struct OpenStory {
     /// `frames/frames.yaml`: the story's own frames; read as empty without
     /// one. Edited by hand until the Frame screen.
     pub frames: EditedFile<Frames>,
-    /// The skins of `frames/skins/`, and what each dresses: what an app or
-    /// an item can wear.
-    pub skins: Vec<SkinRef>,
+    /// One per `frames/skins/<id>/skin.yaml`, in path order: what the Frame
+    /// screen edits, and what an app or an item can wear.
+    pub skins: Vec<EditedFile<Skin>>,
+    /// The skins' own files, as paths inside the story: what a slot or a
+    /// font can be.
+    pub skin_files: Vec<String>,
+    /// Every template, as the engine knows it: what the Frame screen offers.
+    pub templates: Vec<TemplateInfo>,
     pub chapters: Vec<ChapterFile>,
     pub content: Vec<ContentRef>,
     /// One per file of `events/`, in file-name order.
@@ -320,11 +326,58 @@ pub struct OpenStory {
     pub history: HistoryStatus,
 }
 
-/// A skin, and the template it dresses.
+/// A template as the Frame screen offers it (`story_engine::frame::Template`,
+/// `story_engine::skin::slots`): the engine's table, never copied in the
+/// frontend.
 #[derive(Debug, Serialize)]
-pub struct SkinRef {
-    pub id: String,
-    pub template: story_engine::frame::Template,
+pub struct TemplateInfo {
+    pub name: &'static str,
+    /// An app can be it; otherwise it is a way of playing on the scene.
+    pub app: bool,
+    /// The content types it shows.
+    pub shows: Vec<&'static str>,
+    /// The slots a skin for it fills.
+    pub slots: &'static [&'static str],
+}
+
+fn templates() -> Vec<TemplateInfo> {
+    use story_engine::frame::Template as T;
+    use story_engine::model::ContentType as C;
+    const TYPES: [C; 12] = [
+        C::Message,
+        C::Call,
+        C::Mail,
+        C::Article,
+        C::SocialPost,
+        C::Video,
+        C::Listing,
+        C::Statement,
+        C::CalendarEntry,
+        C::Dialogue,
+        C::Illustration,
+        C::Document,
+    ];
+    [
+        T::Thread,
+        T::Inbox,
+        T::Feed,
+        T::Statement,
+        T::Agenda,
+        T::Call,
+        T::Dialogue,
+        T::Newspaper,
+        T::Letter,
+        T::Tv,
+        T::Landline,
+    ]
+    .into_iter()
+    .map(|t| TemplateInfo {
+        name: t.name(),
+        app: t.is_app(),
+        shows: TYPES.iter().filter(|k| t.can_show(**k)).map(|k| k.name()).collect(),
+        slots: story_engine::skin::slots(t),
+    })
+    .collect()
 }
 
 /// `file` as the editor shows it. `value` is what the draft read from it - a
@@ -357,17 +410,19 @@ pub fn open(folder: &Path) -> Result<OpenStory, String> {
     // diagnostics describe the same state of the folder, read once.
     let media = media_list(&d);
     let usages = refs::all_usages(&files, &d);
-    let diagnostics = verdict(d.clone());
+    let diagnostics = verdict(folder, d.clone());
     let manifest = edited(&files, &d.errors, MANIFEST, d.manifest.take());
     let characters = edited(&files, &d.errors, CHARACTERS, Some(std::mem::take(&mut d.characters)));
     let variables = edited(&files, &d.errors, VARIABLES, Some(std::mem::take(&mut d.variables)));
     let drivers = edited(&files, &d.errors, ROSTER, Some(std::mem::take(&mut d.roster)));
     let scenes = edited(&files, &d.errors, SCENES, Some(std::mem::take(&mut d.scenes)));
     let frames = edited(&files, &d.errors, FRAMES, Some(std::mem::take(&mut d.frames)));
-    let skins = (d.skins.iter())
-        .map(|s| SkinRef {
-            id: s.id.clone(),
-            template: s.template,
+    let skin_files = (d.skin_files.iter()).flatten().cloned().collect();
+    let skins = (files.iter())
+        .filter_map(|f| story_engine::skin::skin_id(&f.path).map(|id| (f, id)))
+        .map(|(f, id)| {
+            let skin = d.skins.iter().find(|s| s.id == id).cloned();
+            edited(&files, &d.errors, &f.path, skin)
         })
         .collect();
     let chapters = chapter_files
@@ -410,6 +465,8 @@ pub fn open(folder: &Path) -> Result<OpenStory, String> {
         scenes,
         frames,
         skins,
+        skin_files,
+        templates: templates(),
         chapters,
         content,
         events,
@@ -438,6 +495,8 @@ pub struct Checked {
     /// Re-listed too: a picture copied into `media/` while the editor is
     /// open shows up at the next save.
     pub media: Vec<String>,
+    /// Re-listed too, like `media`.
+    pub skin_files: Vec<String>,
     pub history: HistoryStatus,
 }
 
@@ -449,13 +508,15 @@ pub fn check(folder: &Path) -> Checked {
         Ok((files, d)) => Checked {
             usages: refs::all_usages(&files, &d),
             media: media_list(&d),
-            diagnostics: verdict(d),
+            skin_files: (d.skin_files.iter()).flatten().cloned().collect(),
+            diagnostics: verdict(folder, d),
             history,
         },
         Err(e) => Checked {
             diagnostics: vec![load_error(e)],
             usages: Vec::new(),
             media: Vec::new(),
+            skin_files: Vec::new(),
             history,
         },
     }
@@ -465,9 +526,14 @@ pub fn check(folder: &Path) -> Checked {
 /// else what the validator finds. The messages are the engine's, in English:
 /// the editor is reserved for now, and they are translated when it opens to
 /// all (docs/CHANTIERS.md, Story).
-fn verdict(d: Draft) -> Vec<Diagnostic> {
+fn verdict(folder: &Path, d: Draft) -> Vec<Diagnostic> {
     match Story::from_draft(d) {
-        Ok(story) => validate(&story),
+        // The engine's checks, then what only the pictures can say.
+        Ok(story) => {
+            let mut found = validate(&story);
+            found.extend(super::frames::image_checks(folder, &story));
+            found
+        }
         Err(errors) => errors.into_iter().map(load_error).collect(),
     }
 }
@@ -531,6 +597,8 @@ pub fn render(file: &str, value: serde_json::Value) -> Result<String, String> {
         VARIABLES => write::variables(&from(value)?),
         ROSTER => write::roster(&from(value)?),
         SCENES => write::scenes(&from(value)?),
+        FRAMES => write::frames(&from(value)?),
+        _ if story_engine::skin::skin_id(file).is_some() => write::skin(file, &from::<Skin>(value)?),
         _ if is_chapter_path(file) => write::chapter(file, &from::<Chapter>(value)?),
         _ if is_event_path(file) => write::event(file, &from::<Event>(value)?),
         _ if is_content_path(file) => write::content_file(file, &from::<ContentFile>(value)?),
@@ -810,7 +878,8 @@ pub fn save_file(
     expected: Option<&str>,
     value: serde_json::Value,
 ) -> Result<String, String> {
-    let writes = matches!(file, MANIFEST | CHARACTERS | VARIABLES | ROSTER | SCENES)
+    let writes = matches!(file, MANIFEST | CHARACTERS | VARIABLES | ROSTER | SCENES | FRAMES)
+        || story_engine::skin::skin_id(file).is_some()
         || is_chapter_path(file)
         || is_event_path(file)
         || is_content_path(file);
@@ -825,7 +894,7 @@ pub fn save_file(
 /// for the checks to report. Recorded in the undo history, so Ctrl+Z brings
 /// it back.
 pub fn remove_file(folder: &Path, file: &str, expected: &str) -> Result<(), String> {
-    if !is_event_path(file) && !is_content_path(file) {
+    if !is_event_path(file) && !is_content_path(file) && story_engine::skin::skin_id(file).is_none() {
         return Err(format!("not a file the editor removes: {file}"));
     }
     let path = folder.join(file);
@@ -1341,6 +1410,42 @@ mod tests {
         save_file(&folder, SCENES, None, places).expect("the editor writes scenes/scenes.yaml");
         let opened = open(&folder).unwrap();
         assert_eq!(opened.scenes.value.unwrap().scenes[0].id, "attic", "read back");
+    }
+
+    // The Frame screen (SPEC-story-mode, Skins: how a frame gets its look)
+    // saves `frames/frames.yaml` and a skin in its own folder, removes a
+    // skin, and the sample's pictures pass the checks on their size.
+    #[test]
+    fn the_frame_screen_saves_frames_and_skins() {
+        let sample = Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/story-engine/sample");
+        let shown = open(&sample).unwrap();
+        assert_eq!(shown.diagnostics, [], "the sample, its pictures included");
+        assert!(shown
+            .skins
+            .iter()
+            .any(|s| s.file == "frames/skins/chat_blue/skin.yaml" && s.value.is_some()));
+        assert!(shown
+            .skin_files
+            .contains(&"frames/skins/chat_blue/bubble_in.png".to_string()));
+
+        let config = temp_dir("studio-frames-config");
+        let base = temp_dir("studio-frames");
+        let folder = base.join("s");
+        create(&config, &folder, "S", "en", Frame::None, "C").unwrap();
+        let frames = serde_json::json!({ "frames": [{ "id": "old", "kind": "phone", "apps": [{ "id": "sms", "template": "thread", "shows": ["message"], "skin": "green" }] }] });
+        save_file(&folder, FRAMES, None, frames).expect("frames.yaml written");
+        let skin = serde_json::json!({ "template": "thread", "colors": { "accent": "#00aa00" } });
+        let path = "frames/skins/green/skin.yaml";
+        let stamp = save_file(&folder, path, None, skin).expect("a skin written in its folder");
+        let opened = open(&folder).unwrap();
+        assert_eq!(opened.frames.value.unwrap().frames[0].id, "old");
+        assert_eq!(opened.diagnostics, [], "the app wears a skin that exists");
+        remove_file(&folder, path, &stamp).expect("removed");
+        assert!(!folder.join(path).exists());
+        assert!(
+            save_file(&folder, "frames/other.yaml", None, serde_json::json!({})).is_err(),
+            "not a file the editor writes"
+        );
     }
 
     // The preview (SPEC-story-mode, Create Your Own: Content): a dialogue on

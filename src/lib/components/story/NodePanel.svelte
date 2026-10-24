@@ -36,6 +36,7 @@
   import type { FlowNode } from "$lib/story/studio";
   import Field from "$lib/components/ui/Field.svelte";
   import TargetSelect from "./TargetSelect.svelte";
+  import BeatPhone from "./BeatPhone.svelte";
 
   interface Props {
     /** Index of the node in the shown chapter. */
@@ -254,6 +255,7 @@
         }}
       />
     </Field>
+    <BeatPhone {beat} onchange={save} />
     <datalist id="beat-weathers">{#each weathers as w (w)}<option value={w}></option>{/each}</datalist>
     <datalist id="beat-moods">{#each moods as m (m)}<option value={m}></option>{/each}</datalist>
   {:else if kind === "message"}

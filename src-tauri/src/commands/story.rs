@@ -60,6 +60,18 @@ pub async fn story_play_reading(app: AppHandle, source: play::Source, reading: p
     .await
 }
 
+/// Copies a file the author picked into the story, at `into` (a folder of
+/// `media/` or a skin's), and says the path a story names it by.
+#[tauri::command]
+pub async fn story_import_file(
+    app: AppHandle,
+    folder: PathBuf,
+    source: PathBuf,
+    into: String,
+) -> Result<String, String> {
+    off_window(app, move |_| crate::story::frames::import_file(&folder, &source, &into)).await
+}
+
 /// The bytes of a skin's font, for the page to load (`story/media.rs`).
 #[tauri::command]
 pub async fn story_skin_font(

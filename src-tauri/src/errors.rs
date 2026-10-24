@@ -170,6 +170,9 @@ pub const STORY_FOLDER_NOT_EMPTY: &str = "errors.storyFolderNotEmpty";
 /// A story file changed outside Pit Box since the editor read it: reloaded,
 /// never overwritten (`story::studio::save_file`).
 pub const STORY_FILE_CHANGED: &str = "errors.storyFileChanged";
+/// A file the author picked to bring into a story is of a kind a story
+/// cannot carry (`story::frames::import_file`).
+pub const STORY_FILE_KIND: &str = "errors.storyFileKind";
 /// Undo or redo in the story editor refused: a file the edit touched was
 /// changed outside Pit Box since, and the history was dropped.
 pub const STORY_HISTORY_OUTDATED: &str = "errors.storyHistoryOutdated";

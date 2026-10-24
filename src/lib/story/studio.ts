@@ -31,6 +31,11 @@ export interface FlowNode {
     mood?: string;
     /** Apps that show from this beat on, by id. */
     unlock?: string[];
+    /** What the phone's status bar shows from this beat on; what is left
+     * out stays as it was, a `date` of `""` gives the story's back. */
+    status?: { date?: string; battery?: number; signal?: number; wifi?: boolean; airplane?: boolean };
+    /** App id -> the skin it wears from this beat on. */
+    skins?: Record<string, string>;
   };
   message?: string;
   wait_reply?: boolean;
@@ -307,7 +312,48 @@ export interface EditedFile<T> {
 /** `frames/frames.yaml`, as far as the editor reads it: the frames' ids and
  * names (`story_engine::frame::Frames`). */
 export interface FramesFile {
-  frames: { id: string; kind: string; name?: string; apps: { id: string; name?: string }[] }[];
+  frames: FrameDecl[];
+}
+
+/** A frame a story declares (`story_engine::frame::FrameDecl`): a key
+ * left out is absent from the file. */
+export interface FrameDecl {
+  id: string;
+  kind: "phone";
+  name?: string;
+  body?: { file: string; screen: { x: number; y: number; width: number; height: number; radius?: number } };
+  wallpaper?: string;
+  status_bar?: "full" | "simple" | "none";
+  sounds?: { tap?: string; send?: string };
+  apps: FrameApp[];
+}
+
+export interface FrameApp {
+  id: string;
+  name?: string;
+  icon?: string;
+  template: string;
+  shows: string[];
+  appears?: "first_item" | "always" | "beat";
+  skin?: string;
+}
+
+/** A skin's `skin.yaml` (`story_engine::skin::Skin`); its id is its
+ * folder's. */
+export interface SkinFile {
+  template: string;
+  colors?: Record<string, string>;
+  font?: string;
+  slots?: Record<string, { file: string; slice?: [number, number, number, number] }>;
+}
+
+/** A template as the engine knows it (`studio::TemplateInfo`). */
+export interface TemplateInfo {
+  name: string;
+  /** An app can be it; otherwise it plays on the scene. */
+  app: boolean;
+  shows: string[];
+  slots: string[];
 }
 
 export type NameKind = "character" | "flag" | "counter" | "step" | "event" | "driver" | "scene";
@@ -362,7 +408,11 @@ export interface OpenStory {
   /** `frames/frames.yaml`: the story's own frames, edited by hand so far. */
   frames: EditedFile<FramesFile>;
   /** The skins of `frames/skins/`, and the template each dresses. */
-  skins: { id: string; template: string }[];
+  /** One per `frames/skins/<id>/skin.yaml`. */
+  skins: EditedFile<SkinFile>[];
+  /** The skins' own files, as paths inside the story. */
+  skin_files: string[];
+  templates: TemplateInfo[];
   chapters: ChapterFile[];
   content: ContentRef[];
   /** One per file of `events/`, in file-name order. */
@@ -406,6 +456,7 @@ export interface Checked {
   diagnostics: Diagnostic[];
   usages: NameUsages[];
   media: string[];
+  skin_files: string[];
   history: HistoryStatus;
 }
 
@@ -421,6 +472,12 @@ export const saveFile = (folder: string, file: string, expected: string | null, 
 /** Deletes an event's file, read with stamp `expected`. */
 export const removeFile = (folder: string, file: string, expected: string) =>
   invoke<void>("story_remove_file", { folder, file, expected });
+
+/** Copies a file the author picked into the story, at `into` (a folder of
+ * `media/`, or a skin's `frames/skins/<id>`); resolves to the path the
+ * story names it by. */
+export const importFile = (folder: string, source: string, into: string) =>
+  invoke<string>("story_import_file", { folder, source, into });
 
 /** Renames a name and every sentence citing it, in every file. */
 export const renameName = (folder: string, kind: NameKind, from: string, to: string) =>

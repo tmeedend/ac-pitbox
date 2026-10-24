@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("$lib/i18n/index.svelte", () => ({ t: (key: string) => `<${key}>` }));
 
 import { FRAMES, frameLabel, framesWith } from "./frames";
+import type { FramesFile } from "./studio";
 
 describe("framesWith", () => {
   it("offers the known frames, and keeps an unknown one written by hand", () => {
@@ -14,7 +15,7 @@ describe("framesWith", () => {
   // The story's own frames first; one named like a shipped frame is the
   // story's, offered once.
   it("offers the story's own frames first", () => {
-    const own = {
+    const own: FramesFile = {
       frames: [
         { id: "basic", kind: "phone", apps: [] },
         { id: "phone", kind: "phone", name: "Mine", apps: [] },

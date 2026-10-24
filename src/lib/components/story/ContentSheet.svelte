@@ -22,6 +22,7 @@
     type Placement,
   } from "$lib/story/content";
   import { mediaUrl } from "$lib/story/player/speakers";
+  import { skinsFor } from "$lib/story/frameEdit";
   import { mediaImages } from "$lib/story/world";
   import { setOptional } from "$lib/story/fields";
   import { parseLines } from "$lib/story/flow";
@@ -257,7 +258,7 @@
         <Field label={t("story.content.skin")}>
           <TargetSelect
             value={h.skin ?? ""}
-            options={story.skins.filter((s) => s.template === dresses).map((s) => s.id)}
+            options={skinsFor(story.skins, dresses)}
             emptyLabel={t("story.content.noSkin")}
             onchange={(v) => setOpt("skin", v)}
           />

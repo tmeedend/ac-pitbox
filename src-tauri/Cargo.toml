@@ -99,7 +99,7 @@ fastrand = "2"
 # Miniatures des galeries médias (§6.1) : les captures AC sont en pleine
 # résolution jeu, jamais retaillées jusqu'ici — décodage/redimensionnement
 # jpeg+png seulement (pas les formats exotiques, inutiles ici).
-image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 # Mise à la corbeille d'un screenshot/replay depuis la fiche (§6.1). Passe par
 # `IFileOperation` + `FOFX_RECYCLEONDELETE`, qui **échoue** quand le recyclage
 # est impossible (partage réseau, fichier plus gros que le quota de la

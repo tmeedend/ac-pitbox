@@ -7,6 +7,7 @@
 //! it, and `check-conventions.mjs` (`story-isolation`) keeps it that way.
 
 pub mod backups;
+pub mod frames;
 pub mod history;
 pub mod media;
 pub mod play;

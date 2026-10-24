@@ -242,8 +242,7 @@ kind the phone cannot show or play, a screen with no size, a skin unknown or
 for another template, a colour unknown or not `#rrggbb`, a slot its template
 has not, a skin's file outside its folder or missing, a status out of range
 (errors). The editor's preview of a content item shows its phone dressed as
-the story starts it. The status bar and the skins are typed in the files
-until the Frame screen.
+the story starts it.
 
 **Built so far** (L3d.3): the `agenda` and `call` templates, and what plays
 on the scene. Pit Box's phone gains Phone (calls) and Calendar. A
@@ -308,9 +307,29 @@ changes what the template does, and it never contains code.
   safe areas: what images to make, whatever the tool, to drop in the Frame
   screen. The sheets ship with Pit Box and can be saved from the Frame
   screen.
-- **The Frame screen** lists a frame's apps and, for each, its slots as drop
-  zones, with a live preview filled with sample content and the checks
-  (missing file, wrong ratio, image too small for its reference size).
+- **The Frame screen** lists the story's phones and its skins. A phone's
+  sheet sets its name, its look (the picture of the device and the screen's
+  rectangle in it, the wallpaper, the status bar, its two sounds) and its
+  apps in the home screen's order: name, icon, template, the types it shows
+  among those its template can and no other app of the phone shows, when it
+  appears, its skin; its id is not renamed (the start and the Beats name
+  it). A skin's sheet sets the template it dresses, its colours, its font
+  and each slot of that template, with the slot's stretch margins; changing
+  the template drops the slots the new one has not. Every file is picked
+  among the story's or imported from anywhere by a button: copied into
+  `media/frames/<phone>/` for a phone, into the skin's own folder for a
+  skin; a file of the same name and bytes is the one already there, another
+  gets a number, nothing is overwritten. Not by dropping a file on the
+  window, which installs a mod everywhere in Pit Box. Beside the sheet, a
+  live preview filled with sample content: the game's own phone with the
+  phone's look and apps, or a skin worn by an app of its template or by
+  what plays on the scene its way. The checks the pictures alone can
+  answer come with the engine's: a screen past its body's picture and
+  margins that leave nothing to stretch (errors); a wallpaper of another
+  shape than its screen or smaller than it, an icon not square or under
+  96 px, a background, paper or TV set drawn under half its reference
+  width (warnings). A Beat's panel sets the status bar and the skin each
+  app of the story's phones wears from it.
 - **The author guide**, `docs/story/authoring/`, explains step by step how to
   make a frame, an app and a skin, pointing at the sample story's files. It is
   generic, so it lives in the repository, and it is written by the lot that
@@ -736,8 +755,8 @@ the editor is reserved; they are translated when it opens to all.
   sheet and the Settings' start pick their place in a list.
 - **A section appears with the lot that builds it**, never as an entry that
   opens nothing: the Story flow, the Events, the Contents, the Drivers, the
-  World (characters, flags, counters), the Scenes, the Settings and the
-  story's copies so far. Settings shows only the settings the engine applies.
+  World (characters, flags, counters), the Scenes, the Frames, the Settings
+  and the story's copies so far. Settings shows only the settings the engine applies.
   Each section counts the errors of its own files.
 
 ### Story flow screen

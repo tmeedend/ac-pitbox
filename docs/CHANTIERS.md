@@ -1016,9 +1016,32 @@ de reprendre. En cas d'écart, la spec fait foi.
           fixe se signale par un « ☎ Au téléphone fixe » en coin de scène.
           **Pas vu à l'écran** : le journal, la lettre, le JT, le fixe et
           leurs habillages.
-        - **L3d.4, l'écran Cadre.** Les apps d'un cadre, leurs emplacements,
-          l'import d'un fichier dans l'histoire, un aperçu au contenu
-          factice, les contrôles (fichier absent, ratio, taille).
+        - **L3d.4, l'écran Cadre — fait (2026-10-24).** La section Cadres
+          du Studio (`FramesEditor`, `FrameSheet`, `SkinSheet`,
+          `FramePreview`) ; l'éditeur écrit `frames.yaml` et les
+          `skin.yaml` (`write::frames`, `write::skin`), supprime un
+          habillage ; l'import d'un fichier (`story/frames.rs`,
+          `story_import_file`, `FilePick`) ; les contrôles par les images
+          (`image_checks`, la crate `image` gagne le WebP) ; `OpenStory`
+          porte les habillages, leurs fichiers et la table des modèles du
+          moteur (`templates`) ; le panneau d'un Beat règle la barre d'état
+          et les habillages (`BeatPhone`).
+          **Choisi sans demander** (dans la spec) : l'import par un bouton,
+          pas par glisser-déposer (un fichier lâché sur la fenêtre installe
+          un mod partout dans Pit Box) ; fichiers d'un téléphone dans
+          `media/frames/<id>/`, d'un habillage dans son dossier ; un nom pris
+          par un autre fichier reçoit un numéro, jamais d'écrasement ; l'id
+          d'un téléphone ne se renomme pas ; supprimer un habillage laisse
+          ses images ; seuils : icône sous 96 px, fond sous la moitié de sa
+          largeur de référence, fond d'écran à plus de 5 % de la forme de
+          l'écran.
+          **Choisi sans demander** (détails) : un nouveau téléphone part
+          avec une app Messages ; l'écran d'un corps choisi part à
+          1080 × 2340 en attendant les vraies mesures ; l'aperçu d'un
+          habillage de scène prend des textes d'exemple de l'interface.
+          **Corrigé en passant** (commit à part) : l'écran Scènes
+          n'enregistrait pas `scenes.yaml` depuis L3c.3.
+          **Pas vu à l'écran** : tout l'écran Cadres et le panneau d'un Beat.
         - **L3d.5, le kit et le guide.** Les planches PNG et SVG générées
           par programme, `docs/story/authoring/`, les médias de l'exemple
           faits par Claude (liste plus haut).

@@ -13,6 +13,7 @@ import { errorText } from "$lib/errors";
 import { t } from "$lib/i18n/index.svelte";
 import {
   checkStory,
+  importFile,
   openStory as fetchStory,
   redoEdit,
   removeFile,
@@ -25,29 +26,40 @@ import {
   type Diagnostic,
   type NameKind,
   type OpenStory,
+  type SkinFile,
   type StoryEvent,
 } from "./studio";
 import { eventFile } from "./events";
 import { contentFile, findContent } from "./content";
 
 /** The studio's sections (SPEC-story-mode, Create Your Own). */
-export type StudioSection = "flow" | "events" | "content" | "drivers" | "world" | "scenes" | "settings" | "backups";
+export type StudioSection =
+  | "flow"
+  | "events"
+  | "content"
+  | "drivers"
+  | "world"
+  | "scenes"
+  | "frames"
+  | "settings"
+  | "backups";
 
 /** The section whose files hold `file` (a diagnostic's, say, which may end
  * with `:<line>`): `story.yaml` is the Settings', `world/` the World's,
- * `drivers/` the Drivers', `scenes/` the Scenes', `events/` the Events',
- * `content/` the Contents', the rest the flow's. */
+ * `drivers/` the Drivers', `scenes/` the Scenes', `frames/` the Frames',
+ * `events/` the Events', `content/` the Contents', the rest the flow's. */
 export function sectionOf(file: string): StudioSection {
   if (file === "story.yaml") return "settings";
   if (file.startsWith("drivers/")) return "drivers";
   if (file.startsWith("scenes/")) return "scenes";
+  if (file.startsWith("frames/")) return "frames";
   if (file.startsWith("events/")) return "events";
   if (file.startsWith("content/")) return "content";
   return file.startsWith("world/") ? "world" : "flow";
 }
 
 /** The story-wide files, by their key in `OpenStory`. */
-export type StoryFileKey = "manifest" | "characters" | "variables" | "drivers" | "scenes";
+export type StoryFileKey = "manifest" | "characters" | "variables" | "drivers" | "scenes" | "frames";
 
 export const studio = $state<{
   story: OpenStory | null;
@@ -62,6 +74,8 @@ export const studio = $state<{
   content: string | null;
   /** The id of the place shown in the Scenes section. */
   scene: string | null;
+  /** What the Frames section shows: `frame:<id>` or a skin's file. */
+  frame: string | null;
   diagnostics: Diagnostic[];
   /** Why the last save of a chapter file failed, by file. */
   unsaved: Record<string, string>;
@@ -80,6 +94,7 @@ export const studio = $state<{
   event: null,
   content: null,
   scene: null,
+  frame: null,
   diagnostics: [],
   unsaved: {},
   notice: null,
@@ -105,6 +120,7 @@ export async function openStudio(path: string): Promise<void> {
       studio.event = null;
       studio.content = null;
       studio.scene = null;
+      studio.frame = null;
     }
     if (!story.events.some((e) => e.file === studio.event)) studio.event = story.events[0]?.file ?? null;
     if (studio.content && !findContent(story.contentFiles, studio.content)) studio.content = null;
@@ -243,6 +259,64 @@ export function removeContent(id: string): Promise<string | null> {
     await openStudio(story.path);
     return null;
   });
+}
+
+/** Queues a save of the skin whose `skin.yaml` is `file`, like a chapter. */
+export function saveSkinFile(file: string): Promise<void> {
+  return enqueue(async () => {
+    const entry = studio.story?.skins.find((s) => s.file === file);
+    if (entry?.value) await write(entry, entry.value);
+  });
+}
+
+/** Adds a skin, in a folder of its own (its stamp is empty: new), shows it
+ * and saves it. */
+export function addSkin(file: string, skin: SkinFile): Promise<void> {
+  const story = studio.story;
+  if (!story) return Promise.resolve();
+  story.skins.push({ file, stamp: "", value: skin, error: null });
+  story.skins.sort((a, b) => a.file.localeCompare(b.file));
+  studio.section = "frames";
+  studio.frame = file;
+  return saveSkinFile(file);
+}
+
+/** Queues the deletion of the skin whose `skin.yaml` is `file` - its
+ * images stay in its folder - then reloads the story. Resolves to why it
+ * was refused, or `null` once done. */
+export function removeSkin(file: string): Promise<string | null> {
+  return enqueue(async () => {
+    const path = studio.story?.path;
+    const entry = studio.story?.skins.find((s) => s.file === file);
+    if (!path || !entry) return null;
+    if (Object.keys(studio.unsaved).length > 0) return t("story.studio.historyUnsaved");
+    if (entry.stamp !== "") {
+      try {
+        await removeFile(path, file, entry.stamp);
+      } catch (e) {
+        await openStudio(path);
+        return errorText(e);
+      }
+    }
+    studio.frame = null;
+    await openStudio(path);
+    return null;
+  });
+}
+
+/** Copies a file the author picked into the story, at `into`, then lists
+ * the story's files again so the pickers offer it; resolves to the path
+ * the story names it by. */
+export async function importIntoStory(source: string, into: string): Promise<string> {
+  const story = studio.story;
+  if (!story) throw new Error("no story open");
+  const path = await importFile(story.path, source, into);
+  const { media, skin_files } = await checkStory(story.path);
+  if (studio.story?.path === story.path) {
+    studio.story.media = media;
+    studio.story.skin_files = skin_files;
+  }
+  return path;
 }
 
 /** Adds an event to the open story (its stamp is empty: new), shows it
@@ -384,11 +458,12 @@ function scheduleCheck(): void {
     const path = studio.story?.path;
     if (!path) return;
     try {
-      const { diagnostics, usages, media, history } = await checkStory(path);
+      const { diagnostics, usages, media, skin_files, history } = await checkStory(path);
       if (studio.story?.path !== path) return;
       studio.diagnostics = diagnostics;
       studio.story.usages = usages;
       studio.story.media = media;
+      studio.story.skin_files = skin_files;
       studio.story.history = history;
       studio.revision++;
     } catch (e) {
