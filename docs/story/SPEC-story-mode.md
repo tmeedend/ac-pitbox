@@ -307,8 +307,10 @@ changes what the template does, and it never contains code.
   1080 × 2340, the scene 1920 × 1080), the stretch margins we suggest and
   what to keep clear: what images to make, whatever the tool, to import in
   the Frame screen. Pit Box draws the sheets beside its slot table, so a
-  sheet shows every slot of its template and nothing else, and saves them
-  from the Frame screen (**Starter kit…**) into a folder the author picks.
+  sheet shows every slot of its template and nothing else. A block at the
+  top of the Frame screen says what the kit is for and what saving it does
+  before asking for a folder, then saves the sheets there and offers to
+  open that folder.
 - **The Frame screen** lists the story's phones and its skins. A phone's
   sheet sets its name, its look (the picture of the device and the screen's
   rectangle in it, the wallpaper, the status bar, its two sounds) and its

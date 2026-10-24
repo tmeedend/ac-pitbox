@@ -17,8 +17,9 @@ next.
 
 ## The starter kit
 
-The Frames screen saves the starter kit (**Starter kit…**, then pick a
-folder): one sheet per template, as SVG and PNG. A sheet shows each slot of
+The **Starter kit** block, at the top of the Frames screen, saves it in a
+folder you pick (**Save the starter kit…**): one sheet per template, as SVG
+and PNG; **Open the folder** shows them. A sheet shows each slot of
 that template where it sits, at its reference size, with the stretch margins
 we suggest drawn dashed, and what to keep clear hatched. Draw over a sheet in
 any tool, cut each slot to its own file, and import them in the Frames
