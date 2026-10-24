@@ -31,22 +31,23 @@ import { eventFile } from "./events";
 import { contentFile, findContent } from "./content";
 
 /** The studio's sections (SPEC-story-mode, Create Your Own). */
-export type StudioSection = "flow" | "events" | "content" | "drivers" | "world" | "settings" | "backups";
+export type StudioSection = "flow" | "events" | "content" | "drivers" | "world" | "scenes" | "settings" | "backups";
 
 /** The section whose files hold `file` (a diagnostic's, say, which may end
  * with `:<line>`): `story.yaml` is the Settings', `world/` the World's,
- * `drivers/` the Drivers', `events/` the Events', `content/` the Contents',
- * the rest the flow's - `scenes/` included, until it has a screen. */
+ * `drivers/` the Drivers', `scenes/` the Scenes', `events/` the Events',
+ * `content/` the Contents', the rest the flow's. */
 export function sectionOf(file: string): StudioSection {
   if (file === "story.yaml") return "settings";
   if (file.startsWith("drivers/")) return "drivers";
+  if (file.startsWith("scenes/")) return "scenes";
   if (file.startsWith("events/")) return "events";
   if (file.startsWith("content/")) return "content";
   return file.startsWith("world/") ? "world" : "flow";
 }
 
 /** The story-wide files, by their key in `OpenStory`. */
-export type StoryFileKey = "manifest" | "characters" | "variables" | "drivers";
+export type StoryFileKey = "manifest" | "characters" | "variables" | "drivers" | "scenes";
 
 export const studio = $state<{
   story: OpenStory | null;
@@ -59,6 +60,8 @@ export const studio = $state<{
   event: string | null;
   /** The id of the item shown in the Contents section. */
   content: string | null;
+  /** The id of the place shown in the Scenes section. */
+  scene: string | null;
   diagnostics: Diagnostic[];
   /** Why the last save of a chapter file failed, by file. */
   unsaved: Record<string, string>;
@@ -76,6 +79,7 @@ export const studio = $state<{
   node: null,
   event: null,
   content: null,
+  scene: null,
   diagnostics: [],
   unsaved: {},
   notice: null,
@@ -100,9 +104,13 @@ export async function openStudio(path: string): Promise<void> {
       studio.node = null;
       studio.event = null;
       studio.content = null;
+      studio.scene = null;
     }
     if (!story.events.some((e) => e.file === studio.event)) studio.event = story.events[0]?.file ?? null;
     if (studio.content && !findContent(story.contentFiles, studio.content)) studio.content = null;
+    if (!story.scenes.value?.scenes.some((p) => p.id === studio.scene)) {
+      studio.scene = story.scenes.value?.scenes[0]?.id ?? null;
+    }
     studio.chapter = Math.min(studio.chapter, Math.max(0, story.chapters.length - 1));
     const nodes = story.chapters[studio.chapter]?.chapter?.nodes ?? [];
     if (!nodes.some((n) => n.id === studio.node)) studio.node = null;
@@ -130,6 +138,13 @@ export function selectContent(id: string): void {
   if (!studio.story || !findContent(studio.story.contentFiles, id)) return;
   studio.section = "content";
   studio.content = id;
+}
+
+/** Shows place `id` in the Scenes section. */
+export function selectScene(id: string): void {
+  if (!studio.story?.scenes.value?.scenes.some((p) => p.id === id)) return;
+  studio.section = "scenes";
+  studio.scene = id;
 }
 
 /** Shows the chapter holding node `id`, in the flow, and selects it. */
@@ -280,6 +295,7 @@ export function renameEverywhere(kind: NameKind, from: string, to: string): Prom
     }
     // An event's file named after it moved with it: keep it shown.
     if (kind === "event" && studio.event === eventFile(from)) studio.event = eventFile(to);
+    if (kind === "scene" && studio.scene === from) studio.scene = to;
     await openStudio(path);
     return null;
   });

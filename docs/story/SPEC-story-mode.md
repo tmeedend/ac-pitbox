@@ -625,7 +625,7 @@ the editor is reserved; they are translated when it opens to all.
   (relations, flags, counters, reputation, followers, money), chooses
   replies, and sees what the conversation changed and which items it sent.
   What is set lasts while Pit Box runs and is never written. A dialogue shows
-  on the 16:9 stage (a plain background: scenes are not drawn yet), another item
+  on the 16:9 stage, in front of its own place if it has one, another item
   in the frame it can arrive in, in the template of the phone app showing it
   (thread, inbox, feed, statement; a type with no app yet says so), and an
   item no frame can show shows the checks' warning instead. The preview follows every save, and its views
@@ -640,10 +640,28 @@ the editor is reserved; they are translated when it opens to all.
   leads to, the end) or as **Ink** (the Script view); the form is the tree
   the engine reads, and a text with lines outside the subset opens only in
   the Script view.
+- **The Scenes screen** edits `scenes/scenes.yaml`: the places in the
+  file's order, a new one getting its id from the name typed, like a
+  character; renaming a place renames the Beats and dialogues playing in it
+  and the story's start. A place has a display name, a blur and an ambient
+  sound; its variants come in the order the engine tries them, the last
+  marked as the default, and a new variant goes before it. A variant has its
+  file, its criteria (seasons and times of day ticked, weathers and moods
+  typed), its blur and its sound, the place's unless it says otherwise; its
+  id is renamed alone, a Beat forcing it is then the checks'. Files are
+  picked among those in `media/`, never copied there; one that is not there
+  stays as written and says so. Beside it, the place as the player sees it:
+  the author sets season, time of day, weather and mood - offered among the
+  names the variants and the Beats use - and the engine picks the variant,
+  on the place as edited, saved or not; the phone over it or not, silent.
+  A Beat's panel picks its place, a variant to force among that place's (or
+  among all, without a place: the current one is known only by playing), and
+  types its weather and mood among the names in use or `none`; a dialogue's
+  sheet and the Settings' start pick their place in a list.
 - **A section appears with the lot that builds it**, never as an entry that
   opens nothing: the Story flow, the Events, the Contents, the Drivers, the
-  World (characters, flags, counters), the Settings and the story's copies so
-  far. Settings shows only the settings the engine applies.
+  World (characters, flags, counters), the Scenes, the Settings and the
+  story's copies so far. Settings shows only the settings the engine applies.
   Each section counts the errors of its own files.
 
 ### Story flow screen

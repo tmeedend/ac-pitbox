@@ -60,6 +60,12 @@ pub fn characters(characters: &Characters) -> Result<String, String> {
     yaml("world/characters.yaml", characters)
 }
 
+/// `scenes/scenes.yaml`, read back to be sure it loads. The places and
+/// their variants keep their order: the order picks the variant.
+pub fn scenes(scenes: &crate::scene::Scenes) -> Result<String, String> {
+    yaml(crate::scene::SCENES, scenes)
+}
+
 /// `drivers/roster.yaml`, read back to be sure it loads.
 pub fn roster(roster: &Roster) -> Result<String, String> {
     yaml(crate::load::ROSTER, roster)
@@ -399,6 +405,12 @@ mod tests {
         let back = reread("drivers/roster.yaml", &text).roster;
         assert_eq!(format!("{back:?}"), format!("{:?}", d.roster), "roster read back");
         assert_eq!(roster(&back).unwrap(), text, "roster written again");
+
+        assert_eq!(d.scenes.scenes.len(), 2, "the sample's places");
+        let text = scenes(&d.scenes).unwrap();
+        let back = reread(crate::scene::SCENES, &text).scenes;
+        assert_eq!(format!("{back:?}"), format!("{:?}", d.scenes), "scenes read back");
+        assert_eq!(scenes(&back).unwrap(), text, "scenes written again");
     }
 
     // A grid as written: one opponent per item, its keys in the order an

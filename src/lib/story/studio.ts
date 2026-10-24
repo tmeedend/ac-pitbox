@@ -5,6 +5,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { PlayerChoice, PlayerStep } from "./player/types";
 import type { SceneShown } from "./play";
+import type { ScenesFile } from "./scenes";
 
 /** What shows the story (SPEC-story-mode, Content types, templates and
  * frames): `none` (a visual novel) or a frame's name. There is no default:
@@ -296,7 +297,7 @@ export interface EditedFile<T> {
   error: string | null;
 }
 
-export type NameKind = "character" | "flag" | "counter" | "step" | "event" | "driver";
+export type NameKind = "character" | "flag" | "counter" | "step" | "event" | "driver" | "scene";
 
 /** A line citing a name. */
 export interface Usage {
@@ -343,6 +344,8 @@ export interface OpenStory {
   variables: EditedFile<Variables>;
   /** `drivers/roster.yaml`: read as empty until its first save. */
   drivers: EditedFile<Roster>;
+  /** `scenes/scenes.yaml`: read as empty until its first save. */
+  scenes: EditedFile<ScenesFile>;
   chapters: ChapterFile[];
   content: ContentRef[];
   /** One per file of `events/`, in file-name order. */

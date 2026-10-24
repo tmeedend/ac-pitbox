@@ -18,7 +18,16 @@
     setReplyExit,
   } from "$lib/story/flow";
   import { eventIds, eventLabels, newEvent } from "$lib/story/events";
-  import { addContent, addEvent, saveChapterAt, selectContent, selectEvent, studio } from "$lib/story/studioState.svelte";
+  import {
+    addContent,
+    addEvent,
+    saveChapterAt,
+    selectContent,
+    selectEvent,
+    selectScene,
+    studio,
+  } from "$lib/story/studioState.svelte";
+  import { storyNames, variantIds } from "$lib/story/scenes";
   import { contentIds, newContent } from "$lib/story/content";
   import { nameFrom } from "$lib/story/world";
   import { KIND_LABEL } from "$lib/story/labels";
@@ -43,6 +52,14 @@
   const isStart = $derived(node.id === story.manifest.value?.start.node);
   const events = $derived(eventIds(story.events));
   const eventNames = $derived(eventLabels(story.events));
+  const places = $derived(story.scenes.value?.scenes ?? []);
+  const placeIds = $derived(places.map((p) => p.id));
+  const placeNames = $derived(Object.fromEntries(places.map((p) => [p.id, p.name ?? p.id])));
+  const chapters = $derived(story.chapters.map((c) => c.chapter));
+  /** What a Beat names the story's weather and mood with: the names already
+   * in use, and `none`, which clears them. */
+  const weathers = $derived(["none", ...storyNames(story.scenes.value, chapters, "weather")]);
+  const moods = $derived(["none", ...storyNames(story.scenes.value, chapters, "mood")]);
 
   let idError = $state<string | null>(null);
 
@@ -180,6 +197,50 @@
         {/each}
       </select>
     </Field>
+    <Field label={t("story.scenes.place")}>
+      <TargetSelect
+        value={beat.scene ?? ""}
+        options={placeIds}
+        labels={placeNames}
+        emptyLabel={t("story.scenes.unchanged")}
+        onchange={(v) => setOpt(beat, "scene", v)}
+      />
+      {#if beat.scene && placeIds.includes(beat.scene)}
+        <div class="links">
+          <button class="btn btn-ghost" onclick={() => selectScene(beat.scene!)}>{t("story.events.open")}</button>
+        </div>
+      {/if}
+    </Field>
+    <Field label={t("story.scenes.forcedVariant")}>
+      <TargetSelect
+        value={beat.variant ?? ""}
+        options={variantIds(story.scenes.value, beat.scene)}
+        emptyLabel={t("story.scenes.noForcedVariant")}
+        onchange={(v) => setOpt(beat, "variant", v)}
+      />
+    </Field>
+    <div class="pair">
+      <Field label={t("story.scenes.weather")}>
+        <input
+          class="input mono"
+          list="beat-weathers"
+          value={beat.weather ?? ""}
+          placeholder={t("story.scenes.unchanged")}
+          onchange={(e) => setOpt(beat, "weather", value(e))}
+        />
+      </Field>
+      <Field label={t("story.scenes.mood")}>
+        <input
+          class="input mono"
+          list="beat-moods"
+          value={beat.mood ?? ""}
+          placeholder={t("story.scenes.unchanged")}
+          onchange={(e) => setOpt(beat, "mood", value(e))}
+        />
+      </Field>
+    </div>
+    <datalist id="beat-weathers">{#each weathers as w (w)}<option value={w}></option>{/each}</datalist>
+    <datalist id="beat-moods">{#each moods as m (m)}<option value={m}></option>{/each}</datalist>
   {:else if kind === "message"}
     <Field label={t("story.studio.content")}>
       <TargetSelect
@@ -394,6 +455,12 @@
     display: flex;
     gap: 6px;
     margin-top: 6px;
+  }
+  /* Weather and mood side by side: two short names. */
+  .pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
   }
   .case {
     margin: 14px 0 10px;

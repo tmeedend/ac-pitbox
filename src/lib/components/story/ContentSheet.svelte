@@ -25,6 +25,7 @@
   import Seg from "$lib/components/ui/Seg.svelte";
   import FileStatus from "./FileStatus.svelte";
   import ScriptItems from "./ScriptItems.svelte";
+  import TargetSelect from "./TargetSelect.svelte";
 
   interface Props {
     file: string;
@@ -196,7 +197,13 @@
           </div>
         </Field>
         <Field label={t("story.content.scene")}>
-          <input class="input mono" value={h.scene ?? ""} onchange={(e) => setOpt("scene", value(e))} />
+          <TargetSelect
+            value={h.scene ?? ""}
+            options={(story.scenes.value?.scenes ?? []).map((p) => p.id)}
+            labels={Object.fromEntries((story.scenes.value?.scenes ?? []).map((p) => [p.id, p.name ?? p.id]))}
+            emptyLabel={t("story.content.sceneCurrent")}
+            onchange={(v) => setOpt("scene", v)}
+          />
         </Field>
       {:else if h.type === "illustration"}
         <Field label={t("story.content.picture")}>

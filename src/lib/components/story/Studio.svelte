@@ -3,8 +3,8 @@
   // editor). The side column names the story, its sections and its chapters;
   // the rest is the section shown. A section appears with the lot that
   // builds it, rather than as an entry that opens nothing: the Story flow,
-  // the Events, the Contents, the Drivers, the World and the Settings so
-  // far, and the story's copies.
+  // the Events, the Contents, the Drivers, the World, the Scenes and the
+  // Settings so far, and the story's copies.
   // Ctrl+Z and Ctrl+Y undo and redo the last edits, whatever section shows.
   import { t } from "$lib/i18n/index.svelte";
   import { allNodeIds, freshChapterId, freshNodeId, nextChapterFile } from "$lib/story/flow";
@@ -21,6 +21,7 @@
   import DriversEditor from "./DriversEditor.svelte";
   import EventsEditor from "./EventsEditor.svelte";
   import FlowEditor from "./FlowEditor.svelte";
+  import ScenesEditor from "./ScenesEditor.svelte";
   import SettingsEditor from "./SettingsEditor.svelte";
   import StoryBackups from "./StoryBackups.svelte";
   import WorldEditor from "./WorldEditor.svelte";
@@ -38,6 +39,7 @@
     { id: "content", label: "story.content.title" },
     { id: "drivers", label: "story.drivers.title" },
     { id: "world", label: "story.world.title" },
+    { id: "scenes", label: "story.scenes.title" },
     { id: "settings", label: "story.settings.title" },
     { id: "backups", label: "story.backups.title" },
   ];
@@ -50,6 +52,7 @@
       content: 0,
       drivers: 0,
       world: 0,
+      scenes: 0,
       settings: 0,
       backups: 0,
     };
@@ -145,6 +148,8 @@
     <ContentEditor />
   {:else if studio.section === "drivers"}
     <DriversEditor />
+  {:else if studio.section === "scenes"}
+    <ScenesEditor />
   {:else if studio.section === "backups"}
     <StoryBackups />
   {:else if studio.section === "settings"}

@@ -29,6 +29,8 @@
     language && !(language in localeNames) ? [language, ...Object.keys(localeNames)] : Object.keys(localeNames),
   );
 
+  const places = $derived(studio.story?.scenes.value?.scenes ?? []);
+
   function save() {
     void saveStoryFile("manifest");
   }
@@ -144,6 +146,19 @@
                 <option value={f}>{frameLabel(f)}</option>
               {/each}
             </select>
+          </Field>
+          <Field label={t("story.settings.startScene")}>
+            <TargetSelect
+              value={manifest.start.scene ?? ""}
+              options={places.map((p) => p.id)}
+              labels={Object.fromEntries(places.map((p) => [p.id, p.name ?? p.id]))}
+              emptyLabel={t("story.settings.noStartScene")}
+              onchange={(v) => {
+                if (v) manifest.start.scene = v;
+                else delete manifest.start.scene;
+                save();
+              }}
+            />
           </Field>
           <div class="pair">
             <Field label={t("story.settings.startDate")}>

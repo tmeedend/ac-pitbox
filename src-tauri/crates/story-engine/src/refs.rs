@@ -38,6 +38,8 @@ pub enum NameKind {
     Event,
     /// A driver of the roster (`drivers/roster.yaml`).
     Driver,
+    /// A place of `scenes/scenes.yaml`.
+    Scene,
 }
 
 /// A line citing a name.
@@ -116,6 +118,13 @@ fn citations(path: &str, text: &str, kind: NameKind, id: &str) -> Vec<Range<usiz
             if path.starts_with("events/") {
                 keyed(text, "driver", id, &mut out);
                 after_word(text, "ahead_of", id, &mut out);
+            }
+        }
+        // A Beat's `scene`, a dialogue's. The start's, in `story.yaml`, is
+        // the declaration side's (`rename_declaration`).
+        NameKind::Scene => {
+            if path.starts_with("flow/") || path.ends_with(".story") {
+                keyed(text, "scene", id, &mut out);
             }
         }
     }
@@ -421,6 +430,7 @@ pub fn all_usages(files: &[SourceFile], d: &Draft) -> Vec<NameUsages> {
     }
     names.extend(d.events.iter().map(|e| (NameKind::Event, e.id.clone())));
     names.extend(d.roster.drivers.iter().map(|x| (NameKind::Driver, x.id.clone())));
+    names.extend(d.scenes.scenes.iter().map(|p| (NameKind::Scene, p.id.clone())));
     names
         .into_iter()
         .map(|(kind, id)| {
@@ -555,6 +565,27 @@ fn rename_declaration(before: &Draft, kind: NameKind, from: &str, to: &str) -> R
                 x.id = to.into();
             }
             changed.push(SourceFile::new(ROSTER, &write::roster(&r)?));
+        }
+        NameKind::Scene => {
+            use crate::scene::SCENES;
+            readable(SCENES)?;
+            let mut s = before.scenes.clone();
+            let has = |id: &str| s.scenes.iter().any(|p| p.id == id);
+            check(has(from), has(to))?;
+            for p in s.scenes.iter_mut().filter(|p| p.id == from) {
+                p.id = to.into();
+            }
+            changed.push(SourceFile::new(SCENES, &write::scenes(&s)?));
+            // The place the story starts in.
+            if let Some(mut m) = before
+                .manifest
+                .clone()
+                .filter(|m| m.start.scene.as_deref() == Some(from))
+            {
+                readable("story.yaml")?;
+                m.start.scene = Some(to.into());
+                changed.push(SourceFile::new("story.yaml", &write::manifest(&m)?));
+            }
         }
         NameKind::Character => {
             readable("world/characters.yaml")?;
@@ -810,6 +841,38 @@ mod tests {
         let story = Story::from_sources(after).expect("loads");
         assert_eq!(validate(&story), [], "clean after the rename");
         assert_eq!(story.driver("rival_driver").unwrap().character.as_deref(), Some("foe"));
+    }
+
+    // A place is cited by the Beats that set it and the dialogues that play
+    // in it; the story's start follows the rename too.
+    #[test]
+    fn renaming_a_place_follows_its_beats_its_dialogues_and_the_start() {
+        let files = sample();
+        assert_eq!(
+            usages(&files, NameKind::Scene, "garage").len(),
+            4,
+            "three Beats and a dialogue"
+        );
+        let after = apply(
+            &files,
+            rename(&files, NameKind::Scene, "garage", "workshop").expect("renamed"),
+        );
+        let story = Story::from_sources(after.clone()).expect("loads");
+        assert_eq!(validate(&story), [], "nothing left pointing to the old id");
+        assert!(story.scene("workshop").is_some() && story.scene("garage").is_none());
+        assert_eq!(
+            story.content_item("talk_01").unwrap().scene.as_deref(),
+            Some("workshop")
+        );
+        assert!(
+            file(&after, "flow/03-face-to-face.yaml").contains("scene: workshop, mood: tense"),
+            "a Beat, as typed"
+        );
+
+        let after = apply(&files, rename(&files, NameKind::Scene, "bedroom", "room").unwrap());
+        let story = Story::from_sources(after).expect("loads");
+        assert_eq!(validate(&story), [], "clean after the rename");
+        assert_eq!(story.manifest.start.scene.as_deref(), Some("room"), "the start's place");
     }
 
     // A speaker is found past a choice's or a gather's markers and a line's

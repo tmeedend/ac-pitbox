@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use super::prelude::*;
 use crate::story::{backups, play, studio};
+use story_engine::scene::Shown;
 
 /// The Story switch asked for on this launch's command line, if any
 /// (`--enable-story-studio` / `--disable-story-studio`). Read once at startup
@@ -138,6 +139,13 @@ pub async fn story_preview(
     replies: Vec<String>,
 ) -> Result<studio::PreviewView, String> {
     off_window(app, move |_| studio::preview(&folder, &content, &setup, &replies)).await
+}
+
+/// The variant of a place the Scenes screen's preview shows, at the moment
+/// the author set.
+#[tauri::command]
+pub fn story_scene_pick(place: serde_json::Value, moment: studio::SceneMoment) -> Result<Option<Shown>, String> {
+    studio::scene_pick(place, &moment)
 }
 
 /// Reads a content item's text into the tree the Form view edits.

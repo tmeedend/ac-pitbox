@@ -25,6 +25,7 @@ use story_engine::frame::Frame;
 use story_engine::load::{draft_dir, read_dir, Draft, SourceFile, ROSTER};
 use story_engine::model::{Chapter, Characters, ContentFile, Event, Manifest, Placement, Roster, Variables};
 use story_engine::refs::{self, NameKind, NameUsages};
+use story_engine::scene::{self, Period, Scenes, Season, Shown, SCENES};
 use story_engine::validate::{validate, Diagnostic, Severity};
 use story_engine::write;
 use story_engine::LoadError;
@@ -296,6 +297,8 @@ pub struct OpenStory {
     pub variables: EditedFile<Variables>,
     /// `drivers/roster.yaml`: optional, read as empty until the first driver.
     pub drivers: EditedFile<Roster>,
+    /// `scenes/scenes.yaml`: optional, read as empty until the first place.
+    pub scenes: EditedFile<Scenes>,
     pub chapters: Vec<ChapterFile>,
     pub content: Vec<ContentRef>,
     /// One per file of `events/`, in file-name order.
@@ -346,6 +349,7 @@ pub fn open(folder: &Path) -> Result<OpenStory, String> {
     let characters = edited(&files, &d.errors, CHARACTERS, Some(std::mem::take(&mut d.characters)));
     let variables = edited(&files, &d.errors, VARIABLES, Some(std::mem::take(&mut d.variables)));
     let drivers = edited(&files, &d.errors, ROSTER, Some(std::mem::take(&mut d.roster)));
+    let scenes = edited(&files, &d.errors, SCENES, Some(std::mem::take(&mut d.scenes)));
     let chapters = chapter_files
         .iter()
         .map(|f| {
@@ -383,6 +387,7 @@ pub fn open(folder: &Path) -> Result<OpenStory, String> {
         characters,
         variables,
         drivers,
+        scenes,
         chapters,
         content,
         events,
@@ -503,11 +508,41 @@ pub fn render(file: &str, value: serde_json::Value) -> Result<String, String> {
         CHARACTERS => write::characters(&from(value)?),
         VARIABLES => write::variables(&from(value)?),
         ROSTER => write::roster(&from(value)?),
+        SCENES => write::scenes(&from(value)?),
         _ if is_chapter_path(file) => write::chapter(file, &from::<Chapter>(value)?),
         _ if is_event_path(file) => write::event(file, &from::<Event>(value)?),
         _ if is_content_path(file) => write::content_file(file, &from::<ContentFile>(value)?),
         _ => Err(format!("not a file the editor writes: {file}")),
     }
+}
+
+/// The moment the Scenes screen's preview is set to: what picks a variant,
+/// as its criteria name them. An empty weather or mood is none.
+#[derive(Debug, Deserialize)]
+pub struct SceneMoment {
+    pub season: Season,
+    pub period: Period,
+    pub weather: Option<String>,
+    pub mood: Option<String>,
+}
+
+/// The variant of `place` that shows at moment `m` (SPEC-story-mode, Create
+/// Your Own: Scenes). `place` comes as the screen edits it, saved or not, so
+/// the preview follows every keystroke; the choice is the engine's alone.
+pub fn scene_pick(place: serde_json::Value, m: &SceneMoment) -> Result<Option<Shown>, String> {
+    let place: scene::Place = serde_json::from_value(place).map_err(|e| e.to_string())?;
+    let given = |v: &Option<String>| v.clone().filter(|s| !s.is_empty());
+    let (weather, mood) = (given(&m.weather), given(&m.mood));
+    Ok(scene::pick(
+        &place,
+        &scene::Moment {
+            season: m.season,
+            period: m.period,
+            weather: weather.as_deref(),
+            mood: mood.as_deref(),
+            forced: None,
+        },
+    ))
 }
 
 /// The Content screen's preview of one item (SPEC-story-mode, Create Your
@@ -1206,6 +1241,45 @@ mod tests {
         );
         remove_file(&folder, file, &stamp).expect("removed");
         assert!(!folder.join(file).exists());
+    }
+
+    // The Scenes screen (SPEC-story-mode, Create Your Own: Scenes): the
+    // story's places come with the story, and its preview asks the engine
+    // which variant shows at the moment the author set, on the place as the
+    // screen holds it.
+    #[test]
+    fn the_scenes_come_with_the_story_and_the_preview_picks_their_variant() {
+        let sample = Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/story-engine/sample");
+        let story = open(&sample).expect("opens");
+        let places = story.scenes.value.expect("the sample has scenes");
+        let garage = places.scenes.iter().find(|p| p.id == "garage").expect("a garage");
+        let garage = serde_json::to_value(garage).unwrap();
+        let at = |period: &str, mood: Option<&str>| {
+            let m: SceneMoment = serde_json::from_value(serde_json::json!({
+                "season": "spring", "period": period, "weather": null, "mood": mood
+            }))
+            .unwrap();
+            scene_pick(garage.clone(), &m).unwrap().map(|s| s.variant)
+        };
+        assert_eq!(at("morning", None).as_deref(), Some("day"), "the default, last");
+        assert_eq!(at("night", Some("")).as_deref(), Some("night"), "an empty mood is none");
+        assert_eq!(
+            at("morning", Some("tense")).as_deref(),
+            Some("tense"),
+            "the first that holds"
+        );
+        let empty = serde_json::json!({ "id": "x", "variants": [] });
+        let m: SceneMoment =
+            serde_json::from_value(serde_json::json!({ "season": "winter", "period": "night" })).unwrap();
+        assert_eq!(
+            scene_pick(empty, &m).unwrap(),
+            None,
+            "a place with no variant shows nothing"
+        );
+        assert!(
+            scene_pick(serde_json::json!({ "id": "x" }), &m).is_err(),
+            "a place that does not read says why"
+        );
     }
 
     // The preview (SPEC-story-mode, Create Your Own: Content): a dialogue on

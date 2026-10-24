@@ -866,11 +866,32 @@ de reprendre. En cas d'écart, la spec fait foi.
           **Pas vu** : aucune vidéo ni aucun son dans l'exemple (`garage.ogg`
           attendu) ; le fondu, la coupe et la lecture d'une vidéo par plages
           ne sont prouvés que par les tests de la logique et du protocole.
-        - **L3c.3, l'éditeur.** L'écran Scènes : la liste des lieux, leurs
-          variantes et leurs fichiers, et un aperçu côté joueur où l'on règle
-          saison, heure, météo et humeur pour voir la variante choisie, le
-          téléphone par-dessus. Le panneau d'un Beat et la fiche d'un
-          dialogue choisissent le lieu dans une liste.
+        - **L3c.3, l'éditeur — fait (2026-10-24).** L'écran Scènes
+          (`ScenesEditor`, `ScenePlaceSheet`, `ScenePreview`) édite
+          `scenes/scenes.yaml` (`write::scenes`) ; un lieu se renomme partout
+          (`NameKind::Scene` : Beats, dialogues, départ) ; l'aperçu demande la
+          variante au moteur (`story_scene_pick`, sur `scene::Moment`, le lieu
+          tel qu'à l'écran) ; le panneau d'un Beat gagne lieu, variante
+          imposée, météo et humeur ; la fiche d'un dialogue et le départ des
+          Réglages choisissent le lieu dans une liste. Les erreurs de
+          `scenes/` comptent désormais dans la section Scènes.
+          **Choisi sans demander** (dans la spec) : une nouvelle variante
+          s'insère avant la dernière (le cas général reste en dernier) ;
+          l'id d'une variante se renomme seul, un Beat qui l'imposait est
+          laissé aux contrôles ; sans lieu sur le Beat, la variante imposée
+          se choisit parmi toutes celles de l'histoire ; l'aperçu est muet.
+          **Choisi sans demander** (détails) : l'aperçu démarre au printemps,
+          le matin, sans météo ni humeur ; l'horloge du téléphone y suit la
+          tranche (09:00, 15:00, 19:30, 23:30) ; le téléphone y est réduit à
+          45 % ; un lieu neuf a une variante `default` sans fichier, que les
+          contrôles signalent jusqu'au choix.
+          **Pas vu à l'écran** : tout l'écran ; la vignette d'une vidéo n'est
+          pas montrée dans la liste des fichiers (un simple menu, images et
+          vidéos ensemble).
+          **Reste pour plus tard** : importer un fichier dans `media/` depuis
+          l'éditeur (comme pour les portraits) ; écouter l'ambiance dans
+          l'aperçu.
+        - **L3c terminé** (hors du garage qui montre la voiture, ci-dessous).
         - **Hors de L3c** : le garage qui montre la voiture du joueur attend
           le garage de l'histoire (L6).
         - **Décidé avec l'utilisateur (2026-10-24)** : la météo et l'humeur
