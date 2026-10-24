@@ -202,14 +202,15 @@ chosen beats.
 **Built so far** (L3d.1): a story declares its own phones in
 `frames/frames.yaml`, each of kind `phone` with its apps in the home screen's
 order - an id, a name, an icon (a file of `media/`), a template (thread,
-inbox, feed, statement) and the content types it shows. An app appears
+inbox, feed, statement, agenda, call) and the content types it shows. An app appears
 `always`, with its first item (the default), or from the Beat that unlocks it
 (`unlock: [<app>]`), at the latest with its first item, so an item never lands
 in an app the player cannot open; an app unlocked stays so, in every phone
 having that id. A declared frame shows what its apps show, so a basic phone
 with Messages only leaves a mail waiting for the smartphone. One named like
 Pit Box's `phone` replaces it in that story. A story with no `frames.yaml`
-keeps Pit Box's phone: Messages, Mail, News, Social and Bank, taking every
+keeps Pit Box's phone: Messages, Mail, News, Social, Bank, Phone (calls)
+and Calendar, taking every
 type, those with no app listed by name in Messages. The checks: a frame with
 no app, an app twice, an app showing nothing or what its template cannot, a
 type in two apps of a frame, an icon not in `media/`, a Beat unlocking an app
@@ -232,9 +233,9 @@ signal and Wi-Fi on. An app's `skin` names a folder `frames/skins/<id>/`:
 `muted`, `accent`, `#rrggbb`), its font (TTF, OTF, WOFF2) and its slots, each
 an image of the folder with, for one that stretches, its four fixed margins
 (9-slice) in a picture drawn for a screen 1080 px wide. The slots: a
-thread's `background`, `header`, `bubble_in`, `bubble_out`, `reply`; an
-inbox's and a statement's `background`, `header`, `row`; a feed's
-`background`, `header`, `post`. A colour left out, a slot left out, the font
+thread's and a call screen's `background`, `header`, `bubble_in`,
+`bubble_out`, `reply`; an inbox's, a statement's and an agenda's
+`background`, `header`, `row`; a feed's `background`, `header`, `post`. A colour left out, a slot left out, the font
 left out keep Pit Box's. A Beat's `skins` puts another skin on an app, by
 its id, in whichever phone has it. The checks: a picture or a sound of a
 kind the phone cannot show or play, a screen with no size, a skin unknown or
@@ -960,7 +961,8 @@ The player side follows each story's settings. What the engine needs:
   some content types - with Pit Box's phone: Messages (threads) for messages,
   Mail (inbox) for mails, News and Social (feeds) for articles and social
   posts, Bank (statement) for statements, under the balance when the story
-  has money. A story's own phone shows its apps, with their names and icons
+  has money, Phone (call screen) for calls, Calendar (agenda) for calendar
+  entries. A story's own phone shows its apps, with their names and icons
   (initials without one), as its `frames.yaml` says. Each app shows how many
   of its items are unread or wait for a reply, and an app's way back home is
   marked when another one has some. The phone opens on its first messaging
@@ -968,10 +970,13 @@ The player side follows each story's settings. What the engine needs:
   opens on its home screen, and the next event is then a card on the scene. Messages lists one thread per sender, the latest
   first, the unread ones marked; a thread opened marks its messages seen and
   offers the replies of its open message. Mail lists the latest first; a mail
-  opened is seen and offers its replies. A feed or a statement opened is read
-  as a whole, and a post offers its replies under it. The content types with
-  no app yet (call, video, listing, calendar entry) are listed by name in
-  Messages.
+  opened is seen and offers its replies. A call is listed with who called
+  and when, the unanswered ones marked; opened, it is the call screen: who
+  calls, the conversation as it is said, its replies, and it is answered
+  (seen). A feed, a statement or an agenda opened is read as a whole, and a
+  post offers its replies under it; an agenda lists its entries the earliest
+  first, each under its date. The content types with no app yet (video,
+  listing) are listed by name in Messages.
 - **The dialogue layer** plays the dialogues and illustrations in the order
   they came, the first not closed yet: a dialogue while it waits for a reply,
   then until the player reads past its last line, an illustration until a

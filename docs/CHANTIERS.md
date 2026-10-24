@@ -976,9 +976,24 @@ de reprendre. En cas d'écart, la spec fait foi.
           **À voir avec l'utilisateur** : `media/CREDITS.md` décrit encore
           comme provisoires les six images qu'il a remplacées (portraits,
           illustration, scènes) ; leur source et leur licence sont à écrire.
-        - **L3d.3, les modèles qui manquent.** L'agenda, l'écran d'appel, le
-          type `document` sur la scène (`newspaper`, `letter`), la vidéo
-          `tv` et l'appel `landline` sur la scène.
+        - **L3d.3, les modèles qui manquent.** En deux temps.
+          **L3d.3a, l'agenda et l'appel — fait (2026-10-24).** Les modèles
+          `agenda` (entrées de calendrier) et `call` (l'écran d'appel) ;
+          le téléphone de Pit Box gagne Téléphone et Agenda ; `CallsApp`
+          (liste, puis l'appel : qui appelle, la conversation dite, ses
+          réponses), `AgendaView` (entrées sous leur date, la plus ancienne
+          en tête) ; leurs emplacements d'habillage. Exemple : le smartphone
+          a ses apps Téléphone et Agenda ; au chapitre 2, une entrée
+          d'agenda (la course de Mugello) et un appel de l'ami qui attend sa
+          réponse.
+          **Choisi sans demander** : l'écran d'appel montre la conversation
+          en fil (comme un message, sous un « En ligne »), pas sur la scène à
+          16:9 du dialogue ; un appel ouvert compte comme décroché (vu) ;
+          l'agenda se lit en entier à l'ouverture, comme un relevé.
+          **L3d.3b, sur la scène.** Le type `document` (`newspaper`,
+          `letter`), la vidéo `tv` et l'appel `landline` quand aucun cadre ne
+          les prend, l'habillage du dialogue et de ce qui se joue sur la
+          scène.
         - **L3d.4, l'écran Cadre.** Les apps d'un cadre, leurs emplacements,
           l'import d'un fichier dans l'histoire, un aperçu au contenu
           factice, les contrôles (fichier absent, ratio, taille).

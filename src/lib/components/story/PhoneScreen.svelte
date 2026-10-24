@@ -1,11 +1,12 @@
 <script lang="ts">
   // The phone in a game (SPEC-story-mode, Content types, templates and
   // frames): a home screen with the frame's apps, each a template showing
-  // some content types - a thread, an inbox, a feed, a statement. Which apps,
+  // some content types - a thread, an inbox, a feed, a statement, an agenda,
+  // a call screen. Which apps,
   // their names and icons, and when each appears are the frame's (`apps`,
   // from the engine). The phone opens on its first messaging app, which the
-  // next event heads, and goes back to it when an event comes to wait. A feed
-  // or a statement opened is read as a whole.
+  // next event heads, and goes back to it when an event comes to wait. A feed,
+  // a statement or an agenda opened is read as a whole.
   import { untrack, type Snippet } from "svelte";
   import { i18n, t } from "$lib/i18n/index.svelte";
   import { appItems, appName, appsShown, homeApp, pendingIn } from "$lib/story/player/apps";
@@ -20,6 +21,8 @@
   import StatementView from "./player/StatementView.svelte";
   import BackButton from "./phone/BackButton.svelte";
   import MailApp from "./phone/MailApp.svelte";
+  import CallsApp from "./phone/CallsApp.svelte";
+  import AgendaView from "./player/AgendaView.svelte";
   import MessagesApp from "./phone/MessagesApp.svelte";
 
   interface Props {
@@ -93,7 +96,7 @@
       : [],
   );
   const lines = $derived(
-    open?.template === "statement"
+    open?.template === "statement" || open?.template === "agenda"
       ? appItems(items, open).map((i): StatementLine => ({ key: String(i), when: when(items[i]), steps: items[i].steps }))
       : [],
   );
@@ -110,7 +113,7 @@
   // included.
   $effect(() => {
     const [app, list] = [open, items];
-    if (app?.template !== "feed" && app?.template !== "statement") return;
+    if (app?.template !== "feed" && app?.template !== "statement" && app?.template !== "agenda") return;
     for (const i of appItems(list, app)) if (!list[i].seen) onseen(list[i].content);
   });
 </script>
@@ -127,6 +130,19 @@
     {onseen}
     {next}
     {elsewhere}
+    onhome={() => (screen = "home")}
+  />
+{:else if open?.template === "call"}
+  <CallsApp
+    app={open}
+    {items}
+    {clock}
+    {date}
+    {dateDisplay}
+    {speakers}
+    {elsewhere}
+    onreply={reply}
+    {onseen}
     onhome={() => (screen = "home")}
   />
 {:else if open?.template === "inbox"}
@@ -167,6 +183,9 @@
       <BackButton label={t("story.play.apps")} dot={elsewhere} onclick={() => (screen = "home")} />
       {#if open.template === "statement"}
         <StatementView {lines} balance={money} />
+      {:else if open.template === "agenda"}
+        <!-- The earliest first: an agenda reads forward. -->
+        <AgendaView entries={[...lines].reverse()} />
       {:else}
         <FeedView
           {posts}

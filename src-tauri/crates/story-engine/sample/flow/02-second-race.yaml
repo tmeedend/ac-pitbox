@@ -3,7 +3,11 @@ title: Chapter 2
 nodes:
   # A new phone: the smartphone's apps, the news shown at once.
   - id: chapter_2
-    beat: { frame: smartphone, unlock: [news], status: { battery: 64 } }
+    beat: { frame: smartphone, unlock: [news], status: { battery: 64 }, effects: ["send season_calendar"] }
+  # A call on the new phone: written like a dialogue, answered in the frame.
+  - id: friend_rings
+    message: friend_call
+    wait_reply: true
   - id: season_opens
     side_events: { open: [track_day_01] }
   - id: money_check

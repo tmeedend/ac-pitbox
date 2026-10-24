@@ -192,7 +192,7 @@ pub struct App {
 }
 
 /// The templates an app can be (SPEC-story-mode, Content types, templates
-/// and frames). The agenda and the call screen come later.
+/// and frames). The catalog comes with the catalogs (L6).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Template {
@@ -200,6 +200,10 @@ pub enum Template {
     Inbox,
     Feed,
     Statement,
+    /// Calendar entries, by their date.
+    Agenda,
+    /// The call screen: a call played in the frame.
+    Call,
 }
 
 impl Template {
@@ -211,6 +215,8 @@ impl Template {
             Template::Inbox => kind == C::Mail,
             Template::Feed => matches!(kind, C::Article | C::SocialPost),
             Template::Statement => kind == C::Statement,
+            Template::Agenda => kind == C::CalendarEntry,
+            Template::Call => kind == C::Call,
         }
     }
 
@@ -220,6 +226,8 @@ impl Template {
             Template::Inbox => "inbox",
             Template::Feed => "feed",
             Template::Statement => "statement",
+            Template::Agenda => "agenda",
+            Template::Call => "call",
         }
     }
 }
@@ -261,6 +269,8 @@ pub fn phone_apps() -> Vec<App> {
         app("news", Template::Feed, vec![C::Article], Appears::FirstItem),
         app("social", Template::Feed, vec![C::SocialPost], Appears::FirstItem),
         app("bank", Template::Statement, vec![C::Statement], Appears::FirstItem),
+        app("calls", Template::Call, vec![C::Call], Appears::FirstItem),
+        app("calendar", Template::Agenda, vec![C::CalendarEntry], Appears::FirstItem),
     ]
 }
 
@@ -521,7 +531,7 @@ mod tests {
         let apps: Vec<String> = phone.apps(&story).into_iter().map(|a| a.id).collect();
         assert_eq!(
             apps,
-            ["messages", "mail", "news", "social", "bank"],
+            ["messages", "mail", "news", "social", "bank", "calls", "calendar"],
             "the shipped phone's apps"
         );
     }

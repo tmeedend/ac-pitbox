@@ -303,6 +303,7 @@
   .phone.has-reply :global(.reply),
   .phone.has-row :global(.row),
   .phone.has-row :global(.statement li),
+  .phone.has-row :global(.agenda li),
   .phone.has-post :global(.post) {
     background: none;
     border: 0 solid transparent;
@@ -318,7 +319,8 @@
     border-image: var(--slot-reply) var(--slot-reply-slice) / var(--slot-reply-width);
   }
   .phone.has-row :global(.row),
-  .phone.has-row :global(.statement li) {
+  .phone.has-row :global(.statement li),
+  .phone.has-row :global(.agenda li) {
     border-image: var(--slot-row) var(--slot-row-slice) / var(--slot-row-width);
   }
   .phone.has-post :global(.post) {

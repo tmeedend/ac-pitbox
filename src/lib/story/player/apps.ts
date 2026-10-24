@@ -14,6 +14,8 @@ const SHIPPED_LABEL: Record<string, string> = {
   news: "story.play.appNews",
   social: "story.play.appSocial",
   bank: "story.play.appBank",
+  calls: "story.play.appCalls",
+  calendar: "story.play.appCalendar",
 };
 
 /** A name for an app the story leaves unnamed, by its template. */
@@ -22,6 +24,8 @@ const TEMPLATE_LABEL: Record<AppShown["template"], string> = {
   inbox: "story.play.appMail",
   feed: "story.play.appNews",
   statement: "story.play.appBank",
+  agenda: "story.play.appCalendar",
+  call: "story.play.appCalls",
 };
 
 /** An app's name: the story's, else Pit Box's for that app or template. */

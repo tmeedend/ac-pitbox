@@ -28,7 +28,7 @@ export interface AppShown {
   name: string | null;
   /** A path inside the story's `media/`; `null`, its template's. */
   icon: string | null;
-  template: "thread" | "inbox" | "feed" | "statement";
+  template: "thread" | "inbox" | "feed" | "statement" | "agenda" | "call";
   /** The content types it shows. */
   shows: string[];
   /** On the home screen now. */

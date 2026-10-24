@@ -2923,6 +2923,9 @@
       "appNews": "News",
       "appSocial": "Social",
       "appBank": "Bank",
+      "appCalls": "Calls",
+      "appCalendar": "Calendar",
+      "onCall": "On call",
       "balance": "Balance"
     },
     "scenes": {

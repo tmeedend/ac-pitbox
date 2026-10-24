@@ -26,6 +26,7 @@
   import PhoneFrame from "./player/PhoneFrame.svelte";
   import SceneView from "./player/SceneView.svelte";
   import StatementView from "./player/StatementView.svelte";
+  import AgendaView from "./player/AgendaView.svelte";
   import ThreadView from "./player/ThreadView.svelte";
 
   interface Props {
@@ -76,6 +77,8 @@
   /** The template of the frame's app showing the item; `null` when the
    * frame lists it by name. */
   const template = $derived(view?.app?.template ?? null);
+  /** A message or a call: someone speaks, shown as a thread with them. */
+  const talks = $derived(template === "thread" || template === "call");
   const sender = $derived(view?.from ? (names[view.from] ?? view.from) : t("story.play.unknownSender"));
 
   function choose(label: string) {
@@ -126,10 +129,10 @@
         <PhoneFrame
           clock={view.clock}
           date={dateShown}
-          title={template === "thread" || !view.app ? (view.from ? sender : "—") : appName(view.app, t)}
-          avatar={template === "thread" && view.from ? (speakers[view.from]?.portraits.neutral ?? null) : null}
+          title={talks || !view.app ? (view.from ? sender : "—") : appName(view.app, t)}
+          avatar={talks && view.from ? (speakers[view.from]?.portraits.neutral ?? null) : null}
         >
-          {#if template === "thread"}
+          {#if talks}
             <ThreadView steps={view.steps} choices={view.choices} from={view.from} {names} onchoose={choose} />
           {:else if template === "inbox"}
             <MailView
@@ -158,6 +161,8 @@
             />
           {:else if template === "statement"}
             <StatementView lines={[{ key: id, when, steps: view.steps }]} balance={null} />
+          {:else if template === "agenda"}
+            <AgendaView entries={[{ key: id, when, steps: view.steps }]} />
           {:else}
             <p class="soon">{t("story.preview.noTemplate")}</p>
           {/if}

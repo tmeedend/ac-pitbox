@@ -60,3 +60,13 @@ frames:
         icon: frames/smartphone/icons/bank.png
         template: statement
         shows: [statement]
+      - id: calls
+        name: Phone
+        icon: frames/smartphone/icons/calls.png
+        template: call
+        shows: [call]
+      - id: calendar
+        name: Calendar
+        icon: frames/smartphone/icons/calendar.png
+        template: agenda
+        shows: [calendar_entry]

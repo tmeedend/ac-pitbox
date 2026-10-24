@@ -76,6 +76,8 @@ pub fn slots(template: Template) -> &'static [&'static str] {
         Template::Inbox => &["background", "header", "row"],
         Template::Feed => &["background", "header", "post"],
         Template::Statement => &["background", "header", "row"],
+        Template::Agenda => &["background", "header", "row"],
+        Template::Call => &["background", "header", "bubble_in", "bubble_out", "reply"],
     }
 }
 

@@ -139,6 +139,22 @@ mod tests {
             .unwrap();
         }
         assert_eq!(state.money, 300 - 50 - 50 + 200, "paid retries, prize");
+        // Chapter 2 opens on the new phone ringing: the call waits for its answer.
+        assert_eq!(
+            state.wait,
+            Wait::Reply {
+                content: "friend_call".into()
+            }
+        );
+        submit(
+            story,
+            &mut state,
+            Input::Reply {
+                content: "friend_call".into(),
+                reply: "ready".into(),
+            },
+        )
+        .unwrap();
         submit(
             story,
             &mut state,
@@ -230,10 +246,11 @@ mod tests {
             "the smartphone put back after the face-to-face chapter"
         );
         // Its home screen: Messages always, the news unlocked at chapter 2
-        // with no article yet, the bank with no statement not.
+        // with no article yet, the call and the calendar entry of chapter 2,
+        // the bank with no statement not.
         let apps = crate::view::play_view(&story, &state).apps;
         let available: Vec<&str> = (apps.iter().filter(|a| a.available)).map(|a| a.id.as_str()).collect();
-        assert_eq!(available, ["messages", "mail", "news", "social"]);
+        assert_eq!(available, ["messages", "mail", "news", "social", "calls", "calendar"]);
         // Its look: the picture, the battery and Wi-Fi the last Beat set, the
         // messages in the night skin it put on.
         let view = crate::view::play_view(&story, &state);
