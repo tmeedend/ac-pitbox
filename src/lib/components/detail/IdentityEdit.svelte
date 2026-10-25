@@ -1,6 +1,7 @@
 <script lang="ts">
   // Edition sur place de l'identité d'une voiture ou d'un circuit : nom, marque
-  // et catégorie (voitures) et année, depuis le crayon de l'en-tête.
+  // et catégorie (voitures), catégories (circuits) et année, depuis le crayon de
+  // l'en-tête.
   //
   // Même promesse qu'`InlineEdit` pour le nom, étendue aux deux autres : rien
   // n'est écrit dans les fichiers du mod (règle d'or n°1), chaque saisie vit
@@ -10,9 +11,12 @@
   // « l'origine » est celle que calculent les règles.
   import Pencil from "$lib/components/ui/Pencil.svelte";
   import SuggestInput from "$lib/components/ui/SuggestInput.svelte";
+  import CategoryPicker from "./CategoryPicker.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import {
+    categoriesChange,
     categoryChange,
+    hasCategory,
     textChange,
     yearChange,
     yearRefused,
@@ -32,6 +36,9 @@
   let name = $state("");
   let brand = $state("");
   let category = $state("");
+  /** A track's categories, as the form edits them: nothing is written before
+   * the form is saved, taking one off included. */
+  let categories = $state<string[]>([]);
   let year = $state("");
   let brandChoices = $state<string[]>([]);
   let categoryChoices = $state<string[]>([]);
@@ -40,7 +47,7 @@
   /** What the form opened on. The sheet can change under an open form (the tech
    * sheet saves the year too): a field left alone must not write back what it
    * showed at opening over what was saved since. */
-  let start = $state({ name: "", brand: "", category: "", year: "" });
+  let start = $state({ name: "", brand: "", category: "", categories: [] as string[], year: "" });
 
   const yearInvalid = $derived(year !== start.year && yearRefused(year, identity.year));
 
@@ -48,8 +55,9 @@
     name = identity.name.value ?? "";
     brand = identity.brand?.value ?? "";
     category = identity.category?.value ?? "";
+    categories = [...(identity.categories?.value ?? [])];
     year = identity.year.value != null ? String(identity.year.value) : "";
-    start = { name, brand, category, year };
+    start = { name, brand, category, categories: [...categories], year };
     editing = true;
     // A failed suggestion list costs the autocompletion, not the edit.
     identity.brand
@@ -75,10 +83,18 @@
       const c = category !== start.category && categoryChange(category, identity.category);
       if (c) patch.category = c.change;
     }
+    if (identity.categories) {
+      const c = categoriesChange(categories, start.categories);
+      if (c) patch.categories = c;
+    }
     const y = year !== start.year && yearChange(year, identity.year);
     if (y) patch.year = y.change;
     editing = false;
     if (Object.keys(patch).length) identity.onsave(patch);
+  }
+
+  function addCategory(tag: string) {
+    if (!hasCategory(categories, tag)) categories = [...categories, tag];
   }
 
   function cancel() {
@@ -114,6 +130,9 @@
         suggest: categoryChoices,
       })}
     {/if}
+    {#if identity.categories}
+      {@render categoryList(identity.categories)}
+    {/if}
     {@render row(t("columns.year"), identity.year, year, (v) => (year = v), { attrs: { inputmode: "numeric" }, invalid: yearInvalid })}
     <!-- The reassurance is HERE, where one types: a tooltip on the pencil is
          gone at the very moment it would be needed. -->
@@ -128,6 +147,43 @@
 {:else}
   <Pencil label={t("detail.editIdentity")} onclick={open} />
 {/if}
+
+{#snippet categoryList(field: NonNullable<FicheIdentity["categories"]>)}
+  <div class="f">
+    <span class="lbl-key">{t("columns.category")}</span>
+    <div class="line">
+      <div class="chips">
+        {#each categories as tag (tag)}
+          <span class="chip">
+            {tag}<button
+              class="x"
+              type="button"
+              onclick={() => (categories = categories.filter((c) => c !== tag))}
+              title={t("categoryDecision.removeFromTrack")}>×</button
+            >
+          </span>
+        {/each}
+        <!-- What is offered leaves out what the list already holds. -->
+        <CategoryPicker
+          choices={async () => (await field.suggestions()).filter((c) => !hasCategory(categories, c))}
+          onpick={addCategory}
+        >
+          {#snippet trigger(toggle)}
+            <button class="chip add" type="button" onclick={toggle} title={t("categoryDecision.add")}>+</button>
+          {/snippet}
+        </CategoryPicker>
+      </div>
+      {#if field.overridden}
+        <button class="rev" type="button" onclick={() => (categories = [...field.original])}>
+          {t("detail.editRevert")}
+        </button>
+      {/if}
+    </div>
+    {#if field.overridden}
+      <span class="orig">{t("detail.editOriginal", { value: field.original.join(", ") || t("categoryDecision.computedNone") })}</span>
+    {/if}
+  </div>
+{/snippet}
 
 {#snippet row(
   label: string,
@@ -203,6 +259,41 @@
   }
   .line .input {
     min-width: 0;
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    background: var(--rosso-dim);
+    color: var(--rosso-bright);
+    border: 1px solid var(--rosso-border);
+  }
+  .chip.add {
+    background: transparent;
+    color: var(--muted);
+    border-color: var(--line);
+    cursor: pointer;
+  }
+  .chip.add:hover {
+    color: var(--rosso-bright);
+  }
+  .chip .x {
+    background: transparent;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1;
+    padding: 0;
+  }
+  .chip .x:hover {
+    color: var(--rosso-bright);
   }
   .input.bad {
     border-color: var(--rosso);

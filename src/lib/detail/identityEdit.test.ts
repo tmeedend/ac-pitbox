@@ -1,7 +1,7 @@
 // The header form's decisions (name, brand, year): what a typed text changes.
 // A rule per test, since a wrong one here silently pins or loses a correction.
 import { describe, expect, it } from "vitest";
-import { categoryChange, parseYear, textChange, yearChange, yearRefused, type IdentityField } from "./identityEdit";
+import { categoriesChange, hasCategory, categoryChange, parseYear, textChange, yearChange, yearRefused, type IdentityField } from "./identityEdit";
 
 const name = (over: Partial<IdentityField<string>> = {}): IdentityField<string> => ({
   value: "Ferrari 458 Italia",
@@ -129,5 +129,29 @@ describe("categoryChange", () => {
 
   it("a car the rules leave without category can be filed", () => {
     expect(categoryChange("#gt3", cat({ value: null, original: null }))).toEqual({ change: "#gt3" });
+  });
+});
+
+describe("categoriesChange", () => {
+  it("a category put in the list is an addition, one taken out a removal", () => {
+    expect(categoriesChange(["#rally", "#touge"], ["#rally"])).toEqual({ add: ["#touge"], remove: [] });
+    expect(categoriesChange(["#rally"], ["#rally", "#touge"])).toEqual({ add: [], remove: ["#touge"] });
+  });
+
+  it("the same list, in another order or spelling, changes nothing", () => {
+    expect(categoriesChange(["#touge", "#Rally"], ["#rally", "#touge"])).toBeNull();
+    expect(categoriesChange([], [])).toBeNull();
+  });
+
+  it("swapping a category is one removal and one addition", () => {
+    expect(categoriesChange(["#drift"], ["#touge"])).toEqual({ add: ["#drift"], remove: ["#touge"] });
+  });
+});
+
+describe("hasCategory", () => {
+  it("finds a category whatever its spelling", () => {
+    expect(hasCategory(["#rally", "#touge"], "Touge")).toBe(true);
+    expect(hasCategory(["#rally"], "#drift")).toBe(false);
+    expect(hasCategory([], "#rally")).toBe(false);
   });
 });

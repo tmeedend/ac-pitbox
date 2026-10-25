@@ -22,7 +22,15 @@ export interface IdentityPatch {
   brand?: string | null;
   /** A car's category; `null` goes back to the one the rules compute. */
   category?: string | null;
+  /** A track's categories: what to add to its list and what to take off. */
+  categories?: CategoriesChange;
   year?: number | null;
+}
+
+/** A track's categories, as deltas on the list shown when the form opened. */
+export interface CategoriesChange {
+  add: string[];
+  remove: string[];
 }
 
 /** A text field with a list of existing values to pick from, or to depart from. */
@@ -32,9 +40,16 @@ export interface FicheIdentity {
   name: IdentityField<string>;
   /** Cars only: a track has no brand. */
   brand?: SuggestedField;
-  /** Cars only: a track has a list of categories, edited elsewhere. `original`
-   * is what the rules compute, `overridden` whether the user filed the car. */
+  /** Cars only: one category. `original` is what the rules compute, `overridden` whether the user filed the car. */
   category?: SuggestedField;
+  /** Tracks only: a track has a list of categories. `original` is the list the
+   * rules compute, `overridden` whether the user added or took one off. */
+  categories?: {
+    value: string[];
+    original: string[];
+    overridden: boolean;
+    suggestions: () => Promise<string[]>;
+  };
   year: IdentityField<number>;
   onsave: (patch: IdentityPatch) => void;
 }
@@ -91,4 +106,22 @@ export function categoryChange(draft: string, field: IdentityField<string>): { c
   return field.original != null && key === categoryKey(field.original) && field.overridden
     ? { change: null }
     : { change: next };
+}
+
+/** What a track's category list gains and loses between the list shown when the
+ * form opened and the one it ends with; `null` when they are the same. The
+ * order of the list is not a decision (the backend orders it). */
+export function categoriesChange(draft: string[], shown: string[]): CategoriesChange | null {
+  const keyed = (list: string[]) => new Map(list.map((tag) => [categoryKey(tag), tag]));
+  const was = keyed(shown);
+  const now = keyed(draft);
+  const add = [...now].filter(([key]) => !was.has(key)).map(([, tag]) => tag);
+  const remove = [...was].filter(([key]) => !now.has(key)).map(([, tag]) => tag);
+  return add.length || remove.length ? { add, remove } : null;
+}
+
+/** Whether a category list holds `tag`, whatever its spelling. */
+export function hasCategory(list: string[], tag: string): boolean {
+  const key = categoryKey(tag);
+  return list.some((c) => categoryKey(c) === key);
 }

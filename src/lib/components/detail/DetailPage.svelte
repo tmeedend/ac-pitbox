@@ -354,7 +354,7 @@
     }
   }
 
-  /** The header form (name, brand, category, year): each changed field is saved where its
+  /** The header form (name, brand, categories, year): each changed field is saved where its
    * decision lives, then the sheet and the library reload once. None of it
    * touches the mod's files (golden rule 1). The year goes through the tech
    * sheet's decisions (FICHE§8) for cars and tracks alike: one place says what
@@ -367,6 +367,8 @@
       if (patch.category !== undefined) {
         await applyCategoryOp([id], patch.category === null ? { op: "reset" } : { op: "force", tag: patch.category });
       }
+      for (const tag of patch.categories?.remove ?? []) await applyCategoryOp([id], { op: "remove", tag });
+      for (const tag of patch.categories?.add ?? []) await applyCategoryOp([id], { op: "add", tag });
       if (patch.year !== undefined) {
         await saveTechSheet(
           id,
@@ -426,6 +428,14 @@
             suggestions: () => listCategoryChoices("Car"),
           }
         : undefined,
+      categories: isCar
+        ? undefined
+        : {
+            value: d.categories,
+            original: d.categories_auto,
+            overridden: d.categories_added.length > 0 || d.categories_removed.length > 0,
+            suggestions: () => listCategoryChoices("Track"),
+          },
       year: {
         value: d.year,
         original: typeof sheetYear === "number" ? sheetYear : d.year_file,
