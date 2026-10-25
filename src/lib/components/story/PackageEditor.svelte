@@ -10,18 +10,11 @@
   import { errorText } from "$lib/errors";
   import { fmtSize } from "$lib/format";
   import { t } from "$lib/i18n/index.svelte";
-  import { lineFor, packageName, registerGroups, setText, splitFiles } from "$lib/story/package";
-  import { buildPackage, type Credit, type Permission } from "$lib/story/studio";
+  import { lineFor, packageName, registerGroups, splitFiles } from "$lib/story/package";
+  import { buildPackage, type Credit } from "$lib/story/studio";
   import { registerEntry, saveRegister, studio } from "$lib/story/studioState.svelte";
+  import CreditFields from "./CreditFields.svelte";
   import StoryChecks from "./StoryChecks.svelte";
-
-  const PERMISSIONS: Permission[] = ["granted", "not_needed", "requested", "not_asked"];
-  const PERMISSION_LABEL: Record<Permission, string> = {
-    granted: "story.package.granted",
-    not_needed: "story.package.notNeeded",
-    requested: "story.package.requested",
-    not_asked: "story.package.notAsked",
-  };
 
   const story = $derived(studio.story!);
   const manifest = $derived(story.manifest.value);
@@ -120,40 +113,7 @@
                   onclick={() => edit(g.file, (lines) => lines.splice(i, 1))}>✕</button
                 >
               </div>
-              <div class="row">
-                {#each [["author", "story.package.author"], ["licence", "story.package.licence"]] as [key, label] (key)}
-                  <label>
-                    <span class="lbl">{t(label)}</span>
-                    <input
-                      class="input"
-                      value={line[key as "author" | "licence"] ?? ""}
-                      onchange={(e) => edit(g.file, (lines) => setText(lines[i], key as "author" | "licence", field(e)))}
-                    />
-                  </label>
-                {/each}
-                <label>
-                  <span class="lbl">{t("story.package.permission")}</span>
-                  <select
-                    class="input"
-                    value={line.permission}
-                    onchange={(e) => edit(g.file, (lines) => (lines[i].permission = field(e) as Permission))}
-                  >
-                    {#each PERMISSIONS as p (p)}<option value={p}>{t(PERMISSION_LABEL[p])}</option>{/each}
-                  </select>
-                </label>
-              </div>
-              <div class="row">
-                {#each [["source", "story.package.source"], ["proof", "story.package.proof"]] as [key, label] (key)}
-                  <label class="wide">
-                    <span class="lbl">{t(label)}</span>
-                    <input
-                      class="input"
-                      value={line[key as "source" | "proof"] ?? ""}
-                      onchange={(e) => edit(g.file, (lines) => setText(lines[i], key as "source" | "proof", field(e)))}
-                    />
-                  </label>
-                {/each}
-              </div>
+              <CreditFields {line} onchange={(apply) => edit(g.file, (lines) => apply(lines[i]))} />
             </div>
           {/each}
 
@@ -232,8 +192,7 @@
     gap: 3px;
     min-width: 160px;
   }
-  .files,
-  .wide {
+  .files {
     flex: 1;
   }
   .named {

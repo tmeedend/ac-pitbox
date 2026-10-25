@@ -2,7 +2,19 @@
 // the story's registers grouped as the screen shows them. Which file needs a
 // credit and which line gives it one is the engine's (`story_engine::credits`),
 // never computed here.
-import type { Coverage, Credit, PackageView } from "./studio";
+import type { Coverage, Credit, PackageView, Permission } from "./studio";
+
+/** What every line of a register says, whatever it names. */
+export interface CreditLine {
+  source?: string;
+  author?: string;
+  licence?: string;
+  permission: Permission;
+  proof?: string;
+}
+
+/** A line's free-text fields. */
+export type CreditText = "source" | "author" | "licence" | "proof";
 
 /** One register as the screen shows it: its lines, how many files each
  * names, and the files that have none yet. */
@@ -71,7 +83,7 @@ export function lineFor(file: string): Credit {
 
 /** A line's optional text field set from what was typed: an empty field is
  * left out of the file. */
-export function setText(line: Credit, key: "source" | "author" | "licence" | "proof", text: string): void {
+export function setText(line: CreditLine, key: CreditText, text: string): void {
   const value = text.trim();
   if (value) line[key] = value;
   else delete line[key];
