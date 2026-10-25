@@ -1183,9 +1183,46 @@ de reprendre. En cas d'écart, la spec fait foi.
           le hub qui bloque ; `story-tool pack` n'emporte que l'histoire.
           **Pas vu à l'écran** : le bloc Voitures et circuits, l'import
           depuis le hub, « Il manque » et « Ta version est jouée ».
-        - **Reste** : L4.4 (téléchargement et mises à jour), L4.5
-          (retouches propres à l'histoire, zone des règles d'or, à trancher
-          le moment venu).
+        - **L4.4, le téléchargement et les mises à jour — fait (2026-10-25).**
+          Installer depuis le lien d'un `manifest.json` (`packages/fetch.rs` :
+          manifeste lu, éléments pris dans le même dossier, vérifiés après
+          téléchargement, progression `story:download` et « Arrêter ») ;
+          l'élément de l'histoire gardé en cache (`.cache/<id>/`), pour qu'une
+          mise à jour qui ne le change pas ne le retélécharge pas ; le lien
+          retenu (`<id>.source.json`) et les mises à jour cherchées à
+          l'ouverture du hub (`packages/updates.rs`), avec leur poids ;
+          « Publier pour un hébergement » écrit le dossier à héberger ; le
+          guide d'auteur dit comment le partager (GitHub compris). Une
+          voiture que le joueur a déjà n'est plus comparée octet par octet
+          après extraction mais par sa **signature** (chemins et tailles,
+          `package::folder_signature`, portée par le manifeste) : sans
+          téléchargement.
+          **Choisi sans demander** (dans la spec) : le lien est celui du
+          manifeste, pas d'un `.pitstory` (un fichier se télécharge puis
+          s'installe à la main) ; les éléments vivent dans le même dossier
+          que le manifeste ; les mises à jour se cherchent à l'ouverture du
+          hub, une requête par histoire installée depuis un lien ; une
+          voiture mise à jour par l'auteur n'atteint pas un joueur qui l'a
+          déjà (jamais remplacée, signalée comme autre version) ; installer
+          depuis un fichier oublie le lien.
+          **Choisi sans demander** (détails) : délai de 60 s sans données
+          avant d'abandonner un téléchargement ; le manifeste plafonné à
+          1 Mo ; « Arrêter » rend la main sans rien changer, et le dit comme
+          une information, pas une erreur ; la progression au plus dix fois
+          par seconde ; les éléments d'une publication précédente restent
+          dans le dossier.
+          **Pas vu à l'écran** : l'installation par lien, la progression,
+          « Arrêter », le bouton de mise à jour, « Publier ». Prouvé par un
+          serveur HTTP local dans les tests : première installation
+          (manifeste, histoire, voiture manquante), aucune mise à jour quand
+          rien n'a changé (le manifeste seul est demandé), puis une version 2
+          qui ne télécharge que la nouvelle histoire ; un arrêt ne change
+          rien.
+          **Pour plus tard** : un lien `pitbox://` qui ouvre l'installation
+          d'un clic depuis une page web (le protocole se déclare dans
+          l'installateur).
+        - **Reste** : L4.5 (retouches propres à l'histoire, zone des règles
+          d'or, à trancher le moment venu).
       - **L5 à L8** : dans l'ordre du plan de livraison de la spec.
       **Écarts assumés par rapport au document de conception** (la spec
       publique les reprend déjà) :

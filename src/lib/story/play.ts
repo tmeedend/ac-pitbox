@@ -219,6 +219,28 @@ export type InstallOutcome =
 export const installPackage = (file: string, loseGame: boolean) =>
   invoke<InstallOutcome>("story_package_install", { file, loseGame });
 
+/** Installs the story whose package's manifest is at `url`. */
+export const installFromUrl = (url: string, loseGame: boolean) =>
+  invoke<InstallOutcome>("story_package_install_url", { url, loseGame });
+
+/** Updates an installed story from the URL it came from. */
+export const updatePackage = (id: string, loseGame: boolean) =>
+  invoke<InstallOutcome>("story_package_update", { id, loseGame });
+
+/** An update an installed story can take (`story::packages::Update`). */
+export interface PackageUpdate {
+  id: string;
+  version: string;
+  /** What it would download, in bytes. */
+  size: number;
+}
+
+/** The updates of the stories installed from a URL: one request each. */
+export const packageUpdates = () => invoke<PackageUpdate[]>("story_package_updates");
+
+/** Stops the package download under way. */
+export const cancelDownload = () => invoke<void>("story_package_cancel");
+
 /** An archive an install set aside, once the import is done with it. */
 export const forgetImported = (archive: string) => invoke<void>("story_package_imported", { archive });
 

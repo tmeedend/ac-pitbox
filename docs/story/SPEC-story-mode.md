@@ -613,12 +613,25 @@ must meet these:
   package; files are checked after download.
 
 **The mechanism (decided October 2026).** A package is a **manifest and one
-zip per item** - the story's own files, and with L4.3 each car and each
-track - every item named with its size and SHA-256. An item is zipped
+zip per item** - the story's own files, and each car and track it
+carries - every item named with its size and SHA-256. An item is zipped
 reproducibly, so an item whose files did not change keeps its fingerprint
 and an update downloads only the others; its file name carries the
 fingerprint. A **`.pitstory`** is the same set in one file, for a story
 shared by hand; the same installer reads both.
+
+- **From a link**: the player pastes the URL of a package's
+  `manifest.json`; its items are fetched from the same folder of the same
+  host, whatever the host. The editor publishes that folder (Package
+  section); a host serving it as files is all it takes.
+- **What a download fetches**: the story's own item, unless the very same
+  one is already here from an earlier install; and the cars and tracks the
+  player lacks - never one they have. The download shows its progress and
+  can be stopped, which changes nothing.
+- **Updates** are looked for when the Story hub opens, for each story
+  installed from a link: its manifest read again; a version or an item that
+  changed is an update, offered with what it would download. Installing it
+  is an install from the same link, with the same rules.
 
 - **What a story package carries** is what the story is made of:
   `story.yaml`, `flow/`, `content/`, `events/`, `world/`, `drivers/`,
@@ -646,10 +659,12 @@ shared by hand; the same installer reads both.
 - **A car or track the player lacks** goes through the ordinary import,
   once the story is installed: its report, its questions, the mod managed
   like any other. Uninstalling the story leaves it in the library.
-- **A car the player already has**: never replaced. The same version is used
-  as it is; another version is played, and the hub says so. Playing the
-  story's own version for the session only comes later (L4.5), with the
-  story's own changes to a mod.
+- **A car the player already has**: never replaced, nor downloaded. The
+  same version is used as it is; another version - other file paths or
+  sizes than the package's - is played, and the hub says so. A car the
+  author updates in a later version of the story therefore does not reach a
+  player who has it already. Playing the story's own version for the
+  session only comes later (L4.5), with the story's own changes to a mod.
 - **A story missing a car or track it races on does not start**: the hub
   names what is missing, the DLC to buy for the game's own content. A car
   removed since the install comes back by installing the package again.
@@ -832,7 +847,12 @@ the editor is reserved; they are translated when it opens to all.
   folder id: the game's own say so (with their DLC) and stay out of the
   package; the others offer a line of `package/manifest.yaml`, or say the
   author's library lacks them. The register's checks list beside it and
-  count apart from the story's: they block the build, not the story. **Build the package**
+  count apart from the story's: they block the build, not the story.
+  **Publish for hosting** writes into a folder the author picks what a host
+  serves: the items and `manifest.json`, the file whose link players paste.
+  Items of an earlier publish stay beside (a changed item has another name);
+  `manifest.json` is replaced last, so a player never reads a manifest
+  naming an item not there yet. **Build the package**
   writes a `.pitstory`, named `<id>-<version>.pitstory` unless the author
   picks another name; it waits while the story or its register has an
   error. A package carries the register with the files.
@@ -1078,8 +1098,10 @@ The player side follows each story's settings. What the engine needs:
 
 - **Stories offered.** The sample story Pit Box carries, the packages the
   player installed (each with its version, and Uninstall), and the author's
-  own stories, played as they are on disk. A `.pitstory` is installed from
-  the Story Mode block. A story the checks find errors in does not start,
+  own stories, played as they are on disk. A package is installed from the
+  Story Mode block, from a `.pitstory` or from a link; a story installed
+  from a link shows its update when there is one. A story the checks find
+  errors in does not start,
   nor one missing a car or a track it races on; a story playing the
   player's own version of a car says which.
 - **One game per story**, saved after every move of the player, in Pit Box's

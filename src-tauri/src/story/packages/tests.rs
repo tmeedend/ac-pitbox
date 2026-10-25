@@ -1,7 +1,7 @@
 use super::*;
 use crate::story::holdings::all_held;
 use crate::testutil::temp_dir;
-use std::io::Cursor;
+use std::io::{Cursor, Write};
 
 /// The sample's files, `edit` applied to the one at `path`.
 fn sample_with(path: &str, edit: impl Fn(&str) -> String) -> Vec<(String, Vec<u8>)> {
@@ -72,7 +72,7 @@ fn a_package_installs_and_plays() {
     let file = packed(&base, "sample.pitstory", &story_engine::sample::folder_files());
 
     assert_eq!(
-        install(&config, &file, false, &all_held).unwrap(),
+        install(&config, Origin::File(&file), false, &all_held, &mut |_, _| true).unwrap(),
         installed("sample", "1", None)
     );
     let dir = config.join("story/installed/sample");
@@ -86,9 +86,18 @@ fn a_package_installs_and_plays() {
     );
     let leftovers: Vec<_> = (std::fs::read_dir(config.join("story/installed")).unwrap().flatten())
         .map(|e| e.file_name().to_string_lossy().into_owned())
-        .filter(|n| n.starts_with('.'))
+        .filter(|n| n.starts_with(".staging") || n.starts_with(".old"))
         .collect();
     assert!(leftovers.is_empty(), "nothing left of the staging: {leftovers:?}");
+    let cached: Vec<_> = (std::fs::read_dir(config.join("story/installed/.cache/sample"))
+        .unwrap()
+        .flatten())
+    .map(|e| e.file_name().to_string_lossy().into_owned())
+    .collect();
+    assert!(
+        matches!(cached.as_slice(), [one] if one.starts_with("story-")),
+        "the story's item kept for an update: {cached:?}"
+    );
 
     let source = Source::Installed { id: "sample".into() };
     let listed = play::list(&config, &all_held);
@@ -115,9 +124,10 @@ fn an_update_keeps_the_game_or_asks_before_losing_it() {
     let config = base.join("config");
     install(
         &config,
-        &packed(&base, "v1.pitstory", &story_engine::sample::folder_files()),
+        Origin::File(&packed(&base, "v1.pitstory", &story_engine::sample::folder_files())),
         false,
         &all_held,
+        &mut |_, _| true,
     )
     .unwrap();
     let source = Source::Installed { id: "sample".into() };
@@ -125,7 +135,7 @@ fn an_update_keeps_the_game_or_asks_before_losing_it() {
 
     let v2 = packed(&base, "v2.pitstory", &sample_with("story.yaml", version("2")));
     assert_eq!(
-        install(&config, &v2, false, &all_held).unwrap(),
+        install(&config, Origin::File(&v2), false, &all_held, &mut |_, _| true).unwrap(),
         installed("sample", "2", Some("1"))
     );
     play::resume(&config, &source).expect("the game resumes on the update");
@@ -137,7 +147,7 @@ fn an_update_keeps_the_game_or_asks_before_losing_it() {
     let at = v3.iter().position(|(p, _)| p == flow).unwrap();
     v3[at] = renamed.into_iter().find(|(p, _)| p == flow).unwrap();
     let v3 = packed(&base, "v3.pitstory", &v3);
-    match install(&config, &v3, false, &all_held).unwrap() {
+    match install(&config, Origin::File(&v3), false, &all_held, &mut |_, _| true).unwrap() {
         Outcome::LosesGame { previous, version, .. } => {
             assert_eq!((previous.as_str(), version.as_str()), ("2", "3"));
         }
@@ -149,7 +159,7 @@ fn an_update_keeps_the_game_or_asks_before_losing_it() {
     play::resume(&config, &source).expect("the game still resumes");
 
     assert_eq!(
-        install(&config, &v3, true, &all_held).unwrap(),
+        install(&config, Origin::File(&v3), true, &all_held, &mut |_, _| true).unwrap(),
         installed("sample", "3", Some("2"))
     );
     let listed = play::list(&config, &all_held);
@@ -175,12 +185,12 @@ fn a_damaged_package_installs_nothing() {
     bad[last] ^= 0xff;
     let file = by_hand(&base, &one_item_manifest(&item), &[("s.zip", &bad)]);
     assert_eq!(
-        install(&config, &file, false, &all_held),
+        install(&config, Origin::File(&file), false, &all_held, &mut |_, _| true),
         Err(errors::STORY_PACKAGE_DAMAGED.into())
     );
     let file = by_hand(&base, &one_item_manifest(&item), &[("other.zip", &item)]);
     assert_eq!(
-        install(&config, &file, false, &all_held),
+        install(&config, Origin::File(&file), false, &all_held, &mut |_, _| true),
         Err(errors::STORY_PACKAGE_DAMAGED.into()),
         "item missing"
     );
@@ -193,7 +203,7 @@ fn a_damaged_package_installs_nothing() {
 
     let ok = by_hand(&base, &one_item_manifest(&item), &[("s.zip", &item)]);
     assert_eq!(
-        install(&config, &ok, false, &all_held).unwrap(),
+        install(&config, Origin::File(&ok), false, &all_held, &mut |_, _| true).unwrap(),
         installed("sample", "1", None),
         "the same, whole"
     );
@@ -217,7 +227,7 @@ fn a_package_writes_nothing_outside_the_story() {
         let item = zip.finish().unwrap().into_inner();
         let file = by_hand(&base, &one_item_manifest(&item), &[("s.zip", &item)]);
         assert_eq!(
-            install(&config, &file, false, &all_held),
+            install(&config, Origin::File(&file), false, &all_held, &mut |_, _| true),
             Err(errors::STORY_PACKAGE_DAMAGED.into()),
             "{evil}"
         );
@@ -238,7 +248,13 @@ fn a_package_from_a_newer_pit_box_says_so() {
     let config = base.join("config");
     let newer = r#"{"format":2,"id":"sample","something":"new"}"#;
     assert_eq!(
-        install(&config, &by_hand(&base, newer, &[]), false, &all_held),
+        install(
+            &config,
+            Origin::File(&by_hand(&base, newer, &[])),
+            false,
+            &all_held,
+            &mut |_, _| true
+        ),
         Err(errors::STORY_PACKAGE_TOO_NEW.into())
     );
     let item = package::story_item(&story_engine::sample::folder_files()).unwrap();
@@ -246,9 +262,10 @@ fn a_package_from_a_newer_pit_box_says_so() {
     assert_eq!(
         install(
             &config,
-            &by_hand(&base, &unknown_kind, &[("s.zip", &item)]),
+            Origin::File(&by_hand(&base, &unknown_kind, &[("s.zip", &item)])),
             false,
-            &all_held
+            &all_held,
+            &mut |_, _| true
         ),
         Err(errors::STORY_PACKAGE_TOO_NEW.into()),
         "an item kind unknown here"
@@ -256,7 +273,9 @@ fn a_package_from_a_newer_pit_box_says_so() {
     let not_a_package = base.join("a.pitstory");
     std::fs::write(&not_a_package, b"hello").unwrap();
     assert_eq!(
-        install(&config, &not_a_package, false, &all_held),
+        install(&config, Origin::File(&not_a_package), false, &all_held, &mut |_, _| {
+            true
+        }),
         Err(errors::STORY_PACKAGE_UNREADABLE.into())
     );
 }
@@ -271,7 +290,7 @@ fn a_story_with_errors_is_not_installed() {
     let item = package::story_item(&files).unwrap();
     let file = by_hand(&base, &one_item_manifest(&item), &[("s.zip", &item)]);
     assert_eq!(
-        install(&config, &file, false, &all_held),
+        install(&config, Origin::File(&file), false, &all_held, &mut |_, _| true),
         Err(errors::STORY_PACKAGE_HAS_ERRORS.into())
     );
     assert!(!config.join("story/installed/sample").exists());
@@ -283,7 +302,7 @@ fn uninstalling_keeps_the_game_for_a_new_install() {
     let base = temp_dir("story-pkg-uninstall");
     let config = base.join("config");
     let file = packed(&base, "sample.pitstory", &story_engine::sample::folder_files());
-    install(&config, &file, false, &all_held).unwrap();
+    install(&config, Origin::File(&file), false, &all_held, &mut |_, _| true).unwrap();
     let source = Source::Installed { id: "sample".into() };
     play::new_game(&config, &source, 7).unwrap();
 
@@ -299,7 +318,7 @@ fn uninstalling_keeps_the_game_for_a_new_install() {
     );
     assert!(uninstall(&config, "../config").is_err(), "an id is never a path");
 
-    install(&config, &file, false, &all_held).unwrap();
+    install(&config, Origin::File(&file), false, &all_held, &mut |_, _| true).unwrap();
     play::resume(&config, &source).expect("the game comes back with the story");
 }
 
@@ -311,9 +330,10 @@ fn a_swap_stopped_half_way_is_put_right() {
     let config = base.join("config");
     install(
         &config,
-        &packed(&base, "s.pitstory", &story_engine::sample::folder_files()),
+        Origin::File(&packed(&base, "s.pitstory", &story_engine::sample::folder_files())),
         false,
         &all_held,
+        &mut |_, _| true,
     )
     .unwrap();
     let root = config.join("story/installed");

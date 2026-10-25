@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 use super::prelude::*;
 use crate::story::holdings::{self, Holding};
@@ -71,6 +71,37 @@ pub async fn story_play_move(app: AppHandle, source: play::Source, input: play::
     .await
 }
 
+/// What a package install has downloaded, as `story:download` tells the
+/// hub.
+#[derive(Clone, serde::Serialize)]
+struct DownloadProgress {
+    received: u64,
+    total: u64,
+}
+
+/// Installs a package from `origin`, reporting what it downloads as
+/// `story:download` - at most ten events a second, the last always.
+fn install_reporting(app: &AppHandle, origin: packages::Origin, lose_game: bool) -> Result<packages::Outcome, String> {
+    let mut last: Option<std::time::Instant> = None;
+    let mut progress = |received: u64, total: u64| {
+        let due = last.is_none_or(|t| t.elapsed() >= std::time::Duration::from_millis(100));
+        if due || received == total {
+            last = Some(std::time::Instant::now());
+            if let Err(e) = app.emit("story:download", DownloadProgress { received, total }) {
+                log::warn!("story:download not delivered: {e}");
+            }
+        }
+        true
+    };
+    packages::install(
+        &crate::rules::config_dir(app)?,
+        origin,
+        lose_game,
+        &holdings(app),
+        &mut progress,
+    )
+}
+
 /// Installs a story package (`.pitstory`), or updates the story it carries;
 /// `lose_game` goes ahead when the game under way would not resume on it.
 #[tauri::command]
@@ -80,9 +111,48 @@ pub async fn story_package_install(
     lose_game: bool,
 ) -> Result<packages::Outcome, String> {
     off_window(app, move |app| {
-        packages::install(&crate::rules::config_dir(app)?, &file, lose_game, &holdings(app))
+        install_reporting(app, packages::Origin::File(&file), lose_game)
     })
     .await
+}
+
+/// Installs the story whose package's manifest is at `url`.
+#[tauri::command]
+pub async fn story_package_install_url(
+    app: AppHandle,
+    url: String,
+    lose_game: bool,
+) -> Result<packages::Outcome, String> {
+    off_window(app, move |app| {
+        install_reporting(app, packages::Origin::Url(url.trim()), lose_game)
+    })
+    .await
+}
+
+/// Updates the installed story `id` from the URL it was installed from.
+#[tauri::command]
+pub async fn story_package_update(app: AppHandle, id: String, lose_game: bool) -> Result<packages::Outcome, String> {
+    off_window(app, move |app| {
+        let url = packages::update_url(&crate::rules::config_dir(app)?, &id)
+            .ok_or(crate::errors::STORY_PACKAGE_DOWNLOAD_FAILED)?;
+        install_reporting(app, packages::Origin::Url(&url), lose_game)
+    })
+    .await
+}
+
+/// The updates of the installed stories that came from a URL.
+#[tauri::command]
+pub async fn story_package_updates(app: AppHandle) -> Result<Vec<packages::Update>, String> {
+    off_window(app, |app| {
+        Ok(packages::updates(&crate::rules::config_dir(app)?, &holdings(app)))
+    })
+    .await
+}
+
+/// Stops the package download under way.
+#[tauri::command]
+pub fn story_package_cancel() {
+    packages::cancel();
 }
 
 /// An archive an install set aside for the import, once the import is done
@@ -108,6 +178,13 @@ pub async fn story_package_uninstall(app: AppHandle, id: String) -> Result<(), S
 #[tauri::command]
 pub async fn story_build_package(app: AppHandle, folder: PathBuf, out: PathBuf) -> Result<u64, String> {
     off_window(app, move |app| studio::build_package(&folder, &out, &holdings(app))).await
+}
+
+/// Writes into `dir` what a host serves for the story in `folder`: its
+/// items and `manifest.json`. Says the items' size.
+#[tauri::command]
+pub async fn story_publish_package(app: AppHandle, folder: PathBuf, dir: PathBuf) -> Result<u64, String> {
+    off_window(app, move |app| studio::publish_package(&folder, &dir, &holdings(app))).await
 }
 
 /// Keeps the line the dialogue under way is read at, beside the save.

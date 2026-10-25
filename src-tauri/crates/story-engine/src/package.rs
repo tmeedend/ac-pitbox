@@ -78,6 +78,10 @@ pub struct Item {
     pub size: u64,
     /// Lower-case hex.
     pub sha256: String,
+    /// A car's or a track's folder as `folder_signature` reads it: what tells,
+    /// without downloading the item, whether the player's copy is the same.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -213,7 +217,40 @@ pub fn item(kind: ItemKind, id: Option<&str>, size: u64, sha256: String) -> Item
         file: format!("{name}-{}.zip", &sha256[..16]),
         size,
         sha256,
+        signature: None,
     }
+}
+
+/// A mod's folder in short: the path (lower case, `/`) and the size of each
+/// of its files. Two copies with the same signature are the same as far as
+/// a player can tell without reading every byte - which is all the hub says
+/// of a copy the player has ("another version is played").
+pub fn folder_signature(root: &Path) -> std::io::Result<String> {
+    fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, u64)>) -> std::io::Result<()> {
+        for entry in std::fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                walk(root, &path, out)?;
+            } else {
+                let rel = path.strip_prefix(root).unwrap_or(&path);
+                let rel = (rel.components())
+                    .map(|c| c.as_os_str().to_string_lossy().to_lowercase())
+                    .collect::<Vec<_>>()
+                    .join("/");
+                out.push((rel, entry.metadata()?.len()));
+            }
+        }
+        Ok(())
+    }
+    let mut files = Vec::new();
+    walk(root, root, &mut files)?;
+    files.sort();
+    let mut hasher = Sha256::new();
+    for (rel, size) in files {
+        hasher.update(format!("{rel}|{size}\n").as_bytes());
+    }
+    Ok(hex(&hasher.finalize()))
 }
 
 pub fn hex(digest: &[u8]) -> String {

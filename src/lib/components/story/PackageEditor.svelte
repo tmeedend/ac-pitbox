@@ -8,12 +8,12 @@
   // the package, the others travel with a line of `package/manifest.yaml`.
   // The build waits for every line and for a story with no error. Each edit
   // saves its register at once.
-  import { save } from "@tauri-apps/plugin-dialog";
+  import { open, save } from "@tauri-apps/plugin-dialog";
   import { errorText } from "$lib/errors";
   import { fmtSize } from "$lib/format";
   import { t } from "$lib/i18n/index.svelte";
   import { contentLineFor, lineFor, packageName, registerGroups, splitFiles } from "$lib/story/package";
-  import { buildPackage, type ContentCredit, type Credit, type Holding } from "$lib/story/studio";
+  import { buildPackage, publishPackage, type ContentCredit, type Credit, type Holding } from "$lib/story/studio";
   import { registerEntry, saveContentRegister, saveRegister, studio } from "$lib/story/studioState.svelte";
   import CreditFields from "./CreditFields.svelte";
   import StoryChecks from "./StoryChecks.svelte";
@@ -54,6 +54,24 @@
     return (e.currentTarget as HTMLInputElement).value;
   }
 
+  /** Writes what a host serves into a folder the author picks: the link
+   * players paste is that of its `manifest.json`. */
+  async function publish() {
+    const dir = await open({ directory: true, title: t("story.package.publish") });
+    if (typeof dir !== "string") return;
+    building = true;
+    built = null;
+    failed = null;
+    try {
+      const size = await publishPackage(story.path, dir);
+      built = t("story.package.published", { dir, size: fmtSize(size) });
+    } catch (e) {
+      failed = errorText(e);
+    } finally {
+      building = false;
+    }
+  }
+
   async function build() {
     if (!manifest) return;
     const out = await save({
@@ -89,6 +107,7 @@
     </div>
     <div class="blk-b build">
       <button class="btn" disabled={blocked || building} onclick={build}>{t("story.package.build")}</button>
+      <button class="btn" disabled={blocked || building} onclick={publish}>{t("story.package.publish")}</button>
       {#if storyErrors > 0}
         <span class="why">{t("story.package.storyErrors", { count: storyErrors })}</span>
       {:else if registerErrors > 0}

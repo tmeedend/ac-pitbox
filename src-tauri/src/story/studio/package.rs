@@ -15,7 +15,6 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
-use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
@@ -137,9 +136,10 @@ fn check_content(
     held
 }
 
-/// Builds the story's package into `out`, and says its size. Refused while
-/// the story or its register has an error: what the Package section lists.
-pub fn build_package(folder: &Path, out: &Path, lookup: Lookup) -> Result<u64, String> {
+/// Writes the story's items into `dir`, each named after its fingerprint,
+/// and returns their manifest. Refused while the story or its register has
+/// an error: what the Package section lists.
+fn build_items(folder: &Path, dir: &Path, lookup: Lookup) -> Result<Manifest, String> {
     let story = Story::load(folder).map_err(|_| errors::STORY_BUILD_BLOCKED.to_string())?;
     let files = package::folder_files(folder).map_err(|e| e.to_string())?;
     // The register of the very files packed, read once.
@@ -154,27 +154,41 @@ pub fn build_package(folder: &Path, out: &Path, lookup: Lookup) -> Result<u64, S
         return Err(errors::STORY_BUILD_BLOCKED.into());
     }
 
-    // Each car and track zipped beside the package first: its size and
-    // fingerprint go in the manifest, which comes before the items.
-    let parts = Parts::new(out)?;
+    let write =
+        |path: &Path, bytes: &[u8]| std::fs::write(path, bytes).map_err(|e| format!("writing {}: {e}", path.display()));
     let story_zip = package::story_item(&files)?;
-    let mut items = vec![package::item(
+    let story_item = package::item(
         ItemKind::Story,
         None,
         story_zip.len() as u64,
         package::sha256_hex(&story_zip),
-    )];
-    let mut readers: Vec<Box<dyn std::io::Read>> = vec![Box::new(Cursor::new(story_zip))];
+    );
+    write(&dir.join(&story_item.file), &story_zip)?;
+    let mut items = vec![story_item];
+    // Each car and track zipped under a passing name, then named after its
+    // fingerprint, known only once it is written.
     for (n, h) in held.iter().filter(|h| !h.official).enumerate() {
         let source = h.folder.as_ref().ok_or(errors::STORY_BUILD_BLOCKED)?;
-        let part = parts.0.join(format!("{n}.zip"));
+        let part = dir.join(format!("{n}.part"));
         let file = File::create(&part).map_err(|e| format!("writing {}: {e}", part.display()))?;
         package::content_item(source, &h.id, file)?;
         let (size, sha256) = (File::open(&part).and_then(package::sha256_of)).map_err(|e| e.to_string())?;
-        items.push(package::item(h.kind.into(), Some(&h.id), size, sha256));
-        readers.push(Box::new(File::open(&part).map_err(|e| e.to_string())?));
+        let mut item = package::item(h.kind.into(), Some(&h.id), size, sha256);
+        item.signature = Some(package::folder_signature(source).map_err(|e| format!("{}: {e}", source.display()))?);
+        std::fs::rename(&part, dir.join(&item.file)).map_err(|e| e.to_string())?;
+        items.push(item);
     }
-    let manifest = Manifest::for_story(&story.manifest, items)?;
+    Manifest::for_story(&story.manifest, items)
+}
+
+/// Builds the story's package into `out`, a `.pitstory`, and says its size.
+pub fn build_package(folder: &Path, out: &Path, lookup: Lookup) -> Result<u64, String> {
+    let parts = Parts::new(out)?;
+    let manifest = build_items(folder, &parts.0, lookup)?;
+    let readers = (manifest.items.iter())
+        .map(|i| File::open(parts.0.join(&i.file)).map(|f| Box::new(f) as Box<dyn std::io::Read>))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
     // Through a temporary file: a build stopped half-way never leaves half a
     // package under the name a player would be given.
     let tmp = out.with_extension("pitstory.tmp");
@@ -182,6 +196,21 @@ pub fn build_package(folder: &Path, out: &Path, lookup: Lookup) -> Result<u64, S
     package::write_package(&manifest, readers, file)?;
     std::fs::rename(&tmp, out).map_err(|e| format!("writing {}: {e}", out.display()))?;
     std::fs::metadata(out).map(|m| m.len()).map_err(|e| e.to_string())
+}
+
+/// Writes into `dir` what a host serves: the items and `manifest.json`, the
+/// file whose URL a player pastes. Items of an earlier build stay beside (a
+/// changed item has another name), `manifest.json` is replaced last, so a
+/// player never reads a manifest naming an item not there yet. Says the
+/// size of the items.
+pub fn publish_package(folder: &Path, dir: &Path, lookup: Lookup) -> Result<u64, String> {
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let manifest = build_items(folder, dir, lookup)?;
+    let json = serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?;
+    let (tmp, out) = (dir.join("manifest.json.tmp"), dir.join(package::MANIFEST));
+    std::fs::write(&tmp, json).map_err(|e| format!("writing {}: {e}", tmp.display()))?;
+    std::fs::rename(&tmp, &out).map_err(|e| format!("writing {}: {e}", out.display()))?;
+    Ok(manifest.items.iter().map(|i| i.size).sum())
 }
 
 /// The folder the cars and tracks are zipped in during a build, beside the
@@ -211,7 +240,7 @@ impl Drop for Parts {
 mod tests {
     use super::*;
     use crate::story::holdings::{all_held, held_as};
-    use crate::story::packages::{self, Outcome};
+    use crate::story::packages::{self, Origin, Outcome};
     use crate::testutil::temp_dir;
 
     fn sample_in(dir: &Path) {
@@ -251,7 +280,7 @@ mod tests {
             "nothing left beside the package"
         );
         let config = base.join("config");
-        packages::install(&config, &out, false, &all_held).expect("the build installs");
+        packages::install(&config, Origin::File(&out), false, &all_held, &mut |_, _| true).expect("the build installs");
         assert!(
             !config.join("story/installed/sample/notes.txt").exists(),
             "notes stay with the author"
@@ -381,7 +410,15 @@ mod tests {
         let car = fake_mod(&base.join("author"), "mod_car", "[ENGINE]");
         let out = base.join("p.pitstory");
         build_package(&story, &out, &author_with(car.clone())).unwrap();
-        let installed = |config: &Path, lookup: Lookup| match packages::install(config, &out, false, lookup).unwrap() {
+        let installed = |config: &Path, lookup: Lookup| match packages::install(
+            config,
+            Origin::File(&out),
+            false,
+            lookup,
+            &mut |_, _| true,
+        )
+        .unwrap()
+        {
             Outcome::Installed { imports, .. } => imports,
             other => panic!("installed, got {other:?}"),
         };
@@ -420,6 +457,150 @@ mod tests {
             std::fs::read_to_string(theirs.join("data/engine.ini")).unwrap(),
             "[ENGINE]\nPOWER=999",
             "the player's version untouched"
+        );
+    }
+
+    /// A web server for one test: serves the files of `dir` over HTTP on this
+    /// machine, and lists the paths asked, in order.
+    fn serve(dir: PathBuf) -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+        use std::io::{BufRead, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://127.0.0.1:{}/", listener.local_addr().unwrap().port());
+        let asked = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let log = asked.clone();
+        std::thread::spawn(move || {
+            for mut stream in listener.incoming().flatten() {
+                let mut reader = std::io::BufReader::new(stream.try_clone().unwrap());
+                let mut line = String::new();
+                reader.read_line(&mut line).ok();
+                loop {
+                    let mut header = String::new();
+                    if reader.read_line(&mut header).unwrap_or(0) <= 2 {
+                        break;
+                    }
+                }
+                let path = line.split_whitespace().nth(1).unwrap_or("/");
+                let path = path.trim_start_matches('/').split('?').next().unwrap_or("").to_string();
+                log.lock().unwrap().push(path.clone());
+                let reply = match std::fs::read(dir.join(&path)) {
+                    Ok(body) => {
+                        let head = format!(
+                            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: application/octet-stream\r\nConnection: close\r\n\r\n",
+                            body.len()
+                        );
+                        stream.write_all(head.as_bytes()).and_then(|_| stream.write_all(&body))
+                    }
+                    Err(_) => {
+                        stream.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                    }
+                };
+                reply.ok();
+            }
+        });
+        (base, asked)
+    }
+
+    // A story published on any host installs from its manifest's URL; an
+    // update downloads only what changed, and nothing of what the player
+    // has (SPEC-story-mode, Content: installation and updates).
+    #[test]
+    fn a_story_installs_from_a_url_and_updates_only_what_changed() {
+        let base = temp_dir("story-url");
+        let story = base.join("story");
+        racing_on_a_mod(&story, "granted");
+        let car = fake_mod(&base.join("author"), "mod_car", "[ENGINE]");
+        let host = base.join("host");
+        publish_package(&story, &host, &author_with(car.clone())).unwrap();
+        let (url, asked) = serve(host.to_path_buf());
+        let manifest_url = format!("{url}manifest.json");
+        let config = base.join("player");
+        let take = |asked: &std::sync::Arc<std::sync::Mutex<Vec<String>>>| std::mem::take(&mut *asked.lock().unwrap());
+
+        // A first install: the manifest, the story, and the car the player lacks.
+        let lacking =
+            |w: &BTreeSet<(AcKind, String)>| held_as(w, |(_, id)| (id != "mod_car").then(|| PathBuf::from("x")));
+        let mut seen = 0u64;
+        let outcome = packages::install(
+            &config,
+            Origin::Url(&manifest_url),
+            false,
+            &lacking,
+            &mut |received, _| {
+                seen = received;
+                true
+            },
+        )
+        .unwrap();
+        let Outcome::Installed { imports, .. } = outcome else {
+            panic!("installed")
+        };
+        assert_eq!(imports.len(), 1, "the car to import");
+        assert!(seen > 0, "the progress followed the download");
+        let first = take(&asked);
+        assert_eq!(first.len(), 3, "manifest, story, car: {first:?}");
+        assert!(first[1].starts_with("story-") && first[2].starts_with("car-mod_car-"));
+
+        // Nothing changed: no update, and only the manifest is asked.
+        let the_same = |w: &BTreeSet<(AcKind, String)>| held_as(w, |_| Some(car.clone()));
+        assert!(packages::updates(&config, &the_same).is_empty());
+        assert_eq!(take(&asked), ["manifest.json"]);
+
+        // A new version of the story: the update is the story's item alone -
+        // the player has the car, as the package has it.
+        let yaml = story.join("story.yaml");
+        let text = std::fs::read_to_string(&yaml).unwrap();
+        std::fs::write(&yaml, text.replace("version: \"1\"", "version: \"2\"")).unwrap();
+        publish_package(&story, &host, &author_with(car.clone())).unwrap();
+        let updates = packages::updates(&config, &the_same);
+        let [update] = updates.as_slice() else {
+            panic!("one update: {updates:?}")
+        };
+        assert_eq!(update.version, "2");
+        let story_item = std::fs::read_dir(&host).unwrap().flatten().filter(|e| {
+            let n = e.file_name().to_string_lossy().into_owned();
+            n.starts_with("story-") && !first[1].ends_with(&n)
+        });
+        let new_story_size: u64 = story_item.map(|e| e.metadata().unwrap().len()).sum();
+        assert_eq!(update.size, new_story_size, "the new story's item, nothing else");
+        take(&asked);
+        let url = packages::update_url(&config, "sample").expect("remembered");
+        let outcome = packages::install(&config, Origin::Url(&url), false, &the_same, &mut |_, _| true).unwrap();
+        assert!(matches!(outcome, Outcome::Installed { ref previous, .. } if previous.as_deref() == Some("1")));
+        let second = take(&asked);
+        assert_eq!(second.len(), 2, "manifest and the new story only: {second:?}");
+        assert!(second[1].starts_with("story-") && second[1] != first[1]);
+    }
+
+    // Stopping a download changes nothing.
+    #[test]
+    fn a_download_stopped_changes_nothing() {
+        let base = temp_dir("story-url-stop");
+        let story = base.join("story");
+        sample_in(&story);
+        let host = base.join("host");
+        publish_package(&story, &host, &official).unwrap();
+        let (url, _) = serve(host.to_path_buf());
+        let config = base.join("player");
+        let stopped = packages::install(
+            &config,
+            Origin::Url(&format!("{url}manifest.json")),
+            false,
+            &all_held,
+            &mut |_, _| false,
+        );
+        assert_eq!(stopped, Err(errors::STORY_PACKAGE_CANCELLED.into()));
+        assert!(!config.join("story/installed/sample").exists(), "nothing installed");
+        let not_a_package = packages::install(
+            &config,
+            Origin::Url(&format!("{url}nothing.json")),
+            false,
+            &all_held,
+            &mut |_, _| true,
+        );
+        assert_eq!(
+            not_a_package,
+            Err(errors::STORY_PACKAGE_DOWNLOAD_FAILED.into()),
+            "a link to nothing"
         );
     }
 }

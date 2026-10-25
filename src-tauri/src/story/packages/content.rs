@@ -8,10 +8,11 @@
 //!   folder, set aside in `story/installed/.imports/<story id>/` until the
 //!   screen has imported it - with the report and the questions of any
 //!   import.
-//! - **What the player has** is never replaced: the package's copy is
-//!   compared to theirs, file by file (`identity::content_differs`), and
-//!   one that differs is recorded (`<story id>.content.json`), for Story
-//!   Mode to say it plays the player's version.
+//! - **What the player has** is never replaced, nor even fetched: the
+//!   package names each car and track with its signature (paths and sizes,
+//!   `package::folder_signature`), compared to the player's copy; one that
+//!   differs is recorded (`<story id>.content.json`), for Story Mode to say
+//!   it plays the player's version.
 
 use std::collections::BTreeSet;
 use std::fs::File;
@@ -66,42 +67,69 @@ pub(super) fn check_item(zip_path: &Path, id: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// After an install: each car and track item, checked already and copied to
-/// `staged` under its file name, is set aside for the import when the player
-/// lacks it, or compared to theirs. Returns the archives to import.
-pub(super) fn place(root: &Path, story: &str, items: &[&Item], staged: &Path, lookup: Lookup) -> Vec<PathBuf> {
+/// What an install does with the cars and tracks of a package, decided
+/// before anything is fetched: what the player lacks is fetched for the
+/// import; what they have is compared without fetching it, by signature.
+pub(super) struct Plan<'a> {
+    pub fetch: Vec<&'a Item>,
+    /// Here in another version than the package's.
+    pub other_version: Vec<(AcKind, String)>,
+}
+
+/// The plan for `items`, the cars and tracks of a package. A copy whose
+/// signature cannot be read, or an item without one, is taken as the same:
+/// the player's copy plays either way, and the log says why.
+pub(super) fn plan<'a>(items: &[&'a Item], lookup: Lookup) -> Plan<'a> {
     let wanted: BTreeSet<(AcKind, String)> = (items.iter())
         .filter_map(|i| Some((i.kind.content()?, i.id.clone()?)))
         .collect();
     let held = lookup(&wanted);
-    let dest = imports(root, story);
-    let mut to_import = Vec::new();
-    let mut record = Record::default();
+    let mut plan = Plan {
+        fetch: Vec::new(),
+        other_version: Vec::new(),
+    };
     for item in items {
         let (Some(kind), Some(id)) = (item.kind.content(), item.id.as_deref()) else {
             continue;
         };
-        let zip_path = staged.join(&item.file);
-        match held
-            .iter()
+        let theirs = (held.iter())
             .find(|h| h.kind == kind && h.id == id)
-            .and_then(|h| h.folder.as_ref())
-        {
-            Some(theirs) => {
-                if differs(&zip_path, id, theirs, staged) {
-                    record.other_version.push((kind, id.to_string()));
-                }
+            .and_then(|h| h.folder.as_ref());
+        let Some(theirs) = theirs else {
+            plan.fetch.push(item);
+            continue;
+        };
+        let differs = match (&item.signature, story_engine::package::folder_signature(theirs)) {
+            (Some(ours), Ok(their)) => *ours != their,
+            (None, _) => false,
+            (_, Err(e)) => {
+                log::warn!("story package: {} not compared: {e}", theirs.display());
+                false
             }
-            None => {
-                let to = dest.join(&item.file);
-                let moved = std::fs::create_dir_all(&dest).and_then(|_| std::fs::rename(&zip_path, &to));
-                match moved {
-                    Ok(()) => to_import.push(to),
-                    Err(e) => log::warn!("story package: {id} not set aside for the import: {e}"),
-                }
-            }
+        };
+        if differs {
+            plan.other_version.push((kind, id.to_string()));
         }
     }
+    plan
+}
+
+/// After an install: each car and track fetched, checked already and in
+/// `staged` under its file name, is set aside for the import; what the plan
+/// found is recorded. Returns the archives to import.
+pub(super) fn place(root: &Path, story: &str, plan: &Plan, staged: &Path) -> Vec<PathBuf> {
+    let dest = imports(root, story);
+    let mut to_import = Vec::new();
+    for item in &plan.fetch {
+        let (from, to) = (staged.join(&item.file), dest.join(&item.file));
+        match std::fs::create_dir_all(&dest).and_then(|_| std::fs::rename(&from, &to)) {
+            Ok(()) => to_import.push(to),
+            Err(e) => log::warn!("story package: {} not set aside for the import: {e}", item.file),
+        }
+    }
+    let record = Record {
+        other_version: plan.other_version.clone(),
+    };
     let path = record_path(root, story);
     let written = serde_json::to_string_pretty(&record)
         .map_err(|e| e.to_string())
@@ -110,22 +138,6 @@ pub(super) fn place(root: &Path, story: &str, items: &[&Item], staged: &Path, lo
         log::warn!("story package: {} not written: {e}", path.display());
     }
     to_import
-}
-
-/// Whether the package's copy of `id` differs from the player's. Unpacked
-/// beside the item to compare; what cannot be read counts as the same - the
-/// player's copy plays either way, and the log says why.
-fn differs(zip_path: &Path, id: &str, theirs: &Path, staged: &Path) -> bool {
-    let into = staged.join(format!("compare-{id}"));
-    let result = super::extract(zip_path, &into, |_| true)
-        .and_then(|_| crate::identity::content_differs(&into.join(id), theirs).map_err(|e| e.to_string()));
-    if let Err(e) = std::fs::remove_dir_all(&into) {
-        log::warn!("story package: {} not removed: {e}", into.display());
-    }
-    result.unwrap_or_else(|e| {
-        log::warn!("story package: {id} not compared with {}: {e}", theirs.display());
-        false
-    })
 }
 
 /// The cars and tracks the installed story `story` found here in another

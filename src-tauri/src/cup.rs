@@ -84,7 +84,7 @@ fn cup_type(kind: &str) -> Option<&'static str> {
 
 /// Identifies the app to the registry and to file hosts, like the Wikipedia
 /// client does (WIKI§6.2): name, version, where to reach the project.
-fn user_agent() -> String {
+pub(crate) fn user_agent() -> String {
     format!(
         "PitBox/{} (+https://github.com/tmeedend/ac-pitbox)",
         env!("CARGO_PKG_VERSION")

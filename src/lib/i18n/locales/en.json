@@ -1765,7 +1765,10 @@
     "storyPackageTooNew": "This package comes from a newer Pit Box: update Pit Box to install it.",
     "storyPackageDamaged": "This package is damaged: one of its files is not what it says. Download it again.",
     "storyPackageHasErrors": "The story in this package has errors: it was not installed.",
-    "storyBuildBlocked": "The story or its permission register has errors: the package is not built. See the Package section."
+    "storyBuildBlocked": "The story or its permission register has errors: the package is not built. See the Package section.",
+    "storyPackageDownloadFailed": "The package could not be downloaded: check the link and your connection.",
+    "storyPackageCancelled": "Download stopped: nothing changed.",
+    "storyLinkNotAPackage": "This link does not lead to a story's manifest.json."
   },
   "pack": {
     "tabMembers": "Mods",
@@ -2950,7 +2953,13 @@
       "uninstallConfirm": "Uninstall “{title}”? The game under way is kept: installed again, the story resumes it.",
       "missing": "Missing: {list}",
       "otherVersion": "Your version is played: {list}",
-      "importBusy": "An import is already running: the story's cars and tracks were not imported. Install it again once the import is done."
+      "importBusy": "An import is already running: the story's cars and tracks were not imported. Install it again once the import is done.",
+      "installLink": "Install from a link…",
+      "linkPlaceholder": "Link to the story's manifest.json",
+      "installNow": "Install",
+      "downloading": "Downloading: {received} of {total}",
+      "stop": "Stop",
+      "update": "Update: version {version} ({size})"
     },
     "frames": {
       "title": "Frames",
@@ -3239,7 +3248,9 @@
       "track": "Track",
       "baseGame": "Base game",
       "dlc": "DLC: {dlc}",
-      "notInLibrary": "Not in your library"
+      "notInLibrary": "Not in your library",
+      "publish": "Publish for hosting…",
+      "published": "Published in {dir} ({size}). The link to give is that of its manifest.json."
     }
   }
 }

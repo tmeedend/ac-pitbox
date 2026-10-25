@@ -3,8 +3,12 @@
 //!
 //! An installed story is a folder of Pit Box's own data,
 //! `app_config_dir/story/installed/<story id>/`, holding the story's files
-//! as the package carried them, and beside it `<story id>.package.json`, the
-//! manifest it came with: what an update compares its items to (L4.4).
+//! as the package carried them. Beside it: `<story id>.package.json`, the
+//! manifest it came with, what an update compares its items to;
+//! `<story id>.source.json`, the URL it was installed from, where updates
+//! are looked for (`updates.rs`); and in `.cache/<story id>/` the story's
+//! own item, so that an update which leaves it as it was does not download
+//! it again. A package comes from a file or a URL (`fetch.rs`).
 //! The cars and tracks it carries go to the player's library through the
 //! ordinary import, never straight into the game (`content.rs`).
 //!
@@ -26,13 +30,11 @@
 //! otherwise. Names starting with a dot are Pit Box's own and never listed.
 
 use std::fs::File;
-use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use serde::Serialize;
-use sha2::{Digest, Sha256};
-use story_engine::package::{self, ItemKind, Manifest};
+use serde::{Deserialize, Serialize};
+use story_engine::package::{self, Item, ItemKind, Manifest};
 use story_engine::validate::{validate, Severity};
 use story_engine::Story;
 
@@ -41,13 +43,15 @@ use super::play::{self, Source};
 use crate::errors;
 
 mod content;
+mod fetch;
+mod updates;
+
+pub use fetch::{cancel, Origin, Progress};
+pub use updates::{update_url, updates, Update};
 
 /// One install or uninstall at a time, and no recovery while one runs: a
 /// staging folder in use must not be taken for one left behind.
 static BUSY: Mutex<()> = Mutex::new(());
-
-/// A manifest is a few lines; anything bigger is not one.
-const MANIFEST_LIMIT: u64 = 1024 * 1024;
 
 fn root(config_dir: &Path) -> PathBuf {
     config_dir.join("story/installed")
@@ -105,50 +109,55 @@ pub enum Outcome {
     },
 }
 
-/// Installs the package `file`, or updates the story it carries. With
+/// Installs the package at `origin`, or updates the story it carries. With
 /// `lose_game`, an update goes ahead even when the game under way would not
-/// resume on it. `lookup` says which of its cars and tracks the player has.
-pub fn install(config_dir: &Path, file: &Path, lose_game: bool, lookup: Lookup) -> Result<Outcome, String> {
+/// resume on it. `lookup` says which of its cars and tracks the player has;
+/// `progress` follows what is downloaded.
+pub fn install(
+    config_dir: &Path,
+    origin: Origin,
+    lose_game: bool,
+    lookup: Lookup,
+    progress: Progress,
+) -> Result<Outcome, String> {
     let _busy = BUSY.lock().unwrap_or_else(|e| e.into_inner());
     let root = root(config_dir);
     recover(&root);
-    let mut zip = File::open(file)
-        .map_err(|e| e.to_string())
-        .and_then(|f| zip::ZipArchive::new(f).map_err(|e| e.to_string()))
-        .map_err(|e| {
-            log::warn!("story package {}: not a zip: {e}", file.display());
-            errors::STORY_PACKAGE_UNREADABLE.to_string()
-        })?;
-    let manifest = read_manifest(&mut zip, file)?;
-    let (stories, content): (Vec<&package::Item>, Vec<&package::Item>) =
-        manifest.items.iter().partition(|i| i.kind == ItemKind::Story);
+    let (mut fetcher, manifest) = fetch::Fetcher::open(origin, progress)?;
+    let (stories, content): (Vec<&Item>, Vec<&Item>) = manifest.items.iter().partition(|i| i.kind == ItemKind::Story);
     let [story_item] = stories.as_slice() else {
         log::warn!(
             "story package {}: {} story items, one expected",
-            file.display(),
+            manifest.id,
             stories.len()
         );
         return Err(errors::STORY_PACKAGE_UNREADABLE.into());
     };
     if let Some(bad) = content.iter().find(|i| !i.id.as_deref().is_some_and(content::safe_id)) {
-        log::warn!("story package {}: item {} names no folder", file.display(), bad.file);
+        log::warn!("story package {}: item {} names no folder", manifest.id, bad.file);
         return Err(errors::STORY_PACKAGE_UNREADABLE.into());
     }
 
     std::fs::create_dir_all(&root).map_err(|e| e.to_string())?;
-    let staging = Staging::new(&root, &manifest.id)?;
+    let id = manifest.id.clone();
+    let staging = Staging::new(&root, &id)?;
+    let plan = content::plan(&content, lookup);
     let story_zip = staging.work.join(&story_item.file);
-    copy_checked(&mut zip, story_item, &story_zip)?;
+    let cached = from_cache(&root, &id, story_item, &story_zip);
+    let story_size = if cached { 0 } else { story_item.size };
+    fetcher.set_total(story_size + plan.fetch.iter().map(|i| i.size).sum::<u64>());
+    if !cached {
+        fetcher.fetch(story_item, &story_zip)?;
+    }
     unpack(&story_zip, &staging.dir)?;
     let story = checked_story(&staging.dir, &manifest)?;
     // Every car and track checked too, before anything lands.
-    for item in &content {
+    for item in &plan.fetch {
         let to = staging.work.join(&item.file);
-        copy_checked(&mut zip, item, &to)?;
+        fetcher.fetch(item, &to)?;
         content::check_item(&to, item.id.as_deref().unwrap_or_default())?;
     }
 
-    let id = manifest.id.clone();
     let target = root.join(&id);
     let previous = Story::load(&target).ok().map(|s| s.manifest.version);
     if let (Some(previous), false) = (&previous, lose_game) {
@@ -162,13 +171,14 @@ pub fn install(config_dir: &Path, file: &Path, lose_game: bool, lookup: Lookup) 
     }
     swap(&staging.dir, &target)?;
     content::clear(&root, &id);
-    let imports = content::place(&root, &id, &content, &staging.work, lookup);
-    let kept = root.join(format!("{id}.package.json"));
-    let json = serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?;
-    if let Err(e) = std::fs::write(&kept, json) {
-        // The story plays without it; an update then takes every item again.
-        log::warn!("story package: {} not written: {e}", kept.display());
-    }
+    let imports = content::place(&root, &id, &plan, &staging.work);
+    to_cache(&root, &id, &story_zip);
+    keep(&root.join(format!("{id}.package.json")), Some(&manifest));
+    let source = match origin {
+        Origin::Url(url) if fetcher.downloads() => Some(SourceRecord { url: url.to_string() }),
+        _ => None,
+    };
+    keep(&source_path(&root, &id), source.as_ref());
     Ok(Outcome::Installed {
         id,
         title: manifest.title,
@@ -176,6 +186,69 @@ pub fn install(config_dir: &Path, file: &Path, lose_game: bool, lookup: Lookup) 
         previous,
         imports,
     })
+}
+
+/// Where an installed story came from, when it was a URL.
+#[derive(Debug, Serialize, Deserialize)]
+struct SourceRecord {
+    url: String,
+}
+
+fn source_path(root: &Path, id: &str) -> PathBuf {
+    root.join(format!("{id}.source.json"))
+}
+
+/// The URL the installed story `id` was installed from, if any.
+fn source_url(root: &Path, id: &str) -> Option<String> {
+    let text = std::fs::read_to_string(source_path(root, id)).ok()?;
+    serde_json::from_str::<SourceRecord>(&text).ok().map(|s| s.url)
+}
+
+/// The manifest an installed story came with.
+fn installed_manifest(root: &Path, id: &str) -> Option<Manifest> {
+    let text = std::fs::read_to_string(root.join(format!("{id}.package.json"))).ok()?;
+    Manifest::from_json(&text).ok()
+}
+
+/// Writes `value` to `path` as JSON, or removes the file for `None`. A
+/// failure is logged: the story plays without these files, an update then
+/// downloads what it would have skipped.
+fn keep<T: Serialize>(path: &Path, value: Option<&T>) {
+    let done = match value {
+        Some(v) => (serde_json::to_string_pretty(v).map_err(|e| e.to_string()))
+            .and_then(|json| std::fs::write(path, json).map_err(|e| e.to_string())),
+        None if path.is_file() => std::fs::remove_file(path).map_err(|e| e.to_string()),
+        None => Ok(()),
+    };
+    if let Err(e) = done {
+        log::warn!("story package: {} not written: {e}", path.display());
+    }
+}
+
+fn cache_dir(root: &Path, id: &str) -> PathBuf {
+    root.join(".cache").join(id)
+}
+
+/// The story's item copied from the cache to `to`, when the cache holds the
+/// very item - named by its fingerprint, checked again.
+fn from_cache(root: &Path, id: &str, item: &Item, to: &Path) -> bool {
+    let cached = cache_dir(root, id).join(&item.file);
+    cached.is_file() && std::fs::copy(&cached, to).is_ok() && fetch::check_file(to, item).is_ok()
+}
+
+/// Keeps the story's item for the next update, in place of the last one.
+fn to_cache(root: &Path, id: &str, story_zip: &Path) {
+    let dir = cache_dir(root, id);
+    if dir.is_dir() {
+        if let Err(e) = std::fs::remove_dir_all(&dir) {
+            log::warn!("story package: {} not removed: {e}", dir.display());
+        }
+    }
+    let name = story_zip.file_name().unwrap_or_default();
+    let kept = std::fs::create_dir_all(&dir).and_then(|_| std::fs::rename(story_zip, dir.join(name)));
+    if let Err(e) = kept {
+        log::warn!("story package: the story's item of {id} not kept: {e}");
+    }
 }
 
 /// Removes the installed story `id`. Its game stays where it is: installed
@@ -193,7 +266,15 @@ pub fn uninstall(config_dir: &Path, id: &str) -> Result<(), String> {
         }
     }
     // The cars and tracks it brought stay: they are the player's mods now.
-    content::clear(&root(config_dir), id);
+    let root = root(config_dir);
+    content::clear(&root, id);
+    keep::<SourceRecord>(&source_path(&root, id), None);
+    let cache = cache_dir(&root, id);
+    if cache.is_dir() {
+        if let Err(e) = std::fs::remove_dir_all(&cache) {
+            log::warn!("story package: {} not removed: {e}", cache.display());
+        }
+    }
     Ok(())
 }
 
@@ -209,67 +290,6 @@ pub fn imported(config_dir: &Path, archive: &Path) -> Result<(), String> {
     content::imported(&root(config_dir), archive)
 }
 
-fn read_manifest(zip: &mut zip::ZipArchive<File>, file: &Path) -> Result<Manifest, String> {
-    let unreadable = |why: String| {
-        log::warn!("story package {}: {why}", file.display());
-        errors::STORY_PACKAGE_UNREADABLE.to_string()
-    };
-    let mut text = String::new();
-    (zip.by_name(package::MANIFEST).map_err(|e| unreadable(e.to_string()))?)
-        .take(MANIFEST_LIMIT)
-        .read_to_string(&mut text)
-        .map_err(|e| unreadable(e.to_string()))?;
-    // The format first: a newer manifest may well not read here at all.
-    let format = serde_json::from_str::<serde_json::Value>(&text)
-        .ok()
-        .and_then(|v| v.get("format")?.as_u64());
-    if format.is_some_and(|f| f > u64::from(package::FORMAT)) {
-        return Err(errors::STORY_PACKAGE_TOO_NEW.into());
-    }
-    let manifest = Manifest::from_json(&text).map_err(unreadable)?;
-    if manifest.items.iter().any(|i| i.kind == ItemKind::Unknown) {
-        return Err(errors::STORY_PACKAGE_TOO_NEW.into());
-    }
-    if !package::valid_id(&manifest.id) {
-        return Err(unreadable(format!("id `{}` cannot name a folder", manifest.id)));
-    }
-    Ok(manifest)
-}
-
-/// The item's file copied to `to`, refused unless it has the size and the
-/// fingerprint the manifest gives it.
-fn copy_checked(zip: &mut zip::ZipArchive<File>, item: &package::Item, to: &Path) -> Result<(), String> {
-    let damaged = |why: String| {
-        log::warn!("story package: item {}: {why}", item.file);
-        errors::STORY_PACKAGE_DAMAGED.to_string()
-    };
-    let mut entry = (zip.by_name(&format!("{}{}", package::ITEMS, item.file))).map_err(|e| damaged(e.to_string()))?;
-    let mut out = File::create(to).map_err(|e| e.to_string())?;
-    let mut hasher = Sha256::new();
-    let mut size = 0u64;
-    let mut buf = vec![0u8; 64 * 1024];
-    loop {
-        let n = entry.read(&mut buf).map_err(|e| damaged(e.to_string()))?;
-        if n == 0 {
-            break;
-        }
-        size += n as u64;
-        if size > item.size {
-            return Err(damaged(format!("longer than its {} bytes", item.size)));
-        }
-        hasher.update(&buf[..n]);
-        out.write_all(&buf[..n]).map_err(|e| e.to_string())?;
-    }
-    if size != item.size {
-        return Err(damaged(format!("{size} bytes, {} declared", item.size)));
-    }
-    let sha256 = package::hex(&hasher.finalize());
-    if sha256 != item.sha256 {
-        return Err(damaged(format!("sha256 {sha256}, {} declared", item.sha256)));
-    }
-    Ok(())
-}
-
 /// The story item's files into `dir`. Every entry must be a file a story is
 /// made of (`package::carried`): one that is not - a path leaving the
 /// folder among them - refuses the whole package.
@@ -279,7 +299,7 @@ fn unpack(item: &Path, dir: &Path) -> Result<(), String> {
 
 /// The files of the zip `item` into `dir`, each name `fits` accepts; one it
 /// refuses, or one that could leave `dir`, refuses the whole zip.
-pub(super) fn extract(item: &Path, dir: &Path, fits: impl Fn(&str) -> bool) -> Result<(), String> {
+fn extract(item: &Path, dir: &Path, fits: impl Fn(&str) -> bool) -> Result<(), String> {
     let damaged = |why: String| {
         log::warn!("story package: {why}");
         errors::STORY_PACKAGE_DAMAGED.to_string()

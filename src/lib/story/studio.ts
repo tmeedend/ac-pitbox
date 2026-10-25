@@ -498,6 +498,11 @@ export interface PackageView {
   };
 }
 
+/** Writes into `dir` what a host serves - the items and `manifest.json`;
+ * resolves to the items' size in bytes. */
+export const publishPackage = (folder: string, dir: string) =>
+  invoke<number>("story_publish_package", { folder, dir });
+
 /** Builds the story's package into `out`; resolves to its size in bytes. */
 export const buildPackage = (folder: string, out: string) =>
   invoke<number>("story_build_package", { folder, out });

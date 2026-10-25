@@ -1765,7 +1765,10 @@
     "storyPackageTooNew": "Ce paquet vient d'une version plus récente de Pit Box : mets Pit Box à jour pour l'installer.",
     "storyPackageDamaged": "Ce paquet est abîmé : un de ses fichiers ne correspond pas à ce qu'il annonce. Télécharge-le à nouveau.",
     "storyPackageHasErrors": "L'histoire de ce paquet a des erreurs : elle n'a pas été installée.",
-    "storyBuildBlocked": "L'histoire ou son registre des permissions a des erreurs : le paquet n'est pas construit. Voir la section Paquet."
+    "storyBuildBlocked": "L'histoire ou son registre des permissions a des erreurs : le paquet n'est pas construit. Voir la section Paquet.",
+    "storyPackageDownloadFailed": "Le paquet n'a pas pu être téléchargé : vérifie le lien et ta connexion.",
+    "storyPackageCancelled": "Téléchargement arrêté : rien n'a changé.",
+    "storyLinkNotAPackage": "Ce lien ne mène pas au manifest.json d'une histoire."
   },
   "pack": {
     "tabMembers": "Mods",
@@ -2950,7 +2953,13 @@
       "uninstallConfirm": "Désinstaller « {title} » ? La partie en cours est gardée : réinstallée, l'histoire la reprend.",
       "missing": "Il manque : {list}",
       "otherVersion": "Ta version est jouée : {list}",
-      "importBusy": "Un import est déjà en cours : les voitures et circuits de l'histoire n'ont pas été importés. Réinstalle-la une fois l'import fini."
+      "importBusy": "Un import est déjà en cours : les voitures et circuits de l'histoire n'ont pas été importés. Réinstalle-la une fois l'import fini.",
+      "installLink": "Installer depuis un lien…",
+      "linkPlaceholder": "Lien du manifest.json de l'histoire",
+      "installNow": "Installer",
+      "downloading": "Téléchargement : {received} sur {total}",
+      "stop": "Arrêter",
+      "update": "Mettre à jour : version {version} ({size})"
     },
     "frames": {
       "title": "Cadres",
@@ -3239,7 +3248,9 @@
       "track": "Circuit",
       "baseGame": "Jeu de base",
       "dlc": "DLC : {dlc}",
-      "notInLibrary": "Pas dans ta bibliothèque"
+      "notInLibrary": "Pas dans ta bibliothèque",
+      "publish": "Publier pour un hébergement…",
+      "published": "Publié dans {dir} ({size}). Le lien à donner est celui de son manifest.json."
     }
   }
 }

@@ -52,3 +52,23 @@ made them, under which licence, and whether you may carry them: `granted`
 `requested` or `not_asked`. The Package section of the editor fills these
 lines with you, and builds the package only once every file has one that is
 `granted` or `not_needed`. The sample's registers show the form.
+
+## Sharing your story
+
+The Package section of the editor makes two things:
+
+- **Build the package** writes one `.pitstory` file. Send it as you like;
+  a player installs it from the Story Mode block (Install a story).
+- **Publish for hosting** writes a folder: a `manifest.json` and one zip per
+  item - the story, and each car or track it carries. Put the whole folder
+  on any host that serves files as they are (a release on GitHub, your own
+  web space...) and give players the link to its `manifest.json`; they
+  paste it in Install from a link. Publish again into the same folder for a
+  new version, and upload what changed: the new items, then `manifest.json`
+  last. Players who installed from the link are offered the update, and
+  download only the items that changed.
+
+On GitHub, a release's files are at
+`https://github.com/<you>/<repo>/releases/latest/download/<file>`: give
+`.../latest/download/manifest.json`, and every new release becomes the
+update.

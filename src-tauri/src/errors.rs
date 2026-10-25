@@ -197,3 +197,9 @@ pub const STORY_PACKAGE_DAMAGED: &str = "errors.storyPackageDamaged";
 pub const STORY_PACKAGE_HAS_ERRORS: &str = "errors.storyPackageHasErrors";
 /// The story or its permission register has errors: the package is not built.
 pub const STORY_BUILD_BLOCKED: &str = "errors.storyBuildBlocked";
+/// A package's manifest or item could not be downloaded.
+pub const STORY_PACKAGE_DOWNLOAD_FAILED: &str = "errors.storyPackageDownloadFailed";
+/// The player stopped the download: nothing changed.
+pub const STORY_PACKAGE_CANCELLED: &str = "errors.storyPackageCancelled";
+/// What a link leads to is not a story package's manifest.
+pub const STORY_LINK_NOT_A_PACKAGE: &str = "errors.storyLinkNotAPackage";
