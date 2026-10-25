@@ -179,17 +179,11 @@ pub fn install(
         }
     }
     swap(&staging.dir, &target)?;
-    content::clear(&root, &id);
-    let imports = content::place(&root, &id, &plan, &staging.work);
-    content::place_layers(&root, &id, &manifest.title, &plan, &staging.work, library);
-    content::place_versions(&root, &id, &plan, &staging.work);
-    to_cache(&root, &id, &story_zip);
-    keep(&root.join(format!("{id}.package.json")), Some(&manifest));
     let source = match origin {
         Origin::Url(url) if fetcher.downloads() => Some(SourceRecord { url: url.to_string() }),
         _ => None,
     };
-    keep(&source_path(&root, &id), source.as_ref());
+    let imports = settle(&root, &manifest, &plan, &staging.work, &story_zip, source, library);
     Ok(Outcome::Installed {
         id,
         title: manifest.title,
@@ -197,6 +191,29 @@ pub fn install(
         previous,
         imports,
     })
+}
+
+/// What an install sets around the story once it is in place: the cars and
+/// tracks to import, the story's layers and own versions, its item in the
+/// cache, the manifest and where it came from. Returns the archives to import.
+fn settle(
+    root: &Path,
+    manifest: &Manifest,
+    plan: &content::Plan,
+    staged: &Path,
+    story_zip: &Path,
+    source: Option<SourceRecord>,
+    library: &dyn LibraryWrites,
+) -> Vec<PathBuf> {
+    let id = &manifest.id;
+    content::clear(root, id);
+    let imports = content::place(root, id, plan, staged);
+    content::place_layers(root, id, &manifest.title, plan, staged, library);
+    content::place_versions(root, id, plan, staged);
+    to_cache(root, id, story_zip);
+    keep(&root.join(format!("{id}.package.json")), Some(manifest));
+    keep(&source_path(root, id), source.as_ref());
+    imports
 }
 
 /// Where an installed story came from, when it was a URL.
