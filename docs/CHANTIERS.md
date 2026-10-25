@@ -1151,9 +1151,41 @@ de reprendre. En cas d'écart, la spec fait foi.
           l'utilisateur garde son ancien `CREDITS.md` ; sa section Paquet
           listera ses médias sans crédit jusqu'à ce qu'il les remplisse (ou
           recopie l'exemple).
-        - **Reste** : L4.3 (voitures et circuits), L4.4 (téléchargement et
-          mises à jour), L4.5 (retouches propres à l'histoire, zone des
-          règles d'or, à trancher le moment venu).
+        - **L4.3, les voitures et circuits — fait (2026-10-25).** Le moteur
+          dit ce qu'une histoire demande (`needs.rs` : circuit et voiture de
+          chaque épreuve, voiture propre de chaque adversaire) ; le paquet
+          gagne les éléments `car` et `track` (le dossier entier sous
+          `<id>/`, écrit en flux, reproductible) et le registre
+          `package/manifest.yaml` (`credits::ContentCredit`) ; ce que la
+          machine possède passe par `story/holdings.rs` (bibliothèque, puis
+          `content/` du jeu ; contenu Kunos et DLC par
+          `kunos_dates`). Construction : ce qui n'est pas du contenu Kunos
+          est pris dans la bibliothèque de l'auteur. Installation : chaque
+          élément vérifié avant de poser quoi que ce soit, puis ce qui manque
+          au joueur mis de côté (`.imports/`) et importé par l'import
+          ordinaire depuis le hub, ce qu'il a comparé à sa version
+          (`identity::content_differs`) sans jamais être remplacé. Le hub
+          dit ce qui manque (« Il manque : Porsche Pack I, mod_x ») et ne
+          démarre pas l'histoire ; il dit aussi quand la version du joueur
+          est jouée. La section Paquet gagne le bloc Voitures et circuits.
+          **Choisi sans demander** (dans la spec) : le paquet emporte la
+          version en jeu chez l'auteur, son dossier entier, sans ses
+          couches ; une voiture que l'auteur n'a pas bloque la construction ;
+          désinstaller l'histoire laisse les mods importés dans la
+          bibliothèque ; une voiture supprimée depuis revient en réinstallant
+          le paquet ; une histoire à qui il manque quelque chose ne démarre
+          pas, qu'elle soit installée, l'exemple ou une histoire d'auteur.
+          **Choisi sans demander** (détails) : l'import des mods se lance
+          depuis le hub, une archive après l'autre (un rapport chacune) ; si
+          un import tourne déjà, rien n'est importé et le hub le dit ; une
+          comparaison impossible compte comme la même version (journalisée) ;
+          la carte d'une épreuve ne dit pas encore ce qui lui manque, c'est
+          le hub qui bloque ; `story-tool pack` n'emporte que l'histoire.
+          **Pas vu à l'écran** : le bloc Voitures et circuits, l'import
+          depuis le hub, « Il manque » et « Ta version est jouée ».
+        - **Reste** : L4.4 (téléchargement et mises à jour), L4.5
+          (retouches propres à l'histoire, zone des règles d'or, à trancher
+          le moment venu).
       - **L5 à L8** : dans l'ordre du plan de livraison de la spec.
       **Écarts assumés par rapport au document de conception** (la spec
       publique les reprend déjà) :

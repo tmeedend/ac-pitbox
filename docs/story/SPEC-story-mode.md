@@ -583,8 +583,9 @@ item without permission blocks the build.
 
 - **One `credits.yaml` per folder that travels**: `media/credits.yaml` for
   the files of `media/`, and one in each skin's folder for the skin's own
-  files, so a skin copied to another story keeps its credits. Cars and
-  tracks get theirs with L4.3.
+  files, so a skin copied to another story keeps its credits; and
+  `package/manifest.yaml`, one line per car or track the package carries,
+  by folder id.
 - **A line** names its files by path inside that folder, `*` standing for
   any part of a name, and says where they come from, who made them, under
   which licence, the permission and, if any, its proof.
@@ -637,10 +638,21 @@ shared by hand; the same installer reads both.
   ended, or that did not resume already, asks nothing.
 - **Uninstalling** removes the story and keeps its game: installed again,
   the story resumes it.
-- **A car the player already has** (L4.3): the same version is used as it is; another
-  version is played and the hub says so - the player's own is never replaced.
-  Playing the story's own version for the session only comes later (L4.5),
-  with the story's own changes to a mod.
+- **The cars and tracks a package carries** are those its events race on
+  (each event's track and car, each opponent's own car) that are not the
+  game's own, base game or DLC: taken from the author's library, or game,
+  as they are there - the version in play, its folder whole. One the author
+  does not have cannot be carried and blocks the build.
+- **A car or track the player lacks** goes through the ordinary import,
+  once the story is installed: its report, its questions, the mod managed
+  like any other. Uninstalling the story leaves it in the library.
+- **A car the player already has**: never replaced. The same version is used
+  as it is; another version is played, and the hub says so. Playing the
+  story's own version for the session only comes later (L4.5), with the
+  story's own changes to a mod.
+- **A story missing a car or track it races on does not start**: the hub
+  names what is missing, the DLC to buy for the game's own content. A car
+  removed since the install comes back by installing the package again.
 
 **Dependency list.** The story names cars, tracks and assets with version
 fingerprints and known sources; Pit Box's Missing Content state guides the
@@ -816,8 +828,11 @@ the editor is reserved; they are translated when it opens to all.
   a line naming that file, its permission not asked. A register a file
   needs but that does not exist yet is created by its first line. A line's
   files are typed as a comma-separated list; an emptied field is left out
-  of the file. The register's checks list beside it and count apart from
-  the story's: they block the build, not the story. **Build the package**
+  of the file. The cars and tracks the story races on are listed apart, by
+  folder id: the game's own say so (with their DLC) and stay out of the
+  package; the others offer a line of `package/manifest.yaml`, or say the
+  author's library lacks them. The register's checks list beside it and
+  count apart from the story's: they block the build, not the story. **Build the package**
   writes a `.pitstory`, named `<id>-<version>.pitstory` unless the author
   picks another name; it waits while the story or its register has an
   error. A package carries the register with the files.
@@ -869,7 +884,7 @@ my-story/
   scenes/
     scenes.yaml         places, their variants and ambient sounds
   package/
-    manifest.yaml       cars and tracks: versions, authors, permissions (L4.3)
+    manifest.yaml       the cars and tracks carried: authors, licences, permissions
   media/
     credits.yaml        the media's permission register
     photos/ avatars/ scenes/ music/ replays/ camtool/
@@ -1064,7 +1079,9 @@ The player side follows each story's settings. What the engine needs:
 - **Stories offered.** The sample story Pit Box carries, the packages the
   player installed (each with its version, and Uninstall), and the author's
   own stories, played as they are on disk. A `.pitstory` is installed from
-  the Story Mode block. A story the checks find errors in does not start.
+  the Story Mode block. A story the checks find errors in does not start,
+  nor one missing a car or a track it races on; a story playing the
+  player's own version of a car says which.
 - **One game per story**, saved after every move of the player, in Pit Box's
   own data; a new game replaces it after a confirmation. The story's `saves`
   setting (autosave per day or manual slots, reload) is not applied yet. A

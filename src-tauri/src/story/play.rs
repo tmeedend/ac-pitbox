@@ -24,12 +24,14 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use story_engine::engine::{self, Input};
 use story_engine::model::{Character, Driver};
+use story_engine::needs::{needed, AcKind};
 use story_engine::save::{Save, SaveError};
 use story_engine::state::{EventResult, State, Wait};
 use story_engine::validate::{validate, Severity};
 use story_engine::view::{play_view, PlayView};
 use story_engine::Story;
 
+use super::holdings::{Holding, Lookup};
 use crate::errors;
 
 /// Where a story is read from.
@@ -66,6 +68,19 @@ pub struct Playable {
     /// Errors the checks find: a story with any does not start.
     pub errors: usize,
     pub game: Option<GameInfo>,
+    /// What it races on that this machine lacks, or holds in another
+    /// version than the package's.
+    pub content: ContentStatus,
+}
+
+/// The cars and tracks a story races on, as this machine holds them
+/// (SPEC-story-mode, Content: what is missing).
+#[derive(Debug, Default, Serialize)]
+pub struct ContentStatus {
+    /// Not here: a story missing any does not start.
+    pub missing: Vec<Holding>,
+    /// Here in another version than the package's: played as it is.
+    pub other_version: Vec<(AcKind, String)>,
 }
 
 #[derive(Debug, Serialize)]
@@ -146,8 +161,8 @@ impl From<Move> for Input {
 }
 
 /// The sample, the installed packages, then the author's stories in the
-/// order of their list.
-pub fn list(config_dir: &Path) -> Vec<Playable> {
+/// order of their list, each with what it lacks on this machine.
+pub fn list(config_dir: &Path, lookup: Lookup) -> Vec<Playable> {
     let mut sources = vec![Source::Sample];
     sources.extend(
         super::packages::ids(config_dir)
@@ -179,12 +194,20 @@ pub fn list(config_dir: &Path) -> Vec<Playable> {
                         problem: Some(problem),
                     }),
                 };
+                let missing = (lookup(&needed(&story)).into_iter())
+                    .filter(|h| h.folder.is_none())
+                    .collect();
+                let other_version = match &source {
+                    Source::Installed { id } => super::packages::other_versions(config_dir, id),
+                    _ => Vec::new(),
+                };
                 Playable {
                     title: Some(story.manifest.title.clone()),
                     version: Some(story.manifest.version.clone()),
                     errors,
                     game,
                     source,
+                    content: ContentStatus { missing, other_version },
                 }
             }
             Err(_) => Playable {
@@ -193,6 +216,7 @@ pub fn list(config_dir: &Path) -> Vec<Playable> {
                 version: None,
                 errors: 1,
                 game: None,
+                content: ContentStatus::default(),
             },
         })
         .collect()
@@ -419,6 +443,7 @@ fn write_save(config_dir: &Path, source: &Source, story: &Story, state: &State) 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::story::holdings::all_held;
     use crate::testutil::temp_dir;
     use story_engine::view::Waiting;
 
@@ -447,7 +472,7 @@ mod tests {
             format!("{:?}", moved.view),
             "the same game, as it was left"
         );
-        let listed = list(&config);
+        let listed = list(&config, &all_held);
         assert!(
             matches!(
                 &listed[0],
@@ -501,7 +526,7 @@ mod tests {
         let yaml = std::fs::read_to_string(path.join("story.yaml")).unwrap();
         std::fs::write(path.join("story.yaml"), yaml.replace("node: start", "node: begin")).unwrap();
         assert_eq!(resume(&config, &sources[0]).unwrap_err(), errors::STORY_SAVE_STALE);
-        let listed = list(&config);
+        let listed = list(&config, &all_held);
         let entry = listed.iter().find(|p| p.source == sources[0]).unwrap();
         assert_eq!(
             entry.game.as_ref().and_then(|g| g.problem.as_deref()),
@@ -620,7 +645,7 @@ mod tests {
         .unwrap();
         let source = Source::Folder { path: folder.clone() };
         assert_eq!(new_game(&config, &source, 1).unwrap_err(), errors::STORY_HAS_ERRORS);
-        let listed = list(&config);
+        let listed = list(&config, &all_held);
         assert!(
             listed.iter().any(|p| p.source == source && p.errors > 0),
             "listed, with its errors"
@@ -650,5 +675,27 @@ mod tests {
                 base(ModKind::Car, car);
             }
         }
+    }
+
+    // A story missing a car or a track it races on says which, and the DLC
+    // to buy when it is the game's own (SPEC-story-mode, Content).
+    #[test]
+    fn what_a_story_lacks_is_listed() {
+        let config = temp_dir("story-play-missing");
+        let lacking = |w: &std::collections::BTreeSet<(AcKind, String)>| {
+            crate::story::holdings::held_as(w, |(kind, _)| (*kind == AcKind::Track).then(|| PathBuf::from("t")))
+        };
+        let listed = list(&config, &lacking);
+        let sample = listed.iter().find(|p| p.source == Source::Sample).unwrap();
+        let missing: Vec<&str> = sample.content.missing.iter().map(|h| h.id.as_str()).collect();
+        assert_eq!(
+            missing,
+            ["abarth500", "bmw_1m", "bmw_m3_e30", "lotus_elise_sc"],
+            "the cars, not the tracks"
+        );
+        assert!(
+            list(&config, &all_held)[0].content.missing.is_empty(),
+            "nothing lacking, nothing said"
+        );
     }
 }

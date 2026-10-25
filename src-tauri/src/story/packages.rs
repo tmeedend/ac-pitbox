@@ -5,8 +5,8 @@
 //! `app_config_dir/story/installed/<story id>/`, holding the story's files
 //! as the package carried them, and beside it `<story id>.package.json`, the
 //! manifest it came with: what an update compares its items to (L4.4).
-//! Nothing outside that folder is written: cars and tracks come with L4.3,
-//! through the ordinary import.
+//! The cars and tracks it carries go to the player's library through the
+//! ordinary import, never straight into the game (`package_content.rs`).
 //!
 //! **Nothing lands before it is checked.** Every item is copied out of the
 //! package while its SHA-256 is computed, and compared to the manifest; the
@@ -36,6 +36,8 @@ use story_engine::package::{self, ItemKind, Manifest};
 use story_engine::validate::{validate, Severity};
 use story_engine::Story;
 
+use super::holdings::Lookup;
+use super::package_content;
 use super::play::{self, Source};
 use crate::errors;
 
@@ -89,6 +91,9 @@ pub enum Outcome {
         version: String,
         /// The version it replaced, if one was installed.
         previous: Option<String>,
+        /// The cars and tracks the player lacked, as archives for the
+        /// ordinary import (`package_content.rs`).
+        imports: Vec<PathBuf>,
     },
     /// The game under way would not resume on this version: nothing was
     /// changed.
@@ -101,8 +106,8 @@ pub enum Outcome {
 
 /// Installs the package `file`, or updates the story it carries. With
 /// `lose_game`, an update goes ahead even when the game under way would not
-/// resume on it.
-pub fn install(config_dir: &Path, file: &Path, lose_game: bool) -> Result<Outcome, String> {
+/// resume on it. `lookup` says which of its cars and tracks the player has.
+pub fn install(config_dir: &Path, file: &Path, lose_game: bool, lookup: Lookup) -> Result<Outcome, String> {
     let _busy = BUSY.lock().unwrap_or_else(|e| e.into_inner());
     let root = root(config_dir);
     recover(&root);
@@ -114,20 +119,36 @@ pub fn install(config_dir: &Path, file: &Path, lose_game: bool) -> Result<Outcom
             errors::STORY_PACKAGE_UNREADABLE.to_string()
         })?;
     let manifest = read_manifest(&mut zip, file)?;
-    let [item] = manifest.items.as_slice() else {
+    let (stories, content): (Vec<&package::Item>, Vec<&package::Item>) =
+        manifest.items.iter().partition(|i| i.kind == ItemKind::Story);
+    let [story_item] = stories.as_slice() else {
         log::warn!(
-            "story package {}: {} items, one expected",
+            "story package {}: {} story items, one expected",
             file.display(),
-            manifest.items.len()
+            stories.len()
         );
         return Err(errors::STORY_PACKAGE_UNREADABLE.into());
     };
+    if let Some(bad) = content
+        .iter()
+        .find(|i| !i.id.as_deref().is_some_and(package_content::safe_id))
+    {
+        log::warn!("story package {}: item {} names no folder", file.display(), bad.file);
+        return Err(errors::STORY_PACKAGE_UNREADABLE.into());
+    }
 
     std::fs::create_dir_all(&root).map_err(|e| e.to_string())?;
     let staging = Staging::new(&root, &manifest.id)?;
-    copy_checked(&mut zip, item, &staging.zip)?;
-    unpack(&staging.zip, &staging.dir)?;
+    let story_zip = staging.work.join(&story_item.file);
+    copy_checked(&mut zip, story_item, &story_zip)?;
+    unpack(&story_zip, &staging.dir)?;
     let story = checked_story(&staging.dir, &manifest)?;
+    // Every car and track checked too, before anything lands.
+    for item in &content {
+        let to = staging.work.join(&item.file);
+        copy_checked(&mut zip, item, &to)?;
+        package_content::check_item(&to, item.id.as_deref().unwrap_or_default())?;
+    }
 
     let id = manifest.id.clone();
     let target = root.join(&id);
@@ -142,6 +163,8 @@ pub fn install(config_dir: &Path, file: &Path, lose_game: bool) -> Result<Outcom
         }
     }
     swap(&staging.dir, &target)?;
+    package_content::clear(&root, &id);
+    let imports = package_content::place(&root, &id, &content, &staging.work, lookup);
     let kept = root.join(format!("{id}.package.json"));
     let json = serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?;
     if let Err(e) = std::fs::write(&kept, json) {
@@ -153,6 +176,7 @@ pub fn install(config_dir: &Path, file: &Path, lose_game: bool) -> Result<Outcom
         title: manifest.title,
         version: manifest.version,
         previous,
+        imports,
     })
 }
 
@@ -170,7 +194,21 @@ pub fn uninstall(config_dir: &Path, id: &str) -> Result<(), String> {
             log::warn!("story package: {} not removed: {e}", kept.display());
         }
     }
+    // The cars and tracks it brought stay: they are the player's mods now.
+    package_content::clear(&root(config_dir), id);
     Ok(())
+}
+
+/// The cars and tracks the installed story `id` found here in another
+/// version than its package's.
+pub fn other_versions(config_dir: &Path, id: &str) -> Vec<(story_engine::needs::AcKind, String)> {
+    package_content::other_versions(&root(config_dir), id)
+}
+
+/// An archive an install set aside for the import, once the import is done
+/// with it.
+pub fn imported(config_dir: &Path, archive: &Path) -> Result<(), String> {
+    package_content::imported(&root(config_dir), archive)
 }
 
 fn read_manifest(zip: &mut zip::ZipArchive<File>, file: &Path) -> Result<Manifest, String> {
@@ -238,6 +276,12 @@ fn copy_checked(zip: &mut zip::ZipArchive<File>, item: &package::Item, to: &Path
 /// made of (`package::carried`): one that is not - a path leaving the
 /// folder among them - refuses the whole package.
 fn unpack(item: &Path, dir: &Path) -> Result<(), String> {
+    extract(item, dir, package::carried)
+}
+
+/// The files of the zip `item` into `dir`, each name `fits` accepts; one it
+/// refuses, or one that could leave `dir`, refuses the whole zip.
+pub(super) fn extract(item: &Path, dir: &Path, fits: impl Fn(&str) -> bool) -> Result<(), String> {
     let damaged = |why: String| {
         log::warn!("story package: {why}");
         errors::STORY_PACKAGE_DAMAGED.to_string()
@@ -251,8 +295,8 @@ fn unpack(item: &Path, dir: &Path) -> Result<(), String> {
             continue;
         }
         let name = entry.name().to_string();
-        if !package::carried(&name) || entry.enclosed_name().is_none() {
-            return Err(damaged(format!("`{name}` is not a story's file")));
+        if !fits(&name) || entry.enclosed_name().is_none() {
+            return Err(damaged(format!("`{name}` does not belong here")));
         }
         let path = dir.join(&name);
         if let Some(parent) = path.parent() {
@@ -352,33 +396,33 @@ fn recover(root: &Path) {
     }
 }
 
-/// The staging folder of one install and the item copied beside it, removed
-/// when the install ends, whichever way.
+/// The staging folder of one install - the story unpacked, then put in
+/// place - and beside it the items copied out of the package, removed when
+/// the install ends, whichever way.
 struct Staging {
     dir: PathBuf,
-    zip: PathBuf,
+    work: PathBuf,
 }
 
 impl Staging {
     fn new(root: &Path, id: &str) -> Result<Staging, String> {
         let staging = Staging {
             dir: root.join(format!(".staging-{id}")),
-            zip: root.join(format!(".staging-{id}.zip")),
+            work: root.join(format!(".staging-{id}.items")),
         };
         staging.clear();
-        std::fs::create_dir_all(&staging.dir).map_err(|e| e.to_string())?;
+        for dir in [&staging.dir, &staging.work] {
+            std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        }
         Ok(staging)
     }
 
     fn clear(&self) {
-        if self.dir.is_dir() {
-            if let Err(e) = std::fs::remove_dir_all(&self.dir) {
-                log::warn!("story package: {} not removed: {e}", self.dir.display());
-            }
-        }
-        if self.zip.is_file() {
-            if let Err(e) = std::fs::remove_file(&self.zip) {
-                log::warn!("story package: {} not removed: {e}", self.zip.display());
+        for dir in [&self.dir, &self.work] {
+            if dir.is_dir() {
+                if let Err(e) = std::fs::remove_dir_all(dir) {
+                    log::warn!("story package: {} not removed: {e}", dir.display());
+                }
             }
         }
     }
@@ -393,6 +437,7 @@ impl Drop for Staging {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::story::holdings::all_held;
     use crate::testutil::temp_dir;
     use std::io::Cursor;
 
@@ -451,6 +496,7 @@ mod tests {
             title: "Sample story".into(),
             version: version.into(),
             previous: previous.map(String::from),
+            imports: Vec::new(),
         }
     }
 
@@ -463,7 +509,10 @@ mod tests {
         let config = base.join("config");
         let file = packed(&base, "sample.pitstory", &story_engine::sample::folder_files());
 
-        assert_eq!(install(&config, &file, false).unwrap(), installed("sample", "1", None));
+        assert_eq!(
+            install(&config, &file, false, &all_held).unwrap(),
+            installed("sample", "1", None)
+        );
         let dir = config.join("story/installed/sample");
         assert!(
             dir.join("media/scenes/bedroom.webp").is_file(),
@@ -480,7 +529,7 @@ mod tests {
         assert!(leftovers.is_empty(), "nothing left of the staging: {leftovers:?}");
 
         let source = Source::Installed { id: "sample".into() };
-        let listed = play::list(&config);
+        let listed = play::list(&config, &all_held);
         let p = listed.iter().find(|p| p.source == source).expect("offered");
         assert_eq!((p.errors, p.version.as_deref()), (0, Some("1")));
         let game = play::new_game(&config, &source, 7).expect("starts");
@@ -506,6 +555,7 @@ mod tests {
             &config,
             &packed(&base, "v1.pitstory", &story_engine::sample::folder_files()),
             false,
+            &all_held,
         )
         .unwrap();
         let source = Source::Installed { id: "sample".into() };
@@ -513,7 +563,7 @@ mod tests {
 
         let v2 = packed(&base, "v2.pitstory", &sample_with("story.yaml", version("2")));
         assert_eq!(
-            install(&config, &v2, false).unwrap(),
+            install(&config, &v2, false, &all_held).unwrap(),
             installed("sample", "2", Some("1"))
         );
         play::resume(&config, &source).expect("the game resumes on the update");
@@ -525,22 +575,22 @@ mod tests {
         let at = v3.iter().position(|(p, _)| p == flow).unwrap();
         v3[at] = renamed.into_iter().find(|(p, _)| p == flow).unwrap();
         let v3 = packed(&base, "v3.pitstory", &v3);
-        match install(&config, &v3, false).unwrap() {
+        match install(&config, &v3, false, &all_held).unwrap() {
             Outcome::LosesGame { previous, version, .. } => {
                 assert_eq!((previous.as_str(), version.as_str()), ("2", "3"));
             }
             other => panic!("asked first, got {other:?}"),
         }
-        let listed = play::list(&config);
+        let listed = play::list(&config, &all_held);
         let p = listed.iter().find(|p| p.source == source).unwrap();
         assert_eq!(p.version.as_deref(), Some("2"), "nothing changed before the answer");
         play::resume(&config, &source).expect("the game still resumes");
 
         assert_eq!(
-            install(&config, &v3, true).unwrap(),
+            install(&config, &v3, true, &all_held).unwrap(),
             installed("sample", "3", Some("2"))
         );
-        let listed = play::list(&config);
+        let listed = play::list(&config, &all_held);
         let p = listed.iter().find(|p| p.source == source).unwrap();
         assert_eq!(p.version.as_deref(), Some("3"));
         let game = p.game.as_ref().expect("the game is kept");
@@ -563,23 +613,25 @@ mod tests {
         bad[last] ^= 0xff;
         let file = by_hand(&base, &one_item_manifest(&item), &[("s.zip", &bad)]);
         assert_eq!(
-            install(&config, &file, false),
+            install(&config, &file, false, &all_held),
             Err(errors::STORY_PACKAGE_DAMAGED.into())
         );
         let file = by_hand(&base, &one_item_manifest(&item), &[("other.zip", &item)]);
         assert_eq!(
-            install(&config, &file, false),
+            install(&config, &file, false, &all_held),
             Err(errors::STORY_PACKAGE_DAMAGED.into()),
             "item missing"
         );
         assert!(
-            play::list(&config).iter().all(|p| p.source == Source::Sample),
+            play::list(&config, &all_held)
+                .iter()
+                .all(|p| p.source == Source::Sample),
             "nothing offered"
         );
 
         let ok = by_hand(&base, &one_item_manifest(&item), &[("s.zip", &item)]);
         assert_eq!(
-            install(&config, &ok, false).unwrap(),
+            install(&config, &ok, false, &all_held).unwrap(),
             installed("sample", "1", None),
             "the same, whole"
         );
@@ -603,7 +655,7 @@ mod tests {
             let item = zip.finish().unwrap().into_inner();
             let file = by_hand(&base, &one_item_manifest(&item), &[("s.zip", &item)]);
             assert_eq!(
-                install(&config, &file, false),
+                install(&config, &file, false, &all_held),
                 Err(errors::STORY_PACKAGE_DAMAGED.into()),
                 "{evil}"
             );
@@ -624,20 +676,25 @@ mod tests {
         let config = base.join("config");
         let newer = r#"{"format":2,"id":"sample","something":"new"}"#;
         assert_eq!(
-            install(&config, &by_hand(&base, newer, &[]), false),
+            install(&config, &by_hand(&base, newer, &[]), false, &all_held),
             Err(errors::STORY_PACKAGE_TOO_NEW.into())
         );
         let item = package::story_item(&story_engine::sample::folder_files()).unwrap();
-        let car = one_item_manifest(&item).replace(r#""kind":"story""#, r#""kind":"car""#);
+        let unknown_kind = one_item_manifest(&item).replace(r#""kind":"story""#, r#""kind":"livery""#);
         assert_eq!(
-            install(&config, &by_hand(&base, &car, &[("s.zip", &item)]), false),
+            install(
+                &config,
+                &by_hand(&base, &unknown_kind, &[("s.zip", &item)]),
+                false,
+                &all_held
+            ),
             Err(errors::STORY_PACKAGE_TOO_NEW.into()),
             "an item kind unknown here"
         );
         let not_a_package = base.join("a.pitstory");
         std::fs::write(&not_a_package, b"hello").unwrap();
         assert_eq!(
-            install(&config, &not_a_package, false),
+            install(&config, &not_a_package, false, &all_held),
             Err(errors::STORY_PACKAGE_UNREADABLE.into())
         );
     }
@@ -652,7 +709,7 @@ mod tests {
         let item = package::story_item(&files).unwrap();
         let file = by_hand(&base, &one_item_manifest(&item), &[("s.zip", &item)]);
         assert_eq!(
-            install(&config, &file, false),
+            install(&config, &file, false, &all_held),
             Err(errors::STORY_PACKAGE_HAS_ERRORS.into())
         );
         assert!(!config.join("story/installed/sample").exists());
@@ -664,7 +721,7 @@ mod tests {
         let base = temp_dir("story-pkg-uninstall");
         let config = base.join("config");
         let file = packed(&base, "sample.pitstory", &story_engine::sample::folder_files());
-        install(&config, &file, false).unwrap();
+        install(&config, &file, false, &all_held).unwrap();
         let source = Source::Installed { id: "sample".into() };
         play::new_game(&config, &source, 7).unwrap();
 
@@ -675,12 +732,12 @@ mod tests {
             "its manifest too"
         );
         assert!(
-            play::list(&config).iter().all(|p| p.source != source),
+            play::list(&config, &all_held).iter().all(|p| p.source != source),
             "no longer offered"
         );
         assert!(uninstall(&config, "../config").is_err(), "an id is never a path");
 
-        install(&config, &file, false).unwrap();
+        install(&config, &file, false, &all_held).unwrap();
         play::resume(&config, &source).expect("the game comes back with the story");
     }
 
@@ -694,6 +751,7 @@ mod tests {
             &config,
             &packed(&base, "s.pitstory", &story_engine::sample::folder_files()),
             false,
+            &all_held,
         )
         .unwrap();
         let root = config.join("story/installed");

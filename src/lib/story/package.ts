@@ -2,7 +2,7 @@
 // the story's registers grouped as the screen shows them. Which file needs a
 // credit and which line gives it one is the engine's (`story_engine::credits`),
 // never computed here.
-import type { Coverage, Credit, PackageView, Permission } from "./studio";
+import type { AcKind, ContentCredit, Coverage, Credit, Holding, PackageView, Permission } from "./studio";
 
 /** What every line of a register says, whatever it names. */
 export interface CreditLine {
@@ -87,6 +87,18 @@ export function setText(line: CreditLine, key: CreditText, text: string): void {
   const value = text.trim();
   if (value) line[key] = value;
   else delete line[key];
+}
+
+/** A first line for a car or track the package carries: its permission
+ * waits until the author says otherwise. */
+export function contentLineFor(kind: AcKind, id: string): ContentCredit {
+  return { kind, id, permission: "not_asked" };
+}
+
+/** What a story lacks, as a player reads it: the DLC to buy for the game's
+ * own content - once each - and the folder id of anything else. */
+export function missingLabels(missing: Holding[]): string[] {
+  return [...new Set(missing.map((h) => (h.official && h.dlc ? h.dlc : h.id)))];
 }
 
 /** The package file a build offers to write: `<id>-<version>.pitstory`. */

@@ -453,12 +453,49 @@ export interface Coverage {
   line: number | null;
 }
 
+/** A kind of game content a story names by folder id. */
+export type AcKind = "car" | "track";
+
+/** One line of `package/manifest.yaml`: a car or track the package carries
+ * (`story_engine::credits::ContentCredit`). */
+export interface ContentCredit {
+  kind: AcKind;
+  id: string;
+  source?: string;
+  author?: string;
+  licence?: string;
+  permission: Permission;
+  proof?: string;
+}
+
+/** A car or track a story races on, as this machine holds it
+ * (`story::holdings::Holding`). */
+export interface Holding {
+  kind: AcKind;
+  id: string;
+  /** `null`: not here. */
+  folder: string | null;
+  /** The game's own content: never carried by a package. */
+  official: boolean;
+  /** The DLC it comes from; `null` for the base game or a mod. */
+  dlc: string | null;
+}
+
 /** The story's registers and what they say (`story::studio::PackageView`). */
 export interface PackageView {
   /** The registers the story has; one a file needs but that does not exist
    * yet is created by its first line. */
   registers: EditedFile<Credit[]>[];
-  register: { coverage: Coverage[]; diagnostics: Diagnostic[] };
+  /** `package/manifest.yaml`: empty, its stamp empty, while the story has none. */
+  content_register: EditedFile<ContentCredit[]>;
+  /** Every car and track the story races on, as the author's machine holds it. */
+  content: Holding[];
+  register: {
+    coverage: Coverage[];
+    /** The cars and tracks the package carries, and their line. */
+    content: { kind: AcKind; id: string; line: number | null }[];
+    diagnostics: Diagnostic[];
+  };
 }
 
 /** Builds the story's package into `out`; resolves to its size in bytes. */

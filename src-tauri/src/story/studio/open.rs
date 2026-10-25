@@ -16,6 +16,7 @@ use story_engine::Story;
 
 use super::super::history::{self, HistoryStatus};
 use super::*;
+use crate::story::holdings::Lookup;
 
 /// One chapter file, readable or not: an unreadable one is shown with its
 /// error, so that one typo in a file does not hide the others.
@@ -183,7 +184,7 @@ fn edited<T>(files: &[SourceFile], errors: &[LoadError], file: &str, value: Opti
     }
 }
 
-pub fn open(folder: &Path) -> Result<OpenStory, String> {
+pub fn open(folder: &Path, lookup: Lookup) -> Result<OpenStory, String> {
     let (files, mut d) = draft_dir(folder).map_err(|e| e.to_string())?;
     // Drafted once, then both shown and checked: the screen and its
     // diagnostics describe the same state of the folder, read once.
@@ -229,7 +230,7 @@ pub fn open(folder: &Path) -> Result<OpenStory, String> {
         usages,
         media,
         history: history::with(folder, |h| h.status()),
-        package: package_view(folder),
+        package: package_view(folder, lookup),
     })
 }
 
@@ -294,7 +295,7 @@ pub struct Checked {
 
 /// Everything wrong with the story, where its names are cited, and what can
 /// be undone.
-pub fn check(folder: &Path) -> Checked {
+pub fn check(folder: &Path, lookup: Lookup) -> Checked {
     let history = history::with(folder, |h| h.status());
     match draft_dir(folder) {
         Ok((files, d)) => Checked {
@@ -303,7 +304,7 @@ pub fn check(folder: &Path) -> Checked {
             skin_files: (d.skin_files.iter()).flatten().cloned().collect(),
             diagnostics: verdict(folder, d),
             history,
-            package: package_view(folder),
+            package: package_view(folder, lookup),
         },
         Err(e) => Checked {
             diagnostics: vec![load_error(e)],
@@ -311,7 +312,7 @@ pub fn check(folder: &Path) -> Checked {
             media: Vec::new(),
             skin_files: Vec::new(),
             history,
-            package: package_view(folder),
+            package: package_view(folder, lookup),
         },
     }
 }

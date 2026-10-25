@@ -8,6 +8,11 @@
 //! names its files by path inside that folder, `*` standing for any part of
 //! a name (`icons/*.png`).
 //!
+//! **The cars and tracks a package carries** have their lines in
+//! `package/manifest.yaml`, one per car or track, by folder id. Which of them
+//! a package carries - those that are not the game's own - is the app's to
+//! say (`check_content`).
+//!
 //! **What needs a credit** is what the player sees or hears: a picture, a
 //! video, a sound or a font. A licence text, a readme or the story's own
 //! YAML travel without a line.
@@ -21,12 +26,15 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
+use crate::needs::AcKind;
 use crate::validate::{Diagnostic, Severity};
 
 /// A register's file name.
 pub const FILE: &str = "credits.yaml";
 const MEDIA: &str = "media/";
 const MEDIA_CREDITS: &str = "media/credits.yaml";
+/// The register of the cars and tracks a package carries.
+pub const CONTENT_REGISTER: &str = "package/manifest.yaml";
 
 /// One line of a register.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -43,6 +51,25 @@ pub struct Credit {
     pub licence: Option<String>,
     pub permission: Permission,
     /// What shows the permission: "mail of 2026-03-02", a link.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub proof: Option<String>,
+}
+
+/// One line of `package/manifest.yaml`: a car or a track the package
+/// carries.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ContentCredit {
+    pub kind: AcKind,
+    /// Its folder id.
+    pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub licence: Option<String>,
+    pub permission: Permission,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub proof: Option<String>,
 }
@@ -67,8 +94,17 @@ impl Permission {
     }
 }
 
-/// Reads a register.
+/// Reads a register of files.
 pub fn parse(text: &str) -> Result<Vec<Credit>, String> {
+    read(text)
+}
+
+/// Reads the register of cars and tracks.
+pub fn parse_content(text: &str) -> Result<Vec<ContentCredit>, String> {
+    read(text)
+}
+
+fn read<T: serde::de::DeserializeOwned>(text: &str) -> Result<Vec<T>, String> {
     if text.trim().is_empty() {
         return Ok(Vec::new());
     }
@@ -135,12 +171,23 @@ pub struct Coverage {
     pub line: Option<usize>,
 }
 
+/// A car or track a package carries, and the line giving it its credit.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ContentCoverage {
+    pub kind: AcKind,
+    pub id: String,
+    /// Its line in `package/manifest.yaml`; `None`, no credit.
+    pub line: Option<usize>,
+}
+
 /// A story's register as the Package screen shows it, and what the build
 /// waits for.
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct Register {
     /// Every file that needs a credit, in path order.
     pub coverage: Vec<Coverage>,
+    /// Every car and track the package carries (`check_content`).
+    pub content: Vec<ContentCoverage>,
     pub diagnostics: Vec<Diagnostic>,
 }
 
@@ -151,29 +198,56 @@ impl Register {
     }
 }
 
-/// What keeps one line from letting its files travel.
-fn line_problems(line: &Credit) -> Vec<&'static str> {
+/// What keeps a line - of files, or of a car or track - from letting what
+/// it names travel.
+fn line_problems(author: &Option<String>, licence: &Option<String>, permission: Permission) -> Vec<&'static str> {
     let blank = |field: &Option<String>| field.as_deref().is_none_or(|v| v.trim().is_empty());
     let mut problems = Vec::new();
-    if line.files.is_empty() {
-        problems.push("names no file");
-    }
-    if blank(&line.author) {
+    if blank(author) {
         problems.push("no author");
     }
-    if blank(&line.licence) {
+    if blank(licence) {
         problems.push("no licence");
     }
-    if !line.permission.lets_travel() {
+    if !permission.lets_travel() {
         problems.push("the build waits for its permission");
     }
     problems
 }
 
+/// What is wrong with the registers themselves, line by line: one that
+/// does not read, a line naming no file or keeping its files from travelling.
+fn line_errors(registers: &BTreeMap<String, Result<Vec<Credit>, String>>) -> Vec<Diagnostic> {
+    let mut out = Vec::new();
+    for (register, read) in registers {
+        let error = |message: String| Diagnostic {
+            severity: Severity::Error,
+            file: register.clone(),
+            node: None,
+            message,
+        };
+        match read {
+            Err(e) => out.push(error(format!("does not read: {e}"))),
+            Ok(lines) => {
+                for (n, line) in lines.iter().enumerate() {
+                    let named = line.files.is_empty().then_some("names no file");
+                    let problems = named
+                        .into_iter()
+                        .chain(line_problems(&line.author, &line.licence, line.permission));
+                    for problem in problems {
+                        out.push(error(format!("line {} ({}): {problem}", n + 1, line.files.join(", "))));
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
 /// The register of a story whose files are `paths` (inside the story) and
 /// whose registers read as `registers`, by path.
 pub fn check(paths: &BTreeSet<String>, registers: &BTreeMap<String, Result<Vec<Credit>, String>>) -> Register {
-    let mut diagnostics = Vec::new();
+    let mut diagnostics = line_errors(registers);
     let mut said = |severity, file: &str, message: String| {
         diagnostics.push(Diagnostic {
             severity,
@@ -186,23 +260,6 @@ pub fn check(paths: &BTreeSet<String>, registers: &BTreeMap<String, Result<Vec<C
         Some(Ok(lines)) => lines.as_slice(),
         _ => &[],
     };
-    for (register, read) in registers {
-        match read {
-            Err(e) => said(Severity::Error, register, format!("does not read: {e}")),
-            Ok(lines) => {
-                for (n, line) in lines.iter().enumerate() {
-                    for problem in line_problems(line) {
-                        said(
-                            Severity::Error,
-                            register,
-                            format!("line {} ({}): {problem}", n + 1, line.files.join(", ")),
-                        );
-                    }
-                }
-            }
-        }
-    }
-
     let mut coverage = Vec::new();
     // Which lines named a file, by register, for the lines naming none.
     let mut used: BTreeMap<&str, BTreeSet<usize>> = BTreeMap::new();
@@ -250,7 +307,57 @@ pub fn check(paths: &BTreeSet<String>, registers: &BTreeMap<String, Result<Vec<C
             }
         }
     }
-    Register { coverage, diagnostics }
+    Register {
+        coverage,
+        content: Vec::new(),
+        diagnostics,
+    }
+}
+
+/// Adds to `register` the cars and tracks a package carries, `carried`, and
+/// what their register `read` says: each needs a line as a file does.
+/// `read` is `None` when `package/manifest.yaml` does not exist.
+pub fn check_content(
+    register: &mut Register,
+    carried: &BTreeSet<(AcKind, String)>,
+    read: Option<&Result<Vec<ContentCredit>, String>>,
+) {
+    let mut said = |severity, message: String| {
+        register.diagnostics.push(Diagnostic {
+            severity,
+            file: CONTENT_REGISTER.into(),
+            node: None,
+            message,
+        })
+    };
+    let lines = match read {
+        Some(Err(e)) => {
+            said(Severity::Error, format!("does not read: {e}"));
+            &[][..]
+        }
+        Some(Ok(lines)) => lines.as_slice(),
+        None => &[],
+    };
+    for (n, line) in lines.iter().enumerate() {
+        let at = format!("line {} ({} {})", n + 1, line.kind.folder(), line.id);
+        for problem in line_problems(&line.author, &line.licence, line.permission) {
+            said(Severity::Error, format!("{at}: {problem}"));
+        }
+        if !carried.contains(&(line.kind, line.id.clone())) {
+            said(Severity::Warning, format!("{at}: the package does not carry it"));
+        }
+    }
+    for (kind, id) in carried {
+        let line = lines.iter().position(|l| l.kind == *kind && &l.id == id);
+        if line.is_none() && !matches!(read, Some(Err(_))) {
+            said(Severity::Error, format!("{} {id}: no credit", kind.folder()));
+        }
+        register.content.push(ContentCoverage {
+            kind: *kind,
+            id: id.clone(),
+            line,
+        });
+    }
 }
 
 /// The register of a story whose files are `files`, with their bytes: a
@@ -428,6 +535,54 @@ mod tests {
                 "media/credits.yaml: line 3 (gone.png) names no file of the story",
             ]
         );
+    }
+
+    fn content_line(kind: AcKind, id: &str, permission: Permission) -> ContentCredit {
+        ContentCredit {
+            kind,
+            id: id.into(),
+            source: None,
+            author: Some("A modder".into()),
+            licence: Some("Shared with permission".into()),
+            permission,
+            proof: None,
+        }
+    }
+
+    // A car or a track the package carries is credited like a file
+    // (SPEC-story-mode, Content: permission register).
+    #[test]
+    fn a_carried_car_or_track_needs_its_line_too() {
+        let carried = BTreeSet::from([
+            (AcKind::Car, "mod_car".to_string()),
+            (AcKind::Track, "mod_track".to_string()),
+        ]);
+        let mut r = Register::default();
+        let read = Ok(vec![
+            content_line(AcKind::Car, "mod_car", Permission::Requested),
+            content_line(AcKind::Car, "gone_car", Permission::Granted),
+        ]);
+        check_content(&mut r, &carried, Some(&read));
+        assert!(r.blocks());
+        assert_eq!(
+            messages(&r, Severity::Error),
+            vec![
+                "package/manifest.yaml: line 1 (cars mod_car): the build waits for its permission",
+                "package/manifest.yaml: tracks mod_track: no credit",
+            ]
+        );
+        assert_eq!(
+            messages(&r, Severity::Warning),
+            vec!["package/manifest.yaml: line 2 (cars gone_car): the package does not carry it"]
+        );
+        assert_eq!(
+            (r.content.iter().map(|c| c.line)).collect::<Vec<_>>(),
+            vec![Some(0), None]
+        );
+
+        let mut none = Register::default();
+        check_content(&mut none, &BTreeSet::new(), None);
+        assert!(!none.blocks(), "nothing carried, nothing to credit");
     }
 
     #[test]

@@ -2947,7 +2947,10 @@
       "updateDone": "« {title} » mise à jour : version {previous} → {version}.",
       "losesGameConfirm": "La version {version} de « {title} » ne peut pas reprendre ta partie en cours : elle a retiré ce sur quoi la partie s'est arrêtée. L'installer quand même ? La partie sera gardée, mais ne pourra plus continuer.",
       "uninstall": "Désinstaller",
-      "uninstallConfirm": "Désinstaller « {title} » ? La partie en cours est gardée : réinstallée, l'histoire la reprend."
+      "uninstallConfirm": "Désinstaller « {title} » ? La partie en cours est gardée : réinstallée, l'histoire la reprend.",
+      "missing": "Il manque : {list}",
+      "otherVersion": "Ta version est jouée : {list}",
+      "importBusy": "Un import est déjà en cours : les voitures et circuits de l'histoire n'ont pas été importés. Réinstalle-la une fois l'import fini."
     },
     "frames": {
       "title": "Cadres",
@@ -3230,7 +3233,13 @@
       "uncredited": "Sans crédit : {count}",
       "addLine": "Ajouter une ligne",
       "noLine": "Aucune ligne.",
-      "nothingToCredit": "Aucun fichier à créditer : l'histoire n'a ni image, ni vidéo, ni son, ni police."
+      "nothingToCredit": "Aucun fichier à créditer : l'histoire n'a ni image, ni vidéo, ni son, ni police.",
+      "contentTitle": "Voitures et circuits",
+      "car": "Voiture",
+      "track": "Circuit",
+      "baseGame": "Jeu de base",
+      "dlc": "DLC : {dlc}",
+      "notInLibrary": "Pas dans ta bibliothèque"
     }
   }
 }

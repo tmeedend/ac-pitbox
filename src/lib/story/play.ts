@@ -4,7 +4,17 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { PlayerChoice, PlayerStep } from "./player/types";
 import type { EventResult } from "./race";
-import type { Character, ContentType, DateDisplay, Driver, EventType, Session, Transition } from "./studio";
+import type {
+  AcKind,
+  Character,
+  ContentType,
+  DateDisplay,
+  Driver,
+  EventType,
+  Holding,
+  Session,
+  Transition,
+} from "./studio";
 
 /** Where a story is read from: the sample Pit Box carries, a story folder
  * of Create Your Own, or a package the player installed. */
@@ -22,6 +32,9 @@ export interface Playable {
   /** The game under way; `ended` once the story reached an ending,
    * `problem` (an i18n key) when it cannot resume. */
   game: { ended: boolean; problem: string | null } | null;
+  /** What it races on that this machine lacks - a story missing any does
+   * not start - or holds in another version than the package's. */
+  content: { missing: Holding[]; other_version: [AcKind, string][] };
 }
 
 /** An app of the frame up (`story_engine::view::AppShown`). */
@@ -189,7 +202,15 @@ export const keepReadingAt = (source: Source, reading: Reading) =>
 
 /** What installing a package did (`story::packages::Outcome`). */
 export type InstallOutcome =
-  | { kind: "installed"; id: string; title: string; version: string; previous: string | null }
+  | {
+      kind: "installed";
+      id: string;
+      title: string;
+      version: string;
+      previous: string | null;
+      /** The cars and tracks the player lacked, as archives for the ordinary import. */
+      imports: string[];
+    }
   /** The game under way would not resume on this version: nothing changed. */
   | { kind: "loses_game"; title: string; version: string; previous: string };
 
@@ -197,6 +218,9 @@ export type InstallOutcome =
  * ahead when the game under way would not resume on it. */
 export const installPackage = (file: string, loseGame: boolean) =>
   invoke<InstallOutcome>("story_package_install", { file, loseGame });
+
+/** An archive an install set aside, once the import is done with it. */
+export const forgetImported = (archive: string) => invoke<void>("story_package_imported", { archive });
 
 /** Removes an installed story; its game is kept for a new install. */
 export const uninstallStory = (id: string) => invoke<void>("story_package_uninstall", { id });

@@ -37,7 +37,10 @@ USAGE:
 COMMANDS:
     check   Load and validate the story; exit code 1 on any error.
     play    Play it. Type `help` at the prompt for what can be typed.
-    pack    Build its package, `<id>-<version>.pitstory` unless --out says.
+    pack    Build a package of the story alone, `<id>-<version>.pitstory`
+            unless --out says: the cars and tracks it carries are taken from
+            a library, which the editor's Package section has and this tool
+            has not.
 ";
 
 const PLAY_HELP: &str = "\

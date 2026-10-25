@@ -3,13 +3,16 @@
   // the stories a player can play - the sample Pit Box carries, the packages
   // installed, and the author's own - each with the game under way in it. A
   // new game replaces that game, after a confirmation; a story the checks
-  // find errors in does not start. A package (`.pitstory`) is installed from
-  // here; an update that the game under way would not resume on asks first.
+  // find errors in does not start, nor does one missing a car or a track it
+  // races on. A package (`.pitstory`) is installed from here; an update that
+  // the game under way would not resume on asks first, and the cars and
+  // tracks the player lacked go through the ordinary import.
   import { onMount } from "svelte";
   import { confirm, open } from "@tauri-apps/plugin-dialog";
   import { errorText } from "$lib/errors";
   import { t } from "$lib/i18n/index.svelte";
   import {
+    forgetImported,
     installPackage,
     listPlayable,
     uninstallStory,
@@ -17,7 +20,9 @@
     type Playable,
     type Source,
   } from "$lib/story/play";
+  import { missingLabels } from "$lib/story/package";
   import { openGame } from "$lib/story/playState.svelte";
+  import { importDownloadedArchive } from "$lib/workshop/importState.svelte";
 
   let stories = $state<Playable[] | null>(null);
   let problem = $state<string | null>(null);
@@ -44,6 +49,11 @@
     if (p.source.kind === "sample") return t("story.play.sample");
     if (p.source.kind === "installed") return t("story.play.installedVersion", { version: p.version ?? "?" });
     return p.source.path;
+  }
+
+  /** A story with errors, or missing what it races on, does not start. */
+  function startable(p: Playable): boolean {
+    return p.errors === 0 && p.content.missing.length === 0;
   }
 
   async function start(p: Playable, fresh: boolean) {
@@ -73,12 +83,27 @@
           previous === null
             ? t("story.play.installDone", { title, version })
             : t("story.play.updateDone", { title, version, previous });
+        await importLacking(outcome.imports);
       }
     } catch (e) {
       problem = errorText(e);
     } finally {
       busy = false;
       await refresh();
+    }
+  }
+
+  /** The cars and tracks the player lacked, through the ordinary import -
+   * its report and its questions - one archive after the other. */
+  async function importLacking(archives: string[]) {
+    for (const archive of archives) {
+      const done = await importDownloadedArchive(archive);
+      if (!done) {
+        problem = t("story.play.importBusy");
+        return;
+      }
+      // A question left pending re-reads the archive when answered.
+      if (!done.stillNeeded) await forgetImported(archive);
     }
   }
 
@@ -114,10 +139,19 @@
             <div class="what">
               <span class="name">{p.title ?? t("story.studio.untitled")}</span>
               <span class="sub">{origin(p)}</span>
+              {#if p.content.other_version.length}
+                <span class="sub">
+                  {t("story.play.otherVersion", { list: p.content.other_version.map(([, id]) => id).join(", ") })}
+                </span>
+              {/if}
             </div>
             <span class="state">
               {#if p.errors > 0}
                 <span class="pill pill-err">{t("story.studio.errorCount", { count: p.errors })}</span>
+              {:else if p.content.missing.length}
+                <span class="pill pill-warn" title={missingLabels(p.content.missing).join("\n")}>
+                  {t("story.play.missing", { list: missingLabels(p.content.missing).join(", ") })}
+                </span>
               {:else if p.game?.problem}
                 <span class="pill pill-warn">{t(p.game.problem)}</span>
               {:else if p.game?.ended}
@@ -128,11 +162,11 @@
             </span>
             <span class="row-actions">
               {#if p.game && !p.game.ended}
-                <button class="btn" disabled={p.errors > 0 || p.game.problem !== null} onclick={() => start(p, false)}
+                <button class="btn" disabled={!startable(p) || p.game.problem !== null} onclick={() => start(p, false)}
                   >{t("story.play.continue")}</button
                 >
               {/if}
-              <button class="btn" disabled={p.errors > 0} onclick={() => start(p, true)}>{t("story.play.newGame")}</button>
+              <button class="btn" disabled={!startable(p)} onclick={() => start(p, true)}>{t("story.play.newGame")}</button>
               {#if p.source.kind === "installed"}
                 <button class="btn btn-ghost" disabled={busy} onclick={() => uninstall(p)}
                   >{t("story.play.uninstall")}</button

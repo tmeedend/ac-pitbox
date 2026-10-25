@@ -2947,7 +2947,10 @@
       "updateDone": "“{title}” updated: version {previous} → {version}.",
       "losesGameConfirm": "Version {version} of “{title}” cannot resume your game under way: it removed what the game stopped on. Install it anyway? The game will be kept, but can no longer go on.",
       "uninstall": "Uninstall",
-      "uninstallConfirm": "Uninstall “{title}”? The game under way is kept: installed again, the story resumes it."
+      "uninstallConfirm": "Uninstall “{title}”? The game under way is kept: installed again, the story resumes it.",
+      "missing": "Missing: {list}",
+      "otherVersion": "Your version is played: {list}",
+      "importBusy": "An import is already running: the story's cars and tracks were not imported. Install it again once the import is done."
     },
     "frames": {
       "title": "Frames",
@@ -3230,7 +3233,13 @@
       "uncredited": "Without a credit: {count}",
       "addLine": "Add a line",
       "noLine": "No line.",
-      "nothingToCredit": "Nothing to credit: the story has no picture, video, sound or font."
+      "nothingToCredit": "Nothing to credit: the story has no picture, video, sound or font.",
+      "contentTitle": "Cars and tracks",
+      "car": "Car",
+      "track": "Track",
+      "baseGame": "Base game",
+      "dlc": "DLC: {dlc}",
+      "notInLibrary": "Not in your library"
     }
   }
 }

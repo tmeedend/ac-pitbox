@@ -1,10 +1,27 @@
 //! Story Mode (`docs/story/SPEC-story-mode.md`) — see `crate::story`.
 
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 
+use tauri::Manager;
+
 use super::prelude::*;
+use crate::story::holdings::{self, Holding};
 use crate::story::{backups, packages, play, studio};
+use story_engine::needs::AcKind;
 use story_engine::scene::Shown;
+
+/// What this machine holds of the cars and tracks asked
+/// (`story::holdings`): the base locked for that one read, never while
+/// files are read.
+fn holdings(app: &AppHandle) -> impl Fn(&BTreeSet<(AcKind, String)>) -> Vec<Holding> + '_ {
+    move |wanted| {
+        let cfg = crate::config::load(app);
+        let db = app.state::<Db>();
+        let conn = db.0.lock().unwrap_or_else(|e| e.into_inner());
+        holdings::look_up(&conn, &cfg, wanted)
+    }
+}
 
 /// The Story switch asked for on this launch's command line, if any
 /// (`--enable-story-studio` / `--disable-story-studio`). Read once at startup
@@ -23,7 +40,10 @@ pub fn story_studio_switch() -> Option<bool> {
 
 #[tauri::command]
 pub async fn story_play_list(app: AppHandle) -> Result<Vec<play::Playable>, String> {
-    off_window(app, |app| Ok(play::list(&crate::rules::config_dir(app)?))).await
+    off_window(app, |app| {
+        Ok(play::list(&crate::rules::config_dir(app)?, &holdings(app)))
+    })
+    .await
 }
 
 /// A new game, replacing the one under way; its draws come from the clock.
@@ -60,7 +80,17 @@ pub async fn story_package_install(
     lose_game: bool,
 ) -> Result<packages::Outcome, String> {
     off_window(app, move |app| {
-        packages::install(&crate::rules::config_dir(app)?, &file, lose_game)
+        packages::install(&crate::rules::config_dir(app)?, &file, lose_game, &holdings(app))
+    })
+    .await
+}
+
+/// An archive an install set aside for the import, once the import is done
+/// with it.
+#[tauri::command]
+pub async fn story_package_imported(app: AppHandle, archive: PathBuf) -> Result<(), String> {
+    off_window(app, move |app| {
+        packages::imported(&crate::rules::config_dir(app)?, &archive)
     })
     .await
 }
@@ -77,7 +107,7 @@ pub async fn story_package_uninstall(app: AppHandle, id: String) -> Result<(), S
 /// size; refused while the story or its permission register has an error.
 #[tauri::command]
 pub async fn story_build_package(app: AppHandle, folder: PathBuf, out: PathBuf) -> Result<u64, String> {
-    off_window(app, move |_| studio::build_package(&folder, &out)).await
+    off_window(app, move |app| studio::build_package(&folder, &out, &holdings(app))).await
 }
 
 /// Keeps the line the dialogue under way is read at, beside the save.
@@ -190,14 +220,14 @@ pub async fn story_open(app: AppHandle, folder: PathBuf) -> Result<studio::OpenS
         if let Err(e) = backups::take_daily(&crate::rules::config_dir(app)?, &folder, now) {
             log::warn!("story backups: no copy of {}: {e}", folder.display());
         }
-        studio::open(&folder)
+        studio::open(&folder, &holdings(app))
     })
     .await
 }
 
 #[tauri::command]
 pub async fn story_check(app: AppHandle, folder: PathBuf) -> Result<studio::Checked, String> {
-    off_window(app, move |_| Ok(studio::check(&folder))).await
+    off_window(app, move |app| Ok(studio::check(&folder, &holdings(app)))).await
 }
 
 /// Plays a content item for the Content screen's preview. Reads the story

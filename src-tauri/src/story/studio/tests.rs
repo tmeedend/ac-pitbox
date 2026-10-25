@@ -11,6 +11,7 @@ use story_engine::validate::Diagnostic;
 use super::*;
 use crate::errors;
 use crate::story::history;
+use crate::story::holdings::all_held;
 use crate::testutil::temp_dir;
 
 fn json<T: Serialize>(value: &T) -> serde_json::Value {
@@ -18,7 +19,7 @@ fn json<T: Serialize>(value: &T) -> serde_json::Value {
 }
 
 fn chapter_of(folder: &Path, file: &str) -> (Chapter, String) {
-    let open = open(folder).expect("opens");
+    let open = open(folder, &all_held).expect("opens");
     let c = open
         .chapters
         .into_iter()
@@ -93,7 +94,7 @@ fn a_saved_chapter_reads_back_and_is_checked() {
     let (back, read_stamp) = chapter_of(&folder, "flow/01-chapter.yaml");
     assert_eq!(read_stamp, new_stamp, "the returned stamp is the file's");
     assert_eq!(back.nodes[0].next.as_deref(), Some("nowhere"));
-    let d = check(&folder).diagnostics;
+    let d = check(&folder, &all_held).diagnostics;
     assert!(
         d.iter()
             .any(|d| d.node.as_deref() == Some("start") && d.message.contains("nowhere")),
@@ -205,7 +206,7 @@ fn an_event_is_saved_removed_and_restored() {
         "entry_fee": null,
     });
     let stamp = save_file(&folder, file, None, event).expect("created");
-    let opened = open(&folder).unwrap();
+    let opened = open(&folder, &all_held).unwrap();
     let read = opened.events[0].value.as_ref().expect("reads");
     assert_eq!((read.id.as_str(), read.session.laps), ("race_01", Some(8)));
     assert_eq!(opened.events[0].stamp, stamp, "the stamp the save returned");
@@ -216,7 +217,11 @@ fn an_event_is_saved_removed_and_restored() {
         on_failure: None,
     };
     save_file(&folder, "flow/01-chapter.yaml", Some(&cstamp), json(&chapter)).unwrap();
-    assert!(check(&folder).diagnostics.is_empty(), "{:#?}", check(&folder));
+    assert!(
+        check(&folder, &all_held).diagnostics.is_empty(),
+        "{:#?}",
+        check(&folder, &all_held)
+    );
 
     assert_eq!(
         remove_file(&folder, file, "0").unwrap_err(),
@@ -226,7 +231,7 @@ fn an_event_is_saved_removed_and_restored() {
     remove_file(&folder, file, &stamp).expect("removed");
     assert!(!folder.join(file).exists());
     assert!(
-        (check(&folder).diagnostics.iter()).any(|d| d.message.contains("unknown event `race_01`")),
+        (check(&folder, &all_held).diagnostics.iter()).any(|d| d.message.contains("unknown event `race_01`")),
         "the node citing it is reported"
     );
     history::with(&folder, |h| h.undo(&folder)).unwrap();
@@ -257,12 +262,19 @@ fn renaming_an_event_moves_its_file_and_undoes_whole() {
     rename(&folder, NameKind::Event, "race_01", "opener").expect("renamed");
     assert!(!folder.join("events/race_01.yaml").exists(), "the old file is gone");
     assert!(folder.join("events/opener.yaml").exists(), "under its new name");
-    assert!(check(&folder).diagnostics.is_empty(), "{:#?}", check(&folder));
+    assert!(
+        check(&folder, &all_held).diagnostics.is_empty(),
+        "{:#?}",
+        check(&folder, &all_held)
+    );
 
     history::with(&folder, |h| h.undo(&folder)).unwrap();
     assert!(folder.join("events/race_01.yaml").exists(), "back under its old name");
     assert!(!folder.join("events/opener.yaml").exists(), "the new one undone");
-    assert!(check(&folder).diagnostics.is_empty(), "the node follows back");
+    assert!(
+        check(&folder, &all_held).diagnostics.is_empty(),
+        "the node follows back"
+    );
 }
 
 // story.yaml and the world files are saved like a chapter: canonical,
@@ -274,7 +286,7 @@ fn story_yaml_and_world_files_save_and_read_back() {
     let base = temp_dir("studio-story");
     let folder = base.join("s");
     create(&config, &folder, "S", "en", Frame::None, "C").unwrap();
-    let opened = open(&folder).unwrap();
+    let opened = open(&folder, &all_held).unwrap();
     assert_eq!(opened.characters.stamp, "", "no characters file yet");
     assert!(opened.characters.value.unwrap().characters.is_empty(), "read as empty");
     let mut manifest = opened.manifest.value.expect("story.yaml reads");
@@ -288,14 +300,14 @@ fn story_yaml_and_world_files_save_and_read_back() {
         errors::STORY_FILE_CHANGED,
         "a second \"first save\" never replaces it"
     );
-    let opened = open(&folder).unwrap();
+    let opened = open(&folder, &all_held).unwrap();
     let m = opened.manifest.value.unwrap();
     assert_eq!(m.title, "Renamed");
     assert_eq!(m.settings.failure, story_engine::model::FailureMode::Final);
     assert_eq!(opened.characters.value.unwrap().characters[0].id, "friend");
     assert_ne!(opened.characters.stamp, "", "now on disk");
     assert_eq!(list(&config)[0].title.as_deref(), Some("Renamed"), "the hub follows");
-    assert!(check(&folder).diagnostics.is_empty(), "still clean");
+    assert!(check(&folder, &all_held).diagnostics.is_empty(), "still clean");
 }
 
 // The sample copied into Create Your Own opens clean, portraits
@@ -306,7 +318,7 @@ fn the_sample_is_copied_whole_into_an_empty_folder() {
     let base = temp_dir("studio-story");
     let folder = base.join("sample");
     copy_sample(&config, &folder).expect("copied");
-    let opened = open(&folder).unwrap();
+    let opened = open(&folder, &all_held).unwrap();
     assert!(opened.diagnostics.is_empty(), "clean: {:?}", opened.diagnostics);
     assert!(
         opened.media.iter().any(|m| m == "portraits/friend_neutral.png"),
@@ -330,7 +342,7 @@ fn the_roster_is_created_read_back_and_checked() {
     let base = temp_dir("studio-story");
     let folder = base.join("s");
     create(&config, &folder, "S", "en", Frame::None, "C").unwrap();
-    let opened = open(&folder).unwrap();
+    let opened = open(&folder, &all_held).unwrap();
     assert_eq!(opened.drivers.stamp, "", "no roster yet");
     assert!(opened.drivers.value.unwrap().drivers.is_empty(), "read as empty");
     let event = serde_json::json!({
@@ -338,12 +350,13 @@ fn the_roster_is_created_read_back_and_checked() {
         "session": { "track": "t", "car": "c", "opponents": [{ "driver": "rival" }] },
     });
     save_file(&folder, "events/r.yaml", None, event).expect("event created");
-    let unknown =
-        |folder: &Path| (check(folder).diagnostics.iter()).any(|d| d.message.contains("unknown driver `rival`"));
+    let unknown = |folder: &Path| {
+        (check(folder, &all_held).diagnostics.iter()).any(|d| d.message.contains("unknown driver `rival`"))
+    };
     assert!(unknown(&folder), "the grid names a driver the story lacks");
     let roster = serde_json::json!({ "drivers": [{ "id": "rival", "name": "R", "ai_level": 95 }] });
     save_file(&folder, ROSTER, None, roster).expect("roster created");
-    let opened = open(&folder).unwrap();
+    let opened = open(&folder, &all_held).unwrap();
     let drivers = opened.drivers.value.expect("reads").drivers;
     assert_eq!((drivers[0].id.as_str(), drivers[0].ai_level), ("rival", Some(95)));
     assert!(!unknown(&folder), "the driver is known now");
@@ -368,16 +381,16 @@ fn a_content_file_is_created_read_back_and_removed() {
         "body": "Coming?\n* (yes) [Yes.]\n* (no) [No.]\n"
     }] });
     let stamp = save_file(&folder, file, None, doc).expect("created");
-    let opened = open(&folder).unwrap();
+    let opened = open(&folder, &all_held).unwrap();
     let entry = opened.content_files.iter().find(|f| f.file == file).expect("listed");
     let items = &entry.value.as_ref().expect("reads").items;
     assert_eq!(items[0].header.id, "ask");
     assert!(items[0].body.contains("* (yes) [Yes.]"), "the text as written");
     assert_eq!(opened.content[0].labels, ["yes", "no"], "its labels, for the flow");
     assert!(
-        check(&folder).diagnostics.is_empty(),
+        check(&folder, &all_held).diagnostics.is_empty(),
         "{:#?}",
-        check(&folder).diagnostics
+        check(&folder, &all_held).diagnostics
     );
     remove_file(&folder, file, &stamp).expect("removed");
     assert!(!folder.join(file).exists());
@@ -390,7 +403,7 @@ fn a_content_file_is_created_read_back_and_removed() {
 #[test]
 fn the_scenes_come_with_the_story_and_the_preview_picks_their_variant() {
     let sample = Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/story-engine/sample");
-    let story = open(&sample).expect("opens");
+    let story = open(&sample, &all_held).expect("opens");
     let places = story.scenes.value.expect("the sample has scenes");
     let garage = places.scenes.iter().find(|p| p.id == "garage").expect("a garage");
     let garage = serde_json::to_value(garage).unwrap();
@@ -428,7 +441,7 @@ fn the_scenes_come_with_the_story_and_the_preview_picks_their_variant() {
     let places =
         serde_json::json!({ "scenes": [{ "id": "attic", "variants": [{ "id": "default", "file": "a.webp" }] }] });
     save_file(&folder, SCENES, None, places).expect("the editor writes scenes/scenes.yaml");
-    let opened = open(&folder).unwrap();
+    let opened = open(&folder, &all_held).unwrap();
     assert_eq!(opened.scenes.value.unwrap().scenes[0].id, "attic", "read back");
 }
 
@@ -438,7 +451,7 @@ fn the_scenes_come_with_the_story_and_the_preview_picks_their_variant() {
 #[test]
 fn the_frame_screen_saves_frames_and_skins() {
     let sample = Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/story-engine/sample");
-    let shown = open(&sample).unwrap();
+    let shown = open(&sample, &all_held).unwrap();
     assert_eq!(shown.diagnostics, [], "the sample, its pictures included");
     assert!(shown
         .skins
@@ -457,7 +470,7 @@ fn the_frame_screen_saves_frames_and_skins() {
     let skin = serde_json::json!({ "template": "thread", "colors": { "accent": "#00aa00" } });
     let path = "frames/skins/green/skin.yaml";
     let stamp = save_file(&folder, path, None, skin).expect("a skin written in its folder");
-    let opened = open(&folder).unwrap();
+    let opened = open(&folder, &all_held).unwrap();
     assert_eq!(opened.frames.value.unwrap().frames[0].id, "old");
     assert_eq!(opened.diagnostics, [], "the app wears a skin that exists");
     remove_file(&folder, path, &stamp).expect("removed");
@@ -561,14 +574,14 @@ fn the_studio_lists_media_and_checks_portraits_against_them() {
     std::fs::create_dir_all(folder.join("media/portraits")).unwrap();
     std::fs::write(folder.join("media/portraits/friend.png"), b"png").unwrap();
 
-    let opened = open(&folder).unwrap();
+    let opened = open(&folder, &all_held).unwrap();
     assert_eq!(opened.media, ["portraits/friend.png"], "listed inside media/");
     let missing =
         |d: &[Diagnostic]| (d.iter()).any(|x| x.message.contains("`media/portraits/happy.png` does not exist"));
     assert!(missing(&opened.diagnostics), "{:#?}", opened.diagnostics);
 
     std::fs::write(folder.join("media/portraits/happy.png"), b"png").unwrap();
-    let checked = check(&folder);
+    let checked = check(&folder, &all_held);
     assert_eq!(checked.media.len(), 2, "re-listed at the next check");
     assert!(checked.diagnostics.is_empty(), "{:#?}", checked.diagnostics);
 }
@@ -604,7 +617,7 @@ A line, indented by hand.
     std::fs::create_dir_all(folder.join("content")).unwrap();
     std::fs::write(folder.join("content/remark.story"), content).unwrap();
     let cited = |id: &str| {
-        let u = check(&folder).usages;
+        let u = check(&folder, &all_held).usages;
         u.into_iter().find(|n| n.id == id).map(|n| n.usages.len())
     };
     assert_eq!(cited("visits"), Some(2), "the beat and the reactive message");
@@ -617,7 +630,11 @@ A line, indented by hand.
         content.replace("counter.visits", "counter.trips"),
         "only the cited word changed in the hand-typed file"
     );
-    assert!(check(&folder).diagnostics.is_empty(), "clean: {:#?}", check(&folder));
+    assert!(
+        check(&folder, &all_held).diagnostics.is_empty(),
+        "clean: {:#?}",
+        check(&folder, &all_held)
+    );
     assert!(
         rename(&folder, NameKind::Counter, "trips", "9lives").is_err(),
         "an invalid name is refused"
@@ -649,10 +666,17 @@ fn saves_and_renames_are_undone_last_first() {
     );
     save_file(&folder, "flow/01-chapter.yaml", Some(&stamp), json(&chapter)).unwrap();
     rename(&folder, NameKind::Counter, "visits", "trips").unwrap();
-    assert!(check(&folder).history.can_undo, "the editor can offer Ctrl+Z");
+    assert!(
+        check(&folder, &all_held).history.can_undo,
+        "the editor can offer Ctrl+Z"
+    );
 
     undo(1);
-    assert_eq!(check(&folder).usages[0].id, "visits", "the rename undone: declaration");
+    assert_eq!(
+        check(&folder, &all_held).usages[0].id,
+        "visits",
+        "the rename undone: declaration"
+    );
     assert!(
         std::fs::read_to_string(folder.join("flow/01-chapter.yaml"))
             .unwrap()
@@ -669,7 +693,7 @@ fn saves_and_renames_are_undone_last_first() {
         !folder.join(VARIABLES).exists(),
         "the world file the first save created is gone"
     );
-    assert!(check(&folder).history.can_redo && !check(&folder).history.can_undo);
+    assert!(check(&folder, &all_held).history.can_redo && !check(&folder, &all_held).history.can_undo);
 }
 
 // One chapter that does not read hides neither the others nor itself:
@@ -681,7 +705,7 @@ fn an_unreadable_chapter_is_listed_with_its_error() {
     let folder = base.join("s");
     create(&config, &folder, "S", "en", Frame::None, "C").unwrap();
     std::fs::write(folder.join("flow/02-broken.yaml"), "id: ch02\nnodes: [oops\n").unwrap();
-    let open = open(&folder).unwrap();
+    let open = open(&folder, &all_held).unwrap();
     assert_eq!(open.chapters.len(), 2, "both chapters listed");
     assert!(open.chapters[0].chapter.is_some(), "the first still reads");
     assert!(open.chapters[1].error.is_some(), "the second carries its error");

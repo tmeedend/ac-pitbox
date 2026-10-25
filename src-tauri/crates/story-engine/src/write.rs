@@ -93,6 +93,17 @@ pub fn credits(path: &str, lines: &[crate::credits::Credit]) -> Result<String, S
     }
 }
 
+/// `package/manifest.yaml`, read back to be sure it reads.
+pub fn content_credits(lines: &[crate::credits::ContentCredit]) -> Result<String, String> {
+    let path = crate::credits::CONTENT_REGISTER;
+    let text = serde_saphyr::to_string_with_options(&lines, options()).map_err(|e| e.to_string())?;
+    match crate::credits::parse_content(&text) {
+        Ok(back) if back == lines => Ok(text),
+        Ok(_) => Err(format!("{path}: written, it reads back otherwise")),
+        Err(e) => Err(format!("{path}: written, it does not read back: {e}")),
+    }
+}
+
 /// `drivers/roster.yaml`, read back to be sure it loads.
 pub fn roster(roster: &Roster) -> Result<String, String> {
     yaml(crate::load::ROSTER, roster)

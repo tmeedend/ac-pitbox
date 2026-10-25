@@ -3,16 +3,18 @@
   // story's permission register - one `credits.yaml` per folder that
   // travels - and the build of its package. Each file the player sees or
   // hears needs a line saying who made it, under which licence, and whether
-  // it may travel; a file without one offers to start it. The build waits
-  // for every line and for a story with no error. Each edit saves its
-  // register at once.
+  // it may travel; a file without one offers to start it. The cars and
+  // tracks the story races on are listed apart: the game's own stay out of
+  // the package, the others travel with a line of `package/manifest.yaml`.
+  // The build waits for every line and for a story with no error. Each edit
+  // saves its register at once.
   import { save } from "@tauri-apps/plugin-dialog";
   import { errorText } from "$lib/errors";
   import { fmtSize } from "$lib/format";
   import { t } from "$lib/i18n/index.svelte";
-  import { lineFor, packageName, registerGroups, splitFiles } from "$lib/story/package";
-  import { buildPackage, type Credit } from "$lib/story/studio";
-  import { registerEntry, saveRegister, studio } from "$lib/story/studioState.svelte";
+  import { contentLineFor, lineFor, packageName, registerGroups, splitFiles } from "$lib/story/package";
+  import { buildPackage, type ContentCredit, type Credit, type Holding } from "$lib/story/studio";
+  import { registerEntry, saveContentRegister, saveRegister, studio } from "$lib/story/studioState.svelte";
   import CreditFields from "./CreditFields.svelte";
   import StoryChecks from "./StoryChecks.svelte";
 
@@ -27,6 +29,19 @@
   let building = $state(false);
   let built = $state<string | null>(null);
   let failed = $state<string | null>(null);
+
+  const contentLines = $derived(story.package.content_register.value);
+
+  function editContent(change: (lines: ContentCredit[]) => void) {
+    const lines = story.package.content_register.value;
+    if (!lines) return;
+    change(lines);
+    void saveContentRegister();
+  }
+
+  function lineOf(h: Holding): number {
+    return (contentLines ?? []).findIndex((l) => l.kind === h.kind && l.id === h.id);
+  }
 
   function edit(file: string, change: (lines: Credit[]) => void) {
     const entry = registerEntry(file);
@@ -83,6 +98,50 @@
     {#if built}<p class="done">{built}</p>{/if}
     {#if failed}<p class="errbox">{failed}</p>{/if}
   </section>
+
+  {#if story.package.content.length}
+    <section class="blk">
+      <div class="blk-h">
+        <span class="blk-t">{t("story.package.contentTitle")}</span>
+        <span class="blk-n mono">{story.package.content_register.file}</span>
+      </div>
+      <div class="blk-b">
+        {#if contentLines === null}
+          <p class="errbox">{t("story.package.unreadable")}</p>
+        {:else}
+          {#each story.package.content as h (`${h.kind}/${h.id}`)}
+            {@const i = lineOf(h)}
+            <div class="line">
+              <div class="row">
+                <span class="mono item">{h.id}</span>
+                <span class="named">{t(h.kind === "car" ? "story.package.car" : "story.package.track")}</span>
+                {#if h.official}
+                  <span class="named">{h.dlc ? t("story.package.dlc", { dlc: h.dlc }) : t("story.package.baseGame")}</span>
+                {:else if !h.folder}
+                  <span class="pill pill-err">{t("story.package.notInLibrary")}</span>
+                {:else if i < 0}
+                  <button class="btn btn-ghost" onclick={() => editContent((lines) => lines.push(contentLineFor(h.kind, h.id)))}
+                    >{t("story.package.addLine")}</button
+                  >
+                {/if}
+                {#if i >= 0}
+                  <button
+                    class="btn btn-ghost"
+                    title={t("story.package.removeLine")}
+                    aria-label={t("story.package.removeLine")}
+                    onclick={() => editContent((lines) => lines.splice(i, 1))}>✕</button
+                  >
+                {/if}
+              </div>
+              {#if i >= 0}
+                <CreditFields line={contentLines[i]} onchange={(apply) => editContent((lines) => apply(lines[i]))} />
+              {/if}
+            </div>
+          {/each}
+        {/if}
+      </div>
+    </section>
+  {/if}
 
   {#each groups as g (g.file)}
     <section class="blk">
@@ -196,6 +255,11 @@
     flex: 1;
   }
   .named {
+    padding-bottom: 7px;
+  }
+  .item {
+    flex: 1;
+    font-size: 12px;
     padding-bottom: 7px;
   }
   .missing {

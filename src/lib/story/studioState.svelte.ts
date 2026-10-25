@@ -54,7 +54,8 @@ export type StudioSection =
  * Contents', the rest the flow's. */
 export function sectionOf(file: string): StudioSection {
   if (file === "story.yaml") return "settings";
-  if (file === "media/credits.yaml" || /^frames\/skins\/[^/]+\/credits\.yaml$/.test(file)) return "package";
+  if (file === "media/credits.yaml" || file === "package/manifest.yaml") return "package";
+  if (/^frames\/skins\/[^/]+\/credits\.yaml$/.test(file)) return "package";
   if (file.startsWith("drivers/")) return "drivers";
   if (file.startsWith("scenes/")) return "scenes";
   if (file.startsWith("frames/")) return "frames";
@@ -288,6 +289,15 @@ export function saveRegister(file: string): Promise<void> {
   });
 }
 
+/** Queues a save of `package/manifest.yaml`, the register of the cars and
+ * tracks carried, like a chapter. */
+export function saveContentRegister(): Promise<void> {
+  return enqueue(async () => {
+    const entry = studio.story?.package.content_register;
+    if (entry?.value) await write(entry, entry.value);
+  });
+}
+
 /** Queues a save of the skin whose `skin.yaml` is `file`, like a chapter. */
 export function saveSkinFile(file: string): Promise<void> {
   return enqueue(async () => {
@@ -495,6 +505,7 @@ function scheduleCheck(): void {
       // What the registers say, not the registers themselves: those are the
       // editor's copy, which an edit may have changed since this check.
       studio.story.package.register = pkg.register;
+      studio.story.package.content = pkg.content;
       studio.revision++;
     } catch (e) {
       console.warn("story studio: check failed", e);
