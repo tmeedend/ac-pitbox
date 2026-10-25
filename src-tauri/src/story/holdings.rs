@@ -32,6 +32,17 @@ pub struct Holding {
     /// The DLC it comes from, as the store names it; `None` for the base
     /// game or a mod.
     pub dlc: Option<String>,
+    /// Its layers in the library, which a story can carry as its own change
+    /// to it.
+    pub layers: Vec<HeldLayer>,
+}
+
+/// A layer of a car or track in the library.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct HeldLayer {
+    pub name: String,
+    /// `None`: in the showcase, without its files.
+    pub folder: Option<PathBuf>,
 }
 
 /// How the callers ask: the cars and tracks wanted, in, their holdings out,
@@ -57,6 +68,7 @@ pub fn look_up(conn: &Connection, cfg: &AppConfig, wanted: &BTreeSet<(AcKind, St
                 folder: library_folder(conn, cfg, *kind, id).or_else(|| game_folder(cfg, *kind, id)),
                 official: crate::kunos_dates::is_official(mod_kind(*kind), &lower),
                 dlc: crate::kunos_dates::pack_name(mod_kind(*kind), &lower),
+                layers: library_layers(conn, cfg, *kind, id),
             }
         })
         .collect()
@@ -76,6 +88,26 @@ fn library_folder(conn: &Connection, cfg: &AppConfig, kind: AcKind, id: &str) ->
         return None;
     }
     crate::library::folder_path(conn, cfg, id).ok().filter(|f| f.is_dir())
+}
+
+/// The layers the library holds over `id`.
+fn library_layers(conn: &Connection, cfg: &AppConfig, kind: AcKind, id: &str) -> Vec<HeldLayer> {
+    let host = match kind {
+        AcKind::Car => crate::layers::HostKind::Car,
+        AcKind::Track => crate::layers::HostKind::Track,
+    };
+    match crate::overlay::list_layers(conn, id, host) {
+        Ok(layers) => (layers.into_iter())
+            .map(|l| HeldLayer {
+                folder: crate::layers::folder_path(conn, cfg, &l.id).ok().filter(|f| f.is_dir()),
+                name: l.name,
+            })
+            .collect(),
+        Err(e) => {
+            log::warn!("story: layers of {id} not read: {e}");
+            Vec::new()
+        }
+    }
 }
 
 fn game_folder(cfg: &AppConfig, kind: AcKind, id: &str) -> Option<PathBuf> {
@@ -109,6 +141,7 @@ pub(crate) fn held_as(
             folder: folder(w),
             official: false,
             dlc: None,
+            layers: Vec::new(),
         })
         .collect()
 }

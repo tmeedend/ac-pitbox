@@ -39,6 +39,7 @@ use story_engine::validate::{validate, Severity};
 use story_engine::Story;
 
 use super::holdings::Lookup;
+use super::library::LibraryWrites;
 use super::play::{self, Source};
 use crate::errors;
 
@@ -46,6 +47,7 @@ mod content;
 mod fetch;
 mod updates;
 
+pub use content::StoryLayer;
 pub use fetch::{cancel, Origin, Progress};
 pub use updates::{update_url, updates, Update};
 
@@ -112,12 +114,13 @@ pub enum Outcome {
 /// Installs the package at `origin`, or updates the story it carries. With
 /// `lose_game`, an update goes ahead even when the game under way would not
 /// resume on it. `lookup` says which of its cars and tracks the player has;
-/// `progress` follows what is downloaded.
+/// `library` stores its layers; `progress` follows what is downloaded.
 pub fn install(
     config_dir: &Path,
     origin: Origin,
     lose_game: bool,
     lookup: Lookup,
+    library: &dyn LibraryWrites,
     progress: Progress,
 ) -> Result<Outcome, String> {
     let _busy = BUSY.lock().unwrap_or_else(|e| e.into_inner());
@@ -145,14 +148,15 @@ pub fn install(
     let story_zip = staging.work.join(&story_item.file);
     let cached = from_cache(&root, &id, story_item, &story_zip);
     let story_size = if cached { 0 } else { story_item.size };
-    fetcher.set_total(story_size + plan.fetch.iter().map(|i| i.size).sum::<u64>());
+    let others: u64 = plan.fetch.iter().chain(&plan.layers).map(|i| i.size).sum();
+    fetcher.set_total(story_size + others);
     if !cached {
         fetcher.fetch(story_item, &story_zip)?;
     }
     unpack(&story_zip, &staging.dir)?;
     let story = checked_story(&staging.dir, &manifest)?;
-    // Every car and track checked too, before anything lands.
-    for item in &plan.fetch {
+    // Every car, track and layer checked too, before anything lands.
+    for item in plan.fetch.iter().chain(&plan.layers) {
         let to = staging.work.join(&item.file);
         fetcher.fetch(item, &to)?;
         content::check_item(&to, item.id.as_deref().unwrap_or_default())?;
@@ -172,6 +176,7 @@ pub fn install(
     swap(&staging.dir, &target)?;
     content::clear(&root, &id);
     let imports = content::place(&root, &id, &plan, &staging.work);
+    content::place_layers(&root, &id, &manifest.title, &plan, &staging.work, library);
     to_cache(&root, &id, &story_zip);
     keep(&root.join(format!("{id}.package.json")), Some(&manifest));
     let source = match origin {
@@ -251,9 +256,9 @@ fn to_cache(root: &Path, id: &str, story_zip: &Path) {
     }
 }
 
-/// Removes the installed story `id`. Its game stays where it is: installed
-/// again, the story resumes it.
-pub fn uninstall(config_dir: &Path, id: &str) -> Result<(), String> {
+/// Removes the installed story `id`, and its layers from the library. Its
+/// game stays where it is: installed again, the story resumes it.
+pub fn uninstall(config_dir: &Path, id: &str, library: &dyn LibraryWrites) -> Result<(), String> {
     let _busy = BUSY.lock().unwrap_or_else(|e| e.into_inner());
     let dir = folder(config_dir, id)?;
     if dir.is_dir() {
@@ -268,6 +273,7 @@ pub fn uninstall(config_dir: &Path, id: &str) -> Result<(), String> {
     // The cars and tracks it brought stay: they are the player's mods now.
     let root = root(config_dir);
     content::clear(&root, id);
+    content::remove_layers(&root, id, library);
     keep::<SourceRecord>(&source_path(&root, id), None);
     let cache = cache_dir(&root, id);
     if cache.is_dir() {
@@ -282,6 +288,11 @@ pub fn uninstall(config_dir: &Path, id: &str) -> Result<(), String> {
 /// version than its package's.
 pub fn other_versions(config_dir: &Path, id: &str) -> Vec<(story_engine::needs::AcKind, String)> {
     content::other_versions(&root(config_dir), id)
+}
+
+/// The layers the installed story `id` stored in the library.
+pub fn story_layers(config_dir: &Path, id: &str) -> Vec<StoryLayer> {
+    content::story_layers(&root(config_dir), id)
 }
 
 /// An archive an install set aside for the import, once the import is done

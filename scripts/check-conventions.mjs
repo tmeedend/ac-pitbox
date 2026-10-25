@@ -356,6 +356,7 @@ for (const locale of ["fr", "en", "it", "de", "es", "pt"]) {
     "src-tauri/src/lib.rs", // `mod story;` et `invoke_handler`
     "src-tauri/src/commands/mod.rs",
     "src-tauri/src/commands/story.rs",
+    "src-tauri/src/startup.rs", // le guet du jeu : la fin d'une session d'histoire
   ];
   const inStory = (f) =>
     f.startsWith("src/lib/story/") ||

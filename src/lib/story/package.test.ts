@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { lineFor, missingLabels, packageName, registerGroups, setText, splitFiles } from "./package";
+import {
+  contentLineFor,
+  contentLineOf,
+  lineFor,
+  missingLabels,
+  packageName,
+  registerGroups,
+  setText,
+  splitFiles,
+} from "./package";
 import type { Credit, Holding, PackageView } from "./studio";
 
 const line = (files: string[]): Credit => ({ files, author: "A", licence: "CC0", permission: "not_needed" });
@@ -62,11 +71,22 @@ describe("a line's fields", () => {
       folder: null,
       official,
       dlc,
+      layers: [],
     });
     expect(missingLabels([held("ks_a", true, "Pack 1"), held("ks_b", true, "Pack 1"), held("mod_c", false, null)])).toEqual(
       ["Pack 1", "mod_c"],
     );
     expect(missingLabels([held("abarth500", true, null)])).toEqual(["abarth500"]);
+  });
+
+  // A car's own line and the lines of its layers are told apart: taking a
+  // layer along never stands for the car's credit.
+  it("finds a car's line apart from its layers'", () => {
+    const lines = [contentLineFor("track", "imola", "No billboards"), contentLineFor("track", "imola")];
+    expect(lines[0]).toEqual({ kind: "track", id: "imola", layer: "No billboards", permission: "not_asked" });
+    expect(contentLineOf(lines, "track", "imola")).toBe(1);
+    expect(contentLineOf(lines, "track", "imola", "No billboards")).toBe(0);
+    expect(contentLineOf(lines, "track", "imola", "Other")).toBe(-1);
   });
 
   it("names the package after the story and its version", () => {

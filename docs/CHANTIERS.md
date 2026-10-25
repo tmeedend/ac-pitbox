@@ -1221,8 +1221,43 @@ de reprendre. En cas d'écart, la spec fait foi.
           **Pour plus tard** : un lien `pitbox://` qui ouvre l'installation
           d'un clic depuis une page web (le protocole se déclare dans
           l'installateur).
-        - **Reste** : L4.5 (retouches propres à l'histoire, zone des règles
-          d'or, à trancher le moment venu).
+        - **L4.5, décidé avec l'utilisateur (2026-10-25)** : maintenant, en
+          deux temps. L4.5a les retouches (les couches d'une histoire),
+          L4.5b la version de l'histoire le temps d'une session.
+        - **L4.5a, les couches d'une histoire — fait (2026-10-25).** Une ligne
+          de `package/manifest.yaml` qui nomme une couche (`layer:`) la fait
+          voyager ; la construction la prend dans la bibliothèque de
+          l'auteur (élément `layer`) ; chez le joueur elle est posée comme
+          couche ordinaire de son mod, **éteinte** (`story/library.rs`, par
+          `layers::store_layer`), notée dans `<id>.layers.json`, remplacée à
+          la mise à jour, retirée à la désinstallation ; elle s'allume au
+          lancement d'une épreuve de l'histoire sur ce mod et s'éteint à la
+          fermeture du jeu, au démarrage suivant ou deux minutes après un
+          lancement sans jeu (`story/session.rs`, `story/session.json` écrit
+          avant de toucher quoi que ce soit, sur le modèle de
+          `online/session_layers.rs`, dans l'autre sens). Les bascules
+          passent par l'interrupteur d'une fiche (`compose::set_layer_active`,
+          `compose::remove_layer`) : rien de nouveau dans `activation.rs` ni
+          `deploy.rs`. Nouvelle couture : le guet du jeu de `startup.rs`
+          appelle `commands::story::on_game_running`. Section Paquet : une case
+          « avec l'histoire » par couche de chaque voiture et circuit.
+          **Choisi sans demander** (dans la spec) : la ligne du registre est
+          ce qui fait voyager une couche ; une couche peut porter sur du
+          contenu Kunos ; la couche du joueur porte le nom de l'histoire
+          entre parenthèses, visible et retirable sur la fiche du mod ; une
+          couche qui ne s'allume pas empêche la session ; un joueur sans le
+          mod ne reçoit pas sa couche.
+          **Choisi sans demander** (détails) : les couches se retéléchargent
+          à chaque mise à jour, même inchangées (le cache ne garde que
+          l'élément de l'histoire) ; les couches d'une histoire sont des
+          lignes de la table `layers` d'`overlay.sqlite` (une ligne, pas une
+          colonne ni une table : le format ne bouge pas) ; la logique
+          d'`online/session_layers.rs` est reprise et non partagée (deux
+          endroits, à factoriser au troisième).
+          **Pas vu à l'écran** : la case des couches, une couche allumée
+          pendant une vraie session puis éteinte à la fermeture du jeu.
+        - **Reste** : L4.5b (la version de l'histoire le temps d'une
+          session).
       - **L5 à L8** : dans l'ordre du plan de livraison de la spec.
       **Écarts assumés par rapport au document de conception** (la spec
       publique les reprend déjà) :

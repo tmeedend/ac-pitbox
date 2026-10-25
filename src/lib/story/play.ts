@@ -238,6 +238,11 @@ export interface PackageUpdate {
 /** The updates of the stories installed from a URL: one request each. */
 export const packageUpdates = () => invoke<PackageUpdate[]>("story_package_updates");
 
+/** Before an event is launched: the story's own layers over its car and
+ * track switched on, until the game closes (`story::session`). */
+export const beginStorySession = (source: Source, event: string) =>
+  invoke<void>("story_session_begin", { source, event });
+
 /** Stops the package download under way. */
 export const cancelDownload = () => invoke<void>("story_package_cancel");
 

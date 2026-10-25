@@ -11,7 +11,9 @@
 //! **The cars and tracks a package carries** are those the story races on
 //! that are not the game's own, taken from the author's library (or game)
 //! as they are: the version in play, its folder whole. One the author does
-//! not have cannot be carried, and blocks the build.
+//! not have cannot be carried, and blocks the build. So are the layers the
+//! register names - the story's own changes to a mod - taken from the
+//! author's library by name.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
@@ -121,6 +123,23 @@ fn check_content(
         .map(|h| (h.kind, h.id.clone()))
         .collect();
     credits::check_content(register, &carried, read);
+    let lines = read
+        .and_then(|r| r.as_ref().ok())
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+    for (kind, id, name) in credits::carried_layers(lines) {
+        if layer_folder(&held, kind, &id, &name).is_none() {
+            register.diagnostics.push(Diagnostic {
+                severity: Severity::Error,
+                file: CONTENT_REGISTER.into(),
+                node: None,
+                message: format!(
+                    "{} {id}: the layer {name} is not in your library, the package cannot carry it",
+                    kind.folder()
+                ),
+            });
+        }
+    }
     for h in held.iter().filter(|h| !h.official && h.folder.is_none()) {
         register.diagnostics.push(Diagnostic {
             severity: Severity::Error,
@@ -134,6 +153,17 @@ fn check_content(
         });
     }
     held
+}
+
+/// The folder of the layer `name` of `id`, as the author's library holds it.
+fn layer_folder<'a>(held: &'a [Holding], kind: AcKind, id: &str, name: &str) -> Option<&'a PathBuf> {
+    (held.iter())
+        .find(|h| h.kind == kind && h.id == id)?
+        .layers
+        .iter()
+        .find(|l| l.name == name)?
+        .folder
+        .as_ref()
 }
 
 /// Writes the story's items into `dir`, each named after its fingerprint,
@@ -175,6 +205,18 @@ fn build_items(folder: &Path, dir: &Path, lookup: Lookup) -> Result<Manifest, St
         let (size, sha256) = (File::open(&part).and_then(package::sha256_of)).map_err(|e| e.to_string())?;
         let mut item = package::item(h.kind.into(), Some(&h.id), size, sha256);
         item.signature = Some(package::folder_signature(source).map_err(|e| format!("{}: {e}", source.display()))?);
+        std::fs::rename(&part, dir.join(&item.file)).map_err(|e| e.to_string())?;
+        items.push(item);
+    }
+    let lines = content_read.and_then(Result::ok).unwrap_or_default();
+    for (n, (kind, id, name)) in credits::carried_layers(&lines).into_iter().enumerate() {
+        let source = layer_folder(&held, kind, &id, &name).ok_or(errors::STORY_BUILD_BLOCKED)?;
+        let part = dir.join(format!("layer{n}.part"));
+        let file = File::create(&part).map_err(|e| format!("writing {}: {e}", part.display()))?;
+        package::content_item(source, &id, file)?;
+        let (size, sha256) = (File::open(&part).and_then(package::sha256_of)).map_err(|e| e.to_string())?;
+        let mut item = package::item(ItemKind::Layer, Some(&id), size, sha256);
+        (item.host, item.name) = (Some(kind), Some(name));
         std::fs::rename(&part, dir.join(&item.file)).map_err(|e| e.to_string())?;
         items.push(item);
     }
@@ -241,6 +283,7 @@ mod tests {
     use super::*;
     use crate::story::holdings::{all_held, held_as};
     use crate::story::packages::{self, Origin, Outcome};
+    use crate::story::play;
     use crate::testutil::temp_dir;
 
     fn sample_in(dir: &Path) {
@@ -280,7 +323,15 @@ mod tests {
             "nothing left beside the package"
         );
         let config = base.join("config");
-        packages::install(&config, Origin::File(&out), false, &all_held, &mut |_, _| true).expect("the build installs");
+        packages::install(
+            &config,
+            Origin::File(&out),
+            false,
+            &all_held,
+            &crate::story::library::Recorded::default(),
+            &mut |_, _| true,
+        )
+        .expect("the build installs");
         assert!(
             !config.join("story/installed/sample/notes.txt").exists(),
             "notes stay with the author"
@@ -415,6 +466,7 @@ mod tests {
             Origin::File(&out),
             false,
             lookup,
+            &crate::story::library::Recorded::default(),
             &mut |_, _| true,
         )
         .unwrap()
@@ -525,6 +577,7 @@ mod tests {
             Origin::Url(&manifest_url),
             false,
             &lacking,
+            &crate::story::library::Recorded::default(),
             &mut |received, _| {
                 seen = received;
                 true
@@ -564,7 +617,15 @@ mod tests {
         assert_eq!(update.size, new_story_size, "the new story's item, nothing else");
         take(&asked);
         let url = packages::update_url(&config, "sample").expect("remembered");
-        let outcome = packages::install(&config, Origin::Url(&url), false, &the_same, &mut |_, _| true).unwrap();
+        let outcome = packages::install(
+            &config,
+            Origin::Url(&url),
+            false,
+            &the_same,
+            &crate::story::library::Recorded::default(),
+            &mut |_, _| true,
+        )
+        .unwrap();
         assert!(matches!(outcome, Outcome::Installed { ref previous, .. } if previous.as_deref() == Some("1")));
         let second = take(&asked);
         assert_eq!(second.len(), 2, "manifest and the new story only: {second:?}");
@@ -586,6 +647,7 @@ mod tests {
             Origin::Url(&format!("{url}manifest.json")),
             false,
             &all_held,
+            &crate::story::library::Recorded::default(),
             &mut |_, _| false,
         );
         assert_eq!(stopped, Err(errors::STORY_PACKAGE_CANCELLED.into()));
@@ -595,6 +657,7 @@ mod tests {
             Origin::Url(&format!("{url}nothing.json")),
             false,
             &all_held,
+            &crate::story::library::Recorded::default(),
             &mut |_, _| true,
         );
         assert_eq!(
@@ -602,5 +665,67 @@ mod tests {
             Err(errors::STORY_PACKAGE_DOWNLOAD_FAILED.into()),
             "a link to nothing"
         );
+    }
+
+    // A story's own change to a mod - here hiding something on a track of
+    // the game's own - travels as a layer, is stored off over the player's
+    // track, and is on for the sessions of the story's events on that track
+    // only (SPEC-story-mode, Content: a story's own changes to a mod).
+    #[test]
+    fn a_story_layer_travels_and_is_on_for_its_events_only() {
+        let base = temp_dir("story-layer-travel");
+        let story = base.join("story");
+        sample_in(&story);
+        std::fs::create_dir_all(story.join("package")).unwrap();
+        std::fs::write(
+            story.join(CONTENT_REGISTER),
+            "- kind: track\n  id: mugello\n  layer: No billboards\n  author: The author\n  licence: CC0\n  permission: not_needed\n",
+        )
+        .unwrap();
+        let layer = base.join("library/layers/tracks/mugello/No billboards");
+        std::fs::create_dir_all(layer.join("extension")).unwrap();
+        std::fs::write(layer.join("extension/ext_config.ini"), "[HIDE]").unwrap();
+        let author = |w: &BTreeSet<(AcKind, String)>| {
+            let mut held = official(w);
+            for h in held.iter_mut().filter(|h| h.id == "mugello") {
+                h.layers = vec![crate::story::holdings::HeldLayer {
+                    name: "No billboards".into(),
+                    folder: Some(layer.clone()),
+                }];
+            }
+            held
+        };
+        let view = package_view(&story, &author);
+        assert!(view.register.diagnostics.is_empty(), "{:#?}", view.register.diagnostics);
+        let out = base.join("p.pitstory");
+        build_package(&story, &out, &author).unwrap();
+
+        let config = base.join("player");
+        let library = crate::story::library::Recorded::default();
+        packages::install(&config, Origin::File(&out), false, &all_held, &library, &mut |_, _| {
+            true
+        })
+        .unwrap();
+        assert_eq!(
+            library.stored(),
+            vec![(
+                AcKind::Track,
+                "mugello".to_string(),
+                "No billboards (Sample story)".to_string()
+            )],
+            "stored over the player's track, named after the story"
+        );
+        assert!(library.active().is_empty(), "off outside the story's sessions");
+
+        let source = play::Source::Installed { id: "sample".into() };
+        let on_mugello = play::session_layers(&config, &source, "track_day_01").unwrap();
+        assert_eq!(on_mugello.len(), 1, "the event at Mugello switches it on");
+        assert!(
+            play::session_layers(&config, &source, "race_01").unwrap().is_empty(),
+            "not at Magione"
+        );
+
+        packages::uninstall(&config, "sample", &library).unwrap();
+        assert!(library.stored().is_empty(), "removed with the story");
     }
 }

@@ -8,6 +8,11 @@
 //!   folder, set aside in `story/installed/.imports/<story id>/` until the
 //!   screen has imported it - with the report and the questions of any
 //!   import.
+//! - **A layer the story carries** - its own change to a mod - is stored as
+//!   a layer of the player's mod, off (`story::library`), and recorded
+//!   (`<story id>.layers.json`) for the story's sessions to switch it on. An
+//!   update replaces the story's layers; uninstalling removes them. One whose
+//!   mod the player lacks is not fetched: the story does not start anyway.
 //! - **What the player has** is never replaced, nor even fetched: the
 //!   package names each car and track with its signature (paths and sizes,
 //!   `package::folder_signature`), compared to the player's copy; one that
@@ -24,6 +29,7 @@ use story_engine::package::Item;
 
 use crate::errors;
 use crate::story::holdings::Lookup;
+use crate::story::library::LibraryWrites;
 
 /// What an install recorded of the cars and tracks it found here.
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -72,6 +78,8 @@ pub(super) fn check_item(zip_path: &Path, id: &str) -> Result<(), String> {
 /// import; what they have is compared without fetching it, by signature.
 pub(super) struct Plan<'a> {
     pub fetch: Vec<&'a Item>,
+    /// The layers whose car or track the player has.
+    pub layers: Vec<&'a Item>,
     /// Here in another version than the package's.
     pub other_version: Vec<(AcKind, String)>,
 }
@@ -81,14 +89,21 @@ pub(super) struct Plan<'a> {
 /// the player's copy plays either way, and the log says why.
 pub(super) fn plan<'a>(items: &[&'a Item], lookup: Lookup) -> Plan<'a> {
     let wanted: BTreeSet<(AcKind, String)> = (items.iter())
-        .filter_map(|i| Some((i.kind.content()?, i.id.clone()?)))
+        .filter_map(|i| Some((i.kind.content().or(i.host)?, i.id.clone()?)))
         .collect();
     let held = lookup(&wanted);
     let mut plan = Plan {
         fetch: Vec::new(),
+        layers: Vec::new(),
         other_version: Vec::new(),
     };
     for item in items {
+        if let (Some(host), Some(id)) = (item.host, item.id.as_deref()) {
+            if held.iter().any(|h| h.kind == host && h.id == id && h.folder.is_some()) {
+                plan.layers.push(item);
+            }
+            continue;
+        }
         let (Some(kind), Some(id)) = (item.kind.content(), item.id.as_deref()) else {
             continue;
         };
@@ -138,6 +153,85 @@ pub(super) fn place(root: &Path, story: &str, plan: &Plan, staged: &Path) -> Vec
         log::warn!("story package: {} not written: {e}", path.display());
     }
     to_import
+}
+
+/// A story's layer stored in the player's library.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoryLayer {
+    /// The layer's id in the library.
+    pub id: String,
+    pub kind: AcKind,
+    /// The car or track it lies over.
+    pub host: String,
+}
+
+fn layers_path(root: &Path, story: &str) -> PathBuf {
+    root.join(format!("{story}.layers.json"))
+}
+
+/// The layers the installed story `story` stored in the library.
+pub fn story_layers(root: &Path, story: &str) -> Vec<StoryLayer> {
+    (std::fs::read_to_string(layers_path(root, story)).ok())
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
+/// Removes from the library the layers an earlier install of `story`
+/// stored. One already gone is forgotten; one that cannot be removed is
+/// logged and forgotten too - it stays off, a layer like any other.
+pub(super) fn remove_layers(root: &Path, story: &str, library: &dyn LibraryWrites) {
+    for layer in story_layers(root, story) {
+        match library.remove_layer(&layer.id) {
+            Err(e) if e != crate::errors::LAYER_NOT_FOUND => {
+                log::warn!("story package: layer {} of {story} not removed: {e}", layer.id)
+            }
+            _ => {}
+        }
+    }
+    let path = layers_path(root, story);
+    if path.is_file() {
+        if let Err(e) = std::fs::remove_file(&path) {
+            log::warn!("story package: {} not removed: {e}", path.display());
+        }
+    }
+}
+
+/// Stores the story's layers, checked already and in `staged` under their
+/// file name, in the library, off, in place of an earlier install's.
+/// `title` names them on the mod's sheet, beside their own name.
+pub(super) fn place_layers(
+    root: &Path,
+    story: &str,
+    title: &str,
+    plan: &Plan,
+    staged: &Path,
+    library: &dyn LibraryWrites,
+) {
+    remove_layers(root, story, library);
+    let mut stored = Vec::new();
+    for item in &plan.layers {
+        let (Some(kind), Some(host), Some(name)) = (item.host, item.id.as_deref(), item.name.as_deref()) else {
+            continue;
+        };
+        let into = staged.join(format!("{}.files", item.file));
+        let added = super::extract(&staged.join(&item.file), &into, |_| true)
+            .and_then(|_| library.add_layer(kind, host, &format!("{name} ({title})"), &into.join(host), story));
+        match added {
+            Ok(id) => stored.push(StoryLayer {
+                id,
+                kind,
+                host: host.to_string(),
+            }),
+            Err(e) => log::warn!("story package: layer {name} of {story} not stored over {host}: {e}"),
+        }
+    }
+    let path = layers_path(root, story);
+    let written = serde_json::to_string_pretty(&stored)
+        .map_err(|e| e.to_string())
+        .and_then(|json| std::fs::write(&path, json).map_err(|e| e.to_string()));
+    if let Err(e) = written {
+        log::warn!("story package: {} not written: {e}", path.display());
+    }
 }
 
 /// The cars and tracks the installed story `story` found here in another

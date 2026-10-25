@@ -89,10 +89,17 @@ export function setText(line: CreditLine, key: CreditText, text: string): void {
   else delete line[key];
 }
 
-/** A first line for a car or track the package carries: its permission
- * waits until the author says otherwise. */
-export function contentLineFor(kind: AcKind, id: string): ContentCredit {
-  return { kind, id, permission: "not_asked" };
+/** A first line for a car or track the package carries, or for a layer of
+ * one (`layer`) the story takes along: its permission waits until the
+ * author says otherwise. */
+export function contentLineFor(kind: AcKind, id: string, layer?: string): ContentCredit {
+  return layer === undefined ? { kind, id, permission: "not_asked" } : { kind, id, layer, permission: "not_asked" };
+}
+
+/** The line of `lines` for the car or track `kind`/`id` itself (no
+ * `layer`), or for its layer `layer`: its index, -1 without one. */
+export function contentLineOf(lines: ContentCredit[], kind: AcKind, id: string, layer?: string): number {
+  return lines.findIndex((l) => l.kind === kind && l.id === id && l.layer === layer);
 }
 
 /** What a story lacks, as a player reads it: the DLC to buy for the game's

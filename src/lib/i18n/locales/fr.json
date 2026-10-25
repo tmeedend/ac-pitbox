@@ -3251,7 +3251,8 @@
       "dlc": "DLC : {dlc}",
       "notInLibrary": "Pas dans ta bibliothèque",
       "publish": "Publier pour un hébergement…",
-      "published": "Publié dans {dir} ({size}). Le lien à donner est celui de son manifest.json."
+      "published": "Publié dans {dir} ({size}). Le lien à donner est celui de son manifest.json.",
+      "layer": "Couche {name} : avec l'histoire"
     }
   }
 }

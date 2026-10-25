@@ -461,6 +461,9 @@ export type AcKind = "car" | "track";
 export interface ContentCredit {
   kind: AcKind;
   id: string;
+  /** A layer of that car or track, by name: it travels with the story, and
+   * is on during the story's sessions only. */
+  layer?: string;
   source?: string;
   author?: string;
   licence?: string;
@@ -479,6 +482,8 @@ export interface Holding {
   official: boolean;
   /** The DLC it comes from; `null` for the base game or a mod. */
   dlc: string | null;
+  /** Its layers in the library, which the story can carry. */
+  layers: { name: string; folder: string | null }[];
 }
 
 /** The story's registers and what they say (`story::studio::PackageView`). */
@@ -493,7 +498,7 @@ export interface PackageView {
   register: {
     coverage: Coverage[];
     /** The cars and tracks the package carries, and their line. */
-    content: { kind: AcKind; id: string; line: number | null }[];
+    content: { kind: AcKind; id: string; layer: string | null; line: number | null }[];
     diagnostics: Diagnostic[];
   };
 }

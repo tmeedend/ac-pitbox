@@ -27,6 +27,7 @@
   import { homeApp } from "$lib/story/player/apps";
   import { dateLabel } from "$lib/story/player/phone";
   import { mediaUrl, speakersOf } from "$lib/story/player/speakers";
+  import { beginStorySession } from "$lib/story/play";
   import { closeGame, keepReading, move, play } from "$lib/story/playState.svelte";
   import SteamPrompt from "$lib/components/launch/SteamPrompt.svelte";
   import DialogueStage from "./player/DialogueStage.svelte";
@@ -103,6 +104,9 @@
     const g = play.game;
     if (g?.view.launched !== w.event) return;
     try {
+      // The story's own layers over the event's car and track, on until the
+      // game closes; one that does not come on keeps the session from going.
+      if (play.source) await beginStorySession(play.source, w.event);
       await startSession(await buildSetup(w, g));
       markStarting();
     } catch (e) {

@@ -10,9 +10,11 @@ pub mod backups;
 pub mod frames;
 pub mod history;
 pub mod holdings;
+pub mod library;
 pub mod media;
 pub mod packages;
 pub mod play;
+pub mod session;
 pub mod studio;
 
 /// Turns the Story entry on in a built installer, where it is hidden by

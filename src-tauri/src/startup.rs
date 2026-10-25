@@ -293,6 +293,9 @@ pub(crate) fn start_services(app: &App, conn: Connection) {
         use tauri::Emitter;
         let _ = watch_handle.emit("ac://running", running);
         commands::online::on_game_running(&watch_handle, running);
+        // And a fourth: the layers a story's session switched on go off
+        // (`story/session.rs`).
+        commands::story::on_game_running(&watch_handle, running);
     });
     app.manage(music_engine);
     app.manage(music::PreviewHandle::default());

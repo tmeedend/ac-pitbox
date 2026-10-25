@@ -72,7 +72,15 @@ fn a_package_installs_and_plays() {
     let file = packed(&base, "sample.pitstory", &story_engine::sample::folder_files());
 
     assert_eq!(
-        install(&config, Origin::File(&file), false, &all_held, &mut |_, _| true).unwrap(),
+        install(
+            &config,
+            Origin::File(&file),
+            false,
+            &all_held,
+            &crate::story::library::Recorded::default(),
+            &mut |_, _| true
+        )
+        .unwrap(),
         installed("sample", "1", None)
     );
     let dir = config.join("story/installed/sample");
@@ -127,6 +135,7 @@ fn an_update_keeps_the_game_or_asks_before_losing_it() {
         Origin::File(&packed(&base, "v1.pitstory", &story_engine::sample::folder_files())),
         false,
         &all_held,
+        &crate::story::library::Recorded::default(),
         &mut |_, _| true,
     )
     .unwrap();
@@ -135,7 +144,15 @@ fn an_update_keeps_the_game_or_asks_before_losing_it() {
 
     let v2 = packed(&base, "v2.pitstory", &sample_with("story.yaml", version("2")));
     assert_eq!(
-        install(&config, Origin::File(&v2), false, &all_held, &mut |_, _| true).unwrap(),
+        install(
+            &config,
+            Origin::File(&v2),
+            false,
+            &all_held,
+            &crate::story::library::Recorded::default(),
+            &mut |_, _| true
+        )
+        .unwrap(),
         installed("sample", "2", Some("1"))
     );
     play::resume(&config, &source).expect("the game resumes on the update");
@@ -147,7 +164,16 @@ fn an_update_keeps_the_game_or_asks_before_losing_it() {
     let at = v3.iter().position(|(p, _)| p == flow).unwrap();
     v3[at] = renamed.into_iter().find(|(p, _)| p == flow).unwrap();
     let v3 = packed(&base, "v3.pitstory", &v3);
-    match install(&config, Origin::File(&v3), false, &all_held, &mut |_, _| true).unwrap() {
+    match install(
+        &config,
+        Origin::File(&v3),
+        false,
+        &all_held,
+        &crate::story::library::Recorded::default(),
+        &mut |_, _| true,
+    )
+    .unwrap()
+    {
         Outcome::LosesGame { previous, version, .. } => {
             assert_eq!((previous.as_str(), version.as_str()), ("2", "3"));
         }
@@ -159,7 +185,15 @@ fn an_update_keeps_the_game_or_asks_before_losing_it() {
     play::resume(&config, &source).expect("the game still resumes");
 
     assert_eq!(
-        install(&config, Origin::File(&v3), true, &all_held, &mut |_, _| true).unwrap(),
+        install(
+            &config,
+            Origin::File(&v3),
+            true,
+            &all_held,
+            &crate::story::library::Recorded::default(),
+            &mut |_, _| true
+        )
+        .unwrap(),
         installed("sample", "3", Some("2"))
     );
     let listed = play::list(&config, &all_held);
@@ -185,12 +219,26 @@ fn a_damaged_package_installs_nothing() {
     bad[last] ^= 0xff;
     let file = by_hand(&base, &one_item_manifest(&item), &[("s.zip", &bad)]);
     assert_eq!(
-        install(&config, Origin::File(&file), false, &all_held, &mut |_, _| true),
+        install(
+            &config,
+            Origin::File(&file),
+            false,
+            &all_held,
+            &crate::story::library::Recorded::default(),
+            &mut |_, _| true
+        ),
         Err(errors::STORY_PACKAGE_DAMAGED.into())
     );
     let file = by_hand(&base, &one_item_manifest(&item), &[("other.zip", &item)]);
     assert_eq!(
-        install(&config, Origin::File(&file), false, &all_held, &mut |_, _| true),
+        install(
+            &config,
+            Origin::File(&file),
+            false,
+            &all_held,
+            &crate::story::library::Recorded::default(),
+            &mut |_, _| true
+        ),
         Err(errors::STORY_PACKAGE_DAMAGED.into()),
         "item missing"
     );
@@ -203,7 +251,15 @@ fn a_damaged_package_installs_nothing() {
 
     let ok = by_hand(&base, &one_item_manifest(&item), &[("s.zip", &item)]);
     assert_eq!(
-        install(&config, Origin::File(&ok), false, &all_held, &mut |_, _| true).unwrap(),
+        install(
+            &config,
+            Origin::File(&ok),
+            false,
+            &all_held,
+            &crate::story::library::Recorded::default(),
+            &mut |_, _| true
+        )
+        .unwrap(),
         installed("sample", "1", None),
         "the same, whole"
     );
@@ -227,7 +283,14 @@ fn a_package_writes_nothing_outside_the_story() {
         let item = zip.finish().unwrap().into_inner();
         let file = by_hand(&base, &one_item_manifest(&item), &[("s.zip", &item)]);
         assert_eq!(
-            install(&config, Origin::File(&file), false, &all_held, &mut |_, _| true),
+            install(
+                &config,
+                Origin::File(&file),
+                false,
+                &all_held,
+                &crate::story::library::Recorded::default(),
+                &mut |_, _| true
+            ),
             Err(errors::STORY_PACKAGE_DAMAGED.into()),
             "{evil}"
         );
@@ -253,6 +316,7 @@ fn a_package_from_a_newer_pit_box_says_so() {
             Origin::File(&by_hand(&base, newer, &[])),
             false,
             &all_held,
+            &crate::story::library::Recorded::default(),
             &mut |_, _| true
         ),
         Err(errors::STORY_PACKAGE_TOO_NEW.into())
@@ -265,6 +329,7 @@ fn a_package_from_a_newer_pit_box_says_so() {
             Origin::File(&by_hand(&base, &unknown_kind, &[("s.zip", &item)])),
             false,
             &all_held,
+            &crate::story::library::Recorded::default(),
             &mut |_, _| true
         ),
         Err(errors::STORY_PACKAGE_TOO_NEW.into()),
@@ -273,9 +338,14 @@ fn a_package_from_a_newer_pit_box_says_so() {
     let not_a_package = base.join("a.pitstory");
     std::fs::write(&not_a_package, b"hello").unwrap();
     assert_eq!(
-        install(&config, Origin::File(&not_a_package), false, &all_held, &mut |_, _| {
-            true
-        }),
+        install(
+            &config,
+            Origin::File(&not_a_package),
+            false,
+            &all_held,
+            &crate::story::library::Recorded::default(),
+            &mut |_, _| { true }
+        ),
         Err(errors::STORY_PACKAGE_UNREADABLE.into())
     );
 }
@@ -290,7 +360,14 @@ fn a_story_with_errors_is_not_installed() {
     let item = package::story_item(&files).unwrap();
     let file = by_hand(&base, &one_item_manifest(&item), &[("s.zip", &item)]);
     assert_eq!(
-        install(&config, Origin::File(&file), false, &all_held, &mut |_, _| true),
+        install(
+            &config,
+            Origin::File(&file),
+            false,
+            &all_held,
+            &crate::story::library::Recorded::default(),
+            &mut |_, _| true
+        ),
         Err(errors::STORY_PACKAGE_HAS_ERRORS.into())
     );
     assert!(!config.join("story/installed/sample").exists());
@@ -302,11 +379,19 @@ fn uninstalling_keeps_the_game_for_a_new_install() {
     let base = temp_dir("story-pkg-uninstall");
     let config = base.join("config");
     let file = packed(&base, "sample.pitstory", &story_engine::sample::folder_files());
-    install(&config, Origin::File(&file), false, &all_held, &mut |_, _| true).unwrap();
+    install(
+        &config,
+        Origin::File(&file),
+        false,
+        &all_held,
+        &crate::story::library::Recorded::default(),
+        &mut |_, _| true,
+    )
+    .unwrap();
     let source = Source::Installed { id: "sample".into() };
     play::new_game(&config, &source, 7).unwrap();
 
-    uninstall(&config, "sample").unwrap();
+    uninstall(&config, "sample", &crate::story::library::Recorded::default()).unwrap();
     assert!(!config.join("story/installed/sample").exists(), "the story is gone");
     assert!(
         !config.join("story/installed/sample.package.json").exists(),
@@ -316,9 +401,20 @@ fn uninstalling_keeps_the_game_for_a_new_install() {
         play::list(&config, &all_held).iter().all(|p| p.source != source),
         "no longer offered"
     );
-    assert!(uninstall(&config, "../config").is_err(), "an id is never a path");
+    assert!(
+        uninstall(&config, "../config", &crate::story::library::Recorded::default()).is_err(),
+        "an id is never a path"
+    );
 
-    install(&config, Origin::File(&file), false, &all_held, &mut |_, _| true).unwrap();
+    install(
+        &config,
+        Origin::File(&file),
+        false,
+        &all_held,
+        &crate::story::library::Recorded::default(),
+        &mut |_, _| true,
+    )
+    .unwrap();
     play::resume(&config, &source).expect("the game comes back with the story");
 }
 
@@ -333,6 +429,7 @@ fn a_swap_stopped_half_way_is_put_right() {
         Origin::File(&packed(&base, "s.pitstory", &story_engine::sample::folder_files())),
         false,
         &all_held,
+        &crate::story::library::Recorded::default(),
         &mut |_, _| true,
     )
     .unwrap();

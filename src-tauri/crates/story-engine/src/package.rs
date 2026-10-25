@@ -82,6 +82,11 @@ pub struct Item {
     /// without downloading the item, whether the player's copy is the same.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signature: Option<String>,
+    /// A layer's: the kind of what it lies over (`id` names it) and its name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host: Option<AcKind>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -91,6 +96,9 @@ pub enum ItemKind {
     Story,
     Car,
     Track,
+    /// A layer of a car or a track: the story's own change to it, laid over
+    /// it during the story's sessions only.
+    Layer,
     /// A kind this Pit Box does not know: the package is a newer one's.
     #[serde(other)]
     Unknown,
@@ -102,7 +110,7 @@ impl ItemKind {
         match self {
             ItemKind::Car => Some(AcKind::Car),
             ItemKind::Track => Some(AcKind::Track),
-            ItemKind::Story | ItemKind::Unknown => None,
+            ItemKind::Story | ItemKind::Layer | ItemKind::Unknown => None,
         }
     }
 }
@@ -209,6 +217,7 @@ pub fn item(kind: ItemKind, id: Option<&str>, size: u64, sha256: String) -> Item
     let name = match (kind, id) {
         (ItemKind::Car, Some(id)) => format!("car-{id}"),
         (ItemKind::Track, Some(id)) => format!("track-{id}"),
+        (ItemKind::Layer, Some(id)) => format!("layer-{id}"),
         _ => "story".into(),
     };
     Item {
@@ -218,6 +227,8 @@ pub fn item(kind: ItemKind, id: Option<&str>, size: u64, sha256: String) -> Item
         size,
         sha256,
         signature: None,
+        host: None,
+        name: None,
     }
 }
 

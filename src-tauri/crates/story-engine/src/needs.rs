@@ -8,6 +8,7 @@ use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 
+use crate::model::Event;
 use crate::Story;
 
 /// A kind of game content a story names by folder id.
@@ -30,18 +31,17 @@ impl AcKind {
 
 /// Every car and track the story's events name, by kind then id.
 pub fn needed(story: &Story) -> BTreeSet<(AcKind, String)> {
-    let mut out = BTreeSet::new();
-    for event in &story.events {
-        let s = &event.session;
-        if let Some(track) = &s.track {
-            out.insert((AcKind::Track, track.clone()));
-        }
-        let opponents = s.opponents.iter().filter_map(|o| o.car.as_ref());
-        for car in s.car.iter().chain(opponents) {
-            out.insert((AcKind::Car, car.clone()));
-        }
-    }
-    out
+    story.events.iter().flat_map(of_event).collect()
+}
+
+/// The track and the cars one event races on: its own car and each
+/// opponent's.
+pub fn of_event(event: &Event) -> BTreeSet<(AcKind, String)> {
+    let s = &event.session;
+    let opponents = s.opponents.iter().filter_map(|o| o.car.as_ref());
+    (s.track.iter().map(|t| (AcKind::Track, t.clone())))
+        .chain(s.car.iter().chain(opponents).map(|c| (AcKind::Car, c.clone())))
+        .collect()
 }
 
 #[cfg(test)]

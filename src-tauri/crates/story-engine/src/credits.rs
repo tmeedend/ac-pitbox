@@ -11,7 +11,9 @@
 //! **The cars and tracks a package carries** have their lines in
 //! `package/manifest.yaml`, one per car or track, by folder id. Which of them
 //! a package carries - those that are not the game's own - is the app's to
-//! say (`check_content`).
+//! say (`check_content`). A line naming a `layer` of a car or a track is
+//! what makes that layer travel with the story: the story's own change to
+//! the mod, for its sessions only.
 //!
 //! **What needs a credit** is what the player sees or hears: a picture, a
 //! video, a sound or a font. A licence text, a readme or the story's own
@@ -63,6 +65,11 @@ pub struct ContentCredit {
     pub kind: AcKind,
     /// Its folder id.
     pub id: String,
+    /// A layer of that car or track, by its name in the author's library:
+    /// it travels with the story, and is laid over the mod during the
+    /// story's sessions only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layer: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -176,8 +183,18 @@ pub struct Coverage {
 pub struct ContentCoverage {
     pub kind: AcKind,
     pub id: String,
+    /// A layer of that car or track.
+    pub layer: Option<String>,
     /// Its line in `package/manifest.yaml`; `None`, no credit.
     pub line: Option<usize>,
+}
+
+/// The layers a register makes travel: its lines naming one, as the car or
+/// track they lie over and their name.
+pub fn carried_layers(lines: &[ContentCredit]) -> Vec<(AcKind, String, String)> {
+    (lines.iter())
+        .filter_map(|l| Some((l.kind, l.id.clone(), l.layer.clone()?)))
+        .collect()
 }
 
 /// A story's register as the Package screen shows it, and what the build
@@ -339,23 +356,38 @@ pub fn check_content(
         None => &[],
     };
     for (n, line) in lines.iter().enumerate() {
-        let at = format!("line {} ({} {})", n + 1, line.kind.folder(), line.id);
+        let layer = line
+            .layer
+            .as_deref()
+            .map(|l| format!(", layer {l}"))
+            .unwrap_or_default();
+        let at = format!("line {} ({} {}{layer})", n + 1, line.kind.folder(), line.id);
         for problem in line_problems(&line.author, &line.licence, line.permission) {
             said(Severity::Error, format!("{at}: {problem}"));
         }
-        if !carried.contains(&(line.kind, line.id.clone())) {
+        if line.layer.is_none() && !carried.contains(&(line.kind, line.id.clone())) {
             said(Severity::Warning, format!("{at}: the package does not carry it"));
         }
     }
     for (kind, id) in carried {
-        let line = lines.iter().position(|l| l.kind == *kind && &l.id == id);
+        let line = (lines.iter()).position(|l| l.kind == *kind && &l.id == id && l.layer.is_none());
         if line.is_none() && !matches!(read, Some(Err(_))) {
             said(Severity::Error, format!("{} {id}: no credit", kind.folder()));
         }
         register.content.push(ContentCoverage {
             kind: *kind,
             id: id.clone(),
+            layer: None,
             line,
+        });
+    }
+    // A layer's line is what makes it travel: always covered.
+    for (n, line) in lines.iter().enumerate().filter(|(_, l)| l.layer.is_some()) {
+        register.content.push(ContentCoverage {
+            kind: line.kind,
+            id: line.id.clone(),
+            layer: line.layer.clone(),
+            line: Some(n),
         });
     }
 }
@@ -541,6 +573,7 @@ mod tests {
         ContentCredit {
             kind,
             id: id.into(),
+            layer: None,
             source: None,
             author: Some("A modder".into()),
             licence: Some("Shared with permission".into()),
@@ -583,6 +616,32 @@ mod tests {
         let mut none = Register::default();
         check_content(&mut none, &BTreeSet::new(), None);
         assert!(!none.blocks(), "nothing carried, nothing to credit");
+    }
+
+    // A line naming a layer is what makes it travel - even over the game's
+    // own track - and needs a permission like any other.
+    #[test]
+    fn a_layer_travels_by_its_line() {
+        let mut hide = content_line(AcKind::Track, "imola", Permission::NotAsked);
+        hide.layer = Some("No billboards".into());
+        let lines = vec![hide];
+        assert_eq!(
+            carried_layers(&lines),
+            vec![(AcKind::Track, "imola".to_string(), "No billboards".to_string())]
+        );
+        let mut r = Register::default();
+        check_content(&mut r, &BTreeSet::new(), Some(&Ok(lines)));
+        assert_eq!(
+            messages(&r, Severity::Error),
+            vec![
+                "package/manifest.yaml: line 1 (tracks imola, layer No billboards): the build waits for its permission"
+            ]
+        );
+        assert!(
+            messages(&r, Severity::Warning).is_empty(),
+            "a layer of a track not carried is still carried"
+        );
+        assert_eq!(r.content[0].layer.as_deref(), Some("No billboards"));
     }
 
     #[test]

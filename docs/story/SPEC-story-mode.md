@@ -664,7 +664,18 @@ shared by hand; the same installer reads both.
   sizes than the package's - is played, and the hub says so. A car the
   author updates in a later version of the story therefore does not reach a
   player who has it already. Playing the story's own version for the
-  session only comes later (L4.5), with the story's own changes to a mod.
+  session only comes later (L4.5b).
+- **A story's own change to a mod** (hide a building, a track that changes
+  over the years) is a layer of that car or track, the game's own
+  included, taken along by a line of `package/manifest.yaml` naming it -
+  credited like any other. At the player's, it is stored as a layer of
+  their mod, **off**, named after the story; it is on during the story's
+  events on that car or track only, and off again when the game closes,
+  at the next start of Pit Box after one closed or killed meanwhile, or
+  when no game runs two minutes after the launch. A layer that does not
+  come on keeps the session from going. An update replaces the story's
+  layers; uninstalling removes them. A player without the mod does not get
+  its layer (the story does not start anyway).
 - **A story missing a car or track it races on does not start**: the hub
   names what is missing, the DLC to buy for the game's own content. A car
   removed since the install comes back by installing the package again.
@@ -848,6 +859,9 @@ the editor is reserved; they are translated when it opens to all.
   package; the others offer a line of `package/manifest.yaml`, or say the
   author's library lacks them. The register's checks list beside it and
   count apart from the story's: they block the build, not the story.
+  Under each car or track, its layers in the author's library, each with
+  a box to take it along with the story - a line of
+  `package/manifest.yaml`, its credit below it.
   **Publish for hosting** writes into a folder the author picks what a host
   serves: the items and `manifest.json`, the file whose link players paste.
   Items of an earlier publish stay beside (a changed item has another name);
@@ -1297,7 +1311,7 @@ The settings live in the `settings` part of each story's `story.yaml`.
 | L3b | Visual novel: line log, fast-forward and auto-advance, illustrations, transitions, saving during a dialogue, read-only graph view of the flow | A story with no frame plays like a visual novel |
 | L3c | Scenes: places and variants, still image or video loop, ambient sound, blur, the Scenes screen and its preview; examples in the sample | Dialogues and the frame stand in a place |
 | L3d | Frames and skins: `frames.yaml`, successive phones, apps (name, icon, template, layout, content types), skins and their slots, status bar, wallpaper, UI sounds, the Frame screen, the starter kit and the author guide; the agenda template, the call screen, documents on the scene and the `page` layout, a TV and a landline on the scene; examples in the sample | An author gives the story the look they drew |
-| L4 | Story package: a manifest and one zip per item. L4.1 install a `.pitstory`; L4.2 the permission register (`credits.yaml` per folder that travels, `package/manifest.yaml`) and the Package screen's build; L4.3 cars and tracks in the package, imported when missing; L4.4 download from a URL, items by fingerprint, updates; L4.5 a story's own changes to a mod, for its sessions only | A player installs a bundled story in one click |
+| L4 | Story package: a manifest and one zip per item. L4.1 install a `.pitstory`; L4.2 the permission register (`credits.yaml` per folder that travels, `package/manifest.yaml`) and the Package screen's build; L4.3 cars and tracks in the package, imported when missing; L4.4 download from a URL, items by fingerprint, updates; L4.5a a story's own changes to a mod (its layers), for its sessions only; L4.5b the story's own version of a car or track for its sessions | A player installs a bundled story in one click |
 | L5 | Playtest and Timeline | An author checks years of story in minutes |
 | L6 | Balance simulator, catalogs, economy, side events | Money pressure is tuned on numbers |
 | L7 | Authored cinematics: CSP playback app, replays, CamTool files, music | Scripted moments are staged |

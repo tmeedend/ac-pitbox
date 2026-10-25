@@ -173,6 +173,7 @@ pub fn run() {
             commands::story::story_package_update,
             commands::story::story_package_updates,
             commands::story::story_package_cancel,
+            commands::story::story_session_begin,
             commands::story::story_build_package,
             commands::story::story_publish_package,
             commands::story::story_list,

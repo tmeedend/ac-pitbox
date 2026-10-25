@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use story_engine::engine::{self, Input};
 use story_engine::model::{Character, Driver};
-use story_engine::needs::{needed, AcKind};
+use story_engine::needs::{needed, of_event, AcKind};
 use story_engine::save::{Save, SaveError};
 use story_engine::state::{EventResult, State, Wait};
 use story_engine::validate::{validate, Severity};
@@ -220,6 +220,21 @@ pub fn list(config_dir: &Path, lookup: Lookup) -> Vec<Playable> {
             },
         })
         .collect()
+}
+
+/// The layers the installed story `source` stored that lie over what its
+/// event `event` races on: what its session switches on (`session.rs`). Only
+/// a package carries layers; any other story has none.
+pub fn session_layers(config_dir: &Path, source: &Source, event: &str) -> Result<Vec<String>, String> {
+    let Source::Installed { id } = source else {
+        return Ok(Vec::new());
+    };
+    let story = read(config_dir, source)?;
+    let hosts = story.event(event).map(of_event).unwrap_or_default();
+    Ok((super::packages::story_layers(config_dir, id).into_iter())
+        .filter(|l| hosts.contains(&(l.kind, l.host.clone())))
+        .map(|l| l.id)
+        .collect())
 }
 
 /// Starts a new game, replacing the one under way. `seed` makes its draws:

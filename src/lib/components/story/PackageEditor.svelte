@@ -12,7 +12,7 @@
   import { errorText } from "$lib/errors";
   import { fmtSize } from "$lib/format";
   import { t } from "$lib/i18n/index.svelte";
-  import { contentLineFor, lineFor, packageName, registerGroups, splitFiles } from "$lib/story/package";
+  import { contentLineFor, contentLineOf, lineFor, packageName, registerGroups, splitFiles } from "$lib/story/package";
   import { buildPackage, publishPackage, type ContentCredit, type Credit, type Holding } from "$lib/story/studio";
   import { registerEntry, saveContentRegister, saveRegister, studio } from "$lib/story/studioState.svelte";
   import CreditFields from "./CreditFields.svelte";
@@ -39,8 +39,14 @@
     void saveContentRegister();
   }
 
-  function lineOf(h: Holding): number {
-    return (contentLines ?? []).findIndex((l) => l.kind === h.kind && l.id === h.id);
+  function lineOf(h: Holding, layer?: string): number {
+    return contentLineOf(contentLines ?? [], h.kind, h.id, layer);
+  }
+
+  /** Takes the layer `layer` of `h` along with the story, or leaves it. */
+  function carryLayer(h: Holding, layer: string) {
+    const j = lineOf(h, layer);
+    editContent((lines) => (j >= 0 ? lines.splice(j, 1) : lines.push(contentLineFor(h.kind, h.id, layer))));
   }
 
   function edit(file: string, change: (lines: Credit[]) => void) {
@@ -155,6 +161,16 @@
               {#if i >= 0}
                 <CreditFields line={contentLines[i]} onchange={(apply) => editContent((lines) => apply(lines[i]))} />
               {/if}
+              {#each h.layers as layer (layer.name)}
+                {@const j = lineOf(h, layer.name)}
+                <label class="carry">
+                  <input type="checkbox" checked={j >= 0} onchange={() => carryLayer(h, layer.name)} />
+                  <span>{t("story.package.layer", { name: layer.name })}</span>
+                </label>
+                {#if j >= 0}
+                  <CreditFields line={contentLines[j]} onchange={(apply) => editContent((lines) => apply(lines[j]))} />
+                {/if}
+              {/each}
             </div>
           {/each}
         {/if}
@@ -275,6 +291,13 @@
   }
   .named {
     padding-bottom: 7px;
+  }
+  .carry {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    margin-top: 4px;
   }
   .item {
     flex: 1;

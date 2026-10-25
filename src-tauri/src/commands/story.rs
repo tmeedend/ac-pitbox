@@ -1,13 +1,15 @@
 //! Story Mode (`docs/story/SPEC-story-mode.md`) — see `crate::story`.
 
 use std::collections::BTreeSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use tauri::{Emitter, Manager};
 
 use super::prelude::*;
 use crate::story::holdings::{self, Holding};
-use crate::story::{backups, packages, play, studio};
+use crate::story::library::{self, LibraryWrites};
+use crate::story::{backups, packages, play, session, studio};
 use story_engine::needs::AcKind;
 use story_engine::scene::Shown;
 
@@ -21,6 +23,77 @@ fn holdings(app: &AppHandle) -> impl Fn(&BTreeSet<(AcKind, String)>) -> Vec<Hold
         let conn = db.0.lock().unwrap_or_else(|e| e.into_inner());
         holdings::look_up(&conn, &cfg, wanted)
     }
+}
+
+/// The library as Story Mode writes it (`story::library`): the base locked
+/// for each write alone, under the game-write marker - a story's layers go
+/// on and off by the same path as a sheet's switch.
+struct AppLibrary<'a>(&'a AppHandle);
+
+impl AppLibrary<'_> {
+    fn with<T>(&self, write: impl FnOnce(&rusqlite::Connection, &AppConfig) -> Result<T, String>) -> Result<T, String> {
+        let db = self.0.try_state::<Db>().ok_or("the base is not open yet")?;
+        let cfg = crate::config::load(self.0);
+        let _game_write = crate::gamestate::GameWrite::begin();
+        let conn = db.0.lock().unwrap_or_else(|e| e.into_inner());
+        write(&conn, &cfg)
+    }
+}
+
+impl LibraryWrites for AppLibrary<'_> {
+    fn add_layer(&self, kind: AcKind, host: &str, name: &str, files: &Path, origin: &str) -> Result<String, String> {
+        self.with(|conn, cfg| library::add_layer(conn, cfg, kind, host, name, files, origin))
+    }
+
+    fn remove_layer(&self, id: &str) -> Result<(), String> {
+        self.with(|conn, cfg| crate::compose::remove_layer(conn, cfg, id))
+    }
+
+    fn set_layer_active(&self, id: &str, active: bool) -> Result<(), String> {
+        self.with(|conn, cfg| crate::compose::set_layer_active(conn, cfg, id, active))
+    }
+}
+
+/// Whether the game runs, as the game watch last announced it: what the
+/// guard of a story's session asks when its delay is over.
+static GAME_RUNNING: AtomicBool = AtomicBool::new(false);
+
+/// Hooked on the game watch (`startup.rs`), called on every change and once
+/// at startup: when the game is not running, the layers a story's session
+/// switched on go off (`story::session`). On its own thread: switching
+/// recomposes, which must not hold the watch.
+pub fn on_game_running(app: &AppHandle, running: bool) {
+    GAME_RUNNING.store(running, Ordering::SeqCst);
+    if running {
+        return;
+    }
+    let app = app.clone();
+    std::thread::spawn(move || {
+        if let Ok(dir) = crate::rules::config_dir(&app) {
+            session::end(&dir, &AppLibrary(&app));
+        }
+    });
+}
+
+/// Before an event of a story is launched: the story's layers over its car
+/// and track on, until the game closes - or, no game running when the guard's
+/// delay is over, off again.
+#[tauri::command]
+pub async fn story_session_begin(app: AppHandle, source: play::Source, event: String) -> Result<(), String> {
+    off_window(app, move |app| {
+        let dir = crate::rules::config_dir(app)?;
+        let layers = play::session_layers(&dir, &source, &event)?;
+        if let Some(generation) = session::begin(&dir, &layers, &AppLibrary(app))? {
+            let app = app.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(session::GUARD);
+                let running = GAME_RUNNING.load(Ordering::SeqCst);
+                session::end_if_no_game(&dir, generation, running, &AppLibrary(&app));
+            });
+        }
+        Ok(())
+    })
+    .await
 }
 
 /// The Story switch asked for on this launch's command line, if any
@@ -98,6 +171,7 @@ fn install_reporting(app: &AppHandle, origin: packages::Origin, lose_game: bool)
         origin,
         lose_game,
         &holdings(app),
+        &AppLibrary(app),
         &mut progress,
     )
 }
@@ -168,7 +242,7 @@ pub async fn story_package_imported(app: AppHandle, archive: PathBuf) -> Result<
 #[tauri::command]
 pub async fn story_package_uninstall(app: AppHandle, id: String) -> Result<(), String> {
     off_window(app, move |app| {
-        packages::uninstall(&crate::rules::config_dir(app)?, &id)
+        packages::uninstall(&crate::rules::config_dir(app)?, &id, &AppLibrary(app))
     })
     .await
 }
