@@ -2959,7 +2959,8 @@
       "installNow": "Install",
       "downloading": "Downloading: {received} of {total}",
       "stop": "Stop",
-      "update": "Update: version {version} ({size})"
+      "update": "Update: version {version} ({size})",
+      "updateNothingToDownload": "Update: version {version}"
     },
     "frames": {
       "title": "Frames",

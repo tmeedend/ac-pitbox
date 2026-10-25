@@ -2959,7 +2959,8 @@
       "installNow": "Installer",
       "downloading": "Téléchargement : {received} sur {total}",
       "stop": "Arrêter",
-      "update": "Mettre à jour : version {version} ({size})"
+      "update": "Mettre à jour : version {version} ({size})",
+      "updateNothingToDownload": "Mettre à jour : version {version}"
     },
     "frames": {
       "title": "Cadres",

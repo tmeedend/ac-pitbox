@@ -52,6 +52,8 @@
   }
 
   onMount(() => {
+    // What the last install said belongs to that visit of the hub.
+    if (!installing.busy) Object.assign(installing, { notice: null, problem: null });
     void refresh().then(checkUpdates);
   });
 
@@ -185,7 +187,9 @@
                   disabled={installing.busy}
                   onclick={() => install((loseGame) => updatePackage(id, loseGame))}
                 >
-                  {t("story.play.update", { version: update.version, size: fmtSize(update.size) })}
+                  {update.size > 0
+                    ? t("story.play.update", { version: update.version, size: fmtSize(update.size) })
+                    : t("story.play.updateNothingToDownload", { version: update.version })}
                 </button>
               {/if}
               {#if p.game && !p.game.ended}
