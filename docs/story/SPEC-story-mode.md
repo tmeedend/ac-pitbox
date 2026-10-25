@@ -663,8 +663,21 @@ shared by hand; the same installer reads both.
   same version is used as it is; another version - other file paths or
   sizes than the package's - is played, and the hub says so. A car the
   author updates in a later version of the story therefore does not reach a
-  player who has it already. Playing the story's own version for the
-  session only comes later (L4.5b).
+  player who has it already - unless the story needs its own version.
+- **A story's own version** of a car or track (its line says
+  `own_version: true`): where the player has another, the story's is
+  downloaded and kept in Pit Box's data, and stands in for the player's
+  during the story's events on it only - the player's mod leaves the game
+  by its own switch, the story's is laid in its place, and when the session
+  ends (by the same three ways as a layer) it is removed and the player's
+  comes back as it was, in the game or not. A copy of the game Pit Box does
+  not manage (a mod installed by hand) is never touched: the player's plays
+  then. Uninstalling removes the story's versions. A story's layer over a
+  car or track whose own version stands in is not switched on: it composes
+  with the player's mod, and that mod is out of the game meanwhile.
+- **During a story's session**, until its changes are undone, no story
+  installs, updates or uninstalls: it would remove what the running game
+  reads. The hub says to close the game first.
 - **A story's own change to a mod** (hide a building, a track that changes
   over the years) is a layer of that car or track, the game's own
   included, taken along by a line of `package/manifest.yaml` naming it -
@@ -861,7 +874,8 @@ the editor is reserved; they are translated when it opens to all.
   count apart from the story's: they block the build, not the story.
   Under each car or track, its layers in the author's library, each with
   a box to take it along with the story - a line of
-  `package/manifest.yaml`, its credit below it.
+  `package/manifest.yaml`, its credit below it; and on a car or track the
+  package carries, a box for the story to need its own version.
   **Publish for hosting** writes into a folder the author picks what a host
   serves: the items and `manifest.json`, the file whose link players paste.
   Items of an earlier publish stay beside (a changed item has another name);

@@ -203,3 +203,9 @@ pub const STORY_PACKAGE_DOWNLOAD_FAILED: &str = "errors.storyPackageDownloadFail
 pub const STORY_PACKAGE_CANCELLED: &str = "errors.storyPackageCancelled";
 /// What a link leads to is not a story package's manifest.
 pub const STORY_LINK_NOT_A_PACKAGE: &str = "errors.storyLinkNotAPackage";
+/// The game's folder holds a copy of a car or track Pit Box does not
+/// manage: the story's own version cannot stand in for it.
+pub const STORY_VERSION_UNMANAGED: &str = "errors.storyVersionUnmanaged";
+/// An install or an uninstall while a story's session has changed mods the
+/// running game reads.
+pub const STORY_SESSION_UNDER_WAY: &str = "errors.storySessionUnderWay";

@@ -1768,7 +1768,9 @@
     "storyBuildBlocked": "The story or its permission register has errors: the package is not built. See the Package section.",
     "storyPackageDownloadFailed": "The package could not be downloaded: check the link and your connection.",
     "storyPackageCancelled": "Download stopped: nothing changed.",
-    "storyLinkNotAPackage": "This link does not lead to a story's manifest.json."
+    "storyLinkNotAPackage": "This link does not lead to a story's manifest.json.",
+    "storyVersionUnmanaged": "This game folder is not managed by Pit Box: the story's version cannot stand in for it.",
+    "storySessionUnderWay": "A story's event is under way: close the game, then try again."
   },
   "pack": {
     "tabMembers": "Mods",
@@ -3252,7 +3254,8 @@
       "notInLibrary": "Not in your library",
       "publish": "Publish for hosting…",
       "published": "Published in {dir} ({size}). The link to give is that of its manifest.json.",
-      "layer": "Layer {name}: with the story"
+      "layer": "Layer {name}: with the story",
+      "ownVersion": "Its own version during the story's sessions"
     }
   }
 }

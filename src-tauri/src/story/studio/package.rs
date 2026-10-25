@@ -205,6 +205,12 @@ fn build_items(folder: &Path, dir: &Path, lookup: Lookup) -> Result<Manifest, St
         let (size, sha256) = (File::open(&part).and_then(package::sha256_of)).map_err(|e| e.to_string())?;
         let mut item = package::item(h.kind.into(), Some(&h.id), size, sha256);
         item.signature = Some(package::folder_signature(source).map_err(|e| format!("{}: {e}", source.display()))?);
+        item.own_version = (content_read
+            .as_ref()
+            .and_then(|r| r.as_ref().ok())
+            .into_iter()
+            .flatten())
+        .any(|l| l.kind == h.kind && l.id == h.id && l.layer.is_none() && l.own_version);
         std::fs::rename(&part, dir.join(&item.file)).map_err(|e| e.to_string())?;
         items.push(item);
     }
@@ -718,14 +724,69 @@ mod tests {
         assert!(library.active().is_empty(), "off outside the story's sessions");
 
         let source = play::Source::Installed { id: "sample".into() };
-        let on_mugello = play::session_layers(&config, &source, "track_day_01").unwrap();
-        assert_eq!(on_mugello.len(), 1, "the event at Mugello switches it on");
+        let on_mugello = play::session_plan(&config, &source, "track_day_01").unwrap();
+        assert_eq!(on_mugello.layers.len(), 1, "the event at Mugello switches it on");
         assert!(
-            play::session_layers(&config, &source, "race_01").unwrap().is_empty(),
+            play::session_plan(&config, &source, "race_01")
+                .unwrap()
+                .layers
+                .is_empty(),
             "not at Magione"
         );
 
         packages::uninstall(&config, "sample", &library).unwrap();
         assert!(library.stored().is_empty(), "removed with the story");
+    }
+
+    // A story that needs its own version of a car keeps it where the player
+    // has another, for its sessions - the player's own never replaced
+    // (SPEC-story-mode, Content: a car the player already has).
+    #[test]
+    fn a_storys_own_version_is_kept_for_its_sessions() {
+        let base = temp_dir("story-own-version");
+        let story = base.join("story");
+        racing_on_a_mod(&story, "granted");
+        std::fs::write(
+            story.join(CONTENT_REGISTER),
+            "- kind: car\n  id: mod_car\n  own_version: true\n  author: A modder\n  licence: Shared\n  permission: granted\n",
+        )
+        .unwrap();
+        let car = fake_mod(&base.join("author"), "mod_car", "[ENGINE]");
+        let out = base.join("p.pitstory");
+        build_package(&story, &out, &author_with(car)).unwrap();
+
+        let config = base.join("player");
+        let theirs = fake_mod(&base.join("player_other"), "mod_car", "[ENGINE]\nPOWER=999");
+        let library = crate::story::library::Recorded::default();
+        let lookup = |w: &BTreeSet<(AcKind, String)>| held_as(w, |_| Some(theirs.clone()));
+        packages::install(&config, Origin::File(&out), false, &lookup, &library, &mut |_, _| true).unwrap();
+
+        let kept = packages::own_versions(&config, "sample");
+        let [version] = kept.as_slice() else {
+            panic!("one version kept: {kept:?}")
+        };
+        assert!(
+            version.folder.join("data/engine.ini").is_file(),
+            "the story's version unpacked"
+        );
+        assert!(
+            packages::other_versions(&config, "sample").is_empty(),
+            "not 'your version is played': the story's stands in"
+        );
+        let source = play::Source::Installed { id: "sample".into() };
+        let plan = play::session_plan(&config, &source, "race_01").unwrap();
+        assert_eq!(plan.versions.len(), 1, "it stands in at the event racing it");
+        assert!(play::session_plan(&config, &source, "track_day_01")
+            .unwrap()
+            .versions
+            .is_empty());
+        assert_eq!(
+            std::fs::read_to_string(theirs.join("data/engine.ini")).unwrap(),
+            "[ENGINE]\nPOWER=999",
+            "the player's own untouched"
+        );
+
+        packages::uninstall(&config, "sample", &library).unwrap();
+        assert!(!version.folder.exists(), "gone with the story");
     }
 }

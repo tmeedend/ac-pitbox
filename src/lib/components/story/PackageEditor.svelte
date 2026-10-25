@@ -159,6 +159,18 @@
                 {/if}
               </div>
               {#if i >= 0}
+                <label class="carry">
+                  <input
+                    type="checkbox"
+                    checked={contentLines[i].own_version === true}
+                    onchange={(e) =>
+                      editContent((lines) => {
+                        if ((e.currentTarget as HTMLInputElement).checked) lines[i].own_version = true;
+                        else delete lines[i].own_version;
+                      })}
+                  />
+                  <span>{t("story.package.ownVersion")}</span>
+                </label>
                 <CreditFields line={contentLines[i]} onchange={(apply) => editContent((lines) => apply(lines[i]))} />
               {/if}
               {#each h.layers as layer (layer.name)}

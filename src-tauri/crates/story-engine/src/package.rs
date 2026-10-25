@@ -87,6 +87,10 @@ pub struct Item {
     pub host: Option<AcKind>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// A car's or a track's: the story needs this very version, which stands
+    /// in for another the player has during the story's sessions.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub own_version: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -229,6 +233,7 @@ pub fn item(kind: ItemKind, id: Option<&str>, size: u64, sha256: String) -> Item
         signature: None,
         host: None,
         name: None,
+        own_version: false,
     }
 }
 

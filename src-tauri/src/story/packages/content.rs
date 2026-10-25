@@ -80,6 +80,9 @@ pub(super) struct Plan<'a> {
     pub fetch: Vec<&'a Item>,
     /// The layers whose car or track the player has.
     pub layers: Vec<&'a Item>,
+    /// The cars and tracks the story needs in its own version, where the
+    /// player has another: kept to stand in during the story's sessions.
+    pub versions: Vec<&'a Item>,
     /// Here in another version than the package's.
     pub other_version: Vec<(AcKind, String)>,
 }
@@ -95,6 +98,7 @@ pub(super) fn plan<'a>(items: &[&'a Item], lookup: Lookup) -> Plan<'a> {
     let mut plan = Plan {
         fetch: Vec::new(),
         layers: Vec::new(),
+        versions: Vec::new(),
         other_version: Vec::new(),
     };
     for item in items {
@@ -122,7 +126,9 @@ pub(super) fn plan<'a>(items: &[&'a Item], lookup: Lookup) -> Plan<'a> {
                 false
             }
         };
-        if differs {
+        if differs && item.own_version {
+            plan.versions.push(item);
+        } else if differs {
             plan.other_version.push((kind, id.to_string()));
         }
     }
@@ -227,6 +233,76 @@ pub(super) fn place_layers(
     }
     let path = layers_path(root, story);
     let written = serde_json::to_string_pretty(&stored)
+        .map_err(|e| e.to_string())
+        .and_then(|json| std::fs::write(&path, json).map_err(|e| e.to_string()));
+    if let Err(e) = written {
+        log::warn!("story package: {} not written: {e}", path.display());
+    }
+}
+
+/// A car or track the story keeps in its own version, to stand in for the
+/// player's during its sessions.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OwnVersion {
+    pub kind: AcKind,
+    pub id: String,
+    /// The version's folder, named after the car or track.
+    pub folder: PathBuf,
+}
+
+fn versions_dir(root: &Path, story: &str) -> PathBuf {
+    root.join(".versions").join(story)
+}
+
+fn versions_path(root: &Path, story: &str) -> PathBuf {
+    root.join(format!("{story}.versions.json"))
+}
+
+/// The versions the installed story `story` keeps.
+pub fn own_versions(root: &Path, story: &str) -> Vec<OwnVersion> {
+    (std::fs::read_to_string(versions_path(root, story)).ok())
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
+/// Forgets the versions an earlier install of `story` kept.
+pub(super) fn remove_versions(root: &Path, story: &str) {
+    let dir = versions_dir(root, story);
+    if dir.is_dir() {
+        if let Err(e) = std::fs::remove_dir_all(&dir) {
+            log::warn!("story package: {} not removed: {e}", dir.display());
+        }
+    }
+    let path = versions_path(root, story);
+    if path.is_file() {
+        if let Err(e) = std::fs::remove_file(&path) {
+            log::warn!("story package: {} not removed: {e}", path.display());
+        }
+    }
+}
+
+/// Keeps the story's own versions, checked already and in `staged` under
+/// their file name, unpacked in Pit Box's data, in place of an earlier
+/// install's.
+pub(super) fn place_versions(root: &Path, story: &str, plan: &Plan, staged: &Path) {
+    remove_versions(root, story);
+    let mut kept = Vec::new();
+    for item in &plan.versions {
+        let (Some(kind), Some(id)) = (item.kind.content(), item.id.as_deref()) else {
+            continue;
+        };
+        let into = versions_dir(root, story).join(kind.folder());
+        match super::extract(&staged.join(&item.file), &into, |_| true) {
+            Ok(()) => kept.push(OwnVersion {
+                kind,
+                id: id.to_string(),
+                folder: into.join(id),
+            }),
+            Err(e) => log::warn!("story package: the story's version of {id} not kept: {e}"),
+        }
+    }
+    let path = versions_path(root, story);
+    let written = serde_json::to_string_pretty(&kept)
         .map_err(|e| e.to_string())
         .and_then(|json| std::fs::write(&path, json).map_err(|e| e.to_string()));
     if let Err(e) = written {

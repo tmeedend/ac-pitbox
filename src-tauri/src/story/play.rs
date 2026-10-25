@@ -222,19 +222,39 @@ pub fn list(config_dir: &Path, lookup: Lookup) -> Vec<Playable> {
         .collect()
 }
 
-/// The layers the installed story `source` stored that lie over what its
-/// event `event` races on: what its session switches on (`session.rs`). Only
-/// a package carries layers; any other story has none.
-pub fn session_layers(config_dir: &Path, source: &Source, event: &str) -> Result<Vec<String>, String> {
+/// What a session of the installed story `source`'s event `event` changes
+/// (`session.rs`): the story's layers over what it races on, and its own
+/// versions of those cars and tracks. Only a package carries either; any
+/// other story changes nothing.
+pub fn session_plan(config_dir: &Path, source: &Source, event: &str) -> Result<super::session::Plan, String> {
     let Source::Installed { id } = source else {
-        return Ok(Vec::new());
+        return Ok(super::session::Plan::default());
     };
     let story = read(config_dir, source)?;
     let hosts = story.event(event).map(of_event).unwrap_or_default();
-    Ok((super::packages::story_layers(config_dir, id).into_iter())
+    let versions: Vec<_> = (super::packages::own_versions(config_dir, id).into_iter())
+        .filter(|v| hosts.contains(&(v.kind, v.id.clone())))
+        .map(|v| (v.kind, v.id, v.folder))
+        .collect();
+    // A layer lies over the player's mod, composed with it: over the story's
+    // own version, laid whole in its place, it has nothing to compose with.
+    let standing = |kind: AcKind, host: &str| versions.iter().any(|(k, h, _)| *k == kind && h == host);
+    let layers = (super::packages::story_layers(config_dir, id).into_iter())
         .filter(|l| hosts.contains(&(l.kind, l.host.clone())))
+        .filter(|l| {
+            let over_version = standing(l.kind, &l.host);
+            if over_version {
+                log::warn!(
+                    "story: layer {} of {} not on: the story's own version stands in",
+                    l.id,
+                    l.host
+                );
+            }
+            !over_version
+        })
         .map(|l| l.id)
-        .collect())
+        .collect();
+    Ok(super::session::Plan { layers, versions })
 }
 
 /// Starts a new game, replacing the one under way. `seed` makes its draws:

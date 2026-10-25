@@ -52,6 +52,18 @@ impl LibraryWrites for AppLibrary<'_> {
     fn set_layer_active(&self, id: &str, active: bool) -> Result<(), String> {
         self.with(|conn, cfg| crate::compose::set_layer_active(conn, cfg, id, active))
     }
+
+    fn in_game(&self, kind: AcKind, id: &str) -> bool {
+        library::in_game(&crate::config::load(self.0), kind, id)
+    }
+
+    fn stand_in(&self, kind: AcKind, id: &str, version: &Path) -> Result<(), String> {
+        self.with(|conn, cfg| library::stand_in(conn, cfg, kind, id, version))
+    }
+
+    fn stand_down(&self, kind: AcKind, id: &str, was_active: bool) -> Result<(), String> {
+        self.with(|conn, cfg| library::stand_down(conn, cfg, kind, id, was_active))
+    }
 }
 
 /// Whether the game runs, as the game watch last announced it: what the
@@ -76,14 +88,14 @@ pub fn on_game_running(app: &AppHandle, running: bool) {
 }
 
 /// Before an event of a story is launched: the story's layers over its car
-/// and track on, until the game closes - or, no game running when the guard's
-/// delay is over, off again.
+/// and track on, and its own versions standing in, until the game closes -
+/// or, no game running when the guard's delay is over, undone.
 #[tauri::command]
 pub async fn story_session_begin(app: AppHandle, source: play::Source, event: String) -> Result<(), String> {
     off_window(app, move |app| {
         let dir = crate::rules::config_dir(app)?;
-        let layers = play::session_layers(&dir, &source, &event)?;
-        if let Some(generation) = session::begin(&dir, &layers, &AppLibrary(app))? {
+        let plan = play::session_plan(&dir, &source, &event)?;
+        if let Some(generation) = session::begin(&dir, &plan, &AppLibrary(app))? {
             let app = app.clone();
             std::thread::spawn(move || {
                 std::thread::sleep(session::GUARD);

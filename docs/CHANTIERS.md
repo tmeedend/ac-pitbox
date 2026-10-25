@@ -1256,8 +1256,55 @@ de reprendre. En cas d'écart, la spec fait foi.
           endroits, à factoriser au troisième).
           **Pas vu à l'écran** : la case des couches, une couche allumée
           pendant une vraie session puis éteinte à la fermeture du jeu.
-        - **Reste** : L4.5b (la version de l'histoire le temps d'une
-          session).
+        - **L4.5b, la version de l'histoire le temps d'une session — fait
+          (2026-10-25).** Une ligne de voiture ou de circuit qui dit
+          `own_version: true` (case de la section Paquet) : chez le joueur
+          qui en a une autre version, celle de l'histoire est téléchargée et
+          gardée (`story/installed/.versions/<id>/`, notée dans
+          `<id>.versions.json`) ; au lancement d'une épreuve qui roule dessus,
+          le mod du joueur sort du jeu par sa propre désactivation
+          (`activation::deactivate`), celle de l'histoire est posée par une
+          jonction (`activation::create_junction`) ; à la fin de la session,
+          la jonction est retirée par `activation::remove_junction` - qui
+          refuse tout ce qui n'est pas une jonction - et le mod du joueur
+          revient s'il était en jeu (`story/library.rs`, `stand_in` et
+          `stand_down`). Écrit dans `story/session.json` avant de toucher quoi
+          que ce soit, rendu par les mêmes trois chemins que les couches.
+          **Tests d'abord, sur un vrai disque** : l'aller-retour (le mod du
+          joueur en jeu, la version de l'histoire en jeu, le mod du joueur
+          revenu, la bibliothèque et la copie de l'histoire intactes ; un mod
+          éteint reste éteint), puis un dossier non géré jamais touché, ni à
+          l'aller ni au retour.
+          **Choisi sans demander** (dans la spec) : la version de l'histoire
+          ne prend la place que pendant les épreuves qui roulent dessus ; un
+          dossier que Pit Box ne gère pas laisse jouer la copie du joueur,
+          sans bloquer la session ; la version est gardée dans les données de
+          Pit Box (donc sur le disque système), retirée à la désinstallation.
+          **Choisi sans demander** (détails) : la jonction plutôt que les
+          hardlinks pour la version de l'histoire (un seul lien, retiré par la
+          fonction gardée) ; si Pit Box s'arrête entre la sortie du mod du
+          joueur et la pose de la jonction, la fin de session le remet en jeu
+          (ce qui était noté avant) ; `story/session.json` n'est pas dans les
+          copies de sauvegarde de l'app (contrairement à `online_layers.json`).
+          **Revue de code avant le commit (`/code-review`), quatre points
+          corrigés** : la fin de session rend les versions avant d'éteindre les
+          couches (une couche éteinte recompose son mod, qui aurait pris la
+          place de la jonction de l'histoire et laissé en jeu un mod que le
+          joueur avait éteint) ; une couche sur un mod dont la version de
+          l'histoire prend la place n'est pas allumée (rien avec quoi se
+          composer) ; pas d'installation, de mise à jour ni de
+          désinstallation tant qu'une session d'histoire n'est pas défaite ;
+          `stand_in` ne rend plus l'état d'avant, noté une seule fois avant de
+          toucher quoi que ce soit.
+          **Repéré, non traité** : pendant la session, le mod du joueur paraît
+          actif à toute l'app (`activation::is_mod_active` compte toute
+          jonction) - l'éteindre depuis la bibliothèque à ce moment retirerait
+          la version de l'histoire en pleine course ; `story/session.json`
+          n'est pas dans les sauvegardes de l'app (l'ajouter serait une
+          couture de plus).
+          **Pas vu à l'écran** : la case, une vraie session avec la version de
+          l'histoire, le retour du mod du joueur après le jeu.
+        - **L4 terminé.**
       - **L5 à L8** : dans l'ordre du plan de livraison de la spec.
       **Écarts assumés par rapport au document de conception** (la spec
       publique les reprend déjà) :

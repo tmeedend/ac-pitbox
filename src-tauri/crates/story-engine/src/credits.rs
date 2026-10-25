@@ -70,6 +70,10 @@ pub struct ContentCredit {
     /// story's sessions only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub layer: Option<String>,
+    /// The story needs its own version of that car or track: where the
+    /// player has another, the story's stands in during its sessions.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub own_version: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -574,6 +578,7 @@ mod tests {
             kind,
             id: id.into(),
             layer: None,
+            own_version: false,
             source: None,
             author: Some("A modder".into()),
             licence: Some("Shared with permission".into()),

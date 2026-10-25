@@ -59,7 +59,9 @@ fn update_of(config_dir: &Path, id: &str, lookup: Lookup) -> Option<Update> {
         .map(|i| i.size)
         .sum();
     let plan = content::plan(&cars, lookup);
-    let content_size: u64 = plan.fetch.iter().chain(&plan.layers).map(|i| i.size).sum();
+    let content_size: u64 = (plan.fetch.iter().chain(&plan.layers).chain(&plan.versions))
+        .map(|i| i.size)
+        .sum();
     Some(Update {
         id: id.to_string(),
         version: latest.version,

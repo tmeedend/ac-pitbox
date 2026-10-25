@@ -1768,7 +1768,9 @@
     "storyBuildBlocked": "L'histoire ou son registre des permissions a des erreurs : le paquet n'est pas construit. Voir la section Paquet.",
     "storyPackageDownloadFailed": "Le paquet n'a pas pu être téléchargé : vérifie le lien et ta connexion.",
     "storyPackageCancelled": "Téléchargement arrêté : rien n'a changé.",
-    "storyLinkNotAPackage": "Ce lien ne mène pas au manifest.json d'une histoire."
+    "storyLinkNotAPackage": "Ce lien ne mène pas au manifest.json d'une histoire.",
+    "storyVersionUnmanaged": "Ce dossier du jeu n'est pas géré par Pit Box : la version de l'histoire ne peut pas prendre sa place.",
+    "storySessionUnderWay": "Une épreuve d'histoire est en cours : ferme le jeu, puis recommence."
   },
   "pack": {
     "tabMembers": "Mods",
@@ -3252,7 +3254,8 @@
       "notInLibrary": "Pas dans ta bibliothèque",
       "publish": "Publier pour un hébergement…",
       "published": "Publié dans {dir} ({size}). Le lien à donner est celui de son manifest.json.",
-      "layer": "Couche {name} : avec l'histoire"
+      "layer": "Couche {name} : avec l'histoire",
+      "ownVersion": "Sa propre version pendant les sessions de l'histoire"
     }
   }
 }

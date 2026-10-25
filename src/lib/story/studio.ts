@@ -464,6 +464,9 @@ export interface ContentCredit {
   /** A layer of that car or track, by name: it travels with the story, and
    * is on during the story's sessions only. */
   layer?: string;
+  /** The story needs its own version: where the player has another, the
+   * story's stands in during its sessions. */
+  own_version?: boolean;
   source?: string;
   author?: string;
   licence?: string;

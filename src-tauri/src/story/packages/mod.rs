@@ -47,7 +47,7 @@ mod content;
 mod fetch;
 mod updates;
 
-pub use content::StoryLayer;
+pub use content::{OwnVersion, StoryLayer};
 pub use fetch::{cancel, Origin, Progress};
 pub use updates::{update_url, updates, Update};
 
@@ -124,6 +124,9 @@ pub fn install(
     progress: Progress,
 ) -> Result<Outcome, String> {
     let _busy = BUSY.lock().unwrap_or_else(|e| e.into_inner());
+    if super::session::under_way(config_dir) {
+        return Err(errors::STORY_SESSION_UNDER_WAY.into());
+    }
     let root = root(config_dir);
     recover(&root);
     let (mut fetcher, manifest) = fetch::Fetcher::open(origin, progress)?;
@@ -148,15 +151,17 @@ pub fn install(
     let story_zip = staging.work.join(&story_item.file);
     let cached = from_cache(&root, &id, story_item, &story_zip);
     let story_size = if cached { 0 } else { story_item.size };
-    let others: u64 = plan.fetch.iter().chain(&plan.layers).map(|i| i.size).sum();
+    let others: u64 = (plan.fetch.iter().chain(&plan.layers).chain(&plan.versions))
+        .map(|i| i.size)
+        .sum();
     fetcher.set_total(story_size + others);
     if !cached {
         fetcher.fetch(story_item, &story_zip)?;
     }
     unpack(&story_zip, &staging.dir)?;
     let story = checked_story(&staging.dir, &manifest)?;
-    // Every car, track and layer checked too, before anything lands.
-    for item in plan.fetch.iter().chain(&plan.layers) {
+    // Every car, track, layer and version checked too, before anything lands.
+    for item in plan.fetch.iter().chain(&plan.layers).chain(&plan.versions) {
         let to = staging.work.join(&item.file);
         fetcher.fetch(item, &to)?;
         content::check_item(&to, item.id.as_deref().unwrap_or_default())?;
@@ -177,6 +182,7 @@ pub fn install(
     content::clear(&root, &id);
     let imports = content::place(&root, &id, &plan, &staging.work);
     content::place_layers(&root, &id, &manifest.title, &plan, &staging.work, library);
+    content::place_versions(&root, &id, &plan, &staging.work);
     to_cache(&root, &id, &story_zip);
     keep(&root.join(format!("{id}.package.json")), Some(&manifest));
     let source = match origin {
@@ -260,6 +266,9 @@ fn to_cache(root: &Path, id: &str, story_zip: &Path) {
 /// game stays where it is: installed again, the story resumes it.
 pub fn uninstall(config_dir: &Path, id: &str, library: &dyn LibraryWrites) -> Result<(), String> {
     let _busy = BUSY.lock().unwrap_or_else(|e| e.into_inner());
+    if super::session::under_way(config_dir) {
+        return Err(errors::STORY_SESSION_UNDER_WAY.into());
+    }
     let dir = folder(config_dir, id)?;
     if dir.is_dir() {
         std::fs::remove_dir_all(&dir).map_err(|e| format!("removing {}: {e}", dir.display()))?;
@@ -274,6 +283,7 @@ pub fn uninstall(config_dir: &Path, id: &str, library: &dyn LibraryWrites) -> Re
     let root = root(config_dir);
     content::clear(&root, id);
     content::remove_layers(&root, id, library);
+    content::remove_versions(&root, id);
     keep::<SourceRecord>(&source_path(&root, id), None);
     let cache = cache_dir(&root, id);
     if cache.is_dir() {
@@ -293,6 +303,11 @@ pub fn other_versions(config_dir: &Path, id: &str) -> Vec<(story_engine::needs::
 /// The layers the installed story `id` stored in the library.
 pub fn story_layers(config_dir: &Path, id: &str) -> Vec<StoryLayer> {
     content::story_layers(&root(config_dir), id)
+}
+
+/// The cars and tracks the installed story `id` keeps in its own version.
+pub fn own_versions(config_dir: &Path, id: &str) -> Vec<OwnVersion> {
+    content::own_versions(&root(config_dir), id)
 }
 
 /// An archive an install set aside for the import, once the import is done
