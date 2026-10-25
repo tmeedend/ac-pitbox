@@ -61,7 +61,7 @@ pub(super) fn check_item(zip_path: &Path, id: &str) -> Result<(), String> {
     };
     let zip = (File::open(zip_path).map_err(|e| e.to_string()))
         .and_then(|f| zip::ZipArchive::new(f).map_err(|e| e.to_string()))
-        .map_err(&damaged)?;
+        .map_err(damaged)?;
     let prefix = format!("{id}/");
     for name in zip.file_names() {
         let inside = name.strip_prefix(&prefix).unwrap_or_default();

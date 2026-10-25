@@ -349,7 +349,7 @@ fn extract(item: &Path, dir: &Path, fits: impl Fn(&str) -> bool) -> Result<(), S
     };
     let mut zip = (File::open(item).map_err(|e| e.to_string()))
         .and_then(|f| zip::ZipArchive::new(f).map_err(|e| e.to_string()))
-        .map_err(&damaged)?;
+        .map_err(damaged)?;
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i).map_err(|e| damaged(e.to_string()))?;
         if entry.is_dir() {
