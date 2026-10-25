@@ -21,8 +21,8 @@ use serde::{Deserialize, Serialize};
 use story_engine::needs::AcKind;
 use story_engine::package::Item;
 
-use super::holdings::Lookup;
 use crate::errors;
+use crate::story::holdings::Lookup;
 
 /// What an install recorded of the cars and tracks it found here.
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -117,7 +117,7 @@ pub(super) fn place(root: &Path, story: &str, items: &[&Item], staged: &Path, lo
 /// player's copy plays either way, and the log says why.
 fn differs(zip_path: &Path, id: &str, theirs: &Path, staged: &Path) -> bool {
     let into = staged.join(format!("compare-{id}"));
-    let result = super::packages::extract(zip_path, &into, |_| true)
+    let result = super::extract(zip_path, &into, |_| true)
         .and_then(|_| crate::identity::content_differs(&into.join(id), theirs).map_err(|e| e.to_string()));
     if let Err(e) = std::fs::remove_dir_all(&into) {
         log::warn!("story package: {} not removed: {e}", into.display());
