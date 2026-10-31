@@ -189,3 +189,89 @@ fn a_missing_library_folder_keeps_the_signatures_answer() {
     assert_eq!(l.versions(), 1);
     assert!(l.library.is_dir());
 }
+
+/// Switches a sound mod on for the car, as the user does: the car's `sfx/` in
+/// the library then holds the mod's files and the original is kept apart.
+fn switch_a_sound_on(l: &mut Lib) {
+    l.cfg.ac_install_path = Some(l.base.join("ac"));
+    let sound = l.library.join("sounds").join("dup_car").join("v8");
+    write(&sound, "car.bank", "MODBANK, NOT THE SAME LENGTH");
+    write(&sound, "GUIDs.txt", "MOD");
+    let now = chrono::Local::now().to_rfc3339();
+    crate::overlay::insert_sub_mod(
+        &l.conn,
+        "s1",
+        "SOUND",
+        "dup_car",
+        "v8",
+        &sound.to_string_lossy(),
+        None,
+        &now,
+    )
+    .unwrap();
+    crate::submods::activate_sound(&l.conn, &l.cfg, "s1").unwrap();
+    let active = crate::overlay::active_library_path(&l.conn, "dup_car")
+        .unwrap()
+        .unwrap();
+    let folder = crate::libpath::resolve(l.cfg.library_path.as_deref(), &active).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(folder.join("sfx/car.bank")).unwrap(),
+        "MODBANK, NOT THE SAME LENGTH",
+        "the sound really is switched"
+    );
+}
+
+/// Real regression of the byte-by-byte rule: the switch rewrites the car's
+/// `sfx/` in the library, so the same archive no longer looked like what it
+/// had been imported as, and came back as a second version - with the stock
+/// sound, while the base still said the mod was on. What it was imported with
+/// is the original sound, kept apart: that is what it is compared with.
+#[test]
+fn a_reimport_after_a_sound_switch_is_still_a_duplicate() {
+    let mut l = lib();
+    let root = l.first();
+    switch_a_sound_on(&mut l);
+    assert_eq!(l.analysed(&root), "duplicate");
+    assert_eq!(l.import(&root), "DUPLICATE");
+    assert_eq!(l.versions(), 1, "nothing was stored");
+}
+
+/// The sound being on hides nothing else: the archive's own `sfx/` is compared
+/// with the original one, so a release that ships another sound is an update.
+#[test]
+fn a_new_sound_in_the_archive_is_an_update_even_while_a_sound_is_on() {
+    let mut l = lib();
+    l.first();
+    switch_a_sound_on(&mut l);
+    let root = l.source(|d| write(d, "sfx/car.bank", "A NEW ORIGINAL SOUND"));
+    assert_eq!(l.analysed(&root), "update");
+    assert_eq!(l.import(&root), "UPDATE_REPLACE");
+    assert_eq!(l.versions(), 2);
+}
+
+/// Back to the stock sound, `sfx/` is the car's own again and the plain
+/// comparison applies - nothing of the sound's detour is left in the rule.
+#[test]
+fn a_reimport_after_the_stock_sound_is_back_is_still_a_duplicate() {
+    let mut l = lib();
+    let root = l.first();
+    switch_a_sound_on(&mut l);
+    crate::submods::restore_sound(&l.conn, &l.cfg, "dup_car").unwrap();
+    assert_eq!(l.analysed(&root), "duplicate");
+    assert_eq!(l.import(&root), "DUPLICATE");
+    assert_eq!(l.versions(), 1);
+}
+
+/// The original sound is gone from the library: nothing to compare the `sfx/`
+/// with, and the answer stays the signature's - a duplicate, as everywhere the
+/// files cannot be read.
+#[test]
+fn a_missing_original_sound_keeps_the_signatures_answer() {
+    let mut l = lib();
+    let root = l.first();
+    switch_a_sound_on(&mut l);
+    std::fs::remove_dir_all(crate::submods::sound_backup_dir(&l.cfg, "dup_car").unwrap()).unwrap();
+    assert_eq!(l.analysed(&root), "duplicate");
+    assert_eq!(l.import(&root), "DUPLICATE");
+    assert_eq!(l.versions(), 1);
+}

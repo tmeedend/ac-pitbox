@@ -65,11 +65,21 @@ pub fn content_signature(dir: &Path) -> String {
 /// Only regular files, like `rel_files` and the copy that files a mod in the
 /// library: a link is not followed. Two paths differing only by case cannot
 /// exist side by side on the file systems the app runs on (Windows).
-fn files_by_rel(dir: &Path) -> std::io::Result<BTreeMap<String, (PathBuf, u64)>> {
+fn files_by_rel(dir: &Path) -> std::io::Result<FilesByRel> {
+    let mut files = FilesByRel::new();
+    collect_files(dir, "", &mut files)?;
+    Ok(files)
+}
+
+/// Path (normalised) → where the file is and how big.
+type FilesByRel = BTreeMap<String, (PathBuf, u64)>;
+
+/// Adds to `files` every file under `dir`, its path prefixed by `prefix`
+/// (`"sfx/"` to file a folder where it would sit in another).
+fn collect_files(dir: &Path, prefix: &str, files: &mut FilesByRel) -> std::io::Result<()> {
     if !std::fs::metadata(dir)?.is_dir() {
         return Err(std::io::Error::new(std::io::ErrorKind::NotADirectory, "not a folder"));
     }
-    let mut files = BTreeMap::new();
     for entry in WalkDir::new(dir) {
         let entry = entry?;
         if !entry.file_type().is_file() {
@@ -82,9 +92,12 @@ fn files_by_rel(dir: &Path) -> std::io::Result<BTreeMap<String, (PathBuf, u64)>>
             .to_string_lossy()
             .to_lowercase()
             .replace('\\', "/");
-        files.insert(rel, (entry.path().to_path_buf(), entry.metadata()?.len()));
+        files.insert(
+            format!("{prefix}{rel}"),
+            (entry.path().to_path_buf(), entry.metadata()?.len()),
+        );
     }
-    Ok(files)
+    Ok(())
 }
 
 /// Fills `buf` from `r` as far as it goes: the whole buffer, or what is left.
@@ -130,7 +143,28 @@ fn same_bytes(a: &Path, b: &Path, buf: &mut [Vec<u8>; 2]) -> std::io::Result<boo
 /// caller keeps the signature's answer then - nothing to compare is no reason
 /// to turn a re-import into an update.
 pub fn content_differs(incoming: &Path, existing: &Path) -> std::io::Result<bool> {
-    let (a, b) = (files_by_rel(incoming)?, files_by_rel(existing)?);
+    maps_differ(&files_by_rel(incoming)?, &files_by_rel(existing)?)
+}
+
+/// [`content_differs`] for a car whose `sfx/` holds a sound mod's files: what
+/// the car was imported with is the original sound, kept apart at
+/// `original_sfx`, so the existing `sfx/` is read from there. Without it every
+/// re-import of an archive would differ at once from a car whose sound was
+/// switched - and be filed as an update, with the stock sound back in it.
+/// `Err` when `original_sfx` cannot be read, like the other folders.
+pub fn content_differs_with_original_sfx(
+    incoming: &Path,
+    existing: &Path,
+    original_sfx: &Path,
+) -> std::io::Result<bool> {
+    let a = files_by_rel(incoming)?;
+    let mut b = files_by_rel(existing)?;
+    b.retain(|rel, _| !rel.starts_with("sfx/"));
+    collect_files(original_sfx, "sfx/", &mut b)?;
+    maps_differ(&a, &b)
+}
+
+fn maps_differ(a: &FilesByRel, b: &FilesByRel) -> std::io::Result<bool> {
     if a.len() != b.len()
         || a.iter()
             .any(|(rel, (_, size))| b.get(rel).map(|(_, s)| s) != Some(size))
@@ -259,6 +293,49 @@ mod tests {
         assert!(
             !content_differs(&a, &b).unwrap(),
             "paths are compared as the rest of the import does: lower case"
+        );
+    }
+
+    /// SPEC §4.1: while a sound mod is on, the existing `sfx/` is the mod's and
+    /// the car's own sound is the one kept apart: the incoming `sfx/` is compared
+    /// with THAT, the rest of the folders as usual.
+    #[test]
+    fn a_switched_sound_is_compared_by_the_original_it_replaced() {
+        let base = crate::testutil::temp_dir("differs-sfx");
+        let (incoming, existing, original) = (base.join("in"), base.join("lib"), base.join("original"));
+        for d in [&incoming, &existing] {
+            put(d, "model.kn5", &[7u8; 100]);
+        }
+        put(&incoming, "sfx/car.bank", b"ORIGBANK");
+        put(&incoming, "sfx/GUIDs.txt", b"ORIG");
+        put(&existing, "sfx/car.bank", b"MODBANK-LONGER");
+        put(&original, "car.bank", b"ORIGBANK");
+        put(&original, "GUIDs.txt", b"ORIG");
+
+        assert!(
+            content_differs(&incoming, &existing).unwrap(),
+            "the mod's sound is not the archive's"
+        );
+        assert!(
+            !content_differs_with_original_sfx(&incoming, &existing, &original).unwrap(),
+            "the archive carries the original sound, which is what the car was imported with"
+        );
+
+        put(&incoming, "sfx/car.bank", b"NEW-ORIG-BANK");
+        assert!(
+            content_differs_with_original_sfx(&incoming, &existing, &original).unwrap(),
+            "an archive with another sound than the original is an update"
+        );
+        put(&incoming, "sfx/car.bank", b"ORIGBANK");
+
+        put(&incoming, "model.kn5", &[8u8; 100]);
+        assert!(
+            content_differs_with_original_sfx(&incoming, &existing, &original).unwrap(),
+            "the rest of the car is still compared"
+        );
+        assert!(
+            content_differs_with_original_sfx(&incoming, &existing, &base.join("gone")).is_err(),
+            "an original that cannot be read is an error, not a difference"
         );
     }
 

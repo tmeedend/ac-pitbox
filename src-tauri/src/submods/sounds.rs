@@ -326,6 +326,21 @@ pub(crate) fn sound_backup_dir(cfg: &AppConfig, parent_id: &str) -> Result<PathB
     Ok(lib.join("sounds").join(parent_id).join("__original__"))
 }
 
+/// The car's own `sfx/`, kept apart, **while a sound mod is switched on**: the
+/// car's `sfx/` then holds the mod's files, and this is what the car was
+/// imported with - what a re-import is compared with (SPEC §4.1). `None` when
+/// no sound is on (the `sfx/` is the car's own), or when the car's sounds
+/// cannot be listed (logged: the comparison then reads the `sfx/` as it is).
+pub(crate) fn original_sfx_while_a_sound_is_on(conn: &Connection, cfg: &AppConfig, parent_id: &str) -> Option<PathBuf> {
+    let subs = overlay::list_subs_for_parent(conn, parent_id)
+        .map_err(|e| log::warn!("sounds of {parent_id} not listed, its sfx/ is read as it is: {e}"))
+        .ok()?;
+    if !subs.iter().any(|s| s.sub_type == "SOUND" && s.is_active) {
+        return None;
+    }
+    sound_backup_dir(cfg, parent_id).ok()
+}
+
 // --- One-move swap, and its recovery (§8.3) -----------------------------
 //
 // A stock car's `sfx/` is the GAME's own folder (golden rule 5). Emptying it

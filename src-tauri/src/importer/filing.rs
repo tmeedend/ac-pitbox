@@ -34,6 +34,9 @@ use crate::{harmonize, identity, inspect, layers, uijson};
 /// of a mod's active version in the library (`active_content_differs`).
 pub(super) struct ActiveVersion {
     dir: PathBuf,
+    /// The car's original `sfx/` while a sound mod is switched on: the `sfx/`
+    /// of `dir` is then the mod's, not what the car was imported with.
+    original_sfx: Option<PathBuf>,
 }
 
 /// The active version of a mod in the library. `None` for a mod with no active
@@ -47,7 +50,10 @@ pub(super) fn active_version(conn: &Connection, cfg: &AppConfig, id: &str) -> Op
             if dir.is_none() {
                 log::warn!("duplicate check of {id}: the library path {path} does not resolve, kept as a duplicate");
             }
-            dir.map(|dir| ActiveVersion { dir })
+            dir.map(|dir| ActiveVersion {
+                dir,
+                original_sfx: crate::submods::original_sfx_while_a_sound_is_on(conn, cfg, id),
+            })
         }
         Err(e) => {
             log::warn!("duplicate check of {id}: active version unread ({e}), kept as a duplicate");
@@ -58,13 +64,19 @@ pub(super) fn active_version(conn: &Connection, cfg: &AppConfig, id: &str) -> Op
 
 /// Whether the incoming folder differs from the files of the `active` version
 /// (`identity::content_differs`), for a mod whose signature already matches it.
+/// A car whose sound was switched is compared by the original `sfx/` it was
+/// imported with, not by the mod's.
 ///
 /// `false` - "no, treat it as the duplicate the signature says" - also when
-/// `active` cannot be read (disk unplugged, folder moved). Not being able to
-/// read must not turn every re-import into an update; it is logged, so that a
-/// user who reports one can be diagnosed.
+/// `active` cannot be read (disk unplugged, folder moved, original sound
+/// gone). Not being able to read must not turn every re-import into an update;
+/// it is logged, so that a user who reports one can be diagnosed.
 pub(super) fn differs_from_active(id: &str, incoming: &Path, active: &ActiveVersion) -> bool {
-    identity::content_differs(incoming, &active.dir).unwrap_or_else(|e| {
+    let compared = match &active.original_sfx {
+        Some(original) => identity::content_differs_with_original_sfx(incoming, &active.dir, original),
+        None => identity::content_differs(incoming, &active.dir),
+    };
+    compared.unwrap_or_else(|e| {
         log::warn!(
             "duplicate check of {id}: {} not compared ({e}), kept as a duplicate",
             active.dir.display()
