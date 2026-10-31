@@ -14,7 +14,7 @@ use std::time::Instant;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
-use super::filing::{active_dir, differs_from_active, process_found};
+use super::filing::{active_version, differs_from_active, process_found, ActiveVersion};
 use super::{
     auto_activate, check_disk_space, drop_unused_kept_source, failed_result, file_tail, filing_ratio, keep_source,
     mod_progress, rescue_nested_archives, resolve_conflict, size_batch, source_label, ArchiveResult, ArchiveSource,
@@ -79,9 +79,9 @@ struct Classified {
     status: &'static str,
     existing_id: Option<String>,
     existing_name: Option<String>,
-    /// The folder of the active version, when the signature says "duplicate":
-    /// the files are compared once the base is released (`BulkPlan::verify`).
-    verify_against: Option<PathBuf>,
+    /// The active version, when the signature says "duplicate": the files are
+    /// compared once the base is released (`BulkPlan::verify`).
+    verify_against: Option<ActiveVersion>,
 }
 
 impl Classified {
@@ -122,7 +122,7 @@ fn classify(
             // import itself decides - and where there is nothing to compare
             // (no folder to read), the signature's answer stands.
             Ok(Classified {
-                verify_against: active_dir(conn, cfg, id),
+                verify_against: active_version(conn, cfg, id),
                 ..Classified::of("duplicate")
             })
         } else {
@@ -175,7 +175,7 @@ struct Pending {
     module: usize,
     id: String,
     incoming: PathBuf,
-    active: PathBuf,
+    active: ActiveVersion,
 }
 
 /// The analysis once the base has been read: every mod classified, the

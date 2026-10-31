@@ -30,11 +30,16 @@ use crate::resources::ExtractionMode;
 use crate::rules::Rules;
 use crate::{harmonize, identity, inspect, layers, uijson};
 
-/// The folder of a mod's active version in the library, where an incoming
-/// folder with the same signature is compared (`active_content_differs`).
-/// `None` for a mod with no active version - nothing to compare, and not worth
-/// a line in the log - and for a path that cannot be resolved, which is.
-pub(super) fn active_dir(conn: &Connection, cfg: &AppConfig, id: &str) -> Option<PathBuf> {
+/// What an incoming folder with the same signature is compared with: the files
+/// of a mod's active version in the library (`active_content_differs`).
+pub(super) struct ActiveVersion {
+    dir: PathBuf,
+}
+
+/// The active version of a mod in the library. `None` for a mod with no active
+/// version - nothing to compare, and not worth a line in the log - and for a
+/// path that cannot be resolved, which is.
+pub(super) fn active_version(conn: &Connection, cfg: &AppConfig, id: &str) -> Option<ActiveVersion> {
     match crate::overlay::active_library_path(conn, id) {
         Ok(None) => None,
         Ok(Some(path)) => {
@@ -42,7 +47,7 @@ pub(super) fn active_dir(conn: &Connection, cfg: &AppConfig, id: &str) -> Option
             if dir.is_none() {
                 log::warn!("duplicate check of {id}: the library path {path} does not resolve, kept as a duplicate");
             }
-            dir
+            dir.map(|dir| ActiveVersion { dir })
         }
         Err(e) => {
             log::warn!("duplicate check of {id}: active version unread ({e}), kept as a duplicate");
@@ -51,27 +56,26 @@ pub(super) fn active_dir(conn: &Connection, cfg: &AppConfig, id: &str) -> Option
     }
 }
 
-/// Whether the incoming folder differs from the files of the active version
-/// at `active` (`identity::content_differs`), for a mod whose signature already
-/// matches it.
+/// Whether the incoming folder differs from the files of the `active` version
+/// (`identity::content_differs`), for a mod whose signature already matches it.
 ///
 /// `false` - "no, treat it as the duplicate the signature says" - also when
 /// `active` cannot be read (disk unplugged, folder moved). Not being able to
 /// read must not turn every re-import into an update; it is logged, so that a
 /// user who reports one can be diagnosed.
-pub(super) fn differs_from_active(id: &str, incoming: &Path, active: &Path) -> bool {
-    identity::content_differs(incoming, active).unwrap_or_else(|e| {
+pub(super) fn differs_from_active(id: &str, incoming: &Path, active: &ActiveVersion) -> bool {
+    identity::content_differs(incoming, &active.dir).unwrap_or_else(|e| {
         log::warn!(
             "duplicate check of {id}: {} not compared ({e}), kept as a duplicate",
-            active.display()
+            active.dir.display()
         );
         false
     })
 }
 
-/// [`active_dir`] then [`differs_from_active`], for the import itself.
+/// [`active_version`] then [`differs_from_active`], for the import itself.
 fn active_content_differs(conn: &Connection, cfg: &AppConfig, id: &str, incoming: &Path) -> bool {
-    active_dir(conn, cfg, id).is_some_and(|active| differs_from_active(id, incoming, &active))
+    active_version(conn, cfg, id).is_some_and(|active| differs_from_active(id, incoming, &active))
 }
 
 #[allow(clippy::too_many_arguments)]
