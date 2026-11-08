@@ -1822,13 +1822,15 @@ de reprendre. En cas d'écart, la spec fait foi.
         rendue dans l'app à côté de sa propre `preview.jpg` (306°, plongée
         10°, focale 40°, lumière remplie, flaque à 35). Le détail des mesures
         est dans le commentaire du preset ;
-      - **ce qu'aucun réglage d'Officiel ne rattrape**, et qui demanderait du
-        code : la voiture est ~6 % à droite de celle du jeu (on vise le centre
-        de la boîte 3D, le nez agrandi par la perspective tire la silhouette) ;
-        le jeu ne recadre pas chaque voiture (une Abarth y occupe 45 % de la
-        largeur, une GT 70 %) ; et les peintures sombres restent plus sombres
-        que chez lui, son environnement étant plus lumineux que la constante
-        `ENVIRONMENT` ;
+      - deux écarts qu'aucun réglage ne rattrapait ont été corrigés dans le
+        code (2026-11) : la voiture est **centrée sur sa boîte projetée**
+        (`RENDERER_VERSION` 4, tous les presets bougent), et la **taille
+        réelle** (`trueScale`) prend une distance fixe comme le jeu — mesuré,
+        il donne ~26 % de largeur par mètre de rayon, de l'Abarth à la F1.
+        La référence (`TRUE_SCALE_RADIUS`, 3,1 m) est calibrée sur douze
+        voitures de base. Reste un écart : les peintures sombres sont plus
+        sombres que chez le jeu, son environnement étant plus lumineux que la
+        constante `ENVIRONMENT` ;
       - la principale de Vitrine à 30 % **n'est pas une coquille** : complément
         et contre-jour s'expriment en pourcentage d'elle, donc la descendre
         éteint tout l'éclairage direct et laisse le showroom seul. La remonter

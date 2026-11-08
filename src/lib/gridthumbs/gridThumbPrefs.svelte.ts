@@ -139,6 +139,12 @@ export const GRID_THUMB_RANGES = {
    * fonds l'un sur l'autre, ce qui n'est ni l'un ni l'autre des deux objectifs.
    * L'écran le présente donc en case à cocher. */
   background: { min: 0, max: 100, step: 100, default: 0 },
+  /** **Same camera distance for every car**, as the game does, instead of
+   * fitting each one to the frame: a small car then looks small next to a
+   * large one. Measured on the game's previews, where an Abarth fills 45 % of
+   * the width and a GT 70 %. Off by default — fitting is what keeps a catalogue
+   * readable at 190 px — and all or nothing, so a checkbox. */
+  trueScale: { min: 0, max: 100, step: 100, default: 0 },
 } as const satisfies Record<keyof GridTemplateValues, { min: number; max: number; step: number; default: number }>;
 
 /**
@@ -180,8 +186,11 @@ export const TEMPLATE_KEYS = Object.keys(GRID_THUMB_RANGES) as TemplateKey[];
  *    liste transparente, et `renderOrder` ne trie qu'à l'intérieur d'une
  *    liste). Toutes les vignettes du preset Officiel sortaient noires. Il passe
  *    par `scene.background`, qui échappe à ce classement.
+ *  - **4** — the car is centred on its **projected** box (a lens shift), not
+ *    aimed at the centre of its 3D box: perspective was pulling every
+ *    silhouette ~6 % towards its nose. Every preset moves.
  */
-export const RENDERER_VERSION = 3;
+export const RENDERER_VERSION = 4;
 
 /** Le fond de carte d'un preset : les deux bouts du dégradé radial du mat
  * (GRILLE§2.2). Clair au centre pour décoller la voiture, sombre aux bords pour
@@ -229,6 +238,7 @@ function template(read: (key: TemplateKey) => number): GridTemplateValues {
     reflection: read("reflection"),
     reflectionBlur: read("reflectionBlur"),
     background: read("background"),
+    trueScale: read("trueScale"),
   };
 }
 
@@ -314,6 +324,7 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
       // showroom d'un rendu de jeu vidéo.
       reflection: 90,
       reflectionBlur: 35,
+      trueScale: 0,
     },
     // Le fond quasi noir des previews d'Assetto Corsa, reproduit là où il
     // s'écrit chez nous : dans la carte.
@@ -383,14 +394,15 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
     //  - **the floor**: the pool is a faint patch under the car, not a lit
     //    floor across the frame — 35, not 100.
     //
-    // **What no value here can fix**, measured on the same set, and left to
-    // the rendering code:
-    //  - our car sits ~6 % right of the game's (centre at 54 % vs 48.5 %):
-    //    the camera aims at the centre of the 3D box, and the near nose,
-    //    enlarged by perspective, pulls the silhouette right;
-    //  - the game does **not** fit each car to the frame: an Abarth fills
-    //    45 % of the width there, a Lotus 49 59 %. Fitted framing makes them
-    //    as large as a GT;
+    // Two gaps no value could close were then fixed in the rendering code
+    // (renderer 4, `trueScale`), measured on twelve cars:
+    //  - the car sat ~6 % right of the game's: now centred, 50 % vs 48.4 %;
+    //  - the game does **not** fit each car to the frame — it shoots them all
+    //    from the same distance, so an Abarth fills 45 % of the width and a GT
+    //    70 %. `trueScale` does the same: Abarth 44 %, Lotus 49 61 % (59),
+    //    MX-5 57 % (56), mean width 64.5 % (65.4).
+    //
+    // **What still differs**, left as is:
     //  - dark paint still reads darker than in the game, whose reflections
     //    come from a brighter environment than `ENVIRONMENT`, a constant.
     id: "officiel",
@@ -412,6 +424,7 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
       reflection: 0,
       reflectionBlur: 5,
       background: 100,
+      trueScale: 100,
     },
     // Measured identical on every stock preview, which means a fixed backdrop
     // in the game: near-black with a slight blue-green cast (top ≈ #020406,

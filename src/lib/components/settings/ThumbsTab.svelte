@@ -336,6 +336,16 @@
               <span>{t("settings.gridThumb_background")}</span>
             </label>
           </Field>
+          <Field hint={t("settings.gridThumbHint_trueScale")}>
+            <label class="check">
+              <input
+                type="checkbox"
+                checked={selected.template.trueScale > 0}
+                onchange={(e) => setPresetValue(selected.id, "trueScale", e.currentTarget.checked ? 100 : 0)}
+              />
+              <span>{t("settings.gridThumb_trueScale")}</span>
+            </label>
+          </Field>
           <Field hint={t("settings.gridPresetSkipStockHint")}>
             <label class="check">
               <input

@@ -880,11 +880,87 @@ function placeCamera(
     }
   }
 
+  if (template.trueScale > 0) distance = trueScaleDistance(distance, tanH);
+
   camera.position.copy(target).addScaledVector(dir, distance);
   camera.near = Math.max(distance / 100, 0.01);
   camera.far = distance * 4;
   camera.lookAt(target);
+  camera.clearViewOffset();
   camera.updateProjectionMatrix();
+  centreHorizontally(THREE, camera, box);
+}
+
+/**
+ * Radius, in metres, of the car that the true-scale framing fits exactly.
+ *
+ * Measured, not chosen: on the game's own previews, the share of the frame a
+ * car takes is proportional to its size — 25 to 28 % of the width per metre of
+ * bounding-box radius, from an Abarth 595 (1.8 m, 45 %) to a Formula 1 (2.9 m,
+ * 77 %). The game shoots every car from the same distance. This is the radius
+ * that, at the Officiel framing, reproduces that ratio.
+ */
+const TRUE_SCALE_RADIUS = 3.1;
+
+/** The furthest true scale may push a car back, as a multiple of its fitted
+ * distance. Real cars stay well inside it (an Abarth needs 1.5); a mod built in
+ * the wrong unit would otherwise end up a speck in the middle of the frame. */
+const TRUE_SCALE_MAX_SHRINK = 2.5;
+
+/**
+ * Camera distance for the true-scale framing: the same for every car, as in
+ * the game, so a small car looks small next to a large one.
+ *
+ * Bounded on both sides by the fitted distance: never closer than it, so a car
+ * larger than the reference is fitted rather than cut; never more than
+ * `TRUE_SCALE_MAX_SHRINK` times further.
+ */
+function trueScaleDistance(fitted: number, tanH: number): number {
+  // `tanH` already carries the margin, so the margin keeps scaling the whole
+  // set. The reference is a radius, not a box: the distance must not depend on
+  // the shape of the car being drawn, or it would not be the same for all.
+  const fixed = TRUE_SCALE_RADIUS / tanH;
+  return Math.min(Math.max(fixed, fitted), fitted * TRUE_SCALE_MAX_SHRINK);
+}
+
+/**
+ * Shifts the lens so that the box, **as projected**, sits in the middle of the
+ * frame.
+ *
+ * Aiming at the centre of the 3D box does not centre the car in the image:
+ * seen three-quarters on, its near end is enlarged by perspective and pulls the
+ * silhouette towards it. Measured against the game's own previews, ours sat
+ * ~6 % right of theirs on every car, a gap no preset value could close. A view
+ * offset is a lens shift, not a camera move: perspective and the angle the car
+ * is seen from stay exactly what the template says.
+ *
+ * Horizontal only: the vertical placement is a template value (`height`), and
+ * recentring it here would silently override it.
+ */
+function centreHorizontally(
+  THREE: typeof ThreeModule,
+  camera: ThreeModule.PerspectiveCamera,
+  box: ThreeModule.Box3,
+): void {
+  camera.updateMatrixWorld();
+  let min = Infinity;
+  let max = -Infinity;
+  const corner = new THREE.Vector3();
+  for (const x of [box.min.x, box.max.x]) {
+    for (const y of [box.min.y, box.max.y]) {
+      for (const z of [box.min.z, box.max.z]) {
+        const ndc = corner.set(x, y, z).project(camera).x;
+        min = Math.min(min, ndc);
+        max = Math.max(max, ndc);
+      }
+    }
+  }
+  const centre = (min + max) / 2;
+  if (!Number.isFinite(centre) || Math.abs(centre) < 1e-4) return;
+  // Only the ratio of the two sizes matters to `setViewOffset`: a 1000-unit
+  // wide virtual frame keeps the shift readable in "thousandths of a frame".
+  const width = 1000 * camera.aspect;
+  camera.setViewOffset(width, 1000, (centre * width) / 2, 0, width, 1000);
 }
 
 /** Les trois lampes, posées relativement à la caméra (GRILLE§5.6). */

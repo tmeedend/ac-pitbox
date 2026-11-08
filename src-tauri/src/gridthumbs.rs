@@ -85,6 +85,13 @@ pub struct GridTemplate {
     /// only way a regenerated thumbnail can be **indistinguishable** from an
     /// untouched `preview.png` sitting next to it in the same grid.
     pub background: i32,
+    /// Same camera distance for every car, as the game shoots its previews,
+    /// instead of fitting each car to the frame — 0 or 100.
+    ///
+    /// `serde(default)` because templates saved before it existed must still
+    /// read: they mean "fitted", which is what 0 says.
+    #[serde(default)]
+    pub true_scale: i32,
     /// Version of the **frontend renderer**, incremented whenever the drawing
     /// code changes the pixels it produces.
     ///
@@ -141,6 +148,13 @@ impl GridTemplate {
         if self.background > 0 {
             hasher.update(self.mat_hi.as_bytes());
             hasher.update(self.mat_lo.as_bytes());
+        }
+        // **Hashed only when on**, for the same reason as the mat above: a field
+        // added to the template must not rename every thumbnail already on
+        // disk. Off, it changes no pixel, so it has no business in the name.
+        if self.true_scale > 0 {
+            hasher.update(b"true-scale");
+            hasher.update(self.true_scale.to_le_bytes());
         }
         format!("{:x}", hasher.finalize())[..8].to_string()
     }
@@ -383,6 +397,7 @@ mod tests {
             reflection: 0,
             reflection_blur: 5,
             background: 0,
+            true_scale: 0,
             renderer: 1,
             mat_hi: "#2b2d33".to_string(),
             mat_lo: "#17181c".to_string(),
@@ -395,7 +410,7 @@ mod tests {
     fn every_template_field_changes_the_entry_name() {
         let base = template();
         let name = entry_stem("v46-abc", &base);
-        let mut variants = vec![base.clone(); 14];
+        let mut variants = vec![base.clone(); 15];
         variants[0].azimuth += 1;
         variants[1].elevation += 1;
         variants[2].fov += 1;
@@ -410,6 +425,7 @@ mod tests {
         variants[11].background += 1;
         variants[12].renderer += 1;
         variants[13].reflection_blur += 1;
+        variants[14].true_scale = 100;
         for variant in variants {
             assert_ne!(
                 name,
@@ -513,6 +529,32 @@ mod tests {
         ] {
             assert!(!is_entry_stem(refused), "doit être refusé : {refused}");
         }
+    }
+
+    /// GRILLE§5.6 — true scale arrived after thumbnails were already on disk.
+    /// A template saved before it must still deserialize, mean "fitted", and
+    /// keep the very name its images were stored under: otherwise adding a
+    /// field would silently regenerate every thumbnail of every preset.
+    #[test]
+    fn a_template_saved_before_true_scale_keeps_its_thumbnails() {
+        let old: GridTemplate = serde_json::from_value(serde_json::json!({
+            "azimuth": 318, "elevation": 8, "fov": 22, "margin": 6, "key": 100, "fill": 25,
+            "rim": 60, "shadow": 35, "height": 0, "floor": 0, "reflection": 0,
+            "reflectionBlur": 5, "background": 0, "renderer": 1,
+            "matHi": "#2b2d33", "matLo": "#17181c"
+        }))
+        .expect("un gabarit sans trueScale se relit");
+        assert_eq!(old.true_scale, 0, "absent, il vaut « ajusté »");
+        assert_eq!(old, template(), "relu à l'identique du gabarit de référence");
+        // The literal is the name this template had before the field existed
+        // (SHA-256 of the fourteen values, recomputed outside the code). Comparing
+        // two templates through the same hasher would not see a hash that moved
+        // for everyone.
+        assert_eq!(
+            entry_stem("v46-abc", &old),
+            "v46-abc-te22d8f92",
+            "le nom de ses vignettes ne change pas"
+        );
     }
 
     /// GRILLE§5.7 — the car own fingerprint stays in the name, so an updated mod
