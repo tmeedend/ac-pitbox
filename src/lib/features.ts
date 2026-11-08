@@ -52,7 +52,7 @@
  * `ui_prefs.json` : rallumer retrouve tout en l'état. C'est voulu — un
  * interrupteur qui détruit en passant à `false` n'est plus un interrupteur.
  */
-export const FEATURE_GRID_THUMBS = false;
+export const FEATURE_GRID_THUMBS = true;
 
 /**
  * **Export and import of the library** (EXPORT§).
