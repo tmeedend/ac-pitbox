@@ -1836,21 +1836,23 @@ de reprendre. En cas d'écart, la spec fait foi.
         rouge est vif là où le jeu le rend profond et brillant). Mesuré : même
         à 300 % de lumière ambiante, un Cayenne noir garde ses flancs noirs
         pendant que son toit s'éclaire et que les voitures blanches brûlent.
-        **Cause trouvée (2026-11) : l'espace des couleurs.** AC éclaire les
-        couleurs telles qu'elles sont stockées dans la texture (espace gamma,
-        moteur DX11 de 2014) ; three.js les convertit d'abord en lumière
-        linéaire. Un gris très sombre à 20/255 vaut 0,08 pour AC et 0,007
-        pour nous, onze fois moins ; les tons moyens bougent à peine, d'où
-        la comparaison au jeu de l'aperçu 3D (Supra verte) qui ne voyait
-        rien. Essai au banc, textures lues sans conversion et lumières
-        baissées (principale 25, complément 60) : le Cayenne et l'E30 noirs
-        deviennent gris foncé avec des flancs lisibles, comme chez le jeu, et
-        les blancs cessent de brûler (AE86 p90 237 contre 226 au jeu, 248
-        avant). Ni la lumière ambiante (même à 300 %), ni des murs latéraux
-        quarante fois plus clairs, ni une lumière uniforme ne l'obtenaient.
-        Reste un rouge un peu trop vif. **À décider** : un réglage de preset
-        des vignettes seules, ou aussi l'aperçu 3D de la fiche, qui a le même
-        défaut sur les voitures sombres ;
+        **Cause trouvée (2026-11) : l'exposition automatique du jeu.** Les
+        images d'AC passent par son post-traitement
+        (`system/cfg/ppfilters/default.ini`) : `[AUTO_EXPOSURE]` actif
+        (cible 0,32, bornes 0,2 à 0,5), tone mapping à `GAMMA=1.2`,
+        `SATURATION=0.95`. **Chaque preview est exposée selon son propre
+        contenu** : une voiture noire est photographiée plus clair, d'où son
+        gris-brun, une blanche plus sombre, d'où ses blancs qui ne brûlent
+        pas. C'est exactement ce que GRILLE§5.6 interdit (exposition fixe,
+        pour que les voitures se comparent), d'où l'écart qu'aucune lumière
+        fixe ne comble. **Fausse piste mesurée, à ne pas reprendre** :
+        l'espace des couleurs. Lire les textures sans décodage sRGB éclaircit
+        les noirs mais délave les rouges saturés (Supra rouge rendue saumon
+        dans l'aperçu 3D) ; supprimer aussi l'encodage de sortie garde les
+        rouges mais rend les noirs noirs. Aucune des deux ne reproduit le
+        jeu. **À décider** : une exposition par voiture réservée à Officiel
+        (dont le critère est d'être indiscernable du jeu), en dérogation
+        assumée à GRILLE§5.6, ou rien ;
       - la principale de Vitrine à 30 % **n'est pas une coquille** : complément
         et contre-jour s'expriment en pourcentage d'elle, donc la descendre
         éteint tout l'éclairage direct et laisse le showroom seul. La remonter
