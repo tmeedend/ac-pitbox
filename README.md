@@ -46,7 +46,7 @@ Columns are chosen, reordered and resized.*
 
 ## Download
 
-Windows installer on the [Releases page](https://github.com/tmeedend/ac-pitbox/releases).
+Windows installer (zipped) on the [Releases page](https://github.com/tmeedend/ac-pitbox/releases).
 
 Requirements: **Windows 10/11**, **Assetto Corsa**, **[Content Manager](https://acstuff.ru/app/)**
 and **7-Zip** for archive extraction.
@@ -174,9 +174,10 @@ git push origin v0.3.0
 
 That triggers [`release.yml`](.github/workflows/release.yml), which builds the
 installer and creates a **draft** release: nothing is public until you review
-the binaries and publish it. Next to the `.exe`, the release carries the same
-installer zipped as `Pit.Box_<version>_x64-setup.zip`, ready to upload to
-OverTake, which does not accept a bare `.exe`. `npm run bundle` produces the
+the binaries and publish it. The release carries a single asset, the installer
+zipped as `Pit.Box_<version>_x64-setup.zip`, ready to upload to OverTake, which
+does not accept a bare `.exe` — the `.exe` that `tauri-action` uploads is
+removed once the zip is attached. `npm run bundle` produces the
 same zip locally, in `src-tauri/target/release/bundle/nsis/`. The workflow refuses a tag that does not match the
 version being built, rather than spending twenty minutes producing a `v0.3.0`
 release whose installer says 0.2.0.

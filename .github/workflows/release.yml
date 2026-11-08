@@ -92,8 +92,9 @@ jobs:
 
       # OverTake refuse un `.exe` nu : l'installateur y part zippé, sous le nom
       # que GitHub donne à l'asset (`Pit.Box_0.8.0_x64-setup.zip`). Ajouté à la
-      # même release brouillon, à côté du `.exe`. `gh` retrouve un brouillon par
-      # son tag même si le tag n'y est pas encore attaché.
+      # même release brouillon, qui ne garde que lui (étape suivante). `gh`
+      # retrouve un brouillon par son tag même si le tag n'y est pas encore
+      # attaché.
       - name: Installateur zippé pour OverTake
         id: zip
         run: node scripts/zip-installer.mjs
@@ -103,3 +104,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release upload "${{ github.ref_name }}" "${{ steps.zip.outputs.zip }}" --clobber
+
+      # Le zip contient déjà l'installateur : la release ne garde que lui, un
+      # seul fichier à télécharger, le même partout. `tauri-action` n'a pas
+      # d'option pour ne pas téléverser le `.exe` (il n'en a besoin pour
+      # aucun updater — l'app n'en a pas), il se retire donc après coup. Son
+      # nom d'asset vient de zip-installer.mjs, qui le déduit de celui du zip.
+      - name: Retirer le .exe nu de la release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release delete-asset "${{ github.ref_name }}" "${{ steps.zip.outputs.exe_asset }}" --yes

@@ -12,10 +12,12 @@
 // right name.
 //
 // Run after `tauri build` (`npm run bundle` chains both). When GITHUB_OUTPUT is
-// set, the zip path is written there as `zip` for the next workflow step.
+// set, the zip path is written there as `zip` for the next workflow step, and
+// `exe_asset` names the bare installer as GitHub lists it in the release, so
+// the workflow can remove it and leave the zip as the only asset.
 
 import { readFileSync, readdirSync, existsSync, appendFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 
@@ -54,4 +56,7 @@ execFileSync(
 );
 
 console.log(`[zip] ${zip}`);
-if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `zip=${zip}\n`);
+if (process.env.GITHUB_OUTPUT) {
+  const exeAsset = basename(zip).replace(/\.zip$/, ".exe");
+  appendFileSync(process.env.GITHUB_OUTPUT, `zip=${zip}\nexe_asset=${exeAsset}\n`);
+}
