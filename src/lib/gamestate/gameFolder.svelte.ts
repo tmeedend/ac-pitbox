@@ -2,7 +2,7 @@
 // way out of it towards a sheet (DOSSIER§8.2).
 //
 // A way in is a state set before navigating and consumed by the screen once
-// mounted - like `brandFocus` for the Brands tab: the tab is `nav.section`,
+// mounted - like `termFocus` for the taxonomy tabs: the tab is `nav.section`,
 // there is no route parameter to carry it.
 import { nav, openInSection, requestSection } from "$lib/shell/nav.svelte";
 import type { Owner, OwnerRef } from "./gamestate";

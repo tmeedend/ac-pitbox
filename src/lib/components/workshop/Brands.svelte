@@ -28,7 +28,7 @@
   // (CLAUDE.md rule 6).
   import Switch from "$lib/components/ui/Switch.svelte";
   import { onMount, tick } from "svelte";
-  import { brandFocus } from "$lib/workshop/brandFocus.svelte";
+  import { takeTermFocus } from "$lib/workshop/termFocus.svelte";
   import { showRule } from "$lib/workshop/rulesFocus.svelte";
   import { scrollIntoContainer } from "$lib/shell/shellScroll";
   import { errorText } from "$lib/errors";
@@ -216,8 +216,7 @@
 
   /** Arriving from a car sheet: that brand opened, and brought into view. */
   async function focusRequested() {
-    const brand = brandFocus.brand;
-    brandFocus.brand = null;
+    const brand = takeTermFocus("brands");
     if (!brand) return;
     open = brand;
     loading = false;
