@@ -2502,8 +2502,16 @@ de reprendre. En cas d'écart, la spec fait foi.
         l'oreille. Le premier scan d'un dossier (décodage complet pour le RMS)
         bloque le fil du moteur quelques secondes : à confirmer que ce silence
         à la première entrée en Big Picture ne gêne pas, avant d'investir dans
-        un scan progressif.
-      - **Détection `AC_LIVE` (§16.2) et plein écran (§16.6)** : offsets repris
+        un scan progressif. **Même réserve pour la musique contextuelle**
+        (§16.4 à §16.8, 2026-11-08) : la résolution et le délai sont testés
+        (`music/resolve.test.ts`, `engine.rs`), pas le rendu à l'oreille — à
+        juger, le délai de 2 s en faisant défiler des fiches, la reprise
+        après une fenêtre réduite en mode `Always`, et l'écoute ▶ qui fait
+        taire l'ambiance. Les bandes-son Steam n'ont été essayées sur aucune
+        vraie bibliothèque contenant `steamapps/music/`. Choix
+        d'implémentation : pas de crate `steamlocate`, le registre et
+        `libraryfolders.vdf` étaient déjà lus par `detect.rs`.
+      - **Détection `AC_LIVE` (§16.2) et plein écran (§16.9)** : offsets repris
         d'une implémentation tierce, jamais essayés avec une vraie session. La
         musique GRID doit tenir pendant le chargement et se couper quand la
         voiture devient pilotable ; le plein écran doit couvrir l'écran entier.

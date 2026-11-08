@@ -355,7 +355,6 @@
     "tabWikiHint": "L'extrait d'article affiché sur la fiche d'une voiture ou d'un circuit."
   },
   "music": {
-    "enable": "Activer la musique dans le mode Big Picture",
     "useCustomFolders": "Utiliser mes propres dossiers de musique",
     "useCustomFoldersHint": "Décochée : les deux ambiances embarquées par défaut sont utilisées, rien à configurer.",
     "menuAmbience": "Ambiance menu",
@@ -364,8 +363,28 @@
     "trackCount": "{count} pistes détectées",
     "shuffle": "Lecture aléatoire",
     "showNowPlaying": "Afficher le titre en cours de lecture",
-    "volume": "Volume",
-    "crossfade": "Fondu"
+    "volume": "Volume de la musique",
+    "crossfade": "Fondu",
+    "playMode": "Jouer la musique",
+    "modeOff": "Jamais",
+    "modeBigPicture": "En Big Picture seulement",
+    "modeAlways": "Toujours",
+    "defaultFolder": "Dossier par défaut",
+    "followsScreen": "Suit l'écran",
+    "recent": "Récents",
+    "steamSoundtracks": "Bandes-son Steam",
+    "browseFolder": "Dossier…",
+    "browseFile": "Fichier…",
+    "audioFiles": "Fichiers audio",
+    "missing": "Introuvable",
+    "label": "Musique",
+    "byScreen": "Par écran",
+    "assignments": "Attributions",
+    "noAssignment": "Aucune musique attribuée à une marque, une famille, une catégorie de circuit ou un pays pour l'instant.",
+    "orphan": "N'existe plus",
+    "remove": "Retirer",
+    "openInSorting": "Ouvrir dans le Classement",
+    "trackCategory": "Catégorie de circuit"
   },
   "common": {
     "noResults": "Aucun résultat pour cette recherche.",
@@ -1770,7 +1789,8 @@
     "storyPackageCancelled": "Téléchargement arrêté : rien n'a changé.",
     "storyLinkNotAPackage": "Ce lien ne mène pas au manifest.json d'une histoire.",
     "storyVersionUnmanaged": "Ce dossier du jeu n'est pas géré par Pit Box : la version de l'histoire ne peut pas prendre sa place.",
-    "storySessionUnderWay": "Une épreuve d'histoire est en cours : ferme le jeu, puis recommence."
+    "storySessionUnderWay": "Une épreuve d'histoire est en cours : ferme le jeu, puis recommence.",
+    "musicConfigUnreadable": "Les réglages de la musique n'ont pas pu être lus : rien n'a été modifié."
   },
   "pack": {
     "tabMembers": "Mods",

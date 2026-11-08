@@ -240,7 +240,6 @@
     "unsavedPrompt": "Se han cambiado algunos ajustes (y ya se han aplicado como vista previa en vivo, p. ej. zoom/idioma) pero no se han guardado. ¿Guardar, o descartar y revertir?"
   },
   "music": {
-    "enable": "Activar la música en modo Big Picture",
     "useCustomFolders": "Usar mis propias carpetas de música",
     "useCustomFoldersHint": "Sin marcar: se usan los dos ambientes incluidos por defecto, no hay nada que configurar.",
     "menuAmbience": "Ambiente de los menús",

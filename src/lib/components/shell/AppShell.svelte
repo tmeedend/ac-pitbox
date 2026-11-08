@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import Settings from "$lib/components/settings/Settings.svelte";
   import About from "$lib/components/settings/About.svelte";
   import Library from "$lib/components/library/Library.svelte";
@@ -17,12 +17,13 @@
   import DeleteDialog from "$lib/components/library/DeleteDialog.svelte";
   import ShellToasts from "$lib/components/toasts/ShellToasts.svelte";
   import ControllerSetup from "$lib/components/settings/ControllerSetup.svelte";
-  import { nav, inSessionZone, rememberScreen, tabGroupOf } from "$lib/shell/nav.svelte";
+  import { nav, inSessionZone, rememberScreen, tabGroupOf, SORTING_TABS, FILES_TABS } from "$lib/shell/nav.svelte";
   import { recordScreen } from "$lib/shell/navHistory";
   import { startShellServices } from "$lib/shell/shellServices";
   import { controllers } from "$lib/shell/gamepadDevices.svelte";
   import { bigPictureState } from "$lib/shell/bigpicture.svelte";
-  import { musicEnterMenu, musicEnterGrid } from "$lib/music/music";
+  import { reachSession, reachView } from "$lib/music/context.svelte";
+  import { screenKeyOf } from "$lib/music/resolve";
   import { libraryVersion } from "$lib/library/libraryVersion.svelte";
   import { loadBrandLogos } from "$lib/library/brandLogos.svelte";
   import { listOtherMods } from "$lib/inventory/others";
@@ -115,14 +116,21 @@
   // at every rail click wears thin within an evening.
   const sessionZone = $derived(inSessionZone(nav.section));
 
-  // Ambiance musicale suit l'écran affiché tant que Big Picture est actif
-  // (§4 de la spec musique) : GRID sur l'écran de paramétrage de la session
-  // ("race", l'équivalent Pit Box de la grille de départ), MENU partout
-  // ailleurs.
+  // The music follows the screen reached (§16.5), whatever the play mode:
+  // the engine decides whether anything is heard. The two libraries report
+  // their own arrivals (index, list, sheet), which only they can tell apart;
+  // the session settings resolve on the pair about to be launched.
   $effect(() => {
-    if (!bigPictureState.active) return;
-    if (nav.section === "race") musicEnterGrid();
-    else musicEnterMenu();
+    const section = nav.section;
+    if (section === "cars" || section === "tracks") return;
+    if (section === "race") {
+      const car = nav.sessionCar?.id ?? null;
+      const track = nav.sessionTrack?.id ?? null;
+      const version = libraryVersion();
+      untrack(() => void reachSession(car, track, version));
+      return;
+    }
+    untrack(() => reachView({ kind: "screen", key: screenKeyOf(section, SORTING_TABS, FILES_TABS) }));
   });
 
   const isLibrary = $derived(nav.section === "cars" || nav.section === "tracks");

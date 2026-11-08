@@ -11,7 +11,10 @@
   // category a track stores; name and icon in the taxonomy overlay, display
   // only; the Online page's words in the same overlay. Every gesture is
   // written at once, through one queue whose failures are shown and logged.
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
+  import MusicField from "$lib/components/music/MusicField.svelte";
+  import { scrollIntoContainer } from "$lib/shell/shellScroll";
+  import { takeTermFocus } from "$lib/workshop/termFocus.svelte";
   import { errorText } from "$lib/errors";
   import { writeQueue } from "$lib/workshop/writeQueue";
   import { t } from "$lib/i18n/index.svelte";
@@ -64,6 +67,14 @@
     } catch (e) {
       console.error("track categories", e);
       error = errorText(e);
+    }
+    // Arriving from the music assignments (§16.8): that category opened.
+    const asked = takeTermFocus("categories");
+    if (asked) {
+      open = asked;
+      await tick();
+      const el = document.querySelector<HTMLElement>(`[data-category="${CSS.escape(asked)}"]`);
+      if (el) scrollIntoContainer(el, "center");
     }
   });
 
@@ -159,7 +170,7 @@
       {#each rows as row (row.name)}
         {@const i = effective.indexOf(row.name)}
         {@const curated = isCurated(row, rows, looks)}
-        <li class:open={open === row.name} class:off={!row.on}>
+        <li class:open={open === row.name} class:off={!row.on} data-category={row.name}>
           <div class="row">
             <button type="button" class="head" aria-expanded={open === row.name} onclick={() => toggle(row.name)}>
               <span class="ico"><TrackCategoryIcon tag={row.name} size={20} /></span>
@@ -319,6 +330,8 @@
                   }}
                 />
               </div>
+
+              <MusicField taxonomy="track_category" id={row.name} />
 
               <div class="actions">
                 {#if row.shipped && (looks[row.name] || !row.on)}

@@ -51,7 +51,7 @@ fn read_status() -> Option<i32> {
 }
 
 /// Vrai uniquement quand la voiture est réellement pilotable sur la piste —
-/// faux pendant le chargement, en pause, ou en replay (§16.4). C'est ce
+/// faux pendant le chargement, en pause, ou en replay (§16.2). C'est ce
 /// signal, pas le lancement du process, qui doit couper/baisser la musique.
 pub fn is_live() -> bool {
     read_status() == Some(AC_LIVE)

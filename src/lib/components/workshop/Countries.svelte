@@ -18,7 +18,11 @@
   // (`harmonize::store`), so a new spelling changes what is stored for every
   // mod that writes it. Same write queue as the other Classement tabs
   // (`writeQueue.ts`), failures shown and logged (CLAUDE.md rule 6).
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
+  import MusicField from "$lib/components/music/MusicField.svelte";
+  import { moveMusicTerm } from "$lib/music/context.svelte";
+  import { scrollIntoContainer } from "$lib/shell/shellScroll";
+  import { takeTermFocus } from "$lib/workshop/termFocus.svelte";
   import { errorText } from "$lib/errors";
   import { writeQueue } from "$lib/workshop/writeQueue";
   import { countryLabel, flagFor, gameCountries, gameCountry, loadFlags } from "$lib/flags.svelte";
@@ -77,6 +81,15 @@
     } finally {
       loading = false;
     }
+    // Arriving from the music assignments (§16.8): that country opened.
+    const asked = takeTermFocus("countries");
+    if (asked) {
+      open = asked;
+      showEmpty = showEmpty || !rows.some((r) => r.name === asked && r.cars + r.tracks > 0);
+      await tick();
+      const el = document.querySelector<HTMLElement>(`[data-country="${CSS.escape(asked)}"]`);
+      if (el) scrollIntoContainer(el, "center");
+    }
   });
 
   function take(v: TaxonomyView) {
@@ -91,13 +104,15 @@
   /** Takes the new decisions at once, writes and re-applies them, then reads
    * the library back: the counts only mean something once the stored values
    * moved. */
-  function commit(next: { aliases?: MapOverlay; tags?: MapOverlay; ignored?: string[] }) {
+  function commit(next: { aliases?: MapOverlay; tags?: MapOverlay; ignored?: string[] }, after?: () => Promise<void>) {
     aliases = next.aliases ?? aliases;
     tags = next.tags ?? tags;
     ignored = next.ignored ?? ignored;
     const [a, tg, ig] = [aliases, tags, ignored];
     void enqueue("save_country_aliases", async () => {
       take(await saveCountryOverlay(a, tg, ig));
+      // What must not happen when the save fails (the music of a merge).
+      await after?.();
       await reloadMods();
       bumpLibraryVersion();
     });
@@ -165,7 +180,9 @@
       from,
       to,
     );
-    commit({ ...out, ignored: unignoreCountry(ignored, from) });
+    // Its music follows the spelling into the country it joins (§16.4), once
+    // the merge is written.
+    commit({ ...out, ignored: unignoreCountry(ignored, from) }, () => moveMusicTerm("country", from, to));
   }
 
   function countText(r: Row): string {
@@ -245,7 +262,7 @@
         {@const aliasOrigin = keyOrigins(effAliases, catAliases, r.name)}
         {@const tagOrigin = keyOrigins(effTags, catTags, r.name)}
         {@const curated = touches(aliases, catAliases, r.name) || touches(tags, catTags, r.name)}
-        <li>
+        <li data-country={r.name}>
           <button type="button" class="row" aria-expanded={open === r.name} onclick={() => toggle(r.name)}>
             {@render flagOf(r.name)}
             <span class="nm">{label}{#if label !== r.name}<span class="stored mono">{r.name}</span>{/if}</span>
@@ -356,6 +373,8 @@
                 <span class="lbl-key">{t("countriesTab.attachTo")}</span>
                 <div class="attach">{@render picker(r.name, null)}</div>
               </div>
+
+              <MusicField taxonomy="country" id={r.name} />
 
               {#if curated}
                 <div>

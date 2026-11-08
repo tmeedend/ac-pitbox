@@ -240,7 +240,6 @@
     "unsavedPrompt": "Algumas configurações foram alteradas (e já aplicadas como pré-visualização ao vivo, ex.: zoom/idioma) mas não salvas. Salvar, ou descartar e reverter?"
   },
   "music": {
-    "enable": "Ativar a música no modo Big Picture",
     "useCustomFolders": "Usar minhas próprias pastas de música",
     "useCustomFoldersHint": "Desmarcado: são usados os dois ambientes padrão embutidos, não há nada a configurar.",
     "menuAmbience": "Ambiente dos menus",
