@@ -102,9 +102,12 @@ export const GRID_THUMB_RANGES = {
    *
    * **Négatif remonte la voiture dans le cadre**, positif la descend. Les
    * images du jeu la posent bas — mesuré sur les 178 officielles : marge haute
-   * de 33 % contre 17 % en bas, centre à 58 % de la hauteur — et c'est un
-   * cadrage qui a plu au-delà de ce seul preset, puisque les trois embarqués
-   * l'ont adopté. Zéro viserait le centre du modèle. */
+   * de 33 % contre 17 % en bas, centre à 58 % de la hauteur. Zéro viserait le
+   * centre du modèle.
+   *
+   * The low placement does not need a positive value once the camera looks
+   * down a little: at 10° of elevation and 0 here, Officiel already lands on
+   * the game's 32 % / 16 % margins (measured, see that preset). */
   height: { min: -40, max: 40, step: 1, default: 8 },
   /** Flaque de lumière peinte au sol. **Zéro retire le sol entièrement**, et
    * l'image ne porte alors que la voiture — c'est ce qui garde une vignette de
@@ -337,11 +340,10 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
     // officielles**, pas d'un coup d'œil (`preview.jpg` de la première livrée,
     // réduite en 128×72, boîte des pixels qui s'écartent du fond) :
     //
-    //  - la voiture occupe **66 % de la largeur** du cadre — d'où une marge de
-    //    15 %, la relation entre les deux n'étant pas celle qu'on croit (voir
-    //    `margin` : à marge nulle, la voiture n'occupe déjà que ~75 %) ;
+    //  - la voiture occupe **66 % de la largeur** du cadre (voir `margin` : à
+    //    marge nulle, la voiture n'occupe déjà que ~75 %) ;
     //  - elle est **basse** : 33 % de marge en haut contre 18 % en bas, centre
-    //    à 57 % de la hauteur — d'où une hauteur de cadrage positive ;
+    //    à 57 % de la hauteur ;
     //  - le fond est **plat et quasi noir** (luminance 4 dans les coins comme
     //    au-dessus de la voiture) et ce qui éclaire, c'est le **sol** :
     //    luminance 15 en bas du cadre. Ce n'est donc pas un halo derrière la
@@ -356,39 +358,67 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
     // sinon elle entre dans la boîte et augmenter la marge semble augmenter la
     // largeur mesurée.
     //
-    // Ce qui reste à l'œil, c'est l'équilibre des trois lampes : la mesure dit
-    // où poser la voiture et de quelle couleur est le vide, pas comment la
-    // peinture accroche la lumière. À arrêter dans l'atelier, bascule
-    // « comparer à l'image d'origine » allumée — le critère de ce preset est
-    // mesurable, il ne doit pas se voir.
+    // **Second pass (2026-11): every value below was tuned against the real
+    // thing, not by eye.** Stock cars were rendered in the running app with
+    // the studio rig and set next to their own `preview.jpg` (same car, same
+    // skin), and both were measured with one instrument: silhouette box, body
+    // luminance percentiles, corner and floor luminance. Thirteen cars in all;
+    // the final check ran on eight, four of which had not been used for the
+    // tuning. Mean over those eight, game → this preset (→ previous values):
+    //  - width 67.6 % → 69.9 % (61.3), top 32.2 % → 32.9 % (38.7),
+    //    bottom 16.2 % → 16.3 % (15.2);
+    //  - body p10 28 → 32 (13: dark paint was crushed to black), p50 67 → 69;
+    //  - corners 4 → 6 (11), bottom of frame 6 → 10 (20).
+    //
+    // What the first pass got wrong, in order of how much it showed:
+    //  - **the angle**: the game shows more flank (306°, not 320°) and looks
+    //    from higher (10°, not 6°);
+    //  - **the perspective**: the game's camera is close with a wide lens —
+    //    the near front wheel is clearly bigger than the rear one. 40°, not
+    //    26°, is what reproduces it, and the lens then frames the car on its
+    //    own: margin 5, height 0;
+    //  - **the light**: the game's paint never goes black — its shadows are
+    //    filled by the environment. Full fill, and a key low enough that
+    //    white cars stop clipping;
+    //  - **the floor**: the pool is a faint patch under the car, not a lit
+    //    floor across the frame — 35, not 100.
+    //
+    // **What no value here can fix**, measured on the same set, and left to
+    // the rendering code:
+    //  - our car sits ~6 % right of the game's (centre at 54 % vs 48.5 %):
+    //    the camera aims at the centre of the 3D box, and the near nose,
+    //    enlarged by perspective, pulls the silhouette right;
+    //  - the game does **not** fit each car to the frame: an Abarth fills
+    //    45 % of the width there, a Lotus 49 59 %. Fitted framing makes them
+    //    as large as a GT;
+    //  - dark paint still reads darker than in the game, whose reflections
+    //    come from a brighter environment than `ENVIRONMENT`, a constant.
     id: "officiel",
     name: "",
     builtin: true,
     template: {
-      azimuth: 320,
-      elevation: 6,
-      fov: 26,
-      margin: 15,
-      key: 100,
-      fill: 25,
-      rim: 45,
-      // 8 et non les 6 que la mesure donnait : arrêté à l'œil sur la
-      // comparaison, et repris par les deux autres presets. Une mesure pose le
-      // point de départ ; c'est le regard qui tranche à un ou deux pour cent.
+      azimuth: 306,
+      elevation: 10,
+      fov: 40,
+      margin: 5,
+      key: 55,
+      fill: 100,
+      rim: 70,
       shadow: 30,
-      height: 8,
-      // La flaque fait tout le travail de lumière du fond, et **aucun reflet** :
-      // les images du jeu éclairent le sol, elles n'y mirent pas la voiture.
-      floor: 100,
+      height: 0,
+      // A faint pool and **no reflection**: the game's images light the
+      // floor under the car, they do not mirror the car in it.
+      floor: 35,
       reflection: 0,
       reflectionBlur: 5,
       background: 100,
     },
-    // Quasi noir et **quasi plat** : mesuré, le fond des images du jeu vaut 4
-    // en luminance dans les coins comme au-dessus de la voiture. Le dégradé
-    // radial du catalogue n'a rien à faire ici — ce qu'on prend pour un halo
-    // derrière la voiture est la flaque au sol devant elle.
-    mat: { hi: "#060607", lo: "#030304" },
+    // Measured identical on every stock preview, which means a fixed backdrop
+    // in the game: near-black with a slight blue-green cast (top ≈ #020406,
+    // floor in front of the car ≈ #0b0f10). The radial gradient of the
+    // catalogue mat has no place here — what looks like a halo behind the car
+    // is the pool on the floor in front of it.
+    mat: { hi: "#05080a", lo: "#020305" },
     skipStock: true,
   },
 ];

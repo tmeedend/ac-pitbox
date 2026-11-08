@@ -1801,9 +1801,9 @@ de reprendre. En cas d'écart, la spec fait foi.
       flaque + reflet cuits dans l'image), *Officiel* (être indiscernable d'une
       `preview.png` du jeu, fond cuit, contenu de base laissé tel quel).
       **Reste — et c'est la seule chose qui reste : finaliser les valeurs par
-      défaut des trois presets.** Celles livrées sont une passe de réglage, pas
-      un point d'arrivée : l'utilisateur les a posées à l'écran et les reprendra
-      plus tard, le travail étant fastidieux. Elles se figent dans l'atelier
+      défaut de Catalogue et Vitrine** (Officiel est arrêté, 2026-11).
+      Celles livrées sont une passe de réglage, pas un point d'arrivée :
+      l'utilisateur les a posées à l'écran et les reprendra plus tard, le travail étant fastidieux. Elles se figent dans l'atelier
       (`Réglages › Vignettes`), comme les défauts de l'aperçu 3D l'ont été, et
       il n'y a **rien à coder pour ça** — seulement à recopier les nombres
       arrêtés dans `BUILTIN_PRESETS`.
@@ -1816,8 +1816,19 @@ de reprendre. En cas d'écart, la spec fait foi.
       d'un preset embarqué changent — c'est le fonctionnement normal de
       l'empreinte, pas un accident.
       Trois choses à savoir avant d'y toucher :
-      - les trois partagent le cadrage arrêté à l'écran (angle 320°, focale
-        26°, hauteur 8 %) ; les séparer est possible mais c'était un choix ;
+      - Catalogue et Vitrine partagent le cadrage arrêté à l'écran (angle
+        320°, focale 26°, hauteur 8 %). **Officiel s'en est séparé**
+        (2026-11) : ses valeurs sont arrêtées par mesure, voiture de base
+        rendue dans l'app à côté de sa propre `preview.jpg` (306°, plongée
+        10°, focale 40°, lumière remplie, flaque à 35). Le détail des mesures
+        est dans le commentaire du preset ;
+      - **ce qu'aucun réglage d'Officiel ne rattrape**, et qui demanderait du
+        code : la voiture est ~6 % à droite de celle du jeu (on vise le centre
+        de la boîte 3D, le nez agrandi par la perspective tire la silhouette) ;
+        le jeu ne recadre pas chaque voiture (une Abarth y occupe 45 % de la
+        largeur, une GT 70 %) ; et les peintures sombres restent plus sombres
+        que chez lui, son environnement étant plus lumineux que la constante
+        `ENVIRONMENT` ;
       - la principale de Vitrine à 30 % **n'est pas une coquille** : complément
         et contre-jour s'expriment en pourcentage d'elle, donc la descendre
         éteint tout l'éclairage direct et laisse le showroom seul. La remonter

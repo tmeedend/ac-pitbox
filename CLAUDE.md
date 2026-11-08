@@ -976,7 +976,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Sessions au format `.cmpreset`** | livré ; reste à vérifier dans CM qu'il ignore bien notre clé `PitBox` | `docs/SPEC-session.md` SESSION§3.6 |
 | **Texture updates** | rien d'implémenté ; la règle de détection est mesurée et nette | `docs/SPEC-texture-update.md` |
 | **Harmonisation des libellés** | libellés et barème du rouge faits ; restent le bleu, le vert et le jaune, sans barème | `docs/CHANTIERS.md` |
-| **Vignettes de la grille** | fusionné mais **éteint** (`FEATURE_GRID_THUMBS`) ; reste à figer les valeurs des trois presets | `docs/SPEC-grille.md` |
+| **Vignettes de la grille** | fusionné mais **éteint** (`FEATURE_GRID_THUMBS`) ; Officiel arrêté par mesure ; reste à figer Catalogue et Vitrine | `docs/SPEC-grille.md` |
 | **Aperçu 3D natif** | lots 0 à 6 validés à l'écran ; reste le choix du LOD | `docs/SPEC-preview-3d-kn5.md`, `docs/CHANTIERS.md` |
 | **Enrichissement Wikipédia** | livré et nettoyé ; reste la seule mesure des seuils, sur tes corrections manuelles | `docs/SPEC-wikipedia-fiche-detail.md` |
 | **Signature Authenticode** | le workflow est prêt, il attend un certificat | `docs/windows-code-signing.md` |
