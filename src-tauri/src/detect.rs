@@ -33,32 +33,38 @@ fn last_quoted(line: &str) -> Option<String> {
     quoted.last().map(|s| s.replace("\\\\", "\\"))
 }
 
+/// Les dossiers Steam usuels, quand Steam y est installé.
+pub fn usual_steam_dirs() -> Vec<PathBuf> {
+    [
+        PathBuf::from(r"C:\Program Files (x86)\Steam"),
+        PathBuf::from(r"C:\Program Files\Steam"),
+    ]
+    .into_iter()
+    .filter(|p| p.is_dir())
+    .collect()
+}
+
+/// The library roots of one Steam install: the install itself, then every
+/// `"path"` of its `steamapps/libraryfolders.vdf`.
+pub fn library_roots(steam: &Path) -> Vec<PathBuf> {
+    let mut roots = vec![steam.to_path_buf()];
+    let vdf = steam.join("steamapps").join("libraryfolders.vdf");
+    if let Ok(text) = std::fs::read_to_string(&vdf) {
+        roots.extend(
+            text.lines()
+                .map(str::trim)
+                .filter(|l| l.starts_with("\"path\""))
+                .filter_map(last_quoted)
+                .map(PathBuf::from),
+        );
+    }
+    roots
+}
+
 /// Racines de bibliothèques Steam : dossiers Steam usuels + entrées de
 /// `libraryfolders.vdf`.
 fn steam_libraries() -> Vec<PathBuf> {
-    let mut roots = Vec::new();
-    let candidates = [
-        PathBuf::from(r"C:\Program Files (x86)\Steam"),
-        PathBuf::from(r"C:\Program Files\Steam"),
-    ];
-    for steam in candidates {
-        if !steam.is_dir() {
-            continue;
-        }
-        roots.push(steam.clone());
-        let vdf = steam.join("steamapps").join("libraryfolders.vdf");
-        if let Ok(text) = std::fs::read_to_string(&vdf) {
-            for line in text.lines() {
-                let l = line.trim();
-                if l.starts_with("\"path\"") {
-                    if let Some(p) = last_quoted(l) {
-                        roots.push(PathBuf::from(p));
-                    }
-                }
-            }
-        }
-    }
-    roots
+    usual_steam_dirs().iter().flat_map(|s| library_roots(s)).collect()
 }
 
 /// Cherche une install Assetto Corsa contenant un dossier `content/`.
