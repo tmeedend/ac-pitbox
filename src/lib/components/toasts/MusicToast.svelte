@@ -11,7 +11,7 @@
   // read to the end.
   import { fade, fly } from "svelte/transition";
   import Toast from "./Toast.svelte";
-  import { nowPlaying, onMusicTrack, type NowPlaying } from "$lib/shell/music";
+  import { nowPlaying, onMusicTrack, type NowPlaying } from "$lib/music/music";
   import { bigPictureState } from "$lib/shell/bigpicture.svelte";
 
   /** Long enough to read a title and an artist from a couch. */

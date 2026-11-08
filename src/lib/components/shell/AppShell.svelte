@@ -22,7 +22,7 @@
   import { startShellServices } from "$lib/shell/shellServices";
   import { controllers } from "$lib/shell/gamepadDevices.svelte";
   import { bigPictureState } from "$lib/shell/bigpicture.svelte";
-  import { musicEnterMenu, musicEnterGrid } from "$lib/shell/music";
+  import { musicEnterMenu, musicEnterGrid } from "$lib/music/music";
   import { libraryVersion } from "$lib/library/libraryVersion.svelte";
   import { loadBrandLogos } from "$lib/library/brandLogos.svelte";
   import { listOtherMods } from "$lib/inventory/others";

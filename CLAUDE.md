@@ -438,6 +438,7 @@ src/lib/                Modules : un dossier par domaine, comme le backend
   workshop/             Classement et Fichiers, l'ancien Atelier : règles,
                         taxonomies, import, profils, maintenance
   gamestate/            Le dossier du jeu : pont, filtres, portes d'entrée
+  music/                La musique : pont, attributions, ce qui joue sur quel écran
   story/                Story Mode : l'allumage (`access.ts`), puis le reste
                         du chantier — importé par trois coutures seulement
   *.ts                  Ce qui ne relève d'aucun domaine : `config`, `errors`,

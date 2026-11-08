@@ -11,7 +11,7 @@
     emptyMusicConfig,
     type MusicConfig,
     type DefaultMusicFolders,
-  } from "$lib/shell/music";
+  } from "$lib/music/music";
   import { t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
   import Slider from "$lib/components/ui/Slider.svelte";
