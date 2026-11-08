@@ -1828,9 +1828,17 @@ de reprendre. En cas d'écart, la spec fait foi.
         réelle** (`trueScale`) prend une distance fixe comme le jeu — mesuré,
         il donne ~26 % de largeur par mètre de rayon, de l'Abarth à la F1.
         La référence (`TRUE_SCALE_RADIUS`, 3,1 m) est calibrée sur douze
-        voitures de base. Reste un écart : les peintures sombres sont plus
-        sombres que chez le jeu, son environnement étant plus lumineux que la
-        constante `ENVIRONMENT` ;
+        voitures de base. La **lumière ambiante** (`ambient`, ce que la
+        peinture reflète) est devenue un réglage de preset, 100 % valant
+        l'ancienne constante `ENVIRONMENT` ; Officiel la prend à 160 % ;
+      - **reste un écart, et ce n'est pas la lumière** : nos peintures sont
+        plus plates et plus saturées que celles du jeu (le noir reste noir, le
+        rouge est vif là où le jeu le rend profond et brillant). Mesuré : même
+        à 300 % de lumière ambiante, un Cayenne noir garde ses flancs noirs
+        pendant que son toit s'éclaire et que les voitures blanches brûlent.
+        L'écart est dans la traduction du matériau de peinture par le
+        convertisseur (`kn5-gltf`), que partage l'aperçu 3D de la fiche : à
+        reprendre là, pas dans un preset ;
       - la principale de Vitrine à 30 % **n'est pas une coquille** : complément
         et contre-jour s'expriment en pourcentage d'elle, donc la descendre
         éteint tout l'éclairage direct et laisse le showroom seul. La remonter

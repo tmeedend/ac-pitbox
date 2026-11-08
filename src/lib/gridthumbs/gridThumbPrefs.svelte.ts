@@ -145,6 +145,12 @@ export const GRID_THUMB_RANGES = {
    * the width and a GT 70 %. Off by default — fitting is what keeps a catalogue
    * readable at 190 px — and all or nothing, so a checkbox. */
   trueScale: { min: 0, max: 100, step: 100, default: 0 },
+  /** **Ambient light**: the showroom environment, which is what paint
+   * reflects, in percent of the renderer's own level. Unlike the three lamps
+   * it lights no side in particular — it is what keeps a black car from
+   * rendering as a black shape, the gap the game's previews showed most on
+   * dark paint. 100 is the level every preset had before it was a setting. */
+  ambient: { min: 0, max: 300, step: 5, default: 100 },
 } as const satisfies Record<keyof GridTemplateValues, { min: number; max: number; step: number; default: number }>;
 
 /**
@@ -239,6 +245,7 @@ function template(read: (key: TemplateKey) => number): GridTemplateValues {
     reflectionBlur: read("reflectionBlur"),
     background: read("background"),
     trueScale: read("trueScale"),
+    ambient: read("ambient"),
   };
 }
 
@@ -325,6 +332,7 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
       reflection: 90,
       reflectionBlur: 35,
       trueScale: 0,
+      ambient: 100,
     },
     // Le fond quasi noir des previews d'Assetto Corsa, reproduit là où il
     // s'écrit chez nous : dans la carte.
@@ -402,9 +410,12 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
     //    70 %. `trueScale` does the same: Abarth 44 %, Lotus 49 61 % (59),
     //    MX-5 57 % (56), mean width 64.5 % (65.4).
     //
-    // **What still differs**, left as is:
-    //  - dark paint still reads darker than in the game, whose reflections
-    //    come from a brighter environment than `ENVIRONMENT`, a constant.
+    // **What still differs**, and it is not light: our paint is flatter and
+    // more saturated than the game's — black stays black, red is vivid where
+    // the game's is deep and glossy. Measured: even at 300 % ambient light, a
+    // black Cayenne keeps black sides while its roof lights up. The gap is in
+    // how the converter translates the game's paint material (kn5-gltf), which
+    // the 3D preview of the detail page shares.
     id: "officiel",
     name: "",
     builtin: true,
@@ -413,7 +424,7 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
       elevation: 10,
       fov: 40,
       margin: 5,
-      key: 55,
+      key: 45,
       fill: 100,
       rim: 70,
       shadow: 30,
@@ -425,6 +436,11 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
       reflectionBlur: 5,
       background: 100,
       trueScale: 100,
+      // Ambient 160 with the key down to 45: the lowest gap to the game over
+      // twelve cars (body luminance percentiles, 12.7 → 11.2 levels on
+      // average). Higher only burns white paint — the AE86 goes from 143 to
+      // 190 median at 300, against 144 in the game.
+      ambient: 160,
     },
     // Measured identical on every stock preview, which means a fixed backdrop
     // in the game: near-black with a slight blue-green cast (top ≈ #020406,

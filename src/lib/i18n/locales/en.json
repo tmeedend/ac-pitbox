@@ -299,6 +299,8 @@
     "gridThumbHint_fill": "Lights the opposite side and opens up the shadows.",
     "gridThumb_rim": "Rim light",
     "gridThumbHint_rim": "Outlines the roof and wings. This is what lifts a dark body off the background.",
+    "gridThumb_ambient": "Ambient light",
+    "gridThumbHint_ambient": "What the paint reflects. This is what keeps a dark car visible.",
     "gridThumb_shadow": "Ground shadow",
     "gridThumbHint_shadow": "Without it the car floats.",
     "gridThumbsGroup": "Library thumbnails",

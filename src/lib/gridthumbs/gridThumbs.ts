@@ -42,6 +42,9 @@ export interface GridTemplate {
   /** Same camera distance for every car, as in the game, instead of fitting
    * each one to the frame. All or nothing (0 or 100), like `background`. */
   trueScale: number;
+  /** Light from the showroom environment — what paint reflects —, in percent
+   * of the renderer's own level. 100 renders as before the setting existed. */
+  ambient: number;
   /** Les deux bouts du dégradé de la carte. Ils appartiennent à la carte et non
    * au rendu — **sauf** quand le fond les cuit, et c'est exactement à ce
    * moment-là qu'ils entrent dans l'empreinte, côté backend. */

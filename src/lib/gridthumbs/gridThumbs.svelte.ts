@@ -61,7 +61,9 @@ const SUPERSAMPLE = 2;
  * exprime tout en pourcentage d'elle. */
 const KEY_BASE = 2.2;
 
-/** Part de l'éclairage qui vient du showroom plutôt que des trois lampes.
+/** Part de l'éclairage qui vient du showroom plutôt que des trois lampes, **à
+ * 100 % du réglage `ambient`** d'un preset — celui-ci la multiplie, si bien que
+ * les presets d'avant le réglage rendent exactement comme avant.
  * L'environnement n'est pas décoratif : sans lui, une carrosserie ne reflète
  * rien et la peinture rend plate — c'est lui qui a été calibré sur les photos
  * Kunos (SPEC-preview-3d-kn5 GRILLE§8.1). Les lampes viennent par-dessus, pour
@@ -695,6 +697,11 @@ function drawModel(rig: Rig, model: ThreeModule.Group, template: GridTemplate): 
   rig.shadow.position.set(center.x, floorY + radius / 300, center.z);
   rig.shadow.scale.set(span, span, 1);
   rig.shadow.material.opacity = template.shadow / 100;
+
+  // Per preset since the ambient setting: the game's previews owe their dark
+  // paint sheen to a brighter environment than ours, and no lamp reproduces
+  // it — a lamp lights a side, the environment is what a body reflects.
+  rig.scene.environmentIntensity = (ENVIRONMENT * template.ambient) / 100;
 
   rig.pool.visible = template.floor > 0;
   rig.pool.position.set(center.x, floorY + radius / 400, center.z);

@@ -299,6 +299,8 @@
     "gridThumbHint_fill": "Éclaire le côté opposé et ouvre les ombres.",
     "gridThumb_rim": "Contre-jour",
     "gridThumbHint_rim": "Souligne le toit et les ailes. C'est lui qui détache une carrosserie sombre.",
+    "gridThumb_ambient": "Lumière ambiante",
+    "gridThumbHint_ambient": "Ce que la peinture reflète. C'est elle qui garde visible une voiture sombre.",
     "gridThumb_shadow": "Ombre au sol",
     "gridThumbHint_shadow": "Sans elle, la voiture flotte.",
     "gridThumbsGroup": "Vignettes de la bibliothèque",

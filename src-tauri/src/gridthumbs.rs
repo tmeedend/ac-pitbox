@@ -92,6 +92,11 @@ pub struct GridTemplate {
     /// read: they mean "fitted", which is what 0 says.
     #[serde(default)]
     pub true_scale: i32,
+    /// Light from the showroom environment, in percent of the renderer's own
+    /// level. Defaults to 100 when absent: that is the level every template
+    /// rendered at before it was a setting.
+    #[serde(default = "full_ambient")]
+    pub ambient: i32,
     /// Version of the **frontend renderer**, incremented whenever the drawing
     /// code changes the pixels it produces.
     ///
@@ -156,8 +161,21 @@ impl GridTemplate {
             hasher.update(b"true-scale");
             hasher.update(self.true_scale.to_le_bytes());
         }
+        // Same rule for the ambient light, around its own default: at 100 it
+        // renders as before it existed, so it must not rename those images.
+        if self.ambient != FULL_AMBIENT {
+            hasher.update(b"ambient");
+            hasher.update(self.ambient.to_le_bytes());
+        }
         format!("{:x}", hasher.finalize())[..8].to_string()
     }
+}
+
+/// The ambient level every template had before it was a setting.
+const FULL_AMBIENT: i32 = 100;
+
+fn full_ambient() -> i32 {
+    FULL_AMBIENT
 }
 
 /// What the grid knows about one car thumbnail, without converting anything.
@@ -398,6 +416,7 @@ mod tests {
             reflection_blur: 5,
             background: 0,
             true_scale: 0,
+            ambient: 100,
             renderer: 1,
             mat_hi: "#2b2d33".to_string(),
             mat_lo: "#17181c".to_string(),
@@ -410,7 +429,7 @@ mod tests {
     fn every_template_field_changes_the_entry_name() {
         let base = template();
         let name = entry_stem("v46-abc", &base);
-        let mut variants = vec![base.clone(); 15];
+        let mut variants = vec![base.clone(); 16];
         variants[0].azimuth += 1;
         variants[1].elevation += 1;
         variants[2].fov += 1;
@@ -426,6 +445,7 @@ mod tests {
         variants[12].renderer += 1;
         variants[13].reflection_blur += 1;
         variants[14].true_scale = 100;
+        variants[15].ambient += 5;
         for variant in variants {
             assert_ne!(
                 name,
@@ -531,12 +551,13 @@ mod tests {
         }
     }
 
-    /// GRILLE§5.6 — true scale arrived after thumbnails were already on disk.
+    /// GRILLE§5.6 — true scale and the ambient light arrived after thumbnails
+    /// were already on disk.
     /// A template saved before it must still deserialize, mean "fitted", and
     /// keep the very name its images were stored under: otherwise adding a
     /// field would silently regenerate every thumbnail of every preset.
     #[test]
-    fn a_template_saved_before_true_scale_keeps_its_thumbnails() {
+    fn a_template_saved_before_true_scale_and_ambient_keeps_its_thumbnails() {
         let old: GridTemplate = serde_json::from_value(serde_json::json!({
             "azimuth": 318, "elevation": 8, "fov": 22, "margin": 6, "key": 100, "fill": 25,
             "rim": 60, "shadow": 35, "height": 0, "floor": 0, "reflection": 0,
@@ -545,6 +566,10 @@ mod tests {
         }))
         .expect("un gabarit sans trueScale se relit");
         assert_eq!(old.true_scale, 0, "absent, il vaut « ajusté »");
+        assert_eq!(
+            old.ambient, 100,
+            "absent, la lumière ambiante est celle d'avant le réglage"
+        );
         assert_eq!(old, template(), "relu à l'identique du gabarit de référence");
         // The literal is the name this template had before the field existed
         // (SHA-256 of the fourteen values, recomputed outside the code). Comparing
