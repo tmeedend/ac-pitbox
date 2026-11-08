@@ -1836,9 +1836,21 @@ de reprendre. En cas d'écart, la spec fait foi.
         rouge est vif là où le jeu le rend profond et brillant). Mesuré : même
         à 300 % de lumière ambiante, un Cayenne noir garde ses flancs noirs
         pendant que son toit s'éclaire et que les voitures blanches brûlent.
-        L'écart est dans la traduction du matériau de peinture par le
-        convertisseur (`kn5-gltf`), que partage l'aperçu 3D de la fiche : à
-        reprendre là, pas dans un preset ;
+        **Cause trouvée (2026-11) : l'espace des couleurs.** AC éclaire les
+        couleurs telles qu'elles sont stockées dans la texture (espace gamma,
+        moteur DX11 de 2014) ; three.js les convertit d'abord en lumière
+        linéaire. Un gris très sombre à 20/255 vaut 0,08 pour AC et 0,007
+        pour nous, onze fois moins ; les tons moyens bougent à peine, d'où
+        la comparaison au jeu de l'aperçu 3D (Supra verte) qui ne voyait
+        rien. Essai au banc, textures lues sans conversion et lumières
+        baissées (principale 25, complément 60) : le Cayenne et l'E30 noirs
+        deviennent gris foncé avec des flancs lisibles, comme chez le jeu, et
+        les blancs cessent de brûler (AE86 p90 237 contre 226 au jeu, 248
+        avant). Ni la lumière ambiante (même à 300 %), ni des murs latéraux
+        quarante fois plus clairs, ni une lumière uniforme ne l'obtenaient.
+        Reste un rouge un peu trop vif. **À décider** : un réglage de preset
+        des vignettes seules, ou aussi l'aperçu 3D de la fiche, qui a le même
+        défaut sur les voitures sombres ;
       - la principale de Vitrine à 30 % **n'est pas une coquille** : complément
         et contre-jour s'expriment en pourcentage d'elle, donc la descendre
         éteint tout l'éclairage direct et laisse le showroom seul. La remonter
