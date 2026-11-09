@@ -384,7 +384,8 @@
     "orphan": "No longer exists",
     "remove": "Remove",
     "openInSorting": "Open in Sorting",
-    "trackCategory": "Track category"
+    "trackCategory": "Track category",
+    "pickTrack": "Pick one track"
   },
   "common": {
     "noResults": "No result for this search.",

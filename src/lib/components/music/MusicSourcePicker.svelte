@@ -11,7 +11,15 @@
   import { errorText } from "$lib/errors";
   import ContextMenu from "$lib/components/ui/ContextMenu.svelte";
   import { musicConfig } from "$lib/music/context.svelte";
-  import { listSteamSoundtracks, scanMusicSource, sourceName, type SourceInfo, type Soundtrack } from "$lib/music/music";
+  import {
+    listMusicTracks,
+    listSteamSoundtracks,
+    scanMusicSource,
+    sourceName,
+    trackName,
+    type SourceInfo,
+    type Soundtrack,
+  } from "$lib/music/music";
   import { previewing, togglePreview } from "$lib/music/preview.svelte";
 
   interface Props {
@@ -61,6 +69,22 @@
   });
 
   let menu = $state<{ x: number; y: number } | null>(null);
+  /** The tracks of the source, unfolded from its count (§16.8): picking one
+   * makes it the source, played alone in a loop. */
+  let tracks = $state<{ x: number; y: number; list: string[] } | null>(null);
+
+  async function openTracks(button: HTMLElement) {
+    const source = value ?? defaultSource;
+    if (!source) return;
+    const r = button.getBoundingClientRect();
+    try {
+      const list = await listMusicTracks(source);
+      // Opened once the click is over, for the same reason as Browse… below.
+      setTimeout(() => (tracks = { x: r.left, y: r.bottom + 2, list }));
+    } catch (e) {
+      error = errorText(e);
+    }
+  }
   let error = $state("");
 
   async function browse(directory: boolean) {
@@ -133,12 +157,34 @@
     disabled={!info?.track_count}
     onclick={listen}>{playingHere ? "■" : "▶"}</button
   >
-  <span class="meta mono" class:missing={info?.missing}>
-    {#if info?.missing}{t("music.missing")}{:else if info}{t("music.trackCount", { count: info.track_count })}{/if}
-  </span>
+  {#if info && !info.missing && !info.is_file && info.track_count > 1}
+    <!-- A folder: its count unfolds its tracks, one of which can be picked
+         on its own. A file is already one track, and stays a count. -->
+    <button
+      class="count mono"
+      type="button"
+      title={t("music.pickTrack")}
+      aria-haspopup="menu"
+      onclick={(e) => void openTracks(e.currentTarget)}
+      >{t("music.trackCount", { count: info.track_count })} ▾</button
+    >
+  {:else}
+    <span class="meta mono" class:missing={info?.missing}>
+      {#if info?.missing}{t("music.missing")}{:else if info}{t("music.trackCount", { count: info.track_count })}{/if}
+    </span>
+  {/if}
 </div>
 {#if error}<div class="errbox">{error}</div>{/if}
 </div>
+
+{#if tracks}
+  <ContextMenu
+    x={tracks.x}
+    y={tracks.y}
+    onclose={() => (tracks = null)}
+    items={tracks.list.map((p) => ({ label: trackName(p), onclick: () => onchange(p) }))}
+  />
+{/if}
 
 {#if menu}
   <ContextMenu
@@ -179,6 +225,26 @@
   }
   .meta.missing {
     color: var(--yellow);
+  }
+  /* A button, drawn as one: the count is where one looks for the tracks. */
+  .count {
+    flex: none;
+    font-size: 11px;
+    color: var(--txt2);
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 4px 8px;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .count:hover {
+    border-color: var(--faint2);
+    color: var(--txt);
+  }
+  .count:focus-visible {
+    outline: 2px solid var(--rosso);
+    outline-offset: 2px;
   }
   .errbox {
     margin-top: 6px;

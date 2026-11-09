@@ -82,6 +82,11 @@ export function scanMusicSource(path: string): Promise<SourceInfo> {
   return invoke<SourceInfo>("scan_music_source", { path });
 }
 
+/** The tracks of a source, sorted by file name. */
+export function listMusicTracks(path: string): Promise<string[]> {
+  return invoke<string[]>("list_music_tracks", { path });
+}
+
 export function listSteamSoundtracks(): Promise<Soundtrack[]> {
   return invoke<Soundtrack[]>("list_steam_soundtracks");
 }
@@ -153,6 +158,11 @@ export function nowPlaying(track: TrackInfo): NowPlaying {
     album: track.album,
     cover: track.cover,
   };
+}
+
+/** A track as a list shows it: its file name, without the extension. */
+export function trackName(path: string): string {
+  return sourceName(path).replace(/\.[^.]+$/, "");
 }
 
 /** The last segment of a source path: what a picker shows of it. */

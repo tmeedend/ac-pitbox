@@ -87,6 +87,10 @@
     border: 1px solid var(--line);
     box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5);
     padding: 4px 0;
+    /* A long menu (the tracks of a soundtrack) scrolls inside the window
+       instead of running past its bottom edge. */
+    max-height: calc(70 * var(--vh));
+    overflow-y: auto;
   }
   .ctx li + li {
     border-top: 1px solid var(--line);

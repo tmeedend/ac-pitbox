@@ -50,6 +50,13 @@ pub fn scan_music_source(path: PathBuf) -> SourceInfo {
     scan::scan_source(&path)
 }
 
+/// The tracks of a source, sorted (§16.8): what the track count of a picker
+/// unfolds, to pick one of them as a source of its own.
+#[tauri::command]
+pub fn list_music_tracks(path: PathBuf) -> Vec<PathBuf> {
+    scan::list_tracks(&path)
+}
+
 #[tauri::command]
 pub fn music_enter_big_picture(engine: State<MusicEngineHandle>) {
     engine.send(EngineCommand::EnterBigPicture);

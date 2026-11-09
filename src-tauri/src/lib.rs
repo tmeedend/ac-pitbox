@@ -446,6 +446,7 @@ pub fn run() {
             commands::music::save_music_config,
             commands::music::get_default_music_folders,
             commands::music::scan_music_source,
+            commands::music::list_music_tracks,
             commands::music::music_enter_big_picture,
             commands::music::music_exit_big_picture,
             commands::music::music_set_context,

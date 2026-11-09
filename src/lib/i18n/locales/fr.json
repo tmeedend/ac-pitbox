@@ -384,7 +384,8 @@
     "orphan": "N'existe plus",
     "remove": "Retirer",
     "openInSorting": "Ouvrir dans le Classement",
-    "trackCategory": "Catégorie de circuit"
+    "trackCategory": "Catégorie de circuit",
+    "pickTrack": "Choisir un seul morceau"
   },
   "common": {
     "noResults": "Aucun résultat pour cette recherche.",

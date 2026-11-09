@@ -1011,7 +1011,7 @@ Les dossiers de `<bibliothèque>/steamapps/music/` sont proposés comme **raccou
 
 ### 16.8 Interface
 
-**Un sélecteur de source**, le même partout : une liste — le défaut de la ligne (« Follows screen », l'ambiance menu ou le dossier par défaut), puis `Recent` (les dernières sources choisies) et `Steam soundtracks` —, **Browse…** pour un dossier ou un fichier, **▶** pour écouter sans rien changer, et le nombre de pistes, ou « introuvable ».
+**Un sélecteur de source**, le même partout : une liste — le défaut de la ligne (« Follows screen », l'ambiance menu ou le dossier par défaut), puis `Recent` (les dernières sources choisies) et `Steam soundtracks` —, **Browse…** pour un dossier ou un fichier, **▶** pour écouter sans rien changer, et le nombre de pistes, ou « introuvable ». Le nombre de pistes d'un dossier est un bouton qui déplie ses morceaux : en choisir un en fait la source, jouée seule en boucle — c'est ainsi qu'on prend un morceau précis d'une bande-son.
 
 **Réglages › Musique** (`MusicTab.svelte`), sauvegarde indépendante des autres onglets : Play music, « Use my own music folders », les sources MENU et GRID quand elle est cochée, lecture aléatoire, notification du titre, **Music volume**, durée de fondu. Puis, la case cochée :
 
