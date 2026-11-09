@@ -23,7 +23,7 @@ pub struct DetectedPaths {
 
 /// Extrait la dernière valeur entre guillemets d'une ligne de fichier `.vdf`
 /// (ex. `"path"  "D:\\SteamLibrary"` -> `D:\SteamLibrary`).
-fn last_quoted(line: &str) -> Option<String> {
+pub(crate) fn last_quoted(line: &str) -> Option<String> {
     let quoted: Vec<&str> = line
         .split('"')
         .enumerate()

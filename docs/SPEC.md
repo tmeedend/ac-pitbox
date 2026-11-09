@@ -1007,7 +1007,7 @@ Une fiche sans ancre qui la concerne — ouverte depuis la colonne de session, u
 
 ### 16.7 Bandes-son Steam
 
-Les dossiers de `<bibliothèque>/steamapps/music/` sont proposés comme **raccourcis** dans la liste des sélecteurs (§16.8), pour chaque bibliothèque Steam (l'installation que désigne le registre, puis son `libraryfolders.vdf`). Rien d'autre de Steam n'est parcouru, `steamapps/common/` compris. Un dossier n'est retenu que s'il contient au moins un fichier audio lisible ; une bande-son rangée en sous-dossiers (un par format) en donne un par sous-dossier qui joue. Aucune attribution automatique. Le scan est paresseux : à la première ouverture d'une liste, une fois par lancement.
+Les dossiers de `<bibliothèque>/steamapps/music/` sont proposés comme **raccourcis** dans la liste des sélecteurs (§16.8), pour chaque bibliothèque Steam (l'installation que désigne le registre, puis son `libraryfolders.vdf`). Rien d'autre de Steam n'est parcouru, `steamapps/common/` compris. Un dossier n'est retenu que s'il contient au moins un fichier audio lisible ; une bande-son rangée en sous-dossiers (un par format) en donne un par sous-dossier qui joue. Chacune porte le nom que lui donne la boutique (le manifeste que Steam écrit pour chaque app installée), à défaut celui de son dossier. Aucune attribution automatique. Le scan est paresseux : à la première ouverture d'une liste, une fois par lancement.
 
 ### 16.8 Interface
 

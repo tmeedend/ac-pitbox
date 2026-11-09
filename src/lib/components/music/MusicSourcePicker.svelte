@@ -119,7 +119,10 @@
     type="button"
     onclick={(e) => {
       const r = e.currentTarget.getBoundingClientRect();
-      menu = { x: r.left, y: r.bottom + 2 };
+      // After the click has finished bubbling: the menu closes on any click
+      // outside it, and opened right away it caught the very click that
+      // opened it — Browse… then seemed to do nothing (reported).
+      setTimeout(() => (menu = { x: r.left, y: r.bottom + 2 }));
     }}>{t("pathfield.browse")}</button
   >
   <button

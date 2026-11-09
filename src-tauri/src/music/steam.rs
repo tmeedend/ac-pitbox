@@ -7,6 +7,7 @@
 //! folders otherwise) and its `libraryfolders.vdf`, read by `detect.rs` — no
 //! crate for it: those two reads were already in the app.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
@@ -57,17 +58,51 @@ fn dir_name(p: &Path) -> String {
         .unwrap_or_default()
 }
 
-/// The soundtracks of one `steamapps/music` folder. A soundtrack whose tracks
-/// sit at its root is one source; one that splits them in subfolders (one per
-/// format) gives one source per subfolder that plays — a source plays the
-/// files of its own folder, not those below it.
-pub fn soundtracks_in(music_dir: &Path) -> Vec<Soundtrack> {
+/// The store name of each installed app of a `steamapps` folder, by its
+/// install folder (lowercased): what Steam calls a soundtrack, where its
+/// folder may only say `Soundtrack2024`. Read from the `appmanifest_*.acf`
+/// Steam writes for every installed app, soundtracks included.
+fn store_names(steamapps: &Path) -> HashMap<String, String> {
+    let mut names = HashMap::new();
+    let Ok(entries) = std::fs::read_dir(steamapps) else {
+        return names;
+    };
+    for path in entries.filter_map(|e| e.ok()).map(|e| e.path()) {
+        let is_manifest = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.starts_with("appmanifest_") && n.ends_with(".acf"));
+        let Some(text) = is_manifest.then(|| std::fs::read_to_string(&path).ok()).flatten() else {
+            continue;
+        };
+        let field = |key: &str| {
+            text.lines()
+                .map(str::trim)
+                .find(|l| l.starts_with(&format!("\"{key}\"")))
+                .and_then(crate::detect::last_quoted)
+        };
+        if let (Some(dir), Some(name)) = (field("installdir"), field("name")) {
+            names.insert(dir.to_lowercase(), name);
+        }
+    }
+    names
+}
+
+/// The soundtracks of one `steamapps` folder, in its `music/`. A
+/// soundtrack whose tracks sit at its root is one source; one that splits them
+/// in subfolders (one per format) gives one source per subfolder that plays —
+/// a source plays the files of its own folder, not those below it. Each is
+/// named as the store names it, its folder name when no manifest says.
+pub fn soundtracks_in(steamapps: &Path) -> Vec<Soundtrack> {
+    let names = store_names(steamapps);
     let mut out = Vec::new();
-    for album in subdirs(music_dir) {
+    for album in subdirs(&steamapps.join("music")) {
+        let folder = dir_name(&album);
+        let title = names.get(&folder.to_lowercase()).cloned().unwrap_or(folder);
         let n = playable_count(&album);
         if n > 0 {
             out.push(Soundtrack {
-                name: dir_name(&album),
+                name: title,
                 path: album,
                 track_count: n,
             });
@@ -77,7 +112,7 @@ pub fn soundtracks_in(music_dir: &Path) -> Vec<Soundtrack> {
             let n = playable_count(&sub);
             if n > 0 {
                 out.push(Soundtrack {
-                    name: format!("{} — {}", dir_name(&album), dir_name(&sub)),
+                    name: format!("{title} — {}", dir_name(&sub)),
                     path: sub,
                     track_count: n,
                 });
@@ -124,7 +159,7 @@ pub fn list() -> Vec<Soundtrack> {
     roots.dedup_by_key(|p| p.to_string_lossy().to_lowercase());
     let mut all: Vec<Soundtrack> = roots
         .iter()
-        .flat_map(|r| soundtracks_in(&r.join("steamapps").join("music")))
+        .flat_map(|r| soundtracks_in(&r.join("steamapps")))
         .collect();
     all.sort_by_key(|s| s.name.to_lowercase());
     all
@@ -154,7 +189,7 @@ mod tests {
         std::fs::write(empty.join("page.pdf"), b"x").unwrap();
         std::fs::write(m4a.join("01.m4a"), b"x").unwrap();
 
-        let found = soundtracks_in(&music);
+        let found = soundtracks_in(&base);
         let names: Vec<_> = found.iter().map(|s| (s.name.as_str(), s.track_count)).collect();
         assert_eq!(
             names,
@@ -166,6 +201,26 @@ mod tests {
     #[test]
     fn a_library_without_a_music_folder_gives_nothing() {
         let base = crate::testutil::temp_dir("music-steam-none");
-        assert!(soundtracks_in(&base.join("steamapps").join("music")).is_empty());
+        assert!(soundtracks_in(&base.join("steamapps")).is_empty());
+    }
+
+    // Rule (§16.7): a soundtrack is named as the store names it — a folder
+    // such as Soundtrack2024 says nothing of the game it belongs to. Read
+    // from the app manifest Steam writes; the folder name when there is none.
+    #[test]
+    fn a_soundtrack_takes_its_store_name_from_the_app_manifest() {
+        let base = crate::testutil::temp_dir("music-steam-names");
+        for dir in ["Soundtrack2024", "NoManifest"] {
+            let d = base.join("music").join(dir);
+            std::fs::create_dir_all(&d).unwrap();
+            std::fs::write(d.join("01.mp3"), b"x").unwrap();
+        }
+        std::fs::write(
+            base.join("appmanifest_123.acf"),
+            "\"AppState\"\n{\n\t\"appid\"\t\t\"123\"\n\t\"name\"\t\t\"A Game Original Soundtrack\"\n\t\"installdir\"\t\t\"Soundtrack2024\"\n}\n",
+        )
+        .unwrap();
+        let names: Vec<_> = soundtracks_in(&base).into_iter().map(|s| s.name).collect();
+        assert_eq!(names, vec!["NoManifest", "A Game Original Soundtrack"]);
     }
 }
