@@ -220,6 +220,13 @@ export function resolve(view: View, anchor: Anchor | null, a: Assignments): Reso
   }
 }
 
+/** Whether the engine waits before playing what a view resolved (§16.6):
+ * only for a sheet, which one may be scrolling through. A screen or a tile is
+ * one gesture, and plays at once. */
+export function waitsBeforePlaying(view: View): boolean {
+  return view.kind === "car" || view.kind === "track";
+}
+
 /** Two resolutions that play the same thing — the second need not be sent. */
 export function sameResolution(a: Resolved | null, b: Resolved): boolean {
   return a != null && a.base === b.base && (a.assigned ?? "").toLowerCase() === (b.assigned ?? "").toLowerCase();

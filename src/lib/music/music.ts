@@ -100,7 +100,8 @@ export function musicExitBigPicture(): Promise<void> {
 }
 
 /** What the screen on display resolved (§16.5). */
-export function musicSetContext(context: Resolved): Promise<void> {
+/** `delayed`: a sheet, applied after the engine's delay (§16.6). */
+export function musicSetContext(context: Resolved & { delayed: boolean }): Promise<void> {
   return invoke<void>("music_set_context", { context });
 }
 

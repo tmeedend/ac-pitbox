@@ -7,9 +7,10 @@
 //!
 //! **Ce qui joue est décidé par le front, pas ici** : l'écran affiché envoie un
 //! `Context` (la source attribuée qu'il a résolue, et l'ambiance de base qui
-//! la remplace), et le moteur se contente de l'appliquer — après
-//! `RESOLVE_DELAY`, la dernière demande seule comptant, et sans aucune
-//! transition quand la source est déjà celle qui joue.
+//! la remplace), et le moteur se contente de l'appliquer — tout de suite pour
+//! un écran ou une tuile, après `SHEET_DELAY` pour une fiche (la dernière
+//! demande seule comptant), et sans aucune transition quand la source est déjà
+//! celle qui joue.
 //!
 //! Écart assumé vs la spec : celle-ci décrit une chaîne NAudio explicite
 //! (`MixingSampleProvider`, `WdlResamplingSampleProvider`…) parce que c'est ce
@@ -39,10 +40,12 @@ use tauri::AppHandle;
 use super::config::{Base, MusicConfig, PlayMode};
 use super::index::{self, IndexedTrack};
 
-/// How long a new resolution waits before it is applied (§16.6). Scrolling
-/// through car sheets must not fade at every step: only the context still
-/// asked for after this delay plays.
-pub const RESOLVE_DELAY: Duration = Duration::from_secs(2);
+/// How long the context of a sheet waits before it is applied (§16.6).
+/// Scrolling through car sheets must not fade at every step: only the context
+/// still asked for after this delay plays. A screen or a tile is one gesture
+/// and plays at once — at 2 s everywhere, a click on the rail was heard as lag
+/// (reported).
+pub const SHEET_DELAY: Duration = Duration::from_secs(1);
 
 /// How many sources keep their playlist and position in memory. Beyond, the
 /// least recently heard one is forgotten (and starts over next time). A
@@ -57,6 +60,9 @@ pub struct Context {
     pub assigned: Option<PathBuf>,
     /// What plays when nothing is assigned, or the user's own music is off.
     pub base: Base,
+    /// A sheet: wait `SHEET_DELAY`, the user may be scrolling through them.
+    #[serde(default)]
+    pub delayed: bool,
 }
 
 impl Default for Context {
@@ -64,6 +70,7 @@ impl Default for Context {
         Self {
             assigned: None,
             base: Base::Menu,
+            delayed: false,
         }
     }
 }
@@ -176,7 +183,7 @@ fn run(paths: Paths, initial_config: MusicConfig, on_track: Box<dyn Fn(PathBuf) 
         state: State::Idle,
         fade: None,
         context: Context::default(),
-        pending: Debounced::new(RESOLVE_DELAY),
+        pending: Debounced::new(SHEET_DELAY),
         flags: Flags::default(),
     };
     let tick = Duration::from_millis(30);
@@ -471,7 +478,7 @@ struct Engine {
     fade: Option<ActiveFade>,
     /// The context applied — what plays, or will play once music is wanted.
     context: Context,
-    /// A context asked for while music plays, waiting for `RESOLVE_DELAY`.
+    /// A sheet's context asked for while music plays, waiting for `SHEET_DELAY`.
     pending: Debounced<Context>,
     flags: Flags,
 }
@@ -545,8 +552,15 @@ impl Engine {
     }
 
     fn set_context(&mut self, ctx: Context) {
-        if matches!(self.state, State::Playing(_)) {
+        let playing = matches!(self.state, State::Playing(_));
+        if playing && ctx.delayed {
             self.pending.push(ctx, Instant::now());
+        } else if playing {
+            // A screen or a tile: at once, and it overrides a sheet still
+            // waiting — the user has already left it.
+            self.pending.clear();
+            self.context = ctx;
+            self.apply_context();
         } else {
             // Nothing heard: no transition to smooth, the context simply
             // becomes what will play when music is wanted again.
@@ -1130,7 +1144,7 @@ mod tests {
         assert!(!playlist_is_stale(&[], &[]), "still empty: nothing to rebuild");
     }
 
-    // Rule (§16.6): a resolution waits RESOLVE_DELAY, and only the last one
+    // Rule (§16.6): a sheet's resolution waits SHEET_DELAY, and only the last one
     // pushed counts — scrolling through five sheets in a second fades once.
     #[test]
     fn only_the_last_context_pushed_is_applied_after_the_delay() {

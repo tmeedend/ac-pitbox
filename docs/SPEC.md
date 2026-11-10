@@ -999,7 +999,7 @@ Une fiche sans ancre qui la concerne — ouverte depuis la colonne de session, u
 
 - **Une ambiance par source**, identifiée par son chemin : MENU et GRID en sont deux parmi d'autres. Chacune garde sa position de lecture (MUSIQUE§5.4, généralisé). Huit restent en mémoire ; au-delà, la moins récemment entendue est oubliée et repartira du début.
 - **Même source résolue, aucune transition**, quel que soit le chemin qui y mène.
-- **Délai de 2 s** avant d'appliquer une nouvelle résolution, la dernière seule comptant : faire défiler les fiches ne déclenche pas un fondu par pas. Sans musique audible, le contexte est retenu sans attendre et joue dès qu'elle revient ; un changement de réglage s'applique sans délai.
+- **Un écran atteint ou une tuile cliquée change la musique aussitôt.** Seule une **fiche** attend **1 s**, la dernière demande seule comptant : faire défiler les fiches ne déclenche pas un fondu par pas, et quitter la fiche avant la fin de l'attente l'annule. Sans musique audible, le contexte est retenu sans attendre et joue dès qu'elle revient ; un changement de réglage s'applique sans délai.
 - Fondu enchaîné à puissance constante ; la notification « now playing » (MUSIQUE§5.5), si elle est activée, accompagne chaque piste qui démarre.
 - Au retour d'une session, c'est la source de l'écran affiché à ce moment qui reprend.
 

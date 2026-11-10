@@ -19,6 +19,7 @@ import {
   anchorOnTile,
   resolve,
   sameResolution,
+  waitsBeforePlaying,
   withAssignment,
   withRecent,
   type Anchor,
@@ -69,7 +70,7 @@ function send(): void {
   const next = resolve(lastView, anchor, cfg.assignments);
   if (sameResolution(lastSent, next)) return;
   lastSent = next;
-  musicSetContext(next).catch((e) => {
+  musicSetContext({ ...next, delayed: waitsBeforePlaying(lastView) }).catch((e) => {
     // Sent again at the next arrival: forget it was sent.
     lastSent = null;
     console.warn("music: context not sent", e);

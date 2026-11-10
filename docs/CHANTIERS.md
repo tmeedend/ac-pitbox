@@ -2505,7 +2505,7 @@ de reprendre. En cas d'écart, la spec fait foi.
         un scan progressif. **Même réserve pour la musique contextuelle**
         (§16.4 à §16.8, 2026-11-08) : la résolution et le délai sont testés
         (`music/resolve.test.ts`, `engine.rs`), pas le rendu à l'oreille — à
-        juger, le délai de 2 s en faisant défiler des fiches, la reprise
+        juger, le délai d'1 s en faisant défiler des fiches (2 s partout au départ, entendu comme du lag sur un clic du rail : ramené à 1 s et réservé aux fiches le 2026-11-10), la reprise
         après une fenêtre réduite en mode `Always`, et l'écoute ▶ qui fait
         taire l'ambiance. Les bandes-son Steam n'ont été essayées sur aucune
         vraie bibliothèque contenant `steamapps/music/`. Choix

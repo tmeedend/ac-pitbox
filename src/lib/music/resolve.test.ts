@@ -8,6 +8,7 @@ import {
   emptyAssignments,
   resolve,
   sameResolution,
+  waitsBeforePlaying,
   screenKeyOf,
   withAssignment,
   withRecent,
@@ -180,6 +181,19 @@ describe("same source, two contexts", () => {
     const online = resolve({ kind: "screen", key: "online" }, null, shared);
     expect(sameResolution(onCars, online)).toBe(false);
     expect(sameResolution({ assigned: null, base: "menu" }, { assigned: null, base: "grid" })).toBe(false);
+  });
+});
+
+describe("when the music changes", () => {
+  // A click on the rail or a tile is heard at once; only sheets wait, since
+  // one may be scrolling through them (§16.6).
+  it("only a sheet waits before playing", () => {
+    expect(waitsBeforePlaying({ kind: "car", car: gt3rs })).toBe(true);
+    expect(waitsBeforePlaying({ kind: "track", track: monza })).toBe(true);
+    expect(waitsBeforePlaying({ kind: "screen", key: "online" })).toBe(false);
+    expect(waitsBeforePlaying({ kind: "index", library: "cars" })).toBe(false);
+    expect(waitsBeforePlaying({ kind: "list", library: "cars", anchorPosed: true })).toBe(false);
+    expect(waitsBeforePlaying({ kind: "session", car: null, track: null })).toBe(false);
   });
 });
 
