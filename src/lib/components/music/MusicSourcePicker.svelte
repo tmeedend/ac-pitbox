@@ -55,6 +55,10 @@
 
   const recent = $derived((musicConfig()?.recent_sources ?? []).filter((r) => r !== value));
   const inSteam = $derived(steam?.some((s) => s.path === value) ?? false);
+  /** The whole name of the choice: a long file name is cut in the list. */
+  const chosenName = $derived(
+    value ? (steam?.find((s) => s.path === value)?.name ?? sourceName(value)) : defaultLabel,
+  );
 
   let info = $state<SourceInfo | null>(null);
   $effect(() => {
@@ -116,6 +120,7 @@
   <select
     class="input"
     aria-label={label ?? defaultLabel}
+    title={chosenName}
     value={value ?? ""}
     onfocus={askSteam}
     onpointerdown={askSteam}
@@ -125,16 +130,16 @@
     {#if value && !inSteam}
       <!-- The source chosen, shown by its name whether or not it is still in
            the recent list. -->
-      <option {value}>{sourceName(value)}</option>
+      <option {value} title={sourceName(value)}>{sourceName(value)}</option>
     {/if}
     {#if recent.length}
       <optgroup label={t("music.recent")}>
-        {#each recent as r (r)}<option value={r}>{sourceName(r)}</option>{/each}
+        {#each recent as r (r)}<option value={r} title={sourceName(r)}>{sourceName(r)}</option>{/each}
       </optgroup>
     {/if}
     {#if steam?.length}
       <optgroup label={t("music.steamSoundtracks")}>
-        {#each steam as s (s.path)}<option value={s.path}>{s.name}</option>{/each}
+        {#each steam as s (s.path)}<option value={s.path} title={s.name}>{s.name}</option>{/each}
       </optgroup>
     {/if}
   </select>
@@ -182,7 +187,7 @@
     x={tracks.x}
     y={tracks.y}
     onclose={() => (tracks = null)}
-    items={tracks.list.map((p) => ({ label: trackName(p), onclick: () => onchange(p) }))}
+    items={tracks.list.map((p) => ({ label: trackName(p), title: trackName(p), onclick: () => onchange(p) }))}
   />
 {/if}
 

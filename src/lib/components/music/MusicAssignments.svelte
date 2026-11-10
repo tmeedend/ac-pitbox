@@ -121,7 +121,7 @@
             {#if flag}<img class="flag" src={flag} alt="" />{/if}
           {/if}
         </span>
-        <span class="nm">
+        <span class="nm" title={nameOf(tx, r.id)}>
           {nameOf(tx, r.id)}
           <span class="kind">{t(KIND[tx])}</span>
         </span>

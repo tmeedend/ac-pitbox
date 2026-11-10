@@ -9,6 +9,8 @@
     onclick: () => void;
     disabled?: boolean;
     danger?: boolean;
+    /** Tooltip: the whole label, when it may be cut. */
+    title?: string;
   }
 
   interface Props {
@@ -70,7 +72,7 @@
 <ul class="ctx" bind:this={root} data-gp-overlay style="left:{pos.left}px; top:{pos.top}px;">
   {#each items as it}
     <li>
-      <button type="button" class:danger={it.danger} disabled={it.disabled} onclick={() => pick(it)}>
+      <button type="button" class:danger={it.danger} disabled={it.disabled} title={it.title} onclick={() => pick(it)}>
         {it.label}
       </button>
     </li>
