@@ -36,6 +36,9 @@ import {
 } from "./gridThumbs";
 import { gridThumbsOn, gridThumbsReady } from "./gridThumbPrefs.svelte";
 import { applyFloorMirror } from "$lib/preview3d/floorMirror";
+import { placeCamera } from "./framing";
+import { groundTexture, placePool, type StudioFloor } from "./floor";
+import { gradeColours, gradesColours, meteredExposure, reflectGlass } from "./look";
 
 /** Taille de sortie (GRILLE§5.6). 16:9 parce que c'est le rapport des `preview.png`
  * d'Assetto Corsa : la grille restant mixte pour toujours (GRILLE§7), les deux
@@ -232,7 +235,6 @@ export function cancelGridThumbs(): void {
   queue.length = 0;
   progress.cancelling = true;
 }
-
 
 /** Ferme le rapport de fin. Il ne part jamais tout seul : cinq minutes de
  * travail méritent qu'on ait le temps de lire ce qu'elles ont donné. */
@@ -453,8 +455,7 @@ async function convert(job: Job, stem: string, template: GridTemplate): Promise<
 // `renderer.render` à `toBlob`, qui est asynchrone, et une image dessinée entre
 // les deux repartirait dans le PNG de l'autre.
 
-interface Rig {
-  THREE: typeof ThreeModule;
+interface Rig extends StudioFloor {
   renderer: ThreeModule.WebGLRenderer;
   scene: ThreeModule.Scene;
   camera: ThreeModule.PerspectiveCamera;
@@ -462,17 +463,6 @@ interface Rig {
   fill: ThreeModule.DirectionalLight;
   rim: ThreeModule.DirectionalLight;
   sun: ThreeModule.DirectionalLight;
-  /** La flaque peinte, montée une fois : sa texture est un canevas de 512 px
-   * qu'on ne repeint pas à chaque image. Invisible quand le preset n'a pas de
-   * sol. */
-  pool: ThreeModule.Mesh<ThreeModule.PlaneGeometry, ThreeModule.MeshBasicMaterial>;
-  /** The pool's two looks: the wide glow of the detail page preview, and the
-   * disc of light (`poolSize`), drawn once per edge softness and kept. */
-  glow: ThreeModule.Texture;
-  discs: Map<number, ThreeModule.Texture>;
-  /** The studio floor around the disc, darker than the wall behind it — see
-   * `placePool`. Only shown with a disc and a baked backdrop. */
-  ground: ThreeModule.Mesh<ThreeModule.PlaneGeometry, ThreeModule.MeshBasicMaterial>;
   /** Le receveur d'ombre, toujours là : l'ombre de contact existe même sans
    * sol visible, et c'est elle qui empêche la voiture de flotter. */
   shadow: ThreeModule.Mesh<ThreeModule.PlaneGeometry, ThreeModule.ShadowMaterial>;
@@ -520,210 +510,6 @@ function downsample(source: HTMLCanvasElement): HTMLCanvasElement {
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(source, 0, 0, WIDTH, HEIGHT);
-  return out;
-}
-
-/**
- * The colour grade of the game's preview tool, as far as it carries over to
- * our render (`saturation`, `coolTint`): **saturation down and a cool tint**,
- * the same for every car, so nothing about it breaks comparability.
- *
- * The SDK's `ppeffects.ini` (`sdk/dev/ksPreviewBuilder/dev/previews/`) grades
- * every preview with gamma 1.2, saturation 0.9, brightness 1.08, contrast
- * 1.05 and a colour temperature of 6000 K against a 6400 K white balance.
- * Copied as is onto our render, it made every car too bright (our lights are
- * not theirs): measured on seventeen stock cars, only the saturation and the
- * tint carry over, at values of their own. Our paint came out too saturated
- * (+12 on a 0–255 chroma scale), and the game's whites and greys are bluish
- * where ours were neutral — an Abarth 500 is (151, 157, 163) in the game.
- * With saturation 75 % and cool tint 100 %, colour error 15.0 → 10.9,
- * saturation error 22 → 9.5, silhouette and brightness unchanged. The tint at
- * 100 % is that measured cast: red × 0.97, green × 1.02, blue × 1.055 —
- * other strengths scale it from neutral.
- *
- * Applied on a 2D copy: the WebGL canvas cannot be written back, and the
- * queue reads its PNG from the copy anyway.
- */
-const GRADE_TINT = [-0.03, 0.02, 0.055] as const;
-
-/**
- * Window reflections (`glass`): how much of the studio the glass mirrors,
- * in percent of what the rest of the car does.
- *
- * Glass is blended, and blending attenuates its reflection along with the
- * rest of its colour (see `materials.ts`): against our dark studio, the
- * windows read as plain dark holes where the game's previews show a pale
- * sheen. Raising the environment would brighten the paint too; this raises
- * it on the glass only, by giving those materials the scene's environment
- * as their own map — the one way three lets a material weigh it apart.
- * At 100 % nothing is touched, so presets from before it render as they did.
- */
-function reflectGlass(model: ThreeModule.Object3D, scene: ThreeModule.Scene, glass: number): void {
-  model.traverse((object) => {
-    const mesh = object as ThreeModule.Mesh;
-    if (!mesh.isMesh) return;
-    for (const raw of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
-      const material = raw as ThreeModule.MeshPhysicalMaterial;
-      if (!material.isMeshStandardMaterial || !(material.transparent || (material.transmission ?? 0) > 0)) continue;
-      const own = glass !== 100;
-      if ((material.envMap !== null) !== own) material.needsUpdate = true;
-      material.envMap = own ? scene.environment : null;
-      material.envMapIntensity = own ? (scene.environmentIntensity * glass) / 100 : 1;
-    }
-  });
-}
-
-/**
- * Lays the floor pool: the wide glow, or a **disc of light** (`poolSize`).
- *
- * The game's floor is a disc. With the contrast pushed up, every one of its
- * previews shows the same lit ellipse around the car, same size and same
- * place whatever the car — the studio's turntable — with an edge you can
- * point at. Our glow fades over six car radii instead, and seen from the
- * game's low camera that squashes into a blurred band across the frame, the
- * "horizon" the user noticed. The glow stays the default: it is the floor of
- * the detail page preview, and Showcase is built on it.
- *
- * Under the game's camera the disc is centred on the car's own origin and
- * sized from the reference radius, so it is the same for every car, as in the
- * game; otherwise it follows the car, sized from its radius.
- */
-function placePool(
-  rig: Rig,
-  center: ThreeModule.Vector3,
-  radius: number,
-  floorY: number,
-  span: number,
-  template: GridTemplate,
-): void {
-  let map = rig.glow;
-  if (template.poolSize > 0) {
-    const studio = template.gameFraming > 0 && gameFramingFits(radius);
-    const size = (2 * (studio ? TRUE_SCALE_RADIUS : radius) * template.poolSize) / 100;
-    rig.pool.position.set(studio ? 0 : center.x, floorY + radius / 400, studio ? 0 : center.z);
-    rig.pool.scale.set(size, size, 1);
-    map = discTexture(rig, template.poolEdge);
-    // **The floor beyond the disc is darker than the wall**, and that is
-    // what draws the disc: measured on the game's previews, the frame runs
-    // 3–4 on the wall, 1–2 on the floor just past the disc, 11–14 on the
-    // disc. With one backdrop for both, ours ran 4–5 straight down to the
-    // disc, which melted into it — the blurred horizon. Only with a baked
-    // backdrop: on a cut-out preset it would paint a floor where the card
-    // should show through. And only with a floor: without the pool it is a
-    // dark patch with nothing in it.
-    rig.ground.visible = template.background > 0 && template.floor > 0;
-    rig.ground.material.color.set(template.matLo).multiplyScalar(GROUND_SHADE);
-    rig.ground.position.set(rig.pool.position.x, floorY, rig.pool.position.z);
-    rig.ground.scale.set(size * GROUND_EXTENT, size * GROUND_EXTENT, 1);
-  } else {
-    rig.ground.visible = false;
-    rig.pool.position.set(center.x, floorY + radius / 400, center.z);
-    rig.pool.scale.set(span, span, 1);
-  }
-  if (rig.pool.material.map !== map) {
-    rig.pool.material.map = map;
-    rig.pool.material.needsUpdate = true;
-  }
-}
-
-/**
- * The studio floor's shape: solid in the middle, fading out towards its rim.
- * A plain square drew its far edge as a straight line across the frame, the
- * very horizon the disc was there to remove; the game's dark floor fades
- * into the wall instead.
- */
-function groundTexture(THREE: typeof ThreeModule): ThreeModule.Texture {
-  const size = 256;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  if (ctx) {
-    const middle = size / 2;
-    const gradient = ctx.createRadialGradient(middle, middle, 0, middle, middle, middle);
-    gradient.addColorStop(0, "rgba(255,255,255,1)");
-    gradient.addColorStop(0.5, "rgba(255,255,255,1)");
-    gradient.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, size, size);
-  }
-  return new THREE.CanvasTexture(canvas);
-}
-
-/** How dark the studio floor is, against the wall (the backdrop's darker
- * colour). Measured on the game's previews: 1–2 on the floor past the disc
- * for 3–4 on the wall; this lands at 1. */
-const GROUND_SHADE = 0.4;
-
-/** How far the studio floor reaches before the wall, in disc diameters. The
- * game's floor stops short: its dark band sits at 44–62 % of the frame
- * height, between wall and disc. Measured column profiles at both edges of
- * the frame line up with the game's at 3 (at 20 the floor ran to the
- * horizon and the band started at 31 %). */
-const GROUND_EXTENT = 3;
-
-/**
- * The disc of light: an almost even plateau, then a fade over `edge` percent
- * of its radius. Its brightness at the centre is the glow's, so `floor` means
- * the same thing for both. Drawn once per softness and kept: a slider dragged
- * across the range draws at most twenty of them.
- */
-function discTexture(rig: Rig, edge: number): ThreeModule.Texture {
-  const cached = rig.discs.get(edge);
-  if (cached) return cached;
-  const size = 512;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  if (ctx) {
-    const middle = size / 2;
-    // A sharp edge still gets a couple of percent, or the rim aliases.
-    const fade = Math.max(0.02, edge / 100);
-    const gradient = ctx.createRadialGradient(middle, middle, 0, middle, middle, middle);
-    gradient.addColorStop(0, "rgba(255,255,255,0.11)");
-    gradient.addColorStop(1 - fade, "rgba(255,255,255,0.09)");
-    gradient.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, size, size);
-  }
-  const texture = new rig.THREE.CanvasTexture(canvas);
-  texture.colorSpace = rig.THREE.SRGBColorSpace;
-  rig.discs.set(edge, texture);
-  return texture;
-}
-
-/** Whether this template changes any colour at all — the copy and the walk
- * over every pixel are skipped otherwise. */
-function gradesColours(template: GridTemplate): boolean {
-  return template.saturation !== 100 || template.coolTint !== 0;
-}
-
-function gradeColours(source: HTMLCanvasElement, template: GridTemplate): HTMLCanvasElement {
-  const out = document.createElement("canvas");
-  out.width = source.width;
-  out.height = source.height;
-  const ctx = out.getContext("2d", { willReadFrequently: true });
-  if (!ctx) return source;
-  ctx.drawImage(source, 0, 0);
-  const image = ctx.getImageData(0, 0, out.width, out.height);
-  const data = image.data;
-  const tint = template.coolTint / 100;
-  const tr = 1 + GRADE_TINT[0] * tint;
-  const tg = 1 + GRADE_TINT[1] * tint;
-  const tb = 1 + GRADE_TINT[2] * tint;
-  const saturation = template.saturation / 100;
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i] * tr;
-    const g = data[i + 1] * tg;
-    const b = data[i + 2] * tb;
-    const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-    // Uint8ClampedArray clamps and rounds on write.
-    data[i] = luma + (r - luma) * saturation;
-    data[i + 1] = luma + (g - luma) * saturation;
-    data[i + 2] = luma + (b - luma) * saturation;
-  }
-  ctx.putImageData(image, 0, 0);
   return out;
 }
 
@@ -973,48 +759,6 @@ function drawModel(rig: Rig, model: ThreeModule.Group, template: GridTemplate): 
   }
 }
 
-/** Auto exposure (`autoExposure`). **The game's preview tool does not use
- * one** — its `ppeffects.ini` turns `AUTO_EXPOSURE` off — but our studio does
- * not light like theirs, and metering each image closes part of that gap.
- * The bounds are borrowed from the game's in-race filter
- * (`system/cfg/ppfilters/default.ini`: 0.2 to 0.5 around 0.28), as a ratio
- * only. The target is measured: the mean brightness of an Officiel
- * image runs from 0.006 (a black E30) to 0.052 (a white AE86), mostly
- * background; 0.015, just under the median, matched the game's previews best
- * over twelve cars. A first guess at 0.1 pinned every car to the ceiling.
- *
- * What it buys, measured: white paint stops burning out (AE86 median 141
- * against 144 in the game, 161 at fixed exposure). What it does not: black
- * paint stays black — near zero times 1.8 is still near zero. */
-const EXPOSURE_TARGET = 0.015;
-const EXPOSURE_MIN = 0.7;
-const EXPOSURE_MAX = 1.8;
-
-/**
- * Exposure that brings this image to the target brightness (`autoExposure`).
- *
- * The whole frame is metered, background included. Mean taken in linear light, on a 64×36
- * reduction: two thousand pixels say how bright an image is as well as two
- * million.
- */
-function meteredExposure(canvas: HTMLCanvasElement): number {
-  const probe = document.createElement("canvas");
-  probe.width = 64;
-  probe.height = 36;
-  const ctx = probe.getContext("2d", { willReadFrequently: true });
-  if (!ctx) return 1;
-  ctx.drawImage(canvas, 0, 0, probe.width, probe.height);
-  const { data } = ctx.getImageData(0, 0, probe.width, probe.height);
-  let sum = 0;
-  for (let i = 0; i < data.length; i += 4) {
-    const luma = (data[i] * 0.2126 + data[i + 1] * 0.7152 + data[i + 2] * 0.0722) / 255;
-    sum += Math.pow(luma, 2.2) * (data[i + 3] / 255);
-  }
-  const mean = sum / (probe.width * probe.height);
-  if (!(mean > 0)) return EXPOSURE_MAX;
-  return Math.min(EXPOSURE_MAX, Math.max(EXPOSURE_MIN, EXPOSURE_TARGET / mean));
-}
-
 /**
  * Pose le fond cuit (preset Officiel), ou le retire.
  *
@@ -1113,200 +857,6 @@ async function render(url: string, template: GridTemplate): Promise<Blob | null>
     dispose(model);
   }
   return png;
-}
-
-/**
- * Cadrage **ajusté**, pas à l'échelle : chaque voiture remplit le cadre quelle
- * que soit sa taille réelle (GRILLE§5.6).
- *
- * La distance ne se déduit pas d'un rayon : une voiture vue de trois-quarts est
- * large et basse, et la caler sur sa sphère englobante la laisserait minuscule
- * dans un cadre 16:9. Chacun des huit coins de la boîte est donc projeté dans
- * le repère de la caméra, et on retient la distance qui les fait tous entrer —
- * horizontalement **et** verticalement.
- */
-function placeCamera(
-  THREE: typeof ThreeModule,
-  camera: ThreeModule.PerspectiveCamera,
-  box: ThreeModule.Box3,
-  center: ThreeModule.Vector3,
-  radius: number,
-  template: GridTemplate,
-): void {
-  camera.fov = template.fov;
-  camera.updateProjectionMatrix();
-  if (template.gameFraming > 0 && gameFramingFits(radius)) {
-    placeGameCamera(camera);
-    return;
-  }
-
-  const azimuth = (template.azimuth * Math.PI) / 180;
-  const elevation = (template.elevation * Math.PI) / 180;
-  // Direction de la cible **vers** la caméra.
-  const dir = new THREE.Vector3(
-    Math.cos(elevation) * Math.sin(azimuth),
-    Math.sin(elevation),
-    Math.cos(elevation) * Math.cos(azimuth),
-  ).normalize();
-  const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), dir).normalize();
-  const up = new THREE.Vector3().crossVectors(dir, right).normalize();
-
-  const margin = 1 + template.margin / 100;
-  const tanV = Math.tan((camera.fov * Math.PI) / 360) / margin;
-  const tanH = tanV * camera.aspect;
-
-  // Le point visé monte ou descend avec la hauteur de cadrage : c'est lui qui
-  // décide de la place de la voiture dans le cadre, là où la plongée décide de
-  // ce qu'on voit de son toit. Viser **sous** la voiture la remonte dans
-  // l'image, ce que demande un preset à reflet — le reflet prend la place
-  // libérée en dessous.
-  const target = center.clone();
-  target.y += (radius * template.height) / 100;
-
-  let distance = 0;
-  const corner = new THREE.Vector3();
-  for (const x of [box.min.x, box.max.x]) {
-    for (const y of [box.min.y, box.max.y]) {
-      for (const z of [box.min.z, box.max.z]) {
-        corner.set(x, y, z).sub(target);
-        const depth = corner.dot(dir);
-        distance = Math.max(
-          distance,
-          depth + Math.abs(corner.dot(right)) / tanH,
-          depth + Math.abs(corner.dot(up)) / tanV,
-        );
-      }
-    }
-  }
-
-  if (template.trueScale > 0) distance = trueScaleDistance(distance, tanH);
-
-  camera.position.copy(target).addScaledVector(dir, distance);
-  camera.near = Math.max(distance / 100, 0.01);
-  camera.far = distance * 4;
-  camera.lookAt(target);
-  camera.clearViewOffset();
-  camera.updateProjectionMatrix();
-  centreHorizontally(THREE, camera, box);
-}
-
-/**
- * The camera Kunos shot its own previews with, from the official SDK:
- * `sdk/dev/ksPreviewBuilder/dev/showroom_start.ini`, section `[PREVIEW_MODE]`
- * (`CUSTOM_CAMERA_POSITION`, `LOOK_AT`) and `CAMERA_FOV`. Same frame of
- * reference as our models — the converter keeps the KN5 axes — so the numbers
- * go in as they are; mirrored, they matched the game's images half as well.
- *
- * In our terms: azimuth 317.4°, elevation 7.2°, 5.76 m from a point 0.7 m up
- * and 0.5 m ahead of the car's **own origin**, not the middle of its body.
- * That is what makes the angle differ from car to car in the game's images:
- * a short car whose origin sits near its tail (an Abarth) shows its front, a
- * long one its flank, and an orbit around each car's centre cannot do that.
- * Measured against the game's previews of sixteen stock cars, silhouette
- * overlap: 61 % with this camera, 46 % with the best orbit, 32 % with Content
- * Manager's own preview camera (`DarkPreviewsOptions`).
- */
-const GAME_CAMERA_POSITION = [-3.867643, 1.42359, 4.70381] as const;
-const GAME_CAMERA_TARGET = [0, 0.7, 0.5] as const;
-const GAME_CAMERA_FOV = 30;
-
-/** How far a car may stray from a real car's size, either way, before the game
- * camera stops being trusted for it. The camera does not adapt to the car, so
- * a mod built in the wrong unit would come out as a speck or as a close-up of
- * a wheel; it gets the orbit instead. Stock cars run from 0.6 (Abarth 595) to
- * 0.9 (Formula 1) of the reference radius. */
-const GAME_FRAMING_RANGE = 3;
-
-function gameFramingFits(radius: number): boolean {
-  const ratio = radius / TRUE_SCALE_RADIUS;
-  return ratio > 1 / GAME_FRAMING_RANGE && ratio < GAME_FRAMING_RANGE;
-}
-
-/**
- * Places the game's preview camera (`gameFraming`): the same for every car,
- * nothing fitted, nothing recentred — where the car lands in the frame is the
- * point. The template's own framing values do not apply.
- */
-function placeGameCamera(camera: ThreeModule.PerspectiveCamera): void {
-  camera.fov = GAME_CAMERA_FOV;
-  camera.clearViewOffset();
-  camera.position.set(...GAME_CAMERA_POSITION);
-  camera.near = 0.05;
-  camera.far = 100;
-  camera.lookAt(...GAME_CAMERA_TARGET);
-  camera.updateProjectionMatrix();
-}
-
-/**
- * Radius, in metres, of the car that the true-scale framing fits exactly.
- *
- * Measured, not chosen: on the game's own previews, the share of the frame a
- * car takes is proportional to its size — 25 to 28 % of the width per metre of
- * bounding-box radius, from an Abarth 595 (1.8 m, 45 %) to a Formula 1 (2.9 m,
- * 77 %). The game shoots every car from the same distance. This is the radius
- * that, at the Officiel framing, reproduces that ratio.
- */
-const TRUE_SCALE_RADIUS = 3.1;
-
-/** The furthest true scale may push a car back, as a multiple of its fitted
- * distance. Real cars stay well inside it (an Abarth needs 1.5); a mod built in
- * the wrong unit would otherwise end up a speck in the middle of the frame. */
-const TRUE_SCALE_MAX_SHRINK = 2.5;
-
-/**
- * Camera distance for the true-scale framing: the same for every car, as in
- * the game, so a small car looks small next to a large one.
- *
- * Bounded on both sides by the fitted distance: never closer than it, so a car
- * larger than the reference is fitted rather than cut; never more than
- * `TRUE_SCALE_MAX_SHRINK` times further.
- */
-function trueScaleDistance(fitted: number, tanH: number): number {
-  // `tanH` already carries the margin, so the margin keeps scaling the whole
-  // set. The reference is a radius, not a box: the distance must not depend on
-  // the shape of the car being drawn, or it would not be the same for all.
-  const fixed = TRUE_SCALE_RADIUS / tanH;
-  return Math.min(Math.max(fixed, fitted), fitted * TRUE_SCALE_MAX_SHRINK);
-}
-
-/**
- * Shifts the lens so that the box, **as projected**, sits in the middle of the
- * frame.
- *
- * Aiming at the centre of the 3D box does not centre the car in the image:
- * seen three-quarters on, its near end is enlarged by perspective and pulls the
- * silhouette towards it. Measured against the game's own previews, ours sat
- * ~6 % right of theirs on every car, a gap no preset value could close. A view
- * offset is a lens shift, not a camera move: perspective and the angle the car
- * is seen from stay exactly what the template says.
- *
- * Horizontal only: the vertical placement is a template value (`height`), and
- * recentring it here would silently override it.
- */
-function centreHorizontally(
-  THREE: typeof ThreeModule,
-  camera: ThreeModule.PerspectiveCamera,
-  box: ThreeModule.Box3,
-): void {
-  camera.updateMatrixWorld();
-  let min = Infinity;
-  let max = -Infinity;
-  const corner = new THREE.Vector3();
-  for (const x of [box.min.x, box.max.x]) {
-    for (const y of [box.min.y, box.max.y]) {
-      for (const z of [box.min.z, box.max.z]) {
-        const ndc = corner.set(x, y, z).project(camera).x;
-        min = Math.min(min, ndc);
-        max = Math.max(max, ndc);
-      }
-    }
-  }
-  const centre = (min + max) / 2;
-  if (!Number.isFinite(centre) || Math.abs(centre) < 1e-4) return;
-  // Only the ratio of the two sizes matters to `setViewOffset`: a 1000-unit
-  // wide virtual frame keeps the shift readable in "thousandths of a frame".
-  const width = 1000 * camera.aspect;
-  camera.setViewOffset(width, 1000, (centre * width) / 2, 0, width, 1000);
 }
 
 /** Les trois lampes, posées relativement à la caméra (GRILLE§5.6). */
