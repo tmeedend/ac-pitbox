@@ -124,6 +124,34 @@ pub fn sweep_grid_templates(app: AppHandle, templates: Vec<GridTemplate>) -> Res
     crate::gridthumbs::sweep_other_templates(&app, &templates)
 }
 
+/// The frozen thumbnail a car in the showcase shows under `preset`
+/// (ESPACE§3.3), or `None` when its card shows its frozen image. A car that
+/// still has its files answers `None` too: its thumbnail is `grid_thumbnail`'s.
+#[tauri::command]
+pub async fn frozen_grid_thumbnail(
+    app: AppHandle,
+    db: State<'_, Db>,
+    car_id: String,
+    preset: String,
+    template: GridTemplate,
+) -> Result<Option<String>, String> {
+    let dir = {
+        let cfg = crate::config::load(&app);
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        if !crate::skeleton::is_showcase(&conn, &car_id).map_err(|e| e.to_string())? {
+            return Ok(None);
+        }
+        crate::preview::car_dir(&conn, &cfg, &car_id)
+    };
+    let Some(dir) = dir else { return Ok(None) };
+    let fingerprint = template.fingerprint();
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::skeleton::pick_thumb(&dir, &preset, &fingerprint).map(|p| p.to_string_lossy().into_owned())
+    })
+    .await
+    .map_err(|e| format!("frozen thumbnail task interrupted: {e}"))
+}
+
 /// Resolves a car folder: library first, `content/` next — same rule as the
 /// 3D preview, and the same lock held for as little time as possible.
 fn car_dir(app: &AppHandle, db: &State<'_, Db>, car_id: &str) -> Result<std::path::PathBuf, String> {

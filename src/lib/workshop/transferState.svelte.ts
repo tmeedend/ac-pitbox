@@ -5,6 +5,7 @@
 // one to stay on Fichiers meanwhile, and the notification stack is what keeps
 // it — and the "open the folder" that ends it — visible across pages.
 import { errorText } from "$lib/errors";
+import type { LivePreset } from "$lib/gridthumbs/gridThumbs";
 import { exportLibrary, type ExportReport, type Part } from "./transfer";
 
 export const exportState = $state<{
@@ -15,13 +16,13 @@ export const exportState = $state<{
 }>({ running: false, result: null, error: "" });
 
 /** One at a time: two exports would read the same library twice. */
-export async function runExport(path: string, parts: Part[]): Promise<void> {
+export async function runExport(path: string, parts: Part[], thumbPresets: LivePreset[]): Promise<void> {
   if (exportState.running) return;
   exportState.running = true;
   exportState.result = null;
   exportState.error = "";
   try {
-    exportState.result = await exportLibrary(path, parts);
+    exportState.result = await exportLibrary(path, parts, thumbPresets);
   } catch (e) {
     console.error("library export", e);
     exportState.error = errorText(e);

@@ -1476,6 +1476,14 @@ de reprendre. En cas d'écart, la spec fait foi.
         bibliothèque suffit), regarder les cartes, les fiches, les notes, les
         Compléments, puis récupérer quelques mods par leur archive. Ensuite
         seulement, `FEATURE_LIBRARY_TRANSFER = true`.
+      - **Les vignettes de grille voyagent, figées** (2026-11-10, EXPORT§4.3,
+        ESPACE§3.3) : celles des presets liés aux deux densités, dans le
+        squelette de chaque voiture, derrière une case de l'écran d'export.
+        La mise en vitrine sur place les fige de la même façon : jusque-là elle
+        renvoyait la carte à la preview de l'auteur, contrairement à ce que
+        disait ESPACE§3.3. Le poids estimé (70 Ko par voiture et par preset)
+        est mesuré sur des PNG réduits par `System.Drawing`, pas par la crate
+        `image` qui les écrit vraiment : à recouper sur un vrai export.
       - **Pas de suite à l'import, décidé le 2026-10-10** (EXPORT§7.3) : ni
         bibliothèque filtrée pour tout récupérer, ni réactivation automatique.
         Sur une autre machine, la plupart des mods ne se retéléchargent pas ;

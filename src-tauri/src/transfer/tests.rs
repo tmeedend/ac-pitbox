@@ -306,7 +306,7 @@ fn transferred(tag: &str) -> Transferred {
     let src = source(&root);
     let sheet_before = crate::techsheet::effective(&src.conn(), "lanzo").unwrap();
     let file = root.join("library.pitbox");
-    let exported = export(&src.db, &src.cfg, &src.places, &Part::ALL, &file).unwrap();
+    let exported = export(&src.db, &src.cfg, &src.places, &Part::ALL, &Thumbs::default(), &file).unwrap();
 
     let dest = Install::new(&root, "dest", &["ks_mazda_mx5_cup"]);
     write(dest.places.presets_dir.as_ref().unwrap(), "Spa dusk.cmpreset", b"mine");
@@ -395,7 +395,7 @@ fn the_estimate_counts_what_the_export_holds_and_weighs_near_it() {
     let src = source(&root);
     let estimate = estimate(&src.db, &src.cfg, &src.places).unwrap();
     let file = root.join("library.pitbox");
-    let report = export(&src.db, &src.cfg, &src.places, &Part::ALL, &file).unwrap();
+    let report = export(&src.db, &src.cfg, &src.places, &Part::ALL, &Thumbs::default(), &file).unwrap();
     assert_eq!(
         estimate.counts, report.counts,
         "the same counts, read from the base alone"
@@ -558,7 +558,15 @@ fn a_mod_installed_by_hand_is_recovered_by_importing_its_archive() {
     car(&original, "Hybrid");
     crate::stock::index_stock_content(&src.conn(), &src.cfg, &crate::rules::default_rules(), false).unwrap();
     let file = root.join("library.pitbox");
-    export(&src.db, &src.cfg, &src.places, &[Part::Library], &file).unwrap();
+    export(
+        &src.db,
+        &src.cfg,
+        &src.places,
+        &[Part::Library],
+        &Thumbs::default(),
+        &file,
+    )
+    .unwrap();
     assert!(original.join("model.kn5").is_file(), "its game folder was only read");
 
     let dest = Install::new(&root, "dest", &[]);
@@ -608,7 +616,15 @@ fn a_mod_installed_by_hand_on_both_sides_keeps_its_local_row() {
     write(&src.root.join("hd/rss_hybrid"), "texture_hd/body.dds", &[5; 2000]);
     src.import_folder(&src.root.join("hd"));
     let file = root.join("library.pitbox");
-    export(&src.db, &src.cfg, &src.places, &[Part::Library], &file).unwrap();
+    export(
+        &src.db,
+        &src.cfg,
+        &src.places,
+        &[Part::Library],
+        &Thumbs::default(),
+        &file,
+    )
+    .unwrap();
 
     let dest = Install::new(&root, "dest", &[]);
     let local = dest
@@ -668,7 +684,15 @@ fn an_import_is_refused_where_it_could_overwrite_or_misread() {
     let root = crate::testutil::temp_dir("transfer-refusals");
     let src = Install::new(&root, "source", &[]);
     let file = root.join("library.pitbox");
-    export(&src.db, &src.cfg, &src.places, &[Part::Preferences], &file).unwrap();
+    export(
+        &src.db,
+        &src.cfg,
+        &src.places,
+        &[Part::Preferences],
+        &Thumbs::default(),
+        &file,
+    )
+    .unwrap();
 
     let dest = Install::new(&root, "dest", &[]);
     car(&dest.root.join("in/lanzo"), "Lanzo");
@@ -736,7 +760,7 @@ fn an_import_that_fails_on_the_way_leaves_the_installation_empty() {
     src.import_folder(&src.root.join("in"));
     write(&src.places.config_dir, "ui_prefs.json", b"{}");
     let file = root.join("library.pitbox");
-    export(&src.db, &src.cfg, &src.places, &Part::ALL, &file).unwrap();
+    export(&src.db, &src.cfg, &src.places, &Part::ALL, &Thumbs::default(), &file).unwrap();
 
     let dest = Install::new(&root, "dest", &[]);
     // A file where the skeletons need a folder: writing them fails halfway.
@@ -771,7 +795,15 @@ fn an_export_from_an_older_pit_box_is_brought_up_to_date() {
     car(&src.root.join("in/lanzo"), "Lanzo");
     src.import_folder(&src.root.join("in"));
     let file = root.join("library.pitbox");
-    export(&src.db, &src.cfg, &src.places, &[Part::Library], &file).unwrap();
+    export(
+        &src.db,
+        &src.cfg,
+        &src.places,
+        &[Part::Library],
+        &Thumbs::default(),
+        &file,
+    )
+    .unwrap();
 
     // The same export, its base stripped of columns a later version added.
     let old = root.join("old.pitbox");
@@ -827,7 +859,7 @@ fn an_export_that_lent_the_category_to_game_content_still_imports() {
     let root = crate::testutil::temp_dir("transfer-old-category");
     let src = source(&root);
     let file = root.join("library.pitbox");
-    export(&src.db, &src.cfg, &src.places, &Part::ALL, &file).unwrap();
+    export(&src.db, &src.cfg, &src.places, &Part::ALL, &Thumbs::default(), &file).unwrap();
 
     // The same export as the previous version wrote it: no table of decisions,
     // none of the columns added with them, and a category on the game content
@@ -885,6 +917,97 @@ fn an_export_that_lent_the_category_to_game_content_still_imports() {
     assert_eq!(cup.category_source, "rules");
 }
 
+fn thumb_names(file: &Path) -> Vec<String> {
+    entries(file)
+        .into_iter()
+        .map(|(n, _)| n)
+        .filter(|n| n.contains(".pitbox-vitrine-thumb."))
+        .collect()
+}
+
+/// Rule (EXPORT§4.3): with the box checked, a complete car's grid thumbnails
+/// leave frozen in its skeleton, and land there at arrival; unchecked, none
+/// leaves.
+#[test]
+fn a_complete_cars_thumbnails_leave_frozen_when_asked() {
+    let root = crate::testutil::temp_dir("transfer-thumbs");
+    let src = source(&root);
+    let rendered = root.join("cache/v1-abc-taaaa0001.png");
+    std::fs::create_dir_all(rendered.parent().unwrap()).unwrap();
+    image::RgbaImage::from_pixel(1024, 576, image::Rgba([10, 20, 30, 0]))
+        .save(&rendered)
+        .unwrap();
+    let thumb = crate::skeleton::ThumbFile {
+        preset: "vitrine".into(),
+        fingerprint: "aaaa0001".into(),
+        path: rendered,
+    };
+    let thumbs = Thumbs {
+        include: true,
+        by_car: [("lanzo".to_string(), vec![thumb])].into(),
+    };
+    let file = root.join("thumbs.pitbox");
+    export(&src.db, &src.cfg, &src.places, &[Part::Library], &thumbs, &file).unwrap();
+    let names = thumb_names(&file);
+    assert_eq!(names.len(), 1, "one thumbnail, the car's: {names:?}");
+    assert!(
+        names[0].ends_with(".pitbox-vitrine-thumb.vitrine.aaaa0001.png"),
+        "named after its preset and fingerprint: {}",
+        names[0]
+    );
+
+    let without = root.join("without.pitbox");
+    let unchecked = Thumbs {
+        include: false,
+        ..thumbs
+    };
+    export(&src.db, &src.cfg, &src.places, &[Part::Library], &unchecked, &without).unwrap();
+    assert!(thumb_names(&without).is_empty(), "unchecked, none leaves");
+}
+
+/// Rule (EXPORT§4.3): a car already in the showcase carries the thumbnails
+/// its skeleton froze — but the unchecked box keeps them home too.
+#[test]
+fn a_skeletons_frozen_thumbnails_follow_the_box() {
+    let root = crate::testutil::temp_dir("transfer-thumbs-skeleton");
+    let src = source(&root);
+    let rendered = root.join("cache/v1-abc-taaaa0001.png");
+    std::fs::create_dir_all(rendered.parent().unwrap()).unwrap();
+    image::RgbaImage::from_pixel(1024, 576, image::Rgba([10, 20, 30, 0]))
+        .save(&rendered)
+        .unwrap();
+    let thumbs = [crate::skeleton::ThumbFile {
+        preset: "vitrine".into(),
+        fingerprint: "aaaa0001".into(),
+        path: rendered,
+    }];
+    let card = crate::showcase::CardImages {
+        image: None,
+        thumbs: &thumbs,
+    };
+    crate::showcase::to_showcase(&src.conn(), &src.cfg, "lanzo", card, true).unwrap();
+
+    let file = root.join("with.pitbox");
+    let checked = Thumbs {
+        include: true,
+        ..Default::default()
+    };
+    export(&src.db, &src.cfg, &src.places, &[Part::Library], &checked, &file).unwrap();
+    assert_eq!(thumb_names(&file).len(), 1, "the skeleton's own leaves with it");
+
+    let without = root.join("without.pitbox");
+    export(
+        &src.db,
+        &src.cfg,
+        &src.places,
+        &[Part::Library],
+        &Thumbs::default(),
+        &without,
+    )
+    .unwrap();
+    assert!(thumb_names(&without).is_empty(), "unchecked, not even the skeleton's");
+}
+
 /// Rule (EXPORT§3): unchecking a part takes nothing of it, even indirectly —
 /// and Profiles goes nowhere without the library.
 #[test]
@@ -897,6 +1020,7 @@ fn an_unchecked_part_takes_nothing_of_it() {
         &src.cfg,
         &src.places,
         &[Part::Preferences, Part::Profiles],
+        &Thumbs::default(),
         &file,
     )
     .unwrap();

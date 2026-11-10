@@ -243,13 +243,14 @@ pub struct ShowcaseReport {
 
 /// Puts each mod in the showcase (ESPACE§5.5). `card_images` maps a mod to
 /// the image its card shows right now; a mod absent from it falls back on
-/// the backend's choice.
+/// the backend's choice. `card_thumbs` maps a car to its grid thumbnails.
 pub fn showcase(
     ctx: &BulkCtx,
     conn: &Connection,
     cfg: &AppConfig,
     ids: &[String],
     card_images: &std::collections::HashMap<String, String>,
+    card_thumbs: &std::collections::HashMap<String, Vec<crate::skeleton::ThumbFile>>,
     keep_archive: bool,
 ) -> ShowcaseReport {
     let mut report = ShowcaseReport::default();
@@ -259,8 +260,11 @@ pub fn showcase(
             break;
         }
         ctx.tick(i + 1, ids.len(), id);
-        let image = card_images.get(id).map(Path::new);
-        match crate::showcase::to_showcase(conn, cfg, id, image, keep_archive) {
+        let card = crate::showcase::CardImages {
+            image: card_images.get(id).map(Path::new),
+            thumbs: card_thumbs.get(id).map_or(&[], Vec::as_slice),
+        };
+        match crate::showcase::to_showcase(conn, cfg, id, card, keep_archive) {
             Ok(outcome) => report.done.push(outcome),
             Err(error) => {
                 log::warn!("showcase {id}: {error}");

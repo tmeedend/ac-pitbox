@@ -28,11 +28,36 @@ pub async fn transfer_estimate(app: AppHandle) -> Result<transfer::Estimate, Str
     .await
 }
 
+/// `thumb_presets` are the presets whose grid thumbnails leave frozen
+/// (EXPORT§4.3); empty, no thumbnail leaves.
 #[tauri::command]
-pub async fn transfer_export(app: AppHandle, path: String, parts: Vec<Part>) -> Result<transfer::ExportReport, String> {
+pub async fn transfer_export(
+    app: AppHandle,
+    path: String,
+    parts: Vec<Part>,
+    thumb_presets: Vec<crate::gridthumbs::LivePreset>,
+) -> Result<transfer::ExportReport, String> {
     off_window(app, move |app| {
         let cfg = crate::config::load(app);
-        transfer::export(&app.state::<Db>(), &cfg, &places(app)?, &parts, Path::new(&path))
+        // Only with the library they belong to: collecting them costs a few
+        // reads per car.
+        let presets: &[_] = if parts.contains(&Part::Library) {
+            &thumb_presets
+        } else {
+            &[]
+        };
+        let thumbs = transfer::Thumbs {
+            include: !thumb_presets.is_empty(),
+            by_car: crate::gridthumbs::library_card_thumbs(app, presets),
+        };
+        transfer::export(
+            &app.state::<Db>(),
+            &cfg,
+            &places(app)?,
+            &parts,
+            &thumbs,
+            Path::new(&path),
+        )
     })
     .await
 }

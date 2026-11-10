@@ -19,6 +19,23 @@ const JSON_RATIO: f64 = 0.3;
 const MANIFEST_ZIPPED: u64 = 1024;
 const FROZEN_IMAGE: u64 = 20 * 1024;
 const REDUCED_PREVIEW: u64 = 40 * 1024;
+/// A frozen grid thumbnail (EXPORT§4.3): a car 480 px wide, in a PNG that
+/// keeps its alpha — heavier than the JPEG of a frozen image. Measured on the
+/// thumbnails of a real library (2026-11-10, 25 per preset): 66 and 77 KB.
+pub(super) const FROZEN_THUMB: u64 = 70 * 1024;
+
+/// The cars whose thumbnails an export would freeze: those that still have
+/// their files, managed or installed by hand (EXPORT§4.3). The skeletons'
+/// own already weigh in [`weigh`].
+pub(super) fn cars_with_files(conn: &Connection) -> rusqlite::Result<u64> {
+    conn.query_row(
+        "SELECT COUNT(*) FROM mods m JOIN versions v ON v.id = m.active_version_id
+         WHERE m.kind = 'Car' AND v.content_state <> ?1 AND (m.is_stock = 0 OR m.is_unmanaged = 1)",
+        [crate::overlay::CONTENT_SKELETON],
+        |r| r.get::<_, i64>(0),
+    )
+    .map(|n| n.max(0) as u64)
+}
 
 /// What a file of `size` bytes named `name` weighs in the zip.
 pub(super) fn zipped(name: &str, size: u64) -> u64 {
@@ -100,8 +117,11 @@ pub(super) fn weigh(folders: &[ToWeigh]) -> u64 {
         .iter()
         .map(|f| {
             if f.freed {
+                // Its frozen thumbnails follow the box, and weigh apart
+                // ([`frozen_thumb_bytes`]).
                 return files_in(&f.dir)
                     .iter()
+                    .filter(|(rel, _)| !skeleton::is_frozen_thumb(rel))
                     .map(|(rel, path)| zipped(&rel.to_string_lossy(), size_of(path)))
                     .sum();
             }
@@ -125,6 +145,17 @@ pub(super) fn weigh(folders: &[ToWeigh]) -> u64 {
             }
             bytes
         })
+        .sum()
+}
+
+/// What the thumbnails the skeletons already froze weigh: they leave only
+/// with the box checked (EXPORT§4.3).
+pub(super) fn frozen_thumb_bytes(folders: &[ToWeigh]) -> u64 {
+    folders
+        .iter()
+        .filter(|f| f.freed)
+        .flat_map(|f| skeleton::thumbs_of(&f.dir))
+        .map(|t| size_of(&t.path))
         .sum()
 }
 

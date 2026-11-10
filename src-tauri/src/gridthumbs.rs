@@ -149,7 +149,7 @@ impl GridTemplate {
     /// Short on purpose: it is a suffix on a name that already carries a
     /// 32-character hash, and it only has to separate the handful of templates
     /// one user will ever try.
-    fn fingerprint(&self) -> String {
+    pub(crate) fn fingerprint(&self) -> String {
         let mut hasher = Sha256::new();
         for value in [
             self.azimuth,
@@ -457,9 +457,137 @@ pub fn sweep_other_templates(app: &tauri::AppHandle, templates: &[GridTemplate])
     Ok(removed)
 }
 
+/// A preset bound to a density of the grid, as the frontend holds it: its id,
+/// which a frozen thumbnail is named after (ESPACE§3.3), and the template its
+/// images are rendered under.
+#[derive(Debug, Clone, Deserialize)]
+pub struct LivePreset {
+    pub id: String,
+    pub template: GridTemplate,
+}
+
+/// The thumbnails already rendered for this car under each of `presets`, in
+/// the livery `skin_id` — what a skeleton freezes (ESPACE§3.3). Nothing is
+/// converted: a car with no model to name its entry after has none.
+pub fn rendered(
+    app: &tauri::AppHandle,
+    car_dir: &std::path::Path,
+    car_id: &str,
+    skin_id: Option<&str>,
+    presets: &[LivePreset],
+) -> Vec<crate::skeleton::ThumbFile> {
+    if presets.is_empty() {
+        return Vec::new();
+    }
+    let (Ok(store), Ok(car_stem)) = (dir(app), crate::preview::car_entry_stem(app, car_dir, car_id, skin_id)) else {
+        return Vec::new();
+    };
+    presets
+        .iter()
+        .filter_map(|p| {
+            let path = store.join(format!("{}.png", entry_stem(&car_stem, &p.template)));
+            path.is_file().then(|| crate::skeleton::ThumbFile {
+                preset: p.id.clone(),
+                fingerprint: p.template.fingerprint(),
+                path,
+            })
+        })
+        .collect()
+}
+
+/// The grid thumbnails each of these cars shows right now, to be frozen with
+/// its skeleton (ESPACE§3.3): cars that still have their files, in the livery
+/// their card shows (`preferred.ts`). Empty when `presets` is — the thumbnails
+/// are off, or the user unchecked them.
+///
+/// The base first, its lock given back, then the disk: a few `stat` per car.
+pub fn card_thumbs(
+    app: &tauri::AppHandle,
+    ids: &[String],
+    presets: &[LivePreset],
+) -> std::collections::HashMap<String, Vec<crate::skeleton::ThumbFile>> {
+    use tauri::Manager;
+    if presets.is_empty() {
+        return Default::default();
+    }
+    let cfg = crate::config::load(app);
+    let cars: Vec<(String, PathBuf)> = {
+        let db = app.state::<crate::overlay::Db>();
+        let Ok(conn) = db.0.lock() else {
+            log::warn!("gridthumbs: base lock poisoned, no thumbnail frozen");
+            return Default::default();
+        };
+        ids.iter()
+            .filter_map(|id| {
+                let m = crate::overlay::get_mod(&conn, id).ok().flatten()?;
+                let has_files = !m.showcase && (!m.is_stock || m.is_unmanaged);
+                let car = crate::modscan::ModKind::from_column(&m.kind) == crate::modscan::ModKind::Car;
+                (car && has_files).then_some(())?;
+                Some((id.clone(), crate::preview::car_dir(&conn, &cfg, id)?))
+            })
+            .collect()
+    };
+    let prefs = crate::ui_prefs::load(app);
+    cars.into_iter()
+        .filter_map(|(id, dir)| {
+            let skin = preferred_skin(&prefs, &id);
+            let thumbs = rendered(app, &dir, &id, skin.as_deref(), presets);
+            (!thumbs.is_empty()).then_some((id, thumbs))
+        })
+        .collect()
+}
+
+/// [`card_thumbs`] of every car of the library, for an export (EXPORT§4.3).
+pub fn library_card_thumbs(
+    app: &tauri::AppHandle,
+    presets: &[LivePreset],
+) -> std::collections::HashMap<String, Vec<crate::skeleton::ThumbFile>> {
+    use tauri::Manager;
+    if presets.is_empty() {
+        return Default::default();
+    }
+    let ids: Vec<String> = {
+        let db = app.state::<crate::overlay::Db>();
+        let Ok(conn) = db.0.lock() else {
+            log::warn!("gridthumbs: base lock poisoned, no thumbnail exported");
+            return Default::default();
+        };
+        match crate::overlay::list_mods(&conn) {
+            Ok(mods) => mods.into_iter().map(|m| m.id_interne).collect(),
+            Err(e) => {
+                log::warn!("gridthumbs: mods not listed, no thumbnail exported: {e}");
+                return Default::default();
+            }
+        }
+    };
+    card_thumbs(app, &ids, presets)
+}
+
+/// The livery a car's card shows, as `preferred.ts` keeps it in
+/// `ui_prefs.json`: a JSON object serialized into the value of
+/// `pitbox.skin.<id>`.
+fn preferred_skin(prefs: &serde_json::Value, car_id: &str) -> Option<String> {
+    let raw = prefs.get(format!("pitbox.skin.{car_id}"))?.as_str()?;
+    let skin: serde_json::Value = serde_json::from_str(raw).ok()?;
+    skin.get("id")?.as_str().map(str::to_string)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Rule (ESPACE§3.3): the livery frozen is the one the card shows, read
+    /// as `preferred.ts` writes it — a JSON object inside a string.
+    #[test]
+    fn the_preferred_skin_is_read_as_the_screen_writes_it() {
+        let prefs = serde_json::json!({
+            "pitbox.skin.lanzo": "{\"id\":\"red\",\"name\":\"Red\",\"preview\":null}",
+            "pitbox.skin.broken": "not json",
+        });
+        assert_eq!(preferred_skin(&prefs, "lanzo").as_deref(), Some("red"));
+        assert_eq!(preferred_skin(&prefs, "broken"), None, "a damaged value is no livery");
+        assert_eq!(preferred_skin(&prefs, "other"), None, "nor a missing one");
+    }
 
     fn template() -> GridTemplate {
         GridTemplate {

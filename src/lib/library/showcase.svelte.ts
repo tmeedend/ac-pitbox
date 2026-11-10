@@ -10,6 +10,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { errorText } from "$lib/errors";
 import { fmtSize } from "$lib/format";
 import { t } from "$lib/i18n/index.svelte";
+import { liveTemplates } from "$lib/gridthumbs/gridThumbPrefs.svelte";
 import { cardImage } from "$lib/preferred";
 import { StorageKey } from "$lib/storage";
 import { deleteBrokenMod } from "$lib/workshop/maintenance";
@@ -183,7 +184,12 @@ export async function deleteMods(mods: DeleteTarget[]): Promise<DeleteChoice["mo
   const images = imagesOf(mods);
   const report = await runBulkOp("showcase", ids.length, async () =>
     toBulkReport(
-      await invoke<ShowcaseReport>("bulk_showcase", { ids, cardImages: images, keepArchive: choice.keepArchive }),
+      await invoke<ShowcaseReport>("bulk_showcase", {
+        ids,
+        cardImages: images,
+        thumbPresets: liveTemplates(),
+        keepArchive: choice.keepArchive,
+      }),
       names,
     ),
   );

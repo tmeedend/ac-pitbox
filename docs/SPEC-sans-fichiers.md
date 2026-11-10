@@ -67,6 +67,7 @@ Ce qui **reste** dans le dossier d'une version en vitrine. Tout le reste part. *
 | Voiture | `ui/ui_car.json`, `ui/badge.png`, et les autres `ui/*.json` | nom, marque, specs, courbes de puissance et de couple, tags, badge : la fiche technique et le rangement |
 | Circuit | `ui/**/ui_track.json`, `ui/**/outline.png`, `ui/**/logo.png`, et `ui/**/preview.png` **réduit** (§3.3) ; aussi `outline.jpg`, `logo.jpg`, `preview.jpg` et un `map.png` **rangé dans `ui/`**, que la carte lit en repli | chaque tracé garde son nom, son contour et son image |
 | Voiture, circuit | `.pitbox-vitrine.png` ou `.pitbox-vitrine.jpg` : **l'image de vitrine** (§3.3), l'extension disant le format réel | l'image de la carte |
+| Voiture | `.pitbox-vitrine-thumb.*` : **les vignettes figées** (§3.3) | l'image de la carte quand les vignettes sont allumées |
 | Voiture, circuit | `.pitbox-vitrine.json` : le manifeste (§4.2) | ce qui manque |
 
 **Ce qui part, et pourquoi :**
@@ -86,14 +87,19 @@ Les logos et contours de tracé ne sont pas réduits : ce sont déjà de petits 
 
 ## 3.3 L'image de vitrine
 
-**Une image par mod, figée au moment de la mise en vitrine**, et c'est celle que la carte affiche ensuite.
+**Une image par mod, figée au moment de la mise en vitrine**, et c'est celle que la carte affiche quand elle n'a pas de vignette figée (ci-dessous).
 
-- **Laquelle** : exactement celle que la carte montre à cet instant. Si une **vignette de grille régénérée** existe (GRILLE§5, aujourd'hui éteinte), c'est elle ; sinon l'aperçu de la livrée que la carte prend. Le choix est fait par **la fonction de la carte**, exposée pour l'occasion, pas par une règle recopiée.
-- **Pourquoi la figer** : l'identité d'une vignette régénérée est calculée sur le `.kn5` (nom, date, livrée, configuration CSP, `gridthumbs.rs`). Le `.kn5` parti, la carte ne retrouverait plus sa vignette. L'image doit donc être copiée dans le squelette avant la suppression, pas cherchée après.
-- **Format** : 480 px de large. PNG si elle a de la transparence (vignette régénérée), JPEG qualité 80 sinon. Quelques dizaines de Ko.
+- **Laquelle** : l'aperçu de la livrée ou du tracé que la carte prend à cet instant. Le choix est fait par **la fonction de la carte**, exposée pour l'occasion, pas par une règle recopiée.
+- **Format** : 480 px de large. PNG si elle a de la transparence, JPEG qualité 80 sinon. Quelques dizaines de Ko.
 - **Circuit** : l'image de vitrine est l'aperçu du tracé par défaut, réduit de la même façon ; les `preview.png` de chaque tracé sont réduits en place.
 
-À la réhydratation, l'image de vitrine est supprimée : la carte revient à son chemin normal.
+**Une voiture garde aussi ses vignettes de grille** (GRILLE§5), figées à côté de l'image de vitrine (`.pitbox-vitrine-thumb.<preset>.<empreinte>`, même format) : une par preset lié à une densité de grille, dans la livrée de la carte, celles qui existent au moment de la mise en vitrine.
+
+- **Pourquoi les figer** : l'identité d'une vignette est calculée sur le `.kn5` (nom, date, livrée, configuration CSP, `gridthumbs.rs`). Le `.kn5` parti, la carte ne retrouverait plus sa vignette, et rien ne pourrait la refaire. Elle est donc copiée dans le squelette avant la suppression, pas cherchée après.
+- **Ce que la carte montre** : la vignette figée à l'empreinte exacte du preset de la densité en cours — faite pour lui, ou pour un autre preset aux mêmes réglages, ce sont les mêmes pixels ; sinon la vignette figée **du même preset dans un état plus ancien** — un réglage changé depuis, ou une mise à jour de l'application qui a fait évoluer un preset embarqué ; sinon l'image de vitrine. Une vignette en retard d'un réglage sur ses voisines vaut mieux qu'une preview d'auteur au milieu d'une grille régénérée.
+- **Une voiture en vitrine ne se régénère pas** : sans `.kn5`, il n'y a rien à rendre, et la génération ne la met pas en file.
+
+À la réhydratation, l'image de vitrine et les vignettes figées sont supprimées : la carte revient à son chemin normal, et la génération refait la vignette sur les fichiers revenus.
 
 ## 3.4 Ce qui reste, et ne coûte rien
 

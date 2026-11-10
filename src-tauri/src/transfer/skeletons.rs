@@ -24,6 +24,8 @@ pub(super) struct Skeletons<'a> {
     pub stamp: &'a str,
     /// The previews the cards show ([`super::settings::preferred_previews`]), by mod id.
     pub preferred: &'a std::collections::HashMap<String, PathBuf>,
+    /// The grid thumbnails that leave frozen (EXPORT§4.3).
+    pub thumbs: &'a super::Thumbs,
 }
 
 /// One folder of the library on its way into the zip.
@@ -114,8 +116,10 @@ impl Skeletons<'_> {
             } else {
                 crate::showcase::own_preview(kind, &folder.dir)
             };
+            // What the card shows belongs to the active version alone.
+            let thumbs = self.thumbs_of(&mod_id, active);
             let manifest = Manifest { mod_id, ..labels };
-            self.skeleton_of(&folder, Some(kind), manifest, image, out);
+            self.skeleton_of(&folder, Some(kind), manifest, image, thumbs, out);
         }
         Ok(())
     }
@@ -151,7 +155,7 @@ impl Skeletons<'_> {
             };
             let mut manifest = Manifest::new(self.stamp.to_string(), parent, Vec::new());
             manifest.source_archive = archive;
-            self.skeleton_of(&folder, kind, manifest, None, out);
+            self.skeleton_of(&folder, kind, manifest, None, &[], out);
         }
         Ok(())
     }
@@ -179,14 +183,27 @@ impl Skeletons<'_> {
             }
             let mut manifest = Manifest::new(self.stamp.to_string(), owner, Vec::new());
             manifest.source_archive = archive;
-            self.skeleton_of(&folder, None, manifest, None, out);
+            self.skeleton_of(&folder, None, manifest, None, &[], out);
         }
         Ok(())
     }
 
-    /// A folder already in the showcase: its skeleton, as it is.
+    /// The thumbnails a version's card shows: those of its mod for the
+    /// active version, none for an older one.
+    fn thumbs_of(&self, mod_id: &str, active: bool) -> &[skeleton::ThumbFile] {
+        match self.thumbs.by_car.get(mod_id) {
+            Some(thumbs) if active && self.thumbs.include => thumbs,
+            _ => &[],
+        }
+    }
+
+    /// A folder already in the showcase: its skeleton, as it is — but for
+    /// its frozen thumbnails when they are not to leave (EXPORT§4.3).
     fn as_is(&self, folder: &Folder, out: &mut Vec<Entry>) {
         for (rel, path) in files_in(&folder.dir) {
+            if !self.thumbs.include && skeleton::is_frozen_thumb(&rel) {
+                continue;
+            }
             out.push(Entry::file(
                 Part::Library,
                 zip_name(LIBRARY_PREFIX, &folder.rel, &rel),
@@ -197,13 +214,15 @@ impl Skeletons<'_> {
 
     /// A complete folder made a skeleton in the zip only — the library is
     /// never touched: what `kind`'s whitelist keeps (nothing without one), the
-    /// manifest of the rest, and the frozen image when there is one.
+    /// manifest of the rest, and the frozen image and thumbnails when there
+    /// are.
     fn skeleton_of(
         &self,
         folder: &Folder,
         kind: Option<ModKind>,
         manifest: Manifest,
         image: Option<PathBuf>,
+        thumbs: &[skeleton::ThumbFile],
         out: &mut Vec<Entry>,
     ) {
         let removed = match kind {
@@ -251,6 +270,22 @@ impl Skeletons<'_> {
                 Err(e) => log::warn!("transfer: card image of {} not frozen: {e}", folder.rel),
             }
         }
+        for t in thumbs {
+            let frozen = self
+                .scratch_dir()
+                .and_then(|dir| skeleton::freeze_thumb(&t.path, &dir, &t.preset, &t.fingerprint));
+            match frozen {
+                Ok(frozen) => {
+                    let file = frozen.file_name().map(PathBuf::from).unwrap_or_default();
+                    out.push(Entry::file(
+                        Part::Library,
+                        zip_name(LIBRARY_PREFIX, &folder.rel, &file),
+                        frozen,
+                    ));
+                }
+                Err(e) => log::warn!("transfer: thumbnail {} of {} not frozen: {e}", t.preset, folder.rel),
+            }
+        }
     }
 
     /// A track preview, reduced in a scratch copy (ESPACE§3.3).
@@ -269,9 +304,14 @@ impl Skeletons<'_> {
     }
 
     fn frozen(&self, src: &Path) -> Result<PathBuf, String> {
+        skeleton::freeze_image(src, &self.scratch_dir()?)
+    }
+
+    /// A fresh, empty folder of the scratch, for one frozen file.
+    fn scratch_dir(&self) -> Result<PathBuf, String> {
         let dir = self.scratch_file(PathBuf::new());
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        skeleton::freeze_image(src, &dir)
+        Ok(dir)
     }
 
     /// A fresh place in the scratch folder: every reduced or frozen image
@@ -325,7 +365,8 @@ impl Skeletons<'_> {
                 dir,
                 freed: false,
             };
-            self.skeleton_of(&folder, Some(kind), manifest, image, &mut out);
+            let thumbs = self.thumbs_of(&id, true);
+            self.skeleton_of(&folder, Some(kind), manifest, image, thumbs, &mut out);
             self.conn
                 .execute(
                     "UPDATE versions SET library_path = ?2, content_signature = ?3, size_bytes = ?4 WHERE id = ?1",

@@ -1,6 +1,7 @@
 // Typed bridge to the library transfer (EXPORT§), and the rules the two
 // dialogs share. Pure but for `invoke`, for Vitest.
 import { invoke } from "@tauri-apps/api/core";
+import type { LivePreset } from "$lib/gridthumbs/gridThumbs";
 
 /** Must stay aligned with `transfer::Part`. */
 export type Part = "library" | "classification" | "sessions" | "profiles" | "preferences";
@@ -36,6 +37,10 @@ export interface Estimate {
   /** Per part, as the zip will hold it; a part with nothing to carry is
    * absent. */
   bytes: Partial<Record<Part, number>>;
+  /** What the generated thumbnails add, per preset in use (EXPORT§4.3). */
+  thumb_bytes_per_preset: number;
+  /** What the thumbnails the skeletons already froze add, box checked. */
+  frozen_thumb_bytes: number;
 }
 
 export interface ExportReport {
@@ -78,8 +83,10 @@ export function estimateTransfer(): Promise<Estimate> {
   return invoke<Estimate>("transfer_estimate");
 }
 
-export function exportLibrary(path: string, parts: Part[]): Promise<ExportReport> {
-  return invoke<ExportReport>("transfer_export", { path, parts });
+/** `thumbPresets`: the presets whose grid thumbnails leave frozen
+ * (EXPORT§4.3); empty, none leaves. */
+export function exportLibrary(path: string, parts: Part[], thumbPresets: LivePreset[]): Promise<ExportReport> {
+  return invoke<ExportReport>("transfer_export", { path, parts, thumbPresets });
 }
 
 export function inspectExport(path: string): Promise<Inspection> {

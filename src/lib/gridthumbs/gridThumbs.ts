@@ -103,6 +103,22 @@ export function gridThumbnail(carId: string, skinId: string | null, template: Gr
   return invoke<GridThumb>("grid_thumbnail", { carId, skinId, template });
 }
 
+/** A preset bound to a density, as the backend freezes its thumbnails
+ * (ESPACE§3.3): its id, which names the frozen file, and its template. Must
+ * stay aligned with `gridthumbs::LivePreset`. */
+export interface LivePreset {
+  id: string;
+  template: GridTemplate;
+}
+
+/**
+ * The frozen thumbnail a car in the showcase shows under this preset
+ * (ESPACE§3.3), or `null` when its card shows its frozen image. A file path.
+ */
+export function frozenGridThumbnail(carId: string, preset: string, template: GridTemplate): Promise<string | null> {
+  return invoke<string | null>("frozen_grid_thumbnail", { carId, preset, template });
+}
+
 /**
  * Convertit une voiture **hors du cache d'aperçus** et rend l'URL du modèle.
  *

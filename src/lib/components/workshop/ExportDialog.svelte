@@ -19,6 +19,7 @@
     type Part,
   } from "$lib/workshop/transfer";
   import { runExport } from "$lib/workshop/transferState.svelte";
+  import { livePresets, liveTemplates, presetName } from "$lib/gridthumbs/gridThumbPrefs.svelte";
 
   interface Props {
     onclose: () => void;
@@ -28,9 +29,19 @@
   let estimate = $state<Estimate | null>(null);
   let error = $state("");
   let selected = $state<Part[]>([...PARTS]);
+  /** The generated thumbnails (EXPORT§4.3): offered only when they are on,
+   * and only with the library they belong to. */
+  let withThumbs = $state(true);
 
   const parts = $derived(effectiveParts(selected));
-  const size = $derived(parts.reduce((n, p) => n + (estimate?.bytes[p] ?? 0), 0));
+  const thumbPresets = $derived(liveTemplates());
+  const thumbsOffered = $derived(thumbPresets.length > 0 && parts.includes("library"));
+  const thumbsBytes = $derived(
+    (estimate?.thumb_bytes_per_preset ?? 0) * thumbPresets.length + (estimate?.frozen_thumb_bytes ?? 0),
+  );
+  const size = $derived(
+    parts.reduce((n, p) => n + (estimate?.bytes[p] ?? 0), 0) + (thumbsOffered && withThumbs ? thumbsBytes : 0),
+  );
 
   $effect(() => {
     estimateTransfer()
@@ -46,7 +57,7 @@
     });
     if (!path) return;
     onclose();
-    await runExport(path, parts);
+    await runExport(path, parts, thumbsOffered && withThumbs ? thumbPresets : []);
   }
 </script>
 
@@ -57,6 +68,16 @@
     <LoadingState />
   {:else}
     <TransferParts available={PARTS} counts={estimate.counts} bytes={estimate.bytes} bind:selected />
+    {#if thumbsOffered}
+      <label class="thumbs">
+        <input type="checkbox" bind:checked={withThumbs} />
+        <span class="t-body">
+          <span class="t-name">{t("transfer.partThumbs")}</span>
+          <span class="t-what">{livePresets().map(presetName).join(", ")}</span>
+        </span>
+        {#if thumbsBytes}<span class="t-size mono">{fmtSize(thumbsBytes)}</span>{/if}
+      </label>
+    {/if}
     <p class="size">{t("transfer.estimate", { size: fmtSize(size) })}</p>
     <p class="note">{t("transfer.notExported")}</p>
     <p class="note muted">{t("transfer.contentNote")}</p>
@@ -70,6 +91,43 @@
 </Modal>
 
 <style>
+  /* A sub-option of the library row above: the same row, set in. */
+  .thumbs {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 6px 0 0 24px;
+    padding: 8px 10px;
+    background: var(--panel2);
+    border: 1px solid var(--line);
+    cursor: pointer;
+  }
+  .thumbs input {
+    flex: none;
+    margin-top: 2px;
+    accent-color: var(--rosso);
+  }
+  .t-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .t-name {
+    color: var(--txt2);
+    font-size: 12.5px;
+  }
+  .t-what {
+    color: var(--muted);
+    font-size: 11.5px;
+    line-height: 1.45;
+  }
+  .t-size {
+    flex: none;
+    color: var(--muted);
+    font-size: 11px;
+  }
   .size {
     color: var(--txt2);
     font-size: 12px;

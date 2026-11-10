@@ -276,6 +276,7 @@ pub fn run() {
             commands::gridthumbs::forget_grid_thumbnail,
             commands::gridthumbs::release_grid_model,
             commands::gridthumbs::grid_thumbnail_stats,
+            commands::gridthumbs::frozen_grid_thumbnail,
             commands::gridthumbs::clear_grid_thumbnails,
             commands::gridthumbs::sweep_grid_templates,
             commands::session_state::get_session_picks,

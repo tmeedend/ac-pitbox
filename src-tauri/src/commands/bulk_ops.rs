@@ -113,6 +113,7 @@ pub async fn bulk_showcase(
     app: AppHandle,
     ids: Vec<String>,
     card_images: std::collections::HashMap<String, String>,
+    thumb_presets: Vec<crate::gridthumbs::LivePreset>,
     keep_archive: bool,
 ) -> Result<crate::bulk::ShowcaseReport, String> {
     let _game_write = crate::gamestate::GameWrite::begin();
@@ -120,6 +121,7 @@ pub async fn bulk_showcase(
         let (cancel, emit) = begin(app);
         let ctx = BulkCtx::new(&emit, "showcase", cancel);
         let cfg = crate::config::load(app);
+        let card_thumbs = crate::gridthumbs::card_thumbs(app, &ids, &thumb_presets);
         let db = app.state::<Db>();
         let conn = db.0.lock().map_err(|e| e.to_string())?;
         Ok(crate::bulk::showcase(
@@ -128,6 +130,7 @@ pub async fn bulk_showcase(
             &cfg,
             &ids,
             &card_images,
+            &card_thumbs,
             keep_archive,
         ))
     })

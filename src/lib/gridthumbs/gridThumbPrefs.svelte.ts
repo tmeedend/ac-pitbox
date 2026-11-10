@@ -34,8 +34,9 @@
 // clé pour la liste des presets de l'utilisateur, sur le patron de
 // `driverOutfits.svelte.ts` — une liste de quelques objets ne justifie pas un
 // fichier Rust dédié.
-import type { GridTemplate } from "./gridThumbs";
+import type { GridTemplate, LivePreset } from "./gridThumbs";
 import { sweepGridTemplates } from "./gridThumbs";
+import { t } from "$lib/i18n/index.svelte";
 import { getUiPrefs, setUiPrefs } from "$lib/uiPrefs.svelte";
 import { FEATURE_GRID_THUMBS } from "$lib/features";
 
@@ -703,6 +704,20 @@ export function presetForDensity(density: GridDensity): GridPreset {
 export function livePresets(): GridPreset[] {
   const ids = new Set(Object.values(stored.bound));
   return storedPresets().filter((p) => ids.has(p.id));
+}
+
+/** Le nom affiché d'un preset : sa clé i18n s'il est livré avec l'app — pour
+ * qu'il suive la langue — le nom tapé sinon, qui appartient à quelqu'un et ne
+ * se traduit donc pas. */
+export function presetName(preset: GridPreset): string {
+  return preset.builtin ? t("settings.gridPreset_" + preset.id) : preset.name;
+}
+
+/** The presets in use, as a skeleton freezes their thumbnails (ESPACE§3.3):
+ * none when the thumbnails are off, so nothing is frozen. */
+export function liveTemplates(): LivePreset[] {
+  if (!gridThumbsOn()) return [];
+  return livePresets().map((p) => ({ id: p.id, template: renderTemplate(p) }));
 }
 
 const pending = $derived(JSON.stringify(values) !== JSON.stringify(stored));

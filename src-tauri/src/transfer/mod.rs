@@ -133,6 +133,16 @@ pub struct Manifest {
     pub wiki_content_version: u32,
 }
 
+/// The grid thumbnails an export carries, frozen (EXPORT§4.3).
+#[derive(Debug, Clone, Default)]
+pub struct Thumbs {
+    /// The "generated thumbnails" box: unchecked, none leaves — those of the
+    /// skeletons already in the showcase neither.
+    pub include: bool,
+    /// What each car that still has its files shows, by mod id.
+    pub by_car: std::collections::HashMap<String, Vec<crate::skeleton::ThumbFile>>,
+}
+
 /// What an export of every part would hold and weigh, before writing it
 /// (EXPORT§7.2). The weight is per part, what the zip will hold: the screen
 /// adds up the checked ones.
@@ -140,6 +150,12 @@ pub struct Manifest {
 pub struct Estimate {
     pub counts: Counts,
     pub bytes: BTreeMap<Part, u64>,
+    /// What the generated thumbnails add, per preset in use (EXPORT§4.3): the
+    /// screen multiplies by the presets it binds.
+    pub thumb_bytes_per_preset: u64,
+    /// What the thumbnails the skeletons already froze add — with the box
+    /// checked only, like the others.
+    pub frozen_thumb_bytes: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -219,7 +235,7 @@ struct Built {
     library_bytes: u64,
 }
 
-fn build(db: &Db, cfg: &AppConfig, places: &Places, parts: &[Part]) -> Result<Built, String> {
+fn build(db: &Db, cfg: &AppConfig, places: &Places, parts: &[Part], thumbs: &Thumbs) -> Result<Built, String> {
     let scratch = Scratch::new("export")?;
     let stamp = now();
     let mut entries = Vec::new();
@@ -258,6 +274,7 @@ fn build(db: &Db, cfg: &AppConfig, places: &Places, parts: &[Part]) -> Result<Bu
             scratch: &scratch.0,
             stamp: &stamp,
             preferred: &preferred,
+            thumbs,
         };
         entries.extend(skel.of_library()?);
         let (converted, unmanaged_entries) = skel.convert_unmanaged()?;
@@ -298,9 +315,10 @@ fn build(db: &Db, cfg: &AppConfig, places: &Places, parts: &[Part]) -> Result<Bu
 /// (EXPORT§7.2): counts from the base, weights from the files a skeleton
 /// keeps and the compression measured on a real export ([`weigh::weigh`]).
 pub fn estimate(db: &Db, cfg: &AppConfig, places: &Places) -> Result<Estimate, String> {
-    let (mut counts, folders, base_bytes) = {
+    let (mut counts, folders, base_bytes, cars_with_files) = {
         let conn = db.0.lock().map_err(|e| e.to_string())?;
         let counts = tables::counts(&conn).map_err(|e| e.to_string())?;
+        let cars_with_files = weigh::cars_with_files(&conn).map_err(|e| e.to_string())?;
         let folders = match cfg.library_path.as_deref() {
             Some(library) => weigh::folders_to_weigh(&conn, library).map_err(|e| e.to_string())?,
             None => Vec::new(),
@@ -312,7 +330,7 @@ pub fn estimate(db: &Db, cfg: &AppConfig, places: &Places) -> Result<Estimate, S
                 |r| r.get(0),
             )
             .map_err(|e| e.to_string())?;
-        (counts, folders, base_bytes.max(0) as u64)
+        (counts, folders, base_bytes.max(0) as u64, cars_with_files)
     };
     let mut bytes: BTreeMap<Part, u64> = BTreeMap::new();
     if cfg.library_path.is_some() {
@@ -325,15 +343,27 @@ pub fn estimate(db: &Db, cfg: &AppConfig, places: &Places) -> Result<Estimate, S
     for e in &settings.entries {
         *bytes.entry(e.part).or_default() += e.zipped_size();
     }
-    Ok(Estimate { counts, bytes })
+    Ok(Estimate {
+        counts,
+        bytes,
+        thumb_bytes_per_preset: cars_with_files * weigh::FROZEN_THUMB,
+        frozen_thumb_bytes: weigh::frozen_thumb_bytes(&folders),
+    })
 }
 
-/// Writes the export to `dest` (EXPORT§4 to §6). Written beside `dest` first
-/// and renamed at the end: a failure never leaves half a file under the
-/// name the user chose.
-pub fn export(db: &Db, cfg: &AppConfig, places: &Places, parts: &[Part], dest: &Path) -> Result<ExportReport, String> {
+/// Writes the export to `dest` (EXPORT§4 to §6), with the grid `thumbs`
+/// (EXPORT§4.3). Written beside `dest` first and renamed at the end: a
+/// failure never leaves half a file under the name the user chose.
+pub fn export(
+    db: &Db,
+    cfg: &AppConfig,
+    places: &Places,
+    parts: &[Part],
+    thumbs: &Thumbs,
+    dest: &Path,
+) -> Result<ExportReport, String> {
     let parts = effective(parts);
-    let built = build(db, cfg, places, &parts)?;
+    let built = build(db, cfg, places, &parts, thumbs)?;
     let manifest = Manifest {
         format: FORMAT,
         app_version: places.app_version.clone(),

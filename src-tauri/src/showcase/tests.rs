@@ -114,7 +114,7 @@ fn a_car_in_the_showcase_keeps_exactly_its_skeleton() {
     let before = crate::inspect::dir_size_bytes(&f.dir) as i64;
     overlay::update_version_size(&f.conn, "v1", before).unwrap();
 
-    let out = to_showcase(&f.conn, &f.cfg, "lanzo", None, true).unwrap();
+    let out = to_showcase(&f.conn, &f.cfg, "lanzo", CardImages::default(), true).unwrap();
 
     assert!(out.was_active, "it was in the game");
     assert!(
@@ -182,7 +182,7 @@ fn a_car_in_the_showcase_keeps_exactly_its_skeleton() {
 #[test]
 fn a_showcase_mod_never_goes_back_into_the_game() {
     let f = fixture("showcase-guard", "lanzo", "Car", car);
-    to_showcase(&f.conn, &f.cfg, "lanzo", None, true).unwrap();
+    to_showcase(&f.conn, &f.cfg, "lanzo", CardImages::default(), true).unwrap();
 
     assert_eq!(
         crate::activation::activate(&f.conn, &f.cfg, "lanzo", None)
@@ -228,7 +228,9 @@ fn a_showcase_mod_never_goes_back_into_the_game() {
         "the card shows the frozen image"
     );
     assert_eq!(
-        to_showcase(&f.conn, &f.cfg, "lanzo", None, true).err().as_deref(),
+        to_showcase(&f.conn, &f.cfg, "lanzo", CardImages::default(), true)
+            .err()
+            .as_deref(),
         Some(crate::errors::CONTENT_FREED),
         "and it cannot be freed twice"
     );
@@ -268,7 +270,7 @@ fn nothing_the_user_or_the_sheet_holds_is_lost() {
         "the fixture's physics reached the sheet — otherwise this test proves nothing"
     );
 
-    to_showcase(c, &f.cfg, "lanzo", None, true).unwrap();
+    to_showcase(c, &f.cfg, "lanzo", CardImages::default(), true).unwrap();
     crate::maintenance::reindex_all(c, &f.cfg, true).unwrap();
 
     let mut mod_after = serde_json::to_value(overlay::get_mod(c, "lanzo").unwrap()).unwrap();
@@ -289,8 +291,37 @@ fn nothing_the_user_or_the_sheet_holds_is_lost() {
     assert_eq!(v.csp_features, vec!["lightingfx".to_string()], "and the CSP features");
 }
 
+/// Rule (ESPACE§3.3): a car keeps the grid thumbnails its card shows, one
+/// per preset, frozen before its model goes — named after the `.kn5`, nothing
+/// could find them afterwards. Bug it guards: putting a car in the showcase
+/// sent its card back to the author's preview.
+#[test]
+fn a_car_keeps_its_grid_thumbnails_in_the_showcase() {
+    let f = fixture("showcase-thumbs", "lanzo", "Car", car);
+    let rendered = f.base.join("cache/v1-abc-taaaa0001.png");
+    std::fs::create_dir_all(rendered.parent().unwrap()).unwrap();
+    image::RgbaImage::from_pixel(1024, 576, image::Rgba([10, 20, 30, 0]))
+        .save(&rendered)
+        .unwrap();
+    let thumbs = [skeleton::ThumbFile {
+        preset: "vitrine".into(),
+        fingerprint: "aaaa0001".into(),
+        path: rendered,
+    }];
+    let card = CardImages {
+        image: None,
+        thumbs: &thumbs,
+    };
+    to_showcase(&f.conn, &f.cfg, "lanzo", card, true).unwrap();
+    assert!(
+        skeleton::pick_thumb(&f.dir, "vitrine", "aaaa0001").is_some(),
+        "the skeleton holds the thumbnail of its preset"
+    );
+    assert!(skeleton::image_of(&f.dir).is_some(), "and its frozen image beside it");
+}
+
 /// Rule (ESPACE§3.3): the image frozen is the one the screen shows — a
-/// preferred skin, a regenerated thumbnail —, not the backend's guess.
+/// preferred skin —, not the backend's guess.
 #[test]
 fn the_frozen_image_is_the_one_the_card_shows() {
     let f = fixture("showcase-image", "lanzo", "Car", car);
@@ -299,7 +330,17 @@ fn the_frozen_image_is_the_one_the_card_shows() {
     image::RgbaImage::from_pixel(800, 450, image::Rgba([10, 20, 30, 0]))
         .save(&thumb)
         .unwrap();
-    to_showcase(&f.conn, &f.cfg, "lanzo", Some(&thumb), true).unwrap();
+    to_showcase(
+        &f.conn,
+        &f.cfg,
+        "lanzo",
+        CardImages {
+            image: Some(&thumb),
+            ..Default::default()
+        },
+        true,
+    )
+    .unwrap();
     let frozen = skeleton::image_of(&f.dir).unwrap();
     assert!(
         frozen.to_string_lossy().ends_with(".png"),
@@ -318,7 +359,7 @@ fn a_track_keeps_its_layouts_with_reduced_previews() {
         write(dir, "gp/map.png", b"map");
         write(dir, "shannon.kn5", &[3; 4000]);
     });
-    let out = to_showcase(&f.conn, &f.cfg, "shannon", None, true).unwrap();
+    let out = to_showcase(&f.conn, &f.cfg, "shannon", CardImages::default(), true).unwrap();
     assert_eq!(
         files_of(&f.dir),
         vec![
@@ -358,7 +399,7 @@ fn a_locked_file_leaves_the_version_complete() {
         .open(f.dir.join("sfx/lanzo.bank"))
         .unwrap();
     assert!(
-        to_showcase(&f.conn, &f.cfg, "lanzo", None, true).is_err(),
+        to_showcase(&f.conn, &f.cfg, "lanzo", CardImages::default(), true).is_err(),
         "the removal stops"
     );
     drop(lock);
@@ -420,7 +461,17 @@ fn a_livery_from_an_attached_skin_pack_is_frozen() {
     crate::activation::create_junction(&f.dir.join("skins/pack_livery"), &store).unwrap();
 
     let shown = f.dir.join("skins/pack_livery/preview.jpg");
-    to_showcase(&f.conn, &f.cfg, "lanzo", Some(&shown), true).unwrap();
+    to_showcase(
+        &f.conn,
+        &f.cfg,
+        "lanzo",
+        CardImages {
+            image: Some(&shown),
+            ..Default::default()
+        },
+        true,
+    )
+    .unwrap();
 
     let frozen = skeleton::image_of(&f.dir).expect("the livery shown on the card was frozen");
     let img = image::open(frozen).unwrap();
@@ -466,7 +517,7 @@ fn with_older_version(f: &Fixture) -> PathBuf {
 fn every_version_goes_into_the_showcase() {
     let f = fixture("showcase-versions", "lanzo", "Car", car);
     let old = with_older_version(&f);
-    to_showcase(&f.conn, &f.cfg, "lanzo", None, true).unwrap();
+    to_showcase(&f.conn, &f.cfg, "lanzo", CardImages::default(), true).unwrap();
     for id in ["v0", "v1"] {
         assert!(
             overlay::get_version(&f.conn, id).unwrap().unwrap().is_skeleton(),
@@ -491,7 +542,7 @@ fn one_version_that_resists_leaves_every_version_complete() {
         .open(old.join("sfx/lanzo.bank"))
         .unwrap();
     assert!(
-        to_showcase(&f.conn, &f.cfg, "lanzo", None, true).is_err(),
+        to_showcase(&f.conn, &f.cfg, "lanzo", CardImages::default(), true).is_err(),
         "the lot reports the mod as failed"
     );
     drop(lock);
@@ -561,7 +612,7 @@ fn reinstalling_from_the_kept_archive_takes_the_mod_out_of_the_showcase() {
     let kept = f.base.join("lib/_source_archives/u1/src");
     car(&kept.join("lanzo"));
     overlay::set_kept_archive(&f.conn, "v1", &kept.to_string_lossy()).unwrap();
-    to_showcase(&f.conn, &f.cfg, "lanzo", None, true).unwrap();
+    to_showcase(&f.conn, &f.cfg, "lanzo", CardImages::default(), true).unwrap();
 
     crate::maintenance::reinstall_from_archive(&f.conn, &f.cfg, "lanzo").unwrap();
 
@@ -592,7 +643,7 @@ fn the_plan_says_what_a_deletion_does() {
     );
     assert!(!p.kept_archive);
 
-    to_showcase(&f.conn, &f.cfg, "lanzo", None, true).unwrap();
+    to_showcase(&f.conn, &f.cfg, "lanzo", CardImages::default(), true).unwrap();
     let p = &plan(&f.conn, &f.cfg, &["lanzo".to_string()]).unwrap()[0];
     assert!(p.showcase && !p.active, "only a complete deletion is left");
     assert_eq!(p.versions, 0, "nothing left to free");
@@ -608,7 +659,7 @@ fn the_sources_keep_only_web_addresses() {
         "ui/ui_car.json",
         br#"{"name":"Lanzo","url":"https://rss.example/lanzo"}"#,
     );
-    to_showcase(&f.conn, &f.cfg, "lanzo", None, true).unwrap();
+    to_showcase(&f.conn, &f.cfg, "lanzo", CardImages::default(), true).unwrap();
     let s = sources(&f.conn, &f.cfg, "lanzo").unwrap();
     assert_eq!(s.author_url.as_deref(), Some("https://rss.example/lanzo"));
     assert_eq!(s.file_name.as_deref(), Some("mod_v1.4.7z"));
@@ -640,7 +691,7 @@ fn a_broken_mod_whose_folder_vanished_goes_into_the_showcase() {
         "broken to begin with — otherwise this test proves nothing"
     );
 
-    let out = to_showcase(&f.conn, &f.cfg, "lanzo", None, true).unwrap();
+    let out = to_showcase(&f.conn, &f.cfg, "lanzo", CardImages::default(), true).unwrap();
 
     assert_eq!(out.freed_bytes, 0, "nothing was left to free");
     assert!(
@@ -665,7 +716,7 @@ fn the_kept_archive_goes_only_when_asked() {
     write(&f.base, "lib/_source_archives/u1/mod_v1.4.7z", b"7z");
     overlay::set_kept_archive(&f.conn, "v1", &kept.to_string_lossy()).unwrap();
 
-    to_showcase(&f.conn, &f.cfg, "lanzo", None, false).unwrap();
+    to_showcase(&f.conn, &f.cfg, "lanzo", CardImages::default(), false).unwrap();
     assert!(!kept.exists(), "removed on request");
     assert_eq!(
         overlay::get_version(&f.conn, "v1").unwrap().unwrap().kept_archive_path,
@@ -714,7 +765,7 @@ fn the_same_archive_brings_the_files_back_into_the_same_version() {
         let conn = db.0.lock().unwrap();
         overlay::set_mod_field(&conn, "lanzo", "display_name_user", Some("My Lanzo")).unwrap();
         overlay::set_favorite(&conn, "lanzo", true).unwrap();
-        to_showcase(&conn, &cfg, "lanzo", None, true).unwrap();
+        to_showcase(&conn, &cfg, "lanzo", CardImages::default(), true).unwrap();
     }
 
     let back = import(&db, &cfg, &src);
@@ -764,7 +815,7 @@ fn the_same_archive_brings_the_files_back_into_the_same_version() {
 fn another_version_updates_and_the_skeleton_stays_in_the_timeline() {
     let (_base, db, cfg, src) = round_trip_setup("showcase-update");
     import(&db, &cfg, &src);
-    to_showcase(&db.0.lock().unwrap(), &cfg, "lanzo", None, true).unwrap();
+    to_showcase(&db.0.lock().unwrap(), &cfg, "lanzo", CardImages::default(), true).unwrap();
 
     write(&src.join("lanzo"), "lanzo.kn5", &[9; 6000]);
     let out = import(&db, &cfg, &src);
@@ -809,7 +860,7 @@ fn a_layer_onto_a_showcase_track_stays_a_layer() {
     write(&track, "gp/data/surfaces.ini", b"[SURFACE_0]");
     write(&track, "shannon.kn5", &[3; 4000]);
     assert_eq!(import(&db, &cfg, &base.join("src"))[0].outcome, "IMPORT");
-    to_showcase(&db.0.lock().unwrap(), &cfg, "shannon", None, true).unwrap();
+    to_showcase(&db.0.lock().unwrap(), &cfg, "shannon", CardImages::default(), true).unwrap();
 
     // A new layout: its model, its ini, its ui — nothing the track had.
     let layer = base.join("layer/shannon");
@@ -877,7 +928,7 @@ fn a_layout_brought_by_a_layer_stays_on_the_fiche_of_a_track_in_the_showcase() {
         listed_layouts(&conn, &cfg, "shannon").contains(&"club".to_string()),
         "fixture: the layer brings club"
     );
-    to_showcase(&conn, &cfg, "shannon", None, true).unwrap();
+    to_showcase(&conn, &cfg, "shannon", CardImages::default(), true).unwrap();
 
     let row = overlay::list_layers(&conn, "shannon", crate::layers::HostKind::Track)
         .unwrap()
@@ -964,7 +1015,7 @@ fn layers_and_attached_skins_follow_their_mod() {
     assert_eq!(named.len(), 2, "the layer and the skin pack: {named:?}");
     assert!(named.contains(&("skin", "gulf")));
 
-    let out = to_showcase(&conn, &cfg, "lanzo", None, true).unwrap();
+    let out = to_showcase(&conn, &cfg, "lanzo", CardImages::default(), true).unwrap();
 
     assert_eq!(
         sources(&conn, &cfg, "lanzo").unwrap().attached.len(),
@@ -1003,7 +1054,7 @@ fn each_comes_back_with_its_own_archive() {
             .unwrap()
             .remove(0);
         let skin = overlay::find_sub(&conn, "SKIN", "lanzo", "gulf").unwrap().unwrap();
-        to_showcase(&conn, &cfg, "lanzo", None, true).unwrap();
+        to_showcase(&conn, &cfg, "lanzo", CardImages::default(), true).unwrap();
         (layer.id, skin.id)
     };
 
@@ -1064,7 +1115,7 @@ fn additions_go_and_the_notes_stay() {
     let f = fixture("showcase-loose", "lanzo", "Car", car);
     let (extras, resources) = with_extras_and_resources(&f);
 
-    let out = to_showcase(&f.conn, &f.cfg, "lanzo", None, true).unwrap();
+    let out = to_showcase(&f.conn, &f.cfg, "lanzo", CardImages::default(), true).unwrap();
 
     assert!(!extras.exists(), "the additions' folder is gone whole");
     assert_eq!(
@@ -1092,7 +1143,7 @@ fn a_locked_resource_puts_everything_back() {
         .share_mode(0)
         .open(resources.join("manual.pdf"))
         .unwrap();
-    assert!(to_showcase(&f.conn, &f.cfg, "lanzo", None, true).is_err());
+    assert!(to_showcase(&f.conn, &f.cfg, "lanzo", CardImages::default(), true).is_err());
     drop(lock);
 
     let mut version = files_of(&f.dir);

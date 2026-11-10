@@ -34,6 +34,7 @@
     duplicatePreset,
     gridThumbPrefs,
     gridThumbsDirty,
+    presetName,
     renamePreset,
     renderTemplate,
     revertGridThumbPrefs,
@@ -71,13 +72,6 @@
   let clearing = $state(false);
   let error = $state<string | null>(null);
   let carCount = $state<number | null>(null);
-
-  /** Le nom affiché d'un preset : sa clé i18n s'il est livré avec l'app — pour
-   * qu'il suive la langue — le nom tapé sinon, qui appartient à quelqu'un et ne
-   * se traduit donc pas. */
-  function presetName(preset: GridPreset): string {
-    return preset.builtin ? t("settings.gridPreset_" + preset.id) : preset.name;
-  }
 
   async function refresh() {
     try {

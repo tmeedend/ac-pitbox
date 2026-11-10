@@ -62,16 +62,25 @@ fn now() -> String {
     chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
 }
 
-/// Puts a mod in the showcase (ESPACE§5.5). `card_image` is the image its
-/// card shows right now, as the screen chose it (a preferred skin, a
-/// regenerated grid thumbnail); `None` falls back on the backend's choice.
+/// What a card shows right now, to be frozen with its skeleton (ESPACE§3.3).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CardImages<'a> {
+    /// The image, as the screen chose it (a preferred skin's preview); `None`
+    /// falls back on the backend's choice.
+    pub image: Option<&'a Path>,
+    /// The grid thumbnails rendered for it, one per preset in use; empty when
+    /// the thumbnails are off.
+    pub thumbs: &'a [skeleton::ThumbFile],
+}
+
+/// Puts a mod in the showcase (ESPACE§5.5), freezing what its `card` shows.
 /// `keep_archive` keeps the source archive kept at import, if any, which is
 /// what recovers the mod in one click and offline (ESPACE§5.2).
 pub fn to_showcase(
     conn: &Connection,
     cfg: &AppConfig,
     mod_id: &str,
-    card_image: Option<&Path>,
+    card: CardImages<'_>,
     keep_archive: bool,
 ) -> Result<ShowcaseOutcome, String> {
     let m = overlay::get_mod(conn, mod_id)
@@ -98,7 +107,8 @@ pub fn to_showcase(
     if kind == ModKind::Car {
         crate::techsheet::refresh_active(conn, cfg, mod_id, false).map_err(|e| e.to_string())?;
     }
-    let card_image = card_image
+    let card_image = card
+        .image
         .map(Path::to_path_buf)
         .or_else(|| crate::library::preview_for(conn, cfg, &m).map(PathBuf::from));
 
@@ -132,8 +142,16 @@ pub fn to_showcase(
     for owner in owners {
         let prepared = match owner {
             Owner::Version(v) => {
-                let image = (v.id == active).then_some(card_image.as_deref()).flatten();
-                prepare_version(cfg, kind, &m, v, image, &stamp)
+                // What the card shows belongs to the active version alone.
+                let shown = if v.id == active {
+                    CardImages {
+                        image: card_image.as_deref(),
+                        thumbs: card.thumbs,
+                    }
+                } else {
+                    CardImages::default()
+                };
+                prepare_version(cfg, kind, &m, v, shown, &stamp)
             }
             _ => prepare_attached(cfg, kind, owner, &m.id_interne, &stamp),
         };
@@ -359,7 +377,7 @@ fn prepare_version<'a>(
     kind: ModKind,
     m: &'a ModRow,
     v: &'a VersionRow,
-    card_image: Option<&Path>,
+    card: CardImages<'_>,
     stamp: &str,
 ) -> Result<Freeing<'a>, String> {
     let dir = crate::libpath::resolve(cfg.library_path.as_deref(), &v.library_path)
@@ -372,10 +390,17 @@ fn prepare_version<'a>(
     //    without an image is better than a removal that stops halfway.
     //    Before the projections are removed: the card very often shows a
     //    livery from an attached skin pack, reached through one of them.
-    let image = card_image.map(Path::to_path_buf).or_else(|| own_preview(kind, &dir));
+    let image = card.image.map(Path::to_path_buf).or_else(|| own_preview(kind, &dir));
     if let Some(src) = image {
         if let Err(e) = skeleton::freeze_image(&src, &dir) {
             log::warn!("showcase {}: card image not frozen: {e}", m.id_interne);
+        }
+    }
+    // The grid thumbnails too: named after the `.kn5` about to go, nothing
+    // could find them, or make them again, afterwards (ESPACE§3.3).
+    for t in card.thumbs {
+        if let Err(e) = skeleton::freeze_thumb(&t.path, &dir, &t.preset, &t.fingerprint) {
+            log::warn!("showcase {}: thumbnail of {} not frozen: {e}", m.id_interne, t.preset);
         }
     }
     remove_projections(&dir);
@@ -473,11 +498,7 @@ impl Freeing<'_> {
             );
             return;
         }
-        let own = [self.dir.join(skeleton::MANIFEST_NAME)]
-            .into_iter()
-            .chain(skeleton::image_of(&self.dir))
-            .filter(|p| p.exists());
-        for file in own {
+        for file in skeleton::own_files(&self.dir) {
             let _ = std::fs::remove_file(&file)
                 .inspect_err(|e| log::warn!("showcase {mod_id}: {} not removed: {e}", file.display()));
         }

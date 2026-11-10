@@ -45,7 +45,13 @@
   import { cardImage, getPreferredSkin, getPreferredLayout } from "$lib/preferred";
   import { isPlayable } from "$lib/library/showcase.svelte";
   import { sessionFallback } from "$lib/library/sessionFallback";
-  import { enqueueGridThumbs, gridThumb, requestGridThumb } from "$lib/gridthumbs/gridThumbs.svelte";
+  import {
+    enqueueGridThumbs,
+    frozenThumb,
+    gridThumb,
+    requestFrozenThumb,
+    requestGridThumb,
+  } from "$lib/gridthumbs/gridThumbs.svelte";
   import { gridThumbsOn, presetForDensity, renderTemplate } from "$lib/gridthumbs/gridThumbPrefs.svelte";
   import { buildModContextItems } from "$lib/library/modContextActions";
   import { t } from "$lib/i18n/index.svelte";
@@ -223,7 +229,9 @@
    * mat**, que le fond cuit d'un preset comme Officiel reprend. */
   const template = $derived(renderTemplate(preset));
 
-  type ThumbWant = { car: string; skin: string | null; name: string; want: boolean };
+  /** `frozen`: a car in the showcase, whose thumbnail is looked up in its
+   * skeleton and never rendered (ESPACE§3.3). */
+  type ThumbWant = { car: string; skin: string | null; name: string; want: boolean; frozen: boolean };
   const wanted = new WeakMap<Element, ThumbWant>();
   let visibility: IntersectionObserver | null = null;
 
@@ -236,7 +244,8 @@
         for (const entry of entries) {
           if (!entry.isIntersecting) continue;
           const target = wanted.get(entry.target);
-          if (target?.want) requestGridThumb(template, target.car, target.skin, target.name);
+          if (target?.frozen) requestFrozenThumb(preset.id, template, target.car);
+          else if (target?.want) requestGridThumb(template, target.car, target.skin, target.name);
         }
       },
       // Un peu avant le bord : la vignette d'une carte qui arrive a une
@@ -280,11 +289,20 @@
     // qui cherche l'homogénéité, au contraire, les sauter ruine ce qu'on
     // cherche — d'où une propriété du preset et non un réglage global.
     const skipStock = preset.skipStock;
+    const presetId = preset.id;
+    // The showcase cars' frozen thumbnails, looked up here too and not only
+    // when a card enters the view: switching density changes the preset, and
+    // cards already on screen fire no new intersection (ESPACE§3.3).
+    untrack(() => {
+      for (const c of list) if (c.showcase) requestFrozenThumb(presetId, wanted, c.id_interne);
+    });
     untrack(() =>
       enqueueGridThumbs(
         wanted,
         list
-          .filter((c) => !skipStock || !c.is_stock)
+          // A car in the showcase has no model to render: it shows what its
+          // skeleton froze (GRILLE§7), and stays out of the count.
+          .filter((c) => !c.showcase && (!skipStock || !c.is_stock))
           .map((c) => ({
             id: c.id_interne,
             skin: getPreferredSkin(c.id_interne)?.id ?? null,
@@ -961,11 +979,15 @@
                une voiture chiffrée n'en aura jamais — la carte garde la photo
                d'origine : la grille reste mixte pour toujours, et c'est le mat
                qui les rend comparables. -->
-          {@const regen = isCar ? gridThumb(template, c.id_interne, prefSkin?.id ?? null) : null}
+          {@const regen = !isCar
+            ? null
+            : c.showcase
+              ? frozenThumb(preset.id, template, c.id_interne)
+              : gridThumb(template, c.id_interne, prefSkin?.id ?? null)}
           {@const ol = previewSrc(prefLayout?.outline ?? c.outline)}
           {@const blocked = unusableReason(c)}
           <button data-id={c.id_interne} class="card" class:unusable={blocked !== null} class:sel={effectiveId === c.id_interne && selectedIds.size === 0} class:multisel={selectedIds.has(c.id_interne)} class:session={sessionId === c.id_interne} onclick={(e) => onCardClick(c, e)} ondblclick={() => (nav.openFull = c.id_interne)} oncontextmenu={(e) => openCardContextMenu(e, c)} title={blocked ? `${t(blocked)}\n${t("library.cardTooltip")}` : t("library.cardTooltip")}>
-            <div class="thumb" use:whenVisible={{ car: c.id_interne, skin: prefSkin?.id ?? null, name: cardName(c), want: isCar && !(preset.skipStock && c.is_stock) }}>
+            <div class="thumb" use:whenVisible={{ car: c.id_interne, skin: prefSkin?.id ?? null, name: cardName(c), want: isCar && !c.showcase && !(preset.skipStock && c.is_stock), frozen: isCar && c.showcase }}>
               {#if regen ?? src}<img src={regen ?? src} alt={c.display_name ?? c.id_interne} loading="lazy" />
               {:else}<div class="noprev">{isCar ? t("library.typeCar") : t("library.typeTrack")}</div>{/if}
               {#if !isCar && ol}<img class="outline" src={ol} alt="" loading="lazy" />{/if}

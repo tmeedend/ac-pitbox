@@ -26,6 +26,11 @@ pub const MANIFEST_NAME: &str = ".pitbox-vitrine.json";
 /// The frozen card image (ESPACE§3.3), `.png` or `.jpg` after this stem.
 const IMAGE_STEM: &str = ".pitbox-vitrine";
 const IMAGE_EXTENSIONS: [&str; 2] = ["png", "jpg"];
+/// A frozen grid thumbnail (ESPACE§3.3): this prefix, then
+/// `<preset>.<fingerprint>.<png|jpg>`. It starts like the frozen image on
+/// purpose: what skips the showcase's own files by that prefix
+/// (`showcase::copy_kept`) skips these too.
+const THUMB_PREFIX: &str = ".pitbox-vitrine-thumb.";
 /// Width of every image a skeleton keeps, the frozen one and the reduced
 /// track previews (ESPACE§3.3): enough for the largest card, a few dozen KB.
 pub const IMAGE_WIDTH: u32 = 480;
@@ -40,15 +45,123 @@ fn normalized(rel: &Path) -> String {
     rel.to_string_lossy().replace('\\', "/").to_lowercase()
 }
 
-/// True for the showcase's own files at the root: manifest and frozen image.
+/// True for the showcase's own files at the root: manifest, frozen image and
+/// frozen thumbnails.
 fn is_own_file(rel: &str) -> bool {
-    rel == MANIFEST_NAME || IMAGE_EXTENSIONS.iter().any(|ext| rel == format!("{IMAGE_STEM}.{ext}"))
+    rel == MANIFEST_NAME
+        || IMAGE_EXTENSIONS.iter().any(|ext| rel == format!("{IMAGE_STEM}.{ext}"))
+        || parse_thumb(rel).is_some()
 }
 
 /// Whether `rel`, relative to a folder, is one of the showcase's own files at
-/// its root — the manifest or the frozen image —, not one of the mod's.
+/// its root — the manifest, the frozen image or a frozen thumbnail —, not one
+/// of the mod's.
 pub fn is_showcase_file(rel: &Path) -> bool {
     is_own_file(&normalized(rel))
+}
+
+/// Whether `rel`, relative to a folder, is a frozen grid thumbnail at its root.
+pub fn is_frozen_thumb(rel: &Path) -> bool {
+    parse_thumb(&normalized(rel)).is_some()
+}
+
+/// A grid thumbnail, rendered or frozen (ESPACE§3.3): the preset it was made
+/// for, the fingerprint of that preset's template when it was, and the file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThumbFile {
+    pub preset: String,
+    pub fingerprint: String,
+    pub path: PathBuf,
+}
+
+/// Whether `id` can stand in a file name as a preset's: the ids the screen
+/// gives (`catalogue`, `vitrine`, `officiel`, `u<base 36>`) and nothing that
+/// could be read as a path. It comes from the frontend.
+pub fn is_preset_id(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+fn is_fingerprint(fp: &str) -> bool {
+    !fp.is_empty() && fp.len() <= 64 && fp.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// `(preset, fingerprint)` of a frozen thumbnail's name, `None` for any other
+/// name — a subfolder's file included, since the name then holds a `/`.
+fn parse_thumb(name: &str) -> Option<(&str, &str)> {
+    let (stem, ext) = name.strip_prefix(THUMB_PREFIX)?.rsplit_once('.')?;
+    let (preset, fingerprint) = stem.rsplit_once('.')?;
+    (IMAGE_EXTENSIONS.contains(&ext) && is_preset_id(preset) && is_fingerprint(fingerprint))
+        .then_some((preset, fingerprint))
+}
+
+/// The frozen thumbnails of a skeleton, in name order.
+pub fn thumbs_of(dir: &Path) -> Vec<ThumbFile> {
+    let mut out: Vec<ThumbFile> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+        .filter_map(|e| {
+            let name = e.file_name().into_string().ok()?;
+            let (preset, fingerprint) = parse_thumb(&name)?;
+            Some(ThumbFile {
+                preset: preset.to_string(),
+                fingerprint: fingerprint.to_string(),
+                path: e.path(),
+            })
+        })
+        .collect();
+    out.sort_by(|a, b| a.path.cmp(&b.path));
+    out
+}
+
+/// The frozen thumbnail a card shows for `preset` (ESPACE§3.3): the one of
+/// its exact `fingerprint` — made for it or for another preset of the same
+/// settings, the pixels are the same —, else the one of an older state of the
+/// same preset. `None` sends the card back to the frozen image.
+pub fn pick_thumb(dir: &Path, preset: &str, fingerprint: &str) -> Option<PathBuf> {
+    let thumbs = thumbs_of(dir);
+    let exact = |t: &&ThumbFile| t.fingerprint == fingerprint;
+    thumbs
+        .iter()
+        .filter(exact)
+        .find(|t| t.preset == preset)
+        .or_else(|| thumbs.iter().find(exact))
+        .or_else(|| thumbs.iter().find(|t| t.preset == preset))
+        .map(|t| t.path.clone())
+}
+
+/// Writes `src` as the frozen thumbnail of `preset` in `dir` (ESPACE§3.3), in
+/// the frozen image's format, replacing the one of an older state of the same
+/// preset — a skeleton keeps one per preset.
+pub fn freeze_thumb(src: &Path, dir: &Path, preset: &str, fingerprint: &str) -> Result<PathBuf, String> {
+    if !is_preset_id(preset) || !is_fingerprint(fingerprint) {
+        return Err(format!("thumbnail name refused: {preset}.{fingerprint}"));
+    }
+    // Written before the older state is removed: for a car without its
+    // `.kn5`, a failed write must not leave it with no thumbnail at all.
+    let (img, _) = decode(src)?;
+    let written = write_frozen(&narrowed(img), dir, &format!("{THUMB_PREFIX}{preset}.{fingerprint}"))?;
+    for old in thumbs_of(dir)
+        .into_iter()
+        .filter(|t| t.preset == preset && t.path != written)
+    {
+        std::fs::remove_file(&old.path).map_err(|e| format!("{}: {e}", old.path.display()))?;
+    }
+    Ok(written)
+}
+
+/// The showcase's own files present in `dir`: the manifest, the frozen image
+/// and the frozen thumbnails.
+pub fn own_files(dir: &Path) -> Vec<PathBuf> {
+    let manifest = dir.join(MANIFEST_NAME);
+    manifest
+        .is_file()
+        .then_some(manifest)
+        .into_iter()
+        .chain(image_of(dir))
+        .chain(thumbs_of(dir).into_iter().map(|t| t.path))
+        .collect()
 }
 
 /// Whether `rel`, a file of a car or track folder, stays in its skeleton
@@ -121,7 +234,6 @@ pub fn image_of(dir: &Path) -> Option<PathBuf> {
 /// otherwise. Replaces a previous one of either format.
 pub fn freeze_image(src: &Path, dir: &Path) -> Result<PathBuf, String> {
     let (img, _) = decode(src)?;
-    let img = narrowed(img);
     for old in IMAGE_EXTENSIONS
         .iter()
         .map(|ext| dir.join(format!("{IMAGE_STEM}.{ext}")))
@@ -130,9 +242,15 @@ pub fn freeze_image(src: &Path, dir: &Path) -> Result<PathBuf, String> {
             std::fs::remove_file(&old).map_err(|e| format!("{}: {e}", old.display()))?;
         }
     }
+    write_frozen(&narrowed(img), dir, IMAGE_STEM)
+}
+
+/// Writes a frozen image as `<stem>.png` when it has transparency, as
+/// `<stem>.jpg` otherwise (ESPACE§3.3).
+fn write_frozen(img: &image::DynamicImage, dir: &Path, stem: &str) -> Result<PathBuf, String> {
     let transparent = img.color().has_alpha() && img.to_rgba8().pixels().any(|p| p.0[3] < u8::MAX);
-    let dest = dir.join(format!("{IMAGE_STEM}.{}", if transparent { "png" } else { "jpg" }));
-    write_image(&img, &dest, transparent)?;
+    let dest = dir.join(format!("{stem}.{}", if transparent { "png" } else { "jpg" }));
+    write_image(img, &dest, transparent)?;
     Ok(dest)
 }
 
@@ -591,6 +709,102 @@ mod tests {
         assert!(
             is_kept(ModKind::Car, Path::new(".pitbox-vitrine.png")),
             "and it is part of the skeleton"
+        );
+    }
+
+    fn thumb_png(base: &Path, name: &str) -> PathBuf {
+        let path = base.join(name);
+        image::RgbaImage::from_pixel(1024, 576, image::Rgba([200, 30, 30, 0]))
+            .save(&path)
+            .unwrap();
+        path
+    }
+
+    /// Rule (ESPACE§3.1, ESPACE§3.3): a frozen thumbnail at the root is part of
+    /// the skeleton; a name that only looks like one is not — a file of the
+    /// mod's, or a preset id that could be read as a path.
+    #[test]
+    fn only_a_well_formed_frozen_thumb_at_the_root_is_the_showcases() {
+        for rel in [
+            ".pitbox-vitrine-thumb.vitrine.3fa9c2d1.png",
+            ".pitbox-vitrine-thumb.u1k2x9.00ff.jpg",
+        ] {
+            assert!(kept(ModKind::Car, rel), "{rel} stays");
+            assert!(is_frozen_thumb(Path::new(rel)), "{rel} is a frozen thumbnail");
+        }
+        for rel in [
+            "ui/.pitbox-vitrine-thumb.vitrine.3fa9c2d1.png",
+            ".pitbox-vitrine-thumb.vitrine.nothex.png",
+            ".pitbox-vitrine-thumb.vitrine.3fa9c2d1.dds",
+            ".pitbox-vitrine-thumb.3fa9c2d1.png",
+            ".pitbox-vitrine-thumb.../x.3fa9c2d1.png",
+        ] {
+            assert!(!is_frozen_thumb(Path::new(rel)), "{rel} is not");
+        }
+        assert!(
+            !kept(ModKind::Car, "ui/.pitbox-vitrine-thumb.vitrine.3fa9c2d1.png"),
+            "a look-alike in ui/ goes with the mod's files"
+        );
+    }
+
+    /// Rule (ESPACE§3.3): a skeleton keeps one frozen thumbnail per preset —
+    /// freezing an older state's replaces it — and those of other presets
+    /// stay.
+    #[test]
+    fn freezing_a_thumb_replaces_only_its_own_presets() {
+        let base = crate::testutil::temp_dir("skeleton-thumb");
+        let src = thumb_png(&base, "src.png");
+        let dir = base.join("v1");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        freeze_thumb(&src, &dir, "vitrine", "aaaa0001").unwrap();
+        freeze_thumb(&src, &dir, "catalogue", "bbbb0001").unwrap();
+        let again = freeze_thumb(&src, &dir, "vitrine", "aaaa0002").unwrap();
+
+        let thumbs = thumbs_of(&dir);
+        assert_eq!(thumbs.len(), 2, "one per preset: {thumbs:?}");
+        assert!(thumbs.iter().any(|t| t.path == again), "the newer state of vitrine");
+        assert!(
+            thumbs.iter().any(|t| t.preset == "catalogue"),
+            "catalogue's own is untouched"
+        );
+        let img = image::open(&again).unwrap();
+        assert_eq!(img.width(), IMAGE_WIDTH, "narrowed like the frozen image");
+        assert!(again.to_string_lossy().ends_with(".png"), "a cut-out keeps its alpha");
+        assert_eq!(own_files(&dir).len(), 2, "both are the showcase's own files");
+        assert!(
+            freeze_thumb(&src, &dir, "../evil", "aaaa").is_err(),
+            "a preset id that is not one is refused"
+        );
+    }
+
+    /// Rule (ESPACE§3.3): the card takes the thumbnail of the exact
+    /// fingerprint — even one frozen for another preset of the same settings
+    /// —, else an older state of its own preset, else none (the frozen image).
+    #[test]
+    fn the_card_takes_the_exact_thumb_then_an_older_state_of_its_preset() {
+        let base = crate::testutil::temp_dir("skeleton-pick");
+        let src = thumb_png(&base, "src.png");
+        let dir = base.join("v1");
+        std::fs::create_dir_all(&dir).unwrap();
+        let old = freeze_thumb(&src, &dir, "vitrine", "aaaa0001").unwrap();
+        let copy = freeze_thumb(&src, &dir, "u1copy", "cccc0001").unwrap();
+
+        assert_eq!(pick_thumb(&dir, "vitrine", "aaaa0001"), Some(old.clone()), "exact");
+        assert_eq!(
+            pick_thumb(&dir, "vitrine", "cccc0001"),
+            Some(copy),
+            "the same settings under another preset are the same pixels"
+        );
+        assert_eq!(
+            pick_thumb(&dir, "vitrine", "aaaa0099"),
+            Some(old),
+            "a preset changed since keeps its older thumbnail"
+        );
+        assert_eq!(
+            pick_thumb(&dir, "officiel", "dddd0001"),
+            None,
+            "none for a preset never frozen"
         );
     }
 

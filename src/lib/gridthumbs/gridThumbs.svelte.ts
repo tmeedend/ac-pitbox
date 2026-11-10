@@ -27,6 +27,7 @@ import type * as ThreeModule from "three";
 
 import {
   forgetGridThumbnail,
+  frozenGridThumbnail,
   gridThumbnail,
   markGridThumbnailFailed,
   prepareGridModel,
@@ -73,7 +74,9 @@ const KEY_BASE = 2.2;
  * détacher la silhouette. */
 const ENVIRONMENT = 0.55;
 
-type Entry = { url: string } | { pending: true } | { failed: string };
+/** `none`: a car in the showcase with no frozen thumbnail for this preset —
+ * its card shows its frozen image. */
+type Entry = { url: string } | { pending: true } | { failed: string } | { none: true };
 
 const cache = $state<Record<string, Entry>>({});
 
@@ -101,6 +104,45 @@ function keyOf(template: GridTemplate, carId: string, skinId: string | null): st
 export function gridThumb(template: GridTemplate, carId: string, skinId: string | null): string | null {
   const entry = cache[keyOf(template, carId, skinId)];
   return entry && "url" in entry ? entry.url : null;
+}
+
+/**
+ * The key of a frozen thumbnail. The preset counts here, not only the
+ * template: when no thumbnail has the exact fingerprint, the choice falls back
+ * on an older state **of the same preset** (ESPACE§3.3).
+ */
+function frozenKeyOf(preset: string, template: GridTemplate, carId: string): string {
+  return `frozen|${preset}|${keyOf(template, carId, null)}`;
+}
+
+/**
+ * The frozen thumbnail of a car in the showcase, or `null` (ESPACE§3.3).
+ * Reactive and side-effect free, like `gridThumb`.
+ */
+export function frozenThumb(preset: string, template: GridTemplate, carId: string): string | null {
+  const entry = cache[frozenKeyOf(preset, template, carId)];
+  return entry && "url" in entry ? entry.url : null;
+}
+
+/**
+ * Looks up the frozen thumbnail of a car in the showcase **that became
+ * visible**. No queue and no count: a car without its files is never
+ * rendered (GRILLE§7), this reads one folder.
+ */
+export function requestFrozenThumb(preset: string, template: GridTemplate, carId: string): void {
+  if (!gridThumbsOn()) return;
+  const key = frozenKeyOf(preset, template, carId);
+  if (cache[key]) return;
+  cache[key] = { pending: true };
+  frozenGridThumbnail(carId, preset, template)
+    .then((path) => {
+      cache[key] = path ? { url: convertFileSrc(path) } : { none: true };
+    })
+    .catch((e) => {
+      // Not remembered: the next time the card shows, it asks again.
+      console.error("frozen grid thumbnail", carId, e);
+      delete cache[key];
+    });
 }
 
 interface Job {

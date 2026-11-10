@@ -111,6 +111,10 @@ L'export produit une copie de `overlay.sqlite` (`VACUUM INTO`, lecture seule, co
 
 Pour un mod déjà en vitrine, l'image de vitrine existe : elle part telle quelle. Pour un mod complet, l'export la fabrique par la même fonction (`ESPACE§3.3`) : l'image que montre la carte, c'est-à-dire l'aperçu de la livrée ou du layout préféré, lu dans `ui_prefs.json` avant le nettoyage des chemins.
 
+**Les vignettes de grille partent aussi, figées** comme pour une mise en vitrine (`ESPACE§3.3`), quand la case « Vignettes générées » est cochée : pour une voiture complète, celles des presets liés aux deux densités de grille, dans la livrée de la carte ; pour une voiture déjà en vitrine, celles de son squelette. La case n'apparaît que si les vignettes sont allumées, et elle est cochée par défaut. Décochée, aucune vignette ne part, et les cartes de l'autre machine montrent l'image de vitrine.
+
+Une vignette retrouve son preset **par son identifiant**, jamais par son nom. Les presets embarqués ont le même sur toutes les machines ; ceux de l'utilisateur voyagent avec les Préférences (`ui_prefs.json`) : sans elles, leurs vignettes restent dans les squelettes sans preset pour les montrer.
+
 ---
 
 # 5. Les fichiers
@@ -126,6 +130,7 @@ bibliotheque.pitbox
 │       ├── cars/rss_gtm_lanzo_v10/v4/ui/ui_car.json
 │       ├── cars/rss_gtm_lanzo_v10/v4/ui/badge.png
 │       ├── cars/rss_gtm_lanzo_v10/v4/.pitbox-vitrine.png
+│       ├── cars/rss_gtm_lanzo_v10/v4/.pitbox-vitrine-thumb.vitrine.3fa9c2d1.png   §4.3
 │       ├── cars/rss_gtm_lanzo_v10/v4/.pitbox-vitrine.json
 │       └── …
 ├── classement/
@@ -197,7 +202,7 @@ Repris de la liste de la sauvegarde de démarrage (`backup.rs`), fichier par fic
 
 ## 7.2 Exporter
 
-1. **Les parties**, cochables, avec pour chacune ce qu'elle contient en une ligne et un décompte (« 152 mods, 11 couches, 17 voitures d'origine annotées »).
+1. **Les parties**, cochables, avec pour chacune ce qu'elle contient en une ligne et un décompte (« 152 mods, 11 couches, 17 voitures d'origine annotées »). Sous la bibliothèque, la case des vignettes générées (§4.3), avec son poids.
 2. **La taille estimée**, calculée avant d'écrire, sans préparer l'export : les décomptes viennent de la base, le poids des seuls fichiers d'un squelette, avec des taux de compression mesurés.
 3. **Ce qui ne partira pas**, en clair : « Le contenu des mods ne part pas : ils arriveront en vitrine, apps et compléments compris. »
 4. **Le fichier** : boîte d'enregistrement, nom proposé `Pit Box - <date>.pitbox`.

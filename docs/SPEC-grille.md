@@ -184,6 +184,8 @@ Une voiture qui ne peut pas être rendue **garde sa `preview.png`**.
 
 C'est ce cas qui rend le §2 obligatoire pour toujours.
 
+**Une voiture en vitrine** (sans ses fichiers, ESPACE§3.3) n'est pas un échec : elle ne se rend pas, mais elle montre la vignette figée au moment où elle a perdu ses fichiers, ou celle venue avec un export de bibliothèque (EXPORT§4.3). Elle n'entre ni dans la file ni dans le décompte du rapport.
+
 ---
 
 # 8. Suivi de la génération
