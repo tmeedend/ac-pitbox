@@ -232,6 +232,9 @@ dans un commentaire de code.
 - **`csp-driver-research.md`** — appliquer le pilote en jeu : ce qui marche
   (`[DRIVER3D_MODEL]` d'un `ext_config.ini` pour le corps, le `skin.ini` de la
   livrée pour la tenue), ce qui ne marche pas, et les quatre pistes écartées.
+- **`csp-shot-research.md`** — rendre dans le jeu la vignette d'une voiture
+  protégée (`ac.GeometryShot`) : ce qui marche (rendu, cadrage, transparence,
+  sortie du jeu) et l'éclairage, qui reste le point bloquant.
 - **`preview3d-research.md`** — l'aperçu 3D intégré, au fil de sa
   construction : diagnostics, bancs de mesure (anticrénelage, reflet,
   scintillement, poids du cache), et les pistes essayées puis retirées (sol
