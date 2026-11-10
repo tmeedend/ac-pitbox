@@ -1711,11 +1711,12 @@ de reprendre. En cas d'écart, la spec fait foi.
       mod), le vert (règle) et le jaune (alerte) n'ont pas le leur — le `--orange`
       ajouté pour « mod inactif » (`StateBadge`) est le premier pas dans cette
       direction (ni le jaune d'alerte, ni le rouge destructif).
-- [ ] **Vignettes régénérées de la grille** — **fusionné dans `main`, mais
-      éteint** : `FEATURE_GRID_THUMBS` est à `false` dans `src/lib/features.ts`,
-      qui porte le mode d'emploi de l'interrupteur. Il ne reste qu'un réglage,
-      long et fastidieux, et trois presets livrés avec des valeurs provisoires
-      seraient jugés sur elles. Spec dans `docs/SPEC-grille.md`, dont le GRILLE§11 dit ce
+- [ ] **Vignettes régénérées de la grille** — **livré et allumé** (2026-11) :
+      les trois presets sont arrêtés, Officiel par mesure contre les previews
+      du jeu, Catalogue et Vitrine à l'écran. Restent deux limites connues,
+      détaillées plus bas : les peintures sombres, plus noires que chez le jeu,
+      et le curseur « Reflets des vitres », qui ne sait pas ce qui est du
+      verre. Spec dans `docs/SPEC-grille.md`, dont le GRILLE§11 dit ce
       que l'implémentation a changé et pourquoi. La partie A (GRILLE§2 à GRILLE§4) était
       déjà livrée ; la **partie B** (GRILLE§5 à GRILLE§8) l'est — pipeline, tâche de fond,
       écran de réglage, profils à l'installation — et le modèle de **presets**
@@ -1800,28 +1801,20 @@ de reprendre. En cas d'écart, la spec fait foi.
       (identifier vite, image détourée), *Vitrine* (avoir envie de regarder,
       flaque + reflet cuits dans l'image), *Officiel* (être indiscernable d'une
       `preview.png` du jeu, fond cuit, contenu de base laissé tel quel).
-      **Reste — et c'est la seule chose qui reste : finaliser les valeurs par
-      défaut de Catalogue et Vitrine** (Officiel est arrêté, 2026-11).
-      Celles livrées sont une passe de réglage, pas un point d'arrivée :
-      l'utilisateur les a posées à l'écran et les reprendra plus tard, le travail étant fastidieux. Elles se figent dans l'atelier
-      (`Réglages › Vignettes`), comme les défauts de l'aperçu 3D l'ont été, et
-      il n'y a **rien à coder pour ça** — seulement à recopier les nombres
-      arrêtés dans `BUILTIN_PRESETS`.
-      **Pour reprendre :** passer `FEATURE_GRID_THUMBS` à `true`, et vérifier
-      les trois points d'entrée qu'il rallume — l'onglet `Réglages › Vignettes`,
-      la deuxième page de l'assistant (les trois profils), la tâche de fond.
-      Rien n'a été effacé en s'éteignant : les images déjà produites sont dans
-      `app_cache_dir/gridthumbs/` et les presets de l'utilisateur dans
-      `ui_prefs.json`. Les images, en revanche, se refont dès que les valeurs
-      d'un preset embarqué changent — c'est le fonctionnement normal de
+      **Les valeurs des presets embarqués se règlent dans l'atelier**
+      (`Réglages › Vignettes`), puis se recopient dans `BUILTIN_PRESETS` :
+      il n'y a rien d'autre à coder. Changer une valeur d'un embarqué refait
+      ses images chez tout le monde — c'est le fonctionnement normal de
       l'empreinte, pas un accident.
       Trois choses à savoir avant d'y toucher :
-      - Catalogue et Vitrine partagent le cadrage arrêté à l'écran (angle
-        320°, focale 26°, hauteur 8 %). **Officiel s'en est séparé**
-        (2026-11) : ses valeurs sont arrêtées par mesure, voiture de base
-        rendue dans l'app à côté de sa propre `preview.jpg` (306°, plongée
-        10°, focale 40°, lumière remplie, flaque à 35). Le détail des mesures
-        est dans le commentaire du preset ;
+      - Catalogue et Vitrine gardent l'orbite arrêtée à l'écran (angle 320°,
+        focale 26°), recentrée verticalement (hauteur −7 pour Catalogue, −12
+        pour Vitrine, qui monte la voiture pour montrer son reflet), et
+        prennent l'étalonnage du jeu. **Officiel s'en est séparé** (2026-11) :
+        caméra, sol et étalonnage de l'outil de previews de Kunos, réglés par
+        mesure, voiture de base rendue dans l'app à côté de sa propre
+        `preview.jpg`. Le détail des mesures est dans le commentaire du preset
+        et dans les modules `framing.ts`, `floor.ts`, `look.ts` ;
       - deux écarts qu'aucun réglage ne rattrapait ont été corrigés dans le
         code (2026-11) : la voiture est **centrée sur sa boîte projetée**
         (`RENDERER_VERSION` 4, tous les presets bougent), et la **taille

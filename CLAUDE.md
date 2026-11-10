@@ -432,7 +432,7 @@ src/lib/                Modules : un dossier par domaine, comme le backend
   preview3d/            L'aperçu 3D des voitures (PREVIEW§7)
   launch/               La session : plateau, sessions et grilles enregistrées
   online/               La page Online : pont, filtres et tri des serveurs
-  gridthumbs/           Les vignettes de la grille (GRILLE§5), éteintes
+  gridthumbs/           Les vignettes de la grille (GRILLE§5)
   driver/               Le pilote : corps, tenues, surcharges
   inventory/            Les compléments : apps, autres mods, sous-éléments
   workshop/             Classement et Fichiers, l'ancien Atelier : règles,
@@ -976,7 +976,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | **Sessions au format `.cmpreset`** | livré ; reste à vérifier dans CM qu'il ignore bien notre clé `PitBox` | `docs/SPEC-session.md` SESSION§3.6 |
 | **Texture updates** | rien d'implémenté ; la règle de détection est mesurée et nette | `docs/SPEC-texture-update.md` |
 | **Harmonisation des libellés** | libellés et barème du rouge faits ; restent le bleu, le vert et le jaune, sans barème | `docs/CHANTIERS.md` |
-| **Vignettes de la grille** | fusionné mais **éteint** (`FEATURE_GRID_THUMBS`) ; Officiel arrêté par mesure ; reste à figer Catalogue et Vitrine | `docs/SPEC-grille.md` |
+| **Vignettes de la grille** | livré et allumé (2026-11) : les trois presets arrêtés, Officiel sur la recette de previews du SDK ; restent deux limites connues (peintures sombres, reflets des vitres) | `docs/SPEC-grille.md`, `docs/CHANTIERS.md` |
 | **Aperçu 3D natif** | lots 0 à 6 validés à l'écran ; reste le choix du LOD | `docs/SPEC-preview-3d-kn5.md`, `docs/CHANTIERS.md` |
 | **Enrichissement Wikipédia** | livré et nettoyé ; reste la seule mesure des seuils, sur tes corrections manuelles | `docs/SPEC-wikipedia-fiche-detail.md` |
 | **Signature Authenticode** | le workflow est prêt, il attend un certificat | `docs/windows-code-signing.md` |

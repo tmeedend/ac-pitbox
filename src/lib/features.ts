@@ -25,11 +25,12 @@
 /**
  * **Vignettes régénérées de la grille** (GRILLE§5 à §8, §11).
  *
- * Éteint le temps que les valeurs par défaut des trois presets embarqués soient
- * arrêtées. Le mécanisme est complet et fusionné dans `main` ; ce qui manque
- * est un travail de réglage à l'œil, long et fastidieux, qui ne peut pas se
- * faire à moitié : trois presets livrés avec des valeurs provisoires seraient
- * jugés sur elles.
+ * On since the three built-in presets were settled (2026-11): Officiel by
+ * measurement against the game's own previews, Catalogue and Showcase on
+ * screen. It was off while their values were provisional — three presets
+ * shipped half-tuned would have been judged on them. The switch stays, as the
+ * way to take the feature back out of a build without touching its code; the
+ * user still opts in from `Réglages › Vignettes` or the setup wizard.
  *
  * **Ce que `false` éteint**, et ce sont les trois seuls endroits qui exposaient
  * la fonctionnalité :

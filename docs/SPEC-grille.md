@@ -4,7 +4,7 @@
 
 *Lisibilité des cartes, affichage du nom, et régénération des vignettes. Ni les filtres (§7.1 de `SPEC.md`), ni la fiche d'un mod.*
 
-> **État.** La partie A (§2 à §4 : la carte, le nom, la densité) est **livrée et visible**. La partie B (§5 à §8 : les vignettes régénérées) est **construite mais éteinte** — `FEATURE_GRID_THUMBS`, dans `src/lib/features.ts`, qui porte le mode d'emploi : ni l'onglet de réglages, ni le profil « Soigné » de l'assistant, ni la génération ne sont visibles, et les cartes gardent la `preview.png` du mod. Il ne manque que le réglage des valeurs par défaut des trois presets (`CHANTIERS.md`).
+> **État.** La partie A (§2 à §4 : la carte, le nom, la densité) et la partie B (§5 à §8 : les vignettes régénérées) sont **livrées et visibles**. La partie B est une option que l'utilisateur coche (`Réglages › Vignettes`, ou le profil « Soigné » de l'assistant) : sans elle, les cartes gardent la `preview.png` du mod. `FEATURE_GRID_THUMBS` (`src/lib/features.ts`) reste l'interrupteur qui la retirerait d'un build.
 
 ---
 
