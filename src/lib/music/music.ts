@@ -1,40 +1,49 @@
-// Pont typé vers le backend Rust pour le module musique du mode Big Picture
-// (docs/spec-module-musique_2.md).
+// Pont typé vers le backend Rust pour le module musique (SPEC §16,
+// docs/spec-module-musique_2.md).
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { t } from "$lib/i18n/index.svelte";
+import { emptyAssignments, type Assignments, type Resolved } from "./resolve";
+
+/** Where music plays (§16.1). */
+export type PlayMode = "off" | "big_picture" | "always";
 
 export interface MusicConfig {
   version: number;
-  enabled: boolean;
-  /** Décochée (défaut) : pack embarqué, `menu_folder`/`grid_folder` ignorés. */
+  play_mode: PlayMode;
+  /** Décochée (défaut) : pack embarqué, sources et attributions ignorées. */
   use_custom_folders: boolean;
-  /** `null` = dossier par défaut (voir `getDefaultMusicFolders`). */
+  /** A folder or a file; `null` = the default folder (`getDefaultMusicFolders`). */
   menu_folder: string | null;
   grid_folder: string | null;
   shuffle: boolean;
   /** 0.0–1.0 */
-  volume: number;
+  music_volume: number;
   crossfade_ms: number;
   fade_out_ms: number;
   fade_in_ms: number;
   /** Now-playing notification (MUSIQUE§5.5), off by default. */
   show_now_playing: boolean;
+  assignments: Assignments;
+  /** Sources picked last, most recent first (§16.8, "Recent"). */
+  recent_sources: string[];
 }
 
 export function emptyMusicConfig(): MusicConfig {
   return {
-    version: 1,
-    enabled: true,
+    version: 2,
+    play_mode: "big_picture",
     use_custom_folders: false,
     menu_folder: null,
     grid_folder: null,
     shuffle: true,
-    volume: 0.45,
+    music_volume: 0.45,
     crossfade_ms: 2500,
     fade_out_ms: 1500,
     fade_in_ms: 2000,
     show_now_playing: false,
+    assignments: emptyAssignments(),
+    recent_sources: [],
   };
 }
 
@@ -43,7 +52,17 @@ export interface DefaultMusicFolders {
   grid: string;
 }
 
-export interface FolderInfo {
+/** What a source holds (§16.3). */
+export interface SourceInfo {
+  track_count: number;
+  is_file: boolean;
+  missing: boolean;
+}
+
+/** A Steam soundtrack folder (§16.7). */
+export interface Soundtrack {
+  name: string;
+  path: string;
   track_count: number;
 }
 
@@ -59,8 +78,17 @@ export function getDefaultMusicFolders(): Promise<DefaultMusicFolders> {
   return invoke<DefaultMusicFolders>("get_default_music_folders");
 }
 
-export function scanMusicFolder(path: string): Promise<FolderInfo> {
-  return invoke<FolderInfo>("scan_music_folder", { path });
+export function scanMusicSource(path: string): Promise<SourceInfo> {
+  return invoke<SourceInfo>("scan_music_source", { path });
+}
+
+/** The tracks of a source, sorted by file name. */
+export function listMusicTracks(path: string): Promise<string[]> {
+  return invoke<string[]>("list_music_tracks", { path });
+}
+
+export function listSteamSoundtracks(): Promise<Soundtrack[]> {
+  return invoke<Soundtrack[]>("list_steam_soundtracks");
 }
 
 export function musicEnterBigPicture(): Promise<void> {
@@ -71,12 +99,14 @@ export function musicExitBigPicture(): Promise<void> {
   return invoke<void>("music_exit_big_picture");
 }
 
-export function musicEnterMenu(): Promise<void> {
-  return invoke<void>("music_enter_menu");
+/** What the screen on display resolved (§16.5). */
+/** `delayed`: a sheet, applied after the engine's delay (§16.6). */
+export function musicSetContext(context: Resolved & { delayed: boolean }): Promise<void> {
+  return invoke<void>("music_set_context", { context });
 }
 
-export function musicEnterGrid(): Promise<void> {
-  return invoke<void>("music_enter_grid");
+export function musicSetMinimized(minimized: boolean): Promise<void> {
+  return invoke<void>("music_set_minimized", { minimized });
 }
 
 export function musicPreviewStart(path: string, volume: number): Promise<void> {
@@ -129,4 +159,14 @@ export function nowPlaying(track: TrackInfo): NowPlaying {
     album: track.album,
     cover: track.cover,
   };
+}
+
+/** A track as a list shows it: its file name, without the extension. */
+export function trackName(path: string): string {
+  return sourceName(path).replace(/\.[^.]+$/, "");
+}
+
+/** The last segment of a source path: what a picker shows of it. */
+export function sourceName(path: string): string {
+  return path.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || path;
 }

@@ -1,20 +1,20 @@
-//! Cache d'index par dossier (MUSIQUE§3.4) : durée et correction de gain RMS de
-//! chaque piste, calculées une fois au premier scan puis relues depuis un
-//! fichier `.pitbox-index.json` posé dans le dossier lui-même.
+//! Index cache per source (MUSIQUE§3.4, §16.3): duration and RMS gain
+//! correction of each track, computed once at the first scan and read back
+//! from a JSON file of **the app's own folder** (`app_config_dir/Music/index/`)
+//! — one file per source path. Nothing is ever written in the user's music
+//! folders: until v2 the cache was a `.pitbox-index.json` placed in the folder
+//! itself, which wrote into the user's library and failed on a read-only one.
+//! Those old files are left where they are, never read again.
 //!
 //! Réutilise le décodeur `rodio` déjà en dépendance du moteur — pas de
 //! bibliothèque audio de plus. Décoder le fichier entier est de toute façon
 //! nécessaire pour le RMS ; la durée exacte qu'on en tire au passage comble
 //! le "durée inconnue pour la plupart des MP3" documenté dans `engine.rs`
-//! (MUSIQUE§5.3, préchargement du crossfade) — `engine.rs` préfère maintenant cette
-//! durée indexée à celle, souvent absente, que `Source::total_duration()`
-//! annonce en direct.
+//! (MUSIQUE§5.3, préchargement du crossfade).
 //!
 //! Écart assumé vs la spec : le tag ReplayGain n'est pas lu (MUSIQUE§3.4, "si
-//! présent, le préférer au calcul") — lecture de tags audio = une dépendance
-//! de plus (`lofty`/`id3`) pour une préférence secondaire, pas la demande
-//! principale (normaliser les dossiers qui n'en ont pas). Le calcul RMS
-//! s'applique donc systématiquement.
+//! présent, le préférer au calcul"). Le calcul RMS s'applique donc
+//! systématiquement.
 
 use std::fs::File;
 use std::io::BufReader;
@@ -26,9 +26,8 @@ use rodio::{Decoder, Source};
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
-use super::config::MusicConfig;
+use super::config::{Base, MusicConfig};
 
-const INDEX_FILE_NAME: &str = ".pitbox-index.json";
 /// Cible RMS (MUSIQUE§3.4). dBFS : 0 dB = pleine échelle, donc une valeur négative.
 const TARGET_DBFS: f64 = -18.0;
 /// Borne la correction pour éviter les aberrations sur une piste très
@@ -42,17 +41,23 @@ struct TrackIndex {
     gain_db: f32,
 }
 
+/// What the cache is checked against (§16.3). A folder: its number of audio
+/// files and its modification date (an addition or a removal updates it under
+/// Windows). A file: its modification date and its size.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+struct Signature {
+    count: usize,
+    modified: i64,
+    size: u64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct FolderIndex {
+struct SourceIndex {
+    /// The source this file indexes: the file name is a hash of it, and a
+    /// collision must read as a stale cache, not as someone else's gains.
+    source: PathBuf,
     scanned_at: chrono::DateTime<Utc>,
-    /// Nombre de fichiers audio au moment du scan — comparé au compte
-    /// courant pour l'invalidation (MUSIQUE§3.4).
-    file_count: usize,
-    /// Secondes Unix de la dernière modification du DOSSIER (pas des
-    /// fichiers un par un) au moment du scan — un ajout/suppression met à
-    /// jour ce mtime sous Windows, deuxième critère d'invalidation prescrit
-    /// par la spec en plus du compte de fichiers.
-    dir_modified_at: i64,
+    signature: Signature,
     tracks: Vec<TrackIndex>,
 }
 
@@ -69,17 +74,38 @@ pub struct IndexedTrack {
     pub duration: Option<Duration>,
 }
 
-fn index_path(dir: &Path) -> PathBuf {
-    dir.join(INDEX_FILE_NAME)
+/// FNV-1a over the lowercased path: a stable name for the cache file of a
+/// source. Not `DefaultHasher`, whose output may change between Rust releases
+/// — every cache would then be rebuilt after an update for nothing.
+fn cache_key(source: &Path) -> String {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in source.to_string_lossy().to_lowercase().bytes() {
+        hash ^= byte as u64;
+        hash = hash.wrapping_mul(0x0100_0000_01b3);
+    }
+    format!("{hash:016x}")
 }
 
-fn dir_mtime_secs(dir: &Path) -> i64 {
-    std::fs::metadata(dir)
-        .and_then(|m| m.modified())
-        .ok()
+fn cache_file(cache_dir: &Path, source: &Path) -> PathBuf {
+    cache_dir.join(format!("{}.json", cache_key(source)))
+}
+
+fn secs(t: std::io::Result<std::time::SystemTime>) -> i64 {
+    t.ok()
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
+}
+
+fn signature(source: &Path, tracks: &[PathBuf]) -> Signature {
+    let meta = std::fs::metadata(source);
+    let modified = meta.as_ref().map(|m| secs(m.modified())).unwrap_or(0);
+    let is_file = meta.as_ref().is_ok_and(|m| m.is_file());
+    Signature {
+        count: tracks.len(),
+        modified,
+        size: if is_file { meta.map(|m| m.len()).unwrap_or(0) } else { 0 },
+    }
 }
 
 /// RMS en dBFS sur l'ensemble des échantillons, converti en correction de
@@ -117,14 +143,17 @@ fn analyze(path: &Path) -> Option<(f32, Duration)> {
     Some((gain as f32, duration))
 }
 
+fn file_name(path: &Path) -> String {
+    path.file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
 fn build(tracks: &[PathBuf]) -> Vec<TrackIndex> {
     tracks
         .iter()
         .map(|t| {
-            let file = t
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_default();
+            let file = file_name(t);
             match analyze(t) {
                 Some((gain_db, duration)) => TrackIndex {
                     file,
@@ -133,7 +162,7 @@ fn build(tracks: &[PathBuf]) -> Vec<TrackIndex> {
                 },
                 None => {
                     // Piste illisible (MUSIQUE§9) : entrée neutre plutôt que de
-                    // faire échouer l'indexation de tout le dossier.
+                    // faire échouer l'indexation de toute la source.
                     log::warn!("music: impossible d'analyser {} pour la normalisation", t.display());
                     TrackIndex {
                         file,
@@ -146,90 +175,88 @@ fn build(tracks: &[PathBuf]) -> Vec<TrackIndex> {
         .collect()
 }
 
-fn read_cache(path: &Path) -> Option<FolderIndex> {
+fn read_cache(path: &Path) -> Option<SourceIndex> {
     let s = std::fs::read_to_string(path).ok()?;
     serde_json::from_str(&s).ok()
 }
 
-/// Charge l'index d'un dossier, le (re)calcule si absent ou périmé. Bloquant
+/// Charge l'index d'une source, le (re)calcule si absent ou périmé. Bloquant
 /// (décode chaque piste au premier scan, "quelques secondes pour 30 pistes"
 /// par la spec MUSIQUE§3.4) — appelé depuis un thread dédié (moteur ou façade de
 /// commande), jamais depuis le thread UI.
-fn load_or_build(dir: &Path, tracks: &[PathBuf]) -> Vec<TrackIndex> {
-    let path = index_path(dir);
-    let current_mtime = dir_mtime_secs(dir);
+fn load_or_build(cache_dir: &Path, source: &Path, tracks: &[PathBuf]) -> Vec<TrackIndex> {
+    let path = cache_file(cache_dir, source);
+    let current = signature(source, tracks);
     if let Some(cached) = read_cache(&path) {
-        if cached.file_count == tracks.len() && cached.dir_modified_at == current_mtime {
+        if cached.source == source && cached.signature == current {
             return cached.tracks;
         }
     }
     let built = build(tracks);
-    let index = FolderIndex {
+    let index = SourceIndex {
+        source: source.to_path_buf(),
         scanned_at: Utc::now(),
-        file_count: tracks.len(),
-        dir_modified_at: current_mtime,
+        signature: current,
         tracks: built.clone(),
     };
-    match serde_json::to_string_pretty(&index) {
-        Ok(json) => {
-            if let Err(e) = std::fs::write(&path, json) {
-                log::warn!("music: écriture du cache d'index échouée pour {} : {e}", dir.display());
-            }
-        }
-        Err(e) => log::warn!(
-            "music: sérialisation du cache d'index échouée pour {} : {e}",
-            dir.display()
-        ),
+    let written = std::fs::create_dir_all(cache_dir)
+        .map_err(|e| e.to_string())
+        .and_then(|()| serde_json::to_string_pretty(&index).map_err(|e| e.to_string()))
+        .and_then(|json| std::fs::write(&path, json).map_err(|e| e.to_string()));
+    if let Err(e) = written {
+        log::warn!("music: cache d'index non écrit pour {} : {e}", source.display());
     }
     built
 }
 
-/// Préchauffe le cache d'index de `menu_folder`/`grid_folder` dans un thread
-/// séparé, sans toucher au moteur ni à sa file de commandes.
+/// Préchauffe les caches d'index dans un thread séparé, sans toucher au moteur
+/// ni à sa file de commandes : les deux ambiances de base, et — la musique de
+/// l'utilisateur allumée — chaque source attribuée (§16.4).
 ///
-/// Sans ça, le premier scan (décodage complet de chaque piste, "quelques
-/// secondes pour 30 pistes" MUSIQUE§3.4) se déclenche la première fois que le
-/// moteur a réellement besoin de la playlist — typiquement en pleine
-/// navigation Big Picture (ouverture, ou bascule vers l'écran de
-/// paramétrage de session) : d'où le décalage perceptible entre l'affichage
-/// de l'écran et le début du fondu, tant qu'un dossier n'a jamais été
-/// indexé dans cette exécution de l'app. Appelé au démarrage (dossiers déjà
-/// configurés) et après l'enregistrement des réglages (dossier tout juste
-/// changé) — les deux points où un blocage de quelques secondes est un
-/// détail plutôt qu'une gêne en pleine navigation.
+/// Sans ça, le premier scan (décodage complet de chaque piste) se déclenche la
+/// première fois que le moteur a réellement besoin de la playlist — en pleine
+/// navigation, d'où un décalage perceptible entre l'écran et le fondu. Appelé
+/// au démarrage et après l'enregistrement des réglages, les deux points où un
+/// blocage de quelques secondes est un détail.
 pub fn warm(app: &AppHandle, cfg: MusicConfig) {
-    let app = app.clone();
+    let cache_dir = super::config::index_dir(app);
+    let mut sources = vec![cfg.effective_base(app, Base::Menu), cfg.effective_base(app, Base::Grid)];
+    if cfg.use_custom_folders {
+        let a = &cfg.assignments;
+        for map in [&a.brand, &a.family, &a.track_category, &a.country, &a.screen] {
+            sources.extend(map.values().cloned());
+        }
+    }
+    sources.sort();
+    sources.dedup();
     std::thread::spawn(move || {
-        indexed_tracks(&cfg.effective_menu_folder(&app));
-        indexed_tracks(&cfg.effective_grid_folder(&app));
+        for source in sources {
+            indexed_tracks(&cache_dir, &source);
+        }
     });
 }
 
 /// Combine `scan::list_tracks` avec le cache de gain/durée — ce que
 /// `engine.rs` appelle pour construire une playlist.
-pub fn indexed_tracks(dir: &Path) -> Vec<IndexedTrack> {
-    let tracks = super::scan::list_tracks(dir);
-    let cached = load_or_build(dir, &tracks);
+pub fn indexed_tracks(cache_dir: &Path, source: &Path) -> Vec<IndexedTrack> {
+    let tracks = super::scan::list_tracks(source);
+    if tracks.is_empty() {
+        // Nothing to index: no cache file for a missing source.
+        return Vec::new();
+    }
+    let cached = load_or_build(cache_dir, source, &tracks);
     tracks
         .into_iter()
         .map(|path| {
-            let file = path
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_default();
+            let file = file_name(&path);
             // Recherche par nom (pas par position) : une entrée de cache
             // périmée mais de même longueur ne doit jamais s'appliquer à la
             // mauvaise piste.
             match cached.iter().find(|t| t.file == file) {
-                Some(t) if t.duration_ms > 0 => IndexedTrack {
-                    path,
-                    gain_db: t.gain_db,
-                    duration: Some(Duration::from_millis(t.duration_ms)),
-                },
                 Some(t) => IndexedTrack {
                     path,
                     gain_db: t.gain_db,
-                    duration: None,
+                    duration: (t.duration_ms > 0).then(|| Duration::from_millis(t.duration_ms)),
                 },
                 None => IndexedTrack {
                     path,
@@ -271,11 +298,12 @@ mod tests {
 
     #[test]
     fn silent_track_gets_zero_gain_and_correct_duration() {
-        let dir = crate::testutil::temp_dir("music-index-silent");
-        let track = dir.join("silence.wav");
-        write_silent_wav(&track, 0.5);
+        let base = crate::testutil::temp_dir("music-index-silent");
+        let (music, cache) = (base.join("music"), base.join("cache"));
+        std::fs::create_dir_all(&music).unwrap();
+        write_silent_wav(&music.join("silence.wav"), 0.5);
 
-        let indexed = indexed_tracks(&dir);
+        let indexed = indexed_tracks(&cache, &music);
         assert_eq!(indexed.len(), 1);
         assert_eq!(indexed[0].gain_db, 0.0, "silence total : rien à corriger");
         let duration = indexed[0].duration.expect("durée calculée pour un WAV");
@@ -286,37 +314,84 @@ mod tests {
         );
     }
 
+    // Rule (§16.3): the cache lives in the app's own folder, one file per
+    // source — never in the user's music folder.
     #[test]
-    fn index_cache_is_reused_when_folder_is_unchanged() {
-        let dir = crate::testutil::temp_dir("music-index-cache");
-        write_silent_wav(&dir.join("a.wav"), 0.2);
+    fn the_cache_is_written_in_the_app_folder_and_never_in_the_source() {
+        let base = crate::testutil::temp_dir("music-index-cache");
+        let (music, cache) = (base.join("music"), base.join("cache"));
+        std::fs::create_dir_all(&music).unwrap();
+        write_silent_wav(&music.join("a.wav"), 0.2);
 
-        let first = indexed_tracks(&dir);
+        let first = indexed_tracks(&cache, &music);
         assert!(
-            dir.join(".pitbox-index.json").is_file(),
-            "le cache doit être écrit après le premier scan"
+            cache_file(&cache, &music).is_file(),
+            "cache written under the cache dir"
         );
+        let in_source: Vec<_> = std::fs::read_dir(&music)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(in_source, vec!["a.wav"], "nothing written next to the tracks");
 
-        // Deuxième appel : doit relire le cache plutôt que redécoder — on ne
-        // peut pas mesurer le temps de façon fiable en CI, mais on vérifie
-        // au moins que le résultat reste cohérent après un aller-retour.
-        let second = indexed_tracks(&dir);
-        assert_eq!(first, second);
+        let second = indexed_tracks(&cache, &music);
+        assert_eq!(first, second, "read back from the cache, same result");
     }
 
     #[test]
     fn index_invalidates_when_a_file_is_added() {
-        let dir = crate::testutil::temp_dir("music-index-invalidate");
-        write_silent_wav(&dir.join("a.wav"), 0.2);
-        let first = indexed_tracks(&dir);
-        assert_eq!(first.len(), 1);
+        let base = crate::testutil::temp_dir("music-index-invalidate");
+        let (music, cache) = (base.join("music"), base.join("cache"));
+        std::fs::create_dir_all(&music).unwrap();
+        write_silent_wav(&music.join("a.wav"), 0.2);
+        assert_eq!(indexed_tracks(&cache, &music).len(), 1);
 
-        write_silent_wav(&dir.join("b.wav"), 0.2);
-        let second = indexed_tracks(&dir);
+        write_silent_wav(&music.join("b.wav"), 0.2);
+        let second = indexed_tracks(&cache, &music);
         assert_eq!(
             second.len(),
             2,
             "un nouveau fichier doit invalider le cache (compte de fichiers différent)"
+        );
+        assert!(
+            second.iter().all(|t| t.duration.is_some()),
+            "the new track was indexed too"
+        );
+    }
+
+    // Rule (§16.3): a file source has a cache of its own, checked against the
+    // file's date and size — a file replaced by a longer one is re-indexed.
+    #[test]
+    fn a_file_source_is_indexed_and_invalidated_by_its_size() {
+        let base = crate::testutil::temp_dir("music-index-file");
+        let cache = base.join("cache");
+        let track = base.join("loop.wav");
+        write_silent_wav(&track, 0.2);
+
+        let first = indexed_tracks(&cache, &track);
+        assert_eq!(first.len(), 1);
+        let short = first[0].duration.unwrap();
+
+        write_silent_wav(&track, 0.6);
+        let second = indexed_tracks(&cache, &track);
+        assert!(
+            second[0].duration.unwrap() > short,
+            "bigger file: re-indexed, new duration {:?} > {:?}",
+            second[0].duration,
+            short
+        );
+    }
+
+    #[test]
+    fn two_sources_get_two_cache_files() {
+        assert_ne!(
+            cache_key(Path::new(r"D:\Music\menu")),
+            cache_key(Path::new(r"D:\Music\grid"))
+        );
+        assert_eq!(
+            cache_key(Path::new(r"D:\Music\Menu")),
+            cache_key(Path::new(r"d:\music\menu")),
+            "Windows paths are case-insensitive: one cache for both spellings"
         );
     }
 }

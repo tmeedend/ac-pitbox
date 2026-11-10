@@ -4,7 +4,7 @@
 import { getCurrentWindow, currentMonitor, type PhysicalPosition, type PhysicalSize } from "@tauri-apps/api/window";
 import { setZoom } from "./zoom.svelte";
 import { getConfig } from "$lib/config";
-import { musicEnterBigPicture, musicExitBigPicture } from "./music";
+import { musicEnterBigPicture, musicExitBigPicture } from "$lib/music/music";
 
 export const bigPictureState = $state<{ active: boolean }>({ active: false });
 

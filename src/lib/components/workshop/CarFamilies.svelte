@@ -16,7 +16,10 @@
   // re-harmonisation, a family being an index over tags and not a rule.
   // Writes go through a queue whose failures are shown and logged — a write
   // that fails in silence is the bug rule 6 of CLAUDE.md was written for.
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
+  import MusicField from "$lib/components/music/MusicField.svelte";
+  import { scrollIntoContainer } from "$lib/shell/shellScroll";
+  import { takeTermFocus } from "$lib/workshop/termFocus.svelte";
   import { errorText } from "$lib/errors";
   import { writeQueue } from "$lib/workshop/writeQueue";
   import { t } from "$lib/i18n/index.svelte";
@@ -64,6 +67,14 @@
       error = errorText(e);
     } finally {
       loading = false;
+    }
+    // Arriving from the music assignments (§16.8): that family opened.
+    const asked = takeTermFocus("categories");
+    if (asked) {
+      open = asked;
+      await tick();
+      const el = document.querySelector<HTMLElement>(`[data-family="${CSS.escape(asked)}"]`);
+      if (el) scrollIntoContainer(el, "center");
     }
   });
 
@@ -166,7 +177,7 @@
         {@const n = counts.byFamily.get(f.id) ?? 0}
         {@const base = shippedOf(f.id)}
         {@const curated = isCurated(overlay, shipped, f.id)}
-        <li class:open={open === f.id}>
+        <li class:open={open === f.id} data-family={f.id}>
           <button type="button" class="row" aria-expanded={open === f.id} onclick={() => toggle(f.id)}>
             <svg class="ico" viewBox="0 0 120 52" aria-hidden="true">{@html familyIcon(f.icon)}</svg>
             <span class="nm"
@@ -266,6 +277,8 @@
                   {/each}
                 </ul>
               </div>
+
+              <MusicField taxonomy="family" id={f.id} />
 
               <div class="actions">
                 {#if base && curated}

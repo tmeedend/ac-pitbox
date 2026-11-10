@@ -66,6 +66,16 @@
 
   import { StorageKey } from "$lib/storage";
   import { mark } from "$lib/timing";
+  import { carFacts, currentAnchor, reachView, tileClicked, trackFacts } from "$lib/music/context.svelte";
+  import { anchorPosedIn, type Taxonomy } from "$lib/music/resolve";
+
+  /** The taxonomy of each filter a tile of the index poses (§16.4). */
+  const TILE_TAXONOMY: Record<string, Taxonomy> = {
+    brand: "brand",
+    family: "family",
+    category: "track_category",
+    country: "country",
+  };
   // Une bibliothèque par type (§6.1) : ce composant est rendu une fois pour les
   // voitures, une fois pour les circuits. Toute la persistance est suffixée par
   // type pour rester indépendante entre les deux.
@@ -342,6 +352,10 @@
   /** A tile of the index poses its chip (INDEX§2) - through the same
    * filter state as the chip editor, so everything after it works unchanged. */
   function poseFromIndex(key: string, value: string) {
+    // Before the chip: the list it opens is reached right after, and plays
+    // the term's music (§16.5). A chip posed any other way anchors nothing.
+    const taxonomy = TILE_TAXONOMY[key];
+    if (taxonomy) tileClicked(isCar ? "cars" : "tracks", taxonomy, value);
     filters = poseValue(defs, filters, key, value);
     if (mainEl) mainEl.scrollTop = 0;
   }
@@ -639,6 +653,32 @@
   $effect(() => {
     if (filtering) untrack(() => (browseAll = false));
   });
+
+  // --- Music (§16.5) ---------------------------------------------------
+  //
+  // What this screen reports is its ARRIVALS — the index, the list, a sheet —
+  // and only those: the key below does not move with a chip, the search, a
+  // density or a sort, so neither does the music. Whether the anchor's chip is
+  // still posed is read once, on arrival at the list, untracked.
+  const musicArrival = $derived(
+    loading ? null : nav.openFull ? `sheet:${nav.openFull}` : indexShown ? "index" : "list",
+  );
+  $effect(() => {
+    const arrival = musicArrival;
+    if (arrival) untrack(() => reachLibraryView(arrival));
+  });
+  function reachLibraryView(arrival: string) {
+    const library = isCar ? "cars" : "tracks";
+    if (arrival === "index") return reachView({ kind: "index", library });
+    if (arrival === "list") {
+      return reachView({ kind: "list", library, anchorPosed: anchorPosedIn(filters, currentAnchor()) });
+    }
+    const card = typed.find((c) => c.id_interne === nav.openFull);
+    // A sheet of a mod this list does not hold (gone since): the screen's.
+    if (!card) return reachView({ kind: "list", library, anchorPosed: false });
+    reachView(isCar ? { kind: "car", car: carFacts(card, categoryFamilies()) } : { kind: "track", track: trackFacts(card) });
+  }
+
   /** The logo of a brand tile: the brand's elected one (TAXO§4), not a car's. */
   function brandLogo(brand: string): { src: string; plaque: boolean } | null {
     const l = isCar ? logoOf(brand) : null;

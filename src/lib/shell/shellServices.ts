@@ -24,6 +24,7 @@ import { bumpLibraryVersion } from "$lib/library/libraryVersion.svelte";
 import { loadTechSheetReport } from "$lib/detail/techSheetReport.svelte";
 import { startOnlineWatch } from "$lib/online/watch.svelte";
 import { applyStudioSwitch } from "$lib/story/access";
+import { loadMusicConfig, watchMinimized } from "$lib/music/context.svelte";
 
 /** Starts every shell-wide service; the returned function stops them all. */
 export function startShellServices(): () => void {
@@ -60,6 +61,11 @@ export function startShellServices(): () => void {
   // whatever screen is open, so started with the shell.
   stops.push(startOnlineWatch());
   stops.push(reloadLibraryAfterTechBackfill());
+  // The music of each screen (§16.5) needs the assignments from the first
+  // arrival, and its play mode "always" needs to know when the window is
+  // minimised, whatever screen is open.
+  void loadMusicConfig();
+  stops.push(watchMinimized());
   // `--enable-story-studio` / `--disable-story-studio`, read once: the rail
   // follows `ui_prefs.json` from then on, on this launch and the next ones.
   void applyStudioSwitch();

@@ -27,8 +27,10 @@
   // is decided at write time. Same write queue, failures shown and logged
   // (CLAUDE.md rule 6).
   import Switch from "$lib/components/ui/Switch.svelte";
+  import MusicField from "$lib/components/music/MusicField.svelte";
+  import { moveMusicTerm } from "$lib/music/context.svelte";
   import { onMount, tick } from "svelte";
-  import { brandFocus } from "$lib/workshop/brandFocus.svelte";
+  import { takeTermFocus } from "$lib/workshop/termFocus.svelte";
   import { showRule } from "$lib/workshop/rulesFocus.svelte";
   import { scrollIntoContainer } from "$lib/shell/shellScroll";
   import { errorText } from "$lib/errors";
@@ -130,13 +132,16 @@
   /** Takes the decisions at once, writes and re-applies them, then reads the
    * library back: the counts only mean something once the stored brands
    * moved. */
-  function commit(next: { aliases?: MapOverlay; ignored?: string[]; notBrands?: SetOverlay }) {
+  /** `after` runs in the same write, once the overlay is saved: what must not
+   * happen when the save fails. */
+  function commit(next: { aliases?: MapOverlay; ignored?: string[]; notBrands?: SetOverlay }, after?: () => Promise<void>) {
     aliases = next.aliases ?? aliases;
     ignored = next.ignored ?? ignored;
     notBrands = next.notBrands ?? notBrands;
     const [a, ig, nb] = [aliases, ignored, notBrands];
     void enqueue("save_brand_overlay", async () => {
       take(await saveBrandOverlay(a, ig, nb));
+      await after?.();
       await reloadCars();
       bumpLibraryVersion();
     });
@@ -168,7 +173,11 @@
   const proposals = $derived(brandProposals(rows, ignored));
 
   function merge(from: string, to: string) {
-    commit({ aliases: mergeBrand(aliases, catAliases, effAliases, from, to) });
+    // Its music follows the brand into the term it joins (§16.4) — once the
+    // merge is written, never for a merge that failed.
+    commit({ aliases: mergeBrand(aliases, catAliases, effAliases, from, to) }, () =>
+      moveMusicTerm("brand", from, to.trim()),
+    );
     if (open === from) open = to.trim();
   }
 
@@ -216,8 +225,7 @@
 
   /** Arriving from a car sheet: that brand opened, and brought into view. */
   async function focusRequested() {
-    const brand = brandFocus.brand;
-    brandFocus.brand = null;
+    const brand = takeTermFocus("brands");
     if (!brand) return;
     open = brand;
     loading = false;
@@ -555,6 +563,8 @@
                   </button>
                 </div>
               </div>
+
+              <MusicField taxonomy="brand" id={r.name} />
 
               {#if curated}
                 <div>

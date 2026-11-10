@@ -373,7 +373,6 @@
     "tabWikiHint": "The article shown on a car's or a circuit's fiche."
   },
   "music": {
-    "enable": "Enable music in Big Picture mode",
     "useCustomFolders": "Use my own music folders",
     "useCustomFoldersHint": "Unchecked: the two built-in default ambiences are used, nothing to configure.",
     "menuAmbience": "Menu ambience",
@@ -382,8 +381,29 @@
     "trackCount": "{count} tracks detected",
     "shuffle": "Shuffle playback",
     "showNowPlaying": "Show the track now playing",
-    "volume": "Volume",
-    "crossfade": "Crossfade"
+    "volume": "Music volume",
+    "crossfade": "Crossfade",
+    "playMode": "Play music",
+    "modeOff": "Off",
+    "modeBigPicture": "Big Picture only",
+    "modeAlways": "Always",
+    "defaultFolder": "Default folder",
+    "followsScreen": "Follows screen",
+    "recent": "Recent",
+    "steamSoundtracks": "Steam soundtracks",
+    "browseFolder": "Folder…",
+    "browseFile": "File…",
+    "audioFiles": "Audio files",
+    "missing": "Not found",
+    "label": "Music",
+    "byScreen": "By screen",
+    "assignments": "Assignments",
+    "noAssignment": "No music assigned to a brand, a family, a track category or a country yet.",
+    "orphan": "No longer exists",
+    "remove": "Remove",
+    "openInSorting": "Open in Sorting",
+    "trackCategory": "Track category",
+    "pickTrack": "Pick one track"
   },
   "common": {
     "noResults": "No result for this search.",
@@ -1788,7 +1808,8 @@
     "storyPackageCancelled": "Download stopped: nothing changed.",
     "storyLinkNotAPackage": "This link does not lead to a story's manifest.json.",
     "storyVersionUnmanaged": "This game folder is not managed by Pit Box: the story's version cannot stand in for it.",
-    "storySessionUnderWay": "A story's event is under way: close the game, then try again."
+    "storySessionUnderWay": "A story's event is under way: close the game, then try again.",
+    "musicConfigUnreadable": "The music settings could not be read: nothing was changed."
   },
   "pack": {
     "tabMembers": "Mods",

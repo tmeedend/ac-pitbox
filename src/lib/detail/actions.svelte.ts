@@ -13,7 +13,7 @@ import { errorText } from "$lib/errors";
 import { activateMod, deactivateMod, openModFolder, type ModDetail } from "$lib/library/library";
 import { deleteMods } from "$lib/library/showcase.svelte";
 import { openNativeShowroom } from "$lib/launch/launch";
-import { editBrand } from "$lib/workshop/brandFocus.svelte";
+import { editBrand } from "$lib/workshop/termFocus.svelte";
 import { showInGameFolder } from "$lib/gamestate/gameFolder.svelte";
 import {
   deleteModVersion,

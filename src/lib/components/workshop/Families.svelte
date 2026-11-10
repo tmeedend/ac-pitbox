@@ -7,8 +7,11 @@
   import { t } from "$lib/i18n/index.svelte";
   import CarFamilies from "./CarFamilies.svelte";
   import TrackCategories from "./TrackCategories.svelte";
+  import { termFocus } from "$lib/workshop/termFocus.svelte";
 
-  let tab = $state<"car" | "track">("car");
+  // A track category asked for by the music assignments (§16.8) opens the
+  // Tracks half; the half itself reads the term.
+  let tab = $state<"car" | "track">(termFocus.section === "categories" && termFocus.tracks ? "track" : "car");
 </script>
 
 <div class="families">

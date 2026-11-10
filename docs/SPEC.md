@@ -922,46 +922,106 @@ Les vérifications en conditions réelles qui restent sont dans `CHANTIERS.md`, 
 
 ## 16. Mode Big Picture et musique
 
-Le bouton **Big Picture** de la barre de titre bascule la fenêtre en plein écran — l'interface habituelle, agrandie, pas une interface dédiée — et démarre l'ambiance musicale si elle est activée. **La barre de titre est masquée** ; la sortie est un bouton au pied du rail (§7.2) ou **Échap**. Un **zoom dédié** (`bigpicture_zoom`, §11) s'applique en plus du zoom normal.
+Le bouton **Big Picture** de la barre de titre bascule la fenêtre en plein écran — l'interface habituelle, agrandie, pas une interface dédiée. **La barre de titre est masquée** ; la sortie est un bouton au pied du rail (§7.2) ou **Échap**. Un **zoom dédié** (`bigpicture_zoom`, §11) s'applique en plus du zoom normal.
 
-### 16.1 Musique — périmètre retenu
+### 16.1 Mode de lecture et périmètre
 
-Transposition de `spec-module-musique_2.md` (écrite pour C#/NAudio) vers Rust avec `rodio`, **noyau du module** :
+Transposition de `spec-module-musique_2.md` (écrite pour C#/NAudio) vers Rust avec `rodio` (`music/`). La musique vient des **propres fichiers audio** de l'utilisateur, ou du pack embarqué. Aucun conteneur audio de jeu n'est lu, et aucun outil d'extraction n'est embarqué ni appelé (MUSIQUE§3.3).
 
-- **Deux ambiances** : MENU pendant la navigation, GRID sur l'écran de réglages de la session ; fondu à puissance constante ; machine à états MENU/GRID/SESSION (`music/engine.rs`).
-- **Coupée pendant une session, jamais baissée en fond** : la musique continue pendant l'écran de chargement et s'arrête **quand la voiture est réellement en piste** (§16.2), puis revient en fondu au retour.
-- Choix d'un dossier par ambiance, écoute au clic, fichier de config séparé (`music.json`, jamais fusionné dans `config.json`).
-- Normalisation RMS et cache d'index (§16.3).
+**Play music** (`play_mode`) a trois positions :
 
-**Un pack par défaut est embarqué** (`src-tauri/assets/music/`, deux pistes sous Pixabay Content License, crédits dans `CREDITS.md` et l'écran À propos) : c'est le comportement **sans configuration**. Le pack est déposé dans un dossier piloté par l'app (`app_config_dir/Music/embedded/{menu,grid}`), **réécrit à chaque démarrage**. La case « Utiliser mes propres dossiers de musique » (décochée par défaut) révèle les sélecteurs ; ces dossiers-là appartiennent à l'utilisateur et ne sont jamais réécrits.
+| Position | La musique joue |
+|---|---|
+| `Off` | jamais |
+| `Big Picture only` (défaut) | tant que Big Picture est ouvert |
+| `Always` | aussi en fenêtré |
 
-**Écarté pour de bon** : la détection automatique des bandes-son Steam (MUSIQUE§3.2).
+- **Fenêtre réduite** : fondu de sortie, reprise en fondu à la restauration, quel que soit le mode. Une simple perte de focus ne change rien.
+- **Coupée pendant une session, jamais baissée en fond** : la musique continue pendant l'écran de chargement, s'arrête **quand la voiture est réellement en piste** (§16.2) et revient en fondu au retour. Rien ne démarre tant que le jeu tourne ; sa fermeture rend la musique.
+- Changer de position s'applique sur place, y compris depuis Big Picture.
+- Une **écoute** (▶ d'un sélecteur, §16.8) fait taire l'ambiance le temps qu'elle dure.
+
+**Un pack par défaut est embarqué** (`src-tauri/assets/music/`, deux pistes sous Pixabay Content License, crédits dans `CREDITS.md` et l'écran À propos) : c'est le comportement **sans configuration**. Le pack est déposé dans un dossier piloté par l'app (`app_config_dir/Music/embedded/{menu,grid}`), **réécrit à chaque démarrage**.
+
+**« Use my own music folders »** (décochée par défaut) commande tout le reste. Décochée : seul le pack joue, MENU et GRID, aucun champ musique n'apparaît ailleurs que dans Réglages › Musique, et les attributions (§16.4) sont conservées mais ignorées. Cochée : les sources MENU et GRID se choisissent, et les attributions jouent. Les sources de l'utilisateur ne sont jamais réécrites.
+
+`music.json` est un fichier à part, jamais fusionné dans `config.json`. En v2, `play_mode` et `music_volume` (une future `sfx_volume` viendra à côté). Un fichier v1 se relit : `enabled: true` devient `big_picture`, `false` devient `off`, `volume` devient `music_volume`.
 
 ### 16.2 Détection de fin de chargement
 
 `acs.exe` vit du début du chargement jusqu'au retour aux stands : sa présence ne dit pas si la voiture est pilotable. `music/ac_status.rs` lit la **mémoire partagée officielle d'AC** (`Local\acpmf_graphics`), sans disque : `Status` vaut `AC_LIVE` (2) seulement quand la voiture est en piste. `watch.rs` scrute la présence du process toutes les 500 ms, et, une fois le process vu, le statut toutes les 1000 ms. Le moteur reçoit deux paires de signaux : process lancé ou arrêté (un repère d'état, sans effet sur la lecture), session entrée ou quittée (le fondu réel, sur la transition `AC_LIVE`) — et **l'arrêt du process force la reprise de la musique** si la mémoire partagée n'a pas signalé la sortie.
 
-### 16.3 Normalisation RMS + cache d'index
+### 16.3 Sources, normalisation et cache d'index
 
-Au premier scan d'un dossier, chaque piste est décodée entière (`rodio`) pour une correction de gain vers −18 dBFS, bornée à ±12 dB, et sa durée exacte. Le résultat est mis en cache **dans le dossier** (`.pitbox-index.json`), invalidé si le nombre de fichiers ou la date du dossier change. **Toujours actif**, sans réglage ; le gain s'applique en plus du fondu. La durée exacte sert au préchargement du fondu enchaîné (§16.4).
+Une **source** est un **dossier** — une playlist, aléatoire selon « Shuffle » — ou un **fichier**, joué en boucle. Un dossier joue ses propres fichiers audio, pas ceux de ses sous-dossiers. Une source attribuée vide ou introuvable laisse jouer l'ambiance de base, sans message (MUSIQUE§9).
 
-### 16.4 Écarts assumés vs la spec d'origine
+Au premier scan d'une source, chaque piste est décodée entière (`rodio`) pour une correction de gain vers −18 dBFS, bornée à ±12 dB, et sa durée exacte. **Toujours actif**, sans réglage, pour toutes les sources ; le gain s'applique en plus du fondu, et la durée sert au préchargement du fondu enchaîné (§16.6).
 
-Documentés en tête de `engine.rs` :
-- `rodio`/`cpal` mélangent et rééchantillonnent déjà : rien à rejouer de la chaîne NAudio.
-- Sortie WASAPI **partagée**, jamais exclusive (elle couperait le son d'AC).
-- **Préchargement** : le fondu enchaîné démarre `crossfade_ms + 500 ms` avant la fin quand la durée de la piste est connue (index RMS, ou format qui l'annonce), sinon quand la piste se termine.
-- Chemins en absolu, pas en variables d'environnement.
-- Le tag ReplayGain n'est pas lu : le calcul RMS s'applique toujours.
+Le résultat est mis en cache dans **`app_config_dir/Music/index/`**, un fichier par chemin de source. **Rien n'est écrit dans les dossiers de l'utilisateur** ; les `.pitbox-index.json` qu'une version antérieure y avait posés restent où ils sont, jamais relus. Le cache d'un dossier est périmé quand son nombre de fichiers audio ou sa date changent, celui d'un fichier quand sa date ou sa taille changent.
 
-### 16.5 Interface
+### 16.4 Attributions
 
-Réglages › **Musique** (`MusicTab.svelte`) : coupe-circuit, case « Utiliser mes propres dossiers », sélecteurs de dossier menu/grid (Parcourir, écoute ▶, nombre de pistes) quand elle est cochée, lecture aléatoire, volume, durée de fondu. Sauvegarde indépendante des autres onglets.
+Une source peut être attachée à :
 
-**Ce qui se règle depuis le mode s'applique dans le mode** : couper ou rallumer la musique depuis Big Picture l'arrête ou la relance sur place, et régler un zoom applique **celui des deux qui est à l'écran** (`applyZoomFor`).
+- une **marque**, une **famille** de voitures, une **catégorie de circuit** (son tag, `#drift`) ou un **pays**, toujours par **id canonique** (TAXO§2) ;
+- une **rubrique**, c'est-à-dire une entrée du rail : Cars, Tracks, Driver, Online, Apps, Add-ons, Classement, Fichiers, Settings, About. Classement et Fichiers en ont une chacun, partagée par leurs onglets ; Story n'en a pas.
 
-**Écarts assumés** : l'option « baisser le volume en fond pendant une session » a été retirée — la musique s'arrête toujours ; le contrôle d'un lecteur média externe n'est pas implémenté.
+**MENU** est le défaut global, **GRID** celui des réglages de session, qui n'ont pas de rubrique.
 
-### 16.6 Plein écran — filet de sécurité Windows
+- L'id canonique rend une fusion indolore : les variantes d'un nom mènent au même terme. Fusionner une marque ou un pays dans un autre emporte son attribution quand le terme rejoint n'en a pas ; s'il en a une, il garde la sienne.
+- « Tout rétablir » d'un onglet du Classement ne touche pas aux attributions.
+- Une attribution dont le terme n'existe plus est **conservée** et signalée **orpheline** (§16.8) ; elle ne disparaît que supprimée à la main.
+
+### 16.5 Ce qui joue
+
+**La musique change sur un geste de navigation, jamais sur un changement de filtre.** Une tuile de l'index écrit dans le même état de filtre que les puces (INDEX§2) : la musique ne se déduit donc pas du filtre, elle suit des **arrivées** — un clic sur une tuile, un écran atteint.
+
+**L'ancre** est le couple *(bibliothèque, terme)* qu'un clic sur une tuile de l'index pose, que le terme ait une musique ou non. Il n'y en a qu'une : une tuile de l'autre bibliothèque la remplace. Elle s'efface au retour à l'index de sa bibliothèque (dernière puce retirée, « Tout effacer »), et reste en mémoire sur tout autre écran.
+
+| Arrivée sur | Musique |
+|---|---|
+| Index Voitures / Circuits | rubrique Cars / Tracks → MENU |
+| Clic sur une tuile | le terme s'il a une musique, sinon rien ne change ; pose l'ancre |
+| Puces, recherche, densité, tri | **aucun changement** |
+| Liste de la bibliothèque ancrée | l'ancre si sa puce est encore posée (en inclusion), sinon la rubrique |
+| Fiche voiture ou circuit | l'ancre si l'entité en relève, sinon la cascade ci-dessous |
+| Réglages de session | catégorie du circuit (rang 1) → pays du circuit → marque → famille → GRID |
+| Autre rubrique | rubrique → MENU |
+
+Une fiche sans ancre qui la concerne — ouverte depuis la colonne de session, un lien de pack, ou une liste qui n'a pas suivi de tuile — descend sa cascade :
+
+- **voiture** : marque → familles (dans l'ordre de la table) → pays → rubrique Cars → MENU ;
+- **circuit** : catégorie de rang 1 → pays → rubrique Tracks → MENU.
+
+**Le premier niveau qui a une attribution gagne** ; une ancre dont le terme n'a pas de musique n'apporte rien et la cascade continue. Un circuit relève d'une ancre de catégorie dès qu'il porte cette catégorie, à n'importe quel rang. La fiche d'un pack, ou d'une couche ouverte par-dessus une fiche, garde la musique de la fiche.
+
+### 16.6 Moteur
+
+- **Une ambiance par source**, identifiée par son chemin : MENU et GRID en sont deux parmi d'autres. Chacune garde sa position de lecture (MUSIQUE§5.4, généralisé). Huit restent en mémoire ; au-delà, la moins récemment entendue est oubliée et repartira du début.
+- **Même source résolue, aucune transition**, quel que soit le chemin qui y mène.
+- **Un écran atteint ou une tuile cliquée change la musique aussitôt.** Seule une **fiche** attend **1 s**, la dernière demande seule comptant : faire défiler les fiches ne déclenche pas un fondu par pas, et quitter la fiche avant la fin de l'attente l'annule. Sans musique audible, le contexte est retenu sans attendre et joue dès qu'elle revient ; un changement de réglage s'applique sans délai.
+- Fondu enchaîné à puissance constante ; la notification « now playing » (MUSIQUE§5.5), si elle est activée, accompagne chaque piste qui démarre.
+- Au retour d'une session, c'est la source de l'écran affiché à ce moment qui reprend.
+
+**Écarts assumés** vs la spec d'origine, documentés en tête de `engine.rs` : `rodio`/`cpal` mélangent et rééchantillonnent déjà ; sortie WASAPI **partagée**, jamais exclusive (elle couperait le son d'AC) ; préchargement du fondu `crossfade_ms + 500 ms` avant la fin quand la durée est connue, sinon à la fin de la piste ; chemins en absolu ; tag ReplayGain non lu. L'option « baisser le volume en fond pendant une session » n'existe pas — la musique s'arrête toujours —, ni le contrôle d'un lecteur média externe.
+
+### 16.7 Bandes-son Steam
+
+Les dossiers de `<bibliothèque>/steamapps/music/` sont proposés comme **raccourcis** dans la liste des sélecteurs (§16.8), pour chaque bibliothèque Steam (l'installation que désigne le registre, puis son `libraryfolders.vdf`). Rien d'autre de Steam n'est parcouru, `steamapps/common/` compris. Un dossier n'est retenu que s'il contient au moins un fichier audio lisible ; une bande-son rangée en sous-dossiers (un par format) en donne un par sous-dossier qui joue. Chacune porte le nom que lui donne la boutique (le manifeste que Steam écrit pour chaque app installée), à défaut celui de son dossier. Aucune attribution automatique. Le scan est paresseux : à la première ouverture d'une liste, une fois par lancement.
+
+### 16.8 Interface
+
+**Un sélecteur de source**, le même partout : une liste — le défaut de la ligne (« Follows screen », l'ambiance menu ou le dossier par défaut), puis `Recent` (les dernières sources choisies) et `Steam soundtracks` —, **Browse…** pour un dossier ou un fichier, **▶** pour écouter sans rien changer, et le nombre de pistes, ou « introuvable ». Le nombre de pistes d'un dossier est un bouton qui déplie ses morceaux : en choisir un en fait la source, jouée seule en boucle — c'est ainsi qu'on prend un morceau précis d'une bande-son.
+
+**Réglages › Musique** (`MusicTab.svelte`), sauvegarde indépendante des autres onglets : Play music, « Use my own music folders », les sources MENU et GRID quand elle est cochée, lecture aléatoire, notification du titre, **Music volume**, durée de fondu. Puis, la case cochée :
+
+- **By screen** : un sélecteur par rubrique ;
+- **Assignments** : le récapitulatif en lecture seule des attributions par terme — emblème, nom, source, nombre de pistes, et `›` qui ouvre la ligne du terme dans le Classement. Une orpheline y est signalée, avec un bouton de suppression.
+
+**Classement**, sur la ligne dépliée d'une marque, d'une famille, d'une catégorie de circuit et d'un pays (TAXO§6.2, TAXO§6.4) : une ligne **MUSIC** et son sélecteur, écrite aussitôt choisie comme le reste de ces onglets.
+
+**Ce qui se règle depuis le mode s'applique dans le mode** : changer Play music depuis Big Picture arrête ou relance la musique sur place, et régler un zoom applique **celui des deux qui est à l'écran** (`applyZoomFor`).
+
+### 16.9 Plein écran — filet de sécurité Windows
 
 Sur une fenêtre sans décorations, `setFullscreen(true)` peut ne couvrir que la zone de travail : `bigpicture.svelte.ts` force les **bornes du moniteur** après l'appel, et restaure à la sortie la taille et la position d'avant. **Une fenêtre maximisée ne se restaure pas en lui rendant sa taille** : l'état maximisé est mémorisé à l'entrée et rétabli par `maximize()`, sans `setSize` ni `setPosition`.

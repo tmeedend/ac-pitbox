@@ -297,8 +297,10 @@ pub(crate) fn start_services(app: &App, conn: Connection) {
         // (`story/session.rs`).
         commands::story::on_game_running(&watch_handle, running);
     });
+    // The preview tells the engine when it starts and ends: the ambience
+    // steps aside while it plays (`engine::PreviewHandle`).
+    app.manage(music::PreviewHandle::new(music_engine.clone_sender()));
     app.manage(music_engine);
-    app.manage(music::PreviewHandle::default());
 
     // Aperçu 3D des voitures : jeton de génération + créneau unique de
     // conversion (PREVIEW§7.3).

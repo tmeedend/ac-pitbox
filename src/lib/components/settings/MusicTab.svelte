@@ -1,83 +1,78 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { open } from "@tauri-apps/plugin-dialog";
   import {
     getMusicConfig,
     saveMusicConfig,
     getDefaultMusicFolders,
-    scanMusicFolder,
-    musicPreviewStart,
-    musicPreviewStop,
     emptyMusicConfig,
     type MusicConfig,
     type DefaultMusicFolders,
-  } from "$lib/shell/music";
+    type PlayMode,
+  } from "$lib/music/music";
+  import { musicConfigSaved } from "$lib/music/context.svelte";
+  import { stopPreview } from "$lib/music/preview.svelte";
+  import { SCREEN_KEYS, withAssignment, withRecent, type ScreenKey, type Taxonomy } from "$lib/music/resolve";
   import { t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
   import Slider from "$lib/components/ui/Slider.svelte";
+  import MusicSourcePicker from "$lib/components/music/MusicSourcePicker.svelte";
+  import MusicAssignments from "$lib/components/music/MusicAssignments.svelte";
 
-  // Fichier séparé de AppConfig (music.json, §2 de la spec musique) : état et
-  // sauvegarde propres à cet onglet, indépendants de la garde de navigation
-  // de Settings.svelte (qui ne porte que sur AppConfig).
+  // Fichier séparé de AppConfig (music.json, §16.1) : état et sauvegarde
+  // propres à cet onglet, indépendants de la garde de navigation de
+  // Settings.svelte (qui ne porte que sur AppConfig). Tout ce qui se règle ici
+  // part au bouton Enregistrer, musiques par écran et suppression d'une
+  // orpheline comprises ; les lignes du Classement, elles, écrivent aussitôt.
   let config = $state<MusicConfig>(emptyMusicConfig());
-  let savedConfig = emptyMusicConfig();
   let defaults = $state<DefaultMusicFolders>({ menu: "", grid: "" });
-  let menuTrackCount = $state<number | null>(null);
-  let gridTrackCount = $state<number | null>(null);
-  let previewing = $state<"menu" | "grid" | null>(null);
   let saving = $state(false);
   let saved = $state(false);
   let error = $state("");
-  let loaded = $state(false);
-
-  const menuPath = $derived(config.menu_folder ?? defaults.menu);
-  const gridPath = $derived(config.grid_folder ?? defaults.grid);
 
   onMount(async () => {
-    const [cfg, def] = await Promise.all([getMusicConfig(), getDefaultMusicFolders()]);
-    config = cfg;
-    savedConfig = structuredClone($state.snapshot(cfg));
-    defaults = def;
-    loaded = true;
-  });
-
-  onDestroy(() => {
-    if (previewing) musicPreviewStop();
-  });
-
-  // Recompte les pistes à chaque changement de chemin (saisie ou Parcourir),
-  // menu et grid indépendamment.
-  $effect(() => {
-    if (!loaded) return;
-    const path = menuPath;
-    scanMusicFolder(path).then((info) => (menuTrackCount = info.track_count));
-  });
-  $effect(() => {
-    if (!loaded) return;
-    const path = gridPath;
-    scanMusicFolder(path).then((info) => (gridTrackCount = info.track_count));
-  });
-
-  async function browse(which: "menu" | "grid") {
-    const selected = await open({ directory: true, multiple: false, defaultPath: which === "menu" ? menuPath : gridPath });
-    if (typeof selected !== "string") return;
-    if (which === "menu") config.menu_folder = selected;
-    else config.grid_folder = selected;
-  }
-
-  async function togglePreview(which: "menu" | "grid") {
-    error = "";
-    if (previewing === which) {
-      await musicPreviewStop();
-      previewing = null;
-      return;
-    }
     try {
-      await musicPreviewStart(which === "menu" ? menuPath : gridPath, config.volume);
-      previewing = which;
+      const [cfg, def] = await Promise.all([getMusicConfig(), getDefaultMusicFolders()]);
+      config = cfg;
+      defaults = def;
     } catch (e) {
       error = errorText(e);
     }
+  });
+
+  onDestroy(() => void stopPreview());
+
+  const MODES: { value: PlayMode; key: string }[] = [
+    { value: "off", key: "music.modeOff" },
+    { value: "big_picture", key: "music.modeBigPicture" },
+    { value: "always", key: "music.modeAlways" },
+  ];
+
+  /** The label of each screen: the rail's where it has one. */
+  const SCREEN_LABEL: Record<ScreenKey, string> = {
+    cars: "rules.tabCars",
+    tracks: "rules.tabTracks",
+    driver: "driver.title",
+    online: "nav.online",
+    apps: "nav.apps",
+    others: "nav.others",
+    sorting: "nav.sorting",
+    files: "nav.files",
+    settings: "nav.settings",
+    about: "nav.about",
+  };
+
+  function pickBase(which: "menu_folder" | "grid_folder", source: string | null) {
+    config[which] = source;
+    if (source) config.recent_sources = withRecent(config.recent_sources, source);
+  }
+
+  function pickScreen(key: ScreenKey, source: string | null) {
+    config.assignments = withAssignment(config.assignments, "screen", key, source);
+    if (source) config.recent_sources = withRecent(config.recent_sources, source);
+  }
+
+  function removeAssignment(taxonomy: Taxonomy, id: string) {
+    config.assignments = withAssignment(config.assignments, taxonomy, id, null);
   }
 
   async function save() {
@@ -85,8 +80,8 @@
     error = "";
     try {
       await saveMusicConfig(config);
+      musicConfigSaved(config);
       saved = true;
-      savedConfig = structuredClone($state.snapshot(config));
     } catch (e) {
       error = errorText(e);
     } finally {
@@ -103,9 +98,11 @@
 </script>
 
 <section class="lang-section">
-  <label class="check">
-    <input type="checkbox" bind:checked={config.enabled} />
-    <span>{t("music.enable")}</span>
+  <label>
+    <span>{t("music.playMode")}</span>
+    <select class="input" bind:value={config.play_mode}>
+      {#each MODES as m (m.value)}<option value={m.value}>{t(m.key)}</option>{/each}
+    </select>
   </label>
 </section>
 
@@ -120,52 +117,26 @@
 {#if config.use_custom_folders}
   <section class="folder-block">
     <div class="label">{t("music.menuAmbience")}</div>
-    <div class="row2">
-      <input
-        class="input mono"
-        type="text"
-        placeholder={defaults.menu}
-        value={config.menu_folder ?? ""}
-        spellcheck="false"
-        oninput={(e) => (config.menu_folder = e.currentTarget.value || null)}
-      />
-      <button class="btn" type="button" onclick={() => browse("menu")}>{t("pathfield.browse")}</button>
-      <button
-        class="btn preview"
-        type="button"
-        title={t("music.preview")}
-        disabled={!menuTrackCount}
-        onclick={() => togglePreview("menu")}
-      >
-        {previewing === "menu" ? "■" : "▶"}
-      </button>
-    </div>
-    <p class="hint">{menuTrackCount === null ? t("common.loading") : t("music.trackCount", { count: menuTrackCount })}</p>
+    <MusicSourcePicker
+      value={config.menu_folder}
+      defaultLabel={t("music.defaultFolder")}
+      defaultSource={defaults.menu}
+      volume={config.music_volume}
+      label={t("music.menuAmbience")}
+      onchange={(s) => pickBase("menu_folder", s)}
+    />
   </section>
 
   <section class="folder-block">
     <div class="label">{t("music.gridAmbience")}</div>
-    <div class="row2">
-      <input
-        class="input mono"
-        type="text"
-        placeholder={defaults.grid}
-        value={config.grid_folder ?? ""}
-        spellcheck="false"
-        oninput={(e) => (config.grid_folder = e.currentTarget.value || null)}
-      />
-      <button class="btn" type="button" onclick={() => browse("grid")}>{t("pathfield.browse")}</button>
-      <button
-        class="btn preview"
-        type="button"
-        title={t("music.preview")}
-        disabled={!gridTrackCount}
-        onclick={() => togglePreview("grid")}
-      >
-        {previewing === "grid" ? "■" : "▶"}
-      </button>
-    </div>
-    <p class="hint">{gridTrackCount === null ? t("common.loading") : t("music.trackCount", { count: gridTrackCount })}</p>
+    <MusicSourcePicker
+      value={config.grid_folder}
+      defaultLabel={t("music.defaultFolder")}
+      defaultSource={defaults.grid}
+      volume={config.music_volume}
+      label={t("music.gridAmbience")}
+      onchange={(s) => pickBase("grid_folder", s)}
+    />
   </section>
 {/if}
 
@@ -186,11 +157,11 @@
 <section class="lang-section">
   <Slider
     label={t("music.volume")}
-    value={pct(config.volume)}
+    value={pct(config.music_volume)}
     min={0}
     max={100}
-    display="{pct(config.volume)}%"
-    oninput={(v) => (config.volume = v / 100)}
+    display="{pct(config.music_volume)}%"
+    oninput={(v) => (config.music_volume = v / 100)}
   />
 </section>
 
@@ -205,6 +176,31 @@
     oninput={(v) => (config.crossfade_ms = v)}
   />
 </section>
+
+{#if config.use_custom_folders}
+  <section class="blk">
+    <div class="blk-h"><span class="blk-t">{t("music.byScreen")}</span></div>
+    <div class="blk-b screens">
+      {#each SCREEN_KEYS as key (key)}
+        <span class="screen">{t(SCREEN_LABEL[key])}</span>
+        <MusicSourcePicker
+          value={config.assignments.screen[key] ?? null}
+          defaultLabel={t("music.menuAmbience")}
+          volume={config.music_volume}
+          label={t(SCREEN_LABEL[key])}
+          onchange={(s) => pickScreen(key, s)}
+        />
+      {/each}
+    </div>
+  </section>
+
+  <section class="blk">
+    <div class="blk-h"><span class="blk-t">{t("music.assignments")}</span></div>
+    <div class="blk-b">
+      <MusicAssignments assignments={config.assignments} onremove={removeAssignment} />
+    </div>
+  </section>
+{/if}
 
 {#if error}<div class="errbox">{error}</div>{/if}
 
@@ -251,18 +247,15 @@
     text-transform: uppercase;
     margin-bottom: 8px;
   }
-  .row2 {
-    display: flex;
-    gap: 8px;
+  .screens {
+    display: grid;
+    grid-template-columns: minmax(90px, max-content) minmax(0, 1fr);
+    align-items: center;
+    gap: 8px 16px;
   }
-  .row2 .input {
-    flex: 1;
-  }
-  .btn.preview {
-    flex: none;
-    width: 38px;
-    justify-content: center;
-    padding: 8px 0;
+  .screen {
+    font-size: 12px;
+    color: var(--txt2);
   }
   .hint {
     margin-top: 8px;
