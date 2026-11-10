@@ -212,6 +212,15 @@ float4 main(PS_IN pin) {
     float diffuse = gKey.w * saturate(dot(n, gKey.xyz)) + gFill.w * saturate(dot(n, gFill.xyz))
       + gRim.w * saturate(dot(n, gRim.xyz));
     rgb += albedo * diffuse * gRelight;
+    // Specular highlight of each lamp (Blinn-Phong, one glossiness for every
+    // surface: the passes carry no material). Chrome and headlight reflectors
+    // have a near-black surface colour and live on reflections only, so the
+    // diffuse term above leaves them dark (run 6, the Supra's left headlight).
+    float3 v = normalize(gView);
+    float spec = gKey.w * pow(saturate(dot(n, normalize(gKey.xyz + v))), gGloss)
+      + gFill.w * pow(saturate(dot(n, normalize(gFill.xyz + v))), gGloss)
+      + gRim.w * pow(saturate(dot(n, normalize(gRim.xyz + v))), gGloss);
+    rgb += spec * gSpecular * (nrm.a > 0.5 ? 1 : 0);
   }
   float3 outc = toSrgb(neutral(rgb * gExposure));
   if (gGrade > 0) {
@@ -271,6 +280,11 @@ end
 
 local PASSES = {
   { id = 'base', setup = showroom },
+  -- Run 7: is the dark left headlight its cover glass reflecting the dark
+  -- side of the showroom cubemap? Same shot without glass, and with the
+  -- game's plainer cubemap.
+  { id = 'base_noglass', opaque = true, setup = showroom },
+  { id = 'base_basic', setup = function(s) showroom(s) s:overrideReflectionCubemap('basic') end },
   -- Opaque only: glass would hide the cabin from the relighting.
   { id = 'normal', opaque = true, setup = function(s) s:setShadersType(render.ShadersType.SampleNormal) end },
   { id = 'albedo', opaque = true, setup = function(s) s:setShadersType(render.ShadersType.SampleColor) end },
@@ -283,16 +297,15 @@ local PASSES = {
 
 -- What gets written: one image per output, each a combination of passes.
 -- `relight` scales the added lamps (`albedo × cos × relight` for the key);
--- `linear` decodes the surface colour from sRGB first, as three.js does with
--- its textures — which of the two the game hands over is not documented.
+-- `specular` scales their highlights. Run 6 settled the surface colour: used
+-- as the game hands it over (decoding it from sRGB first, as three.js does
+-- with its textures, gave an orange too red and too dark), hence `linear`
+-- stays off.
 local GRADE = { tint = vec3(-0.03, 0.02, 0.055), saturation = 0.75 }
 local OUTPUTS = {
-  { name = 'showroom_graded', exposure = 0.8, grade = true },
-  { name = 'relit_g10', exposure = 0.8, grade = true, relight = 1.0 },
-  { name = 'relit_g20', exposure = 0.8, grade = true, relight = 2.0 },
-  { name = 'relit_g30', exposure = 0.8, grade = true, relight = 3.0 },
-  { name = 'relit_lin_g20', exposure = 0.8, grade = true, relight = 2.0, linear = true },
-  { name = 'relit_lin_g40', exposure = 0.8, grade = true, relight = 4.0, linear = true },
+  { name = 'relit_s03', exposure = 0.8, grade = true, relight = 2.0, specular = 0.3 },
+  { name = 'relit_s03_noglass', base = 'base_noglass', exposure = 0.8, grade = true, relight = 2.0, specular = 0.3 },
+  { name = 'relit_s03_basic', base = 'base_basic', exposure = 0.8, grade = true, relight = 2.0, specular = 0.3 },
 }
 
 local function carIndexOf(id)
@@ -390,13 +403,14 @@ local function planCar(entry, steps)
       return vec4(d.x, d.y, d.z, share)
     end
     for _, out in ipairs(OUTPUTS) do
-      if shots.base then
+      if shots[out.base or 'base'] then
         local canvas = ui.ExtraCanvas(vec2(job.width, job.height), 1, render.AntialiasingMode.None)
         local ok, err = pcall(function()
           canvas:updateWithShader({
-            textures = { txShot = shots.base, txAlbedo = shots.albedo or false, txNormal = shots.normal or false },
+            textures = { txShot = shots[out.base or 'base'], txAlbedo = shots.albedo or false, txNormal = shots.normal or false },
             values = {
               gExposure = out.exposure, gRelight = out.relight or 0, gLinear = out.linear and 1 or 0,
+              gSpecular = out.specular or 0, gGloss = 60, gView = state.look * -1,
               gGrade = out.grade and 1 or 0, gTint = GRADE.tint, gSaturation = GRADE.saturation,
               gKey = lamp(1), gFill = lamp(2), gRim = lamp(3),
             },

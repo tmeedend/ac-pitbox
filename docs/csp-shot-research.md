@@ -121,6 +121,38 @@ la linéariser (décodage sRGB) donne un orange trop rouge et trop sombre.
 Ce qui reste visible : pas d'ombre de contact, des vitres un peu plus sombres,
 et ce n'est vérifié que sur deux voitures, une orange et une argent.
 
+## Tours 7 et 8 : d'autres peintures, et le phare sombre
+
+**Cinq peintures de plus**, toutes non protégées : noir (`bmw_m3_e30`), blanc
+(`c13_porsche_959_87`), rouge (`ferrari_458`), bleu (`ks_ford_mustang_2015`),
+jaune (`ks_corvette_c7_stingray`). Avec le même réglage que la Supra (lampes à
+×2), aucune ne sort fausse : le noir garde ses reflets, le blanc ne brûle pas,
+le jaune reste jaune. La comparaison chiffrée n'est possible que pour la
+Ferrari : carrosserie (98, 46, 48) dans le jeu avec spéculaire ×0,8, contre
+(111, 39, 40) chez Pit Box. Pour les trois autres, la vignette Pit Box retrouvée
+par la silhouette était celle d'une variante du même modèle (BMW de course,
+Corvette de police, Mustang orange) : le rapprochement par la forme seule ne
+distingue pas les variantes d'une même carrosserie.
+
+**Le phare gauche de la Supra, sombre dans le jeu, gris chez Pit Box.**
+- Ce n'est pas un manque de lampe : un reflet spéculaire des trois lampes
+  (Blinn-Phong, une brillance pour toutes les surfaces) ne l'éclaircit presque
+  pas.
+- Ce n'est pas son verre : rendu sans aucun verre, il reste aussi sombre.
+- C'est l'environnement de reflet. Le réflecteur chromé a une couleur de
+  surface quasi noire et ne vit que de reflets ; tourné vers la caméra, il
+  reflète ce qui est derrière elle, et dans le showroom du jeu (`'menu'`)
+  c'est sombre. Le phare droit, tourné de côté, reflète une zone claire et
+  sort presque blanc. Avec `'basic'`, le gauche s'éclaircit à peine. Pit Box
+  donne à toute la voiture le même environnement gris uniforme, d'où deux
+  phares pareils.
+
+Le jeu ne propose que quatre environnements (`menu`, `basic`, `white`,
+`black`) et aucun moyen d'en fournir un. Piste non essayée : rendre la même
+vue sous `white` puis sous `black`. Leur différence, pixel par pixel, dit
+combien chaque surface reflète, et le shader pourrait alors y poser
+l'environnement de Pit Box lui-même, comme il pose déjà ses lampes.
+
 ## Pistes pour l'éclairage, de la moins à la plus coûteuse
 
 *Écrites avant les tours 4 à 6 ; la deuxième est celle qui a abouti, mais dans
