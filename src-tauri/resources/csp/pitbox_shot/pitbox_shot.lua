@@ -160,39 +160,118 @@ local function shiftedProjection(view, proj, worldPts)
 end
 
 -- ---------------------------------------------------------------------------
+-- Colour pipeline: the shot is rendered in HDR (float texture, linear light)
+-- and brought to screen colours here, by the same tone mapping as Pit Box's
+-- renderer (three.js `NeutralToneMapping`, the Khronos PBR Neutral curve) and
+-- an sRGB encode. Without this step the PNG held the raw HDR values clipped
+-- at 1: highlights burnt, orange turned yellow (runs 1 to 3). YEBIS, the
+-- game's own post-processing, would do it but loses the transparent
+-- background, hence our own pass. The 2× supersampled shot is averaged down
+-- by the bilinear sample at the half-resolution pixel centres.
+
+local TONEMAP = [[
+float3 neutral(float3 color) {
+  const float startCompression = 0.8 - 0.04;
+  const float desaturation = 0.15;
+  float x = min(color.r, min(color.g, color.b));
+  float offset = x < 0.08 ? x - 6.25 * x * x : 0.04;
+  color -= offset;
+  float peak = max(color.r, max(color.g, color.b));
+  if (peak < startCompression) return color;
+  const float d = 1 - startCompression;
+  float newPeak = 1 - d * d / (peak + d - startCompression);
+  color *= newPeak / peak;
+  float g = 1 - 1 / (desaturation * (peak - newPeak) + 1);
+  return lerp(color, newPeak, g);
+}
+float3 toSrgb(float3 c) {
+  c = saturate(c);
+  return c <= 0.0031308 ? c * 12.92 : 1.055 * pow(c, 1 / 2.4) - 0.055;
+}
+float4 main(PS_IN pin) {
+  float4 c = txShot.SampleLevel(samLinearClamp, pin.Tex, 0);
+  if (c.a <= 0) return 0;
+  // Edges were blended over a transparent black clear: premultiplied.
+  float3 rgb = c.rgb / c.a;
+  return float4(toSrgb(neutral(max(rgb, 0) * gExposure)), saturate(c.a));
+}
+]]
+
+-- ---------------------------------------------------------------------------
+-- Lights: the template's three lamps, placed as `placeLights` does in
+-- gridThumbs.svelte.ts — key 45° off the camera azimuth and 35° up, fill
+-- -135° and 20°, rim 175° and 12° — at four radii from the car. Pit Box uses
+-- directional lights; AC has only point and spot lights, so these are point
+-- lights far enough, with a range long enough, to fall off very little across
+-- the car. Their brightness scale against three.js is unknown: `job.lights`
+-- multiplies them all, and the run compares a few values.
+--
+-- Run 4: **no visible effect** — with lamps at 0, 1 and 3, the images are the
+-- same. `ac.LightSource` lights do not seem to reach a GeometryShot; kept so
+-- the next attempt (shader type, lights linked to the car node) starts here.
+
+local LAMPS = { { 'key', 45, 35, 1 }, { 'fill', -135, 20, 0.25 }, { 'rim', 175, 12, 0.6 } }
+
+local function placeLamps(state, strength)
+  local lights = {}
+  local base = math.atan2(state.camDir.x, state.camDir.z)
+  for _, lamp in ipairs(LAMPS) do
+    local angle, elevation = base + rad(lamp[2]), rad(lamp[3])
+    local local_ = state.center + vec3(math.cos(elevation) * math.sin(angle), math.sin(elevation),
+      math.cos(elevation) * math.cos(angle)) * (state.radius * 4)
+    local light = ac.LightSource(ac.LightType.Regular)
+    light.position = state.modelToWorld:transformPoint(local_)
+    light.direction = (state.centerWorld - light.position):normalize()
+    light.spot = 0
+    light.range = state.radius * 16
+    light.rangeGradientOffset = 0.9
+    light.diffuseConcentration = 1
+    light.specularMultiplier = 1
+    light.shadows = false
+    light.affectsCars = true
+    light.showInReflections = false
+    local v = strength * lamp[4]
+    light.color = rgb(v, v, v)
+    lights[#lights + 1] = light
+  end
+  return lights
+end
+
+-- ---------------------------------------------------------------------------
 -- Variants: one lighting setup each, rendered from the same camera.
 --
--- First run, kept here so it is not tried again: the default neutral lighting
--- (ambient 3, white-to-black reflection gradient) burns highlights and tints
--- silver paint blue; `setOriginalLighting` after `setBestSceneShotQuality`
--- changes nothing; YEBIS composites the blurred track scene behind the car and
--- loses the transparent background.
---
--- Second run: after `setBestSceneShotQuality` the ambient colour has no effect
--- (ambient 1.5 and 0.9 gave identical images, both saturated, orange turning
--- yellow): the shot is lit by the track's own sun. SimplifiedYEBIS tonemaps
--- but leaves the car half transparent. Hence this third set, on Main shaders
--- with the neutral lighting kept, at decreasing ambient levels.
+-- Kept here so they are not tried again:
+-- - run 1: the default neutral lighting (ambient 3, white-to-black reflection
+--   gradient) burns highlights and tints silver paint blue;
+--   `setOriginalLighting` after `setBestSceneShotQuality` changes nothing;
+--   YEBIS composites the blurred track scene behind the car and loses the
+--   transparent background;
+-- - run 2: after `setBestSceneShotQuality` the ambient colour has no effect,
+--   the shot is lit by the track's own sun; SimplifiedYEBIS tonemaps but
+--   leaves the car half transparent;
+-- - run 3: on Main shaders with neutral lighting, ambient 1.5 to 0.6 gave
+--   nearly identical images — the strong reflection dominates, and the raw HDR
+--   was clipped (see the colour pipeline above).
 
-local function main(s, ambient, zenith, horizon)
+local function neutral(s, ambient, zenith, horizon)
   s:setShadersType(render.ShadersType.Main):setMaxLayer(5)
   s:setAmbientColor(rgbm(1, 1, 1, ambient))
   s:setReflectionColor(rgbm(zenith, zenith, zenith, 1), rgbm(horizon, horizon, horizon, 1))
 end
 
 local VARIANTS = {
-  { id = 'main_a15', aa = render.AntialiasingMode.ExtraSharpCMAA,
-    setup = function(s) main(s, 1.5, 0.5, 0.1) end },
-  { id = 'main_a10', aa = render.AntialiasingMode.ExtraSharpCMAA,
-    setup = function(s) main(s, 1.0, 0.4, 0.08) end },
-  { id = 'main_a06', aa = render.AntialiasingMode.ExtraSharpCMAA,
-    setup = function(s) main(s, 0.6, 0.3, 0.05) end },
-  { id = 'best_neutral', aa = render.AntialiasingMode.ExtraSharpCMAA,
-    setup = function(s)
-      s:setBestSceneShotQuality():setSky(false):setParticles(false):setGrass(false):setOriginalLighting(false)
-      s:setAmbientColor(rgbm(1, 1, 1, 1.0)):setReflectionColor(rgbm(0.4, 0.4, 0.4, 1), rgbm(0.08, 0.08, 0.08, 1))
-    end },
+  -- Neutral lighting alone, reflections dimmed: what the lamps add is measured against this.
+  { id = 'ambient_only', lights = 0, setup = function(s) neutral(s, 0.5, 0.35, 0.08) end },
+  { id = 'lamps', lights = 1, setup = function(s) neutral(s, 0.5, 0.35, 0.08) end },
+  { id = 'lamps_strong', lights = 3, setup = function(s) neutral(s, 0.5, 0.35, 0.08) end },
+  { id = 'lamps_showroom', lights = 1,
+    setup = function(s) neutral(s, 0.5, 0.35, 0.08) s:overrideReflectionCubemap('menu') end },
+  -- The track's own sun, for reference, through the same colour pipeline.
+  { id = 'track_sun', lights = 0,
+    setup = function(s) s:setBestSceneShotQuality():setSky(false):setParticles(false):setGrass(false) end },
 }
+
+local EXPOSURES = { 0.6, 1.0, 1.6 }
 
 local function carIndexOf(id)
   for i = 0, ac.getSim().carsCount - 1 do
@@ -202,7 +281,7 @@ local function carIndexOf(id)
 end
 
 -- Builds the list of steps for one car: each step is a function run on its
--- own frame, so a save never reads a texture rendered on the same frame.
+-- own frame, so nothing reads a texture rendered on the same frame.
 local function planCar(entry, steps)
   local record = { id = entry.id, files = {}, status = 'pending' }
   done.cars[#done.cars + 1] = record
@@ -219,6 +298,7 @@ local function planCar(entry, steps)
     -- (seen on the Supra of the second run).
     record.doorWasOpen = car.isDriverDoorOpen
     ac.setDriverDoorOpen(index, false, true)
+    record.skin = ac.getCarSkinID and ac.getCarSkinID(index) or nil
     local root = ac.findNodes('carRoot:' .. index)
     local modelToWorld = root:getWorldTransformationRaw():clone()
     local worldToModel = modelToWorld:inverse()
@@ -231,9 +311,6 @@ local function planCar(entry, steps)
     local t = job.template
     local aspect = job.width / job.height
     local camLocal, targetLocal, distance = fitOrbit(bmin, bmax, t, aspect)
-    if job.mirrorX then
-      camLocal.x, targetLocal.x = -camLocal.x, -targetLocal.x
-    end
     local pos = modelToWorld:transformPoint(camLocal)
     local target = modelToWorld:transformPoint(targetLocal)
     local upWorld = modelToWorld:transformPoint(targetLocal + vec3(0, 1, 0)) - target
@@ -241,6 +318,11 @@ local function planCar(entry, steps)
     state.near = math.max(distance / 100, 0.01)
     state.far = distance * 4
     state.root = root
+    state.modelToWorld = modelToWorld
+    state.center = (bmin + bmax) / 2
+    state.centerWorld = modelToWorld:transformPoint(state.center)
+    state.radius = (bmax - bmin):length() / 2
+    state.camDir = camLocal - targetLocal
     state.worldCorners = {}
     for _, c in ipairs(corners(bmin, bmax)) do
       state.worldCorners[#state.worldCorners + 1] = modelToWorld:transformPoint(c)
@@ -249,41 +331,61 @@ local function planCar(entry, steps)
   end
 
   for _, variant in ipairs(VARIANTS) do
-    -- Unshifted shots are produced on demand only: the lens shift was proven
-    -- on the first run (projected centre 0.065 brought back to the middle).
-    for _, shift in ipairs(job.unshifted and { false, true } or { true }) do
-      local name = variant.id .. (shift and '_shift' or '')
-      local shot
-      steps[#steps + 1] = function()
-        if not state.root then return end
-        local ok, err = pcall(function()
-          shot = ac.GeometryShot(state.root, vec2(job.width * job.supersample, job.height * job.supersample), 1, false,
-            variant.aa)
-          shot:setClearColor(rgbm(0, 0, 0, 0)):setOpaqueAlphaFix(true):setTransparentPass(true)
-          shot:setClippingPlanes(state.near, state.far)
-          variant.setup(shot)
-          shot:update(state.pos, state.look, state.up, job.template.fov)
-          if shift then
-            local proj, centre, entry = shiftedProjection(shot:viewMatrix(), shot:projectionMatrix(), state.worldCorners)
-            record.shift = { centre = centre, entry = entry }
-            if proj then shot:update(shot:viewMatrix(), proj, state.pos) end
-          end
-        end)
-        if not ok then
-          record.files[name] = 'error: ' .. tostring(err)
-          shot = nil
-        end
-      end
-      steps[#steps + 1] = function()
-        if not shot then return end
-        local file = JOB_DIR .. '/out/' .. entry.id .. '__' .. name .. '.png'
-        local ok, err = pcall(function() shot:save(file, ac.ImageFormat.PNG) end)
-        record.files[name] = ok and file or ('error: ' .. tostring(err))
-        shot:dispose()
+    local shot, lights, canvases
+    -- Frame 1: lamps on. Lights placed on the same frame as the shot might not
+    -- be registered yet.
+    steps[#steps + 1] = function()
+      if not state.root then return end
+      if variant.lights > 0 then lights = placeLamps(state, variant.lights * (job.lights or 4)) end
+    end
+    -- Frame 2: render in HDR, with the lens shift (centres the projected box).
+    steps[#steps + 1] = function()
+      if not state.root then return end
+      local ok, err = pcall(function()
+        shot = ac.GeometryShot(state.root, vec2(job.width * job.supersample, job.height * job.supersample), 1, false,
+          render.AntialiasingMode.None, render.TextureFormat.R16G16B16A16.Float)
+        shot:setClearColor(rgbm(0, 0, 0, 0)):setOpaqueAlphaFix(true):setTransparentPass(true)
+        shot:setClippingPlanes(state.near, state.far)
+        variant.setup(shot)
+        shot:update(state.pos, state.look, state.up, job.template.fov)
+        local proj, centre, entry = shiftedProjection(shot:viewMatrix(), shot:projectionMatrix(), state.worldCorners)
+        record.shift = { centre = centre, entry = entry }
+        if proj then shot:update(shot:viewMatrix(), proj, state.pos) end
+      end)
+      if not ok then
+        record.files[variant.id] = 'error: ' .. tostring(err)
         shot = nil
-        record.status = 'done'
-        saveDone()
       end
+    end
+    -- Frame 3: tone map at each exposure.
+    steps[#steps + 1] = function()
+      if lights then for _, l in ipairs(lights) do l:dispose() end lights = nil end
+      if not shot then return end
+      canvases = {}
+      for _, exposure in ipairs(EXPOSURES) do
+        local canvas = ui.ExtraCanvas(vec2(job.width, job.height), 1, render.AntialiasingMode.None)
+        local ok, err = pcall(function()
+          canvas:updateWithShader({ textures = { txShot = shot }, values = { gExposure = exposure }, shader = TONEMAP })
+        end)
+        if not ok then record.files[variant.id] = 'tonemap error: ' .. tostring(err) end
+        canvases[#canvases + 1] = { exposure = exposure, canvas = canvas }
+      end
+    end
+    -- Frame 4: save.
+    steps[#steps + 1] = function()
+      if not canvases then return end
+      for _, c in ipairs(canvases) do
+        local name = string.format('%s_e%02d', variant.id, math.floor(c.exposure * 10 + 0.5))
+        local file = JOB_DIR .. '/out/' .. entry.id .. '__' .. name .. '.png'
+        local ok, err = pcall(function() c.canvas:save(file, ac.ImageFormat.PNG) end)
+        record.files[name] = ok and file or ('error: ' .. tostring(err))
+        c.canvas:dispose()
+      end
+      canvases = nil
+      shot:dispose()
+      shot = nil
+      record.status = 'done'
+      saveDone()
     end
   end
 end

@@ -19,7 +19,8 @@
 param(
   [string]$Car,
   [string]$Track = 'magione',
-  [switch]$MirrorX,
+  [string]$Skin,
+  [double]$Lights = 4,
   [switch]$Remove
 )
 $ErrorActionPreference = 'Stop'
@@ -67,7 +68,7 @@ $job = [ordered]@{
   height      = 576
   supersample = 2
   warmup      = 8
-  mirrorX     = [bool]$MirrorX
+  lights      = $Lights
   quit        = $true
   probes      = @{
     localAppData = Join-Path $env:LOCALAPPDATA 'com.pitbox.app\pitbox_shot_probe.txt'
@@ -93,5 +94,25 @@ $preset = [ordered]@{
 }
 $presetFile = Join-Path $env:TEMP "pitbox-shot-$([guid]::NewGuid()).json"
 $preset | ConvertTo-Json | Set-Content -Encoding utf8NoBOM $presetFile
+$raceIni = Join-Path $docs 'Assetto Corsa\cfg\race.ini'
+$baseline = (Get-Item $raceIni).LastWriteTimeUtc
 Start-Process -FilePath $cm -ArgumentList "acmanager://race/quick?presetFile=$presetFile"
+
+# The Quick Drive preset carries no skin, so CM picks one. Same remedy as Pit
+# Box's own launch (raceini::spawn_player_skin_patcher): rewrite SKIN in
+# [CAR_0] right after CM wrote race.ini, before the game reads it.
+if ($Skin) {
+  $deadline = (Get-Date).AddSeconds(60)
+  while ((Get-Date) -lt $deadline) {
+    Start-Sleep -Milliseconds 50
+    if ((Get-Item $raceIni).LastWriteTimeUtc -eq $baseline) { continue }
+    $ini = [IO.File]::ReadAllText($raceIni)
+    # The player's car is MODEL= of [RACE]; [CAR_0] holds "MODEL=-".
+    if ($ini -notmatch "(?ms)^\[RACE\][^\[]*^MODEL=$([regex]::Escape($Car))\s*$") { continue }
+    $patched = [regex]::Replace($ini, '(?ms)(^\[CAR_0\][^\[]*?^SKIN=)[^\r\n]*', "`${1}$Skin")
+    [IO.File]::WriteAllText($raceIni, $patched)
+    "race.ini: skin set to $Skin"
+    break
+  }
+}
 "session started for $Car on $Track; results in $jobDir"

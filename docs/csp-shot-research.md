@@ -56,6 +56,44 @@ C'était annoncé comme le point faible, et ça l'est.
 « indiscernable » : la nôtre est mate et retenue, celle du jeu brillante et
 saturée. Dans une grille mixte, les voitures protégées se reconnaîtraient.
 
+## Tour 4 : HDR, tonemapping maison et reflets du showroom
+
+Diagnostic des tours 1 à 3 : le PNG contenait les valeurs HDR brutes, écrêtées
+à 1, sans tonemapping ni encodage sRGB — d'où les hautes lumières brûlées et
+l'orange devenu jaune. Ce que fait YEBIS d'ordinaire, mais YEBIS perd la
+transparence.
+
+Ce tour rend donc en texture flottante (`R16G16B16A16.Float`), puis applique
+dans le jeu, par un shader (`ExtraCanvas:updateWithShader`), la même courbe que
+Pit Box (`NeutralToneMapping` de three.js) et l'encodage sRGB. La transparence
+est conservée, l'exposition se règle (vérifié : ×0,6 / ×1 / ×1,6 changent bien
+la luminosité moyenne).
+
+- **Les reflets du showroom du jeu** (`overrideReflectionCubemap('menu')`) sont
+  ce qui change tout : orange crédible, argent qui ressemble à de l'argent. Le
+  dégradé de reflet par défaut, lui, délave toutes les couleurs en pastel.
+- **Avec en plus l'étalonnage du preset Catalogue** (saturation 75 %, teinte
+  froide, appliqué ici après coup en Python), la Supra du jeu n'est plus loin de
+  celle de Pit Box : même cadrage, même famille de couleur. Restent une teinte
+  plus rouge et un flanc plus sombre.
+- **Les lampes du gabarit, posées avec `ac.LightSource`, n'ont aucun effet
+  visible** : images identiques à 0, 1 et 3 fois leur intensité. Ces lumières
+  ne semblent pas atteindre une `GeometryShot`. C'est ce qui manque pour le
+  flanc : il n'y a pas de lampe principale.
+- **Le soleil de la piste** reste inutilisable : surexposé même à ×0,6.
+- **Le skin** est imposé en réécrivant `SKIN=` dans `[CAR_0]` du `race.ini`
+  juste après l'écriture de CM, comme le lancement de Pit Box. La Supra est
+  bien sortie en `00_orange` (relu par `ac.getCarSkinID`), mais **c'est CM qui
+  l'avait choisi** : le patch cherchait la voiture dans `[CAR_0]`, où CM écrit
+  `MODEL=-`, et n'a donc jamais rien réécrit. Corrigé ensuite (la voiture se lit
+  dans `[RACE]`, comme `raceini::player_car_model`), pas encore réessayé.
+
+Un plantage d'AC au chargement pendant ce tour ne venait pas de l'app : Windows
+avait épuisé sa mémoire réservable (127 Go engagés), dont 71 Go par un seul
+processus Firefox. CSP le dit en clair dans `logs/log.txt` (« out of memory,
+even though 4.2 GB of RAM is free »). À savoir pour le lot 2 : un échec de ce
+genre doit se signaler comme un échec du jeu, pas de la voiture.
+
 ## Pistes pour l'éclairage, de la moins à la plus coûteuse
 
 1. **Piste studio** (prévue par le document de départ) : soleil orienté selon le
