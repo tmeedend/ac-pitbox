@@ -1836,23 +1836,85 @@ de reprendre. En cas d'écart, la spec fait foi.
         rouge est vif là où le jeu le rend profond et brillant). Mesuré : même
         à 300 % de lumière ambiante, un Cayenne noir garde ses flancs noirs
         pendant que son toit s'éclaire et que les voitures blanches brûlent.
-        **Cause trouvée (2026-11) : l'exposition automatique du jeu.** Les
-        images d'AC passent par son post-traitement
-        (`system/cfg/ppfilters/default.ini`) : `[AUTO_EXPOSURE]` actif
-        (cible 0,32, bornes 0,2 à 0,5), tone mapping à `GAMMA=1.2`,
-        `SATURATION=0.95`. **Chaque preview est exposée selon son propre
-        contenu** : une voiture noire est photographiée plus clair, d'où son
-        gris-brun, une blanche plus sombre, d'où ses blancs qui ne brûlent
-        pas. C'est exactement ce que GRILLE§5.6 interdit (exposition fixe,
-        pour que les voitures se comparent), d'où l'écart qu'aucune lumière
-        fixe ne comble. **Fausse piste mesurée, à ne pas reprendre** :
-        l'espace des couleurs. Lire les textures sans décodage sRGB éclaircit
-        les noirs mais délave les rouges saturés (Supra rouge rendue saumon
-        dans l'aperçu 3D) ; supprimer aussi l'encodage de sortie garde les
-        rouges mais rend les noirs noirs. Aucune des deux ne reproduit le
-        jeu. **À décider** : une exposition par voiture réservée à Officiel
-        (dont le critère est d'être indiscernable du jeu), en dérogation
-        assumée à GRILLE§5.6, ou rien ;
+        **La recette de Kunos est dans le SDK du jeu** (2026-11) :
+        `sdk/dev/ksPreviewBuilder/`, l'outil avec lequel Kunos a produit ses
+        previews. Sa caméra (`dev/showroom_start.ini`, `[PREVIEW_MODE]`) est
+        reprise telle quelle par la case « Cadrage du jeu » ; son
+        post-traitement (`dev/previews/ppeffects.ini`) **n'a pas
+        d'exposition automatique** (`AUTO_EXPOSURE` à 0, exposition fixe 0,2)
+        mais un étalonnage fixe, le même pour toutes les voitures : gamma
+        1,2, saturation 0,9, luminosité 1,08, contraste 1,05.
+        **Essayé (2026-11), et retenu en partie** : les curseurs
+        « Saturation » et « Teinte froide » (d'abord une case, devenue deux
+        curseurs à la demande de l'utilisateur). Recopié tel quel sur notre rendu, l'étalonnage rend toutes les
+        voitures trop claires (nos lumières ne sont pas les leurs) ; mesuré
+        sur 17 voitures, seuls la saturation et la teinte froide passent, à
+        leurs propres valeurs (saturation 0,75, teinte 0,97 / 1,02 / 1,055) :
+        écart de couleur 15,0 → 10,9, de saturation 22 → 9,5. Le gamma 1,2
+        n'aide pas ici. Le champ de vision, lui, est juste : 31° ou 32°
+        dégradent la silhouette (taille moyenne déjà à +0,6 % du jeu).
+        **Sol et vitres** (2026-11, relevés par l'utilisateur). Le sol du jeu
+        est plus clair que notre flaque : 60 % la met à son niveau (sous la
+        voiture comme en bas du cadre, à moins d'un niveau près). Au passage,
+        un vrai défaut : la flaque montait à 200 % mais plafonnait à 100 %
+        (c'était une opacité) ; au-delà de 100 % elle s'éclaircit désormais
+        (`RENDERER_VERSION` 5). Les vitres du jeu sont pâles, laiteuses ;
+        les nôtres sombres. Nouveau curseur « Reflets des vitres », qui
+        renforce l'environnement sur le seul vitrage : Officiel à 200 %, gain
+        modeste ; au-delà, les vitres teintées virent au vert. **Le reste de
+        l'écart n'est pas dans un preset** : chez le jeu, une vitre est
+        presque transparente et ce qu'on y voit est le reflet d'un
+        environnement clair, alors que le convertisseur donne à nos vitres une
+        opacité calibrée pour un studio sombre (`GLASS_MIN_OPACITY`,
+        `WINDSCREEN_OPACITY` dans `kn5-gltf`), partagée avec l'aperçu 3D.
+        L'habitacle aussi paraît plus clair chez le jeu à travers la vitre. À
+        reprendre avec la séance de comparaison de l'aperçu 3D. **Limite connue
+        du curseur** (relevée en revue) : faute de savoir ce qui est du verre,
+        il renforce tout matériau fondu — une décalcomanie ou un calque de phare
+        en fondu prend aussi le reflet. Le convertisseur, lui, le sait
+        (`is_glass_shader` dans `kn5-gltf`) mais ne l'écrit pas dans le
+        fichier : le poser en `extras` du matériau réglerait le cas, au prix
+        d'un `CONVERTER_VERSION` qui reconvertit tout le cache de l'aperçu.
+        **Le sol du jeu est un cercle**, relevé ensuite par l'utilisateur :
+        contraste poussé, chaque preview montre le même disque éclairé au
+        même endroit (le plateau du studio), là où notre lueur faisait une
+        ligne d'horizon floue. Mais la forme seule n'y changeait presque
+        rien : mesuré en colonnes au bord du cadre, le jeu passe du mur (3–4)
+        à **un sol plus sombre** (1–2) puis au disque (11–14), alors que notre
+        fond unique restait à 4–5 jusqu'au disque, qui s'y fondait. D'où les
+        curseurs « Cercle de lumière » et « Bord du cercle », et un sol
+        sombre autour du cercle quand le fond est cuit (fondu, pas un carré :
+        son bord droit redessinait un horizon). Officiel : cercle 140, bord
+        50 ; profils alignés sur ceux du jeu, recouvrement des silhouettes
+        63,6 % (60,9 avec la lueur), écart de couleur 10,3. Catalogue et
+        Vitrine prennent la saturation et la teinte du jeu (pas le reste, qui
+        coûterait la comparabilité).
+        **La case « Exposition automatique » reste**, cochée sur Officiel,
+        parce qu'elle aide mesurée avec la caméra du jeu (écart moyen 10,7
+        contre 11,5 niveaux, blancs qui ne brûlent plus) — mais ce n'est pas
+        ce que fait le jeu. Elle est née d'une erreur de lecture : le
+        `system/cfg/ppfilters/default.ini` lu d'abord est le filtre du jeu en
+        course, pas celui de l'outil de previews.
+        **Fausses pistes mesurées, à ne pas reprendre** : l'espace des
+        couleurs (lire les textures sans décodage sRGB délave les rouges
+        saturés, Supra rouge rendue saumon dans l'aperçu 3D ; supprimer aussi
+        l'encodage de sortie rend les noirs noirs) ; la lumière ambiante
+        poussée à 300 % ou des murs quarante fois plus clairs (le toit
+        s'éclaire, les flancs restent noirs). L'écart des noirs reste ouvert,
+        entre l'étalonnage ci-dessus et la peinture elle-même — à regarder
+        aussi pendant la séance de comparaison du chantier de l'aperçu 3D ;
+      - **l'angle de vue varie d'une voiture à l'autre chez le jeu**, et
+        c'est la caméra de Kunos qui l'explique : fixe, placée par rapport à
+        l'**origine propre** de chaque voiture (à 0,7 m de haut et 0,5 m
+        devant elle), qui n'est pas au milieu de sa caisse — la 488 dépasse de
+        2,80 m devant et 1,93 m derrière, l'Abarth de 1,61 m et 2,09 m. D'où
+        une Abarth vue de face et une 488 de flanc. Recouvrement des
+        silhouettes avec les images du jeu, sur 16 voitures : **61 %** avec
+        la caméra du SDK, 46 % avec la meilleure orbite, 32 % avec la caméra
+        de previews de Content Manager (`DarkPreviewsOptions`, dépôt
+        `gro-ove/actools`). Une première « caméra fixe » écrite à tâtons
+        (azimut, hauteur et distance cherchés par balayage) n'avait rien
+        gagné : les bons nombres ne se devinaient pas, ils se lisaient ;
       - la principale de Vitrine à 30 % **n'est pas une coquille** : complément
         et contre-jour s'expriment en pourcentage d'elle, donc la descendre
         éteint tout l'éclairage direct et laisse le showroom seul. La remonter
@@ -1887,6 +1949,18 @@ de reprendre. En cas d'écart, la spec fait foi.
       gigaoctet de mémoire. Il subsiste du crénelage sur les lignes claires
       quasi horizontales ; le prochain essai est **en amont** (normales,
       rugosité), pas un filtre de plus. PREVIEW§15 point 8.
+      **Proposé : une séance de comparaison systématique**, la `preview.jpg`
+      de chaque skin à côté de notre aperçu 3D, sur un large échantillon de
+      mods et de voitures de base, pour chasser les défauts de conversion qu'on
+      ne voit qu'en regardant voiture par voiture. Le banc des vignettes
+      (GRILLE§6.2, bascule « comparer à l'image d'origine ») en donne déjà
+      l'outil : même angle, même voiture, même livrée. Premier cas repéré au
+      passage (2026-11) : les **phares du Cayenne** (`ks_porsche_cayenne`,
+      skin noir) sortent **bleus** chez nous, alors qu'ils ne le sont pas dans
+      ses images du jeu. Pour juger, comparer formes, matières et couleurs
+      plutôt que la luminosité absolue : les `preview.jpg` passent par un
+      étalonnage propre à l'outil de Kunos (gamma, saturation, contraste ;
+      voir le chantier des vignettes), que l'aperçu 3D ne reproduit pas.
       (R et B de `txMaps` : question close, par la négative ; la métallicité
       vient de `fresnelC` — écarts n°7 et n°10 de `kn5-format.md`.)
       Trois règles à ne pas perdre de vue :

@@ -45,6 +45,25 @@ export interface GridTemplate {
   /** Light from the showroom environment — what paint reflects —, in percent
    * of the renderer's own level. 100 renders as before the setting existed. */
   ambient: number;
+  /** Each image exposed to its own brightness — 0 or 100. Off, every car
+   * shares one exposure and stays comparable. */
+  autoExposure: number;
+  /** The camera the game shot its own previews with, the same for every car —
+   * 0 or 100. Off, the camera orbits each car with the values above. */
+  gameFraming: number;
+  /** Colour saturation, in percent: 100 leaves the colours as rendered. */
+  saturation: number;
+  /** Cool tint, in percent of the game's own cast: 0 is neutral. */
+  coolTint: number;
+  /** Window reflections, in percent of what the rest of the car reflects:
+   * 100 leaves the glass as rendered. */
+  glass: number;
+  /** Size of the disc of light on the floor, in percent of the car's radius
+   * (or of the reference radius under the game's camera). 0 keeps the wide
+   * glow of the detail page preview. */
+  poolSize: number;
+  /** How soft that disc's edge is, in percent of its radius. */
+  poolEdge: number;
   /** Les deux bouts du dégradé de la carte. Ils appartiennent à la carte et non
    * au rendu — **sauf** quand le fond les cuit, et c'est exactement à ce
    * moment-là qu'ils entrent dans l'empreinte, côté backend. */

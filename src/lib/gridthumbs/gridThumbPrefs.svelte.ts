@@ -151,6 +151,44 @@ export const GRID_THUMB_RANGES = {
    * rendering as a black shape, the gap the game's previews showed most on
    * dark paint. 100 is the level every preset had before it was a setting. */
   ambient: { min: 0, max: 300, step: 5, default: 100 },
+  /** **Each image exposed to its own brightness** (`meteredExposure`): a dark
+   * car comes out a little brighter, a light one a little darker.
+   *
+   * **Not what the game does**, and that is worth knowing: Kunos shot its
+   * previews at a fixed exposure (`ppeffects.ini` of the SDK's preview tool,
+   * `AUTO_EXPOSURE` off). It is there because our studio does not light like
+   * theirs, and it closes part of that gap — measured, it keeps white paint
+   * from burning out.
+   *
+   * **Off by default, and a deliberate exception to GRILLE§5.6** (fixed
+   * exposure, so a black car and a white one stay comparable): it is there
+   * for a preset whose goal is to be indistinguishable from the game, and
+   * pulls every car towards the same brightness. All or nothing. */
+  autoExposure: { min: 0, max: 100, step: 100, default: 0 },
+  /** **The camera the game shot its own previews with** (`placeGameCamera`):
+   * one position for the whole library, set relative to each car's own origin,
+   * so the angle a car is seen from varies with the car exactly as in the
+   * game's images. When on, the framing values above do not apply. Off by
+   * default: an orbit at one angle keeps a catalogue comparable. */
+  gameFraming: { min: 0, max: 100, step: 100, default: 0 },
+  /** **Colour saturation** (`gradeColours`). The same for every car, so it
+   * keeps a catalogue comparable — it only moves the whole set. 100 leaves
+   * the render as it is; the game's previews measure at 75. */
+  saturation: { min: 50, max: 150, step: 5, default: 100 },
+  /** **Cool tint**, in percent of the cast the game's previews carry (their
+   * whites are bluish: an Abarth 500 is (151, 157, 163) there). 0 is neutral. */
+  coolTint: { min: 0, max: 200, step: 5, default: 0 },
+  /** **Window reflections** (`reflectGlass`): what the glass mirrors, in
+   * percent of what the paint does. Our studio is dark, so windows read as
+   * dark holes where the game's previews show a pale sheen. */
+  glass: { min: 0, max: 600, step: 10, default: 100 },
+  /** **The disc of light** under the car (`placePool`), the game's turntable:
+   * its radius, in percent of the car's (of the reference radius under the
+   * game's camera, so the same for every car as in the game). 0 keeps the
+   * wide glow, which reads as a blurred horizon from a low camera. */
+  poolSize: { min: 0, max: 300, step: 5, default: 0 },
+  /** How soft the disc's edge is, in percent of its radius. */
+  poolEdge: { min: 0, max: 100, step: 5, default: 30 },
 } as const satisfies Record<keyof GridTemplateValues, { min: number; max: number; step: number; default: number }>;
 
 /**
@@ -195,8 +233,12 @@ export const TEMPLATE_KEYS = Object.keys(GRID_THUMB_RANGES) as TemplateKey[];
  *  - **4** — the car is centred on its **projected** box (a lens shift), not
  *    aimed at the centre of its 3D box: perspective was pulling every
  *    silhouette ~6 % towards its nose. Every preset moves.
+ *  - **5** — a floor above 100 % gets brighter instead of doing nothing: it
+ *    was an opacity, capped at 1. Only floors above 100 % change pixels;
+ *    every other image is redrawn identically, the price of never leaving a
+ *    stale one behind.
  */
-export const RENDERER_VERSION = 4;
+export const RENDERER_VERSION = 5;
 
 /** Le fond de carte d'un preset : les deux bouts du dégradé radial du mat
  * (GRILLE§2.2). Clair au centre pour décoller la voiture, sombre aux bords pour
@@ -246,6 +288,13 @@ function template(read: (key: TemplateKey) => number): GridTemplateValues {
     background: read("background"),
     trueScale: read("trueScale"),
     ambient: read("ambient"),
+    autoExposure: read("autoExposure"),
+    gameFraming: read("gameFraming"),
+    saturation: read("saturation"),
+    coolTint: read("coolTint"),
+    glass: read("glass"),
+    poolSize: read("poolSize"),
+    poolEdge: read("poolEdge"),
   };
 }
 
@@ -284,7 +333,12 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
     id: "catalogue",
     name: "",
     builtin: true,
-    template: defaultTemplate(),
+    // The game's colour grade, measured on Officiel: the same for every car,
+    // so it moves the whole set without costing comparability.
+    // Height -7: the car centred in the frame (margins 22.1 % above, 21.6 %
+    // below over six cars). The +8 default came from the game's previews,
+    // which sit low; a catalogue has no reason to copy that.
+    template: { ...defaultTemplate(), height: -7, saturation: 75, coolTint: 100 },
     mat: CATALOGUE_MAT,
     skipStock: false,
   },
@@ -319,12 +373,14 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
       rim: 140,
       shadow: 45,
       background: 0,
-      // La voiture remonte dans le cadre pour laisser la place au reflet, et
-      // le sol arrive : flaque de lumière, puis reflet court dessus. C'est ce
-      // qui sépare une photo de studio d'un détourage — et c'est aussi ce qui
-      // fait que cette vignette-là n'est plus entièrement transparente, donc
-      // qu'elle veut le mat sombre ci-dessous sous peine de soucoupe.
-      height: 8,
+      // The car sits **high** to leave room for its reflection: at -12 the
+      // reflection shows under it (at +8, the value this preset first had,
+      // the car sat low and the reflection was cut by the frame — the
+      // comment here said "the car rises" while the value lowered it). The
+      // floor comes with it: pool, then a short reflection on it. That is
+      // what separates a studio photo from a cut-out — and what makes this
+      // thumbnail no longer fully transparent, hence the dark mat below.
+      height: -12,
       floor: 85,
       // Un reflet **franc et très flou** : à 90 % il porte l'image, et à 3,5 il
       // est laqué et non mouillé. C'est le couple qui sépare une photo de
@@ -333,6 +389,14 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
       reflectionBlur: 35,
       trueScale: 0,
       ambient: 100,
+      autoExposure: 0,
+      gameFraming: 0,
+      // The game's colour grade, as on Catalogue.
+      saturation: 75,
+      coolTint: 100,
+      glass: 100,
+      poolSize: 0,
+      poolEdge: 30,
     },
     // Le fond quasi noir des previews d'Assetto Corsa, reproduit là où il
     // s'écrit chez nous : dans la carte.
@@ -410,12 +474,19 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
     //    70 %. `trueScale` does the same: Abarth 44 %, Lotus 49 61 % (59),
     //    MX-5 57 % (56), mean width 64.5 % (65.4).
     //
-    // **What still differs**, and it is not light: our paint is flatter and
-    // more saturated than the game's — black stays black, red is vivid where
-    // the game's is deep and glossy. Measured: even at 300 % ambient light, a
-    // black Cayenne keeps black sides while its roof lights up. The gap is in
-    // how the converter translates the game's paint material (kn5-gltf), which
-    // the 3D preview of the detail page shares.
+    // **The game's own camera and auto exposure** finish the job. The camera
+    // (`gameFraming`) is the one Kunos shot its previews with, read from the
+    // SDK. Auto exposure is not the game's — its preview tool exposes every
+    // car alike — but measured with that camera it still closes part of the
+    // gap our studio leaves (mean error 10.7 against 11.5 levels, white paint
+    // no longer burnt): the one preset that breaks GRILLE§5.6's fixed
+    // exposure, because its goal is to be indistinguishable from the game.
+    //
+    // **What still differs**: black paint stays black where the game's is dark
+    // grey, and red is more vivid. Neither light nor exposure reaches it —
+    // at 300 % ambient, or exposure ×1.8, a black Cayenne keeps black sides —
+    // so the gap is in the paint itself as we render it. The colour space was
+    // ruled out by measurement (docs/CHANTIERS.md).
     id: "officiel",
     name: "",
     builtin: true,
@@ -429,9 +500,12 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
       rim: 70,
       shadow: 30,
       height: 0,
-      // A faint pool and **no reflection**: the game's images light the
-      // floor under the car, they do not mirror the car in it.
-      floor: 35,
+      // A pool and **no reflection**: the game's images light the floor under
+      // the car, they do not mirror the car in it. 60 measured with the game
+      // camera and auto exposure: floor brightness under the car and at the
+      // bottom of the frame both within a level of the game's (35 left them
+      // 4 levels dark; 100 overshot, and auto exposure then darkened the car).
+      floor: 60,
       reflection: 0,
       reflectionBlur: 5,
       background: 100,
@@ -441,6 +515,25 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
       // average). Higher only burns white paint — the AE86 goes from 143 to
       // 190 median at 300, against 144 in the game.
       ambient: 160,
+      // See the head of this preset, and `meteredExposure` for the measure.
+      autoExposure: 100,
+      // The game's own preview camera — see `placeGameCamera`. The framing
+      // values above stay for a copy that turns it off.
+      gameFraming: 100,
+      // The game's colour grade, measured — see `gradeColours`.
+      saturation: 75,
+      coolTint: 100,
+      // Window reflections: a modest, measured gain — the top of the car
+      // (windows) 1.5 levels closer to the game, colours unchanged. Higher
+      // lightens the windows further but tints tinted glass green. The rest of
+      // the gap is the game's bright environment in a clear pane, which our
+      // dark studio does not have (docs/CHANTIERS.md).
+      glass: 200,
+      // The game's turntable: a disc of light on a darker floor, not a glow
+      // (`placePool`). Size set on column profiles at both edges of the
+      // frame, which line up with the game's: wall, dark floor band, disc.
+      poolSize: 140,
+      poolEdge: 50,
     },
     // Measured identical on every stock preview, which means a fixed backdrop
     // in the game: near-black with a slight blue-green cast (top ≈ #020406,

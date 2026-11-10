@@ -59,11 +59,11 @@
   /** Les deux groupes de curseurs, et leur ordre. Le cadrage d'abord — c'est
    * lui qu'on vient régler — la lumière ensuite. */
   const FRAMING = ["azimuth", "elevation", "fov", "margin", "height"] as const;
-  const LIGHT = ["key", "fill", "rim", "ambient"] as const;
+  const LIGHT = ["key", "fill", "rim", "ambient", "glass", "saturation", "coolTint"] as const;
   /** Le sol est un groupe à lui : c'est ce qui sépare le plus nettement un
    * preset de catalogue — voiture détourée, rien d'autre — d'un preset de
    * vitrine, où la flaque et le reflet sont l'essentiel de l'effet. */
-  const GROUND = ["floor", "reflection", "reflectionBlur", "shadow"] as const;
+  const GROUND = ["floor", "poolSize", "poolEdge", "reflection", "reflectionBlur", "shadow"] as const;
   const DENSITIES: GridDensity[] = ["dense", "comfortable"];
 
   let applying = $state(false);
@@ -336,14 +336,35 @@
               <span>{t("settings.gridThumb_background")}</span>
             </label>
           </Field>
+          <Field hint={t("settings.gridThumbHint_gameFraming")}>
+            <label class="check">
+              <input
+                type="checkbox"
+                checked={selected.template.gameFraming > 0}
+                onchange={(e) => setPresetValue(selected.id, "gameFraming", e.currentTarget.checked ? 100 : 0)}
+              />
+              <span>{t("settings.gridThumb_gameFraming")}</span>
+            </label>
+          </Field>
           <Field hint={t("settings.gridThumbHint_trueScale")}>
             <label class="check">
               <input
                 type="checkbox"
                 checked={selected.template.trueScale > 0}
+                disabled={selected.template.gameFraming > 0}
                 onchange={(e) => setPresetValue(selected.id, "trueScale", e.currentTarget.checked ? 100 : 0)}
               />
               <span>{t("settings.gridThumb_trueScale")}</span>
+            </label>
+          </Field>
+          <Field hint={t("settings.gridThumbHint_autoExposure")}>
+            <label class="check">
+              <input
+                type="checkbox"
+                checked={selected.template.autoExposure > 0}
+                onchange={(e) => setPresetValue(selected.id, "autoExposure", e.currentTarget.checked ? 100 : 0)}
+              />
+              <span>{t("settings.gridThumb_autoExposure")}</span>
             </label>
           </Field>
           <Field hint={t("settings.gridPresetSkipStockHint")}>
@@ -377,7 +398,7 @@
               step={GRID_THUMB_RANGES[key].step}
               display={unit(key, selected.template[key])}
               hint={t("settings.gridThumbHint_" + key)}
-              disabled={!editable}
+              disabled={!editable || selected.template.gameFraming > 0}
               oninput={(v) => setPresetValue(selected.id, key, v)}
             />
           {/each}
@@ -396,7 +417,7 @@
               step={GRID_THUMB_RANGES[key].step}
               display={key === "reflectionBlur" ? tenths(selected.template[key]) : percent(selected.template[key])}
               hint={t("settings.gridThumbHint_" + key)}
-              disabled={!editable}
+              disabled={!editable || (key === "poolEdge" && selected.template.poolSize === 0)}
               oninput={(v) => setPresetValue(selected.id, key, v)}
             />
           {/each}

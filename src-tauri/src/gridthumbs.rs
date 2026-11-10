@@ -95,8 +95,35 @@ pub struct GridTemplate {
     /// Light from the showroom environment, in percent of the renderer's own
     /// level. Defaults to 100 when absent: that is the level every template
     /// rendered at before it was a setting.
-    #[serde(default = "full_ambient")]
+    #[serde(default = "neutral")]
     pub ambient: i32,
+    /// Each image exposed to its own brightness, as the game's previews are
+    /// — 0 or 100. Absent means off: fixed exposure, as before it existed.
+    #[serde(default)]
+    pub auto_exposure: i32,
+    /// The game's own preview camera, the same for every car — 0 or 100.
+    /// Absent means off: the orbit, as before it existed.
+    #[serde(default)]
+    pub game_framing: i32,
+    /// Colour saturation, in percent. Absent means 100: the colours as
+    /// rendered, as before it existed.
+    #[serde(default = "neutral")]
+    pub saturation: i32,
+    /// Cool tint, in percent of the game's own cast. Absent means 0.
+    #[serde(default)]
+    pub cool_tint: i32,
+    /// Window reflections, in percent of the paint's. Absent means 100: the
+    /// glass as rendered, as before it existed.
+    #[serde(default = "neutral")]
+    pub glass: i32,
+    /// Size of the disc of light on the floor, in percent of a radius. Absent
+    /// means 0: the wide glow, as before it existed.
+    #[serde(default)]
+    pub pool_size: i32,
+    /// Softness of that disc's edge, in percent of its radius. Only means
+    /// something with a disc, and only counts then.
+    #[serde(default = "soft_edge")]
+    pub pool_edge: i32,
     /// Version of the **frontend renderer**, incremented whenever the drawing
     /// code changes the pixels it produces.
     ///
@@ -163,19 +190,53 @@ impl GridTemplate {
         }
         // Same rule for the ambient light, around its own default: at 100 it
         // renders as before it existed, so it must not rename those images.
-        if self.ambient != FULL_AMBIENT {
+        if self.ambient != NEUTRAL {
             hasher.update(b"ambient");
             hasher.update(self.ambient.to_le_bytes());
+        }
+        if self.auto_exposure > 0 {
+            hasher.update(b"auto-exposure");
+            hasher.update(self.auto_exposure.to_le_bytes());
+        }
+        if self.game_framing > 0 {
+            hasher.update(b"game-framing");
+            hasher.update(self.game_framing.to_le_bytes());
+        }
+        if self.saturation != NEUTRAL {
+            hasher.update(b"saturation");
+            hasher.update(self.saturation.to_le_bytes());
+        }
+        if self.cool_tint > 0 {
+            hasher.update(b"cool-tint");
+            hasher.update(self.cool_tint.to_le_bytes());
+        }
+        if self.glass != NEUTRAL {
+            hasher.update(b"glass");
+            hasher.update(self.glass.to_le_bytes());
+        }
+        // The edge belongs to the disc: without one it changes no pixel, so it
+        // stays out of the name, like the mat without a baked backdrop.
+        if self.pool_size > 0 {
+            hasher.update(b"pool");
+            hasher.update(self.pool_size.to_le_bytes());
+            hasher.update(self.pool_edge.to_le_bytes());
         }
         format!("{:x}", hasher.finalize())[..8].to_string()
     }
 }
 
-/// The ambient level every template had before it was a setting.
-const FULL_AMBIENT: i32 = 100;
+/// The value of a percentage field that changes nothing — ambient light,
+/// saturation, window reflections — and that templates saved before the field
+/// existed therefore read as.
+const NEUTRAL: i32 = 100;
 
-fn full_ambient() -> i32 {
-    FULL_AMBIENT
+fn neutral() -> i32 {
+    NEUTRAL
+}
+
+/// The disc edge a template saved before the setting reads as.
+fn soft_edge() -> i32 {
+    30
 }
 
 /// What the grid knows about one car thumbnail, without converting anything.
@@ -417,6 +478,13 @@ mod tests {
             background: 0,
             true_scale: 0,
             ambient: 100,
+            auto_exposure: 0,
+            game_framing: 0,
+            saturation: 100,
+            cool_tint: 0,
+            glass: 100,
+            pool_size: 0,
+            pool_edge: 30,
             renderer: 1,
             mat_hi: "#2b2d33".to_string(),
             mat_lo: "#17181c".to_string(),
@@ -429,7 +497,7 @@ mod tests {
     fn every_template_field_changes_the_entry_name() {
         let base = template();
         let name = entry_stem("v46-abc", &base);
-        let mut variants = vec![base.clone(); 16];
+        let mut variants = vec![base.clone(); 22];
         variants[0].azimuth += 1;
         variants[1].elevation += 1;
         variants[2].fov += 1;
@@ -446,6 +514,12 @@ mod tests {
         variants[13].reflection_blur += 1;
         variants[14].true_scale = 100;
         variants[15].ambient += 5;
+        variants[16].auto_exposure = 100;
+        variants[17].game_framing = 100;
+        variants[18].saturation -= 5;
+        variants[19].cool_tint = 100;
+        variants[20].glass += 10;
+        variants[21].pool_size = 100;
         for variant in variants {
             assert_ne!(
                 name,
@@ -453,6 +527,27 @@ mod tests {
                 "un gabarit modifié doit donner une autre vignette : {variant:?}"
             );
         }
+    }
+
+    /// GRILLE§5.6 — the disc edge only shapes a disc: without a disc it must
+    /// not rename a single image, with one it must.
+    #[test]
+    fn the_circle_edge_counts_only_with_a_circle() {
+        let mut glow = template();
+        let mut softer = template();
+        softer.pool_edge += 20;
+        assert_eq!(
+            entry_stem("v46-aaa", &glow),
+            entry_stem("v46-aaa", &softer),
+            "sans cercle, le bord ne change aucune image"
+        );
+        glow.pool_size = 100;
+        softer.pool_size = 100;
+        assert_ne!(
+            entry_stem("v46-aaa", &glow),
+            entry_stem("v46-aaa", &softer),
+            "avec un cercle, un autre bord est une autre image"
+        );
     }
 
     /// The mat is a card colour, not a render value — until a preset bakes it
@@ -551,13 +646,14 @@ mod tests {
         }
     }
 
-    /// GRILLE§5.6 — true scale and the ambient light arrived after thumbnails
+    /// GRILLE§5.6 — true scale, the ambient light, auto exposure, game
+    /// framing, colour grade and window reflections arrived after thumbnails
     /// were already on disk.
     /// A template saved before it must still deserialize, mean "fitted", and
     /// keep the very name its images were stored under: otherwise adding a
     /// field would silently regenerate every thumbnail of every preset.
     #[test]
-    fn a_template_saved_before_true_scale_and_ambient_keeps_its_thumbnails() {
+    fn a_template_saved_before_the_newer_fields_keeps_its_thumbnails() {
         let old: GridTemplate = serde_json::from_value(serde_json::json!({
             "azimuth": 318, "elevation": 8, "fov": 22, "margin": 6, "key": 100, "fill": 25,
             "rim": 60, "shadow": 35, "height": 0, "floor": 0, "reflection": 0,
@@ -566,6 +662,12 @@ mod tests {
         }))
         .expect("un gabarit sans trueScale se relit");
         assert_eq!(old.true_scale, 0, "absent, il vaut « ajusté »");
+        assert_eq!(old.auto_exposure, 0, "absent, l'exposition reste fixe");
+        assert_eq!(old.game_framing, 0, "absent, la caméra reste en orbite");
+        assert_eq!(old.saturation, 100, "absent, les couleurs restent celles du rendu");
+        assert_eq!(old.cool_tint, 0, "absent, aucune teinte");
+        assert_eq!(old.glass, 100, "absent, les vitres restent celles du rendu");
+        assert_eq!(old.pool_size, 0, "absent, la lueur diffuse d'avant");
         assert_eq!(
             old.ambient, 100,
             "absent, la lumière ambiante est celle d'avant le réglage"
