@@ -347,6 +347,15 @@ impl FootprintAlpha {
         self.samples > 0 && self.min >= OPAQUE_ALPHA
     }
 
+    /// This material samples **only** partly transparent texels: its alpha
+    /// is an opacity painted by the author — a headlight cover tinted at
+    /// 55 %, a spoke blur — not a cutout nor a missing alpha. Measured, not
+    /// assumed: without samples, nothing to conclude (kn5-format.md, écart
+    /// n°28).
+    pub fn is_partial(&self) -> bool {
+        self.samples > 0 && self.min > BLANK_ALPHA && self.max < OPAQUE_ALPHA
+    }
+
     /// Cet alpha **découpe** au lieu de fondre : il ne prend que ses deux
     /// extrêmes, aux bords adoucis près.
     ///

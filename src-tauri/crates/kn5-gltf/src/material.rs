@@ -211,6 +211,11 @@ pub struct MaterialTextures {
     /// `FootprintAlpha::is_cutout` et la note sur le numéro de portière de
     /// `rss_gtm_lanzo_v10` dans [`convert`].
     pub diffuse_alpha_cutout: bool,
+    /// Does this material sample **only** partly transparent texels? Its
+    /// alpha is then a painted opacity, which the game applies as it is —
+    /// see `FootprintAlpha::is_partial` and écart n°28 of
+    /// docs/kn5-format.md.
+    pub diffuse_alpha_partial: bool,
     /// Couleur moyenne de la texture diffuse, quand il y en a une — la seule
     /// chose qui sépare une lentille teintée d'un simple gabarit de vitre
     /// (voir [`diffuse_carries_a_colour`]).
@@ -562,7 +567,29 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     } else {
         (alpha_mode, alpha_cutoff)
     };
+    // **A texture that carries its own, constant opacity is that opacity**,
+    // outside glass shaders (docs/kn5-format.md, écart n°28). The arm below
+    // was written for panes whose texture says nothing — and it caught these
+    // too: a yellow headlight cover painted at 55 % (`EXT_Glass_Yellow`,
+    // `ks_ferrari_488_gt3`, alpha 141 on every texel) got the glass opacity
+    // (0.15, from `ksDiffuse = 0.14`), which glTF then multiplied by the
+    // texel's 0.55 — 8 %, and the yellow headlights read as dark ones. The game
+    // blends with the texture's alpha as it is.
+    let painted_opacity = !is_glass_shader(shader) && base_color_texture.is_some() && textures.diffuse_alpha_partial;
+    // Only on what the author declared see-through (écart n°29): a cover
+    // whose texture turned out opaque, or a tinted one carrying its own
+    // opacity. The game shows those mostly by their reflection, which is why
+    // their authors set them so low. Applied to every surface, the same rule
+    // also darkened the whole cabin, which our studio does not light the way
+    // the game's does: windows read as black holes where the game shows a
+    // grey interior through them.
+    let level = if opaque_by_alpha || painted_opacity {
+        colour_level(material)
+    } else {
+        1.0
+    };
     let base_color = match alpha_mode {
+        AlphaMode::Blend if painted_opacity => [level, level, level, declared_opacity.unwrap_or(1.0)],
         AlphaMode::Blend if !texture_carries_alpha && !opaque_by_alpha => {
             let tint = windscreen_tint(material);
             // L'opacité déclarée n'a pas de plancher : c'est une valeur
@@ -577,8 +604,8 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
         // La texture porte la découpe, et l'opacité déclarée la module :
         // glTF multiplie le facteur par l'alpha du texel, exactement comme
         // le fait `ksPerPixelAlpha`.
-        AlphaMode::Blend => [1.0, 1.0, 1.0, declared_opacity.unwrap_or(1.0)],
-        _ => [1.0, 1.0, 1.0, 1.0],
+        AlphaMode::Blend => [level, level, level, declared_opacity.unwrap_or(1.0)],
+        _ => [level, level, level, 1.0],
     };
 
     GltfMaterial {
@@ -812,6 +839,42 @@ const GLASS_MIN_OPACITY: f32 = 0.15;
 /// une vitre extérieure, et deux panneaux se cumulent.
 const WINDSCREEN_TINT: f32 = 0.22;
 const WINDSCREEN_OPACITY: f32 = 0.35;
+
+/// How much of its colour a surface returns, against car paint
+/// (docs/kn5-format.md, écart n°29).
+///
+/// AC lights a texel as `colour × (ksAmbient × ambient + ksDiffuse × sun)`:
+/// the two properties scale the colour itself, and they vary a lot from one
+/// material to the next — paint sits at 0.45 / 0.5, while 82 of 295 opaque
+/// materials on seven stock cars are at 0.2 or less (plastics, carbon, the
+/// cabin, light housings). Ignored, every surface came out as bright as paint.
+/// Real bug on `ks_porsche_cayenne`: its headlight lens is a navy texel at
+/// 0.2 / 0.2, almost black in the game under its reflection, and a bright
+/// blue in ours.
+///
+/// **Only on surfaces declared see-through** (`blend_mode = 1`) whose texture
+/// is opaque or carries its own opacity — light covers, translucent details:
+/// 13 materials on seven stock cars, none in a cabin. See the call site for
+/// why not everywhere.
+///
+/// Relative to paint, so a cover at paint's level does not move. Capped at 1:
+/// `baseColorFactor` cannot brighten, and the odd material above paint stays
+/// at its texture. A material without the properties keeps its texture as it
+/// is.
+fn colour_level(material: &Kn5Material) -> f32 {
+    let (Some(ambient), Some(diffuse)) = (material.property("ksAmbient"), material.property("ksDiffuse")) else {
+        return 1.0;
+    };
+    if !ambient.is_finite() || !diffuse.is_finite() {
+        return 1.0;
+    }
+    (((ambient + diffuse) / 2.0) / PAINT_LEVEL).clamp(0.0, 1.0)
+}
+
+/// The colour level of car paint on stock cars (`ksAmbient` 0.45,
+/// `ksDiffuse` 0.5 on the 488, the MX-5, the P1, the Cayenne, the R8): the
+/// reference [`colour_level`] measures every other surface against.
+const PAINT_LEVEL: f32 = 0.475;
 
 /// Le gris du panneau synthétisé, ou blanc pour tout le reste.
 ///
@@ -1580,6 +1643,76 @@ mod tests {
             .metallic,
             0.0,
             "no metallic guess before the txMaps semantics are documented"
+        );
+    }
+
+    // Rule (kn5-format.md, écart n°28): outside glass, a texture that carries
+    // its own constant opacity is that opacity — no glass floor multiplies it.
+    // Real bug: the yellow headlights of `ks_ferrari_488_gt3`.
+    #[test]
+    fn a_tinted_cover_keeps_the_opacity_painted_in_its_texture() {
+        let cover = material(
+            "ksPerPixelReflection",
+            1,
+            false,
+            &[("ksAmbient", 0.21), ("ksDiffuse", 0.14)],
+        );
+        let partial = || MaterialTextures {
+            diffuse_alpha_partial: true,
+            ..Default::default()
+        };
+        let converted = convert(&cover, partial());
+        assert_eq!(converted.alpha_mode, AlphaMode::Blend, "still a blend");
+        assert_eq!(
+            converted.base_color[3], 1.0,
+            "the texture alpha alone carries the opacity, as in the game"
+        );
+        let pane = material("ksWindscreen", 1, false, &[("ksDiffuse", 0.3)]);
+        assert!(
+            convert(&pane, partial()).base_color[3] < 1.0,
+            "a real pane keeps its approximation"
+        );
+        assert!(
+            convert(&cover, MaterialTextures::default()).base_color[3] < 1.0,
+            "unmeasured alpha: nothing allows reading it as an opacity"
+        );
+    }
+
+    // Rule (kn5-format.md, écart n°29): the colour of a surface declared
+    // see-through but with an opaque texture is scaled by ksAmbient/ksDiffuse,
+    // relative to paint's. Real bug: the navy headlight lens of the Cayenne,
+    // almost black in the game.
+    #[test]
+    fn a_see_through_cover_returns_less_of_its_colour_than_paint() {
+        let opaque = || MaterialTextures {
+            diffuse_alpha_opaque: true,
+            ..Default::default()
+        };
+        let lens = convert(
+            &material("ksPerPixelNM", 1, false, &[("ksAmbient", 0.2), ("ksDiffuse", 0.2)]),
+            opaque(),
+        );
+        assert_eq!(lens.alpha_mode, AlphaMode::Opaque, "opaque, as its alpha says");
+        assert!(
+            (lens.base_color[0] - 0.2 / PAINT_LEVEL).abs() < 1e-6,
+            "a cover at 0.2 returns 42 % of its colour: {}",
+            lens.base_color[0]
+        );
+        assert_eq!(lens.base_color[3], 1.0, "opacity is untouched");
+        let bright = convert(
+            &material("ksPerPixelNM", 1, false, &[("ksAmbient", 0.6), ("ksDiffuse", 0.8)]),
+            opaque(),
+        );
+        assert_eq!(bright.base_color[0], 1.0, "capped at 1: a factor cannot brighten");
+        let bare = convert(&material("ksPerPixelNM", 1, false, &[]), opaque());
+        assert_eq!(bare.base_color[0], 1.0, "without the properties, the texture as it is");
+        let cabin = convert(
+            &material("ksPerPixelNM", 0, false, &[("ksAmbient", 0.2), ("ksDiffuse", 0.2)]),
+            MaterialTextures::default(),
+        );
+        assert_eq!(
+            cabin.base_color[0], 1.0,
+            "a surface opaque by nature (cabin, plastics) keeps its colour"
         );
     }
 }

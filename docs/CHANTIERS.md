@@ -1956,9 +1956,11 @@ de reprendre. En cas d'écart, la spec fait foi.
       ne voit qu'en regardant voiture par voiture. Le banc des vignettes
       (GRILLE§6.2, bascule « comparer à l'image d'origine ») en donne déjà
       l'outil : même angle, même voiture, même livrée. Premier cas repéré au
-      passage (2026-11) : les **phares du Cayenne** (`ks_porsche_cayenne`,
-      skin noir) sortent **bleus** chez nous, alors qu'ils ne le sont pas dans
-      ses images du jeu. Pour juger, comparer formes, matières et couleurs
+      passage (2026-11), et corrigés : les **phares du Cayenne**, bleus chez
+      nous, et ceux de la **488 GT3**, jaunes dans le jeu et sombres chez nous
+      (écarts n°28 et n°29 de `kn5-format.md`). L'écart n°29 n'est appliqué
+      qu'aux caches : à toute la voiture, il noircit les habitacles — à
+      reprendre si l'éclairage se rapproche de celui du jeu. Pour juger, comparer formes, matières et couleurs
       plutôt que la luminosité absolue : les `preview.jpg` passent par un
       étalonnage propre à l'outil de Kunos (gamma, saturation, contraste ;
       voir le chantier des vignettes), que l'aperçu 3D ne reproduit pas.
