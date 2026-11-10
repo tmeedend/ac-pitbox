@@ -20,7 +20,6 @@ param(
   [string]$Car,
   [string]$Track = 'magione',
   [string]$Skin,
-  [double]$Lights = 4,
   [switch]$Remove
 )
 $ErrorActionPreference = 'Stop'
@@ -68,7 +67,6 @@ $job = [ordered]@{
   height      = 576
   supersample = 2
   warmup      = 8
-  lights      = $Lights
   quit        = $true
   probes      = @{
     localAppData = Join-Path $env:LOCALAPPDATA 'com.pitbox.app\pitbox_shot_probe.txt'

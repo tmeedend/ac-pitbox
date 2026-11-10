@@ -168,6 +168,15 @@ end
 -- game's own post-processing, would do it but loses the transparent
 -- background, hence our own pass. The 2× supersampled shot is averaged down
 -- by the bilinear sample at the half-resolution pixel centres.
+--
+-- Relighting (run 5): the template's lamps cannot be placed in the game
+-- (`ac.LightSource` does not reach a GeometryShot), so they are added here. Two extra shots from the same camera
+-- give the surface colour (`SampleColor`) and the world-space normal
+-- (`SampleNormal`); each lamp adds `albedo × max(0, n·L) × intensity`, with L
+-- the lamp direction placed as `placeLights` does in gridThumbs.svelte.ts.
+--
+-- Last, the preset's colour grade (`gradeColours` of look.ts: cool tint then
+-- saturation, on the encoded values), which Pit Box applies to Catalogue.
 
 local TONEMAP = [[
 float3 neutral(float3 color) {
@@ -192,53 +201,51 @@ float4 main(PS_IN pin) {
   float4 c = txShot.SampleLevel(samLinearClamp, pin.Tex, 0);
   if (c.a <= 0) return 0;
   // Edges were blended over a transparent black clear: premultiplied.
-  float3 rgb = c.rgb / c.a;
-  return float4(toSrgb(neutral(max(rgb, 0) * gExposure)), saturate(c.a));
+  float3 rgb = max(c.rgb / c.a, 0);
+  if (gRelight > 0) {
+    float4 alb = txAlbedo.SampleLevel(samLinearClamp, pin.Tex, 0);
+    float4 nrm = txNormal.SampleLevel(samLinearClamp, pin.Tex, 0);
+    float3 n = nrm.xyz / max(nrm.a, 0.0001);
+    n = normalize(n * 2 - 1);
+    float3 albedo = max(alb.rgb / max(alb.a, 0.0001), 0);
+    if (gLinear > 0) albedo = pow(albedo, 2.2);
+    float diffuse = gKey.w * saturate(dot(n, gKey.xyz)) + gFill.w * saturate(dot(n, gFill.xyz))
+      + gRim.w * saturate(dot(n, gRim.xyz));
+    rgb += albedo * diffuse * gRelight;
+  }
+  float3 outc = toSrgb(neutral(rgb * gExposure));
+  if (gGrade > 0) {
+    outc *= 1 + gTint;
+    float luma = dot(outc, float3(0.2126, 0.7152, 0.0722));
+    outc = luma + (outc - luma) * gSaturation;
+  }
+  return float4(saturate(outc), saturate(c.a));
 }
 ]]
 
 -- ---------------------------------------------------------------------------
--- Lights: the template's three lamps, placed as `placeLights` does in
+-- Lamps: the template's three, placed as `placeLights` does in
 -- gridThumbs.svelte.ts — key 45° off the camera azimuth and 35° up, fill
--- -135° and 20°, rim 175° and 12° — at four radii from the car. Pit Box uses
--- directional lights; AC has only point and spot lights, so these are point
--- lights far enough, with a range long enough, to fall off very little across
--- the car. Their brightness scale against three.js is unknown: `job.lights`
--- multiplies them all, and the run compares a few values.
---
--- Run 4: **no visible effect** — with lamps at 0, 1 and 3, the images are the
--- same. `ac.LightSource` lights do not seem to reach a GeometryShot; kept so
--- the next attempt (shader type, lights linked to the car node) starts here.
+-- -135° and 20°, rim 175° and 12°; fill and rim as a share of the key
+-- (Catalogue: 25 % and 60 %).
 
 local LAMPS = { { 'key', 45, 35, 1 }, { 'fill', -135, 20, 0.25 }, { 'rim', 175, 12, 0.6 } }
 
-local function placeLamps(state, strength)
-  local lights = {}
+-- Lamp positions in world space, at four radii from the car.
+local function lampPositions(state)
+  local list = {}
   local base = math.atan2(state.camDir.x, state.camDir.z)
   for _, lamp in ipairs(LAMPS) do
     local angle, elevation = base + rad(lamp[2]), rad(lamp[3])
     local local_ = state.center + vec3(math.cos(elevation) * math.sin(angle), math.sin(elevation),
       math.cos(elevation) * math.cos(angle)) * (state.radius * 4)
-    local light = ac.LightSource(ac.LightType.Regular)
-    light.position = state.modelToWorld:transformPoint(local_)
-    light.direction = (state.centerWorld - light.position):normalize()
-    light.spot = 0
-    light.range = state.radius * 16
-    light.rangeGradientOffset = 0.9
-    light.diffuseConcentration = 1
-    light.specularMultiplier = 1
-    light.shadows = false
-    light.affectsCars = true
-    light.showInReflections = false
-    local v = strength * lamp[4]
-    light.color = rgb(v, v, v)
-    lights[#lights + 1] = light
+    list[#list + 1] = { pos = state.modelToWorld:transformPoint(local_), share = lamp[4] }
   end
-  return lights
+  return list
 end
 
 -- ---------------------------------------------------------------------------
--- Variants: one lighting setup each, rendered from the same camera.
+-- Passes, all from the same camera.
 --
 -- Kept here so they are not tried again:
 -- - run 1: the default neutral lighting (ambient 3, white-to-black reflection
@@ -246,32 +253,47 @@ end
 --   `setOriginalLighting` after `setBestSceneShotQuality` changes nothing;
 --   YEBIS composites the blurred track scene behind the car and loses the
 --   transparent background;
--- - run 2: after `setBestSceneShotQuality` the ambient colour has no effect,
---   the shot is lit by the track's own sun; SimplifiedYEBIS tonemaps but
---   leaves the car half transparent;
--- - run 3: on Main shaders with neutral lighting, ambient 1.5 to 0.6 gave
---   nearly identical images — the strong reflection dominates, and the raw HDR
---   was clipped (see the colour pipeline above).
+-- - run 2: after `setBestSceneShotQuality` the shot is lit by the track's own
+--   sun and the ambient colour has no effect; SimplifiedYEBIS leaves the car
+--   half transparent;
+-- - run 3: ambient 1.5 to 0.6 gave nearly identical images — the raw HDR was
+--   clipped (see the colour pipeline above);
+-- - run 4: the reflection gradient washes every paint out to pastel; the
+--   showroom cubemap (`'menu'`) gives believable colours; the track sun stays
+--   overexposed even at ×0.6.
 
-local function neutral(s, ambient, zenith, horizon)
+local function showroom(s)
   s:setShadersType(render.ShadersType.Main):setMaxLayer(5)
-  s:setAmbientColor(rgbm(1, 1, 1, ambient))
-  s:setReflectionColor(rgbm(zenith, zenith, zenith, 1), rgbm(horizon, horizon, horizon, 1))
+  s:setAmbientColor(rgbm(1, 1, 1, 0.5))
+  s:setReflectionColor(rgbm(0.35, 0.35, 0.35, 1), rgbm(0.08, 0.08, 0.08, 1))
+  s:overrideReflectionCubemap('menu')
 end
 
-local VARIANTS = {
-  -- Neutral lighting alone, reflections dimmed: what the lamps add is measured against this.
-  { id = 'ambient_only', lights = 0, setup = function(s) neutral(s, 0.5, 0.35, 0.08) end },
-  { id = 'lamps', lights = 1, setup = function(s) neutral(s, 0.5, 0.35, 0.08) end },
-  { id = 'lamps_strong', lights = 3, setup = function(s) neutral(s, 0.5, 0.35, 0.08) end },
-  { id = 'lamps_showroom', lights = 1,
-    setup = function(s) neutral(s, 0.5, 0.35, 0.08) s:overrideReflectionCubemap('menu') end },
-  -- The track's own sun, for reference, through the same colour pipeline.
-  { id = 'track_sun', lights = 0,
-    setup = function(s) s:setBestSceneShotQuality():setSky(false):setParticles(false):setGrass(false) end },
+local PASSES = {
+  { id = 'base', setup = showroom },
+  -- Opaque only: glass would hide the cabin from the relighting.
+  { id = 'normal', opaque = true, setup = function(s) s:setShadersType(render.ShadersType.SampleNormal) end },
+  { id = 'albedo', opaque = true, setup = function(s) s:setShadersType(render.ShadersType.SampleColor) end },
 }
 
-local EXPOSURES = { 0.6, 1.0, 1.6 }
+-- Run 5, kept so it is not tried again: `ac.LightSource` lamps have no effect
+-- on a shot under the original lighting either — the game's lights do not
+-- reach a GeometryShot at all. `SampleNormal` is the world-space normal
+-- encoded as n·0.5+0.5 (measured: hood y 0.95, flank x 0.9).
+
+-- What gets written: one image per output, each a combination of passes.
+-- `relight` scales the added lamps (`albedo × cos × relight` for the key);
+-- `linear` decodes the surface colour from sRGB first, as three.js does with
+-- its textures — which of the two the game hands over is not documented.
+local GRADE = { tint = vec3(-0.03, 0.02, 0.055), saturation = 0.75 }
+local OUTPUTS = {
+  { name = 'showroom_graded', exposure = 0.8, grade = true },
+  { name = 'relit_g10', exposure = 0.8, grade = true, relight = 1.0 },
+  { name = 'relit_g20', exposure = 0.8, grade = true, relight = 2.0 },
+  { name = 'relit_g30', exposure = 0.8, grade = true, relight = 3.0 },
+  { name = 'relit_lin_g20', exposure = 0.8, grade = true, relight = 2.0, linear = true },
+  { name = 'relit_lin_g40', exposure = 0.8, grade = true, relight = 4.0, linear = true },
+}
 
 local function carIndexOf(id)
   for i = 0, ac.getSim().carsCount - 1 do
@@ -280,12 +302,33 @@ local function carIndexOf(id)
   return nil
 end
 
+local function renderPass(state, pass)
+  local shot = ac.GeometryShot(state.root, vec2(job.width * job.supersample, job.height * job.supersample), 1, false,
+    render.AntialiasingMode.None, render.TextureFormat.R16G16B16A16.Float)
+  shot:setClearColor(rgbm(0, 0, 0, 0)):setOpaqueAlphaFix(true):setTransparentPass(not pass.opaque)
+  shot:setClippingPlanes(state.near, state.far)
+  pass.setup(shot)
+  if state.view then
+    -- Same matrices as the first pass, lens shift included.
+    shot:update(state.view, state.proj, state.pos)
+  else
+    shot:update(state.pos, state.look, state.up, job.template.fov)
+    local proj, centre, entry = shiftedProjection(shot:viewMatrix(), shot:projectionMatrix(), state.worldCorners)
+    state.shift = { centre = centre, entry = entry }
+    state.view = shot:viewMatrix():clone()
+    state.proj = proj or shot:projectionMatrix():clone()
+    shot:update(state.view, state.proj, state.pos)
+  end
+  return shot
+end
+
 -- Builds the list of steps for one car: each step is a function run on its
 -- own frame, so nothing reads a texture rendered on the same frame.
 local function planCar(entry, steps)
   local record = { id = entry.id, files = {}, status = 'pending' }
   done.cars[#done.cars + 1] = record
   local state = {}
+  local shots = {}
 
   steps[#steps + 1] = function()
     local index = carIndexOf(entry.id)
@@ -298,19 +341,15 @@ local function planCar(entry, steps)
     -- (seen on the Supra of the second run).
     record.doorWasOpen = car.isDriverDoorOpen
     ac.setDriverDoorOpen(index, false, true)
-    record.skin = ac.getCarSkinID and ac.getCarSkinID(index) or nil
+    record.skin = ac.getCarSkinID(index)
     local root = ac.findNodes('carRoot:' .. index)
     local modelToWorld = root:getWorldTransformationRaw():clone()
     local worldToModel = modelToWorld:inverse()
     local bmin, bmax, box = measureBox(root, worldToModel, car)
     record.box = box
-    record.boxModel = { min = { bmin.x, bmin.y, bmin.z }, max = { bmax.x, bmax.y, bmax.z } }
     record.activeLOD = car.activeLOD
-    record.speedKmh = car.speedKmh
 
-    local t = job.template
-    local aspect = job.width / job.height
-    local camLocal, targetLocal, distance = fitOrbit(bmin, bmax, t, aspect)
+    local camLocal, targetLocal, distance = fitOrbit(bmin, bmax, job.template, job.width / job.height)
     local pos = modelToWorld:transformPoint(camLocal)
     local target = modelToWorld:transformPoint(targetLocal)
     local upWorld = modelToWorld:transformPoint(targetLocal + vec3(0, 1, 0)) - target
@@ -327,66 +366,62 @@ local function planCar(entry, steps)
     for _, c in ipairs(corners(bmin, bmax)) do
       state.worldCorners[#state.worldCorners + 1] = modelToWorld:transformPoint(c)
     end
+    state.lamps = {}
+    for i, lamp in ipairs(lampPositions(state)) do
+      state.lamps[i] = (lamp.pos - state.centerWorld):normalize()
+    end
     record.distance = distance
   end
 
-  for _, variant in ipairs(VARIANTS) do
-    local shot, lights, canvases
-    -- Frame 1: lamps on. Lights placed on the same frame as the shot might not
-    -- be registered yet.
+  for _, pass in ipairs(PASSES) do
     steps[#steps + 1] = function()
       if not state.root then return end
-      if variant.lights > 0 then lights = placeLamps(state, variant.lights * (job.lights or 4)) end
+      local ok, err = pcall(function() shots[pass.id] = renderPass(state, pass) end)
+      if not ok then record.files[pass.id] = 'error: ' .. tostring(err) end
+      record.shift = state.shift
     end
-    -- Frame 2: render in HDR, with the lens shift (centres the projected box).
-    steps[#steps + 1] = function()
-      if not state.root then return end
-      local ok, err = pcall(function()
-        shot = ac.GeometryShot(state.root, vec2(job.width * job.supersample, job.height * job.supersample), 1, false,
-          render.AntialiasingMode.None, render.TextureFormat.R16G16B16A16.Float)
-        shot:setClearColor(rgbm(0, 0, 0, 0)):setOpaqueAlphaFix(true):setTransparentPass(true)
-        shot:setClippingPlanes(state.near, state.far)
-        variant.setup(shot)
-        shot:update(state.pos, state.look, state.up, job.template.fov)
-        local proj, centre, entry = shiftedProjection(shot:viewMatrix(), shot:projectionMatrix(), state.worldCorners)
-        record.shift = { centre = centre, entry = entry }
-        if proj then shot:update(shot:viewMatrix(), proj, state.pos) end
-      end)
-      if not ok then
-        record.files[variant.id] = 'error: ' .. tostring(err)
-        shot = nil
-      end
+  end
+
+  local canvases = {}
+  steps[#steps + 1] = function()
+    if not shots.base then return end
+    local function lamp(i)
+      local d, share = state.lamps[i], LAMPS[i][4]
+      return vec4(d.x, d.y, d.z, share)
     end
-    -- Frame 3: tone map at each exposure.
-    steps[#steps + 1] = function()
-      if lights then for _, l in ipairs(lights) do l:dispose() end lights = nil end
-      if not shot then return end
-      canvases = {}
-      for _, exposure in ipairs(EXPOSURES) do
+    for _, out in ipairs(OUTPUTS) do
+      if shots.base then
         local canvas = ui.ExtraCanvas(vec2(job.width, job.height), 1, render.AntialiasingMode.None)
         local ok, err = pcall(function()
-          canvas:updateWithShader({ textures = { txShot = shot }, values = { gExposure = exposure }, shader = TONEMAP })
+          canvas:updateWithShader({
+            textures = { txShot = shots.base, txAlbedo = shots.albedo or false, txNormal = shots.normal or false },
+            values = {
+              gExposure = out.exposure, gRelight = out.relight or 0, gLinear = out.linear and 1 or 0,
+              gGrade = out.grade and 1 or 0, gTint = GRADE.tint, gSaturation = GRADE.saturation,
+              gKey = lamp(1), gFill = lamp(2), gRim = lamp(3),
+            },
+            shader = TONEMAP,
+          })
         end)
-        if not ok then record.files[variant.id] = 'tonemap error: ' .. tostring(err) end
-        canvases[#canvases + 1] = { exposure = exposure, canvas = canvas }
+        if ok then
+          canvases[#canvases + 1] = { name = out.name, canvas = canvas }
+        else
+          record.files[out.name] = 'shader error: ' .. tostring(err)
+        end
       end
     end
-    -- Frame 4: save.
-    steps[#steps + 1] = function()
-      if not canvases then return end
-      for _, c in ipairs(canvases) do
-        local name = string.format('%s_e%02d', variant.id, math.floor(c.exposure * 10 + 0.5))
-        local file = JOB_DIR .. '/out/' .. entry.id .. '__' .. name .. '.png'
-        local ok, err = pcall(function() c.canvas:save(file, ac.ImageFormat.PNG) end)
-        record.files[name] = ok and file or ('error: ' .. tostring(err))
-        c.canvas:dispose()
-      end
-      canvases = nil
-      shot:dispose()
-      shot = nil
-      record.status = 'done'
-      saveDone()
+  end
+
+  steps[#steps + 1] = function()
+    for _, c in ipairs(canvases) do
+      local file = JOB_DIR .. '/out/' .. entry.id .. '__' .. c.name .. '.png'
+      local ok, err = pcall(function() c.canvas:save(file, ac.ImageFormat.PNG) end)
+      record.files[c.name] = ok and file or ('error: ' .. tostring(err))
+      c.canvas:dispose()
     end
+    for _, shot in pairs(shots) do shot:dispose() end
+    record.status = 'done'
+    saveDone()
   end
 end
 

@@ -94,7 +94,37 @@ processus Firefox. CSP le dit en clair dans `logs/log.txt` (« out of memory,
 even though 4.2 GB of RAM is free »). À savoir pour le lot 2 : un échec de ce
 genre doit se signaler comme un échec du jeu, pas de la voiture.
 
+## Tours 5 et 6 : les lampes du gabarit, ajoutées par nous
+
+Le jeu ne laisse poser aucune lampe dans une `GeometryShot` : `ac.LightSource`
+reste sans effet sous l'éclairage neutre (tour 4) **comme sous l'éclairage
+d'origine** (tour 5, images identiques avec et sans). Les lampes sont donc
+ajoutées par notre shader, toujours dans le jeu :
+
+- deux passes de plus, depuis la même caméra : la couleur de surface
+  (`ShadersType.SampleColor`) et la normale en repère monde
+  (`ShadersType.SampleNormal`, encodée `n·0,5+0,5` — mesuré : capot y 0,95,
+  flanc x 0,9), sans les vitres pour ne pas masquer l'habitacle ;
+- chaque lampe ajoute `couleur × max(0, n·L) × intensité` à l'image HDR,
+  avant le tonemapping. Les directions sont celles de `placeLights` : principale
+  à +45° de l'azimut caméra et 35° de haut, complément à −135° et 20° (25 %),
+  contre-jour à 175° et 12° (60 %) ;
+- puis l'étalonnage Catalogue (teinte froide, saturation 75 %), comme Pit Box,
+  cette fois dans le shader du jeu.
+
+**Résultat** : à un gain de ×2, la Supra du jeu est à quelques unités de la
+vignette Pit Box en couleur moyenne de carrosserie — (124, 77, 44) contre
+(116, 74, 40), sans les lampes (89, 44, 27). La S2000 protégée sort avec le même
+traitement, sans réglage propre. La couleur de surface s'utilise telle quelle :
+la linéariser (décodage sRGB) donne un orange trop rouge et trop sombre.
+
+Ce qui reste visible : pas d'ombre de contact, des vitres un peu plus sombres,
+et ce n'est vérifié que sur deux voitures, une orange et une argent.
+
 ## Pistes pour l'éclairage, de la moins à la plus coûteuse
+
+*Écrites avant les tours 4 à 6 ; la deuxième est celle qui a abouti, mais dans
+le jeu et non dans Pit Box.*
 
 1. **Piste studio** (prévue par le document de départ) : soleil orienté selon le
    gabarit, sans ciel ni décor, et `setBestSceneShotQuality()`. C'est le seul
