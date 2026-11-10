@@ -197,11 +197,33 @@ float3 toSrgb(float3 c) {
   c = saturate(c);
   return c <= 0.0031308 ? c * 12.92 : 1.055 * pow(c, 1 / 2.4) - 0.055;
 }
+// Pit Box's reflection environment (preview3d/showroomEnvironment.ts), in the
+// car's frame: near-black walls, a bright ceiling panel above the car, two
+// faint side panels; scaled by the environment intensity of the grid rig.
+float3 studio(float3 r) {
+  float up = dot(r, gCarUp), side = abs(dot(r, gCarSide));
+  float ceiling = smoothstep(0.65, 0.8, up) * 6;
+  float fill = smoothstep(0.6, 0.8, side) * (1 - smoothstep(0.5, 0.65, abs(up - 0.2))) * 0.05;
+  return (0.01 + ceiling + fill) * 0.55;
+}
 float4 main(PS_IN pin) {
   float4 c = txShot.SampleLevel(samLinearClamp, pin.Tex, 0);
   if (c.a <= 0) return 0;
   // Edges were blended over a transparent black clear: premultiplied.
   float3 rgb = max(c.rgb / c.a, 0);
+  if (gEnv > 0) {
+    // Reflectivity of each pixel: the same view under the game's white
+    // environment minus under its black one. What stays under the black one
+    // is everything but reflections (ambient, emissive).
+    float4 cb = txBlack.SampleLevel(samLinearClamp, pin.Tex, 0);
+    float4 cw = txWhite.SampleLevel(samLinearClamp, pin.Tex, 0);
+    float3 black = max(cb.rgb / max(cb.a, 0.0001), 0);
+    float3 refl = max(cw.rgb / max(cw.a, 0.0001) - black, 0);
+    float4 nrmE = txNormal.SampleLevel(samLinearClamp, pin.Tex, 0);
+    float3 nE = normalize(nrmE.xyz / max(nrmE.a, 0.0001) * 2 - 1);
+    float3 env = gEnv == 1 ? gEnvLevel : studio(reflect(-normalize(gView), nE)) * gEnvLevel;
+    rgb = black + refl * env;
+  }
   if (gRelight > 0) {
     float4 alb = txAlbedo.SampleLevel(samLinearClamp, pin.Tex, 0);
     float4 nrm = txNormal.SampleLevel(samLinearClamp, pin.Tex, 0);
@@ -280,11 +302,11 @@ end
 
 local PASSES = {
   { id = 'base', setup = showroom },
-  -- Run 7: is the dark left headlight its cover glass reflecting the dark
-  -- side of the showroom cubemap? Same shot without glass, and with the
-  -- game's plainer cubemap.
-  { id = 'base_noglass', opaque = true, setup = showroom },
-  { id = 'base_basic', setup = function(s) showroom(s) s:overrideReflectionCubemap('basic') end },
+  -- Run 9: the reflectivity of each pixel, from the same view under the
+  -- game's white and black environments (run 8: the dark headlight is its
+  -- chrome reflecting the dark side of the showroom cubemap).
+  { id = 'black', setup = function(s) showroom(s) s:overrideReflectionCubemap('black') end },
+  { id = 'white', setup = function(s) showroom(s) s:overrideReflectionCubemap('white') end },
   -- Opaque only: glass would hide the cabin from the relighting.
   { id = 'normal', opaque = true, setup = function(s) s:setShadersType(render.ShadersType.SampleNormal) end },
   { id = 'albedo', opaque = true, setup = function(s) s:setShadersType(render.ShadersType.SampleColor) end },
@@ -303,9 +325,11 @@ local PASSES = {
 -- stays off.
 local GRADE = { tint = vec3(-0.03, 0.02, 0.055), saturation = 0.75 }
 local OUTPUTS = {
-  { name = 'relit_s03', exposure = 0.8, grade = true, relight = 2.0, specular = 0.3 },
-  { name = 'relit_s03_noglass', base = 'base_noglass', exposure = 0.8, grade = true, relight = 2.0, specular = 0.3 },
-  { name = 'relit_s03_basic', base = 'base_basic', exposure = 0.8, grade = true, relight = 2.0, specular = 0.3 },
+  { name = 'menu', exposure = 0.8, grade = true, relight = 2.0, specular = 0.3 },
+  { name = 'flat05', exposure = 0.8, grade = true, relight = 2.0, specular = 0.3, env = 1, envLevel = 0.5 },
+  { name = 'studio05', exposure = 0.8, grade = true, relight = 2.0, specular = 0.3, env = 2, envLevel = 0.5 },
+  { name = 'studio10', exposure = 0.8, grade = true, relight = 2.0, specular = 0.3, env = 2, envLevel = 1.0 },
+  { name = 'studio20', exposure = 0.8, grade = true, relight = 2.0, specular = 0.3, env = 2, envLevel = 2.0 },
 }
 
 local function carIndexOf(id)
@@ -375,6 +399,9 @@ local function planCar(entry, steps)
     state.centerWorld = modelToWorld:transformPoint(state.center)
     state.radius = (bmax - bmin):length() / 2
     state.camDir = camLocal - targetLocal
+    local origin = modelToWorld:transformPoint(vec3(0, 0, 0))
+    state.carUp = (modelToWorld:transformPoint(vec3(0, 1, 0)) - origin):normalize()
+    state.carSide = (modelToWorld:transformPoint(vec3(1, 0, 0)) - origin):normalize()
     state.worldCorners = {}
     for _, c in ipairs(corners(bmin, bmax)) do
       state.worldCorners[#state.worldCorners + 1] = modelToWorld:transformPoint(c)
@@ -407,9 +434,11 @@ local function planCar(entry, steps)
         local canvas = ui.ExtraCanvas(vec2(job.width, job.height), 1, render.AntialiasingMode.None)
         local ok, err = pcall(function()
           canvas:updateWithShader({
-            textures = { txShot = shots[out.base or 'base'], txAlbedo = shots.albedo or false, txNormal = shots.normal or false },
+            textures = { txShot = shots[out.base or 'base'], txAlbedo = shots.albedo or false, txNormal = shots.normal or false,
+              txBlack = shots.black or false, txWhite = shots.white or false },
             values = {
               gExposure = out.exposure, gRelight = out.relight or 0, gLinear = out.linear and 1 or 0,
+              gEnv = out.env or 0, gEnvLevel = out.envLevel or 0, gCarUp = state.carUp, gCarSide = state.carSide,
               gSpecular = out.specular or 0, gGloss = 60, gView = state.look * -1,
               gGrade = out.grade and 1 or 0, gTint = GRADE.tint, gSaturation = GRADE.saturation,
               gKey = lamp(1), gFill = lamp(2), gRim = lamp(3),

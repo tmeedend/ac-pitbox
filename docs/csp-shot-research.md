@@ -153,6 +153,42 @@ vue sous `white` puis sous `black`. Leur différence, pixel par pixel, dit
 combien chaque surface reflète, et le shader pourrait alors y poser
 l'environnement de Pit Box lui-même, comme il pose déjà ses lampes.
 
+## Tour 9 : l'environnement de reflet de Pit Box, posé par nous
+
+Essayée, la piste ci-dessus marche techniquement : deux passes de plus sous les
+environnements `white` et `black` du jeu, leur différence donne la
+réflectivité de chaque point, et le shader y pose ce qu'il veut. Deux
+environnements comparés : un gris uniforme (0,5), et le studio de Pit Box
+(`showroomEnvironment.ts` : murs à 0,01, panneau de plafond à 6, panneaux
+latéraux à 0,05, le tout à 0,55), lu dans la direction réfléchie, à trois
+intensités.
+
+| Carrosserie (moyenne) | Pit Box | showroom du jeu | gris 0,5 | studio ×0,5 | studio ×2 |
+| --- | --- | --- | --- | --- | --- |
+| Supra orange | 116, 74, 40 | 126, 80, 48 | 127, 81, 50 | **121, 74, 39** | 124, 78, 46 |
+| Ferrari rouge | 111, 39, 40 | 94, 39, 41 | **96, 41, 43** | 85, 27, 28 | 91, 37, 38 |
+
+- **La carrosserie de la Supra** n'a jamais été aussi proche qu'avec le studio ;
+  **la Ferrari**, elle, s'en éloigne (plus sombre). Pas de gagnant net.
+- **Les phares empirent avec le studio** : ceux de la Supra et de la Porsche
+  deviennent noirs. Nos reflets sont des miroirs parfaits : un chrome tourné
+  vers la caméra renvoie les murs presque noirs du studio. Chez Pit Box, la
+  rugosité de chaque matériau floute ses reflets (PMREM) et mélange le panneau
+  du plafond au reste, d'où un gris. Les passes du jeu ne portent pas cette
+  rugosité, donc ce flou ne se reproduit pas point par point.
+- Le gris uniforme donne à peu près l'image du showroom du jeu, phare gauche
+  un peu moins sombre.
+
+Le phare rejoint donc les deux limites connues des vignettes Pit Box elles-mêmes
+(peintures sombres, reflets des vitres, `CHANTIERS.md`) : c'est un reflet, et
+les reflets sont ce que deux moteurs différents reproduisent le moins bien.
+Réglage retenu pour la suite, faute de mieux : showroom du jeu ou gris
+uniforme, lampes à ×2, spéculaire ×0,3.
+
+Le premier essai de ce tour a planté au chargement d'AC, avec Firefox à 76 Go
+de mémoire engagée et Bash incapable de lancer un processus. Relancé après la
+fermeture de Firefox, il est passé du premier coup.
+
 ## Pistes pour l'éclairage, de la moins à la plus coûteuse
 
 *Écrites avant les tours 4 à 6 ; la deuxième est celle qui a abouti, mais dans
