@@ -30,6 +30,17 @@
 //! diffuse texture** rather than into `baseColorFactor`. A factor could not
 //! spare the decals, and glTF clamps it to 1, so it could never carry the
 //! brightening half of a `MODULATE2X` (a white swatch asks for ×1.87).
+//!
+//! **A detail map at the diffuse's own scale is a drawing, not a swatch.**
+//! With `detailUVMultiplier = 1` it is laid over the diffuse texel for texel,
+//! and some mods put everything there: the traffic trucks of
+//! `traffic_isuzu_tanker` keep only ambient occlusion in their diffuse, and the
+//! cab, its grille, the hazard stripes of the tank all live in a 2048² detail
+//! map. Reduced to its average, it painted the truck one flat colour (reported
+//! on screen). Such a map is baked pixel by pixel ([`apply_detail`]); on a flat
+//! swatch that gives the very same result as its average. A tiled one (a
+//! carbon weave repeated 800 times) cannot be baked into the diffuse at all,
+//! and keeps its average.
 
 use std::collections::BTreeMap;
 
@@ -59,6 +70,16 @@ pub(crate) struct Variant {
     /// Texture the pixels come from.
     pub source: String,
     pub factor: [f32; 3],
+    /// Baked pixel by pixel instead of `factor`, when there is one.
+    pub detail: Option<Detail>,
+}
+
+/// A detail map laid over the diffuse at its own scale — see the head of this
+/// module.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Detail {
+    pub texture: String,
+    pub use_detail: f32,
 }
 
 /// Which material gets which painted texture, and what has to be baked for it.
@@ -116,12 +137,53 @@ fn variant_for(material: &Kn5Material, textures: &TextureSet) -> Option<Variant>
     }
     let diffuse = base_color_map(material)?;
     textures.get(&diffuse)?;
+    if let Some(detail) = same_scale_detail(material) {
+        textures.get(&detail.texture)?;
+        return Some(Variant {
+            // The blend amount in the name too: the same pair at another
+            // amount is another image.
+            name: format!("{diffuse}#detail-{}-{:.2}", detail.texture, detail.use_detail),
+            source: diffuse,
+            factor: [1.0; 3],
+            detail: Some(detail),
+        });
+    }
     let factor = factor(material, average(material, textures)?)?;
     Some(Variant {
         name: variant_name(&diffuse, factor),
         source: diffuse,
         factor,
+        detail: None,
     })
+}
+
+/// The detail map of a material, when it is laid over the diffuse at the same
+/// scale. Only an explicit `detailUVMultiplier = 1`: an absent one says
+/// nothing about the scale, and such materials keep the average.
+fn same_scale_detail(material: &Kn5Material) -> Option<Detail> {
+    let use_detail = material.property("useDetail").unwrap_or(0.0).clamp(0.0, 1.0);
+    if use_detail <= 0.0 || material.property("detailUVMultiplier") != Some(1.0) {
+        return None;
+    }
+    let texture = material.texture_for("txDetail").filter(|t| !t.is_empty())?;
+    Some(Detail {
+        texture: texture.to_string(),
+        use_detail,
+    })
+}
+
+/// How far a texel may stray from the average of its map for the map to still
+/// count as a flat swatch, in levels out of 255. Swatches are flat colours
+/// saved through a lossy format; a drawing strays by far more.
+const FLAT_TOLERANCE: u8 = 8;
+
+/// Whether a detail map is a flat swatch, which then paints through its average
+/// exactly as before ([`factor`]) — Kunos skins do not move.
+pub(crate) fn is_flat(detail: &RgbaImage, average: [f32; 3]) -> bool {
+    let average = average.map(|c| (c * 255.0).round() as i16);
+    detail
+        .pixels()
+        .all(|p| (0..3).all(|c| (p.0[c] as i16 - average[c]).unsigned_abs() <= FLAT_TOLERANCE as u16))
 }
 
 /// Average colour of the material's detail map, once prepared.
@@ -135,7 +197,12 @@ fn average(material: &Kn5Material, textures: &TextureSet) -> Option<[f32; 3]> {
 /// `useDetail` is the blend amount the shader applies — 0 or 1 on every
 /// material met so far, but honoured as a ratio since that is what it is.
 pub(crate) fn factor(material: &Kn5Material, detail_average: [f32; 3]) -> Option<[f32; 3]> {
-    let use_detail = material.property("useDetail").unwrap_or(0.0).clamp(0.0, 1.0);
+    factor_for(material.property("useDetail").unwrap_or(0.0), detail_average)
+}
+
+/// [`factor`], from the blend amount itself.
+pub(crate) fn factor_for(use_detail: f32, detail_average: [f32; 3]) -> Option<[f32; 3]> {
+    let use_detail = use_detail.clamp(0.0, 1.0);
     if use_detail <= 0.0 {
         return None;
     }
@@ -166,21 +233,39 @@ pub(crate) fn variant_name(diffuse: &str, factor: [f32; 3]) -> String {
 pub(crate) fn apply(image: &mut RgbaImage, factor: [f32; 3]) -> bool {
     let mut painted = false;
     for pixel in image.pixels_mut() {
-        let mask = 1.0 - pixel.0[3] as f32 / 255.0;
-        if mask > 0.0 {
-            painted = true;
-            // `zip` stops after the three colour channels, leaving the alpha to
-            // the line below.
-            for (channel, factor) in pixel.0.iter_mut().zip(factor.iter()) {
-                let scale = 1.0 + (factor - 1.0) * mask;
-                *channel = (*channel as f32 * scale).round().clamp(0.0, 255.0) as u8;
-            }
-        }
-        // The mask has done its job; kept, it would be read as transparency and
-        // erase the bodywork (see `texture::strip_alpha`).
-        pixel.0[3] = u8::MAX;
+        painted |= paint_pixel(&mut pixel.0, factor);
     }
     painted
+}
+
+/// Paints a decoded diffuse texture with a detail map of the same size, pixel
+/// by pixel — the `MODULATE2X` of [`factor`], one texel at a time.
+pub(crate) fn apply_detail(image: &mut RgbaImage, detail: &RgbaImage, use_detail: f32) -> bool {
+    debug_assert_eq!(image.dimensions(), detail.dimensions(), "detail resized to the diffuse");
+    let use_detail = use_detail.clamp(0.0, 1.0);
+    let mut painted = false;
+    for (pixel, texel) in image.pixels_mut().zip(detail.pixels()) {
+        let factor = [0, 1, 2].map(|c| 1.0 + (texel.0[c] as f32 / 255.0 * DETAIL_MODULATE - 1.0) * use_detail);
+        painted |= paint_pixel(&mut pixel.0, factor);
+    }
+    painted
+}
+
+/// One pixel of [`apply`], whose alpha is the paint mask. Whether it was painted.
+fn paint_pixel(pixel: &mut [u8; 4], factor: [f32; 3]) -> bool {
+    let mask = 1.0 - pixel[3] as f32 / 255.0;
+    if mask > 0.0 {
+        // `zip` stops after the three colour channels, leaving the alpha to
+        // the line below.
+        for (channel, factor) in pixel.iter_mut().zip(factor.iter()) {
+            let scale = 1.0 + (factor - 1.0) * mask;
+            *channel = (*channel as f32 * scale).round().clamp(0.0, 255.0) as u8;
+        }
+    }
+    // The mask has done its job; kept, it would be read as transparency and
+    // erase the bodywork (see `texture::strip_alpha`).
+    pixel[3] = u8::MAX;
+    mask > 0.0
 }
 
 #[cfg(test)]
@@ -278,6 +363,77 @@ mod tests {
         let mut image = RgbaImage::from_pixel(2, 2, Rgba([120, 120, 120, 255]));
         assert!(!apply(&mut image, [0.0, 0.5, 1.0]), "rien à peindre");
         assert_eq!(image.get_pixel(0, 0).0, [120, 120, 120, 255], "image intacte");
+    }
+
+    // Règle : une carte de détail à l'échelle de la diffuse est un dessin, et se
+    // peint pixel par pixel — les rayures d'une citerne restent des rayures.
+    // Bug réel : `traffic_isuzu_tanker` sortait d'une seule couleur, sa carte
+    // réduite à sa moyenne.
+    #[test]
+    fn a_same_scale_detail_map_is_painted_pixel_by_pixel() {
+        let mut image = RgbaImage::from_pixel(2, 1, Rgba([128, 128, 128, 0]));
+        let mut stripes = RgbaImage::new(2, 1);
+        stripes.put_pixel(0, 0, Rgba([255, 200, 0, 255])); // jaune
+        stripes.put_pixel(1, 0, Rgba([0, 0, 0, 255])); // noir
+        assert!(!is_flat(&stripes, [0.5, 0.39, 0.0]), "des rayures ne sont pas un aplat");
+
+        assert!(apply_detail(&mut image, &stripes, 1.0), "quelque chose a été peint");
+        let yellow = image.get_pixel(0, 0).0;
+        assert!(
+            yellow[0] > 200 && yellow[2] == 0,
+            "la bande jaune reste jaune : {yellow:?}"
+        );
+        assert_eq!(image.get_pixel(1, 0).0, [0, 0, 0, 255], "la bande noire reste noire");
+    }
+
+    // Règle : un aplat se reconnaît, et se peint par sa moyenne comme avant —
+    // les skins Kunos ne bougent pas. Un aplat passé par un format avec pertes
+    // varie de quelques niveaux, pas davantage.
+    #[test]
+    fn a_flat_swatch_keeps_painting_through_its_average() {
+        let mut swatch = RgbaImage::from_pixel(4, 4, Rgba([35, 57, 161, 255]));
+        swatch.put_pixel(0, 0, Rgba([38, 55, 165, 255]));
+        assert!(
+            is_flat(&swatch, [35.0 / 255.0, 57.0 / 255.0, 161.0 / 255.0]),
+            "un aplat bruité reste un aplat"
+        );
+
+        let average = [35.0 / 255.0, 57.0 / 255.0, 161.0 / 255.0];
+        let factor = factor_for(1.0, average).expect("une couleur peint");
+        let mut by_average = RgbaImage::from_pixel(2, 2, Rgba([150, 140, 130, 0]));
+        let mut by_pixel = by_average.clone();
+        apply(&mut by_average, factor);
+        apply_detail(
+            &mut by_pixel,
+            &RgbaImage::from_pixel(2, 2, Rgba([35, 57, 161, 255])),
+            1.0,
+        );
+        assert_eq!(
+            by_average, by_pixel,
+            "sur un aplat uni, les deux chemins donnent la même image"
+        );
+    }
+
+    // Règle : seule une échelle de 1 **déclarée** est un dessin. Une carte
+    // répétée (le tissage d'un carbone, ×800) ne se reporte pas sur la diffuse,
+    // et une échelle absente ne dit rien.
+    #[test]
+    fn only_a_declared_scale_of_one_is_painted_pixel_by_pixel() {
+        let one = material(&[("useDetail", 1.0), ("detailUVMultiplier", 1.0)]);
+        assert_eq!(
+            same_scale_detail(&one),
+            Some(Detail {
+                texture: "detail.dds".to_string(),
+                use_detail: 1.0
+            }),
+            "échelle 1"
+        );
+        let tiled = material(&[("useDetail", 1.0), ("detailUVMultiplier", 800.0)]);
+        assert_eq!(same_scale_detail(&tiled), None, "carte répétée : la moyenne");
+        let unknown = material(&[("useDetail", 1.0)]);
+        assert_eq!(same_scale_detail(&unknown), None, "échelle absente : la moyenne");
+        let unused = material(&[("detailUVMultiplier", 1.0)]);
+        assert_eq!(same_scale_detail(&unused), None, "détail non utilisé");
     }
 
     // Règle : deux matériaux qui demandent la même peinture sur la même livrée

@@ -523,7 +523,25 @@ pub(crate) fn bake_paint(
                     }),
                 );
             };
-            let outcome = paint_one(variant, &blob, origin, options).map_err(|reason| TextureWarning {
+            // A detail map baked pixel by pixel is read again too, skin first,
+            // like the diffuse (see `paint`).
+            let detail = match &variant.detail {
+                None => None,
+                Some(detail) => {
+                    let embedded = model.texture(&detail.texture).map(|t| t.data.as_slice());
+                    let Some((bytes, _)) = load_source(&detail.texture, skin_dir, embedded) else {
+                        return (
+                            variant.name.clone(),
+                            Err(TextureWarning {
+                                name: variant.name.clone(),
+                                reason: "detail map disappeared between the two passes".to_string(),
+                            }),
+                        );
+                    };
+                    Some((bytes, detail.use_detail))
+                }
+            };
+            let outcome = paint_one(variant, &blob, detail, origin, options).map_err(|reason| TextureWarning {
                 name: variant.name.clone(),
                 reason,
             });
@@ -633,13 +651,38 @@ fn roughness_one(
 fn paint_one(
     variant: &crate::paint::Variant,
     blob: &[u8],
+    detail: Option<(Vec<u8>, f32)>,
     origin: TextureOrigin,
     options: &TextureOptions,
 ) -> Result<Option<PreparedTexture>, String> {
     let source_bytes = blob.len();
     let decoded = decode(blob).map_err(|e| format!("decode failed: {e}"))?;
     let mut resized = downscale(decoded, TextureRole::Color.max_size(options));
-    if !crate::paint::apply(&mut resized, variant.factor) {
+    let painted = match detail {
+        None => crate::paint::apply(&mut resized, variant.factor),
+        Some((bytes, use_detail)) => {
+            let detail = decode(&bytes).map_err(|e| format!("detail map decode failed: {e}"))?;
+            let average = average_color(&detail);
+            if crate::paint::is_flat(&detail, average) {
+                // A swatch: through its average, exactly as before — and
+                // nothing at all when that average is neutral.
+                match crate::paint::factor_for(use_detail, average) {
+                    Some(factor) => crate::paint::apply(&mut resized, factor),
+                    None => false,
+                }
+            } else {
+                // Texel for texel: the drawing takes the diffuse's size.
+                let detail = image::imageops::resize(
+                    &detail,
+                    resized.width(),
+                    resized.height(),
+                    image::imageops::FilterType::Triangle,
+                );
+                crate::paint::apply_detail(&mut resized, &detail, use_detail)
+            }
+        }
+    };
+    if !painted {
         return Ok(None);
     }
     let (bytes, mime) = encode(&resized, TextureRole::Color, options)?;
