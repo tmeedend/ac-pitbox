@@ -208,6 +208,33 @@ Vu sur la Ferrari 458 : le reflet tombe sous la voiture, chaque roue sous sa
 roue. Aucune vignette Vitrine de Pit Box n'existait sur la machine pour
 comparer : le preset confortable de l'utilisateur est Officiel.
 
+## Tour 11 : Officiel
+
+Officiel ajoute trois choses au sol, toutes posées par le shader de l'app comme
+le rig de Pit Box les pose :
+
+- **le fond cuit** : le dégradé elliptique du mat (`backdropTexture`), ni
+  exposé ni tone mappé ;
+- **le disque de lumière** (`poolSize`) centré sur l'origine de la voiture sous
+  la caméra du jeu, et le **sol sombre** du studio autour (`GROUND_SHADE`) ;
+- **l'exposition automatique** : l'image entière rendue en 64×36 à
+  l'exposition de base, relue côté CPU (`ExtraCanvas:accessData`, asynchrone),
+  sa luminosité moyenne en lumière linéaire donnant l'exposition de l'image
+  finale, avec la cible et les bornes de `look.ts`.
+
+L'étalonnage passe en dernier, sur toute l'image, fond compris, comme Pit Box
+étalonne son canevas fini.
+
+Comparé sur la Ferrari 599 GTO à sa vignette Officiel Pit Box : cadrage
+identique (la silhouette se superpose exactement), fond (3, 4, 6) des deux
+côtés, sol (13, 14, 15) contre (14, 14, 15), image entière (25, 16, 16) contre
+(28, 14, 15), exposition mesurée 0,74. La peinture sort un peu plus sombre et
+moins brillante sur le capot : la limite des reflets, déjà vue.
+
+Le journal d'erreurs (`error.txt`, et `lastError` dans `done.json`) a trouvé du
+premier coup une erreur de compilation du shader que rien d'autre n'aurait
+montrée.
+
 ## Pistes pour l'éclairage, de la moins à la plus coûteuse
 
 *Écrites avant les tours 4 à 6 ; la deuxième est celle qui a abouti, mais dans

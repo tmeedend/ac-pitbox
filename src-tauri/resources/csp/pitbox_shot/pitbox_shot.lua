@@ -69,14 +69,20 @@ local GAME_CAMERA_POSITION = vec3(-3.867643, 1.42359, 4.70381)
 local GAME_CAMERA_TARGET = vec3(0, 0.7, 0.5)
 local GAME_CAMERA_FOV = 30
 
+-- Whether the game's camera suits a car of this size (framing.ts
+-- `gameFramingFits`): a mod built in the wrong unit gets the orbit instead.
+local function gameFramingFits(radius)
+  local ratio = radius / TRUE_SCALE_RADIUS
+  return ratio > 1 / GAME_FRAMING_RANGE and ratio < GAME_FRAMING_RANGE
+end
+
 -- Camera for one template, in model space: position, target, field of view,
 -- distance, and whether the lens shift applies (not under the game's camera,
 -- where the place of the car in the frame is the point).
 local function placeCamera(bmin, bmax, t, aspect)
   local radius = (bmax - bmin):length() / 2
   if (t.gameFraming or 0) > 0 then
-    local ratio = radius / TRUE_SCALE_RADIUS
-    if ratio > 1 / GAME_FRAMING_RANGE and ratio < GAME_FRAMING_RANGE then
+    if gameFramingFits(radius) then
       local distance = (GAME_CAMERA_POSITION - GAME_CAMERA_TARGET):length()
       return GAME_CAMERA_POSITION:clone(), GAME_CAMERA_TARGET:clone(), GAME_CAMERA_FOV, distance, false
     end
@@ -183,16 +189,30 @@ float3 toSrgb(float3 c) {
 }
 float lamp(float3 n, float4 l) { return l.w * saturate(dot(n, l.xyz)); }
 float shine(float3 n, float3 v, float4 l) { return l.w * pow(saturate(dot(n, normalize(l.xyz + v))), gGloss); }
+// Tone mapping only: the colour grade comes last, on the whole image, as
+// Pit Box grades its finished canvas (background included).
 float3 finish(float3 rgb) {
-  float3 outc = toSrgb(neutral(rgb * gExposure));
-  outc *= 1 + gTint;
-  float luma = dot(outc, float3(0.2126, 0.7152, 0.0722));
-  return saturate(luma + (outc - luma) * gSaturation);
+  return saturate(toSrgb(neutral(rgb * gExposure)));
+}
+float3 grade(float3 c) {
+  c *= 1 + gTint;
+  float luma = dot(c, float3(0.2126, 0.7152, 0.0722));
+  return saturate(luma + (c - luma) * gSaturation);
+}
+float4 over(float4 top, float4 below) {
+  return float4(top.rgb + below.rgb * (1 - top.a), top.a + below.a * (1 - top.a));
+}
+// The baked background (`backdropTexture`): the card's mat, an ellipse from
+// `gMatHi` at 44 % of the height to `gMatLo`, interpolated in screen colours
+// like a canvas gradient. Not exposed, not tone mapped: exactly the mat.
+float3 backdrop(float2 uv) {
+  float2 p = float2((uv.x - 0.5) * 256 / (256.0 / 144.0), uv.y * 144 - 144 * 0.44);
+  return lerp(gMatHi, gMatLo, saturate(length(p) / (144 * 0.76)));
 }
 // The floor of a preset that has one (GRILLE§7.1), as the Pit Box rig lays it
-// (floor.ts, studioFloor.ts, floorMirror.ts): the car's reflection, then the
-// pool of light and the contact darkening, on a square of six car radii
-// centred under the car. Returned premultiplied, in screen colours.
+// (floor.ts, studioFloor.ts, floorMirror.ts), premultiplied, in screen
+// colours, from the bottom up: the studio ground (Officiel), the reflection,
+// the pool — the wide glow with its contact darkening, or the disc of light.
 float4 floorLayer(float2 uv) {
   float3 far = lerp(lerp(gCornerTL, gCornerTR, uv.x), lerp(gCornerBL, gCornerBR, uv.x), uv.y);
   float3 dir = far - gCamera;
@@ -200,9 +220,15 @@ float4 floorLayer(float2 uv) {
   if (facing >= 0) return 0;
   float3 hit = gCamera + dir * (dot(gFloorCentre - gCamera, gFloorUp) / facing);
   float r = length(hit - gFloorCentre) / gFloorHalf;
-  if (r >= 1) return 0;
+  float rp = length(hit - gPoolCentre) / gPoolHalf;
   float4 acc = 0;
-  if (gReflection > 0) {
+  if (gGround > 0) {
+    // Solid to half its radius, then fading to nothing (`groundTexture`).
+    float rg = length(hit - gPoolCentre) / (gPoolHalf * 3);
+    float a = rg < 0.5 ? 1 : saturate(1 - (rg - 0.5) / 0.5);
+    acc = over(float4(gGroundColor * a, a), acc);
+  }
+  if (gReflection > 0 && r < 1) {
     // The mirror camera's image is the reflection flipped left to right.
     float2 m = float2(1 - uv.x, uv.y);
     float4 sum = 0;
@@ -218,36 +244,52 @@ float4 floorLayer(float2 uv) {
     if (mir.a > 0.001) {
       float fade = 1 - smoothstep(0.75 * 0.35, 0.75, r);
       float a = mir.a * gReflection * fade;
-      acc = float4(finish(max(mir.rgb / mir.a, 0) * gMirrorTint) * a, a);
+      acc = over(float4(finish(max(mir.rgb / mir.a, 0) * gMirrorTint) * a, a), acc);
     }
   }
-  // The glow: 0.11 at the centre, 0.066 at 45 %, 0.018 at 75 %, 0 at the rim.
-  float glow = r < 0.45 ? lerp(0.11, 0.066, r / 0.45)
-    : r < 0.75 ? lerp(0.066, 0.018, (r - 0.45) / 0.3) : lerp(0.018, 0, (r - 0.75) / 0.25);
-  float pa = glow * gFloorOpacity;
-  acc = float4(gFloorBright * pa + acc.rgb * (1 - pa), pa + acc.a * (1 - pa));
-  // Contact darkening, the last centimetre under the body: 0.3 to 0 over a
-  // third of the radius.
-  float ca = r < 0.34 ? 0.3 * (1 - r / 0.34) * gFloorOpacity : 0;
-  return float4(acc.rgb * (1 - ca), ca + acc.a * (1 - ca));
+  if (rp < 1) {
+    float pa;
+    if (gDisc > 0) {
+      // The disc of light: 0.11 at the centre, 0.09 where its edge starts,
+      // nothing at the rim (`discTexture`).
+      pa = rp < 1 - gDiscFade ? lerp(0.11, 0.09, rp / (1 - gDiscFade)) : lerp(0.09, 0, (rp - (1 - gDiscFade)) / gDiscFade);
+    } else {
+      // The glow: 0.11 at the centre, 0.066 at 45 %, 0.018 at 75 %, 0 at the rim.
+      pa = rp < 0.45 ? lerp(0.11, 0.066, rp / 0.45)
+        : rp < 0.75 ? lerp(0.066, 0.018, (rp - 0.45) / 0.3) : lerp(0.018, 0, (rp - 0.75) / 0.25);
+    }
+    pa *= gFloorOpacity;
+    acc = over(float4((gFloorBright * pa).xxx, pa), acc);
+    if (gDisc <= 0) {
+      // Contact darkening, the last centimetre under the body: 0.3 to 0 over
+      // a third of the radius (`poolTexture`).
+      float ca = rp < 0.34 ? 0.3 * (1 - rp / 0.34) * gFloorOpacity : 0;
+      acc = over(float4(0, 0, 0, ca), acc);
+    }
+  }
+  return acc;
 }
 float4 main(PS_IN pin) {
-  float4 below = gFloor > 0 ? floorLayer(pin.Tex) : 0;
+  float4 below = gBackground > 0 ? float4(backdrop(pin.Tex), 1) : 0;
+  if (gFloor > 0) below = over(floorLayer(pin.Tex), below);
   float4 c = txShot.SampleLevel(samLinearClamp, pin.Tex, 0);
-  if (c.a <= 0) return below.a > 0 ? float4(below.rgb / below.a, below.a) : 0;
-  float3 rgb = max(c.rgb / c.a, 0) * gAmbient;
-  float4 alb = txAlbedo.SampleLevel(samLinearClamp, pin.Tex, 0);
-  float4 nrm = txNormal.SampleLevel(samLinearClamp, pin.Tex, 0);
-  if (nrm.a > 0.5) {
-    float3 n = normalize(nrm.xyz / nrm.a * 2 - 1);
-    float3 albedo = max(alb.rgb / max(alb.a, 0.0001), 0);
-    float3 v = normalize(gView);
-    rgb += albedo * (lamp(n, gKey) + lamp(n, gFill) + lamp(n, gRim)) * gLight;
-    rgb += (shine(n, v, gKey) + shine(n, v, gFill) + shine(n, v, gRim)) * gSpecular;
+  float4 outc = below;
+  if (c.a > 0) {
+    float3 rgb = max(c.rgb / c.a, 0) * gAmbient;
+    float4 alb = txAlbedo.SampleLevel(samLinearClamp, pin.Tex, 0);
+    float4 nrm = txNormal.SampleLevel(samLinearClamp, pin.Tex, 0);
+    if (nrm.a > 0.5) {
+      float3 n = normalize(nrm.xyz / nrm.a * 2 - 1);
+      float3 albedo = max(alb.rgb / max(alb.a, 0.0001), 0);
+      float3 v = normalize(gView);
+      rgb += albedo * (lamp(n, gKey) + lamp(n, gFill) + lamp(n, gRim)) * gLight;
+      rgb += (shine(n, v, gKey) + shine(n, v, gFill) + shine(n, v, gRim)) * gSpecular;
+    }
+    float a = saturate(c.a);
+    outc = over(float4(finish(rgb) * a, a), below);
   }
-  float a = saturate(c.a);
-  float4 outc = float4(finish(rgb) * a + below.rgb * (1 - a), a + below.a * (1 - a));
-  return float4(outc.rgb / max(outc.a, 0.0001), outc.a);
+  if (outc.a <= 0) return 0;
+  return float4(grade(outc.rgb / outc.a), outc.a);
 }
 ]]
 
@@ -342,6 +384,74 @@ end
 -- colour, 0x7F7F7F: 0.212 once converted to linear light.
 local MIRROR_TINT = 0.212
 
+-- look.ts `EXPOSURE_TARGET`/`EXPOSURE_MIN`/`EXPOSURE_MAX`.
+local EXPOSURE_TARGET = 0.015
+local EXPOSURE_MIN = 0.7
+local EXPOSURE_MAX = 1.8
+-- floor.ts `GROUND_SHADE`: the studio floor around the disc, against the
+-- backdrop's darker colour.
+local GROUND_SHADE = 0.4
+
+local function hexColour(hex, fallback)
+  local r, g, b = tostring(hex or ''):match('^#(%x%x)(%x%x)(%x%x)$')
+  if not r then return fallback end
+  return vec3(tonumber(r, 16) / 255, tonumber(g, 16) / 255, tonumber(b, 16) / 255)
+end
+local function toLinear(c)
+  local function one(v) return v <= 0.04045 and v / 12.92 or math.pow((v + 0.055) / 1.055, 2.4) end
+  return vec3(one(c.x), one(c.y), one(c.z))
+end
+local function toScreen(c)
+  local function one(v) return v <= 0.0031308 and v * 12.92 or 1.055 * math.pow(v, 1 / 2.4) - 0.055 end
+  return vec3(one(c.x), one(c.y), one(c.z))
+end
+
+local function shaderTextures(shots)
+  return { txShot = shots.base, txAlbedo = shots.albedo, txNormal = shots.normal, txMirror = shots.mirror or false }
+end
+
+-- What the finishing shader needs for one template. `exposure` multiplies the
+-- base exposure (auto exposure); `metering` leaves the colour grade out, as
+-- Pit Box meters its render before grading it.
+local function shaderValues(state, view, t, exposure, metering)
+  local key, fill, rim = lampDirections(state, t)
+  local corners = screenCorners(view)
+  local floor = (t.floor or 0) > 0
+  -- The pool: the wide glow over six car radii around the car, or the disc of
+  -- light (`poolSize`), centred on the car's own origin and sized from the
+  -- reference radius under the game's camera, as in the game (floor.ts
+  -- `placePool`).
+  local disc = (t.poolSize or 0) > 0
+  local poolCentre, poolHalf = state.floorCentre, state.radius * 3
+  if disc then
+    local studio = (t.gameFraming or 0) > 0 and gameFramingFits(state.radius)
+    poolHalf = (studio and TRUE_SCALE_RADIUS or state.radius) * t.poolSize / 100
+    if studio then poolCentre = state.modelToWorld:transformPoint(vec3(0, state.bmin.y, 0)) end
+  end
+  local hi = hexColour(t.matHi, vec3(0.1, 0.1, 0.11))
+  local lo = hexColour(t.matLo, vec3(0.05, 0.05, 0.06))
+  return {
+    gExposure = EXPOSURE * exposure, gAmbient = (t.ambient or 100) / 100,
+    gLight = LIGHT_AT_100 * (t.key or 100) / 100, gSpecular = SPECULAR, gGloss = GLOSS,
+    gKey = key, gFill = fill, gRim = rim, gView = view.look * -1,
+    gTint = metering and vec3(0, 0, 0) or GRADE_TINT * ((t.coolTint or 0) / 100),
+    gSaturation = metering and 1 or (t.saturation or 100) / 100,
+    gBackground = (t.background or 0) > 0 and 1 or 0, gMatHi = hi, gMatLo = lo,
+    gFloor = floor and 1 or 0,
+    gFloorOpacity = math.min(1, (t.floor or 0) / 100), gFloorBright = math.max(1, (t.floor or 0) / 100),
+    gReflection = view.mirrored and (t.reflection or 0) / 100 or 0,
+    gReflectionBlur = ((t.reflectionBlur or 0) / 10) * 0.002, gMirrorTint = MIRROR_TINT,
+    gCamera = view.pos, gFloorUp = state.floorUp, gFloorCentre = state.floorCentre,
+    gFloorHalf = state.radius * 3,
+    gPoolCentre = poolCentre, gPoolHalf = poolHalf,
+    gDisc = disc and 1 or 0, gDiscFade = math.max(0.02, (t.poolEdge or 30) / 100),
+    -- The studio floor around the disc, only with a baked background.
+    gGround = (disc and floor and (t.background or 0) > 0) and 1 or 0,
+    gGroundColor = toScreen(toLinear(lo) * GROUND_SHADE),
+    gCornerTL = corners[1], gCornerTR = corners[2], gCornerBL = corners[3], gCornerBR = corners[4],
+  }
+end
+
 local function carIndexOf(id)
   for i = 0, ac.getSim().carsCount - 1 do
     if ac.getCarID(i) == id then return i end
@@ -425,33 +535,63 @@ local function planCar(entry, steps)
           fov = view.fov, near = view.near, far = view.far, mirrorOf = view,
         }
         local ok, err = pcall(function() shots.mirror = renderPass(state, mirror, PASSES[1]) end)
-        if not ok then record.outputs[output.file] = 'error: ' .. tostring(err) end
+        if ok then view.mirrored = true else record.outputs[output.file] = 'error: ' .. tostring(err) end
+      end
+    end
+
+    -- Auto exposure (look.ts `meteredExposure`): the whole frame rendered small
+    -- at the base exposure, read back, its mean brightness in linear light
+    -- giving the exposure of the final image. Read back asynchronously, hence
+    -- a step that waits for it.
+    local exposure = 1
+    if (t.autoExposure or 0) > 0 then
+      local meter, measured = nil, nil
+      steps[#steps + 1] = function()
+        if not (shots.base and shots.normal and shots.albedo) then return end
+        meter = ui.ExtraCanvas(vec2(64, 36), 1, render.AntialiasingMode.None)
+        meter:updateWithShader({ textures = shaderTextures(shots), values = shaderValues(state, view, t, 1, true),
+          shader = FINISH })
+      end
+      steps[#steps + 1] = function()
+        if not meter then
+          measured = false
+          return
+        end
+        meter:accessData(function(err, data)
+          if err or not data then
+            measured = false
+            return
+          end
+          local sum = 0
+          for y = 0, 35 do
+            for x = 0, 63 do
+              local c = data:color(x, y)
+              local luma = c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722
+              sum = sum + math.pow(luma, 2.2) * c.mult
+            end
+          end
+          measured = sum / (64 * 36)
+          data:dispose()
+        end)
+      end
+      steps[#steps + 1] = function()
+        if measured == nil then return 'again' end
+        if meter then meter:dispose() end
+        if measured and measured > 0 then
+          exposure = math.min(EXPOSURE_MAX, math.max(EXPOSURE_MIN, EXPOSURE_TARGET / measured))
+        elseif measured == 0 then
+          exposure = EXPOSURE_MAX
+        end
+        record.exposure = exposure
       end
     end
 
     steps[#steps + 1] = function()
       if not (shots.base and shots.normal and shots.albedo) then return end
-      local key, fill, rim = lampDirections(state, t)
-      local corners = screenCorners(view)
       canvas = ui.ExtraCanvas(vec2(job.width, job.height), 1, render.AntialiasingMode.None)
       local ok, err = pcall(function()
-        canvas:updateWithShader({
-          textures = { txShot = shots.base, txAlbedo = shots.albedo, txNormal = shots.normal, txMirror = shots.mirror or false },
-          values = {
-            gExposure = EXPOSURE, gAmbient = (t.ambient or 100) / 100,
-            gLight = LIGHT_AT_100 * (t.key or 100) / 100, gSpecular = SPECULAR, gGloss = GLOSS,
-            gKey = key, gFill = fill, gRim = rim, gView = view.look * -1,
-            gTint = GRADE_TINT * ((t.coolTint or 0) / 100), gSaturation = (t.saturation or 100) / 100,
-            gFloor = withFloor and 1 or 0,
-            gFloorOpacity = math.min(1, (t.floor or 0) / 100), gFloorBright = math.max(1, (t.floor or 0) / 100),
-            gReflection = shots.mirror and (t.reflection or 0) / 100 or 0,
-            gReflectionBlur = ((t.reflectionBlur or 0) / 10) * 0.002, gMirrorTint = MIRROR_TINT,
-            gCamera = view.pos, gFloorUp = state.floorUp, gFloorCentre = state.floorCentre,
-            gFloorHalf = state.radius * 3,
-            gCornerTL = corners[1], gCornerTR = corners[2], gCornerBL = corners[3], gCornerBR = corners[4],
-          },
-          shader = FINISH,
-        })
+        canvas:updateWithShader({ textures = shaderTextures(shots), values = shaderValues(state, view, t, exposure, false),
+          shader = FINISH })
       end)
       if not ok then
         record.outputs[output.file] = 'error: ' .. tostring(err)
@@ -502,6 +642,8 @@ local function update(dt)
     local step = steps[stepIndex]
     if step then
       local ok, err = pcall(step)
+      -- A step waiting for something (a read-back) runs again next frame.
+      if ok and err == 'again' then return end
       if not ok then
         ac.error('pitbox_shot: ' .. tostring(err))
         done.lastError = tostring(err)

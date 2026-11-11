@@ -67,10 +67,15 @@ $catalogue = @{ azimuth = 320; elevation = 8; fov = 26; margin = 6; height = -7;
 $vitrine = @{ azimuth = 320; elevation = 5; fov = 26; margin = 1; height = -12; key = 30; fill = 15; rim = 140
   ambient = 100; saturation = 75; coolTint = 100; shadow = 45; trueScale = 0; gameFraming = 0; floor = 85
   reflection = 90; reflectionBlur = 35; poolSize = 0; background = 0 }
+$officiel = @{ azimuth = 306; elevation = 10; fov = 40; margin = 5; height = 0; key = 45; fill = 100; rim = 70
+  ambient = 160; saturation = 75; coolTint = 100; shadow = 30; trueScale = 100; gameFraming = 100; floor = 60
+  reflection = 0; reflectionBlur = 5; poolSize = 140; poolEdge = 50; background = 100; autoExposure = 100
+  matHi = "#05080a"; matLo = "#020305" }
 $job = [ordered]@{
   cars        = @(@{ id = $Car; outputs = @(
         @{ file = (Join-Path $jobDir "out\$Car-catalogue.png"); template = $catalogue },
-        @{ file = (Join-Path $jobDir "out\$Car-vitrine.png"); template = $vitrine }) })
+        @{ file = (Join-Path $jobDir "out\$Car-vitrine.png"); template = $vitrine },
+        @{ file = (Join-Path $jobDir "out\$Car-officiel.png"); template = $officiel }) })
   width       = 1024
   height      = 576
   supersample = 2

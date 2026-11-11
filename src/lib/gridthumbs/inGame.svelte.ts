@@ -13,17 +13,6 @@ import { adoptGridThumb, gridThumbFailed } from "./gridThumbs.svelte";
 import { gridThumbsOn, presetForDensity, renderTemplate } from "./gridThumbPrefs.svelte";
 import { listLibrary } from "$lib/library/library";
 
-/**
- * Whether the game can render this template (GRILLE§7.1). It draws the car,
- * and the floor of a preset that has one — the glow, the contact darkening and
- * the reflection, as Catalogue and Vitrine use them. A baked background, the
- * disc of light (`poolSize`) and the per-image exposure are Officiel's, and the
- * game does not compose them yet.
- */
-export function renderableInGame(template: GridTemplate): boolean {
-  return template.background === 0 && template.poolSize === 0 && template.autoExposure === 0;
-}
-
 /** A car to photograph: its id, the skin its card shows, its name for the
  * task panel. */
 export interface InGameCar {
@@ -34,37 +23,31 @@ export interface InGameCar {
 
 /**
  * Whether the right click offers the in-game render for this car: thumbnails
- * on, a template the game can render, and a car known not to render in Pit
- * Box under it.
+ * on, and a car known not to render in Pit Box under the template of the view.
+ * Every template is renderable by the game — its floor, baked background, disc
+ * of light and auto exposure included (GRILLE§7.1).
  */
 export function canRenderInGame(template: GridTemplate, car: InGameCar): boolean {
-  return gridThumbsOn() && renderableInGame(template) && gridThumbFailed(template, car.id, car.skin);
+  return gridThumbsOn() && gridThumbFailed(template, car.id, car.skin);
 }
 
-/** The templates one session renders: the grid's two densities, those the
- * game can render, each once. */
+/** The templates one session renders: the grid's two densities, each once. */
 function sessionTemplates(): GridTemplate[] {
   const seen = new Set<string>();
   const list: GridTemplate[] = [];
   for (const density of ["dense", "comfortable"] as const) {
     const template = renderTemplate(presetForDensity(density));
     const key = JSON.stringify(template);
-    if (!renderableInGame(template) || seen.has(key)) continue;
+    if (seen.has(key)) continue;
     seen.add(key);
     list.push(template);
   }
   return list;
 }
 
-/** Whether the game can render the thumbnails of at least one grid density —
- * else there is nothing to offer in one go. */
-export function inGameAvailable(): boolean {
-  return gridThumbsOn() && sessionTemplates().length > 0;
-}
-
 /**
- * Every protected car of the library the game can render a thumbnail for,
- * under the presets of the two densities (GRILLE§7.1): what « render them in
+ * Every protected car of the library, under the presets of the two densities
+ * (GRILLE§7.1): what « render them in
  * the game » takes in one go, from the generation report or the settings.
  * The names are the cards' own, for the task panel.
  */

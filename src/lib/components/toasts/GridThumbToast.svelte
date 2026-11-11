@@ -26,7 +26,7 @@
     gridThumbsPaused,
   } from "$lib/gridthumbs/gridThumbs.svelte";
   import { t } from "$lib/i18n/index.svelte";
-  import { inGameAvailable, protectedCarsForGame, requestInGame } from "$lib/gridthumbs/inGame.svelte";
+  import { protectedCarsForGame, requestInGame } from "$lib/gridthumbs/inGame.svelte";
 
   /** Protected cars are what the report counts, and the place the user learns
    * about them: the way to render them in the game is offered right there
@@ -116,7 +116,7 @@
 {:else if p.finished}
   <Toast title={report} onclose={dismissGridThumbReport}>
     {#snippet actions()}
-      {#if p.failed > 0 && inGameAvailable()}
+      {#if p.failed > 0}
         <button class="btn-ghost g-cancel" type="button" onclick={renderProtected}>{t("gridThumbs.inGameAll")}</button>
       {/if}
     {/snippet}
