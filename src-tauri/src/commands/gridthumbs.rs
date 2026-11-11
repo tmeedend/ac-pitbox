@@ -8,7 +8,7 @@
 //! and **under what name**, since that name is what makes a thumbnail expire
 //! exactly when the mod it shows changes.
 
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 use super::prelude::*;
 
@@ -154,6 +154,68 @@ pub async fn frozen_grid_thumbnail(
 
 /// Resolves a car folder: library first, `content/` next — same rule as the
 /// 3D preview, and the same lock held for as little time as possible.
+/// Renders the thumbnails of one protected car **in the game** and stores
+/// them (GRILLE§7.1); returns what became of each.
+///
+/// Lasts a whole game session, so off the window thread; the base is locked
+/// only while the car and the studio track are made available, never while
+/// the game runs. The phase goes out as `gameshot://phase` for the task panel.
+#[tauri::command]
+pub async fn render_in_game(
+    app: AppHandle,
+    request: crate::gameshot::ShotRequest,
+) -> Result<Vec<crate::gameshot::ShotResult>, String> {
+    off_window(app, move |app| {
+        let cfg = crate::config::load(app);
+        let ac = cfg.ac_install_path.clone().ok_or(crate::errors::AC_NOT_CONFIGURED)?;
+        // Before anything is activated: a car activated under a running game
+        // would be in its folder for nothing.
+        if crate::launch::game_running() {
+            return Err(crate::errors::GAME_RUNNING.into());
+        }
+        if !crate::launch::steam_running() {
+            return Err(crate::errors::STEAM_NOT_RUNNING.into());
+        }
+        {
+            let db = app.state::<Db>();
+            let conn = db.0.lock().map_err(|e| e.to_string())?;
+            use crate::modscan::ModKind;
+            crate::launch::ensure_available(&conn, &cfg, ModKind::Car, &request.car_id)?;
+            crate::launch::ensure_available(&conn, &cfg, ModKind::Track, crate::gameshot::STUDIO_TRACK)?;
+        }
+        // The skin the grid shows; without one, the first, as the Pit Box
+        // renderer picks it — CM would otherwise use the last one it drove.
+        let car_dir = ac.join("content").join("cars").join(&request.car_id);
+        let skin = request
+            .skin
+            .clone()
+            .or_else(|| {
+                kn5_gltf::resolve_skin(&car_dir, None)
+                    .and_then(|dir| dir.file_name().map(|n| n.to_string_lossy().into_owned()))
+            })
+            .unwrap_or_default();
+        let paths = crate::gameshot::Paths {
+            ac,
+            ac_documents: crate::gameshot::ac_documents().ok_or("dossier Documents introuvable")?,
+            app_source: app
+                .path()
+                .app_config_dir()
+                .map_err(|e| format!("dossier de l'app indisponible : {e}"))?
+                .join(crate::gameshot::SOURCE_PARENT)
+                .join(crate::gameshot::APP_ID),
+            thumbs: crate::gridthumbs::dir(app)?,
+        };
+        let launch = || crate::launch::launch_studio(&cfg, &request.car_id, &skin, crate::gameshot::STUDIO_TRACK);
+        let progress = |phase: crate::gameshot::Phase| {
+            if let Err(e) = app.emit("gameshot://phase", phase) {
+                log::warn!("gameshot: phase not sent ({e})");
+            }
+        };
+        crate::gameshot::run(&paths, &request, &launch, &crate::launch::game_running, &progress)
+    })
+    .await
+}
+
 fn car_dir(app: &AppHandle, db: &State<'_, Db>, car_id: &str) -> Result<std::path::PathBuf, String> {
     let cfg = crate::config::load(app);
     let conn = db.0.lock().map_err(|e| e.to_string())?;

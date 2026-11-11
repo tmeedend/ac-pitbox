@@ -59,8 +59,9 @@
   const paused = $derived(gridThumbsPaused());
 
   /** Le rapport de fin. Une ligne factuelle, **sans tonalité d'échec** : les
-   * voitures protégées ne sont pas un problème à régler, l'utilisateur n'y peut
-   * rien et sa grille reste parfaitement utilisable (GRILLE§7). */
+   * voitures protégées ne sont pas un problème à régler, leur carte garde sa
+   * photo et la grille reste parfaitement utilisable (GRILLE§7) — le rendu dans
+   * le jeu est au clic droit, pour qui le veut (GRILLE§7.1). */
   const report = $derived.by(() => {
     const parts = [t("gridThumbs.reportDone", { count: String(p.done) })];
     if (p.failed > 0) parts.push(t("gridThumbs.reportFailed", { count: String(p.failed) }));

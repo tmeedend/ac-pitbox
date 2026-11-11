@@ -60,7 +60,16 @@ function label(single: string, plural: string, n: number): string {
   return n > 1 ? t(plural, { count: n }) : t(single);
 }
 
-export function buildModContextItems(targets: ModContextTarget[], onchange: () => void): ModContextItem[] {
+/**
+ * The menu of a selection. `extra` carries the actions only the grid can work
+ * out — they depend on its template and on each card's skin, which the
+ * targets do not carry: the in-game thumbnail of a protected car (GRILLE§7.1).
+ */
+export function buildModContextItems(
+  targets: ModContextTarget[],
+  onchange: () => void,
+  extra: ModContextItem[] = [],
+): ModContextItem[] {
   if (!targets.length) return [];
   const items: ModContextItem[] = [];
   const single = targets.length === 1 ? targets[0] : null;
@@ -150,6 +159,8 @@ export function buildModContextItems(targets: ModContextTarget[], onchange: () =
       },
     });
   }
+
+  items.push(...extra);
 
   if (!mods.length) return items;
 

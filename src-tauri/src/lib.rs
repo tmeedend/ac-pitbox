@@ -31,6 +31,7 @@ mod fmod;
 mod fragment;
 mod fsb5;
 mod gamebackup;
+mod gameshot;
 mod gamestate;
 mod gridthumbs;
 mod harmonize;
@@ -279,6 +280,7 @@ pub fn run() {
             commands::gridthumbs::frozen_grid_thumbnail,
             commands::gridthumbs::clear_grid_thumbnails,
             commands::gridthumbs::sweep_grid_templates,
+            commands::gridthumbs::render_in_game,
             commands::session_state::get_session_picks,
             commands::session_state::save_session_picks,
             commands::session_state::get_launch_state,

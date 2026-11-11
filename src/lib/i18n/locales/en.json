@@ -438,7 +438,15 @@
     "etaMinutes": "~{n} min",
     "reportDone": "{count} thumbnails generated",
     "reportFailed": "{count} impossible (protected cars)",
-    "reportResume": "resume later"
+    "reportResume": "resume later",
+    "inGameAction": "Generate the thumbnail in the game",
+    "inGameActionN": "Generate {count} thumbnails in the game",
+    "inGameTitle": "Thumbnails in the game",
+    "inGameCollapsed": "Thumbnails in the game · {done} / {total}",
+    "inGameLaunching": "Starting the game…",
+    "inGameShooting": "In the game — it closes by itself",
+    "inGameReportDone": "{count} thumbnails rendered in the game",
+    "inGameReportFailed": "{count} failed"
   },
   "toast": {
     "expand": "Expand",
@@ -1809,7 +1817,11 @@
     "storyLinkNotAPackage": "This link does not lead to a story's manifest.json.",
     "storyVersionUnmanaged": "This game folder is not managed by Pit Box: the story's version cannot stand in for it.",
     "storySessionUnderWay": "A story's event is under way: close the game, then try again.",
-    "musicConfigUnreadable": "The music settings could not be read: nothing was changed."
+    "musicConfigUnreadable": "The music settings could not be read: nothing was changed.",
+    "gameShotAppFolderTaken": "A folder named pitbox_shot already exists in apps\\lua and does not belong to Pit Box. Rename or remove it to render thumbnails in the game.",
+    "gameShotNeverStarted": "The game did not start. Content Manager may be waiting for something: look at its window.",
+    "gameShotTimedOut": "The game was still running after five minutes. Close it: the thumbnail was not rendered.",
+    "gameShotNoImage": "The game closed without producing the thumbnail. This version of Custom Shaders Patch may not support it."
   },
   "pack": {
     "tabMembers": "Mods",

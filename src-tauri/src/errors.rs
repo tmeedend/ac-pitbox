@@ -43,6 +43,14 @@ pub const TRACK_NOT_INSTALLED: &str = "errors.trackNotInstalled";
 // A session asked for while Assetto Corsa still runs (SESSION§2.4): one game
 // at a time, whoever started it.
 pub const GAME_RUNNING: &str = "errors.gameRunning";
+// A thumbnail rendered in the game (GRILLE§7.1): `apps/lua/pitbox_shot` is a
+// real folder, not ours; the game never appeared after Content Manager was
+// asked; it was still running at the deadline; or it closed without having
+// produced a single image (a CSP that cannot, most likely).
+pub const GAMESHOT_APP_FOLDER_TAKEN: &str = "errors.gameShotAppFolderTaken";
+pub const GAMESHOT_NEVER_STARTED: &str = "errors.gameShotNeverStarted";
+pub const GAMESHOT_TIMED_OUT: &str = "errors.gameShotTimedOut";
+pub const GAMESHOT_NO_IMAGE: &str = "errors.gameShotNoImage";
 // A car that takes its 3D models from another car absent from the game and
 // from the library (SESSION§2.5): the game would crash loading it. Carries
 // `{name}`, the folder of the missing car (`with_values`).

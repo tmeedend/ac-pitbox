@@ -19,6 +19,7 @@
   import OnlineWatchToast from "./OnlineWatchToast.svelte";
   import PrepareToast from "./PrepareToast.svelte";
   import GridThumbToast from "./GridThumbToast.svelte";
+  import InGameShotToast from "./InGameShotToast.svelte";
   import { FEATURE_GRID_THUMBS } from "$lib/features";
 </script>
 
@@ -43,5 +44,5 @@
   <!-- La génération des vignettes en dernier, donc au plus près du coin : elle
        dure des minutes là où les autres passent, et c'est celle qu'on revient
        consulter. -->
-  {#if FEATURE_GRID_THUMBS}<GridThumbToast />{/if}
+  {#if FEATURE_GRID_THUMBS}<GridThumbToast /><InGameShotToast />{/if}
 </ToastStack>

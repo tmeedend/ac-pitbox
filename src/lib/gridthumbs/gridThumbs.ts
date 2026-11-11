@@ -179,3 +179,29 @@ export function clearGridThumbnails(): Promise<number> {
 export function sweepGridTemplates(templates: GridTemplate[]): Promise<number> {
   return invoke<number>("sweep_grid_templates", { templates });
 }
+
+/** One car to photograph in the game, and the thumbnails wanted of it — one
+ * per entry name (GRILLE§7.1). Must stay aligned with `gameshot::ShotRequest`. */
+export interface InGameShotRequest {
+  carId: string;
+  skin: string | null;
+  outputs: { stem: string; template: GridTemplate }[];
+}
+
+/** What became of one requested thumbnail: the stored PNG, or `null`. */
+export interface InGameShotResult {
+  stem: string;
+  path: string | null;
+}
+
+/** Where a session in the game is (`gameshot::Phase`). */
+export type InGamePhase = "launching" | "ingame";
+
+/**
+ * Renders a protected car **in the game** and stores its thumbnails
+ * (GRILLE§7.1). Resolves when the game has closed — a whole session, about a
+ * minute; the phase goes out meanwhile as `gameshot://phase`.
+ */
+export function renderInGame(request: InGameShotRequest): Promise<InGameShotResult[]> {
+  return invoke<InGameShotResult[]>("render_in_game", { request });
+}

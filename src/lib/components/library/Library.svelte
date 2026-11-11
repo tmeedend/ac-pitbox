@@ -53,7 +53,8 @@
     requestGridThumb,
   } from "$lib/gridthumbs/gridThumbs.svelte";
   import { gridThumbsOn, presetForDensity, renderTemplate } from "$lib/gridthumbs/gridThumbPrefs.svelte";
-  import { buildModContextItems } from "$lib/library/modContextActions";
+  import { buildModContextItems, type ModContextItem } from "$lib/library/modContextActions";
+  import { canRenderInGame, requestInGame, type InGameCar } from "$lib/gridthumbs/inGame.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { zoomFactor } from "$lib/shell/zoom.svelte";
   import { pinShell } from "$lib/shell/shellScroll";
@@ -484,7 +485,24 @@
     }
     return [ctxMenu.card];
   });
-  const contextItems = $derived(buildModContextItems(contextTargets, refresh));
+  // The in-game render of protected cars (GRILLE§7.1) needs what only the grid
+  // knows: its template, and the skin each card shows.
+  const inGameCars = $derived(
+    isCar
+      ? contextTargets
+          .filter((c) => !c.showcase)
+          .map((c) => ({ id: c.id_interne, skin: getPreferredSkin(c.id_interne)?.id ?? null, name: cardName(c) }))
+          .filter((car) => canRenderInGame(template, car))
+      : [],
+  );
+  /** The action carries its own list: read at the click, `inGameCars` would
+   * already be empty if the menu closes first. */
+  function inGameItems(cars: InGameCar[]): ModContextItem[] {
+    if (!cars.length) return [];
+    const label = cars.length > 1 ? t("gridThumbs.inGameActionN", { count: cars.length }) : t("gridThumbs.inGameAction");
+    return [{ label, onclick: () => requestInGame(cars) }];
+  }
+  const contextItems = $derived(buildModContextItems(contextTargets, refresh, inGameItems(inGameCars)));
 
   // La bibliothèque EST le sélecteur (SESSION§1) : ouvrir une carte la définit comme
   // choix de session, affiché dans le bloc SESSION de la barre latérale.

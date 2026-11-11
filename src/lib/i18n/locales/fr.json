@@ -438,7 +438,15 @@
     "etaMinutes": "~{n} min",
     "reportDone": "{count} vignettes générées",
     "reportFailed": "{count} impossibles (voitures protégées)",
-    "reportResume": "reprendre plus tard"
+    "reportResume": "reprendre plus tard",
+    "inGameAction": "Générer la vignette dans le jeu",
+    "inGameActionN": "Générer {count} vignettes dans le jeu",
+    "inGameTitle": "Vignettes dans le jeu",
+    "inGameCollapsed": "Vignettes dans le jeu · {done} / {total}",
+    "inGameLaunching": "Lancement du jeu…",
+    "inGameShooting": "Dans le jeu — il se fermera tout seul",
+    "inGameReportDone": "{count} vignettes rendues dans le jeu",
+    "inGameReportFailed": "{count} en échec"
   },
   "toast": {
     "expand": "Déplier",
@@ -1809,7 +1817,11 @@
     "storyLinkNotAPackage": "Ce lien ne mène pas au manifest.json d'une histoire.",
     "storyVersionUnmanaged": "Ce dossier du jeu n'est pas géré par Pit Box : la version de l'histoire ne peut pas prendre sa place.",
     "storySessionUnderWay": "Une épreuve d'histoire est en cours : ferme le jeu, puis recommence.",
-    "musicConfigUnreadable": "Les réglages de la musique n'ont pas pu être lus : rien n'a été modifié."
+    "musicConfigUnreadable": "Les réglages de la musique n'ont pas pu être lus : rien n'a été modifié.",
+    "gameShotAppFolderTaken": "Un dossier pitbox_shot existe déjà dans apps\\lua et n'appartient pas à Pit Box. Renomme-le ou retire-le pour générer des vignettes dans le jeu.",
+    "gameShotNeverStarted": "Le jeu ne s'est pas lancé. Content Manager attend peut-être quelque chose : regarde sa fenêtre.",
+    "gameShotTimedOut": "Le jeu tournait encore au bout de cinq minutes. Ferme-le : la vignette n'a pas été rendue.",
+    "gameShotNoImage": "Le jeu s'est fermé sans produire la vignette. Cette version de Custom Shaders Patch ne le permet peut-être pas."
   },
   "pack": {
     "tabMembers": "Mods",

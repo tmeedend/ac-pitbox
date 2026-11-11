@@ -178,13 +178,25 @@ Une version qui change le rendu (`RENDERER_VERSION`) ou un preset embarqué pér
 
 Une voiture qui ne peut pas être rendue **garde sa `preview.png`**.
 
-- **Pas de badge sur la carte** : l'utilisateur n'y peut rien, et un marqueur d'erreur salirait une carte utilisable.
+- **Pas de badge sur la carte** : un marqueur d'erreur salirait une carte utilisable. Pour une voiture protégée, le seul recours est au clic droit (§7.1).
 - **Le décompte se dit une fois, à la fin**, dans le rapport de génération (`298 générées · 14 impossibles (voitures protégées)`), sans tonalité d'échec.
 - **L'échec est mémorisé avec l'empreinte du mod** : la tentative ne se refait que si le mod change.
 
 C'est ce cas qui rend le §2 obligatoire pour toujours.
 
 **Une voiture en vitrine** (sans ses fichiers, ESPACE§3.3) n'est pas un échec : elle ne se rend pas, mais elle montre la vignette figée au moment où elle a perdu ses fichiers, ou celle venue avec un export de bibliothèque (EXPORT§4.3). Elle n'entre ni dans la file ni dans le décompte du rapport.
+
+## 7.1 Une voiture protégée, rendue par le jeu
+
+Un modèle protégé ne se lit que dans le jeu : c'est donc le jeu qui le photographie, avec le gabarit de la vue. Recherche et mesures : `docs/csp-shot-research.md`.
+
+- **Au clic droit d'une carte**, « Générer la vignette dans le jeu », seulement si les vignettes sont allumées, que la voiture est protégée (son rendu a échoué pour le preset de la vue) et que ce preset est **rendable par le jeu** : sans sol, sans fond cuit, sans exposition automatique — Catalogue et ses copies. Vitrine et Officiel ne le sont pas encore. Sur une sélection, l'entrée porte sur ses voitures protégées.
+- **Une session de jeu par voiture**, en file, suivie dans la pile bas-droite. Le jeu s'ouvre au stand sur Magione, prend la photo sans rien afficher, et se ferme seul. Refusé tant que le jeu tourne déjà.
+- **Une session sert les deux densités** : la vignette est aussi rendue pour le preset de l'autre densité s'il est rendable, puisque la voiture est déjà chargée.
+- **L'image prend la place de la vignette Pit Box** : même nom, donc même péremption — elle se refait quand le mod change, et le marqueur d'échec disparaît.
+- **Un échec ne se mémorise pas** : la carte garde sa photo, la pile dit pourquoi, et l'entrée reste au menu. Aucune version minimale de CSP n'est exigée : un CSP qui ne sait pas faire produit un échec dit comme tel.
+- **Rien du jeu n'est modifié** : l'app de prise de vue est liée dans `apps/lua` le temps de la session, retirée ensuite, et un balayage au démarrage retire celle qu'une fermeture brutale aurait laissée. Un vrai dossier du même nom n'est jamais touché : la session est refusée.
+- **Le rendu suit le gabarit** : cadrage (orbite, taille réelle, cadrage du jeu), lampes, lumière ambiante, étalonnage, et l'ombre de contact que livre le mod. Les reflets sont ceux du showroom du jeu, pas ceux de Pit Box : un chrome tourné vers la caméra peut sortir plus sombre qu'en rendu Pit Box.
 
 ---
 

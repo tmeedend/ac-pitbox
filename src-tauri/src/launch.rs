@@ -551,6 +551,41 @@ pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(
         }
     }
 
+    start_quick_drive(cm, setup)?;
+
+    // Marqueur « déjà essayé » définitif (§6) : posé au lancement, fiabilise
+    // les faux zéros de CM. Non bloquant si l'écriture échoue.
+    let now = chrono::Local::now().to_rfc3339();
+    let _ = crate::overlay::mark_launched(conn, &setup.car_id, &now);
+    let _ = crate::overlay::mark_launched(conn, &setup.track_id, &now);
+    Ok(())
+}
+
+/// The session a grid thumbnail is shot in (GRILLE§7.1): practice, pit start,
+/// the given track, the car with its skin. Nothing else matters — the shot
+/// draws the car alone — so everything else keeps its default.
+fn studio_setup(car_id: &str, skin: &str, track: &str) -> Result<RaceSetup, String> {
+    serde_json::from_value(serde_json::json!({
+        "car_id": car_id,
+        "car_skin": skin,
+        "track_id": track,
+        "track_layout": null,
+        "session_type": "practice",
+        "practice_start": "pit",
+    }))
+    .map_err(|e| format!("session de prise de vue : {e}"))
+}
+
+/// Starts the session of an in-game thumbnail through Content Manager, like
+/// any other session (golden rule 4). The car and the track must already be
+/// in the game (`ensure_available`).
+pub(crate) fn launch_studio(cfg: &AppConfig, car_id: &str, skin: &str, track: &str) -> Result<(), String> {
+    start_quick_drive(cm_exe(cfg)?, &studio_setup(car_id, skin, track)?)
+}
+
+/// Hands a session to Content Manager: the Quick Drive preset, then the
+/// player's skin patched into the `race.ini` CM writes (SESSION§2).
+pub(crate) fn start_quick_drive(cm: &Path, setup: &RaceSetup) -> Result<(), String> {
     // Preset Quick Drive (SESSION§2) plutôt qu'un race.ini/PreparedConfig : seul ce
     // chemin peuple StartProperties.BasicProperties côté CM, condition pour
     // que le téléchargement CSP automatique (VAO/config manquants) se
@@ -580,17 +615,27 @@ pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(
     if let Some(skin) = setup.car_skin.as_deref().filter(|s| !s.is_empty()) {
         crate::raceini::spawn_player_skin_patcher(setup.car_id.clone(), skin.to_string());
     }
-
-    // Marqueur « déjà essayé » définitif (§6) : posé au lancement, fiabilise
-    // les faux zéros de CM. Non bloquant si l'écriture échoue.
-    let now = chrono::Local::now().to_rfc3339();
-    let _ = crate::overlay::mark_launched(conn, &setup.car_id, &now);
-    let _ = crate::overlay::mark_launched(conn, &setup.track_id, &now);
     Ok(())
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// GRILLE§7.1: the thumbnail session is a practice started in the pits,
+    /// on the studio track, with the car's skin — the car stands still and the
+    /// skin is the one the grid shows.
+    #[test]
+    fn the_studio_session_is_a_pit_start_practice_with_the_skin() {
+        let setup = studio_setup("some_car", "00_orange", "magione").expect("the setup deserialises");
+        assert_eq!(setup.session_type, SessionType::Practice, "a practice");
+        assert_eq!(setup.practice_start, PracticeStart::Pit, "started in the pits");
+        assert_eq!(setup.car_skin.as_deref(), Some("00_orange"), "the grid's skin");
+        let preset: serde_json::Value =
+            serde_json::from_str(&crate::quickdrive::build_preset(&setup).unwrap()).unwrap();
+        assert_eq!(preset["CarId"], "some_car", "the car");
+        assert_eq!(preset["TrackId"], "magione", "the studio track");
+    }
 
     /// SESSION§2.5: a car whose models live in another car's folder goes on
     /// track only with that car in the game. Absent from the game and from

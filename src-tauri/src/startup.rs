@@ -16,8 +16,8 @@ use tauri::{App, Manager};
 use crate::config::AppConfig;
 use crate::overlay::{self, Db};
 use crate::{
-    backup, brands, catalog_update, commands, config, cup, extras, fmod, gamebackup, gamestate, harmonize, music,
-    nationalities, preview, rules, shadowdir, showcase, showroom, stock, submods, timing, version_guard, wiki,
+    backup, brands, catalog_update, commands, config, cup, extras, fmod, gamebackup, gameshot, gamestate, harmonize,
+    music, nationalities, preview, rules, shadowdir, showcase, showroom, stock, submods, timing, version_guard, wiki,
 };
 
 /// Refuses a base a newer build opened, backs up the base and the
@@ -105,6 +105,13 @@ pub(crate) fn safety_nets(app: &App, conn: &Connection) {
     // sauvegarde laissée par l'ancien aperçu 3D intégré traîne encore
     // (il forçait le mode fenêtré ; Pit Box n'y touche plus).
     timing::step("setup.video_ini", showroom::restore_orphaned_video_ini);
+
+    // Safety net (GRILLE§7.1): the app that renders thumbnails in the game is
+    // linked into `apps/lua` for one session only; Pit Box closed during that
+    // session leaves it there, and the next game started by hand would load it.
+    if let Some(ac) = config::load(app.handle()).ac_install_path {
+        timing::step("setup.gameshot_sweep", || gameshot::sweep(&ac));
+    }
 
     // Safety net (ESPACE§5.5): a showcase removal stopped between its
     // manifest and the base is finished, from the manifest.

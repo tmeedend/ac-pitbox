@@ -1,7 +1,8 @@
 <#
 .SYNOPSIS
-  Proof of concept: renders protected cars inside Assetto Corsa with the
-  pitbox_shot CSP app (docs/csp-shot-research.md).
+  Renders one car with the in-game thumbnail app (GRILLE§7.1) outside Pit
+  Box, to work on the Lua app without the whole round trip
+  (docs/csp-shot-research.md). Pit Box itself goes through gameshot.rs.
 
 .DESCRIPTION
   Developer tool, never shipped. Links the app into apps\lua with a junction
@@ -59,21 +60,19 @@ $jobDir = Join-Path $docs 'Assetto Corsa\pitbox_shot'
 New-Item -ItemType Directory -Force -Path (Join-Path $jobDir 'out') | Out-Null
 Remove-Item (Join-Path $jobDir 'done.json') -ErrorAction SilentlyContinue
 
-# The Catalogue preset (src/lib/gridthumbs/gridThumbPrefs.svelte.ts).
+# The Catalogue preset (src/lib/gridthumbs/gridThumbPrefs.svelte.ts), in the
+# job format Pit Box writes (gameshot.rs `write_job`).
+$template = @{ azimuth = 320; elevation = 8; fov = 26; margin = 6; height = -7; key = 100; fill = 25; rim = 60
+  ambient = 100; saturation = 75; coolTint = 100; shadow = 35; trueScale = 0; gameFraming = 0 }
 $job = [ordered]@{
-  cars        = @(@{ id = $Car })
-  template    = @{ azimuth = 320; elevation = 8; fov = 26; margin = 6; height = -7 }
+  cars        = @(@{ id = $Car; outputs = @(@{ file = (Join-Path $jobDir "out\$Car.png"); template = $template }) })
   width       = 1024
   height      = 576
   supersample = 2
   warmup      = 8
   quit        = $true
-  probes      = @{
-    localAppData = Join-Path $env:LOCALAPPDATA 'com.pitbox.app\pitbox_shot_probe.txt'
-    temp         = Join-Path $env:TEMP 'pitbox_shot_probe.txt'
-  }
 }
-$job | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8NoBOM (Join-Path $jobDir 'job.json')
+$job | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8NoBOM (Join-Path $jobDir 'job.json')
 
 # Quick Drive practice, pit start: the car stands still in its pit box.
 $preset = [ordered]@{

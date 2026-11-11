@@ -1922,6 +1922,40 @@ de reprendre. En cas d'écart, la spec fait foi.
         remonte aussi les deux autres ;
       - le cadrage d'Officiel a une **mesure** derrière lui (GRILLE§11.4) ;
         s'en écarter est permis, l'ignorer serait dommage.
+- [ ] **Vignettes des voitures protégées, rendues par le jeu** (GRILLE§7.1,
+      recherche dans `docs/csp-shot-research.md`) — lots 1 et 2 faits
+      (2026-11-11) : la preuve de concept (app Lua CSP, `ac.GeometryShot`,
+      neuf tours d'essais d'éclairage), puis le clic droit d'une carte, une
+      voiture par session, en file, les deux densités d'un coup, suivi dans la
+      pile bas-droite (`gameshot.rs`, `inGame.svelte.ts`).
+      **Restent** :
+      - le lot 3 : plusieurs voitures dans une même session (jamais essayé :
+        une séance d'essais ne porte qu'une voiture) et un lot depuis
+        `Réglages › Vignettes` ;
+      - Vitrine et Officiel : sol, flaque, reflet et fond à composer autour de
+        la voiture ; le reflet au sol n'a jamais été essayé ;
+      - essayer CSP 0.2.11 (l'utilisateur l'a) : aucune version minimale n'est
+        exigée, un CSP qui ne sait pas faire produit `errors.gameShotNoImage` ;
+      - le lot 4, la capture d'écran comme photo de la voiture, sur une branche
+        à part.
+      **Pièges payés** :
+      - la boîte englobante est celle du jeu (`car.aabbCenter`/`aabbSize`), pas
+        `getLocalAABB` du nœud de la voiture, qui descend un mètre sous le sol ;
+      - les lampes ne passent pas : `ac.LightSource` n'atteint pas une
+        `GeometryShot`. Le shader de l'app les ajoute à partir de deux passes
+        (couleur de surface, normale) ;
+      - sans tonemapping maison, le PNG garde les valeurs HDR écrêtées ; YEBIS
+        perd la transparence ;
+      - le skin se patche dans `race.ini` : la voiture du joueur est le
+        `MODEL=` de `[RACE]`, `[CAR_0]` porte `MODEL=-` ;
+      - un jeu qui plante au chargement (Steam pas prêt, mémoire épuisée) reste
+        ouvert derrière la fenêtre de rapport de CSP, et CM attend qu'il se
+        ferme avant toute autre session : la file attend alors son délai de
+        cinq minutes.
+      **Choisi sans demander** : Magione comme piste de prise de vue (contenu
+      de base), lampes à ×2 pour une principale à 100 %, exposition 0,8,
+      reflet des lampes 0,3, reflets du showroom du jeu.
+
 - [ ] **Aperçu 3D natif des voitures** (fusionné dans `main` ; la branche
       d'origine `feature/3dpreview` ne subsiste que sur `origin`).
       **L'avancement détaillé, les écarts assumés vis-à-vis de la spec et le

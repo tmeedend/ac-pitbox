@@ -107,6 +107,23 @@ export function gridThumb(template: GridTemplate, carId: string, skinId: string 
 }
 
 /**
+ * Whether this car is known not to render under this template — a protected
+ * model (GRILLE§7). Reactive and side-effect free, like `gridThumb`: it is what
+ * offers the in-game render at the right click (GRILLE§7.1), and a car whose
+ * card was never shown is simply not known yet.
+ */
+export function gridThumbFailed(template: GridTemplate, carId: string, skinId: string | null): boolean {
+  const entry = cache[keyOf(template, carId, skinId)];
+  return !!entry && "failed" in entry;
+}
+
+/** Shows a thumbnail produced outside this queue — rendered by the game
+ * (GRILLE§7.1) and already stored under its entry name. */
+export function adoptGridThumb(template: GridTemplate, carId: string, skinId: string | null, path: string): void {
+  cache[keyOf(template, carId, skinId)] = { url: convertFileSrc(path) };
+}
+
+/**
  * The key of a frozen thumbnail. The preset counts here, not only the
  * template: when no thumbnail has the exact fingerprint, the choice falls back
  * on an older state **of the same preset** (ESPACE§3.3).
