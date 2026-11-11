@@ -857,7 +857,7 @@ pub(crate) fn decode(blob: &[u8]) -> Result<RgbaImage, String> {
                 // `DdsFormatInfo { dxgi: None, d3d: None, fourcc: None }`.
                 // Measured on twelve cars of the reference library: 117 of 938
                 // textures, up to 26 % on `ks_ford_gt40`. Far too many to drop.
-                Err(compressed_error) => decode_uncompressed_dds(&dds, raw_bit_count(blob))
+                Err(compressed_error) => decode_uncompressed_dds(&dds, raw_bit_count(blob), raw_format_flags(blob))
                     .map_err(|e| format!("unsupported DDS payload: {compressed_error}; as uncompressed: {e}")),
             }
         }
@@ -880,8 +880,8 @@ pub(crate) fn decode(blob: &[u8]) -> Result<RgbaImage, String> {
 /// `ddsfile` ne rend ce champ que si le bloc `DDS_PIXELFORMAT` déclare `RGB`
 /// ou `LUMINANCE`, et **certains exportateurs ne déclarent ni l'un ni
 /// l'autre** : `c4_tire0_bump.dds` de `some1_corvette_c4_zr1_1990` porte
-/// `0x20`, qui n'est aucun des drapeaux du format (`LUMINANCE` vaut
-/// `0x20000`). Le champ, lui, est parfaitement rempli — 8 bits pour une
+/// `0x20` — `DDPF_PALETTEINDEXED8`, que `ddsfile` ne connaît pas, mais sans
+/// palette derrière (voir [`decode_paletted`]). Le champ, lui, est parfaitement rempli — 8 bits pour une
 /// surface 2048×1024 dont la charge fait exactement ce compte —, si bien que
 /// la seule chose qui manquait pour lire ce relief de pneu était de regarder
 /// l'octet plutôt que le drapeau qui le décrit.
@@ -892,9 +892,47 @@ fn raw_bit_count(blob: &[u8]) -> Option<u32> {
     Some(u32::from_le_bytes(bytes))
 }
 
+/// `DDPF_PALETTEINDEXED8`: one byte per texel, an index into 256 colours
+/// stored right after the header. `ddsfile` has no name for it and drops it,
+/// hence the raw read ([`raw_format_flags`]).
+const PALETTE_INDEXED_8: u32 = 0x20;
+const PALETTE_BYTES: usize = 256 * 4;
+
+/// The `DDS_PIXELFORMAT` flags as written, unknown bits included.
+fn raw_format_flags(blob: &[u8]) -> Option<u32> {
+    let bytes: [u8; 4] = blob.get(80..84)?.try_into().ok()?;
+    Some(u32::from_le_bytes(bytes))
+}
+
+/// A palette-indexed surface, when the payload holds **exactly** a palette
+/// plus the mip chain.
+///
+/// The flag alone is not enough: `c4_tire0_bump.dds` (above) carries it over a
+/// payload of exactly one byte per texel, no palette — a luminance map that
+/// reads right as such. The skins of `peugeot_504` do carry one: their
+/// `car_paint.dds` is 1 024 bytes longer than its chain, and read as grey its
+/// indices painted every skin black (reported on screen). Colours are stored
+/// red, green, blue — checked against the skin names: `amarante_red` is
+/// (103, 24, 37), `british_green` (12, 53, 39). The fourth byte is left out:
+/// D3D's `PALETTEENTRY` names it `peFlags`, and nothing says it is an alpha.
+fn decode_paletted(data: &[u8], width: u32, height: u32, mips: u32) -> Option<RgbaImage> {
+    let chain: usize = (0..mips.max(1))
+        .map(|level| ((width >> level).max(1) as usize) * ((height >> level).max(1) as usize))
+        .sum();
+    if data.len() != PALETTE_BYTES + chain {
+        return None;
+    }
+    let (palette, indices) = data.split_at(PALETTE_BYTES);
+    Some(RgbaImage::from_fn(width, height, |x, y| {
+        let entry = indices[(y * width + x) as usize] as usize * 4;
+        image::Rgba([palette[entry], palette[entry + 1], palette[entry + 2], u8::MAX])
+    }))
+}
+
 fn decode_uncompressed_dds(
     dds: &image_dds::ddsfile::Dds,
     fallback_bit_count: Option<u32>,
+    raw_flags: Option<u32>,
 ) -> Result<RgbaImage, String> {
     use image_dds::ddsfile::PixelFormatFlags;
 
@@ -933,6 +971,12 @@ fn decode_uncompressed_dds(
     // Le contrôle de taille quelques lignes plus bas reste le garde-fou : il
     // porte sur ce que mip 0 demande réellement.
     let data = dds.data.as_slice();
+
+    if bit_count == 8 && raw_flags.is_some_and(|flags| flags & PALETTE_INDEXED_8 != 0) {
+        if let Some(image) = decode_paletted(data, width, height, dds.get_num_mipmap_levels()) {
+            return Ok(image);
+        }
+    }
 
     // Rows can be padded when the header advertises a pitch; otherwise they
     // are packed tight. Trusting the header blindly would misread the many
@@ -1480,6 +1524,23 @@ mod tests {
             [16, 16, 16, 255],
             "la luminance du niveau 0 se répète sur RVB, alpha plein"
         );
+    }
+
+    // Rule: a palette-indexed DDS reads its colours from the palette, not its
+    // indices as grey. Bug réel : les skins de `peugeot_504` sortaient noires,
+    // leurs indices 0 à 2 lus comme des niveaux de gris.
+    #[test]
+    fn a_palette_indexed_dds_reads_its_palette() {
+        let mut payload = vec![0u8; PALETTE_BYTES];
+        payload[0..4].copy_from_slice(&[13, 91, 133, 33]); // couleur 0 : bleu
+        payload[4..8].copy_from_slice(&[103, 24, 37, 200]); // couleur 1 : rouge
+        payload.extend_from_slice(&[1, 0]); // les deux texels
+        let mut blob = uncompressed_dds(2, 1, [0, 0, 0, 0], 8, &payload);
+        blob[80..84].copy_from_slice(&PALETTE_INDEXED_8.to_le_bytes());
+
+        let image = decode(&blob).expect("la palette se lit");
+        assert_eq!(image.get_pixel(0, 0).0, [103, 24, 37, 255], "rouge, opaque");
+        assert_eq!(image.get_pixel(1, 0).0, [13, 91, 133, 255], "bleu, opaque");
     }
 
     // Rule: a pixel format that declares no known flag still decodes, as long
