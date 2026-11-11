@@ -561,7 +561,7 @@ const DENSITIES: GridDensity[] = ["dense", "comfortable"];
 const FALLBACK: Record<GridDensity, string> = { dense: "catalogue", comfortable: "vitrine" };
 
 /** Le preset lié à une densité **en cours d'édition** (par opposition à
- * `presetForDensity`, qui lit ce qui est enregistré). */
+ * `presetFor`, qui lit ce qui est enregistré). */
 export function editedPresetFor(density: GridDensity): GridPreset | undefined {
   return [...BUILTIN_PRESETS, ...values.user].find((p) => p.id === values.bound[density]);
 }
@@ -694,7 +694,7 @@ function find(list: readonly GridPreset[], id: string): GridPreset | undefined {
  * Bouger un curseur ne doit pas mettre trois cents vignettes au rebut avant que
  * l'utilisateur n'ait dit « Appliquer » (GRILLE§6.3).
  */
-export function presetForDensity(density: GridDensity): GridPreset {
+export function presetFor(density: GridDensity): GridPreset {
   const list = storedPresets();
   return find(list, stored.bound[density]) ?? list[0];
 }

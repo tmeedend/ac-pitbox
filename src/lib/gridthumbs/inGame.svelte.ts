@@ -10,7 +10,7 @@ import { listen } from "@tauri-apps/api/event";
 
 import { gridThumbnail, protectedGridCars, renderInGame, type GridTemplate, type InGamePhase } from "./gridThumbs";
 import { adoptGridThumb, gridThumbFailed } from "./gridThumbs.svelte";
-import { gridThumbsOn, presetForDensity, renderTemplate } from "./gridThumbPrefs.svelte";
+import { gridThumbsOn, presetFor, renderTemplate } from "./gridThumbPrefs.svelte";
 import { listLibrary } from "$lib/library/library";
 
 /** A car to photograph: its id, the skin its card shows, its name for the
@@ -36,7 +36,7 @@ function sessionTemplates(): GridTemplate[] {
   const seen = new Set<string>();
   const list: GridTemplate[] = [];
   for (const density of ["dense", "comfortable"] as const) {
-    const template = renderTemplate(presetForDensity(density));
+    const template = renderTemplate(presetFor(density));
     const key = JSON.stringify(template);
     if (seen.has(key)) continue;
     seen.add(key);

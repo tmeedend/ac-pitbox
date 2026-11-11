@@ -47,13 +47,12 @@
   import { sessionFallback } from "$lib/library/sessionFallback";
   import {
     enqueueGridThumbs,
-    frozenThumb,
-    gridThumb,
-    gridThumbSettled,
+    carPicture,
+    wantsGridThumb,
     requestFrozenThumb,
     requestGridThumb,
   } from "$lib/gridthumbs/gridThumbs.svelte";
-  import { gridThumbsOn, presetForDensity, renderTemplate } from "$lib/gridthumbs/gridThumbPrefs.svelte";
+  import { gridThumbsOn, presetFor, renderTemplate } from "$lib/gridthumbs/gridThumbPrefs.svelte";
   import { buildModContextItems, type ModContextItem } from "$lib/library/modContextActions";
   import { canRenderInGame, requestInGame, type InGameCar } from "$lib/gridthumbs/inGame.svelte";
   import { t } from "$lib/i18n/index.svelte";
@@ -226,7 +225,7 @@
   // Les deux jeux d'images coexistent sur disque, donc rebasculer est
   // instantané une fois les deux produits — c'est le balayage qui garde les
   // images de tous les presets vivants qui rend ça vrai.
-  const preset = $derived(presetForDensity(shown === "comfortable" ? "comfortable" : "dense"));
+  const preset = $derived(presetFor(shown === "comfortable" ? "comfortable" : "dense"));
   /** Le gabarit tel qu'il part au rendu : les valeurs du preset **plus son
    * mat**, que le fond cuit d'un preset comme Officiel reprend. */
   const template = $derived(renderTemplate(preset));
@@ -1034,20 +1033,16 @@
                une voiture chiffrée n'en aura jamais — la carte garde la photo
                d'origine : la grille reste mixte pour toujours, et c'est le mat
                qui les rend comparables. -->
-          {@const regen = !isCar
-            ? null
-            : c.showcase
-              ? frozenThumb(preset.id, template, c.id_interne)
-              : gridThumb(template, c.id_interne, prefSkin?.id ?? null)}
           <!-- Until the disk has said whether the thumbnail exists, the card
                shows nothing: showing the photo and switching a moment later
                was a visible flicker (GRILLE§5.4). -->
-          {@const waiting = regen === null && isCar && !c.showcase && !(preset.skipStock && c.is_stock) && gridThumbsOn() && !gridThumbSettled(template, c.id_interne, prefSkin?.id ?? null)}
-          {@const cardSrc = waiting ? null : (regen ?? src)}
+          {@const picture = isCar ? carPicture(preset, template, c, prefSkin?.id ?? null, src) : { src, waiting: false }}
+          {@const waiting = picture.waiting}
+          {@const cardSrc = picture.src}
           {@const ol = previewSrc(prefLayout?.outline ?? c.outline)}
           {@const blocked = unusableReason(c)}
           <button data-id={c.id_interne} class="card" class:unusable={blocked !== null} class:sel={effectiveId === c.id_interne && selectedIds.size === 0} class:multisel={selectedIds.has(c.id_interne)} class:session={sessionId === c.id_interne} onclick={(e) => onCardClick(c, e)} ondblclick={() => (nav.openFull = c.id_interne)} oncontextmenu={(e) => openCardContextMenu(e, c)} title={blocked ? `${t(blocked)}\n${t("library.cardTooltip")}` : t("library.cardTooltip")}>
-            <div class="thumb" use:whenVisible={{ car: c.id_interne, skin: prefSkin?.id ?? null, name: cardName(c), want: isCar && !c.showcase && !(preset.skipStock && c.is_stock), frozen: isCar && c.showcase }}>
+            <div class="thumb" use:whenVisible={{ car: c.id_interne, skin: prefSkin?.id ?? null, name: cardName(c), want: isCar && wantsGridThumb(preset, c), frozen: isCar && c.showcase }}>
               {#if cardSrc}<img src={cardSrc} alt={c.display_name ?? c.id_interne} loading="lazy" />
               {:else if waiting}<!-- the disk has not answered yet -->
               {:else}<div class="noprev">{isCar ? t("library.typeCar") : t("library.typeTrack")}</div>{/if}

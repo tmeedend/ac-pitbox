@@ -37,7 +37,7 @@ import {
   type GridTemplate,
   type GridThumb,
 } from "./gridThumbs";
-import { gridThumbsOn, gridThumbsReady } from "./gridThumbPrefs.svelte";
+import { gridThumbsOn, gridThumbsReady, type GridPreset } from "./gridThumbPrefs.svelte";
 import { applyFloorMirror } from "$lib/preview3d/floorMirror";
 import { placeCamera } from "./framing";
 import { groundTexture, placePool, type StudioFloor } from "./floor";
@@ -121,6 +121,44 @@ export function gridThumb(template: GridTemplate, carId: string, skinId: string 
 export function gridThumbSettled(template: GridTemplate, carId: string, skinId: string | null): boolean {
   const entry = cache[keyOf(template, carId, skinId)];
   return !!entry && !("looking" in entry);
+}
+
+/** A car as its picture needs it: a library card, or a mod's detail. */
+export interface PicturedCar {
+  id_interne: string;
+  is_stock: boolean;
+  showcase: boolean;
+}
+
+/** Whether this car gets a regenerated thumbnail under this preset at all: not
+ * a car in the showcase, whose thumbnail is frozen (ESPACE§3.3), nor stock
+ * content the preset leaves as it is. */
+export function wantsGridThumb(preset: GridPreset, car: PicturedCar): boolean {
+  return !car.showcase && !(preset.skipStock && car.is_stock);
+}
+
+/**
+ * What the picture of a car shows under a preset (GRILLE§5.4): its thumbnail
+ * when there is one, the mod's own `photo` when there is known to be none, and
+ * nothing — `waiting` — while the disk has not answered. Reactive and
+ * side-effect free, like `gridThumb`.
+ */
+export function carPicture(
+  preset: GridPreset,
+  template: GridTemplate,
+  car: PicturedCar,
+  skinId: string | null,
+  photo: string | null,
+): { src: string | null; waiting: boolean } {
+  const regen = car.showcase
+    ? frozenThumb(preset.id, template, car.id_interne)
+    : gridThumb(template, car.id_interne, skinId);
+  const waiting =
+    regen === null &&
+    wantsGridThumb(preset, car) &&
+    gridThumbsOn() &&
+    !gridThumbSettled(template, car.id_interne, skinId);
+  return { src: waiting ? null : (regen ?? photo), waiting };
 }
 
 /**
