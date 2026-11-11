@@ -314,6 +314,8 @@ glTF borne `baseColorFactor` à 1, donc il ne saurait pas porter la moitié
 variantes sont nommées d'après leur source et leur couleur, donc deux matériaux
 qui demandent la même peinture partagent une image ; une variante qui
 n'assombrit ni n'éclaircit rien (diffuse entièrement opaque) n'est pas écrite.
+Une carte de détail qui porte un **dessin** plutôt qu'un aplat se peint pixel
+par pixel : voir l'écart n°28.
 
 ⚠️ **Correction d'une conclusion antérieure.** Cette section affirmait que la
 carte de détail de la Supra verte était un « vert d'eau » très peu saturé, ce
@@ -1564,8 +1566,8 @@ validée pour rien.
 
 **Deuxième cause, même symptôme** : `ddsfile` ne rend `rgb_bit_count` que si le
 bloc de format déclare `RGB` ou `LUMINANCE`. `c4_tire0_bump.dds` de
-`some1_corvette_c4_zr1_1990` écrit `0x20`, qui n'est aucun des drapeaux du
-format (`LUMINANCE` vaut `0x20000`), alors que le champ lui-même est
+`some1_corvette_c4_zr1_1990` écrit `0x20` — `DDPF_PALETTEINDEXED8`, que
+`ddsfile` ne connaît pas, mais sans palette derrière (écart n°30) —, alors que le champ lui-même est
 parfaitement rempli — 8 bits pour une surface 2048×1024 dont la charge fait
 exactement ce compte. D'où la lecture directe de `dwRGBBitCount` en repli.
 
@@ -1751,3 +1753,69 @@ lampes ambre) 0,439 : aucune valeur ne décrit l'une ou l'autre moitié. Le seul
 remède qui tienne serait de **scinder le matériau par maillage**, puisque c'est
 par maillage que les mods déclarent leur verre (`Meshes = …`). Tant que ce n'est
 pas fait, tout seuil de couleur par matériau se trompera sur au moins un rôle.
+
+---
+
+## Écart n°28 — à l'échelle 1, la carte de détail est un dessin, pas un aplat
+
+**Attendu** (écart n°5) : la carte de détail est un petit aplat de peinture, que
+sa couleur moyenne résume sans rien perdre.
+
+**Réel** : avec `detailUVMultiplier = 1`, elle est posée texel pour texel sur la
+diffuse, et certains mods y mettent tout. Les camions « traffic » de la
+bibliothèque (`traffic_isuzu_tanker` et ses voisins) ne gardent dans leur
+diffuse que l'occlusion, en gris ; la cabine, sa calandre, ses phares, les
+rayures jaunes et noires de la citerne vivent dans une carte de détail de
+2048². Réduite à sa moyenne, elle peignait le camion d'une seule couleur —
+signalé à l'écran.
+
+**Correctif** (`paint.rs`, `apply_detail`) : à une échelle de 1 **déclarée**, la
+carte est relue et appliquée pixel par pixel, avec la même formule. Un aplat
+(aucun texel à plus de 8 niveaux de sa moyenne) reste peint par sa moyenne,
+exactement comme avant : les skins Kunos ne bougent pas. Une échelle absente ne
+dit rien, et une carte répétée (le tissage d'un carbone, ×800) ne peut pas être
+cuite dans la diffuse : toutes deux gardent la moyenne. Mesuré : 364 matériaux
+sur 114 voitures déclarent l'échelle 1, la plupart avec un aplat.
+
+---
+
+## Écart n°29 — une découpe qui effacerait toute la pièce n'en efface rien
+
+**Attendu** : un matériau alpha-testé découpe sa surface selon l'alpha de sa
+diffuse.
+
+**Réel** : sur la famille `MultiMap`, cet alpha est le masque de peinture
+(écart n°5), et un matériau peut n'échantillonner que des zéros. Découpé, il
+disparaît en entier : le volant de `nissan_skyline_r34_omori_factory_s1`
+(`Leather`, `ksPerPixelMultiMap_AT_NMDetail`, alpha 0 sur 48 109 points
+mesurés) était transparent, alors qu'il est bien là dans le jeu. Mesuré sur la
+bibliothèque : **70 matériaux alpha-testés sur 50 voitures** n'échantillonnent
+que de l'alpha nul, dont le tissu intérieur de `ks_abarth_595ss`.
+
+**Correctif** : la règle de `FootprintAlpha::is_blank`, qui valait déjà pour le
+fondu (« un auteur ne modélise pas une pièce pour qu'elle soit invisible »),
+vaut aussi pour la découpe : le matériau se dessine opaque. Un alpha qui varie,
+lui, découpe toujours — les décalcomanies des mêmes shaders en dépendent.
+
+---
+
+## Écart n°30 — un DDS à palette se lit par sa palette
+
+**Attendu** : un DDS non compressé de 8 bits est une luminance.
+
+**Réel** : le drapeau `0x20` du bloc de format est `DDPF_PALETTEINDEXED8` —
+256 couleurs de 4 octets juste après l'en-tête, puis un index par texel. La
+peinture des skins de `peugeot_504` et `peugeot_504_tn` (`car_paint.dds`,
+34 fichiers) est dans ce format. Lue comme une luminance, elle ne donnait que
+ses index — 0 à 2 —, et toutes les skins sortaient noires.
+
+Les couleurs sont rangées **rouge, vert, bleu** : vérifié sur les noms des
+skins, `caraibe_blue` vaut (13, 91, 133), `amarante_red` (103, 24, 37),
+`british_green` (12, 53, 39). Le quatrième octet varie de 0 à 255 sans qu'on
+sache ce qu'il dit — `PALETTEENTRY` le nomme `peFlags` —, il est laissé de
+côté et la texture lue opaque.
+
+**Le drapeau ne suffit pas** : `c4_tire0_bump.dds` (écart n°24) le porte sur une
+charge d'exactement un octet par texel, sans palette, et se lit juste en
+luminance. La palette n'est donc lue que si la charge contient **exactement**
+une palette plus la chaîne de mips.

@@ -881,7 +881,8 @@ pub(crate) fn decode(blob: &[u8]) -> Result<RgbaImage, String> {
 /// ou `LUMINANCE`, et **certains exportateurs ne déclarent ni l'un ni
 /// l'autre** : `c4_tire0_bump.dds` de `some1_corvette_c4_zr1_1990` porte
 /// `0x20` — `DDPF_PALETTEINDEXED8`, que `ddsfile` ne connaît pas, mais sans
-/// palette derrière (voir [`decode_paletted`]). Le champ, lui, est parfaitement rempli — 8 bits pour une
+/// palette derrière (voir [`decode_paletted`]). Le champ, lui, est
+/// parfaitement rempli — 8 bits pour une
 /// surface 2048×1024 dont la charge fait exactement ce compte —, si bien que
 /// la seule chose qui manquait pour lire ce relief de pneu était de regarder
 /// l'octet plutôt que le drapeau qui le décrit.
