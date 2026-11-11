@@ -1658,8 +1658,15 @@ de reprendre. En cas d'écart, la spec fait foi.
          (`Storage.SaveData: Impossible de supprimer le fichier à remplacer`),
          signe qu'un autre processus le tient ouvert. À reprendre avec le
          journal d'un lancement tombé sur le menu, noté à l'heure près.
-      3. **« Steam API has failed to initialize »** quand le jeu part juste
-         après le démarrage de Steam : CSP refuse de lancer.
+      3. **« Steam API has failed to initialize »** : CSP refuse de lancer.
+         Piste trouvée le 2026-11-11 au troisième cas : le registre
+         (`HKCU\Software\Valve\Steam\ActiveProcess`, valeur `pid`) désignait
+         un Steam disparu (13804) alors qu'un autre tournait (27992, démarré à
+         11:10:35, l'heure exacte où CM a relancé le jeu dans un des journaux
+         du point 2). Le jeu trouve Steam par ce numéro : il ne le trouvait
+         plus. Remède manuel : redémarrer Steam. Pit Box pourrait le détecter
+         avant de lancer (le `pid` du registre ne correspond à aucun
+         `steam.exe`) et le dire, au lieu de laisser le jeu planter.
       4. **Un jeu planté reste ouvert** derrière la fenêtre de rapport de CSP,
          et CM reste sur « Waiting… » : toute session suivante attend. Le rendu
          dans le jeu (GRILLE§7.1) abandonne alors au bout de cinq minutes et
