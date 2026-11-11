@@ -1635,6 +1635,38 @@ de reprendre. En cas d'écart, la spec fait foi.
         ignoré `logos::tests::real_install_logos`
         (`cargo test --release --lib logos::tests::real_install_logos -- --ignored --nocapture`).
 
+- [ ] **Lancements qui échouent** (relevé le 2026-11-11, journaux de CM dans
+      `%LOCALAPPDATA%\AcTools Content Manager\Logs`, du jeu dans
+      `Documents\Assetto Corsa\logs`). Quatre problèmes distincts, un seul
+      dont la cause est connue :
+      1. **Bug de Pit Box, cause connue, pas encore corrigé** : le `ModeData`
+         des sessions solo (essais, hotlap, journée piste…) écrit
+         `PlayerBallast`/`PlayerRestrictor` en flottants (`0.0`), alors que CM
+         les attend en entiers (`15`, `3` dans ses propres presets
+         `pitbox-practice.cmpreset`, `pitbox-hotlap.cmpreset`). CM le refuse à
+         chaque lancement (`JsonReaderException: Input string '0.0' is not a
+         valid integer. Path 'PlayerBallast'`) et **jette tout le
+         `ModeData`** : départ (stand, piste, hotlap), pénalités, voiture
+         fantôme, lest et bride retombent sur ce qu'affiche CM. Le test
+         `the_player_handicap_reaches_every_session_type` attend des
+         flottants et ne l'a pas vu. Au niveau de la grille d'une course, le
+         format attendu n'est pas vérifié.
+      2. **AC s'ouvre de temps en temps sur son menu vanilla**, cause non
+         trouvée. Indices : CM lance le jeu par `AppIdStarter`
+         (« SteamStarter won't work: Wrong location ») et voit le jeu
+         « already here » dès le lancement ; dans un journal (11:10:22),
+         `acs.exe` se ferme au bout de 12 s et CM le relance aussitôt ; à chaque
+         lancement, CM n'arrive pas à réécrire un de ses fichiers de réglages
+         (`Storage.SaveData: Impossible de supprimer le fichier à remplacer`),
+         signe qu'un autre processus le tient ouvert. À reprendre avec le
+         journal d'un lancement tombé sur le menu, noté à l'heure près.
+      3. **« Steam API has failed to initialize »** quand le jeu part juste
+         après le démarrage de Steam : CSP refuse de lancer.
+      4. **Un jeu planté reste ouvert** derrière la fenêtre de rapport de CSP,
+         et CM reste sur « Waiting… » : toute session suivante attend. Le rendu
+         dans le jeu (GRILLE§7.1) abandonne alors au bout de cinq minutes et
+         vide le reste de sa file.
+
 - [ ] **Sessions au format `.cmpreset` — une seule vérification reste.**
       Livré (SESSION§3.6) : une session enregistrée est un preset Quick Drive
       écrit chez Content Manager, portant en plus une clé `PitBox` avec

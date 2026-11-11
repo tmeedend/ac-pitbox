@@ -974,6 +974,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 
 | Chantier | Où il en est | Où lire |
 | --- | --- | --- |
+| **Lancements qui échouent** | relevé le 2026-11-11 : `ModeData` solo refusé par CM (flottants au lieu d'entiers, cause connue, pas corrigé) ; AC parfois sur son menu vanilla, Steam pas prêt, jeu planté qui bloque CM (causes non trouvées) | `docs/CHANTIERS.md` |
 | **Sessions au format `.cmpreset`** | livré ; reste à vérifier dans CM qu'il ignore bien notre clé `PitBox` | `docs/SPEC-session.md` SESSION§3.6 |
 | **Texture updates** | rien d'implémenté ; la règle de détection est mesurée et nette | `docs/SPEC-texture-update.md` |
 | **Harmonisation des libellés** | libellés et barème du rouge faits ; restent le bleu, le vert et le jaune, sans barème | `docs/CHANTIERS.md` |
