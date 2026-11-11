@@ -352,8 +352,8 @@ fn build_grid(s: &RaceSetup) -> Value {
         "Nationalities": nationalities,
         // Au niveau de la grille et non du `ModeData`, comme le preset de
         // référence : c'est là que CM les écrit pour une course.
-        "PlayerBallast": player_ballast(s),
-        "PlayerRestrictor": player_restrictor(s),
+        "PlayerBallast": f64::from(player_ballast(s)),
+        "PlayerRestrictor": f64::from(player_restrictor(s)),
         "ShuffleCandidates": false,
         "VarietyLimitation": 0,
         "OpponentsNumber": opponents.len(),
@@ -370,14 +370,21 @@ fn build_grid(s: &RaceSetup) -> Value {
     })
 }
 
-/// Lest et bride du joueur (SETUP§2.7), bornés sur la plage de Content Manager.
-/// Écrits en flottants comme le preset de référence, où ils valent `5.0` et
-/// `10.0` — les tableaux par ligne, eux, sont des chaînes.
-fn player_ballast(s: &RaceSetup) -> f64 {
-    f64::from(s.player_ballast.min(200))
+/// Player ballast and restrictor (SETUP§2.7), bounded on Content Manager's
+/// range.
+///
+/// **Two formats, one per place.** At the level of a race grid they are
+/// floats, as in the reference race preset (`5.0`, `10.0`; the per-row arrays
+/// are strings). In the `ModeData` of a solo session they are **integers**,
+/// as in CM's own `pitbox-practice.cmpreset` (`15`, `3`): a float there makes
+/// CM refuse the whole `ModeData` (`JsonReaderException: Input string '0.0' is
+/// not a valid integer`), start type and penalties included — every practice
+/// and hotlap went out with CM's on-screen values until 2026-11-11.
+fn player_ballast(s: &RaceSetup) -> u32 {
+    s.player_ballast.min(200)
 }
-fn player_restrictor(s: &RaceSetup) -> f64 {
-    f64::from(s.player_restrictor.min(100))
+fn player_restrictor(s: &RaceSetup) -> u32 {
+    s.player_restrictor.min(100)
 }
 
 /// Les deux bornes d'un réglage « centre ± écart » (SETUP§2.9), **bornées**.
@@ -1149,8 +1156,12 @@ mod tests {
             s.player_restrictor = 15;
             let v: Value = serde_json::from_str(&build_preset(&s).unwrap()).unwrap();
             let mode: Value = serde_json::from_str(v["ModeData"].as_str().unwrap()).unwrap();
-            assert_eq!(mode["PlayerBallast"], 40.0, "{kind:?}");
-            assert_eq!(mode["PlayerRestrictor"], 15.0, "{kind:?}");
+            // Integers, not floats: CM refuses the whole solo `ModeData`
+            // otherwise (its own presets write `15`, `3`).
+            assert_eq!(mode["PlayerBallast"], 40, "{kind:?}");
+            assert!(mode["PlayerBallast"].is_u64(), "an integer in the ModeData ({kind:?})");
+            assert_eq!(mode["PlayerRestrictor"], 15, "{kind:?}");
+            assert!(mode["PlayerRestrictor"].is_u64(), "an integer in the ModeData ({kind:?})");
         }
     }
 

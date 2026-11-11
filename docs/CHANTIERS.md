@@ -1637,20 +1637,18 @@ de reprendre. En cas d'écart, la spec fait foi.
 
 - [ ] **Lancements qui échouent** (relevé le 2026-11-11, journaux de CM dans
       `%LOCALAPPDATA%\AcTools Content Manager\Logs`, du jeu dans
-      `Documents\Assetto Corsa\logs`). Quatre problèmes distincts, un seul
-      dont la cause est connue :
-      1. **Bug de Pit Box, cause connue, pas encore corrigé** : le `ModeData`
-         des sessions solo (essais, hotlap, journée piste…) écrit
-         `PlayerBallast`/`PlayerRestrictor` en flottants (`0.0`), alors que CM
-         les attend en entiers (`15`, `3` dans ses propres presets
-         `pitbox-practice.cmpreset`, `pitbox-hotlap.cmpreset`). CM le refuse à
-         chaque lancement (`JsonReaderException: Input string '0.0' is not a
-         valid integer. Path 'PlayerBallast'`) et **jette tout le
-         `ModeData`** : départ (stand, piste, hotlap), pénalités, voiture
-         fantôme, lest et bride retombent sur ce qu'affiche CM. Le test
-         `the_player_handicap_reaches_every_session_type` attend des
-         flottants et ne l'a pas vu. Au niveau de la grille d'une course, le
-         format attendu n'est pas vérifié.
+      `Documents\Assetto Corsa\logs`). Quatre problèmes distincts, le premier
+      corrigé, les trois autres sans cause trouvée :
+      1. **Corrigé le 2026-11-11 — bug de Pit Box** : le `ModeData` des
+         sessions solo (essais, hotlap) écrivait `PlayerBallast` et
+         `PlayerRestrictor` en flottants (`0.0`), alors que CM les attend en
+         entiers (`15`, `3` dans ses propres presets). CM refusait le
+         `ModeData` entier à chaque lancement (`JsonReaderException: Input
+         string '0.0' is not a valid integer`) : départ, pénalités, voiture
+         fantôme, lest et bride retombaient sur ce qu'affichait CM. Le test
+         `the_player_handicap_reaches_every_session_type` attendait des
+         flottants ; il exige maintenant des entiers. Au niveau de la grille
+         d'une course, les flottants restent, comme le preset de référence.
       2. **AC s'ouvre de temps en temps sur son menu vanilla**, cause non
          trouvée. Indices : CM lance le jeu par `AppIdStarter`
          (« SteamStarter won't work: Wrong location ») et voit le jeu
