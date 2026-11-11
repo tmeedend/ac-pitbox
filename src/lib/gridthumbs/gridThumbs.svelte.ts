@@ -29,11 +29,13 @@ import {
   forgetGridThumbnail,
   frozenGridThumbnail,
   gridThumbnail,
+  gridThumbnails,
   markGridThumbnailFailed,
   prepareGridModel,
   releaseGridModel,
   saveGridThumbnail,
   type GridTemplate,
+  type GridThumb,
 } from "./gridThumbs";
 import { gridThumbsOn, gridThumbsReady } from "./gridThumbPrefs.svelte";
 import { applyFloorMirror } from "$lib/preview3d/floorMirror";
@@ -75,8 +77,11 @@ const KEY_BASE = 2.2;
 const ENVIRONMENT = 0.55;
 
 /** `none`: a car in the showcase with no frozen thumbnail for this preset —
- * its card shows its frozen image. */
-type Entry = { url: string } | { pending: true } | { failed: string } | { none: true };
+ * its card shows its frozen image. `looking`: the disk has been asked whether
+ * the thumbnail exists, and has not answered yet — the card shows nothing
+ * rather than the mod's photo it would replace a moment later. `pending`: it
+ * does not exist, and waits in the render queue. */
+type Entry = { url: string } | { looking: true } | { pending: true } | { failed: string } | { none: true };
 
 const cache = $state<Record<string, Entry>>({});
 
@@ -104,6 +109,18 @@ function keyOf(template: GridTemplate, carId: string, skinId: string | null): st
 export function gridThumb(template: GridTemplate, carId: string, skinId: string | null): string | null {
   const entry = cache[keyOf(template, carId, skinId)];
   return entry && "url" in entry ? entry.url : null;
+}
+
+/**
+ * Whether the card may show the mod's own photo: the thumbnail is known not to
+ * exist yet (queued, failed), not merely not looked up yet. Until the disk has
+ * answered, the card shows nothing — showing the photo and switching to the
+ * thumbnail a moment later was the flicker this exists for. Reactive and
+ * side-effect free, like `gridThumb`.
+ */
+export function gridThumbSettled(template: GridTemplate, carId: string, skinId: string | null): boolean {
+  const entry = cache[keyOf(template, carId, skinId)];
+  return !!entry && !("looking" in entry);
 }
 
 /**
@@ -352,7 +369,59 @@ export function requestGridThumb(
   name = carId,
 ): void {
   if (!gridThumbsOn()) return;
-  enqueue(template, carId, skinId, name, true);
+  const key = keyOf(template, carId, skinId);
+  if (cache[key]) {
+    // Already known, being looked up, or queued — a queued one comes forward.
+    enqueue(template, carId, skinId, name, true);
+    void drain();
+    return;
+  }
+  // The disk first, **outside the queue**: a thumbnail that exists shows at
+  // once instead of waiting for its turn behind the renders.
+  cache[key] = { looking: true };
+  lookups.push({ template, carId, skinId, name, key });
+  if (!lookupTimer) lookupTimer = setTimeout(flushLookups, LOOKUP_BATCH_MS);
+}
+
+/** How long visible cards gather before one lookup asks the disk about all of
+ * them: one scroll reveals a row at once, and the observer reports it card by
+ * card. */
+const LOOKUP_BATCH_MS = 16;
+let lookups: Job[] = [];
+let lookupTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function flushLookups(): Promise<void> {
+  lookupTimer = null;
+  const batch = lookups;
+  lookups = [];
+  // The grid binds one template per density: group by it.
+  const byTemplate = new Map<string, Job[]>();
+  for (const job of batch) {
+    const id = JSON.stringify(job.template);
+    byTemplate.set(id, [...(byTemplate.get(id) ?? []), job]);
+  }
+  for (const jobs of byTemplate.values()) {
+    let found: (GridThumb | null)[] = [];
+    try {
+      found = await gridThumbnails(
+        jobs.map((job) => ({ carId: job.carId, skinId: job.skinId })),
+        jobs[0].template,
+      );
+    } catch (e) {
+      console.error("vignettes de grille : recherche groupée", e);
+    }
+    jobs.forEach((job, i) => {
+      const known = found[i];
+      if (known?.path) cache[job.key] = { url: convertFileSrc(known.path) };
+      else if (known?.failed) cache[job.key] = { failed: known.failed };
+      else {
+        // Not on disk (or not answered): the render queue takes it, ahead of
+        // what is not visible.
+        delete cache[job.key];
+        enqueue(job.template, job.carId, job.skinId, job.name, true);
+      }
+    });
+  }
   void drain();
 }
 

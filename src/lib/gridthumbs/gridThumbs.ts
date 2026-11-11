@@ -103,6 +103,15 @@ export function gridThumbnail(carId: string, skinId: string | null, template: Gr
   return invoke<GridThumb>("grid_thumbnail", { carId, skinId, template });
 }
 
+/** `gridThumbnail` for several cars in one call, outside the render queue —
+ * the cards that just became visible. `null` for a car without a model. */
+export function gridThumbnails(
+  cars: { carId: string; skinId: string | null }[],
+  template: GridTemplate,
+): Promise<(GridThumb | null)[]> {
+  return invoke<(GridThumb | null)[]>("grid_thumbnails", { cars, template });
+}
+
 /** A preset bound to a density, as the backend freezes its thumbnails
  * (ESPACE§3.3): its id, which names the frozen file, and its template. Must
  * stay aligned with `gridthumbs::LivePreset`. */

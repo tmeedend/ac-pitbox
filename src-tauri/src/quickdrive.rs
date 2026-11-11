@@ -1161,7 +1161,10 @@ mod tests {
             assert_eq!(mode["PlayerBallast"], 40, "{kind:?}");
             assert!(mode["PlayerBallast"].is_u64(), "an integer in the ModeData ({kind:?})");
             assert_eq!(mode["PlayerRestrictor"], 15, "{kind:?}");
-            assert!(mode["PlayerRestrictor"].is_u64(), "an integer in the ModeData ({kind:?})");
+            assert!(
+                mode["PlayerRestrictor"].is_u64(),
+                "an integer in the ModeData ({kind:?})"
+            );
         }
     }
 

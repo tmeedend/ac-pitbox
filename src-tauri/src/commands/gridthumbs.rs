@@ -40,6 +40,52 @@ pub async fn grid_thumbnail(
     ))
 }
 
+/// One car of a [`grid_thumbnails`] lookup.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GridThumbQuery {
+    car_id: String,
+    skin_id: Option<String>,
+}
+
+/// [`grid_thumbnail`] for every card that just became visible, in one call
+/// and **outside the render queue**: what exists on disk shows at once, and
+/// the card never shows the mod's photo first only to switch to the thumbnail
+/// a moment later (GRILLE§5.4). `None` for a car without a model folder.
+///
+/// The base first, for every car, then the disk, lock given back.
+#[tauri::command]
+pub async fn grid_thumbnails(
+    app: AppHandle,
+    cars: Vec<GridThumbQuery>,
+    template: GridTemplate,
+) -> Result<Vec<Option<GridThumb>>, String> {
+    off_window(app, move |app| {
+        let dirs: Vec<Option<std::path::PathBuf>> = {
+            let cfg = crate::config::load(app);
+            let db = app.state::<Db>();
+            let conn = db.0.lock().map_err(|e| e.to_string())?;
+            cars.iter()
+                .map(|car| crate::preview::car_dir(&conn, &cfg, &car.car_id))
+                .collect()
+        };
+        Ok(cars
+            .iter()
+            .zip(dirs)
+            .map(|(car, dir)| {
+                // No entry is an ordinary case (a folder without a usable
+                // model): the card keeps its photo, as with `grid_thumbnail`.
+                let stem = crate::preview::car_entry_stem(app, &dir?, &car.car_id, car.skin_id.as_deref()).ok()?;
+                Some(crate::gridthumbs::look_up(
+                    app,
+                    &crate::gridthumbs::entry_stem(&stem, &template),
+                ))
+            })
+            .collect())
+    })
+    .await
+}
+
 /// Converts one car **outside the preview cache** and returns the URL of the
 /// model to render (GRILLE§5.3).
 ///

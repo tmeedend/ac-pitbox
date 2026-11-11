@@ -49,6 +49,7 @@
     enqueueGridThumbs,
     frozenThumb,
     gridThumb,
+    gridThumbSettled,
     requestFrozenThumb,
     requestGridThumb,
   } from "$lib/gridthumbs/gridThumbs.svelte";
@@ -236,17 +237,34 @@
   const wanted = new WeakMap<Element, ThumbWant>();
   let visibility: IntersectionObserver | null = null;
 
+  /** The cards on screen (and just around it), for what must be asked again
+   * when the template changes: the observer does not fire again for a card
+   * that stays visible. */
+  const onScreen = new Set<Element>();
+
+  function requestFor(want: ThumbWant) {
+    if (want.frozen) requestFrozenThumb(preset.id, template, want.car);
+    else if (want.want) requestGridThumb(template, want.car, want.skin, want.name);
+  }
+
   function whenVisible(node: HTMLElement, want: ThumbWant) {
     // `IntersectionObserver` manque dans certains contextes de test : son
-    // absence doit coûter la fonctionnalité, jamais l'écran.
-    if (typeof IntersectionObserver === "undefined") return;
+    // absence doit coûter le tri par visibilité, jamais l'écran — une carte
+    // attend sa vignette sans montrer sa photo, elle doit donc la demander.
+    if (typeof IntersectionObserver === "undefined") {
+      requestFor(want);
+      return;
+    }
     visibility ??= new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
+          if (!entry.isIntersecting) {
+            onScreen.delete(entry.target);
+            continue;
+          }
+          onScreen.add(entry.target);
           const target = wanted.get(entry.target);
-          if (target?.frozen) requestFrozenThumb(preset.id, template, target.car);
-          else if (target?.want) requestGridThumb(template, target.car, target.skin, target.name);
+          if (target) requestFor(target);
         }
       },
       // Un peu avant le bord : la vignette d'une carte qui arrive a une
@@ -257,14 +275,33 @@
     visibility.observe(node);
     return {
       update(next: ThumbWant) {
+        const previous = wanted.get(node);
         wanted.set(node, next);
+        // Another livery, or a card that now wants a thumbnail: asked again
+        // if it is on screen — the observer will not fire for it.
+        const changed = !previous || previous.car !== next.car || previous.skin !== next.skin || previous.want !== next.want;
+        if (changed && onScreen.has(node)) requestFor(next);
       },
       destroy() {
         visibility?.unobserve(node);
+        onScreen.delete(node);
         wanted.delete(node);
       },
     };
   }
+
+  // A new template (density switched, preset applied): the cards on screen ask
+  // for their thumbnail under it at once, instead of waiting for the
+  // background pass while showing nothing.
+  $effect(() => {
+    void template;
+    untrack(() => {
+      for (const node of onScreen) {
+        const want = wanted.get(node);
+        if (want) requestFor(want);
+      }
+    });
+  });
 
   onDestroy(() => {
     visibility?.disconnect();
@@ -1002,11 +1039,17 @@
             : c.showcase
               ? frozenThumb(preset.id, template, c.id_interne)
               : gridThumb(template, c.id_interne, prefSkin?.id ?? null)}
+          <!-- Until the disk has said whether the thumbnail exists, the card
+               shows nothing: showing the photo and switching a moment later
+               was a visible flicker (GRILLE§5.4). -->
+          {@const waiting = regen === null && isCar && !c.showcase && !(preset.skipStock && c.is_stock) && gridThumbsOn() && !gridThumbSettled(template, c.id_interne, prefSkin?.id ?? null)}
+          {@const cardSrc = waiting ? null : (regen ?? src)}
           {@const ol = previewSrc(prefLayout?.outline ?? c.outline)}
           {@const blocked = unusableReason(c)}
           <button data-id={c.id_interne} class="card" class:unusable={blocked !== null} class:sel={effectiveId === c.id_interne && selectedIds.size === 0} class:multisel={selectedIds.has(c.id_interne)} class:session={sessionId === c.id_interne} onclick={(e) => onCardClick(c, e)} ondblclick={() => (nav.openFull = c.id_interne)} oncontextmenu={(e) => openCardContextMenu(e, c)} title={blocked ? `${t(blocked)}\n${t("library.cardTooltip")}` : t("library.cardTooltip")}>
             <div class="thumb" use:whenVisible={{ car: c.id_interne, skin: prefSkin?.id ?? null, name: cardName(c), want: isCar && !c.showcase && !(preset.skipStock && c.is_stock), frozen: isCar && c.showcase }}>
-              {#if regen ?? src}<img src={regen ?? src} alt={c.display_name ?? c.id_interne} loading="lazy" />
+              {#if cardSrc}<img src={cardSrc} alt={c.display_name ?? c.id_interne} loading="lazy" />
+              {:else if waiting}<!-- the disk has not answered yet -->
               {:else}<div class="noprev">{isCar ? t("library.typeCar") : t("library.typeTrack")}</div>{/if}
               {#if !isCar && ol}<img class="outline" src={ol} alt="" loading="lazy" />{/if}
               {#if sessionId === c.id_interne}<span class="sessbadge">{t("library.sessionBadge")}</span>{/if}

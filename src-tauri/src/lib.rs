@@ -271,6 +271,7 @@ pub fn run() {
             commands::preview::preview_cache_size,
             commands::preview::set_preview_cache_cap,
             commands::gridthumbs::grid_thumbnail,
+            commands::gridthumbs::grid_thumbnails,
             commands::gridthumbs::prepare_grid_model,
             commands::gridthumbs::save_grid_thumbnail,
             commands::gridthumbs::mark_grid_thumbnail_failed,
