@@ -60,6 +60,31 @@ pub struct GltfMaterial {
     /// ce qui n'en porte pas.
     pub clearcoat: f32,
     pub clearcoat_roughness: f32,
+    /// A repeated detail map, for the viewer to lay over the colour — see
+    /// [`DetailLayer`].
+    pub detail: Option<DetailLayer>,
+}
+
+/// A detail map **repeated** over the surface (`detailUVMultiplier` above 1):
+/// the weave of a carbon body, the grain of a leather.
+///
+/// It cannot be baked into the diffuse the way a same-scale one is
+/// ([`crate::paint`]): repeated 800 times, it would need a texture 800 times
+/// larger. The diffuse carries its **average** instead, and the GLB carries the
+/// map itself in the material's `extras` (`pitboxDetail`), for the viewer's
+/// shader to put the pattern back — glTF has no second colour slot. Without
+/// it, the carbon of `ks_lamborghini_sesto_elemento` was a flat grey
+/// (reported on screen, the game showing the weave).
+#[derive(Debug, Clone, PartialEq)]
+pub struct DetailLayer {
+    pub texture: String,
+    /// How many times it repeats over the diffuse's UVs.
+    pub scale: f32,
+    /// `useDetail`, the blend amount.
+    pub use_detail: f32,
+    /// The average the diffuse was painted with, which the shader divides
+    /// back out ([0,1], as written in the file).
+    pub average: [f32; 3],
 }
 
 /// De combien de fois une texture se répète sur la surface.
@@ -228,6 +253,9 @@ pub struct MaterialTextures {
     /// le pipeline apprend du mod et que la conversion ne peut pas deviner du
     /// seul KN5.
     pub csp: Option<crate::SurfaceOverride>,
+    /// The repeated detail map of this material, when it carries a pattern
+    /// (see [`crate::paint::tiled_detail`]). Kept on opaque surfaces only.
+    pub detail: Option<DetailLayer>,
 }
 
 /// Réflectance à incidence normale à partir de laquelle une surface commence
@@ -476,6 +504,8 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
             ior: Some(ior),
             clearcoat: 0.0,
             clearcoat_roughness: 0.0,
+            // Glass carries no weave.
+            detail: None,
         };
     }
 
@@ -614,6 +644,9 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
         ior: None,
         clearcoat: csp_clearcoat.0,
         clearcoat_roughness: csp_clearcoat.1,
+        // The shader lays the pattern over the colour; through a cut-out or a
+        // blend it would also have to know the alpha, which the paint consumed.
+        detail: textures.detail.filter(|_| alpha_mode == AlphaMode::Opaque),
     }
 }
 

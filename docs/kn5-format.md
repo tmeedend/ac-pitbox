@@ -1819,3 +1819,33 @@ côté et la texture lue opaque.
 charge d'exactement un octet par texel, sans palette, et se lit juste en
 luminance. La palette n'est donc lue que si la charge contient **exactement**
 une palette plus la chaîne de mips.
+
+---
+
+## Écart n°31 — une carte de détail répétée porte un motif que la diffuse ne peut pas porter
+
+**Attendu** (écarts n°5 et n°28) : la carte de détail se résume à sa moyenne,
+ou se peint pixel par pixel dans la diffuse.
+
+**Réel** : répétée (`detailUVMultiplier` au-delà de 1), elle porte un **motif**
+— le tissage d'un carbone, le grain d'un cuir — qu'aucune des deux voies ne
+garde. La carrosserie de `ks_lamborghini_sesto_elemento` (`EXT_SKIN_CARBON`)
+pose `metal_detail.dds`, un tissage sombre de 256², répété 2 000 fois (800 dans
+le KN5, 2 000 par la config livrée avec CSP) ; réduite à sa moyenne (0,13), la
+carrosserie sortait d'un gris uni là où le jeu montre le tissage de près —
+signalé à l'écran. Il faudrait une texture 2 000 fois plus grande pour le cuire.
+
+**Correctif** : la diffuse garde la moyenne, et le GLB porte en plus la carte
+elle-même dans les `extras` du matériau (`pitboxDetail` : texture, répétition,
+`useDetail`, moyenne). Le shader de l'aperçu (`preview3d/detailMap.ts`) remet le
+texel à la place de la moyenne, avec le même `MODULATE2X`. De loin, les mipmaps
+ramènent la carte à sa moyenne, donc à ce que dit déjà la diffuse ; de près, le
+motif apparaît. Seulement sur une surface opaque, et pas pour un aplat (carte
+uniforme à 8 niveaux près). Les vignettes ne s'en servent pas : le motif y
+tombe sous le pixel.
+
+**Ce que ça ne fait pas** : le masque de peinture (l'alpha de la diffuse) a été
+consommé par la peinture et n'est plus là pour le shader ; une décalcomanie
+posée sur une surface à motif reçoit donc le motif aussi. Rencontré sur aucun
+matériau à ce jour.
+

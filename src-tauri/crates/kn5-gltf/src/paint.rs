@@ -172,6 +172,29 @@ fn same_scale_detail(material: &Kn5Material) -> Option<Detail> {
     })
 }
 
+/// The repeated detail map of a material, for the viewer to lay over the
+/// colour ([`crate::material::DetailLayer`]): a `detailUVMultiplier` above 1,
+/// and a map that carries a pattern. A flat swatch says nothing its average
+/// has not already said in the diffuse.
+pub(crate) fn tiled_detail(material: &Kn5Material, textures: &TextureSet) -> Option<crate::material::DetailLayer> {
+    let use_detail = material.property("useDetail").unwrap_or(0.0).clamp(0.0, 1.0);
+    let scale = material.property("detailUVMultiplier")?;
+    if use_detail <= 0.0 || !(scale > 1.0 && scale.is_finite()) {
+        return None;
+    }
+    let texture = material.texture_for("txDetail").filter(|t| !t.is_empty())?;
+    let prepared = textures.get(texture)?;
+    if prepared.flat {
+        return None;
+    }
+    Some(crate::material::DetailLayer {
+        texture: texture.to_string(),
+        scale,
+        use_detail,
+        average: prepared.average,
+    })
+}
+
 /// How far a texel may stray from the average of its map for the map to still
 /// count as a flat swatch, in levels out of 255. Swatches are flat colours
 /// saved through a lossy format; a drawing strays by far more.

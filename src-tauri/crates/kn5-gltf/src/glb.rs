@@ -118,10 +118,12 @@ pub fn build(
     let mut gltf_textures: Vec<Value> = Vec::new();
     let mut texture_index: Map<String, Value> = Map::new();
     for material in &used_materials {
+        let detail = material.detail.as_ref().map(|d| d.texture.clone());
         for name in [
             &material.base_color_texture,
             &material.normal_texture,
             &material.roughness_texture,
+            &detail,
         ]
         .into_iter()
         .flatten()
@@ -447,6 +449,21 @@ fn material_json(material: &GltfMaterial, texture_index: &Map<String, Value>) ->
     }
     if let Some(index) = material.normal_texture.as_ref().and_then(|n| texture_index.get(n)) {
         value["normalTexture"] = texture_info(index, material.uv_scale.normal);
+    }
+    // `extras` and not an extension, as for the steering: only Pit Box's viewer
+    // reads it, and a viewer that does not simply shows the average the
+    // diffuse already carries (see `DetailLayer`).
+    if let Some(detail) = &material.detail {
+        if let Some(index) = texture_index.get(&detail.texture) {
+            value["extras"] = json!({
+                "pitboxDetail": {
+                    "texture": index,
+                    "scale": detail.scale,
+                    "useDetail": detail.use_detail,
+                    "average": detail.average,
+                }
+            });
+        }
     }
     value
 }
@@ -1022,7 +1039,36 @@ mod tests {
             ior: None,
             clearcoat: 0.0,
             clearcoat_roughness: 0.0,
+            detail: None,
         }
+    }
+
+    // Règle : une carte de détail répétée voyage dans les `extras` du matériau,
+    // avec sa répétition et la moyenne que la diffuse porte déjà — c'est ce que
+    // l'aperçu relit pour reposer le tissage d'un carbone.
+    #[test]
+    fn a_repeated_detail_map_travels_in_the_material_extras() {
+        let mut carbon = sample_material();
+        carbon.detail = Some(crate::material::DetailLayer {
+            texture: "weave.dds".to_string(),
+            scale: 2000.0,
+            use_detail: 1.0,
+            average: [0.125, 0.125, 0.125],
+        });
+        let mut index = Map::new();
+        index.insert("weave.dds".to_string(), json!(3));
+        let written = material_json(&carbon, &index);
+        let detail = &written["extras"]["pitboxDetail"];
+        assert_eq!(detail["texture"], json!(3), "l'index de la texture");
+        assert_eq!(detail["scale"], json!(2000.0), "la répétition");
+        assert_eq!(
+            detail["average"],
+            json!([0.125, 0.125, 0.125]),
+            "la moyenne déjà peinte"
+        );
+
+        let unknown = material_json(&carbon, &Map::new());
+        assert!(unknown["extras"].is_null(), "sans texture écrite, rien à relire");
     }
 
     // Règle : le repère tangent n'est écrit **que** là où une carte de normales

@@ -125,6 +125,9 @@ pub struct PreparedTexture {
     /// Couleur moyenne, en linéaire approché [0,1]. Sert à teinter un matériau
     /// depuis sa carte de détail (voir `material::convert`).
     pub average: [f32; 3],
+    /// A flat swatch rather than a pattern ([`crate::paint::is_flat`]): as a
+    /// detail map, its average says all there is to say.
+    pub flat: bool,
 }
 
 /// A texture that could not be prepared. Never fatal: a car with one broken
@@ -643,6 +646,8 @@ fn roughness_one(
         has_alpha: false,
         alpha_varies: false,
         average: average_color(&resized),
+        // A baked texture is never read as a detail map.
+        flat: false,
     }))
 }
 
@@ -700,6 +705,8 @@ fn paint_one(
         has_alpha: false,
         alpha_varies: false,
         average: average_color(&resized),
+        // A baked texture is never read as a detail map.
+        flat: false,
     }))
 }
 
@@ -790,6 +797,7 @@ fn prepare_one(
             has_alpha: keep_alpha && resized.pixels().any(|p| p.0[3] != u8::MAX),
             alpha_varies: keep_alpha && alpha_varies(&resized),
             average: average_color(&resized),
+            flat: crate::paint::is_flat(&resized, average_color(&resized)),
         },
         verdicts,
     ))

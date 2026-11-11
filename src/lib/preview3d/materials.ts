@@ -1,10 +1,12 @@
 // What the car preview changes on the materials of a converted model, once,
 // as it arrives (docs/SPEC-preview-3d-kn5.md PREVIEW§8.2, PREVIEW§15):
 // anisotropic filtering, alpha cut-outs on sample coverage, the roughness
-// floor against shimmer, glass drawn after the opaque body, and who casts the
-// shadow. Out of `CarPreview3D.svelte` with the rest of the scene.
+// floor against shimmer, the repeated detail maps, glass drawn after the opaque
+// body, and who casts the shadow. Out of `CarPreview3D.svelte` with the rest of
+// the scene.
 import type * as ThreeModule from "three";
 import { TUNING } from "./tuning";
+import { detailMapOf, patchDetailShader } from "./detailMap";
 
 /**
  * Is this material physical glass, i.e. does it carry
@@ -34,20 +36,31 @@ function isTransmissive(material: ThreeModule.Material): boolean {
  * `roughnessFactor` is declared; `<lights_physical_fragment>` consumes it much
  * further down. Verified against three r185.
  */
-function applyRoughnessFloor(material: ThreeModule.MeshStandardMaterial): void {
-  const floor = TUNING.roughnessFloor;
-  if (floor <= 0) return;
-  material.onBeforeCompile = (shader) => {
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "#include <roughnessmap_fragment>",
-      `#include <roughnessmap_fragment>
+function applyRoughnessFloor(shader: ThreeModule.WebGLProgramParametersWithUniforms, floor: number): void {
+  shader.fragmentShader = shader.fragmentShader.replace(
+    "#include <roughnessmap_fragment>",
+    `#include <roughnessmap_fragment>
       roughnessFactor = max( roughnessFactor, ${floor.toFixed(4)} );`,
-    );
+  );
+}
+
+/**
+ * The preview's two changes to a material's shader: the roughness floor (not
+ * on physical glass) and the repeated detail map (`detailMap.ts`). One
+ * `onBeforeCompile` for both — a material has only one.
+ */
+function patchShader(material: ThreeModule.MeshStandardMaterial): void {
+  const floor = isTransmissive(material) ? 0 : TUNING.roughnessFloor;
+  const detail = detailMapOf(material);
+  if (floor <= 0 && !detail) return;
+  material.onBeforeCompile = (shader) => {
+    if (floor > 0) applyRoughnessFloor(shader, floor);
+    if (detail) patchDetailShader(shader, detail);
   };
   // Sans cette clé, three met en commun le programme compilé de deux
   // matériaux qu'il croit identiques : il ne regarde pas ce qu'`onBeforeCompile`
   // a changé.
-  material.customProgramCacheKey = () => `pitbox-roughfloor-${floor}`;
+  material.customProgramCacheKey = () => `pitbox-roughfloor-${floor}${detail ? "-detail" : ""}`;
 }
 
 /** Prepares every mesh of a freshly loaded model for the preview's renderer. */
@@ -71,6 +84,10 @@ export function prepareMaterials(model: ThreeModule.Object3D, renderer: ThreeMod
           texture.needsUpdate = true;
         }
       }
+      // The detail map lives on `userData`, out of the loop above's sight —
+      // and a weave seen at a grazing angle is exactly what anisotropy is for.
+      const detail = detailMapOf(material);
+      if (detail) detail.map.anisotropy = maxAnisotropy;
       // Découpes en alpha (calandres, jantes ajourées, grillages) : leur bord
       // est décidé par un seuil, donc le MSAA ne le voit pas — il ne lisse
       // que la silhouette du triangle, pas le trou qu'on y perce. Reporté sur
@@ -84,7 +101,7 @@ export function prepareMaterials(model: ThreeModule.Object3D, renderer: ThreeMod
       // tableau de mesures devant `TUNING.roughnessFloor`.
       // Physical glass is exempt: three blurs the transmitted image by the
       // same roughness, so a 0.15 floor would frost every windowpane.
-      if (standard.isMeshStandardMaterial && !isTransmissive(material)) applyRoughnessFloor(standard);
+      if (standard.isMeshStandardMaterial) patchShader(standard);
     }
   });
   applyGlassRules(model);

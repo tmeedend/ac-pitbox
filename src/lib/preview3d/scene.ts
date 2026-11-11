@@ -15,6 +15,7 @@ import { reportListenerAngle } from "$lib/detail/enginePlayer.svelte";
 import { applyFloorMirror } from "./floorMirror";
 import { addFloor, attachMirror, sizeMirror } from "./floor";
 import { prepareMaterials } from "./materials";
+import { attachDetailMaps } from "./detailMap";
 import { preview3dPrefs } from "./preview3dPrefs.svelte";
 import { applyDriverOpacity, applySteer, findRig, stepDriverFade, type Rig } from "./rig";
 import {
@@ -406,6 +407,7 @@ export async function build(
   scene.environment = pmrem.fromScene(showroomEnvironment(THREE), TUNING.environmentBlur).texture;
 
   const gltf = await new GLTFLoader().loadAsync(url);
+  await attachDetailMaps(gltf, THREE);
   prepareMaterials(gltf.scene, renderer);
 
   // Cadrage calculé, jamais codé en dur : les mods ont des échelles très
