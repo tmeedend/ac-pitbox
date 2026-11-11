@@ -1,16 +1,17 @@
 // Thumbnails of protected cars, rendered by the game (docs/SPEC-grille.md
 // GRILLE§7.1): the queue behind the right click, and what the task panel shows.
 //
-// One game session per car, one after the other: starting the game costs
-// twenty to forty seconds and two sessions cannot overlap. A session renders
-// the thumbnail of **both** grid densities when their presets allow it — the
-// car is loaded already, a second image costs a second, and switching density
-// afterwards must not ask for another session.
+// Up to twelve cars per game session, one session after the other: starting
+// the game costs twenty to forty seconds and two sessions cannot overlap. A
+// session renders the thumbnail of **every preset in use** — both grid
+// densities and the session car — the car is loaded already, a second image
+// costs a second, and switching density afterwards must not ask for another
+// session.
 import { listen } from "@tauri-apps/api/event";
 
 import { gridThumbnail, protectedGridCars, renderInGame, type GridTemplate, type InGamePhase } from "./gridThumbs";
 import { adoptGridThumb, gridThumbFailed } from "./gridThumbs.svelte";
-import { gridThumbsOn, presetFor, renderTemplate } from "./gridThumbPrefs.svelte";
+import { THUMB_SLOTS, gridThumbsOn, presetFor, renderTemplate } from "./gridThumbPrefs.svelte";
 import { listLibrary } from "$lib/library/library";
 
 /** A car to photograph: its id, the skin its card shows, its name for the
@@ -31,12 +32,14 @@ export function canRenderInGame(template: GridTemplate, car: InGameCar): boolean
   return gridThumbsOn() && gridThumbFailed(template, car.id, car.skin);
 }
 
-/** The templates one session renders: the grid's two densities, each once. */
+/** The templates one session renders: the grid's two densities and the
+ * session car's, each once — a protected car picked for a session is shown
+ * there too. */
 function sessionTemplates(): GridTemplate[] {
   const seen = new Set<string>();
   const list: GridTemplate[] = [];
-  for (const density of ["dense", "comfortable"] as const) {
-    const template = renderTemplate(presetFor(density));
+  for (const slot of THUMB_SLOTS) {
+    const template = renderTemplate(presetFor(slot));
     const key = JSON.stringify(template);
     if (seen.has(key)) continue;
     seen.add(key);
@@ -46,7 +49,7 @@ function sessionTemplates(): GridTemplate[] {
 }
 
 /**
- * Every protected car of the library, under the presets of the two densities
+ * Every protected car of the library, under the presets in use
  * (GRILLE§7.1): what « render them in
  * the game » takes in one go, from the generation report or the settings.
  * The names are the cards' own, for the task panel.
@@ -169,7 +172,7 @@ async function shoot(cars: InGameCar[]): Promise<number> {
   const templates = sessionTemplates();
   // The entry names come from the backend, as for every thumbnail: they are
   // what makes the game's image expire with the mod, like the others.
-  // A density whose thumbnail exists already is not rendered again.
+  // A preset whose thumbnail exists already is not rendered again.
   const wanted = await Promise.all(
     cars.map(async (car) => {
       const known = await Promise.all(

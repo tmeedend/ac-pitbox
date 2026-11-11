@@ -20,6 +20,13 @@
     slot: SlotState;
     /** Photo, already resolved by `previewSrc`. */
     preview: string | null;
+    /** The picture is not decided yet — the disk has not said whether the
+     * car's thumbnail exists (GRILLE§5.4): the box keeps its room, empty,
+     * rather than show the photo and switch a moment later. */
+    pending?: boolean;
+    /** The card background of the thumbnail's preset (GRILLE§5.6), behind a
+     * thumbnail that does not bake its own. */
+    mat?: { hi: string; lo: string } | null;
     /** Layout outline laid over a track photo. */
     outline?: string | null;
     /** Full name, read by screen readers; `null` when nothing is picked (no
@@ -42,6 +49,8 @@
     kind,
     slot,
     preview,
+    pending = false,
+    mat = null,
     outline = null,
     name,
     displayName,
@@ -70,9 +79,19 @@
     ? `${name} — ${isCar ? t("session.changeCar") : t("session.changeTrack")}`
     : undefined}
 >
-  <div class="thumb" class:track={!isCar} class:car={isCar} class:vacant={slot !== "picked"} class:photo={slot === "picked" && preview}>
+  <div
+    class="thumb"
+    class:track={!isCar}
+    class:car={isCar}
+    class:vacant={slot !== "picked"}
+    class:photo={slot === "picked" && (preview || pending)}
+    class:pending={slot === "picked" && !preview && pending}
+    class:matted={mat != null}
+    style:--mat-hi={mat?.hi}
+    style:--mat-lo={mat?.lo}
+  >
     {#if slot === "picked"}
-      {#if preview}<img src={preview} alt="" />{:else}<span class="thumb-ic">{isCar ? "🚗" : "🏁"}</span>{/if}
+      {#if preview}<img src={preview} alt="" />{:else if !pending}<span class="thumb-ic">{isCar ? "🚗" : "🏁"}</span>{/if}
       {#if outline}<img class="outline" src={outline} alt="" />{/if}
       <!-- Le libellé n'est pas supprimé, il est différé (SPEC SESSION§1) : au
            survol et au focus clavier seulement, sur un voile PLEIN — au
@@ -165,6 +184,15 @@
      recadrage, ni bandes vides. */
   .thumb.photo {
     aspect-ratio: auto;
+  }
+  /* Waiting for the thumbnail: the room it will take, the 16:9 of every
+     thumbnail (GRILLE§5.6), so that nothing moves when it arrives. */
+  .thumb.photo.pending {
+    aspect-ratio: 16 / 9;
+  }
+  /* The preset's mat, as on a library card (GRILLE§2.2). */
+  .thumb.matted {
+    background: radial-gradient(ellipse at 50% 44%, var(--mat-hi) 0%, var(--mat-lo) 76%);
   }
   .thumb.photo img {
     display: block;

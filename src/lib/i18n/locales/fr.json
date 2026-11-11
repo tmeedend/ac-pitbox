@@ -267,6 +267,7 @@
     "gridPresetSkipStockHint": "Les voitures livrées avec le jeu gardent leur image d'origine. Utile pour un preset qui imite ce rendu : les régénérer donnerait le même résultat.",
     "gridThumbsFor_dense": "Grille dense",
     "gridThumbsFor_comfortable": "Grille confortable",
+    "gridThumbsFor_session": "Voiture de session",
     "gridThumbsBill": "Appliquer régénérera {count} vignettes · environ {minutes} min",
     "gridThumbsFraming": "Cadrage",
     "gridThumbsLight": "Lumière",

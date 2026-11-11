@@ -118,7 +118,9 @@ Règles communes aux champs de la colonne :
 **Chaque emplacement a trois états**, et aucun bouton « Changer » :
 
 - **Choisi** : photo, nom, métadonnée. Au survol et au focus clavier, un voile
-  plein porte « ✎ Changer de voiture / de circuit ».
+  plein porte « ✎ Changer de voiture / de circuit ». La photo de la voiture est
+  sa vignette sous le preset choisi pour elle (GRILLE§5.6), Officiel par
+  défaut, quand les vignettes sont allumées.
 - **Vide** : trame diagonale, « ＋ Choisir une voiture ». **L'app ne choisit
   jamais une voiture à la place de l'utilisateur** au premier démarrage. Tant
   que le duo est incomplet, « Démarrer la session » est désactivé, son fond

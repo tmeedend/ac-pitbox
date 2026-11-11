@@ -47,6 +47,8 @@ const KEYS = {
   /** Quel preset pour quelle densité de grille. */
   dense: "pitbox.gridThumbs.preset.dense",
   comfortable: "pitbox.gridThumbs.preset.comfortable",
+  /** And for the car of the session column (GRILLE§5.6). */
+  session: "pitbox.gridThumbs.preset.session",
 } as const;
 
 /**
@@ -555,23 +557,29 @@ function clamp(key: TemplateKey, value: number): number {
 /** Les deux densités de grille, qui choisissent chacune leur preset. */
 export type GridDensity = "dense" | "comfortable";
 
-const DENSITIES: GridDensity[] = ["dense", "comfortable"];
+/** Where a preset is shown: the grid's two densities, and the car picked for
+ * the session in the session column (GRILLE§5.6). Each chooses its own. */
+export type ThumbSlot = GridDensity | "session";
 
-/** Sur quoi retombe une densité dont le preset a disparu. */
-const FALLBACK: Record<GridDensity, string> = { dense: "catalogue", comfortable: "vitrine" };
+export const THUMB_SLOTS: readonly ThumbSlot[] = ["dense", "comfortable", "session"];
 
-/** Le preset lié à une densité **en cours d'édition** (par opposition à
+/** Sur quoi retombe un emplacement dont le preset a disparu — and what it
+ * shows until one is chosen. The session car defaults to Officiel: the column
+ * shows one car large, the place for the game's own look. */
+const FALLBACK: Record<ThumbSlot, string> = { dense: "catalogue", comfortable: "vitrine", session: "officiel" };
+
+/** Le preset lié à un emplacement **en cours d'édition** (par opposition à
  * `presetFor`, qui lit ce qui est enregistré). */
-export function editedPresetFor(density: GridDensity): GridPreset | undefined {
-  return [...BUILTIN_PRESETS, ...values.user].find((p) => p.id === values.bound[density]);
+export function editedPresetFor(slot: ThumbSlot): GridPreset | undefined {
+  return [...BUILTIN_PRESETS, ...values.user].find((p) => p.id === values.bound[slot]);
 }
 
 interface Values {
   enabled: boolean;
   /** Les presets de l'utilisateur, dans l'ordre où il les a créés. */
   user: GridPreset[];
-  /** L'id du preset de chaque densité. */
-  bound: Record<GridDensity, string>;
+  /** L'id du preset de chaque emplacement. */
+  bound: Record<ThumbSlot, string>;
 }
 
 // `$state` de module : lu par la grille et par l'écran de réglages, écrit par
@@ -598,11 +606,13 @@ function ensureLoaded(): Promise<void> {
   loaded ??= getUiPrefs(Object.values(KEYS)).then((read) => {
     if (read[KEYS.enabled] !== null) values.enabled = read[KEYS.enabled] === "1";
     values.user = parsePresets(read[KEYS.presets]);
-    // Un preset supprimé laisse une densité orpheline : elle retombe sur son
-    // embarqué plutôt que de ne rien afficher.
+    // Un preset supprimé laisse un emplacement orphelin : il retombe sur son
+    // embarqué plutôt que de ne rien afficher. A file written before the
+    // session slot existed has no key for it, and gets its default the same way.
     values.bound = {
       dense: known(read[KEYS.dense]) ?? FALLBACK.dense,
       comfortable: known(read[KEYS.comfortable]) ?? FALLBACK.comfortable,
+      session: known(read[KEYS.session]) ?? FALLBACK.session,
     };
     Object.assign(stored, $state.snapshot(values));
   });
@@ -687,20 +697,20 @@ function find(list: readonly GridPreset[], id: string): GridPreset | undefined {
 }
 
 /**
- * Le preset **enregistré** d'une densité de grille — celui sous lequel les
- * images existent, et donc le seul avec lequel la grille a le droit de chercher
- * ou de produire.
+ * Le preset **enregistré** d'un emplacement — celui sous lequel les images
+ * existent, et donc le seul avec lequel la grille (ou la colonne de session) a
+ * le droit de chercher ou de produire.
  *
  * Bouger un curseur ne doit pas mettre trois cents vignettes au rebut avant que
  * l'utilisateur n'ait dit « Appliquer » (GRILLE§6.3).
  */
-export function presetFor(density: GridDensity): GridPreset {
+export function presetFor(slot: ThumbSlot): GridPreset {
   const list = storedPresets();
-  return find(list, stored.bound[density]) ?? list[0];
+  return find(list, stored.bound[slot]) ?? list[0];
 }
 
-/** Les presets réellement en usage — un par densité, dédoublonnés. Ce sont eux
- * dont les images doivent survivre au balayage. */
+/** Les presets réellement en usage — un par emplacement, dédoublonnés. Ce sont
+ * eux dont les images doivent survivre au balayage. */
 export function livePresets(): GridPreset[] {
   const ids = new Set(Object.values(stored.bound));
   return storedPresets().filter((p) => ids.has(p.id));
@@ -731,8 +741,8 @@ export function setGridThumbsEnabled(enabled: boolean): void {
   values.enabled = enabled;
 }
 
-export function bindPreset(density: GridDensity, id: string): void {
-  values.bound = { ...values.bound, [density]: id };
+export function bindPreset(slot: ThumbSlot, id: string): void {
+  values.bound = { ...values.bound, [slot]: id };
 }
 
 /** Modifie une valeur d'un preset de l'utilisateur. Un embarqué est en lecture
@@ -788,12 +798,12 @@ export function duplicatePreset(id: string, name: string): string | null {
   return copy.id;
 }
 
-/** Supprime un preset de l'utilisateur. Les densités qui le montraient
+/** Supprime un preset de l'utilisateur. Les emplacements qui le montraient
  * retombent sur leur embarqué — jamais sur rien. */
 export function deletePreset(id: string): void {
   values.user = values.user.filter((p) => p.id !== id);
-  for (const density of DENSITIES) {
-    if (values.bound[density] === id) values.bound = { ...values.bound, [density]: FALLBACK[density] };
+  for (const slot of THUMB_SLOTS) {
+    if (values.bound[slot] === id) values.bound = { ...values.bound, [slot]: FALLBACK[slot] };
   }
 }
 
@@ -818,6 +828,7 @@ export async function saveGridThumbPrefs(): Promise<void> {
     [KEYS.presets]: JSON.stringify($state.snapshot(values.user)),
     [KEYS.dense]: values.bound.dense,
     [KEYS.comfortable]: values.bound.comfortable,
+    [KEYS.session]: values.bound.session,
   });
   Object.assign(stored, structuredClone($state.snapshot(values)));
   // `renderTemplate` et non `p.template` : c'est l'empreinte du gabarit **tel

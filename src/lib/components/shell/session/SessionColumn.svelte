@@ -22,6 +22,13 @@
   import { t } from "$lib/i18n/index.svelte";
   import { zoomFactor } from "$lib/shell/zoom.svelte";
   import { LAUNCH_BUTTON_ATTR } from "$lib/shell/gamepadNav";
+  import { gridThumbsOn, presetFor, renderTemplate } from "$lib/gridthumbs/gridThumbPrefs.svelte";
+  import {
+    carPicture,
+    requestFrozenThumb,
+    requestGridThumb,
+    wantsGridThumb,
+  } from "$lib/gridthumbs/gridThumbs.svelte";
 
   interface Props {
     /** Assetto Corsa or its content folder cannot be found (SPEC SESSION§1). */
@@ -159,6 +166,10 @@
   // sélecteur). Chaque effet est clé sur l'id, ce qui écarte déjà les
   // réponses obsolètes.
   let carDetail = $state<Awaited<ReturnType<typeof getModDetail>>>(null);
+  /** The car `carDetail` was answered for — told apart from « not answered
+   * yet », which `null` alone cannot say (a mod gone from the base answers
+   * `null` too). */
+  let carDetailOf = $state<string | null>(null);
   let trackDetail = $state<Awaited<ReturnType<typeof getModDetail>>>(null);
 
   $effect(() => {
@@ -170,10 +181,14 @@
     libraryVersion();
     if (!carId) {
       carDetail = null;
+      carDetailOf = null;
       return;
     }
     getModDetail(carId).then((d) => {
-      if (nav.sessionCar?.id === carId) carDetail = d;
+      if (nav.sessionCar?.id === carId) {
+        carDetail = d;
+        carDetailOf = carId;
+      }
     });
   });
 
@@ -186,6 +201,39 @@
     }
     getModDetail(trackId).then((d) => {
       if (nav.sessionTrack?.id === trackId) trackDetail = d;
+    });
+  });
+
+  // The session car's picture (GRILLE§5.6): its thumbnail under the preset
+  // chosen for it, by the rules of a library card. The detail must be this
+  // car's — whether it is stock content or in the showcase decides which
+  // thumbnail, if any, it has.
+  const sessionPreset = $derived(presetFor("session"));
+  const sessionTemplate = $derived(renderTemplate(sessionPreset));
+  const carDetailKnown = $derived(nav.sessionCar != null && carDetailOf === nav.sessionCar.id);
+  const sessionCarDetail = $derived(carDetailKnown ? carDetail : null);
+  const carPic = $derived.by(() => {
+    const car = nav.sessionCar;
+    if (!car || !gridThumbsOn()) return { src: carPrev, waiting: false };
+    // Not known yet: deciding now would show the photo, then swap it.
+    if (!carDetailKnown) return { src: null, waiting: true };
+    if (!sessionCarDetail) return { src: carPrev, waiting: false };
+    return carPicture(sessionPreset, sessionTemplate, sessionCarDetail, car.skin, carPrev);
+  });
+
+  $effect(() => {
+    // Every dependency read before the first return (CLAUDE.md, `$effect`).
+    const on = gridThumbsOn();
+    const car = nav.sessionCar;
+    const detail = sessionCarDetail;
+    const preset = sessionPreset;
+    const template = sessionTemplate;
+    if (!on || !car || !detail) return;
+    // `untrack`: the requests write the thumbnail cache this effect would
+    // otherwise follow.
+    untrack(() => {
+      if (detail.showcase) requestFrozenThumb(preset.id, template, car.id);
+      else if (wantsGridThumb(preset, detail)) requestGridThumb(template, car.id, car.skin, car.name);
     });
   });
 
@@ -337,7 +385,9 @@
       <SessionSlot
         kind="car"
         slot={carSlot}
-        preview={carPrev}
+        preview={carPic.src}
+        pending={carPic.waiting}
+        mat={nav.sessionCar && gridThumbsOn() ? sessionPreset.mat : null}
         name={nav.sessionCar?.name ?? null}
         displayName={sessionCarName}
         badge={carDetail?.badge}

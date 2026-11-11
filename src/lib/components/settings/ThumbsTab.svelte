@@ -44,6 +44,7 @@
     setPresetSkipStock,
     setPresetValue,
     setGridThumbsEnabled,
+    THUMB_SLOTS,
     type GridDensity,
     type GridPreset,
   } from "$lib/gridthumbs/gridThumbPrefs.svelte";
@@ -66,6 +67,8 @@
    * preset de catalogue — voiture détourée, rien d'autre — d'un preset de
    * vitrine, où la flaque et le reflet sont l'essentiel de l'effet. */
   const GROUND = ["floor", "poolSize", "poolEdge", "reflection", "reflectionBlur", "shadow"] as const;
+  /** What « generate the whole library » covers. Not the session car's
+   * preset: it shows one car at a time, rendered when that car is picked. */
   const DENSITIES: GridDensity[] = ["dense", "comfortable"];
 
   let applying = $state(false);
@@ -82,8 +85,8 @@
     }
   }
 
-  /** The protected cars the game can render under the presets bound to the
-   * grid (GRILLE§7.1) — none when no bound preset is renderable. */
+  /** The protected cars the game can render under the presets in use
+   * (GRILLE§7.1) — none when no bound preset is renderable. */
   let protectedCars = $state<InGameCar[]>([]);
 
   $effect(() => {
@@ -230,10 +233,11 @@
         <!-- **Le preset suit la densité de la grille.** La densité est déjà une
              déclaration d'intention : dense = « je cherche », confortable =
              « je regarde ». Les deux jeux d'images coexistent, donc rebasculer
-             est instantané une fois les deux produits. -->
-        {#each DENSITIES as density (density)}
-          <Field label={t("settings.gridThumbsFor_" + density)}>
-            <select class="input" value={prefs.bound[density]} onchange={(e) => bindPreset(density, e.currentTarget.value)}>
+             est instantané une fois les deux produits. The session car has a
+             preset of its own (GRILLE§5.6). -->
+        {#each THUMB_SLOTS as slot (slot)}
+          <Field label={t("settings.gridThumbsFor_" + slot)}>
+            <select class="input" value={prefs.bound[slot]} onchange={(e) => bindPreset(slot, e.currentTarget.value)}>
               {#each presets as preset (preset.id)}
                 <option value={preset.id}>{presetName(preset)}</option>
               {/each}

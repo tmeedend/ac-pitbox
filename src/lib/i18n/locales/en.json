@@ -267,6 +267,7 @@
     "gridPresetSkipStockHint": "Cars that ship with the game keep their original image. Useful for a preset that imitates that look: regenerating them would give the same result.",
     "gridThumbsFor_dense": "Dense grid",
     "gridThumbsFor_comfortable": "Comfortable grid",
+    "gridThumbsFor_session": "Session car",
     "gridThumbsBill": "Applying will regenerate {count} thumbnails · about {minutes} min",
     "gridThumbsFraming": "Framing",
     "gridThumbsLight": "Light",
