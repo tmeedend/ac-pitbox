@@ -23,6 +23,13 @@ const FILL = 0.05;
 /** The enclosure itself. Not black: at zero, everything that faces no lamp
  * goes perfectly flat and the car loses its edges. */
 const WALLS = 0.01;
+/** A light band at the car's height, all around the room, as photo studios
+ * hang them. **The chrome needs it**: a mirror only shows what is around it,
+ * and in a room lit from above, everything a headlight reflector or a chrome
+ * trim faces — the walls, at the car's height — was black. The reflectors of
+ * `j8_toyota_celica_tuned` came out as dark holes (reported on screen). On the
+ * paint it draws the thin horizon line of a studio photo. */
+const HORIZON = 1.5;
 
 /**
  * Builds the scene `PMREMGenerator` turns into an environment map.
@@ -59,6 +66,13 @@ export function showroomEnvironment(THREE: typeof ThreeModule): ThreeModule.Scen
   panel(CEILING, [0, 8.5, 2.5], [10, 0.4, 5]);
   panel(FILL, [-7, 3, 0], [0.4, 5, 12]);
   panel(FILL, [7, 3, 0], [0.4, 5, 12]);
+  // The band, just in front of the side panels and against the end walls: seen
+  // from the car, a ring a few degrees above the horizon whichever way a
+  // surface faces.
+  panel(HORIZON, [-6.7, 1, 0], [0.1, 0.5, 13.4]);
+  panel(HORIZON, [6.7, 1, 0], [0.1, 0.5, 13.4]);
+  panel(HORIZON, [0, 1, -9.8], [13.4, 0.5, 0.1]);
+  panel(HORIZON, [0, 1, 9.8], [13.4, 0.5, 0.1]);
 
   return scene;
 }

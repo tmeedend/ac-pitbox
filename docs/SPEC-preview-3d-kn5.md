@@ -464,6 +464,12 @@ abandonnée. Un événement de progression alimente l'indicateur de chargement.
 
 - **Un studio sombre à rampes zénithales**, procédural et sans asset
   (`showroomEnvironment.ts`) ; c'est `scene.environmentIntensity` qui le dose.
+  **Une bande lumineuse à hauteur de voiture en fait le tour** : un chrome ou
+  un réflecteur de phare n'a sinon rien de clair à refléter. Le même studio
+  éclaire les vignettes (GRILLE§5.6).
+- **Une carte de détail répétée** (tissage d'un carbone, grain d'un cuir) se
+  voit de près : la diffuse en porte la moyenne, le shader remet le motif
+  (`kn5-format.md`, écart n°31).
 - **Le cadrage est calculé** sur les dimensions du modèle, pas codé en dur ;
   focale de 20° par défaut, trois-quarts avant **gauche** comme les photos du
   jeu.

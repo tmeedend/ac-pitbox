@@ -2046,22 +2046,21 @@ de reprendre. En cas d'écart, la spec fait foi.
       voir le chantier des vignettes), que l'aperçu 3D ne reproduit pas.
       Relevé à l'écran le 2026-11-11 : quatre défauts corrigés (camions
       « traffic », volant de la R34 Omori, peinture de la 504, vitres des
-      vignettes — écarts n°28 à 30). Restent deux pistes, à mener en lots à
-      part :
-      - **des éléments lumineux dans le décor du studio** (panneaux de studio
-        photo) : les chromes et les réflecteurs de phares sont des miroirs, et
-        notre studio sombre ne leur donne rien à refléter — l'intérieur des
-        phares de `j8_toyota_celica_tuned` sort noir. Change le rendu de toutes
-        les voitures : à régler en regardant, vignettes comprises ;
-      - **les cartes de détail répétées** (le tissage du carbone de
-        `ks_lamborghini_sesto_elemento`, ×800, ×2000 par sa config CSP) : elles
-        ne se cuisent pas dans la diffuse (écart n°28) et sont aujourd'hui
-        réduites à leur moyenne, d'où un carbone gris uni. Piste : les porter
-        dans le GLB comme seconde texture avec leur répétition, et les mêler à
-        la couleur dans le shader de l'aperçu. Sans effet sur une vignette, où
-        le tissage tombe sous le pixel. La carrosserie reste mate : c'est ce que
-        la config livrée avec CSP déclare (`Material_CarPaint_Matte`), et le jeu
-        la montre ainsi.
+      vignettes — écarts n°28 à 30), puis deux pistes menées dans la foulée,
+      **à juger à l'écran** :
+      - **une bande lumineuse à hauteur de voiture** autour du studio
+        (`HORIZON` de `showroomEnvironment.ts`, intensité 1,5 choisie sans
+        mesure) : les chromes et les réflecteurs de phares avaient tout noir à
+        refléter. Elle change le rendu de toutes les voitures, vignettes
+        comprises (`RENDERER_VERSION` 7) — y compris Officiel, dont les valeurs
+        avaient été mesurées sans elle : à remesurer si l'écart au jeu bouge ;
+      - **les cartes de détail répétées** (écart n°31) : le tissage du carbone
+        de `ks_lamborghini_sesto_elemento` revient de près dans l'aperçu 3D,
+        pas sur les vignettes, où il tombe sous le pixel. La carrosserie reste
+        mate : c'est ce que la config livrée avec CSP déclare
+        (`Material_CarPaint_Matte`), et le jeu la montre ainsi.
+      Reste, de ce relevé, la calandre violette de `peugeot_504`, pas encore
+      examinée.
       (R et B de `txMaps` : question close, par la négative ; la métallicité
       vient de `fresnelC` — écarts n°7 et n°10 de `kn5-format.md`.)
       Trois règles à ne pas perdre de vue :
