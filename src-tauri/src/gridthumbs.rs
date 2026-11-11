@@ -573,6 +573,50 @@ pub fn library_card_thumbs(
     card_thumbs(app, &ids, presets)
 }
 
+/// A car whose grid thumbnail only the game can render (GRILLE§7.1), in the
+/// livery its card shows.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProtectedCar {
+    pub car_id: String,
+    pub skin: Option<String>,
+}
+
+/// The cars of the library the Pit Box renderer could not render under
+/// `template` because their model is protected — `errors.previewProtected`
+/// recorded next to their entry (GRILLE§7). What the in-game render can still
+/// do for them in one go (GRILLE§7.1). A car not tried yet is not listed: the
+/// background pass tries every car first.
+pub fn protected_cars(app: &tauri::AppHandle, template: &GridTemplate) -> Vec<ProtectedCar> {
+    use tauri::Manager;
+    let ids: Vec<String> = {
+        let db = app.state::<crate::overlay::Db>();
+        let Ok(conn) = db.0.lock() else {
+            log::warn!("gridthumbs: base lock poisoned, no protected car listed");
+            return Vec::new();
+        };
+        match crate::overlay::list_mods(&conn) {
+            Ok(mods) => mods.into_iter().map(|m| m.id_interne).collect(),
+            Err(e) => {
+                log::warn!("gridthumbs: mods not listed, no protected car listed: {e}");
+                return Vec::new();
+            }
+        }
+    };
+    let Ok(store) = dir(app) else { return Vec::new() };
+    let prefs = crate::ui_prefs::load(app);
+    cars_with_files(app, &ids)
+        .into_iter()
+        .filter_map(|(car_id, car_dir)| {
+            let skin = preferred_skin(&prefs, &car_id);
+            let stem = crate::preview::car_entry_stem(app, &car_dir, &car_id, skin.as_deref()).ok()?;
+            let entry = entry_stem(&stem, template);
+            let reason = std::fs::read_to_string(store.join(format!("{entry}.fail"))).ok()?;
+            (reason.trim() == crate::errors::PREVIEW_PROTECTED).then_some(ProtectedCar { car_id, skin })
+        })
+        .collect()
+}
+
 /// The livery a car's card shows, as `preferred.ts` keeps it in
 /// `ui_prefs.json`: a JSON object serialized into the value of
 /// `pitbox.skin.<id>`.

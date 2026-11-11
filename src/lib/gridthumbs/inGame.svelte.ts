@@ -8,9 +8,10 @@
 // afterwards must not ask for another session.
 import { listen } from "@tauri-apps/api/event";
 
-import { gridThumbnail, renderInGame, type GridTemplate, type InGamePhase } from "./gridThumbs";
+import { gridThumbnail, protectedGridCars, renderInGame, type GridTemplate, type InGamePhase } from "./gridThumbs";
 import { adoptGridThumb, gridThumbFailed } from "./gridThumbs.svelte";
 import { gridThumbsOn, presetForDensity, renderTemplate } from "./gridThumbPrefs.svelte";
+import { listLibrary } from "$lib/library/library";
 
 /**
  * Whether the game can render this template. It draws the car alone, on a
@@ -52,6 +53,32 @@ function sessionTemplates(): GridTemplate[] {
     list.push(template);
   }
   return list;
+}
+
+/** Whether the game can render the thumbnails of at least one grid density —
+ * else there is nothing to offer in one go. */
+export function inGameAvailable(): boolean {
+  return gridThumbsOn() && sessionTemplates().length > 0;
+}
+
+/**
+ * Every protected car of the library the game can render a thumbnail for,
+ * under the presets of the two densities (GRILLE§7.1): what « render them in
+ * the game » takes in one go, from the generation report or the settings.
+ * The names are the cards' own, for the task panel.
+ */
+export async function protectedCarsForGame(): Promise<InGameCar[]> {
+  if (!gridThumbsOn()) return [];
+  const [library, ...lists] = await Promise.all([
+    listLibrary(),
+    ...sessionTemplates().map((template) => protectedGridCars(template)),
+  ]);
+  const names = new Map(library.map((card) => [card.id_interne, card.display_name ?? card.id_interne]));
+  const cars = new Map<string, InGameCar>();
+  for (const car of lists.flat()) {
+    if (!cars.has(car.carId)) cars.set(car.carId, { id: car.carId, skin: car.skin, name: names.get(car.carId) ?? car.carId });
+  }
+  return [...cars.values()];
 }
 
 const progress = $state({

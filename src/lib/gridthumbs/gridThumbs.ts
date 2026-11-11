@@ -214,3 +214,15 @@ export type InGamePhase = "launching" | "ingame";
 export function renderInGame(request: InGameShotRequest): Promise<InGameShotResult[]> {
   return invoke<InGameShotResult[]>("render_in_game", { request });
 }
+
+/** A car whose thumbnail only the game can render, in the livery its card
+ * shows (`gridthumbs::ProtectedCar`). */
+export interface ProtectedCar {
+  carId: string;
+  skin: string | null;
+}
+
+/** The protected cars of the library under this template (GRILLE§7.1). */
+export function protectedGridCars(template: GridTemplate): Promise<ProtectedCar[]> {
+  return invoke<ProtectedCar[]>("protected_grid_cars", { template });
+}

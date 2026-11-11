@@ -191,6 +191,7 @@ C'est ce cas qui rend le §2 obligatoire pour toujours.
 Un modèle protégé ne se lit que dans le jeu : c'est donc le jeu qui le photographie, avec le gabarit de la vue. Recherche et mesures : `docs/csp-shot-research.md`.
 
 - **Au clic droit d'une carte**, « Générer la vignette dans le jeu », seulement si les vignettes sont allumées, que la voiture est protégée (son rendu a échoué pour le preset de la vue) et que ce preset est **rendable par le jeu** : sans sol, sans fond cuit, sans exposition automatique — Catalogue et ses copies. Vitrine et Officiel ne le sont pas encore. Sur une sélection, l'entrée porte sur ses voitures protégées.
+- **En une fois** : là où l'utilisateur apprend qu'il a des voitures protégées — le rapport de génération (« N impossibles ») et `Réglages › Vignettes` —, un bouton les met toutes en file, sous les presets des deux densités que le jeu sait rendre. Une voiture que la génération n'a pas encore essayée n'y figure pas.
 - **Une session de jeu par voiture**, en file, suivie dans la pile bas-droite. Le jeu s'ouvre au stand sur Magione, prend la photo sans rien afficher, et se ferme seul. Refusé tant que le jeu tourne déjà.
 - **Une session sert les deux densités** : la vignette est aussi rendue pour le preset de l'autre densité s'il est rendable, puisque la voiture est déjà chargée.
 - **L'image prend la place de la vignette Pit Box** : même nom, donc même péremption — elle se refait quand le mod change, et le marqueur d'échec disparaît.

@@ -446,7 +446,8 @@
     "inGameLaunching": "Lancement du jeu…",
     "inGameShooting": "Dans le jeu — il se fermera tout seul",
     "inGameReportDone": "{count} vignettes rendues dans le jeu",
-    "inGameReportFailed": "{count} en échec"
+    "inGameReportFailed": "{count} en échec",
+    "inGameAll": "Les générer dans le jeu"
   },
   "toast": {
     "expand": "Déplier",

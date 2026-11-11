@@ -446,7 +446,8 @@
     "inGameLaunching": "Starting the game…",
     "inGameShooting": "In the game — it closes by itself",
     "inGameReportDone": "{count} thumbnails rendered in the game",
-    "inGameReportFailed": "{count} failed"
+    "inGameReportFailed": "{count} failed",
+    "inGameAll": "Render them in the game"
   },
   "toast": {
     "expand": "Expand",

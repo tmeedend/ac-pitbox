@@ -23,6 +23,7 @@
   import { i18n, t } from "$lib/i18n/index.svelte";
   import { listLibrary } from "$lib/library/library";
   import { clearGridThumbnails, gridThumbnailStats, type GridThumbStats } from "$lib/gridthumbs/gridThumbs";
+  import { protectedCarsForGame, requestInGame, type InGameCar } from "$lib/gridthumbs/inGame.svelte";
   import { enqueueGridThumbs } from "$lib/gridthumbs/gridThumbs.svelte";
   import { getPreferredSkin } from "$lib/preferred";
   import { withoutBrand } from "$lib/library/displayName";
@@ -81,8 +82,15 @@
     }
   }
 
+  /** The protected cars the game can render under the presets bound to the
+   * grid (GRILLE§7.1) — none when no bound preset is renderable. */
+  let protectedCars = $state<InGameCar[]>([]);
+
   $effect(() => {
     void refresh();
+    void protectedCarsForGame()
+      .then((cars) => (protectedCars = cars))
+      .catch((e) => console.error("voitures protégées", e));
     void listLibrary()
       .then((list) => (carCount = list.filter((c) => c.kind === "Car").length))
       .catch(() => undefined);
@@ -247,11 +255,18 @@
               {t("settings.gridThumbsClear")}
             </button>
             <!-- Le décompte des impossibles se dit une fois, sans tonalité
-                 d'échec : l'utilisateur n'y peut rien, aucune action n'est
-                 proposable, et ces cartes restent parfaitement utilisables avec
-                 leur photo d'origine (GRILLE§7). -->
+                 d'échec : ces cartes restent parfaitement utilisables avec leur
+                 photo d'origine (GRILLE§7). Le rendu dans le jeu est proposé à
+                 côté, pour qui le veut (GRILLE§7.1). -->
             {#if stats && stats.failed > 0}
               <span class="muted">{t("settings.gridThumbsFailed", { count: String(stats.failed) })}</span>
+            {/if}
+            {#if protectedCars.length > 0}
+              <button class="btn" type="button" onclick={() => requestInGame(protectedCars)}>
+                {protectedCars.length > 1
+                  ? t("gridThumbs.inGameActionN", { count: protectedCars.length })
+                  : t("gridThumbs.inGameAction")}
+              </button>
             {/if}
           </div>
         </Field>

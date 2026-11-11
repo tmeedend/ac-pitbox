@@ -26,6 +26,19 @@
     gridThumbsPaused,
   } from "$lib/gridthumbs/gridThumbs.svelte";
   import { t } from "$lib/i18n/index.svelte";
+  import { inGameAvailable, protectedCarsForGame, requestInGame } from "$lib/gridthumbs/inGame.svelte";
+
+  /** Protected cars are what the report counts, and the place the user learns
+   * about them: the way to render them in the game is offered right there
+   * (GRILLE§7.1). */
+  async function renderProtected() {
+    dismissGridThumbReport();
+    const cars = await protectedCarsForGame().catch((e) => {
+      console.error("voitures protégées", e);
+      return [];
+    });
+    if (cars.length) requestInGame(cars);
+  }
 
   const p = $derived(gridThumbProgress());
 
@@ -101,7 +114,13 @@
     {/if}
   </Toast>
 {:else if p.finished}
-  <Toast title={report} onclose={dismissGridThumbReport} />
+  <Toast title={report} onclose={dismissGridThumbReport}>
+    {#snippet actions()}
+      {#if p.failed > 0 && inGameAvailable()}
+        <button class="btn-ghost g-cancel" type="button" onclick={renderProtected}>{t("gridThumbs.inGameAll")}</button>
+      {/if}
+    {/snippet}
+  </Toast>
 {/if}
 
 <style>

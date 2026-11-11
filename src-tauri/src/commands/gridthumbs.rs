@@ -40,6 +40,17 @@ pub async fn grid_thumbnail(
     ))
 }
 
+/// The protected cars of the library under this template, in the livery
+/// their card shows (GRILLE§7.1): what the in-game render can do in one go.
+/// A few `stat` per car of the library, off the window thread.
+#[tauri::command]
+pub async fn protected_grid_cars(
+    app: AppHandle,
+    template: GridTemplate,
+) -> Result<Vec<crate::gridthumbs::ProtectedCar>, String> {
+    off_window(app, move |app| Ok(crate::gridthumbs::protected_cars(app, &template))).await
+}
+
 /// One car of a [`grid_thumbnails`] lookup.
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
