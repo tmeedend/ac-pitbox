@@ -116,6 +116,10 @@ pub struct GridTemplate {
     /// glass as rendered, as before it existed.
     #[serde(default = "neutral")]
     pub glass: i32,
+    /// Chrome reflections, in percent of the paint's. Absent means 100: the
+    /// chrome as rendered, as before it existed.
+    #[serde(default = "neutral")]
+    pub chrome: i32,
     /// Size of the disc of light on the floor, in percent of a radius. Absent
     /// means 0: the wide glow, as before it existed.
     #[serde(default)]
@@ -213,6 +217,10 @@ impl GridTemplate {
         if self.glass != NEUTRAL {
             hasher.update(b"glass");
             hasher.update(self.glass.to_le_bytes());
+        }
+        if self.chrome != NEUTRAL {
+            hasher.update(b"chrome");
+            hasher.update(self.chrome.to_le_bytes());
         }
         // The edge belongs to the disc: without one it changes no pixel, so it
         // stays out of the name, like the mat without a baked backdrop.
@@ -665,6 +673,7 @@ mod tests {
             saturation: 100,
             cool_tint: 0,
             glass: 100,
+            chrome: 100,
             pool_size: 0,
             pool_edge: 30,
             renderer: 1,
@@ -679,7 +688,7 @@ mod tests {
     fn every_template_field_changes_the_entry_name() {
         let base = template();
         let name = entry_stem("v46-abc", &base);
-        let mut variants = vec![base.clone(); 22];
+        let mut variants = vec![base.clone(); 23];
         variants[0].azimuth += 1;
         variants[1].elevation += 1;
         variants[2].fov += 1;
@@ -702,6 +711,7 @@ mod tests {
         variants[19].cool_tint = 100;
         variants[20].glass += 10;
         variants[21].pool_size = 100;
+        variants[22].chrome += 10;
         for variant in variants {
             assert_ne!(
                 name,
@@ -829,7 +839,7 @@ mod tests {
     }
 
     /// GRILLE§5.6 — true scale, the ambient light, auto exposure, game
-    /// framing, colour grade and window reflections arrived after thumbnails
+    /// framing, colour grade, window and chrome reflections arrived after thumbnails
     /// were already on disk.
     /// A template saved before it must still deserialize, mean "fitted", and
     /// keep the very name its images were stored under: otherwise adding a
@@ -849,6 +859,7 @@ mod tests {
         assert_eq!(old.saturation, 100, "absent, les couleurs restent celles du rendu");
         assert_eq!(old.cool_tint, 0, "absent, aucune teinte");
         assert_eq!(old.glass, 100, "absent, les vitres restent celles du rendu");
+        assert_eq!(old.chrome, 100, "absent, les chromes restent ceux du rendu");
         assert_eq!(old.pool_size, 0, "absent, la lueur diffuse d'avant");
         assert_eq!(
             old.ambient, 100,

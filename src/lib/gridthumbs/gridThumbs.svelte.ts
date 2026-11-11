@@ -42,7 +42,8 @@ import { applyFloorMirror } from "$lib/preview3d/floorMirror";
 import { applyGlassRules } from "$lib/preview3d/materials";
 import { placeCamera } from "./framing";
 import { groundTexture, placePool, type StudioFloor } from "./floor";
-import { gradeColours, gradesColours, meteredExposure, reflectGlass } from "./look";
+import { gradeColours, gradesColours, meteredExposure } from "./look";
+import { reflectChrome, reflectGlass } from "$lib/preview3d/reflections";
 
 /** Taille de sortie (GRILLE§5.6). 16:9 parce que c'est le rapport des `preview.png`
  * d'Assetto Corsa : la grille restant mixte pour toujours (GRILLE§7), les deux
@@ -889,6 +890,7 @@ function drawModel(rig: Rig, model: ThreeModule.Group, template: GridTemplate): 
   // it — a lamp lights a side, the environment is what a body reflects.
   rig.scene.environmentIntensity = (ENVIRONMENT * template.ambient) / 100;
   reflectGlass(model, rig.scene, template.glass);
+  reflectChrome(model, rig.scene, template.chrome);
 
   rig.pool.visible = template.floor > 0;
   placePool(rig, center, radius, floorY, span, template);

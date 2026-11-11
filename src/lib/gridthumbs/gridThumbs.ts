@@ -58,6 +58,9 @@ export interface GridTemplate {
   /** Window reflections, in percent of what the rest of the car reflects:
    * 100 leaves the glass as rendered. */
   glass: number;
+  /** Chrome reflections, in percent of what the paint reflects: 100 leaves
+   * the chrome as rendered. */
+  chrome: number;
   /** Size of the disc of light on the floor, in percent of the car's radius
    * (or of the reference radius under the game's camera). 0 keeps the wide
    * glow of the detail page preview. */

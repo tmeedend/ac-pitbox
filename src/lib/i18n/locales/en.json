@@ -312,6 +312,8 @@
     "gridThumbHint_ambient": "What the paint reflects. This is what keeps a dark car visible.",
     "gridThumb_glass": "Window reflections",
     "gridThumbHint_glass": "What the windows reflect, compared with the rest of the car.",
+    "gridThumb_chrome": "Chrome reflections",
+    "gridThumbHint_chrome": "What chrome and bare metal reflect, compared with the paint.",
     "gridThumb_saturation": "Saturation",
     "gridThumbHint_saturation": "How strong the colours are, the same for every car. The game's images are slightly less saturated.",
     "gridThumb_coolTint": "Cool tint",

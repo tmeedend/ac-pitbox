@@ -312,6 +312,8 @@
     "gridThumbHint_ambient": "Ce que la peinture reflète. C'est elle qui garde visible une voiture sombre.",
     "gridThumb_glass": "Reflets des vitres",
     "gridThumbHint_glass": "Ce que les vitres reflètent, par rapport au reste de la voiture.",
+    "gridThumb_chrome": "Reflets des chromes",
+    "gridThumbHint_chrome": "Ce que reflètent les chromes et le métal nu, comparé à la peinture.",
     "gridThumb_saturation": "Saturation",
     "gridThumbHint_saturation": "L'intensité des couleurs, la même pour toutes les voitures. Les images du jeu sont un peu moins saturées.",
     "gridThumb_coolTint": "Teinte froide",

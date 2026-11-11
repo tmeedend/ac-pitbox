@@ -467,6 +467,9 @@ abandonnée. Un événement de progression alimente l'indicateur de chargement.
   **Une bande lumineuse à hauteur de voiture en fait le tour** : un chrome ou
   un réflecteur de phare n'a sinon rien de clair à refléter. Le même studio
   éclaire les vignettes (GRILLE§5.6).
+- **Les chromes reflètent un studio plus clair que la peinture** (le métal nu,
+  les réflecteurs de phares) : sans quoi un miroir dans un studio sombre sort
+  noir. La peinture garde son studio sombre, qui la garde profonde.
 - **Une carte de détail répétée** (tissage d'un carbone, grain d'un cuir) se
   voit de près : la diffuse en porte la moyenne, le shader remet le motif
   (`kn5-format.md`, écart n°31).

@@ -62,7 +62,7 @@
   /** Les deux groupes de curseurs, et leur ordre. Le cadrage d'abord — c'est
    * lui qu'on vient régler — la lumière ensuite. */
   const FRAMING = ["azimuth", "elevation", "fov", "margin", "height"] as const;
-  const LIGHT = ["key", "fill", "rim", "ambient", "glass", "saturation", "coolTint"] as const;
+  const LIGHT = ["key", "fill", "rim", "ambient", "glass", "chrome", "saturation", "coolTint"] as const;
   /** Le sol est un groupe à lui : c'est ce qui sépare le plus nettement un
    * preset de catalogue — voiture détourée, rien d'autre — d'un preset de
    * vitrine, où la flaque et le reflet sont l'essentiel de l'effet. */

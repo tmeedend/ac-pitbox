@@ -185,6 +185,11 @@ export const GRID_THUMB_RANGES = {
    * percent of what the paint does. Our studio is dark, so windows read as
    * dark holes where the game's previews show a pale sheen. */
   glass: { min: 0, max: 600, step: 10, default: 100 },
+  /** **Chrome reflections** (`reflectChrome`): what chrome and bare metal
+   * mirror, in percent of what the paint does. A mirror only shows what is
+   * around it, and our studio is dark on purpose: headlight reflectors and
+   * trims read as black where the game's show a bright surface. */
+  chrome: { min: 0, max: 600, step: 10, default: 100 },
   /** **The disc of light** under the car (`placePool`), the game's turntable:
    * its radius, in percent of the car's (of the reference radius under the
    * game's camera, so the same for every car as in the game). 0 keeps the
@@ -302,6 +307,7 @@ function template(read: (key: TemplateKey) => number): GridTemplateValues {
     saturation: read("saturation"),
     coolTint: read("coolTint"),
     glass: read("glass"),
+    chrome: read("chrome"),
     poolSize: read("poolSize"),
     poolEdge: read("poolEdge"),
   };
@@ -327,6 +333,13 @@ function defaultTemplate(): GridTemplateValues {
   return template((key) => GRID_THUMB_RANGES[key].default);
 }
 
+/** Chrome reflections of the three built-in presets. **Set by eye, not
+ * measured**: against our dark studio, the headlight reflectors of
+ * `j8_toyota_celica_tuned` and `ks_alfa_romeo_155_v6` came out black where the
+ * game shows them bright (reported on screen). One value for all three until
+ * someone judges them apart. */
+const CHROME = 250;
+
 /** Le mat d'origine : celui de la grille depuis le GRILLE§2.2. */
 const CATALOGUE_MAT: GridMat = { hi: "#2b2d33", lo: "#17181c" };
 
@@ -347,7 +360,7 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
     // Height -7: the car centred in the frame (margins 22.1 % above, 21.6 %
     // below over six cars). The +8 default came from the game's previews,
     // which sit low; a catalogue has no reason to copy that.
-    template: { ...defaultTemplate(), height: -7, saturation: 75, coolTint: 100 },
+    template: { ...defaultTemplate(), height: -7, saturation: 75, coolTint: 100, chrome: CHROME },
     mat: CATALOGUE_MAT,
     skipStock: false,
   },
@@ -404,6 +417,7 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
       saturation: 75,
       coolTint: 100,
       glass: 100,
+      chrome: CHROME,
       poolSize: 0,
       poolEdge: 30,
     },
@@ -538,6 +552,7 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
       // the gap is the game's bright environment in a clear pane, which our
       // dark studio does not have (docs/CHANTIERS.md).
       glass: 200,
+      chrome: CHROME,
       // The game's turntable: a disc of light on a darker floor, not a glow
       // (`placePool`). Size set on column profiles at both edges of the
       // frame, which line up with the game's: wall, dark floor band, disc.

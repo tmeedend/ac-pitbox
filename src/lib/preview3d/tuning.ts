@@ -243,6 +243,16 @@ export const TUNING = {
    * re-add it without measuring first.
    */
   roughnessFloor: 0.15,
+
+  /**
+   * Chrome reflections, in percent of what the paint reflects
+   * (`reflections.ts`). The studio is dark so the paint stays deep, and a
+   * mirror only shows what is around it: headlight reflectors and chrome
+   * trims came out black (`j8_toyota_celica_tuned`, `ks_alfa_romeo_155_v6`,
+   * reported on screen). The same value as the built-in thumbnail presets;
+   * set by eye, not measured.
+   */
+  chromeReflection: 250,
 };
 
 // Effet d'entrée du plateau (PREVIEW§15). Deux gestes, et rien d'autre qu'un

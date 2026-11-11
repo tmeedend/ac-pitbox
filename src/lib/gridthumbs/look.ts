@@ -1,35 +1,9 @@
-// The finish of a grid thumbnail (docs/SPEC-grille.md GRILLE§5.6): what the
-// glass reflects, the exposure, and the colour grade — the settings that move
-// the render towards the game's look without touching its framing or floor.
-import type * as ThreeModule from "three";
+// The finish of a grid thumbnail (docs/SPEC-grille.md GRILLE§5.6): the
+// exposure and the colour grade — the settings that move the render towards
+// the game's look without touching its framing or floor. What the glass and
+// the chrome reflect is in `preview3d/reflections.ts`, shared with the 3D
+// preview.
 import type { GridTemplate } from "./gridThumbs";
-
-/**
- * Window reflections (`glass`): how much of the studio the glass mirrors,
- * in percent of what the rest of the car does.
- *
- * Glass is blended, and blending attenuates its reflection along with the
- * rest of its colour (see `materials.ts`): against our dark studio, the
- * windows read as plain dark holes where the game's previews show a pale
- * sheen. Raising the environment would brighten the paint too; this raises
- * it on the glass only, by giving those materials the scene's environment
- * as their own map — the one way three lets a material weigh it apart.
- * At 100 % nothing is touched, so presets from before it render as they did.
- */
-export function reflectGlass(model: ThreeModule.Object3D, scene: ThreeModule.Scene, glass: number): void {
-  model.traverse((object) => {
-    const mesh = object as ThreeModule.Mesh;
-    if (!mesh.isMesh) return;
-    for (const raw of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
-      const material = raw as ThreeModule.MeshPhysicalMaterial;
-      if (!material.isMeshStandardMaterial || !(material.transparent || (material.transmission ?? 0) > 0)) continue;
-      const own = glass !== 100;
-      if ((material.envMap !== null) !== own) material.needsUpdate = true;
-      material.envMap = own ? scene.environment : null;
-      material.envMapIntensity = own ? (scene.environmentIntensity * glass) / 100 : 1;
-    }
-  });
-}
 
 /** Auto exposure (`autoExposure`). **The game's preview tool does not use
  * one** — its `ppeffects.ini` turns `AUTO_EXPOSURE` off — but our studio does
