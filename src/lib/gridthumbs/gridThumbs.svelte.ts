@@ -39,6 +39,7 @@ import {
 } from "./gridThumbs";
 import { gridThumbsOn, gridThumbsReady, type GridPreset } from "./gridThumbPrefs.svelte";
 import { applyFloorMirror } from "$lib/preview3d/floorMirror";
+import { applyGlassRules } from "$lib/preview3d/materials";
 import { placeCamera } from "./framing";
 import { groundTexture, placePool, type StudioFloor } from "./floor";
 import { gradeColours, gradesColours, meteredExposure, reflectGlass } from "./look";
@@ -996,20 +997,15 @@ function backdropTexture(THREE: typeof ThreeModule, hi: string, lo: string): Thr
   return texture;
 }
 
-/** Prépare un modèle à être dessiné : tout ce qui est maillage projette une
- * ombre, sinon le sol reste vide et la voiture flotte. */
-function castShadows(model: ThreeModule.Group): void {
-  model.traverse((object) => {
-    const mesh = object as ThreeModule.Mesh;
-    if (mesh.isMesh) mesh.castShadow = true;
-  });
-}
-
 async function render(url: string, template: GridTemplate): Promise<Blob | null> {
   const rig = await ensureEngine();
   if (template.reflection > 0 && template.floor > 0) await ensureMirror(rig);
   const model = await rig.load(url);
-  castShadows(model);
+  // The 3D preview's glass rules (PREVIEW§8.2). Every mesh used to cast a
+  // shadow here, glass included, and blended glass kept writing depth: the
+  // panes shadowed the cabin and windows came out a flat grey, on thumbnails
+  // only (`j8_toyota_celica_tuned`, reported on screen).
+  applyGlassRules(model);
   rig.scene.add(model);
 
   let png: Blob | null = null;
@@ -1122,7 +1118,7 @@ export async function createGridStudio(width: number, height: number): Promise<G
           const url = await prepareGridModel(carId, skinId);
           try {
             const model = await rig.load(url);
-            castShadows(model);
+            applyGlassRules(model);
             held.push(model);
             return { id: carId, name, model };
           } finally {

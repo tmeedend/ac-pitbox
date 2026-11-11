@@ -240,8 +240,11 @@ export const TEMPLATE_KEYS = Object.keys(GRID_THUMB_RANGES) as TemplateKey[];
  *    was an opacity, capped at 1. Only floors above 100 % change pixels;
  *    every other image is redrawn identically, the price of never leaving a
  *    stale one behind.
+ *  - **6** — the glass rules of the 3D preview (PREVIEW§8.2): only the opaque
+ *    body casts a shadow, blended glass is drawn last without writing depth.
+ *    Windows had come out grey, the panes shadowing the cabin.
  */
-export const RENDERER_VERSION = 5;
+export const RENDERER_VERSION = 6;
 
 /** Le fond de carte d'un preset : les deux bouts du dégradé radial du mat
  * (GRILLE§2.2). Clair au centre pour décoller la voiture, sombre aux bords pour
