@@ -393,6 +393,19 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     };
 
     let (alpha_mode, alpha_cutoff) = alpha_mode_of(material);
+    // **A cut-out that would cut everything cuts nothing.** The rule of
+    // `FootprintAlpha::is_blank`, for alpha-tested materials as for blended
+    // ones: an author does not model a part to make it invisible. On the
+    // `MultiMap` family the diffuse alpha is the paint mask (écart n°5), and a
+    // material can sample nothing but zeros: the steering wheel of
+    // `nissan_skyline_r34_omori_factory_s1` vanished whole (reported on
+    // screen). Measured: 70 alpha-tested materials over 50 cars sample only
+    // transparent texels, the fabric of `ks_abarth_595ss` among them.
+    let alpha_mode = if alpha_mode == AlphaMode::Mask && textures.diffuse_alpha_blank {
+        AlphaMode::Opaque
+    } else {
+        alpha_mode
+    };
 
     // Calculé ici, avant la branche du verre : c'est ce verdict-là — et non le
     // seul `blend_mode` — qui dit si la conversion rendrait la surface opaque,
@@ -852,6 +865,24 @@ mod tests {
                 texture: "body.dds".to_string(),
             }],
         }
+    }
+
+    // Rule: an alpha-tested material that samples only transparent texels is
+    // opaque — cut by its alpha, it would vanish whole. Real bug: the steering
+    // wheel of `nissan_skyline_r34_omori_factory_s1`.
+    #[test]
+    fn a_cut_out_with_nothing_but_transparent_texels_stays_opaque() {
+        let wheel = material("ksPerPixelMultiMap_AT_NMDetail", 0, true, &[("ksAlphaRef", 0.0)]);
+        let blank = convert(
+            &wheel,
+            MaterialTextures {
+                diffuse_alpha_blank: true,
+                ..Default::default()
+            },
+        );
+        assert_eq!(blank.alpha_mode, AlphaMode::Opaque, "the wheel is drawn whole");
+        let cut = convert(&wheel, MaterialTextures::default());
+        assert_eq!(cut.alpha_mode, AlphaMode::Mask, "an alpha that varies still cuts");
     }
 
     // Rule: the alpha-tested byte drives MASK. Ignoring it renders grilles and
