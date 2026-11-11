@@ -576,6 +576,31 @@ fn studio_setup(car_id: &str, skin: &str, track: &str) -> Result<RaceSetup, Stri
     .map_err(|e| format!("session de prise de vue : {e}"))
 }
 
+/// The session several thumbnails are shot in at once (GRILLE§7.1): a track
+/// day on the given track, the first car driven by the player, the others as
+/// AI cars, each in its skin. A practice holds one car only. The AI cars would
+/// leave their pit boxes: the app pauses the game as soon as it can.
+///
+/// Measured: Content Manager shows its results window after a track day (it
+/// skips it after a practice only), and ignores every request while it is
+/// open — a race does the same.
+fn studio_grid_setup(cars: &[(String, String)], track: &str) -> Result<RaceSetup, String> {
+    let (player, others) = cars.split_first().ok_or("session de prise de vue sans voiture")?;
+    let opponents: Vec<serde_json::Value> = others
+        .iter()
+        .map(|(car, skin)| serde_json::json!({ "car_id": car, "car_skin": skin }))
+        .collect();
+    serde_json::from_value(serde_json::json!({
+        "car_id": player.0,
+        "car_skin": player.1,
+        "track_id": track,
+        "track_layout": null,
+        "session_type": "trackday",
+        "opponents": opponents,
+    }))
+    .map_err(|e| format!("session de prise de vue : {e}"))
+}
+
 /// Starts the session of an in-game thumbnail through Content Manager, like
 /// any other session (golden rule 4). The car and the track must already be
 /// in the game (`ensure_available`).
@@ -635,6 +660,53 @@ mod tests {
             serde_json::from_str(&crate::quickdrive::build_preset(&setup).unwrap()).unwrap();
         assert_eq!(preset["CarId"], "some_car", "the car");
         assert_eq!(preset["TrackId"], "magione", "the studio track");
+    }
+
+    /// GRILLE§7.1: several thumbnails are shot in one race, the first car as
+    /// the player's, the others as opponents in their own skins.
+    #[test]
+    fn the_grid_session_lines_the_other_cars_up_as_opponents() {
+        let cars = vec![
+            ("car_a".to_string(), "skin_a".to_string()),
+            ("car_b".to_string(), "skin_b".to_string()),
+            ("car_c".to_string(), "skin_c".to_string()),
+        ];
+        let setup = studio_grid_setup(&cars, "magione").expect("the setup deserialises");
+        assert_eq!(
+            setup.session_type,
+            SessionType::TrackDay,
+            "a track day: practice with AI cars"
+        );
+        assert_eq!(setup.car_id, "car_a", "the first car is the player's");
+        let opponents: Vec<_> = setup
+            .opponents
+            .iter()
+            .map(|o| (o.car_id.as_str(), o.car_skin.as_deref()))
+            .collect();
+        assert_eq!(
+            opponents,
+            vec![("car_b", Some("skin_b")), ("car_c", Some("skin_c"))],
+            "the others, in their skins"
+        );
+    }
+
+    /// Developer tool for the several-cars experiment: writes the Quick Drive
+    /// preset of a grid session to the path in `PITBOX_SHOT_PRESET`, for the
+    /// cars in `PITBOX_SHOT_CARS` (`car:skin,car:skin`).
+    #[test]
+    #[ignore = "developer tool, run by hand"]
+    fn dump_studio_grid_preset() {
+        let cars: Vec<(String, String)> = std::env::var("PITBOX_SHOT_CARS")
+            .expect("PITBOX_SHOT_CARS")
+            .split(',')
+            .map(|pair| {
+                let (car, skin) = pair.split_once(':').expect("car:skin");
+                (car.to_string(), skin.to_string())
+            })
+            .collect();
+        let setup = studio_grid_setup(&cars, "magione").unwrap();
+        let path = std::env::var("PITBOX_SHOT_PRESET").expect("PITBOX_SHOT_PRESET");
+        std::fs::write(path, crate::quickdrive::build_preset(&setup).unwrap()).unwrap();
     }
 
     /// SESSION§2.5: a car whose models live in another car's folder goes on

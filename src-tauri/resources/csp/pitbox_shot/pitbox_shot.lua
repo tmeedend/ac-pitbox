@@ -473,6 +473,14 @@ local function planCar(entry, steps)
       return
     end
     local car = ac.getCar(index)
+    state.index = index
+    -- A car seen from afar is drawn with a lighter model (LOD): on a grid,
+    -- only the player's car is close to the main camera.
+    ac.forceDetailedCarLOD(index)
+    -- The cars lined up as opponents have their driver seated, the player's
+    -- standing in its pit box has none: no driver at all, as in the Pit Box
+    -- renders, which draw the car alone.
+    ac.setDriverVisible(index, false)
     -- A car standing in its pit box gets its driver door opened by the game.
     ac.setDriverDoorOpen(index, false, true)
     record.skin = ac.getCarSkinID(index)
@@ -492,6 +500,17 @@ local function planCar(entry, steps)
     for _, c in ipairs(corners(state.bmin, state.bmax)) do
       state.worldCorners[#state.worldCorners + 1] = state.modelToWorld:transformPoint(c)
     end
+  end
+
+  -- The detailed model and its textures need a few frames once forced:
+  -- forced again on every one of them (the call holds "for a few frames").
+  local settle = 0
+  steps[#steps + 1] = function()
+    if not state.index then return end
+    ac.forceDetailedCarLOD(state.index)
+    settle = settle + 1
+    if settle < 30 then return 'again' end
+    record.activeLOD = ac.getCar(state.index).activeLOD
   end
 
   for _, output in ipairs(entry.outputs) do
@@ -515,6 +534,7 @@ local function planCar(entry, steps)
     for _, pass in ipairs(PASSES) do
       steps[#steps + 1] = function()
         if not view then return end
+        ac.forceDetailedCarLOD(state.index)
         local ok, err = pcall(function() shots[pass.id] = renderPass(state, view, pass) end)
         if not ok then record.outputs[output.file] = 'error: ' .. tostring(err) end
       end
@@ -617,6 +637,7 @@ local steps = nil
 local stepIndex = 1
 local waited = 0
 local quitAt = nil
+local paused = false
 
 local function update(dt)
   if status == 'idle' or status == 'finished' then
@@ -628,6 +649,11 @@ local function update(dt)
   end
 
   if status == 'waiting' then
+    -- A race lines several cars up on the grid: the game is paused before the
+    -- start, so nothing moves. Asked again until the game accepts it (not
+    -- while still loading). No lighter models either, for any car.
+    if not paused then paused = ac.tryToPause(true) end
+    ac.overrideLODMultiplier(nil, math.huge)
     -- Textures and LOD A need a moment after the session starts.
     waited = waited + dt
     if waited < (job.warmup or 8) then return end
@@ -652,6 +678,7 @@ local function update(dt)
       return
     end
     done.finished = true
+    done.paused = paused
     status = 'finished'
     saveDone()
     if job.quit then quitAt = os.preciseClock() + 1 end

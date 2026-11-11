@@ -235,6 +235,31 @@ Le journal d'erreurs (`error.txt`, et `lastError` dans `done.json`) a trouvé du
 premier coup une erreur de compilation du shader que rien d'autre n'aurait
 montrée.
 
+## Tour 12 : plusieurs voitures dans une même session (branche d'essai)
+
+Une séance d'essais ne porte qu'une voiture. Une **course** ou une **journée
+piste** en porte plusieurs : la première au joueur, les autres en adversaires,
+chacune dans son skin (`launch::studio_grid_setup`, preset produit par le code
+de Pit Box). Dans l'app de prise de vue :
+
+- **le jeu est mis en pause** dès qu'il l'accepte (`ac.tryToPause`), avant
+  qu'une voiture ne bouge ;
+- **aucun modèle simplifié** (`ac.overrideLODMultiplier(nil, math.huge)`), et
+  `ac.forceDetailedCarLOD` sur chaque voiture pendant 30 images avant sa photo ;
+- **pas de pilote** (`ac.setDriverVisible(i, false)`) : les adversaires en ont
+  un assis au volant, visible par la vitre.
+
+Mesuré : **4 voitures protégées, 12 images (Catalogue, Vitrine, Officiel), en
+36 s** de bout en bout, lancement compris, contre environ 25 s par voiture une
+par une. Toutes en LOD 0, dans leur skin, jeu bien en pause.
+
+**Le blocage** : après une course ou une journée piste, Content Manager ouvre
+sa fenêtre de résultats (il ne la saute qu'après une séance d'essais :
+`SkipResults: Type=Practice`) et **ignore toute demande tant qu'elle est
+ouverte** (« Waiting for extra windows to close »). Une session à plusieurs
+voitures se termine donc sur cette fenêtre, et la suivante ne part pas. Magione
+a 18 stands : jusqu'à 18 voitures par session.
+
 ## Pistes pour l'éclairage, de la moins à la plus coûteuse
 
 *Écrites avant les tours 4 à 6 ; la deuxième est celle qui a abouti, mais dans

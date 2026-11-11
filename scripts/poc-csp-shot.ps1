@@ -21,6 +21,9 @@ param(
   [string]$Car,
   [string]$Track = 'magione',
   [string]$Skin,
+  # Several cars in one race session: "car:skin,car:skin" (the first is the
+  # player's). The preset comes from launch.rs `dump_studio_grid_preset`.
+  [string]$Cars,
   [switch]$Remove
 )
 $ErrorActionPreference = 'Stop'
@@ -46,7 +49,12 @@ if ($Remove) {
   }
   return
 }
-if (-not $Car) { throw '-Car is required' }
+if ($Cars) {
+  $pairs = $Cars.Split(',') | ForEach-Object { $c, $s = $_.Split(':'); @{ id = $c; skin = $s } }
+  $Car = $pairs[0].id
+  $Skin = $pairs[0].skin
+}
+if (-not $Car) { throw '-Car or -Cars is required' }
 
 if (-not (Test-Path $link)) {
   New-Item -ItemType Junction -Path $link -Target $source | Out-Null
@@ -71,11 +79,13 @@ $officiel = @{ azimuth = 306; elevation = 10; fov = 40; margin = 5; height = 0; 
   ambient = 160; saturation = 75; coolTint = 100; shadow = 30; trueScale = 100; gameFraming = 100; floor = 60
   reflection = 0; reflectionBlur = 5; poolSize = 140; poolEdge = 50; background = 100; autoExposure = 100
   matHi = "#05080a"; matLo = "#020305" }
+$ids = if ($Cars) { $pairs | ForEach-Object { $_.id } } else { @($Car) }
+$jobCars = @($ids | ForEach-Object { @{ id = $_; outputs = @(
+      @{ file = (Join-Path $jobDir "out\$_-catalogue.png"); template = $catalogue },
+      @{ file = (Join-Path $jobDir "out\$_-vitrine.png"); template = $vitrine },
+      @{ file = (Join-Path $jobDir "out\$_-officiel.png"); template = $officiel }) } })
 $job = [ordered]@{
-  cars        = @(@{ id = $Car; outputs = @(
-        @{ file = (Join-Path $jobDir "out\$Car-catalogue.png"); template = $catalogue },
-        @{ file = (Join-Path $jobDir "out\$Car-vitrine.png"); template = $vitrine },
-        @{ file = (Join-Path $jobDir "out\$Car-officiel.png"); template = $officiel }) })
+  cars        = $jobCars
   width       = 1024
   height      = 576
   supersample = 2
@@ -100,7 +110,17 @@ $preset = [ordered]@{
   asc                = $false
 }
 $presetFile = Join-Path $env:TEMP "pitbox-shot-$([guid]::NewGuid()).json"
-$preset | ConvertTo-Json | Set-Content -Encoding utf8NoBOM $presetFile
+if ($Cars) {
+  # A race with the other cars as opponents, built by Pit Box's own code.
+  $env:PITBOX_SHOT_CARS = $Cars
+  $env:PITBOX_SHOT_PRESET = $presetFile
+  Push-Location (Join-Path $PSScriptRoot '..\src-tauri')
+  cargo test -q --lib launch::tests::dump_studio_grid_preset -- --ignored --exact | Out-Null
+  Pop-Location
+  if (-not (Test-Path $presetFile)) { throw 'grid preset not written' }
+} else {
+  $preset | ConvertTo-Json | Set-Content -Encoding utf8NoBOM $presetFile
+}
 $raceIni = Join-Path $docs 'Assetto Corsa\cfg\race.ini'
 $baseline = (Get-Item $raceIni).LastWriteTimeUtc
 Start-Process -FilePath $cm -ArgumentList "acmanager://race/quick?presetFile=$presetFile"
