@@ -436,12 +436,10 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     };
 
     // Calculé ici, avant la branche du verre : c'est ce verdict-là — et non le
-    // seul `blend_mode` — qui dit si la conversion rendrait la surface opaque,
-    // et l'optique déclarée plus bas a besoin de le savoir.
+    // seul `blend_mode` — qui dit si la conversion rendrait la surface opaque.
     let declared_opacity = declared_opacity(material);
     let fades_by_declaration = declared_opacity.is_some_and(|opacity| opacity < 1.0);
     let opaque_by_alpha = !is_glass_shader(shader) && textures.diffuse_alpha_opaque && !fades_by_declaration;
-    let renders_opaque = alpha_mode == AlphaMode::Opaque || opaque_by_alpha;
 
     // **Le verre que CSP déclare est du verre physique, pas un fondu.**
     //
@@ -457,13 +455,21 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     // (écart n°6) : `smGlass` ne s'en sert pas comme d'une couleur, et la
     // garder pose un voile teinté devant l'habitacle.
     // Une optique déclarée par `[REFRACTING_HEADLIGHT_…]` ne prend ce chemin
-    // qu'à deux conditions : que le KN5 la rende opaque, et que sa diffuse ne
-    // porte pas de couleur. Ce chemin **jette la texture** — juste pour un
-    // gabarit de vitre, ruineux pour une lentille teintée.
+    // qu'à deux conditions : qu'elle ne soit pas une découpe, et que sa
+    // diffuse ne porte pas de couleur. Ce chemin **jette la texture** — juste
+    // pour un gabarit de vitre, ruineux pour une lentille teintée : c'est le
+    // filtre de couleur qui épargne les feux arrière, pas le mode de rendu.
+    //
+    // A blended lens takes it too. It was left out at first, the colour filter
+    // not existing yet, and it came out nearly invisible: faded to 20 %, its
+    // relief and its reflections are faded alike, and the reflector behind it
+    // is all that shows — the headlights of `j8_toyota_celica_tuned` looked
+    // like they were missing their glass (reported on screen).
     if let Some(ior) = textures
         .csp
         .filter(|csp| {
-            !csp.glass_only_if_opaque || (renders_opaque && !diffuse_carries_a_colour(textures.diffuse_average))
+            !csp.glass_only_if_colourless
+                || (alpha_mode != AlphaMode::Mask && !diffuse_carries_a_colour(textures.diffuse_average))
         })
         .and_then(|csp| csp.glass_ior)
     {
@@ -1208,21 +1214,20 @@ mod tests {
         assert_eq!(converted.transmission, 1.0, "et la vitre laisse passer");
     }
 
-    // Règle : une optique déclarée par `[REFRACTING_HEADLIGHT_…]` ne devient du
-    // verre CSP que là où le KN5 la rendrait opaque **et** où sa diffuse ne
-    // porte pas de couleur.
+    // Règle : une optique déclarée par `[REFRACTING_HEADLIGHT_…]` devient du
+    // verre CSP là où sa diffuse ne porte pas de couleur, opaque ou en fondu.
     //
-    // Les trois cas comptent, et chacun a son contre-exemple réel : sans la
-    // règle, `ext_headlight_glass` de `rj_honda_civic_eg6_tuned` reste un
-    // aplat noir ; appliquée à tout ce qui est déclaré, elle décolore les 571
-    // surfaces déjà en fondu de la bibliothèque, donc tous les feux arrière ;
-    // appliquée à tout ce qui est opaque, elle vide de son orange le
-    // clignotant `ext_indicator_glass` de la même Civic.
+    // Chaque cas a son contre-exemple réel : sans la règle,
+    // `ext_headlight_glass` de `rj_honda_civic_eg6_tuned` reste un aplat noir,
+    // et la vitre en fondu de `j8_toyota_celica_tuned` disparaît ; appliquée
+    // sans le filtre de couleur, elle vide de leur rouge les feux arrière en
+    // fondu, et de son orange le clignotant opaque `ext_indicator_glass` de la
+    // Civic.
     #[test]
-    fn a_refracting_lens_only_replaces_an_opaque_and_colourless_surface() {
+    fn a_refracting_lens_only_replaces_a_colourless_surface() {
         let lens = crate::SurfaceOverride {
             glass_ior: Some(1.73),
-            glass_only_if_opaque: true,
+            glass_only_if_colourless: true,
             ..crate::SurfaceOverride::default()
         };
         // `glass.dds` : le gabarit de vitre, gris très sombre.
@@ -1244,12 +1249,25 @@ mod tests {
             &material("ksPerPixelNM", 1, false, &[("ksDiffuse", 0.1)]),
             template.clone(),
         );
-        assert_eq!(blended.transmission, 0.0, "un feu déjà en fondu garde sa conversion");
+        assert_eq!(blended.transmission, 1.0, "une vitre incolore en fondu devient une vitre aussi");
+
+        // Un feu arrière en fondu : sa texture porte son rouge.
+        let red = convert(
+            &material("ksPerPixelNM", 1, false, &[("ksDiffuse", 0.1)]),
+            MaterialTextures {
+                diffuse_average: Some([0.85, 0.0, 0.0]),
+                ..template.clone()
+            },
+        );
+        assert_eq!(red.transmission, 0.0, "un feu rouge en fondu garde sa conversion");
         assert_eq!(
-            blended.base_color_texture.as_deref(),
+            red.base_color_texture.as_deref(),
             Some("body.dds"),
             "et surtout sa texture, qui porte sa couleur"
         );
+
+        let cut = convert(&material("ksPerPixelNM", 0, true, &[]), template.clone());
+        assert_eq!(cut.transmission, 0.0, "une découpe reste une découpe");
 
         // `turn.dds` : l'orange d'un clignotant, opaque comme le phare.
         let amber = convert(

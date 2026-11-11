@@ -1619,6 +1619,15 @@ qu'elles se touchent :
 Sans ce filtre, le clignotant `ext_indicator_glass` de la même Civic — opaque,
 mais franchement orange — devenait une vitre incolore.
 
+**Puis le critère « opaque » est tombé** (2026-11-11) : le filtre de couleur
+suffit à lui seul à épargner les feux rouges et orange, et il laisse passer les
+vitres incolores **en fondu**, que le premier critère excluait. Celles-là
+sortaient presque invisibles — fondues à 20 %, leur relief et leurs reflets
+l'étaient d'autant, et l'on ne voyait que le réflecteur derrière : les phares
+de `j8_toyota_celica_tuned` semblaient sans vitre (signalé à l'écran). Mesuré :
+45 matériaux de 29 voitures passent en verre, tous des vitres de phare, de feu
+de recul ou de clignotant ; aucun n'en sort. Une découpe reste une découpe.
+
 ⚠️ **La réciproque a été essayée et retirée.** Ce filtre avait aussi été posé
 dans l'autre sens — le chemin du verre *gardait* une diffuse qui porte une
 couleur, pour rendre son rouge au feu arrière d'`amy_ek_cup`. C'était une

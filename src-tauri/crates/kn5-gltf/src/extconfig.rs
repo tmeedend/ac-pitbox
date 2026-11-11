@@ -173,10 +173,10 @@ pub struct SurfaceOverride {
     pub clearcoat: Option<(f32, f32)>,
     /// Physical glass: index of refraction, transmission coming with it.
     pub glass_ior: Option<f32>,
-    /// Ce verre-là ne remplace la conversion que là où elle produirait une
-    /// surface **opaque** — voir la section `REFRACTING_HEADLIGHT` de
+    /// Ce verre-là ne remplace la conversion que sur une surface **incolore**,
+    /// qui n'est pas une découpe — voir la section `REFRACTING_HEADLIGHT` de
     /// [`collect_materials`].
-    pub glass_only_if_opaque: bool,
+    pub glass_only_if_colourless: bool,
 }
 
 impl SurfaceOverride {
@@ -623,8 +623,8 @@ fn collect_materials(
         // le maillage `83` de la Civic porte `ext_headlight_glass`, et
         // `tailights_glass_red` d'`amy_ek_cup` porte `glass_taillight`.
         //
-        // **Et la déclaration ne vaut que là où la conversion échoue** :
-        // `glass_only_if_opaque`. Mesuré sur la bibliothèque — 74 voitures
+        // **Et la déclaration ne vaut pas partout** :
+        // `glass_only_if_colourless`. Mesuré sur la bibliothèque — 74 voitures
         // portent ces sections, pour 655 surfaces retrouvées dans leur
         // modèle. **571 sont déjà en fondu ou en découpe** : leur verre rouge
         // ou orange est rendu correctement, et le traitement CSP, qui jette la
@@ -633,11 +633,15 @@ fn collect_materials(
         // **84 sortent opaques, sur 27 voitures** — 81 en `ksPerPixelNM` —, et
         // celles-là sont bouchées faute de savoir qu'il s'agit d'une optique.
         // C'est exactement la population à corriger, `amy_ek_cup` et
-        // `rj_honda_civic_eg6_tuned` comprises.
+        // `rj_honda_civic_eg6_tuned` comprises. Le filtre de couleur, venu
+        // ensuite (`material::diffuse_carries_a_colour`), sépare à lui seul
+        // les feux rouges et orange des vitres incolores : il laisse passer
+        // aussi les vitres en fondu, que le seul critère « opaque » excluait
+        // (`j8_toyota_celica_tuned`, voir `material::convert`).
         if section.name.to_ascii_uppercase().starts_with("REFRACTING_HEADLIGHT") {
             let glass = SurfaceOverride {
                 glass_ior: Some(glass_ior_of(&section)),
-                glass_only_if_opaque: true,
+                glass_only_if_colourless: true,
                 ..SurfaceOverride::default()
             };
             for name in section.list("SURFACE").unwrap_or_default() {
@@ -734,7 +738,7 @@ fn section_override(section: &Section) -> SurfaceOverride {
         roughness: smoothness.map(|s| (1.0 - s).clamp(0.0, 1.0)),
         clearcoat,
         glass_ior: None,
-        glass_only_if_opaque: false,
+        glass_only_if_colourless: false,
     }
 }
 
@@ -1908,7 +1912,7 @@ IOR = 2
         assert!(
             over.meshes
                 .iter()
-                .all(|(_, o)| o.glass_ior == Some(2.0) && o.glass_only_if_opaque),
+                .all(|(_, o)| o.glass_ior == Some(2.0) && o.glass_only_if_colourless),
             "et il hérite de l'optique déclarée, garde comprise"
         );
 
@@ -1944,7 +1948,7 @@ GLASS_COLOR = 0.25,0.25,0.25
                 "83".to_string(),
                 SurfaceOverride {
                     glass_ior: Some(1.73),
-                    glass_only_if_opaque: true,
+                    glass_only_if_colourless: true,
                     ..SurfaceOverride::default()
                 }
             )],
