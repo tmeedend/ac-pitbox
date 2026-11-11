@@ -321,10 +321,15 @@ pub fn look_up(app: &tauri::AppHandle, stem: &str) -> GridThumb {
 /// brutal shutdown would be served forever afterwards, since its name is what
 /// says it exists.
 pub fn write(app: &tauri::AppHandle, stem: &str, png: &[u8]) -> Result<PathBuf, String> {
+    write_in(&dir(app)?, stem, png)
+}
+
+/// [`write`] into a given store folder: the in-game renderer (`gameshot`)
+/// stores its images through here, without an app handle.
+pub fn write_in(dir: &std::path::Path, stem: &str, png: &[u8]) -> Result<PathBuf, String> {
     if !is_entry_stem(stem) {
         return Err(format!("nom de vignette refusé : {stem}"));
     }
-    let dir = dir(app)?;
     let file = dir.join(format!("{stem}.png"));
     let tmp = dir.join(format!("{stem}.{}.tmp", std::process::id()));
     std::fs::write(&tmp, png).map_err(|e| format!("{} : {e}", tmp.display()))?;
