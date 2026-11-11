@@ -189,6 +189,25 @@ Le premier essai de ce tour a planté au chargement d'AC, avec Firefox à 76 Go
 de mémoire engagée et Bash incapable de lancer un processus. Relancé après la
 fermeture de Firefox, il est passé du premier coup.
 
+## Tour 10 : le sol de Vitrine
+
+Le sol se pose dans le shader de l'app, comme le rig de Pit Box le pose
+(`floor.ts`, `studioFloor.ts`, `floorMirror.ts`) : un carré de six rayons de
+voiture sous la boîte, la flaque en dégradé, l'assombrissement sous la caisse,
+et le reflet. Deux techniques :
+
+- **Où un pixel touche le sol** : les quatre rayons des coins de l'image, tirés
+  des matrices de la caméra du jeu (décalage d'objectif compris), interpolés
+  par le shader puis coupés par le plan du sol.
+- **Le reflet** : une passe de plus, vue par la caméra symétrique sous le sol,
+  avec le décalage d'objectif inversé ; son image est le reflet retourné de
+  gauche à droite. Flouté (25 prises) et éteint en s'éloignant de la voiture,
+  teinté de 0,212 comme le `Reflector` de three.js.
+
+Vu sur la Ferrari 458 : le reflet tombe sous la voiture, chaque roue sous sa
+roue. Aucune vignette Vitrine de Pit Box n'existait sur la machine pour
+comparer : le preset confortable de l'utilisateur est Officiel.
+
 ## Pistes pour l'éclairage, de la moins à la plus coûteuse
 
 *Écrites avant les tours 4 à 6 ; la deuxième est celle qui a abouti, mais dans

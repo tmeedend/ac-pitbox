@@ -1969,8 +1969,11 @@ de reprendre. En cas d'écart, la spec fait foi.
       - le lot 3 : plusieurs voitures dans une même session (jamais essayé :
         une séance d'essais ne porte qu'une voiture) et un lot depuis
         `Réglages › Vignettes` ;
-      - Vitrine et Officiel : sol, flaque, reflet et fond à composer autour de
-        la voiture ; le reflet au sol n'a jamais été essayé ;
+      - Officiel : fond cuit (dégradé du mat), disque de lumière et sol plus
+        sombre autour, exposition automatique par image. Vitrine est fait
+        (2026-11-11) : flaque, assombrissement et reflet posés par le shader de
+        l'app, le reflet venant d'une passe vue par une caméra en miroir sous
+        le sol ;
       - essayer CSP 0.2.11 (l'utilisateur l'a) : aucune version minimale n'est
         exigée, un CSP qui ne sait pas faire produit `errors.gameShotNoImage` ;
       - le lot 4, la capture d'écran comme photo de la voiture, sur une branche

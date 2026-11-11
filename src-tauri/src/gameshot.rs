@@ -208,9 +208,12 @@ pub fn write_job(paths: &Paths, request: &ShotRequest) -> Result<(), String> {
         std::fs::remove_dir_all(&out).map_err(|e| format!("{} : {e}", out.display()))?;
     }
     std::fs::create_dir_all(&out).map_err(|e| format!("{} : {e}", out.display()))?;
-    if let Err(e) = std::fs::remove_file(work.join("done.json")) {
-        if e.kind() != std::io::ErrorKind::NotFound {
-            log::warn!("gameshot: previous done.json left in place ({e})");
+    // What the app wrote last time: its report, and the error it stopped on.
+    for name in ["done.json", "error.txt"] {
+        if let Err(e) = std::fs::remove_file(work.join(name)) {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                log::warn!("gameshot: previous {name} left in place ({e})");
+            }
         }
     }
 
@@ -352,7 +355,11 @@ fn run_with(
                 // a car missing from the session, or no file at all when the
                 // app never ran.
                 let done = std::fs::read_to_string(paths.work().join("done.json"));
-                log::warn!("gameshot: no image for {} — done.json: {done:?}", request.car_id);
+                let error = std::fs::read_to_string(paths.work().join("error.txt"));
+                log::warn!(
+                    "gameshot: no image for {} — done.json: {done:?}, error.txt: {error:?}",
+                    request.car_id
+                );
                 return Err(crate::errors::GAMESHOT_NO_IMAGE.into());
             }
             Ok(results)

@@ -14,13 +14,14 @@ import { gridThumbsOn, presetForDensity, renderTemplate } from "./gridThumbPrefs
 import { listLibrary } from "$lib/library/library";
 
 /**
- * Whether the game can render this template. It draws the car alone, on a
- * transparent background: a floor, a baked background or a per-image exposure
- * would need a composition it does not do yet — Vitrine and Officiel wait,
- * Catalogue and its copies can (GRILLE§7.1).
+ * Whether the game can render this template (GRILLE§7.1). It draws the car,
+ * and the floor of a preset that has one — the glow, the contact darkening and
+ * the reflection, as Catalogue and Vitrine use them. A baked background, the
+ * disc of light (`poolSize`) and the per-image exposure are Officiel's, and the
+ * game does not compose them yet.
  */
 export function renderableInGame(template: GridTemplate): boolean {
-  return template.floor === 0 && template.background === 0 && template.autoExposure === 0;
+  return template.background === 0 && template.poolSize === 0 && template.autoExposure === 0;
 }
 
 /** A car to photograph: its id, the skin its card shows, its name for the

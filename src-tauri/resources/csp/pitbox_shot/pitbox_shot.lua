@@ -125,6 +125,8 @@ local function projectedCentre(view, proj, pts)
   return (lo + hi) / 2
 end
 
+-- Returns the shifted projection, and the shift itself (entry and amount) so
+-- the floor's mirror pass can apply its mirror image.
 local function shiftedProjection(view, proj, worldPts)
   local c0 = projectedCentre(view, proj, worldPts)
   for _, entry in ipairs({ { 'row3', 'x' }, { 'row1', 'z' } }) do
@@ -134,10 +136,10 @@ local function shiftedProjection(view, proj, worldPts)
     if math.abs(slope) > 0.5 then
       local fixed = proj:clone()
       fixed[entry[1]][entry[2]] = fixed[entry[1]][entry[2]] - c0 / slope
-      return fixed
+      return fixed, { entry = entry, amount = -c0 / slope }
     end
   end
-  return proj
+  return proj, nil
 end
 
 -- ---------------------------------------------------------------------------
@@ -181,9 +183,58 @@ float3 toSrgb(float3 c) {
 }
 float lamp(float3 n, float4 l) { return l.w * saturate(dot(n, l.xyz)); }
 float shine(float3 n, float3 v, float4 l) { return l.w * pow(saturate(dot(n, normalize(l.xyz + v))), gGloss); }
+float3 finish(float3 rgb) {
+  float3 outc = toSrgb(neutral(rgb * gExposure));
+  outc *= 1 + gTint;
+  float luma = dot(outc, float3(0.2126, 0.7152, 0.0722));
+  return saturate(luma + (outc - luma) * gSaturation);
+}
+// The floor of a preset that has one (GRILLE§7.1), as the Pit Box rig lays it
+// (floor.ts, studioFloor.ts, floorMirror.ts): the car's reflection, then the
+// pool of light and the contact darkening, on a square of six car radii
+// centred under the car. Returned premultiplied, in screen colours.
+float4 floorLayer(float2 uv) {
+  float3 far = lerp(lerp(gCornerTL, gCornerTR, uv.x), lerp(gCornerBL, gCornerBR, uv.x), uv.y);
+  float3 dir = far - gCamera;
+  float facing = dot(dir, gFloorUp);
+  if (facing >= 0) return 0;
+  float3 hit = gCamera + dir * (dot(gFloorCentre - gCamera, gFloorUp) / facing);
+  float r = length(hit - gFloorCentre) / gFloorHalf;
+  if (r >= 1) return 0;
+  float4 acc = 0;
+  if (gReflection > 0) {
+    // The mirror camera's image is the reflection flipped left to right.
+    float2 m = float2(1 - uv.x, uv.y);
+    float4 sum = 0;
+    float total = 0;
+    for (int i = -2; i <= 2; i++) {
+      for (int j = -2; j <= 2; j++) {
+        float w = max(1 - length(float2(i, j)) / 3.2, 0);
+        sum += txMirror.SampleLevel(samLinearClamp, m + float2(i, j) * gReflectionBlur, 0) * w;
+        total += w;
+      }
+    }
+    float4 mir = sum / total;
+    if (mir.a > 0.001) {
+      float fade = 1 - smoothstep(0.75 * 0.35, 0.75, r);
+      float a = mir.a * gReflection * fade;
+      acc = float4(finish(max(mir.rgb / mir.a, 0) * gMirrorTint) * a, a);
+    }
+  }
+  // The glow: 0.11 at the centre, 0.066 at 45 %, 0.018 at 75 %, 0 at the rim.
+  float glow = r < 0.45 ? lerp(0.11, 0.066, r / 0.45)
+    : r < 0.75 ? lerp(0.066, 0.018, (r - 0.45) / 0.3) : lerp(0.018, 0, (r - 0.75) / 0.25);
+  float pa = glow * gFloorOpacity;
+  acc = float4(gFloorBright * pa + acc.rgb * (1 - pa), pa + acc.a * (1 - pa));
+  // Contact darkening, the last centimetre under the body: 0.3 to 0 over a
+  // third of the radius.
+  float ca = r < 0.34 ? 0.3 * (1 - r / 0.34) * gFloorOpacity : 0;
+  return float4(acc.rgb * (1 - ca), ca + acc.a * (1 - ca));
+}
 float4 main(PS_IN pin) {
+  float4 below = gFloor > 0 ? floorLayer(pin.Tex) : 0;
   float4 c = txShot.SampleLevel(samLinearClamp, pin.Tex, 0);
-  if (c.a <= 0) return 0;
+  if (c.a <= 0) return below.a > 0 ? float4(below.rgb / below.a, below.a) : 0;
   float3 rgb = max(c.rgb / c.a, 0) * gAmbient;
   float4 alb = txAlbedo.SampleLevel(samLinearClamp, pin.Tex, 0);
   float4 nrm = txNormal.SampleLevel(samLinearClamp, pin.Tex, 0);
@@ -194,11 +245,9 @@ float4 main(PS_IN pin) {
     rgb += albedo * (lamp(n, gKey) + lamp(n, gFill) + lamp(n, gRim)) * gLight;
     rgb += (shine(n, v, gKey) + shine(n, v, gFill) + shine(n, v, gRim)) * gSpecular;
   }
-  float3 outc = toSrgb(neutral(rgb * gExposure));
-  outc *= 1 + gTint;
-  float luma = dot(outc, float3(0.2126, 0.7152, 0.0722));
-  outc = luma + (outc - luma) * gSaturation;
-  return float4(saturate(outc), saturate(c.a));
+  float a = saturate(c.a);
+  float4 outc = float4(finish(rgb) * a + below.rgb * (1 - a), a + below.a * (1 - a));
+  return float4(outc.rgb / max(outc.a, 0.0001), outc.a);
 }
 ]]
 
@@ -261,11 +310,37 @@ local function renderPass(state, view, pass)
     shot:update(view.pos, view.look, view.up, view.fov)
     view.view = shot:viewMatrix():clone()
     view.proj = shot:projectionMatrix():clone()
-    if view.shift then view.proj = shiftedProjection(view.view, view.proj, state.worldCorners) end
+    if view.mirrorOf and view.mirrorOf.shift then
+      -- The reflection's lens shift is the main one, mirrored: the image is
+      -- flipped back left to right when it is laid on the floor.
+      local e = view.mirrorOf.shift.entry
+      view.proj[e[1]][e[2]] = view.proj[e[1]][e[2]] - view.mirrorOf.shift.amount
+    elseif view.shift then
+      view.proj, view.shift = shiftedProjection(view.view, view.proj, state.worldCorners)
+    end
     shot:update(view.view, view.proj, view.pos)
   end
   return shot
 end
+
+-- Points on the rays through the four corners of the frame (top-left,
+-- top-right, bottom-left, bottom-right), in world space: the shader
+-- interpolates them to find where each pixel meets the floor. Any depth will
+-- do as long as it is the same for all four; the lens shift is included,
+-- being part of the projection.
+local function screenCorners(view)
+  local invProj, invView = view.proj:inverse(), view.view:inverse()
+  local function corner(x, y)
+    local p = invProj:transform(vec4(x, y, 0.5, 1))
+    local w = invView:transform(vec4(p.x / p.w, p.y / p.w, p.z / p.w, 1))
+    return vec3(w.x, w.y, w.z)
+  end
+  return { corner(-1, 1), corner(1, 1), corner(-1, -1), corner(1, -1) }
+end
+
+-- Pit Box's mirror tints its reflection with three.js `Reflector`'s default
+-- colour, 0x7F7F7F: 0.212 once converted to linear light.
+local MIRROR_TINT = 0.212
 
 local function carIndexOf(id)
   for i = 0, ac.getSim().carsCount - 1 do
@@ -299,6 +374,10 @@ local function planCar(entry, steps)
     state.center = (state.bmin + state.bmax) / 2
     state.centerWorld = state.modelToWorld:transformPoint(state.center)
     state.radius = (state.bmax - state.bmin):length() / 2
+    -- The floor plane: under the car's box, facing the car's up.
+    local origin = state.modelToWorld:transformPoint(vec3(0, 0, 0))
+    state.floorUp = (state.modelToWorld:transformPoint(vec3(0, 1, 0)) - origin):normalize()
+    state.floorCentre = state.modelToWorld:transformPoint(vec3(state.center.x, state.bmin.y, state.center.z))
     state.worldCorners = {}
     for _, c in ipairs(corners(state.bmin, state.bmax)) do
       state.worldCorners[#state.worldCorners + 1] = state.modelToWorld:transformPoint(c)
@@ -331,18 +410,45 @@ local function planCar(entry, steps)
       end
     end
 
+    -- The floor's reflection: the car seen from the camera mirrored under the
+    -- floor plane (a planar mirror), as Pit Box's `Reflector` does.
+    local withFloor = (t.floor or 0) > 0
+    local withReflection = withFloor and (t.reflection or 0) > 0
+    if withReflection then
+      steps[#steps + 1] = function()
+        if not view or not view.view then return end
+        local n, f = state.floorUp, state.floorCentre
+        local function point(p) return p - n * (2 * (p - f):dot(n)) end
+        local function vector(v) return v - n * (2 * v:dot(n)) end
+        local mirror = {
+          pos = point(view.pos), look = vector(view.look), up = vector(view.up),
+          fov = view.fov, near = view.near, far = view.far, mirrorOf = view,
+        }
+        local ok, err = pcall(function() shots.mirror = renderPass(state, mirror, PASSES[1]) end)
+        if not ok then record.outputs[output.file] = 'error: ' .. tostring(err) end
+      end
+    end
+
     steps[#steps + 1] = function()
       if not (shots.base and shots.normal and shots.albedo) then return end
       local key, fill, rim = lampDirections(state, t)
+      local corners = screenCorners(view)
       canvas = ui.ExtraCanvas(vec2(job.width, job.height), 1, render.AntialiasingMode.None)
       local ok, err = pcall(function()
         canvas:updateWithShader({
-          textures = { txShot = shots.base, txAlbedo = shots.albedo, txNormal = shots.normal },
+          textures = { txShot = shots.base, txAlbedo = shots.albedo, txNormal = shots.normal, txMirror = shots.mirror or false },
           values = {
             gExposure = EXPOSURE, gAmbient = (t.ambient or 100) / 100,
             gLight = LIGHT_AT_100 * (t.key or 100) / 100, gSpecular = SPECULAR, gGloss = GLOSS,
             gKey = key, gFill = fill, gRim = rim, gView = view.look * -1,
             gTint = GRADE_TINT * ((t.coolTint or 0) / 100), gSaturation = (t.saturation or 100) / 100,
+            gFloor = withFloor and 1 or 0,
+            gFloorOpacity = math.min(1, (t.floor or 0) / 100), gFloorBright = math.max(1, (t.floor or 0) / 100),
+            gReflection = shots.mirror and (t.reflection or 0) / 100 or 0,
+            gReflectionBlur = ((t.reflectionBlur or 0) / 10) * 0.002, gMirrorTint = MIRROR_TINT,
+            gCamera = view.pos, gFloorUp = state.floorUp, gFloorCentre = state.floorCentre,
+            gFloorHalf = state.radius * 3,
+            gCornerTL = corners[1], gCornerTR = corners[2], gCornerBL = corners[3], gCornerBR = corners[4],
           },
           shader = FINISH,
         })
@@ -372,7 +478,7 @@ local stepIndex = 1
 local waited = 0
 local quitAt = nil
 
-function script.update(dt)
+local function update(dt)
   if status == 'idle' or status == 'finished' then
     if quitAt and os.preciseClock() >= quitAt then
       quitAt = nil
@@ -407,6 +513,21 @@ function script.update(dt)
     status = 'finished'
     saveDone()
     if job.quit then quitAt = os.preciseClock() + 1 end
+  end
+end
+
+-- An error out of a step is caught there; one here (planning, a broken job)
+-- would stop the app frame after frame without a word anywhere — CSP does not
+-- log an app's errors. It goes to a file next to the job, read by Pit Box's log
+-- when the session produced nothing.
+local failed = false
+function script.update(dt)
+  if failed then return end
+  local ok, err = pcall(update, dt)
+  if not ok then
+    failed = true
+    io.save(JOB_DIR .. '/error.txt', tostring(err))
+    ac.error('pitbox_shot: ' .. tostring(err))
   end
 end
 
