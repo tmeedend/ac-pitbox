@@ -1249,7 +1249,10 @@ mod tests {
             &material("ksPerPixelNM", 1, false, &[("ksDiffuse", 0.1)]),
             template.clone(),
         );
-        assert_eq!(blended.transmission, 1.0, "une vitre incolore en fondu devient une vitre aussi");
+        assert_eq!(
+            blended.transmission, 1.0,
+            "une vitre incolore en fondu devient une vitre aussi"
+        );
 
         // Un feu arrière en fondu : sa texture porte son rouge.
         let red = convert(
