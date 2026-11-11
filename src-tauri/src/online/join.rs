@@ -79,9 +79,7 @@ pub fn prepare(request: &JoinRequest) -> Result<Vec<String>, String> {
     if crate::launch::game_running() {
         return Err(crate::errors::GAME_RUNNING.into());
     }
-    if !crate::launch::steam_running() {
-        return Err(crate::errors::STEAM_NOT_RUNNING.into());
-    }
+    crate::launch::steam_check()?;
     let steam_id = super::active_steam_id().ok_or(crate::errors::STEAM_NOT_SIGNED_IN)?;
     if request.booking {
         return Ok(Vec::new());
@@ -154,7 +152,7 @@ pub fn join(
     let guard = super::session_layers::set_aside(conn, cfg, config_dir, &own_layers(conn, request))?;
 
     let uri = join_uri(request);
-    if let Err(e) = crate::launch::spawn_cm(cm, Some(std::ffi::OsStr::new(&uri))) {
+    if let Err(e) = crate::cmwatch::spawn_for_session(cm, std::ffi::OsStr::new(&uri)) {
         // No game will start, so no game will end to give the layers back.
         super::session_layers::restore(conn, cfg, config_dir);
         return Err(format!("starting Content Manager: {e}"));

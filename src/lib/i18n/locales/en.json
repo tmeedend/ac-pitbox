@@ -447,7 +447,8 @@
     "inGameShooting": "In the game — it closes by itself",
     "inGameReportDone": "{count} thumbnails rendered in the game",
     "inGameReportFailed": "{count} failed",
-    "inGameAll": "Render them in the game"
+    "inGameAll": "Render them in the game",
+    "inGameAndMore": "{name} and {count} more"
   },
   "toast": {
     "expand": "Expand",
@@ -1822,7 +1823,8 @@
     "gameShotAppFolderTaken": "A folder named pitbox_shot already exists in apps\\lua and does not belong to Pit Box. Rename or remove it to render thumbnails in the game.",
     "gameShotNeverStarted": "The game did not start. Content Manager may be waiting for something: look at its window.",
     "gameShotTimedOut": "The game was still running after five minutes. Close it: the thumbnail was not rendered.",
-    "gameShotNoImage": "The game closed without producing the thumbnail. This version of Custom Shaders Patch may not support it."
+    "gameShotNoImage": "The game closed without producing the thumbnail. This version of Custom Shaders Patch may not support it.",
+    "steamRestartNeeded": "Steam is running, but the game will not find it: restart Steam, then try again."
   },
   "pack": {
     "tabMembers": "Mods",

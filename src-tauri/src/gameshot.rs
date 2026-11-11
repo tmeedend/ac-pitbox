@@ -56,9 +56,18 @@ const WARMUP: u32 = 8;
 /// How long the game may take to appear after Content Manager was asked.
 /// CM's own preparation (downloads, checks) happens before it.
 const START_DEADLINE: Duration = Duration::from_secs(120);
-/// How long a whole session may last. A shot takes about ten seconds once the
-/// session has loaded; past this, the game is stuck and the shot failed.
-const SESSION_DEADLINE: Duration = Duration::from_secs(300);
+/// How long a whole session may last: this much, plus `PER_CAR_DEADLINE` for
+/// every car. One car takes about ten seconds once the session has loaded;
+/// past this, the game is stuck and the shot failed.
+const SESSION_DEADLINE: Duration = Duration::from_secs(240);
+const PER_CAR_DEADLINE: Duration = Duration::from_secs(20);
+
+/// How many cars one session photographs at most (GRILLE§7.1). The session
+/// costs about 25 seconds whatever the number, a car about 3 more: twelve
+/// brings a car to some 5 seconds, and beyond that the gain is small while
+/// every car stays loaded at once and a crash loses the whole session.
+/// The studio track has 18 pit boxes.
+pub const CARS_PER_SESSION: usize = 12;
 
 /// One car to photograph, and the thumbnails wanted of it — one per grid
 /// density whose preset the game can render (GRILLE§7.1).
@@ -126,6 +135,21 @@ impl Paths {
 
 fn app_link(ac: &Path) -> PathBuf {
     ac.join("apps").join("lua").join(APP_ID)
+}
+
+/// The skin a car goes on track in: the one its card shows, else the first,
+/// as the Pit Box renderer picks it (`kn5_gltf::resolve_skin`) — Content
+/// Manager would otherwise use the last one it drove.
+pub fn session_skin(ac: &Path, request: &ShotRequest) -> String {
+    request
+        .skin
+        .clone()
+        .or_else(|| {
+            let car_dir = ac.join("content").join("cars").join(&request.car_id);
+            kn5_gltf::resolve_skin(&car_dir, None)
+                .and_then(|dir| dir.file_name().map(|n| n.to_string_lossy().into_owned()))
+        })
+        .unwrap_or_default()
 }
 
 /// `Documents\Assetto Corsa`, where the game keeps its user files.
@@ -196,8 +220,8 @@ pub fn sweep(ac: &Path) {
 
 /// Writes the job the Lua app reads, after clearing what a previous session
 /// left in the working folder.
-pub fn write_job(paths: &Paths, request: &ShotRequest) -> Result<(), String> {
-    for output in &request.outputs {
+pub fn write_job(paths: &Paths, requests: &[ShotRequest]) -> Result<(), String> {
+    for output in requests.iter().flat_map(|r| &r.outputs) {
         if !crate::gridthumbs::is_entry_stem(&output.stem) {
             return Err(format!("nom de vignette refusé : {}", output.stem));
         }
@@ -217,18 +241,24 @@ pub fn write_job(paths: &Paths, request: &ShotRequest) -> Result<(), String> {
         }
     }
 
-    let outputs: Vec<serde_json::Value> = request
-        .outputs
+    let cars: Vec<serde_json::Value> = requests
         .iter()
-        .map(|o| {
-            serde_json::json!({
-                "file": out.join(format!("{}.png", o.stem)).to_string_lossy(),
-                "template": o.template,
-            })
+        .map(|request| {
+            let outputs: Vec<serde_json::Value> = request
+                .outputs
+                .iter()
+                .map(|o| {
+                    serde_json::json!({
+                        "file": out.join(format!("{}.png", o.stem)).to_string_lossy(),
+                        "template": o.template,
+                    })
+                })
+                .collect();
+            serde_json::json!({ "id": request.car_id, "outputs": outputs })
         })
         .collect();
     let job = serde_json::json!({
-        "cars": [{ "id": request.car_id, "outputs": outputs }],
+        "cars": cars,
         "width": WIDTH,
         "height": HEIGHT,
         "supersample": SUPERSAMPLE,
@@ -281,10 +311,10 @@ pub fn wait(
 
 /// Moves the images the game produced into the store. A thumbnail the game
 /// did not write comes back without a path: the card keeps its photo.
-pub fn collect(paths: &Paths, request: &ShotRequest) -> Vec<ShotResult> {
-    request
-        .outputs
+pub fn collect(paths: &Paths, requests: &[ShotRequest]) -> Vec<ShotResult> {
+    requests
         .iter()
+        .flat_map(|r| &r.outputs)
         .map(|o| {
             let file = paths.out().join(format!("{}.png", o.stem));
             let path = match std::fs::read(&file) {
@@ -305,68 +335,83 @@ pub fn collect(paths: &Paths, request: &ShotRequest) -> Vec<ShotResult> {
         .collect()
 }
 
-/// One whole session: link the app, write the job, start the game, wait,
-/// store the images, unlink — the unlinking whatever happened.
+/// One whole session for one or several cars: link the app, write the job,
+/// start the game, wait, store the images, unlink — the unlinking whatever
+/// happened.
 ///
 /// `launch` starts the session (Content Manager, in the app); `game_running`
-/// says whether the game runs. Both are passed in so tests can stand in for
-/// the game.
+/// says whether the game runs; `release` lets go of Content Manager once a
+/// launched session is over (`cmwatch`, SESSION§2.7). All are passed in so
+/// tests can stand in for them.
 pub fn run(
     paths: &Paths,
-    request: &ShotRequest,
+    requests: &[ShotRequest],
     launch: &dyn Fn() -> Result<(), String>,
     game_running: &dyn Fn() -> bool,
     progress: &dyn Fn(Phase),
+    release: &dyn Fn(),
 ) -> Result<Vec<ShotResult>, String> {
+    let session = SESSION_DEADLINE + PER_CAR_DEADLINE * requests.len() as u32;
     run_with(
         paths,
-        request,
+        requests,
         launch,
         game_running,
         progress,
-        (START_DEADLINE, SESSION_DEADLINE, Duration::from_millis(500)),
+        release,
+        (START_DEADLINE, session, Duration::from_millis(500)),
     )
 }
 
 fn run_with(
     paths: &Paths,
-    request: &ShotRequest,
+    requests: &[ShotRequest],
     launch: &dyn Fn() -> Result<(), String>,
     game_running: &dyn Fn() -> bool,
     progress: &dyn Fn(Phase),
+    release: &dyn Fn(),
     (start, session, poll): (Duration, Duration, Duration),
 ) -> Result<Vec<ShotResult>, String> {
     if game_running() {
         return Err(crate::errors::GAME_RUNNING.into());
     }
+    let mut launched = false;
     let outcome = (|| -> Result<Ending, String> {
         install_app(paths)?;
-        write_job(paths, request)?;
+        write_job(paths, requests)?;
         progress(Phase::Launching);
         launch()?;
+        launched = true;
         Ok(wait(game_running, progress, start, session, poll))
     })();
     uninstall_app(&paths.ac, &paths.ac_documents);
+    // Only after a session that was really started: otherwise there is no
+    // Content Manager of this session to let go of.
+    if launched {
+        release();
+    }
+    let cars = requests
+        .iter()
+        .map(|r| r.car_id.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
     match outcome? {
         Ending::Closed => {
-            let results = collect(paths, request);
+            let results = collect(paths, requests);
             if results.iter().all(|r| r.path.is_none()) {
                 // What the app wrote says why, for a bug report: a step error,
                 // a car missing from the session, or no file at all when the
                 // app never ran.
                 let done = std::fs::read_to_string(paths.work().join("done.json"));
                 let error = std::fs::read_to_string(paths.work().join("error.txt"));
-                log::warn!(
-                    "gameshot: no image for {} — done.json: {done:?}, error.txt: {error:?}",
-                    request.car_id
-                );
+                log::warn!("gameshot: no image for {cars} — done.json: {done:?}, error.txt: {error:?}");
                 return Err(crate::errors::GAMESHOT_NO_IMAGE.into());
             }
             Ok(results)
         }
         Ending::NeverStarted => Err(crate::errors::GAMESHOT_NEVER_STARTED.into()),
         Ending::TimedOut => {
-            log::warn!("gameshot: {} still running after the deadline", request.car_id);
+            log::warn!("gameshot: game still running after the deadline ({cars})");
             Err(crate::errors::GAMESHOT_TIMED_OUT.into())
         }
     }
@@ -429,10 +474,11 @@ mod tests {
         // which is beside the point of this test.
         let _ = run_with(
             &p,
-            &request(),
+            &[request()],
             &launch,
             &game,
             &|_| {},
+            &|| {},
             (Duration::from_secs(5), Duration::from_secs(5), Duration::from_millis(1)),
         );
         assert!(linked.get(), "the app was linked when the game started");
@@ -522,10 +568,11 @@ mod tests {
         };
         let results = run_with(
             &p,
-            &request(),
+            &[request()],
             &launch,
             &game,
             &|_| {},
+            &|| {},
             (Duration::from_secs(5), Duration::from_secs(5), Duration::from_millis(1)),
         )
         .unwrap();
@@ -546,6 +593,51 @@ mod tests {
         );
     }
 
+    // Rule (GRILLE§7.1): one session photographs several cars; the job carries
+    // them all, and each car's images land in the store under their names.
+    #[test]
+    fn one_session_serves_several_cars() {
+        let base = crate::testutil::temp_dir("gameshot-several");
+        let p = paths(&base);
+        const OTHER: &str = "v49-fedcba9876543210fedcba9876543210-t0a1b2c3d";
+        let mut second = request();
+        second.car_id = "other_car".into();
+        second.outputs[0].stem = OTHER.into();
+        let requests = [request(), second];
+        let ran = Cell::new(0u32);
+        let launch = || {
+            let job: serde_json::Value =
+                serde_json::from_str(&std::fs::read_to_string(p.work().join("job.json")).unwrap()).unwrap();
+            let cars = job["cars"].as_array().unwrap();
+            assert_eq!(cars.len(), 2, "both cars in the job");
+            for car in cars {
+                std::fs::write(car["outputs"][0]["file"].as_str().unwrap(), b"png").unwrap();
+            }
+            Ok(())
+        };
+        let game = || {
+            let n = ran.get();
+            ran.set(n + 1);
+            n == 1
+        };
+        let results = run_with(
+            &p,
+            &requests,
+            &launch,
+            &game,
+            &|_| {},
+            &|| {},
+            (Duration::from_secs(5), Duration::from_secs(5), Duration::from_millis(1)),
+        )
+        .unwrap();
+        assert_eq!(results.len(), 2, "a result per car");
+        assert!(results.iter().all(|r| r.path.is_some()), "both stored");
+        assert!(
+            p.thumbs.join(format!("{OTHER}.png")).is_file(),
+            "the second car's image is in the store"
+        );
+    }
+
     // Rule: a game that never starts is a failure of the session, said with
     // its own key — and the app is unlinked all the same.
     #[test]
@@ -554,10 +646,11 @@ mod tests {
         let p = paths(&base);
         let err = run_with(
             &p,
-            &request(),
+            &[request()],
             &|| Ok(()),
             &|| false,
             &|_| {},
+            &|| {},
             (
                 Duration::from_millis(5),
                 Duration::from_secs(5),
@@ -569,13 +662,57 @@ mod tests {
         assert!(!p.link().exists(), "unlinked after a failed session");
     }
 
+    // Rule (SESSION§2.7): Content Manager is let go of after a session that was
+    // really started — never when nothing was launched.
+    #[test]
+    fn content_manager_is_released_only_after_a_launched_session() {
+        let base = crate::testutil::temp_dir("gameshot-release");
+        let p = paths(&base);
+        let released = Cell::new(0u32);
+        let release = || released.set(released.get() + 1);
+        let _ = run(&p, &[request()], &|| Ok(()), &|| true, &|_| {}, &release);
+        assert_eq!(released.get(), 0, "refused before launching: nothing to release");
+        let _ = run_with(
+            &p,
+            &[request()],
+            &|| Err("CM missing".into()),
+            &|| false,
+            &|_| {},
+            &release,
+            (
+                Duration::from_millis(5),
+                Duration::from_secs(5),
+                Duration::from_millis(1),
+            ),
+        );
+        assert_eq!(released.get(), 0, "the launch itself failed: nothing to release");
+        let _ = run_with(
+            &p,
+            &[request()],
+            &|| Ok(()),
+            &|| false,
+            &|_| {},
+            &release,
+            (
+                Duration::from_millis(5),
+                Duration::from_secs(5),
+                Duration::from_millis(1),
+            ),
+        );
+        assert_eq!(
+            released.get(),
+            1,
+            "a launched session is released, even one whose game never came"
+        );
+    }
+
     // Rule: a session is refused while the game runs (SESSION§2.4), before
     // anything is linked or written.
     #[test]
     fn nothing_is_written_while_the_game_runs() {
         let base = crate::testutil::temp_dir("gameshot-busy");
         let p = paths(&base);
-        let err = run(&p, &request(), &|| Ok(()), &|| true, &|_| {}).unwrap_err();
+        let err = run(&p, &[request()], &|| Ok(()), &|| true, &|_| {}, &|| {}).unwrap_err();
         assert_eq!(err, crate::errors::GAME_RUNNING, "refused with the usual key");
         assert!(!p.link().exists(), "nothing linked");
         assert!(!p.work().exists(), "nothing written");
@@ -595,10 +732,11 @@ mod tests {
         };
         let err = run_with(
             &p,
-            &request(),
+            &[request()],
             &|| Ok(()),
             &game,
             &|_| {},
+            &|| {},
             (Duration::from_secs(5), Duration::from_secs(5), Duration::from_millis(1)),
         )
         .unwrap_err();

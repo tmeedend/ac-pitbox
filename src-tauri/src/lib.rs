@@ -14,6 +14,7 @@ mod catalog_update;
 mod categories;
 mod cm_stats;
 mod cmimport;
+mod cmwatch;
 mod commands;
 mod compose;
 mod config;

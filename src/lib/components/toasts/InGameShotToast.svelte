@@ -25,7 +25,11 @@
 {#if p.running}
   <Toast title={t("gridThumbs.inGameTitle")}>
     <ProgressBar ratio={null} {phase}>
-      {#snippet detail()}{p.current ?? ""}{/snippet}
+      {#snippet detail()}{p.current
+          ? p.others > 0
+            ? t("gridThumbs.inGameAndMore", { name: p.current, count: String(p.others) })
+            : p.current
+          : ""}{/snippet}
     </ProgressBar>
     {#if p.total > 1}
       <div class="ig-count"><span class="mono">{t("gridThumbs.taskCount", { done: String(p.done + p.failed), total: String(p.total) })}</span></div>

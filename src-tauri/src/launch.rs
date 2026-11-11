@@ -392,11 +392,56 @@ pub(crate) fn ensure_available(conn: &Connection, cfg: &AppConfig, kind: ModKind
 /// Même mécanique de détection que la surveillance du jeu (`music/watch.rs`),
 /// mais ponctuelle : un scan de processus au clic, pas un thread.
 pub fn steam_running() -> bool {
+    !steam_pids().is_empty()
+}
+
+fn steam_pids() -> Vec<u32> {
     let mut sys = sysinfo::System::new();
     sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
     sys.processes()
-        .values()
-        .any(|p| p.name().to_string_lossy().eq_ignore_ascii_case("steam.exe"))
+        .iter()
+        .filter(|(_, p)| p.name().to_string_lossy().eq_ignore_ascii_case("steam.exe"))
+        .map(|(pid, _)| pid.as_u32())
+        .collect()
+}
+
+/// Whether the game will find the running Steam (SESSION§2.3).
+///
+/// The game finds Steam through the process number Steam writes in the
+/// registry (`HKCU\Software\Valve\Steam\ActiveProcess`, `pid`). Seen on
+/// 2026-11-11: a Steam started again had left the number of the previous
+/// one there; Steam was running, and the game stopped at once on "Steam API
+/// has failed to initialize". Restarting Steam rewrites it.
+pub fn steam_check() -> Result<(), String> {
+    steam_verdict(registered_steam_pid(), &steam_pids()).map_err(str::to_string)
+}
+
+/// `steam_check` without the system: no Steam running, or Steam running under
+/// another number than the registered one. No registered number at all is let
+/// through — nothing says it is wrong.
+fn steam_verdict(registered: Option<u32>, running: &[u32]) -> Result<(), &'static str> {
+    if running.is_empty() {
+        return Err(crate::errors::STEAM_NOT_RUNNING);
+    }
+    match registered {
+        Some(pid) if pid != 0 && !running.contains(&pid) => Err(crate::errors::STEAM_RESTART_NEEDED),
+        _ => Ok(()),
+    }
+}
+
+#[cfg(windows)]
+fn registered_steam_pid() -> Option<u32> {
+    use winreg::enums::HKEY_CURRENT_USER;
+    use winreg::RegKey;
+    RegKey::predef(HKEY_CURRENT_USER)
+        .open_subkey(r"Software\Valve\Steam\ActiveProcess")
+        .and_then(|k| k.get_value::<u32, _>("pid"))
+        .ok()
+}
+
+#[cfg(not(windows))]
+fn registered_steam_pid() -> Option<u32> {
+    None
 }
 
 /// Does Assetto Corsa run already? (SESSION§2.4)
@@ -422,23 +467,27 @@ pub(crate) fn cm_exe(cfg: &AppConfig) -> Result<&Path, String> {
 }
 
 /// Starts Content Manager with at most one argument — an `acmanager://` URI or
-/// a file for it to open. CM is single-instance: when it already runs, the
-/// argument is handed to the running instance, which is why the child process
-/// is never waited on.
-pub(crate) fn spawn_cm(cm: &Path, arg: Option<&OsStr>) -> std::io::Result<()> {
+/// a file for it to open — and returns the process started. CM is
+/// single-instance: when it already runs, the argument is handed to the
+/// running instance and this process ends at once, which is why it is never
+/// waited on. A session goes through `cmwatch::spawn_for_session` instead.
+pub(crate) fn spawn_cm(cm: &Path, arg: Option<&OsStr>) -> std::io::Result<u32> {
     let mut cmd = Command::new(cm);
     if let Some(arg) = arg {
         cmd.arg(arg);
     }
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
-    cmd.spawn().map(|_| ())
+    cmd.spawn().map(|child| child.id())
 }
 
 /// Ouvre Content Manager sans argument (§7.2) : pratique pour parcourir
 /// son propre menu (réglages CM, contenu…) sans passer par une session Pit Box.
 pub fn open_content_manager(cfg: &AppConfig) -> Result<(), String> {
-    spawn_cm(cm_exe(cfg)?, None).map_err(|e| format!("lancement de Content Manager : {e}"))
+    // The user's own Content Manager: never closed by Pit Box (SESSION§2.7).
+    spawn_cm(cm_exe(cfg)?, None)
+        .map(|_| ())
+        .map_err(|e| format!("lancement de Content Manager : {e}"))
 }
 
 /// Lance un replay dans Content Manager (§6.1, onglet Médias). Même mécanisme
@@ -452,7 +501,7 @@ pub fn launch_replay(cfg: &AppConfig, replay_path: &Path) -> Result<(), String> 
     if game_running() {
         return Err(crate::errors::GAME_RUNNING.to_string());
     }
-    spawn_cm(cm, Some(replay_path.as_os_str())).map_err(|e| format!("lancement du replay : {e}"))
+    crate::cmwatch::spawn_for_session(cm, replay_path.as_os_str()).map_err(|e| format!("lancement du replay : {e}"))
 }
 
 /// The grid as it can go on track: an opponent in the showcase is left out
@@ -515,6 +564,9 @@ pub fn launch(conn: &Connection, cfg: &AppConfig, setup: &RaceSetup) -> Result<(
     if game_running() {
         return Err(crate::errors::GAME_RUNNING.to_string());
     }
+    // Steam absent is asked for by the screen before this (SESSION§2.3); a
+    // Steam the game will not find is caught here, before anything is written.
+    steam_check()?;
 
     // Nothing in the showcase goes on track (ESPACE R5). The session column
     // and the opponent picker already leave such mods out; this is the net,
@@ -601,11 +653,16 @@ fn studio_grid_setup(cars: &[(String, String)], track: &str) -> Result<RaceSetup
     .map_err(|e| format!("session de prise de vue : {e}"))
 }
 
-/// Starts the session of an in-game thumbnail through Content Manager, like
-/// any other session (golden rule 4). The car and the track must already be
-/// in the game (`ensure_available`).
-pub(crate) fn launch_studio(cfg: &AppConfig, car_id: &str, skin: &str, track: &str) -> Result<(), String> {
-    start_quick_drive(cm_exe(cfg)?, &studio_setup(car_id, skin, track)?)
+/// Starts the session of in-game thumbnails through Content Manager, like
+/// any other session (golden rule 4): a practice for one car, a track day for
+/// several. The cars (with their skins) and the track must already be in the
+/// game (`ensure_available`).
+pub(crate) fn launch_studio(cfg: &AppConfig, cars: &[(String, String)], track: &str) -> Result<(), String> {
+    let setup = match cars {
+        [(car, skin)] => studio_setup(car, skin, track)?,
+        _ => studio_grid_setup(cars, track)?,
+    };
+    start_quick_drive(cm_exe(cfg)?, &setup)
 }
 
 /// Hands a session to Content Manager: the Quick Drive preset, then the
@@ -630,7 +687,8 @@ pub(crate) fn start_quick_drive(cm: &Path, setup: &RaceSetup) -> Result<(), Stri
     // (gro-ove/actools) : pas de garde équivalente pour `TrackPropertiesData`
     // (toujours chargé), d'où l'absence du même flag pour l'état de piste.
     let uri = format!("acmanager://race/quick?presetFile={}&loadAssists=true", path.display());
-    spawn_cm(cm, Some(OsStr::new(&uri))).map_err(|e| format!("lancement de Content Manager : {e}"))?;
+    crate::cmwatch::spawn_for_session(cm, OsStr::new(&uri))
+        .map_err(|e| format!("lancement de Content Manager : {e}"))?;
 
     // Skin du joueur (SESSION§2) : absent du schéma Quick Drive, donc réinjecté
     // dans le `race.ini` que CM écrit à l'instant où il lance `acs.exe` — le
@@ -707,6 +765,25 @@ mod tests {
         let setup = studio_grid_setup(&cars, "magione").unwrap();
         let path = std::env::var("PITBOX_SHOT_PRESET").expect("PITBOX_SHOT_PRESET");
         std::fs::write(path, crate::quickdrive::build_preset(&setup).unwrap()).unwrap();
+    }
+
+    /// SESSION§2.3: a Steam the game will not find — running under another
+    /// number than the one in the registry — is refused before the launch, and
+    /// told apart from a Steam that does not run.
+    #[test]
+    fn a_steam_the_game_will_not_find_is_refused() {
+        assert_eq!(steam_verdict(Some(10), &[10]), Ok(()), "the registered Steam runs");
+        assert_eq!(steam_verdict(None, &[10]), Ok(()), "nothing registered: let through");
+        assert_eq!(
+            steam_verdict(Some(13804), &[27992]),
+            Err(crate::errors::STEAM_RESTART_NEEDED),
+            "stale number"
+        );
+        assert_eq!(
+            steam_verdict(Some(10), &[]),
+            Err(crate::errors::STEAM_NOT_RUNNING),
+            "no Steam"
+        );
     }
 
     /// SESSION§2.5: a car whose models live in another car's folder goes on

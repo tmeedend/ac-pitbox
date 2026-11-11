@@ -1664,13 +1664,20 @@ de reprendre. En cas d'écart, la spec fait foi.
          un Steam disparu (13804) alors qu'un autre tournait (27992, démarré à
          11:10:35, l'heure exacte où CM a relancé le jeu dans un des journaux
          du point 2). Le jeu trouve Steam par ce numéro : il ne le trouvait
-         plus. Remède manuel : redémarrer Steam. Pit Box pourrait le détecter
-         avant de lancer (le `pid` du registre ne correspond à aucun
-         `steam.exe`) et le dire, au lieu de laisser le jeu planter.
+         plus. Remède manuel : redémarrer Steam. **Détecté depuis** : Pit Box
+         refuse de lancer quand ce numéro ne correspond à aucun `steam.exe`
+         et dit de redémarrer Steam (SESSION§2.3). Reste à savoir pourquoi
+         Steam ne réécrit pas ce numéro en redémarrant.
       4. **Un jeu planté reste ouvert** derrière la fenêtre de rapport de CSP,
          et CM reste sur « Waiting… » : toute session suivante attend. Le rendu
          dans le jeu (GRILLE§7.1) abandonne alors au bout de cinq minutes et
          vide le reste de sa file.
+      5. **CM garde sa boîte d'attente après une journée piste**, même « Skip
+         results » coché pour tous les types de session, et ignore alors toute
+         nouvelle demande (relevé le 2026-11-11 ; son code est censé la fermer,
+         la cause n'est pas trouvée). Contourné : Pit Box demande la fermeture
+         du CM qu'il a lui-même démarré, douze secondes après la fin du jeu
+         (SESSION§2.7, `cmwatch.rs`).
 
 - [ ] **Sessions au format `.cmpreset` — une seule vérification reste.**
       Livré (SESSION§3.6) : une session enregistrée est un preset Quick Drive
@@ -1966,9 +1973,10 @@ de reprendre. En cas d'écart, la spec fait foi.
       voiture par session, en file, les deux densités d'un coup, suivi dans la
       pile bas-droite (`gameshot.rs`, `inGame.svelte.ts`).
       **Restent** :
-      - le lot 3 : plusieurs voitures dans une même session (jamais essayé :
-        une séance d'essais ne porte qu'une voiture) et un lot depuis
-        `Réglages › Vignettes` ;
+      - plusieurs voitures par session (fait le 2026-11-11, douze par
+        journée piste) : à essayer sur une vraie série d'une soixantaine de
+        voitures protégées, pour vérifier la mémoire et la reprise après un
+        plantage en milieu de lot ;
       - les reflets de peinture : un rouge Officiel sort un peu plus sombre
         et moins brillant que chez Pit Box (le showroom du jeu n'est pas son
         studio). Vitrine et Officiel sont faits (2026-11-11) : sol, reflet,

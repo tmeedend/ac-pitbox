@@ -194,6 +194,12 @@ avant de construire le preset. Absent, un dialogue demande de démarrer Steam et
 revérifie à la validation, et reste ouvert tant que Steam manque. Une erreur de
 la vérification elle-même laisse passer le lancement.
 
+**Un Steam que le jeu ne trouvera pas est refusé aussi**, avec son propre
+message : Steam tourne, mais sous un autre numéro de processus que celui inscrit
+dans le registre, où le jeu va le chercher. Seul un redémarrage de Steam le
+répare ; lancé quand même, le jeu s'arrêterait aussitôt (« Steam API has failed
+to initialize »).
+
 ### 2.4 Une session à la fois
 
 **Pit Box ne lance rien tant qu'Assetto Corsa tourne**, quel que soit celui qui
@@ -249,6 +255,27 @@ cumulé, et abandon.
   vainqueur, donc son temps cumulé est au moins celui du vainqueur ; un temps
   plus court veut dire arrêté avant le drapeau. Une voiture sans aucun tour n'a
   pas fini.
+
+### 2.7 Content Manager laissé ouvert après une session
+
+Après une séance d'essais, Content Manager se ferme seul quelques secondes après
+le jeu. Après une journée piste, une course ou une session online, il peut
+garder sa boîte d'attente ouverte, même avec « Skip results » coché, et **ignore
+alors toute nouvelle demande** : la session suivante ne démarre pas.
+
+- **Seulement après une session de prise de vue** (GRILLE§7.1), où il n'y a
+  aucun résultat à lire. Après une session de l'utilisateur, Content Manager
+  garde son comportement : sa fenêtre de résultats suit son réglage « Skip
+  results ».
+- **Seulement le Content Manager que Pit Box a lui-même démarré**, c'est-à-dire
+  quand aucun ne tournait. Celui que l'utilisateur avait ouvert, ou qu'il a
+  ouvert par le bouton « Ouvrir Content Manager » de Pit Box, n'est jamais
+  touché.
+- Le jeu fermé, ce Content Manager a **douze secondes** pour se fermer seul ;
+  au-delà, Pit Box lui demande de se fermer — l'équivalent de sa croix, jamais
+  un arrêt forcé. Pas s'il montre sa fenêtre principale : quelqu'un l'utilise.
+- Un Content Manager qui ne se ferme pas malgré la demande est laissé tel quel,
+  et le journal le dit.
 
 ## 3. Écran de réglages
 

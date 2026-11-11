@@ -72,6 +72,9 @@ pub fn with_values(key: &str, values: &[(&str, &str)]) -> String {
 // not worked around. The lobby and a server are told apart because the user's
 // next move differs - retry later, or pick another server.
 pub const STEAM_NOT_RUNNING: &str = "errors.steamNotRunning";
+// Steam runs, but under another number than the one the game will look for
+// (SESSION§2.3): only a restart of Steam fixes it.
+pub const STEAM_RESTART_NEEDED: &str = "errors.steamRestartNeeded";
 pub const STEAM_NOT_SIGNED_IN: &str = "errors.steamNotSignedIn";
 pub const LOBBY_UNAVAILABLE: &str = "errors.lobbyUnavailable";
 pub const SERVER_UNREACHABLE: &str = "errors.serverUnreachable";

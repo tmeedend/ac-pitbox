@@ -211,16 +211,17 @@ pub async fn frozen_grid_thumbnail(
 
 /// Resolves a car folder: library first, `content/` next — same rule as the
 /// 3D preview, and the same lock held for as little time as possible.
-/// Renders the thumbnails of one protected car **in the game** and stores
-/// them (GRILLE§7.1); returns what became of each.
+/// Renders the thumbnails of protected cars **in the game**, in one session
+/// (`gameshot::CARS_PER_SESSION` at most), and stores them (GRILLE§7.1);
+/// returns what became of each.
 ///
 /// Lasts a whole game session, so off the window thread; the base is locked
-/// only while the car and the studio track are made available, never while
+/// only while the cars and the studio track are made available, never while
 /// the game runs. The phase goes out as `gameshot://phase` for the task panel.
 #[tauri::command]
 pub async fn render_in_game(
     app: AppHandle,
-    request: crate::gameshot::ShotRequest,
+    requests: Vec<crate::gameshot::ShotRequest>,
 ) -> Result<Vec<crate::gameshot::ShotResult>, String> {
     off_window(app, move |app| {
         let cfg = crate::config::load(app);
@@ -230,27 +231,23 @@ pub async fn render_in_game(
         if crate::launch::game_running() {
             return Err(crate::errors::GAME_RUNNING.into());
         }
-        if !crate::launch::steam_running() {
-            return Err(crate::errors::STEAM_NOT_RUNNING.into());
+        crate::launch::steam_check()?;
+        if requests.is_empty() || requests.len() > crate::gameshot::CARS_PER_SESSION {
+            return Err(format!("{} voitures pour une session de prise de vue", requests.len()));
         }
         {
             let db = app.state::<Db>();
             let conn = db.0.lock().map_err(|e| e.to_string())?;
             use crate::modscan::ModKind;
-            crate::launch::ensure_available(&conn, &cfg, ModKind::Car, &request.car_id)?;
+            for request in &requests {
+                crate::launch::ensure_available(&conn, &cfg, ModKind::Car, &request.car_id)?;
+            }
             crate::launch::ensure_available(&conn, &cfg, ModKind::Track, crate::gameshot::STUDIO_TRACK)?;
         }
-        // The skin the grid shows; without one, the first, as the Pit Box
-        // renderer picks it — CM would otherwise use the last one it drove.
-        let car_dir = ac.join("content").join("cars").join(&request.car_id);
-        let skin = request
-            .skin
-            .clone()
-            .or_else(|| {
-                kn5_gltf::resolve_skin(&car_dir, None)
-                    .and_then(|dir| dir.file_name().map(|n| n.to_string_lossy().into_owned()))
-            })
-            .unwrap_or_default();
+        let cars: Vec<(String, String)> = requests
+            .iter()
+            .map(|r| (r.car_id.clone(), crate::gameshot::session_skin(&ac, r)))
+            .collect();
         let paths = crate::gameshot::Paths {
             ac,
             ac_documents: crate::gameshot::ac_documents().ok_or("dossier Documents introuvable")?,
@@ -262,13 +259,22 @@ pub async fn render_in_game(
                 .join(crate::gameshot::APP_ID),
             thumbs: crate::gridthumbs::dir(app)?,
         };
-        let launch = || crate::launch::launch_studio(&cfg, &request.car_id, &skin, crate::gameshot::STUDIO_TRACK);
+        let launch = || crate::launch::launch_studio(&cfg, &cars, crate::gameshot::STUDIO_TRACK);
         let progress = |phase: crate::gameshot::Phase| {
             if let Err(e) = app.emit("gameshot://phase", phase) {
                 log::warn!("gameshot: phase not sent ({e})");
             }
         };
-        crate::gameshot::run(&paths, &request, &launch, &crate::launch::game_running, &progress)
+        // The next session of the queue starts only once Content Manager has
+        // let go of this one (SESSION§2.7): asked once the game has gone.
+        crate::gameshot::run(
+            &paths,
+            &requests,
+            &launch,
+            &crate::launch::game_running,
+            &progress,
+            &crate::cmwatch::release_owned,
+        )
     })
     .await
 }

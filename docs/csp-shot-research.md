@@ -260,6 +260,13 @@ ouverte** (« Waiting for extra windows to close »). Une session à plusieurs
 voitures se termine donc sur cette fenêtre, et la suivante ne part pas. Magione
 a 18 stands : jusqu'à 18 voitures par session.
 
+**Suite (2026-11-11)** : même avec « Skip results » coché pour tous les types
+de session, CM garde après une journée piste sa boîte d'attente (« Waiting for
+extra windows to close ») ; son code (`GameDialog.OnResult`) est pourtant censé
+la fermer. Contourné côté Pit Box (SESSION§2.7) : le CM que Pit Box a démarré
+est prié de se fermer douze secondes après le jeu. La génération en masse
+envoie les voitures par lots de douze, une journée piste par lot.
+
 ## Pistes pour l'éclairage, de la moins à la plus coûteuse
 
 *Écrites avant les tours 4 à 6 ; la deuxième est celle qui a abouti, mais dans

@@ -207,12 +207,13 @@ export interface InGameShotResult {
 export type InGamePhase = "launching" | "ingame";
 
 /**
- * Renders a protected car **in the game** and stores its thumbnails
- * (GRILLE§7.1). Resolves when the game has closed — a whole session, about a
- * minute; the phase goes out meanwhile as `gameshot://phase`.
+ * Renders protected cars **in the game**, in one session (twelve at most), and
+ * stores their thumbnails (GRILLE§7.1). Resolves when the game has closed and
+ * Content Manager has let go of the session; the phase goes out meanwhile as
+ * `gameshot://phase`.
  */
-export function renderInGame(request: InGameShotRequest): Promise<InGameShotResult[]> {
-  return invoke<InGameShotResult[]>("render_in_game", { request });
+export function renderInGame(requests: InGameShotRequest[]): Promise<InGameShotResult[]> {
+  return invoke<InGameShotResult[]>("render_in_game", { requests });
 }
 
 /** A car whose thumbnail only the game can render, in the livery its card
