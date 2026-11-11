@@ -511,33 +511,38 @@ pub fn card_thumbs(
     ids: &[String],
     presets: &[LivePreset],
 ) -> std::collections::HashMap<String, Vec<crate::skeleton::ThumbFile>> {
-    use tauri::Manager;
     if presets.is_empty() {
         return Default::default();
     }
-    let cfg = crate::config::load(app);
-    let cars: Vec<(String, PathBuf)> = {
-        let db = app.state::<crate::overlay::Db>();
-        let Ok(conn) = db.0.lock() else {
-            log::warn!("gridthumbs: base lock poisoned, no thumbnail frozen");
-            return Default::default();
-        };
-        ids.iter()
-            .filter_map(|id| {
-                let m = crate::overlay::get_mod(&conn, id).ok().flatten()?;
-                let has_files = !m.showcase && (!m.is_stock || m.is_unmanaged);
-                let car = crate::modscan::ModKind::from_column(&m.kind) == crate::modscan::ModKind::Car;
-                (car && has_files).then_some(())?;
-                Some((id.clone(), crate::preview::car_dir(&conn, &cfg, id)?))
-            })
-            .collect()
-    };
+    let cars = cars_with_files(app, ids);
     let prefs = crate::ui_prefs::load(app);
     cars.into_iter()
         .filter_map(|(id, dir)| {
             let skin = preferred_skin(&prefs, &id);
             let thumbs = rendered(app, &dir, &id, skin.as_deref(), presets);
             (!thumbs.is_empty()).then_some((id, thumbs))
+        })
+        .collect()
+}
+
+/// The cars among `ids` that still have their files — not in the showcase,
+/// not untouched base content — with their model folder. The base is read and
+/// its lock given back before any file is touched by the caller.
+fn cars_with_files(app: &tauri::AppHandle, ids: &[String]) -> Vec<(String, PathBuf)> {
+    use tauri::Manager;
+    let cfg = crate::config::load(app);
+    let db = app.state::<crate::overlay::Db>();
+    let Ok(conn) = db.0.lock() else {
+        log::warn!("gridthumbs: base lock poisoned, no car listed");
+        return Vec::new();
+    };
+    ids.iter()
+        .filter_map(|id| {
+            let m = crate::overlay::get_mod(&conn, id).ok().flatten()?;
+            let has_files = !m.showcase && (!m.is_stock || m.is_unmanaged);
+            let car = crate::modscan::ModKind::from_column(&m.kind) == crate::modscan::ModKind::Car;
+            (car && has_files).then_some(())?;
+            Some((id.clone(), crate::preview::car_dir(&conn, &cfg, id)?))
         })
         .collect()
 }
