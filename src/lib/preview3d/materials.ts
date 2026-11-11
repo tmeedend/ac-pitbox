@@ -59,8 +59,6 @@ export function prepareMaterials(model: ThreeModule.Object3D, renderer: ThreeMod
   // l'anisotropie qui le règle. Une ligne pour le gain le plus visible.
   const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
 
-  // Les vitres passent après l'opaque et n'écrivent pas dans le tampon de
-  // profondeur, sinon l'intérieur disparaît derrière le pare-brise (PREVIEW§8.2).
   model.traverse((object) => {
     const mesh = object as ThreeModule.Mesh;
     if (!mesh.isMesh) return;
@@ -88,6 +86,21 @@ export function prepareMaterials(model: ThreeModule.Object3D, renderer: ThreeMod
       // same roughness, so a 0.15 floor would frost every windowpane.
       if (standard.isMeshStandardMaterial && !isTransmissive(material)) applyRoughnessFloor(standard);
     }
+  });
+  applyGlassRules(model);
+}
+
+/**
+ * Where glass goes in the drawing order, and who casts the shadow.
+ *
+ * Les vitres passent après l'opaque et n'écrivent pas dans le tampon de
+ * profondeur, sinon l'intérieur disparaît derrière le pare-brise (PREVIEW§8.2).
+ */
+export function applyGlassRules(model: ThreeModule.Object3D): void {
+  model.traverse((object) => {
+    const mesh = object as ThreeModule.Mesh;
+    if (!mesh.isMesh) return;
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     if (materials.some((m) => (m as ThreeModule.Material).transparent)) {
       mesh.renderOrder = 1;
       for (const m of materials) (m as ThreeModule.Material).depthWrite = false;
