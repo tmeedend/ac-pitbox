@@ -7,6 +7,7 @@
 import type * as ThreeModule from "three";
 import { TUNING } from "./tuning";
 import { detailMapOf, patchDetailShader } from "./detailMap";
+import { patchGradeShader } from "./grade";
 
 /**
  * Is this material physical glass, i.e. does it carry
@@ -45,22 +46,22 @@ function applyRoughnessFloor(shader: ThreeModule.WebGLProgramParametersWithUnifo
 }
 
 /**
- * The preview's two changes to a material's shader: the roughness floor (not
- * on physical glass) and the repeated detail map (`detailMap.ts`). One
- * `onBeforeCompile` for both — a material has only one.
+ * The preview's changes to a material's shader: the roughness floor (not on
+ * physical glass), the repeated detail map (`detailMap.ts`) and the colour
+ * grade (`grade.ts`). One `onBeforeCompile` for all — a material has only one.
  */
 function patchShader(material: ThreeModule.MeshStandardMaterial): void {
   const floor = isTransmissive(material) ? 0 : TUNING.roughnessFloor;
   const detail = detailMapOf(material);
-  if (floor <= 0 && !detail) return;
   material.onBeforeCompile = (shader) => {
     if (floor > 0) applyRoughnessFloor(shader, floor);
     if (detail) patchDetailShader(shader, detail);
+    patchGradeShader(shader);
   };
   // Sans cette clé, three met en commun le programme compilé de deux
   // matériaux qu'il croit identiques : il ne regarde pas ce qu'`onBeforeCompile`
   // a changé.
-  material.customProgramCacheKey = () => `pitbox-roughfloor-${floor}${detail ? "-detail" : ""}`;
+  material.customProgramCacheKey = () => `pitbox-graded-roughfloor-${floor}${detail ? "-detail" : ""}`;
 }
 
 /** Prepares every mesh of a freshly loaded model for the preview's renderer. */

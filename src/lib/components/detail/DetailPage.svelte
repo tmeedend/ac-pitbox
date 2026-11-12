@@ -51,7 +51,15 @@
   import { SheetTrackSkins } from "$lib/detail/sheetTrackSkins.svelte";
   import { nav, pickSession, requestSection } from "$lib/shell/nav.svelte";
   import { onLibraryChange } from "$lib/library/libraryVersion.svelte";
-  import { getPreferredSkin, setPreferredSkin, getPreferredLayout, setPreferredLayout } from "$lib/preferred";
+  import {
+    getPreferredSkin,
+    setPreferredSkin,
+    getPreferredLayout,
+    setPreferredLayout,
+    getThumbnailSkin,
+    setThumbnailSkin,
+  } from "$lib/preferred";
+  import ContextMenu from "$lib/components/ui/ContextMenu.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { trackLength } from "$lib/detail/trackLength";
   import LayersBlock from "./LayersBlock.svelte";
@@ -64,6 +72,7 @@
   import ProvenanceBlock from "./ProvenanceBlock.svelte";
   import TagsBlock from "./TagsBlock.svelte";
   import MediaScreenshots from "./MediaScreenshots.svelte";
+  import MediaThumbnails from "./MediaThumbnails.svelte";
   import MediaReplays from "./MediaReplays.svelte";
   import MediaBackgrounds from "./MediaBackgrounds.svelte";
   import DetailHero from "./DetailHero.svelte";
@@ -100,6 +109,25 @@
    * ouverture de fiche**, sans persistance : la fiche s'ouvre sur l'aperçu et
    * ses données, pas sur une grille de trente livrées. */
   let pickerOpen = $state(false);
+  /** Right click on a livery of the unfolded grid. */
+  let skinMenu = $state<{ x: number; y: number; index: number } | null>(null);
+
+  /** The menu of a livery, its values taken **now**. The menu closes before
+   * it runs the action, and an action reading the livery through the open
+   * menu found nothing left to read: « Use for the thumbnails » did nothing
+   * (reported on screen). */
+  function skinMenuItems(index: number) {
+    const sk = skins[index];
+    const carId = id;
+    if (!sk) return [];
+    return [
+      {
+        label: t("detail.useForThumbnails"),
+        disabled: sk.id === thumbSkinId,
+        onclick: () => setThumbnailSkin(carId, { id: sk.id, name: sk.name, preview: sk.preview }),
+      },
+    ];
+  }
   /** Fiche d'une couche ouverte par-dessus celle de l'hôte (REFONTE§8.4) : la fermer
    * y ramène, au lieu de renvoyer à la liste — même règle que la fiche d'un
    * pack. Le nombre de couches sœurs voyage avec elle : la carte Ordre n'a de
@@ -221,6 +249,11 @@
   let extrasCount = $state<number | null>(null);
   let backgroundsCount = $state<number | null>(null);
   let skins = $state<SkinItem[]>([]);
+  /** The livery of this car's grid thumbnails (GRILLE§5.4): chosen for them,
+   * or the default one — the first of `skins/`, as the backend resolves it. */
+  const thumbSkinId = $derived(
+    getThumbnailSkin(id)?.id ?? skins.map((sk) => sk.id).sort()[0] ?? null,
+  );
   let previewSkin = $state(0);
   let previewLayout = $state(0);
   let actionError = $state("");
@@ -517,7 +550,13 @@
   $effect(() => {
     const current = id;
     actionError = "";
-    activeTab = "content";
+    // The tab a link asked for, consumed like `openSkin` below: a one-off
+    // intention, not a dependency of this effect.
+    activeTab = untrack(() => {
+      const wanted = nav.openTab;
+      nav.openTab = null;
+      return wanted ?? "content";
+    });
     pickerOpen = false;
     textTab = "desc";
     siblings = [];
@@ -903,9 +942,11 @@
               thumb: previewSrc(sk.livery ?? sk.preview, contentRevision),
               image: previewSrc(sk.preview, contentRevision),
               livery: previewSrc(sk.livery, contentRevision),
+              mark: sk.id === thumbSkinId ? t("detail.thumbnailSkin") : null,
             }))}
             index={previewSkin}
             onpick={selectSkin}
+            oncontext={(index, e) => (skinMenu = { x: e.clientX, y: e.clientY, index })}
             expanded={pickerOpen}
             ontoggle={() => (pickerOpen = !pickerOpen)}
             emptyText={t("detail.noSkins")}
@@ -985,6 +1026,17 @@
            dossier » et « Lier un fichier… » sont la seule voie pour y ajouter
            quelque chose. -->
       <div class="tab-body stack">
+        {#if isCar && detail}
+          {@const thumbSkin = skins.find((sk) => sk.id === thumbSkinId)}
+          <MediaThumbnails
+            carId={id}
+            name={detail.display_name ?? detail.id_interne}
+            skin={getThumbnailSkin(id)?.id ?? null}
+            photo={previewSrc(thumbSkin?.preview ?? detail.preview, contentRevision)}
+            photoLabel={detail.is_stock ? t("detail.thumbnailOriginalGame") : t("detail.thumbnailOriginalMod")}
+            skinName={thumbSkin?.name ?? null}
+          />
+        {/if}
         <MediaScreenshots modId={id} onerror={(m) => (actionError = m)} oncount={(n) => (screenshotsCount = n)} />
         <MediaReplays modId={id} onerror={(m) => (actionError = m)} oncount={(n) => (replaysCount = n)} />
         <!-- Les documents livrés AVEC ce mod mais rangés à part (REFONTE§7.8) — une
@@ -1065,6 +1117,15 @@
   {/if}
 </div>
 
+
+{#if skinMenu}
+  <ContextMenu
+    x={skinMenu.x}
+    y={skinMenu.y}
+    items={skinMenuItems(skinMenu.index)}
+    onclose={() => (skinMenu = null)}
+  />
+{/if}
 
 <style>
   .page {

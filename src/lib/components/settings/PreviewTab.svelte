@@ -27,6 +27,9 @@
   import Preview3dControls from "$lib/components/detail/Preview3dControls.svelte";
   import Field from "$lib/components/ui/Field.svelte";
   import Slider from "$lib/components/ui/Slider.svelte";
+  import TuningFrame from "./TuningFrame.svelte";
+  import { allPresets, presetName, renderTemplate } from "$lib/gridthumbs/gridThumbPrefs.svelte";
+  import { preview3dFromPreset } from "$lib/gridthumbs/toPreview3d";
   import { i18n, t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
   import { listLibrary } from "$lib/library/library";
@@ -97,6 +100,20 @@
       .catch((e) => console.error("list_library", e));
   });
 
+  // --- Partir d'un preset de vignettes -------------------------------------
+
+  let presetId = $state("officiel");
+
+  /** Copies what the preset and the 3D preview share. Nothing is written: the
+   * copy waits for Save like a slider moved by hand. */
+  function fromPreset() {
+    const preset = allPresets().find((p) => p.id === presetId);
+    if (!preset) return;
+    for (const [key, value] of Object.entries(preview3dFromPreset(renderTemplate(preset)))) {
+      setPreview3dValue(key as keyof ReturnType<typeof preview3dFromPreset>, value);
+    }
+  }
+
   // --- Cache -------------------------------------------------------------
 
   /** Le plafond n'est appliqué qu'à l'écriture des préférences, elle-même
@@ -163,161 +180,180 @@
   }
 </script>
 
-<div class="cards">
-  <div class="col">
-  {#if prefs.enabled && sampleCar}
-    <div class="stage">
-      <!-- `driverAlways` : il n'y a pas de clé de contact sur cet écran, et
-           régler un pilote qu'on ne voit jamais n'aurait pas de sens. -->
-      <CarPreview3D carId={sampleCar} skinId={sampleSkin} driverAlways />
-      <!-- Même bouton que sur la fiche voiture : replace la caméra selon les
-           réglages et relance le plateau. Ici il sert aussi à **revoir l'effet
-           d'entrée**, qui ne se joue par définition qu'à l'entrée. -->
-      <button
-        class="replace"
-        type="button"
-        onclick={resetPreview3dView}
-        title={t("detail.preview3dReplace")}
-        aria-label={t("detail.preview3dReplace")}
-      >
-        <svg viewBox="0 0 16 16" aria-hidden="true">
-          <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" />
-          <path d="M13.5 2v3.2h-3.2" />
-        </svg>
-      </button>
-    </div>
-  {/if}
-  <section class="blk">
-  <div class="blk-h"><span class="blk-t">{t("settings.preview3dGroupRender")}</span></div>
-  <div class="blk-b">
-    <Field hint={t("settings.preview3dEnabledHint")}>
-      <label class="check">
-        <input
-          type="checkbox"
-          checked={prefs.enabled}
-          onchange={(e) => setPreview3dEnabled(e.currentTarget.checked)}
-        />
-        <span>{t("settings.preview3dEnabled")}</span>
-      </label>
-    </Field>
-
-    <Field label={t("settings.preview3dDriver")} hint={t("settings.preview3dDriverHint")}>
-      <select
-        class="input"
-        value={prefs.driver}
-        onchange={(e) => setPreview3dDriver(e.currentTarget.value as DriverMode)}
-      >
-        {#each DRIVER_MODES as mode (mode)}
-          <option value={mode}>{t("settings.preview3dDriverOption." + mode)}</option>
-        {/each}
-      </select>
-    </Field>
-
-    <Field>
-      <Slider
-        label={t("settings.preview3dSteer")}
-        value={prefs.steer}
-        min={PREVIEW3D_RANGES.steer.min}
-        max={PREVIEW3D_RANGES.steer.max}
-        step={PREVIEW3D_RANGES.steer.step}
-        display={degrees(prefs.steer)}
-        hint={t("settings.preview3dSteerHint")}
-        oninput={(v) => setPreview3dValue("steer", v)}
-      />
-    </Field>
-
-    <Field label={t("settings.preview3dQuality")}>
-      <div class="radios">
-        {#each PREVIEW_QUALITIES as level (level)}
-          <label class="radio-opt">
-            <input
-              type="radio"
-              name="preview3d_quality"
-              value={level}
-              checked={prefs.quality === level}
-              onchange={() => setPreview3dQuality(level)}
-            />
-            <span>
-              <span class="radio-title">{t("settings.preview3dQualityOption." + level)}</span>
-              <span class="radio-hint">{t("settings.preview3dQualityOption." + level + "Hint")}</span>
-            </span>
-          </label>
-        {/each}
+<TuningFrame>
+  {#snippet head()}
+    <!-- A copy, not a link (gridthumbs/toPreview3d.ts): the preset is not
+         touched, and Discard undoes the copy like any other change. -->
+    <section class="blk">
+      <div class="blk-h"><span class="blk-t">{t("settings.preview3dFromPreset")}</span></div>
+      <div class="blk-b">
+        <Field hint={t("settings.preview3dFromPresetHint")}>
+          <div class="from-preset">
+            <select class="input" bind:value={presetId}>
+              {#each allPresets() as preset (preset.id)}
+                <option value={preset.id}>{presetName(preset)}</option>
+              {/each}
+            </select>
+            <button class="btn" type="button" onclick={fromPreset}>{t("settings.preview3dFromPresetApply")}</button>
+          </div>
+        </Field>
       </div>
-    </Field>
+    </section>
+  {/snippet}
 
-    <Field label={t("settings.preview3dIntro")}>
-      <div class="radios">
-        {#each INTRO_EFFECTS as effect (effect)}
-          <label class="radio-opt">
-            <input
-              type="radio"
-              name="preview3d_intro"
-              value={effect}
-              checked={prefs.intro === effect}
-              onchange={() => setPreview3dIntro(effect)}
-            />
-            <span>
-              <span class="radio-title">{t("settings.preview3dIntroOption." + effect)}</span>
-              <span class="radio-hint">{t("settings.preview3dIntroOption." + effect + "Hint")}</span>
-            </span>
-          </label>
-        {/each}
+  {#snippet preview()}
+    {#if prefs.enabled && sampleCar}
+      <div class="stage">
+        <!-- `driverAlways` : il n'y a pas de clé de contact sur cet écran, et
+             régler un pilote qu'on ne voit jamais n'aurait pas de sens. -->
+        <CarPreview3D carId={sampleCar} skinId={sampleSkin} driverAlways />
+        <!-- Même bouton que sur la fiche voiture : replace la caméra selon les
+             réglages et relance le plateau. Ici il sert aussi à **revoir l'effet
+             d'entrée**, qui ne se joue par définition qu'à l'entrée. -->
+        <button
+          class="replace"
+          type="button"
+          onclick={resetPreview3dView}
+          title={t("detail.preview3dReplace")}
+          aria-label={t("detail.preview3dReplace")}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" />
+            <path d="M13.5 2v3.2h-3.2" />
+          </svg>
+        </button>
       </div>
-    </Field>
-  </div>
-</section>
-
-<section class="blk">
-  <div class="blk-h"><span class="blk-t">{t("settings.preview3dGroupLight")}</span></div>
-  <div class="blk-b"><Preview3dControls group="light" /></div>
-</section>
-
-<section class="blk">
-  <div class="blk-h"><span class="blk-t">{t("settings.preview3dGroupFloor")}</span></div>
-  <div class="blk-b"><Preview3dControls group="floor" /></div>
-</section>
-  </div>
-
-  <div class="col">
-<section class="blk">
-  <div class="blk-h"><span class="blk-t">{t("settings.preview3dGroupFraming")}</span></div>
-  <div class="blk-b"><Preview3dControls group="framing" /></div>
-</section>
-
-<section class="blk">
-  <div class="blk-h">
-    <span class="blk-t">{t("settings.preview3dGroupCache")}</span>
-    {#if cacheBytes !== null}
-      <span class="blk-n">{t("settings.preview3dCacheUsed", { size: gigabytes(cacheBytes) })}</span>
     {/if}
-  </div>
-  <div class="blk-b">
-    <Slider
-      label={t("settings.preview3dCache")}
-      value={prefs.cacheMb}
-      min={PREVIEW3D_RANGES.cacheMb.min}
-      max={PREVIEW3D_RANGES.cacheMb.max}
-      step={PREVIEW3D_RANGES.cacheMb.step}
-      display={gigabytes(prefs.cacheMb * 1024 * 1024)}
-      hint={t("settings.preview3dCacheHint")}
-      oninput={(v) => {
-        setPreview3dValue("cacheMb", v);
-        scheduleCacheRefresh();
-      }}
-    />
-    <div class="cache-row">
-      <button class="btn" type="button" onclick={clearCache} disabled={clearing || cacheBytes === 0}>
-        {t("settings.preview3dCacheClear")}
-      </button>
-    </div>
-    {#if cacheError}<div class="errbox">{errorText(cacheError)}</div>{/if}
-  </div>
+  {/snippet}
+
+  {#snippet side()}
+      <section class="blk">
+      <div class="blk-h"><span class="blk-t">{t("settings.preview3dGroupRender")}</span></div>
+      <div class="blk-b">
+        <Field hint={t("settings.preview3dEnabledHint")}>
+          <label class="check">
+            <input
+              type="checkbox"
+              checked={prefs.enabled}
+              onchange={(e) => setPreview3dEnabled(e.currentTarget.checked)}
+            />
+            <span>{t("settings.preview3dEnabled")}</span>
+          </label>
+        </Field>
+
+        <Field label={t("settings.preview3dDriver")} hint={t("settings.preview3dDriverHint")}>
+          <select
+            class="input"
+            value={prefs.driver}
+            onchange={(e) => setPreview3dDriver(e.currentTarget.value as DriverMode)}
+          >
+            {#each DRIVER_MODES as mode (mode)}
+              <option value={mode}>{t("settings.preview3dDriverOption." + mode)}</option>
+            {/each}
+          </select>
+        </Field>
+
+        <Field>
+          <Slider
+            label={t("settings.preview3dSteer")}
+            value={prefs.steer}
+            min={PREVIEW3D_RANGES.steer.min}
+            max={PREVIEW3D_RANGES.steer.max}
+            step={PREVIEW3D_RANGES.steer.step}
+            display={degrees(prefs.steer)}
+            hint={t("settings.preview3dSteerHint")}
+            oninput={(v) => setPreview3dValue("steer", v)}
+          />
+        </Field>
+
+        <Field label={t("settings.preview3dQuality")}>
+          <div class="radios">
+            {#each PREVIEW_QUALITIES as level (level)}
+              <label class="radio-opt">
+                <input
+                  type="radio"
+                  name="preview3d_quality"
+                  value={level}
+                  checked={prefs.quality === level}
+                  onchange={() => setPreview3dQuality(level)}
+                />
+                <span>
+                  <span class="radio-title">{t("settings.preview3dQualityOption." + level)}</span>
+                  <span class="radio-hint">{t("settings.preview3dQualityOption." + level + "Hint")}</span>
+                </span>
+              </label>
+            {/each}
+          </div>
+        </Field>
+
+        <Field label={t("settings.preview3dIntro")}>
+          <div class="radios">
+            {#each INTRO_EFFECTS as effect (effect)}
+              <label class="radio-opt">
+                <input
+                  type="radio"
+                  name="preview3d_intro"
+                  value={effect}
+                  checked={prefs.intro === effect}
+                  onchange={() => setPreview3dIntro(effect)}
+                />
+                <span>
+                  <span class="radio-title">{t("settings.preview3dIntroOption." + effect)}</span>
+                  <span class="radio-hint">{t("settings.preview3dIntroOption." + effect + "Hint")}</span>
+                </span>
+              </label>
+            {/each}
+          </div>
+        </Field>
+      </div>
+    </section>
+
+    <section class="blk">
+      <div class="blk-h">
+        <span class="blk-t">{t("settings.preview3dGroupCache")}</span>
+        {#if cacheBytes !== null}
+          <span class="blk-n">{t("settings.preview3dCacheUsed", { size: gigabytes(cacheBytes) })}</span>
+        {/if}
+      </div>
+      <div class="blk-b">
+        <Slider
+          label={t("settings.preview3dCache")}
+          value={prefs.cacheMb}
+          min={PREVIEW3D_RANGES.cacheMb.min}
+          max={PREVIEW3D_RANGES.cacheMb.max}
+          step={PREVIEW3D_RANGES.cacheMb.step}
+          display={gigabytes(prefs.cacheMb * 1024 * 1024)}
+          hint={t("settings.preview3dCacheHint")}
+          oninput={(v) => {
+            setPreview3dValue("cacheMb", v);
+            scheduleCacheRefresh();
+          }}
+        />
+        <div class="cache-row">
+          <button class="btn" type="button" onclick={clearCache} disabled={clearing || cacheBytes === 0}>
+            {t("settings.preview3dCacheClear")}
+          </button>
+        </div>
+        {#if cacheError}<div class="errbox">{errorText(cacheError)}</div>{/if}
+      </div>
+      </section>
+  {/snippet}
+
+  <section class="blk">
+    <div class="blk-h"><span class="blk-t">{t("settings.preview3dGroupFraming")}</span></div>
+    <div class="blk-b"><Preview3dControls group="framing" /></div>
   </section>
 
-  </div>
-</div>
+  <section class="blk">
+    <div class="blk-h"><span class="blk-t">{t("settings.preview3dGroupLight")}</span></div>
+    <div class="blk-b"><Preview3dControls group="light" /></div>
+  </section>
 
+  <section class="blk">
+    <div class="blk-h"><span class="blk-t">{t("settings.preview3dGroupFloor")}</span></div>
+    <div class="blk-b"><Preview3dControls group="floor" /></div>
+  </section>
+</TuningFrame>
 <footer>
   {#if dirty}
     <span class="pill pill-warn">{t("settings.unsavedTitle")}</span>
@@ -392,35 +428,13 @@
     background: var(--card);
     overflow: hidden;
   }
-  /* **Deux colonnes assignées, pas un flux.** `columns` laissait le navigateur
-     répartir les cartes, et l'ordre obtenu ne pouvait pas être choisi : ce qui
-     se règle le plus souvent — le cadrage — tombait où il tombait. Ici la
-     colonne de gauche porte l'aperçu et ce qu'on regarde en même temps que lui
-     (rendu, éclairage, sol), la droite ce qu'on manipule le plus (cadrage)
-     puis le cache, seul bloc qui touche au disque et qui reste donc en
-     dernier. Une seule colonne quand la fenêtre est trop étroite pour deux
-     lisibles. */
-  .cards {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
-    align-items: start;
+  .from-preset {
+    display: flex;
+    gap: 10px;
   }
-  @media (max-width: 780px) {
-    .cards {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  }
-  .col {
+  .from-preset select {
+    flex: 1;
     min-width: 0;
-  }
-  /* Les cartes se suivent dans leur colonne ; la première n'a rien au-dessus
-     d'elle, la grille posant déjà l'écart entre colonnes. */
-  .cards .blk {
-    margin-top: 0;
-  }
-  .cards .blk + .blk {
-    margin-top: 14px;
   }
   .check {
     display: flex;
@@ -481,5 +495,12 @@
     justify-content: flex-end;
     gap: 12px;
     margin-top: 24px;
+    padding: 12px 0;
+    border-top: 1px solid var(--line);
+    /* In sight whatever the settings' scroll, as on the thumbnails screen. */
+    position: sticky;
+    bottom: 0;
+    z-index: 4;
+    background: var(--bg);
   }
 </style>

@@ -1983,6 +1983,13 @@ de reprendre. En cas d'écart, la spec fait foi.
       voiture par session, en file, les deux densités d'un coup, suivi dans la
       pile bas-droite (`gameshot.rs`, `inGame.svelte.ts`).
       **Restent** :
+      - **à vérifier dans le jeu** (2026-11-12) : les trois lampes ont quitté
+        les vignettes de Pit Box, mais le rendu dans le jeu en garde trois
+        fixes (principale 100 %, complément 25 %, contre-jour 60 %), faute de
+        quoi la prise de vue n'a que l'ambiance du jeu. Vitrine et Officiel les
+        avaient plus basses : leurs images rendues dans le jeu peuvent sortir
+        plus claires que celles de Pit Box. Comparer une voiture protégée et
+        sa voisine rendue par Pit Box ;
       - plusieurs voitures par session (fait le 2026-11-11, douze par
         journée piste) : à essayer sur une vraie série d'une soixantaine de
         voitures protégées, pour vérifier la mémoire et la reprise après un

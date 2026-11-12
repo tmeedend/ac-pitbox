@@ -284,6 +284,8 @@ pub fn run() {
             commands::gridthumbs::sweep_grid_templates,
             commands::gridthumbs::render_in_game,
             commands::gridthumbs::protected_grid_cars,
+            commands::gridthumbs::protected_grid_summary,
+            commands::gridthumbs::grid_thumbnail_coverage,
             commands::session_state::get_session_picks,
             commands::session_state::save_session_picks,
             commands::session_state::get_launch_state,

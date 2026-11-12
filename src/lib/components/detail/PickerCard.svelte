@@ -23,6 +23,9 @@
     livery?: string | null;
     /** Origin badge: this entry is brought by a layer (REFONTE§7.7). */
     origin?: { label: string; title: string } | null;
+    /** A small mark on the cell, with what it means as its tooltip (the
+     * livery of the thumbnails). */
+    mark?: string | null;
   }
 
   interface Props {
@@ -41,9 +44,22 @@
     /** "contain" for a layout outline (whole shape), "cover" for a photo. */
     fit?: "cover" | "contain";
     note?: string;
+    /** Right click on a cell of the grid, for a menu of what else it can be. */
+    oncontext?: (index: number, e: MouseEvent) => void;
   }
-  let { title, items, index, onpick, expanded, ontoggle, emptyText, cellTitle, fit = "cover", note }: Props =
-    $props();
+  let {
+    title,
+    items,
+    index,
+    onpick,
+    expanded,
+    ontoggle,
+    emptyText,
+    cellTitle,
+    fit = "cover",
+    note,
+    oncontext,
+  }: Props = $props();
 
   /** Cases vides à ajouter en fin de grille (§ correctif damier) : `.skins`
    * est une vraie grille CSS à colonnes fixes, donc la dernière ligne
@@ -79,7 +95,19 @@
       {#if expanded && items.length}
         <div class="skins">
           {#each items as it, i (it.id)}
-            <button class="skin" class:preview={i === index} onclick={() => onpick(i)} title={cellTitle}>
+            <button
+              class="skin"
+              class:preview={i === index}
+              onclick={() => onpick(i)}
+              oncontextmenu={oncontext
+                ? (e) => {
+                    e.preventDefault();
+                    oncontext(i, e);
+                  }
+                : undefined}
+              title={it.mark ? `${cellTitle}
+${it.mark}` : cellTitle}
+            >
               <div class="skin-img" class:layout-img={fit === "contain"}>
                 {#if it.image}<img src={it.image} alt={it.name} loading="lazy" />{:else}<span class="skin-noimg"
                     >▦</span
@@ -93,6 +121,16 @@
                 <!-- Marque d'origine (REFONTE§7.7) : ce tracé n'est pas dans le mod,
                      c'est une couche qui l'apporte. -->
                 {#if it.origin}<span class="skin-from mono" title={it.origin.title}>{it.origin.label}</span>{/if}
+                {#if it.mark}
+                  <span class="skin-mark" title={it.mark} aria-label={it.mark}>
+                    <svg viewBox="0 0 12 12" aria-hidden="true">
+                      <rect x="1" y="1" width="4" height="4" />
+                      <rect x="7" y="1" width="4" height="4" />
+                      <rect x="1" y="7" width="4" height="4" />
+                      <rect x="7" y="7" width="4" height="4" />
+                    </svg>
+                  </span>
+                {/if}
               </div>
               <div class="skin-b"><span class="skin-name">{it.name}</span></div>
             </button>
@@ -189,6 +227,21 @@
     color: var(--blue);
     font-size: 7px;
     padding: 0 3px;
+  }
+  /* The thumbnails' livery: a little grid, as the library's grid view. */
+  .skin-mark {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    display: flex;
+    padding: 2px;
+    background: rgba(6, 6, 9, 0.82);
+    border: 1px solid var(--muted2);
+  }
+  .skin-mark svg {
+    width: 9px;
+    height: 9px;
+    fill: var(--txt);
   }
   .skin-apercu {
     position: absolute;

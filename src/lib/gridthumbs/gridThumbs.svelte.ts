@@ -65,25 +65,31 @@ const HEIGHT = 576;
  */
 const SUPERSAMPLE = 2;
 
-/** Intensité de la lumière principale à 100 %, en unités three.js. Le gabarit
- * exprime tout en pourcentage d'elle. */
-const KEY_BASE = 2.2;
-
-/** Part de l'éclairage qui vient du showroom plutôt que des trois lampes, **à
- * 100 % du réglage `ambient`** d'un preset — celui-ci la multiplie, si bien que
- * les presets d'avant le réglage rendent exactement comme avant.
- * L'environnement n'est pas décoratif : sans lui, une carrosserie ne reflète
- * rien et la peinture rend plate — c'est lui qui a été calibré sur les photos
- * Kunos (SPEC-preview-3d-kn5 GRILLE§8.1). Les lampes viennent par-dessus, pour
- * détacher la silhouette. */
+/** L'éclairage du showroom **à 100 % du réglage `ambient`** d'un preset —
+ * celui-ci la multiplie, si bien que les presets d'avant le réglage rendent
+ * exactement comme avant. C'est la seule lumière de la vignette, comme dans
+ * l'aperçu 3D : les trois lampes qui s'y ajoutaient ont été retirées
+ * (2026-11-12), comparées à l'écran sans différence visible aux valeurs des
+ * presets. L'environnement n'est pas décoratif : sans lui, une carrosserie ne
+ * reflète rien et la peinture rend plate — c'est lui qui a été calibré sur les
+ * photos Kunos (SPEC-preview-3d-kn5 GRILLE§8.1). */
 const ENVIRONMENT = 0.55;
 
 /** `none`: a car in the showcase with no frozen thumbnail for this preset —
  * its card shows its frozen image. `looking`: the disk has been asked whether
  * the thumbnail exists, and has not answered yet — the card shows nothing
  * rather than the mod's photo it would replace a moment later. `pending`: it
- * does not exist, and waits in the render queue. */
-type Entry = { url: string } | { looking: true } | { pending: true } | { failed: string } | { none: true };
+ * waits in the render queue — and does not exist on disk, unless `unchecked`:
+ * queued with the whole library behind the visible cards, before anyone asked
+ * the disk. Such a card is not settled either: shown the mod's photo, it would
+ * swap to the thumbnail when the queue reached it and found the file already
+ * there — the flicker reported while scrolling. */
+type Entry =
+  | { url: string }
+  | { looking: true }
+  | { pending: true; unchecked?: true }
+  | { failed: string }
+  | { none: true };
 
 const cache = $state<Record<string, Entry>>({});
 
@@ -122,7 +128,7 @@ export function gridThumb(template: GridTemplate, carId: string, skinId: string 
  */
 export function gridThumbSettled(template: GridTemplate, carId: string, skinId: string | null): boolean {
   const entry = cache[keyOf(template, carId, skinId)];
-  return !!entry && !("looking" in entry);
+  return !!entry && !("looking" in entry) && !("unchecked" in entry);
 }
 
 /** A car as its picture needs it: a library card, or a mod's detail. */
@@ -377,6 +383,8 @@ function enqueue(
   skinId: string | null,
   name: string,
   front: boolean,
+  /** Whether the disk has already said the thumbnail is not there. */
+  checked = true,
 ): void {
   const key = keyOf(template, carId, skinId);
   if (cache[key]) {
@@ -388,11 +396,19 @@ function enqueue(
     return;
   }
   beginBatch();
-  cache[key] = { pending: true };
+  cache[key] = checked ? { pending: true } : { pending: true, unchecked: true };
   const job = { template, carId, skinId, name, key };
   if (front) queue.unshift(job);
   else queue.push(job);
   progress.total += 1;
+}
+
+/** Takes a job out of the render queue, and out of the task's count. */
+function dequeue(key: string): void {
+  const index = queue.findIndex((job) => job.key === key);
+  if (index < 0) return;
+  queue.splice(index, 1);
+  progress.total -= 1;
 }
 
 /**
@@ -410,7 +426,8 @@ export function requestGridThumb(
 ): void {
   if (!gridThumbsOn()) return;
   const key = keyOf(template, carId, skinId);
-  if (cache[key]) {
+  const entry = cache[key];
+  if (entry && !("unchecked" in entry)) {
     // Already known, being looked up, or queued — a queued one comes forward.
     enqueue(template, carId, skinId, name, true);
     void drain();
@@ -452,6 +469,9 @@ async function flushLookups(): Promise<void> {
     }
     jobs.forEach((job, i) => {
       const known = found[i];
+      // Out of the background queue if it was there: answered now, or put
+      // back at the front just below.
+      dequeue(job.key);
       if (known?.path) cache[job.key] = { url: convertFileSrc(known.path) };
       else if (known?.failed) cache[job.key] = { failed: known.failed };
       else {
@@ -478,7 +498,9 @@ export function enqueueGridThumbs(
   cars: { id: string; skin: string | null; name: string }[],
 ): void {
   if (!gridThumbsOn()) return;
-  for (const car of cars) enqueue(template, car.id, car.skin, car.name, false);
+  // Unchecked: a card that comes into view asks the disk before showing
+  // anything (`requestGridThumb`).
+  for (const car of cars) enqueue(template, car.id, car.skin, car.name, false, false);
   void drain();
 }
 
@@ -627,9 +649,6 @@ interface Rig extends StudioFloor {
   renderer: ThreeModule.WebGLRenderer;
   scene: ThreeModule.Scene;
   camera: ThreeModule.PerspectiveCamera;
-  key: ThreeModule.DirectionalLight;
-  fill: ThreeModule.DirectionalLight;
-  rim: ThreeModule.DirectionalLight;
   sun: ThreeModule.DirectionalLight;
   /** Le receveur d'ombre, toujours là : l'ombre de contact existe même sans
    * sol visible, et c'est elle qui empêche la voiture de flotter. */
@@ -710,16 +729,8 @@ async function createRig(width: number, height: number): Promise<Rig> {
     scene.environment = pmrem.fromScene(showroomEnvironment(THREE), 0.04).texture;
     scene.environmentIntensity = ENVIRONMENT;
 
-    // Les trois lampes du GRILLE§5.6. Leurs positions sont posées à chaque rendu,
-    // relativement à la voiture : un mod fait deux mètres, un autre en fait
-    // quinze si son auteur s'est trompé d'unité.
-    const key = new THREE.DirectionalLight(0xffffff, 0);
-    const fill = new THREE.DirectionalLight(0xffffff, 0);
-    const rim = new THREE.DirectionalLight(0xffffff, 0);
-    scene.add(key, fill, rim);
-
     // Le projecteur de l'ombre de contact, **à intensité nulle** : il n'éclaire
-    // rien, tout ce que la voiture reçoit vient des trois autres. Il n'existe
+    // rien, tout ce que la voiture reçoit vient du showroom. Il n'existe
     // que pour donner une direction de projection à three.js — `ShadowMaterial`
     // lit le masque d'ombre, pas la contribution de la lampe, donc les deux
     // sujets restent séparés.
@@ -782,9 +793,6 @@ async function createRig(width: number, height: number): Promise<Rig> {
       renderer,
       scene,
       camera,
-      key,
-      fill,
-      rim,
       sun,
       pool,
       glow,
@@ -915,7 +923,7 @@ function drawModel(rig: Rig, model: ThreeModule.Group, template: GridTemplate): 
   }
 
   placeCamera(THREE, camera, box, center, radius, template);
-  placeLights(rig, camera, center, radius, template);
+  placeShadow(rig, center, radius);
   applyBackdrop(rig, template);
 
   renderer.toneMappingExposure = 1;
@@ -1023,42 +1031,11 @@ async function render(url: string, template: GridTemplate): Promise<Blob | null>
   return png;
 }
 
-/** Les trois lampes, posées relativement à la caméra (GRILLE§5.6). */
-function placeLights(
-  rig: Rig,
-  camera: ThreeModule.PerspectiveCamera,
-  center: ThreeModule.Vector3,
-  radius: number,
-  template: GridTemplate,
-): void {
-  const { key, fill, rim, sun } = rig;
-  const intensity = (KEY_BASE * template.key) / 100;
-  key.intensity = intensity;
-  fill.intensity = (intensity * template.fill) / 100;
-  rim.intensity = (intensity * template.rim) / 100;
-
-  // L'azimut de la caméra, dont les lampes se décalent : le rig suit le
-  // cadrage, sinon régler l'angle de vue déplacerait aussi la lumière.
-  const base = Math.atan2(camera.position.x - center.x, camera.position.z - center.z);
-  const place = (light: ThreeModule.DirectionalLight, offset: number, elevationDeg: number) => {
-    const angle = base + (offset * Math.PI) / 180;
-    const elevation = (elevationDeg * Math.PI) / 180;
-    light.position.set(
-      center.x + radius * 4 * Math.cos(elevation) * Math.sin(angle),
-      center.y + radius * 4 * Math.sin(elevation),
-      center.z + radius * 4 * Math.cos(elevation) * Math.cos(angle),
-    );
-    light.target.position.copy(center);
-    light.target.updateMatrixWorld();
-  };
-  place(key, 45, 35);
-  place(fill, -135, 20);
-  // Le contre-jour : derrière le sujet, rasant sur la ligne de toit. **C'est
-  // le paramètre le plus directement utile au problème de départ** — c'est lui
-  // qui détache la silhouette d'une carrosserie noire, plus que n'importe quel
-  // réglage de fond.
-  place(rim, 175, 12);
-
+/** Le projecteur de l'ombre de contact, posé relativement à la voiture : un
+ * mod fait deux mètres, un autre en fait quinze si son auteur s'est trompé
+ * d'unité. */
+function placeShadow(rig: Rig, center: ThreeModule.Vector3, radius: number): void {
+  const { sun } = rig;
   // L'ombre tombe presque à la verticale, avec juste assez de décalage pour se
   // lire comme une ombre.
   sun.position.set(center.x - radius * 0.3, center.y + radius * 4, center.z + radius * 0.5);

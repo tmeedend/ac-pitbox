@@ -9,7 +9,7 @@
   import ProgressBar from "$lib/components/ui/ProgressBar.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
-  import { dismissInGameReport, inGameProgress } from "$lib/gridthumbs/inGame.svelte";
+  import { dismissInGameReport, inGameProgress, showInGameFailures } from "$lib/gridthumbs/inGame.svelte";
 
   const p = $derived(inGameProgress());
   const phase = $derived(p.phase === "ingame" ? t("gridThumbs.inGameShooting") : t("gridThumbs.inGameLaunching"));
@@ -39,6 +39,11 @@
 {:else if p.finished}
   <Toast title={report} tone={p.failed > 0 ? "warn" : "default"} onclose={dismissInGameReport}>
     {#if p.lastError}<div class="ig-error">{errorText(p.lastError)}</div>{/if}
+    {#if p.failures.length > 0}
+      <button type="button" class="btn ig-see" onclick={() => void showInGameFailures()}>
+        {t("gridThumbs.inGameSeeFailures")}
+      </button>
+    {/if}
   </Toast>
 {/if}
 
@@ -51,5 +56,8 @@
   .ig-error {
     font-size: 11px;
     color: var(--txt2);
+  }
+  .ig-see {
+    margin-top: 8px;
   }
 </style>

@@ -152,9 +152,13 @@ end
 -- Colour pipeline. Each shot is rendered in HDR (float texture, linear light)
 -- and finished here, in the game, by a shader:
 --
--- 1. the template's three lamps are added. The game lets no light reach a
+-- 1. three fixed lamps are added. The game lets no light reach a
 --    GeometryShot (`ac.LightSource` had no effect under either lighting), so
---    two extra shots from the same camera give the surface colour
+--    the light Pit Box's studio gives a car has to be put back by hand. They
+--    were the template's lamps until those left Pit Box's own render
+--    (2026-11-12); they stay here at the values every preset was calibrated
+--    with, since without them the shot has only the game's ambient. Two extra
+--    shots from the same camera give the surface colour
 --    (`SampleColor`, used as handed over: decoding it from sRGB made orange
 --    too red) and the world normal (`SampleNormal`, encoded n·0.5+0.5); each
 --    lamp adds `albedo × max(0, n·L)` and a Blinn-Phong highlight;
@@ -303,9 +307,10 @@ local GLOSS = 60
 -- look.ts `GRADE_TINT`, the game's own cast at 100 % cool tint.
 local GRADE_TINT = vec3(-0.03, 0.02, 0.055)
 
--- The template's lamps (gridThumbs.svelte.ts `placeLights`): offset from the
--- camera azimuth and elevation, in degrees; fill and rim as a share of the key.
-local function lampDirections(state, t)
+-- The fixed lamps, as Pit Box's studio placed its own before they were
+-- removed: offset from the camera azimuth and elevation, in degrees; fill and
+-- rim as a share of the key (25 % and 60 %, the old default).
+local function lampDirections(state)
   local base = math.atan2(state.camDir.x, state.camDir.z)
   local function at(offset, elevation, share)
     local a, e = base + rad(offset), rad(elevation)
@@ -313,7 +318,7 @@ local function lampDirections(state, t)
     local d = (state.modelToWorld:transformPoint(p) - state.centerWorld):normalize()
     return vec4(d.x, d.y, d.z, share)
   end
-  return at(45, 35, 1), at(-135, 20, (t.fill or 25) / 100), at(175, 12, (t.rim or 60) / 100)
+  return at(45, 35, 1), at(-135, 20, 0.25), at(175, 12, 0.6)
 end
 
 -- Kept so they are not tried again: the default neutral lighting burns
@@ -414,7 +419,7 @@ end
 -- base exposure (auto exposure); `metering` leaves the colour grade out, as
 -- Pit Box meters its render before grading it.
 local function shaderValues(state, view, t, exposure, metering)
-  local key, fill, rim = lampDirections(state, t)
+  local key, fill, rim = lampDirections(state)
   local corners = screenCorners(view)
   local floor = (t.floor or 0) > 0
   -- The pool: the wide glow over six car radii around the car, or the disc of
@@ -432,7 +437,7 @@ local function shaderValues(state, view, t, exposure, metering)
   local lo = hexColour(t.matLo, vec3(0.05, 0.05, 0.06))
   return {
     gExposure = EXPOSURE * exposure, gAmbient = (t.ambient or 100) / 100,
-    gLight = LIGHT_AT_100 * (t.key or 100) / 100, gSpecular = SPECULAR, gGloss = GLOSS,
+    gLight = LIGHT_AT_100, gSpecular = SPECULAR, gGloss = GLOSS,
     gKey = key, gFill = fill, gRim = rim, gView = view.look * -1,
     gTint = metering and vec3(0, 0, 0) or GRADE_TINT * ((t.coolTint or 0) / 100),
     gSaturation = metering and 1 or (t.saturation or 100) / 100,

@@ -318,7 +318,7 @@ pub fn collect(paths: &Paths, requests: &[ShotRequest]) -> Vec<ShotResult> {
         .map(|o| {
             let file = paths.out().join(format!("{}.png", o.stem));
             let path = match std::fs::read(&file) {
-                Ok(png) => match crate::gridthumbs::write_in(&paths.thumbs, &o.stem, &png) {
+                Ok(png) => match crate::gridthumbs::write_from_game(&paths.thumbs, &o.stem, &png) {
                     Ok(stored) => Some(stored.to_string_lossy().into_owned()),
                     Err(e) => {
                         log::warn!("gameshot: {} not stored ({e})", o.stem);

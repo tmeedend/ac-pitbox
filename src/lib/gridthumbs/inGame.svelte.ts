@@ -9,12 +9,21 @@
 // session.
 import { listen } from "@tauri-apps/api/event";
 
-import { gridThumbnail, protectedGridCars, renderInGame, type GridTemplate, type InGamePhase } from "./gridThumbs";
+import {
+  gridThumbnail,
+  protectedGridCars,
+  protectedGridSummary,
+  renderInGame,
+  type GridTemplate,
+  type InGamePhase,
+  type ProtectedSummary,
+} from "./gridThumbs";
+import { nav, openInSection, requestSection } from "$lib/shell/nav.svelte";
 import { adoptGridThumb, gridThumbFailed } from "./gridThumbs.svelte";
 import { THUMB_SLOTS, gridThumbsOn, presetFor, renderTemplate } from "./gridThumbPrefs.svelte";
 import { listLibrary } from "$lib/library/library";
 
-/** A car to photograph: its id, the skin its card shows, its name for the
+/** A car to photograph: its id, the livery of its thumbnails, its name for the
  * task panel. */
 export interface InGameCar {
   id: string;
@@ -48,6 +57,24 @@ function sessionTemplates(): GridTemplate[] {
   return list;
 }
 
+/** Where the protected cars stand under the presets in use, counted by car. */
+export function protectedSummary(): Promise<ProtectedSummary> {
+  return protectedGridSummary(sessionTemplates());
+}
+
+/** The cars the last run did not photograph lead to their sheet, on Media
+ * and documents, where their thumbnails are (GRILLE§7.1). */
+export async function openFailedCar(id: string): Promise<void> {
+  nav.openTab = "media";
+  await openInSection("cars", id);
+}
+
+/** From the end report to the list of what failed, in Réglages › Vignettes. */
+export async function showInGameFailures(): Promise<void> {
+  nav.settingsTab = "thumbs";
+  await requestSection("settings");
+}
+
 /**
  * Every protected car of the library, under the presets in use
  * (GRILLE§7.1): what « render them in
@@ -56,16 +83,9 @@ function sessionTemplates(): GridTemplate[] {
  */
 export async function protectedCarsForGame(): Promise<InGameCar[]> {
   if (!gridThumbsOn()) return [];
-  const [library, ...lists] = await Promise.all([
-    listLibrary(),
-    ...sessionTemplates().map((template) => protectedGridCars(template)),
-  ]);
+  const [library, cars] = await Promise.all([listLibrary(), protectedGridCars(sessionTemplates())]);
   const names = new Map(library.map((card) => [card.id_interne, card.display_name ?? card.id_interne]));
-  const cars = new Map<string, InGameCar>();
-  for (const car of lists.flat()) {
-    if (!cars.has(car.carId)) cars.set(car.carId, { id: car.carId, skin: car.skin, name: names.get(car.carId) ?? car.carId });
-  }
-  return [...cars.values()];
+  return cars.map((car) => ({ id: car.carId, skin: car.skin, name: names.get(car.carId) ?? car.carId }));
 }
 
 const progress = $state({
@@ -80,7 +100,19 @@ const progress = $state({
   phase: null as InGamePhase | null,
   /** Why the last car failed — an i18n key or a technical message. */
   lastError: null as string | null,
+  /** The cars of this run that came back without an image, and why. Kept
+   * until the next run, in memory only: a failure in the game is not
+   * remembered, so that the car can be tried again (GRILLE§7.1). */
+  failures: [] as InGameFailure[],
 });
+
+/** A car the game did not photograph. `reason` is an i18n key or a technical
+ * message. */
+export interface InGameFailure {
+  id: string;
+  name: string;
+  reason: string;
+}
 
 /** What the task panel shows. */
 export function inGameProgress() {
@@ -107,6 +139,7 @@ export function requestInGame(cars: InGameCar[]): void {
     progress.done = 0;
     progress.failed = 0;
     progress.lastError = null;
+    progress.failures = [];
   }
   for (const car of cars) {
     if (current.has(car.id) || queue.some((q) => q.id === car.id)) continue;
@@ -137,20 +170,23 @@ async function drain(): Promise<void> {
       progress.phase = null;
       try {
         const failed = await shoot(batch);
-        progress.done += batch.length - failed;
-        progress.failed += failed;
-        if (failed) progress.lastError = "errors.gameShotNoImage";
+        progress.done += batch.length - failed.length;
+        progress.failed += failed.length;
+        if (failed.length) progress.lastError = "errors.gameShotNoImage";
+        fail(failed, "errors.gameShotNoImage");
       } catch (e) {
         // Not remembered: the cards keep their photo, the entry stays in the
         // menu, and the report says why (GRILLE§7.1).
         console.error("vignettes dans le jeu", batch.map((car) => car.id), e);
         progress.failed += batch.length;
         progress.lastError = typeof e === "string" ? e : String(e);
+        fail(batch, progress.lastError);
         // A game still open (stuck, or behind CSP's crash report) refuses
         // every following session: the rest of the queue would fail batch by
         // batch for the same reason, so it stops here, counted as failed.
         if (progress.lastError === "errors.gameShotTimedOut" || progress.lastError === "errors.gameRunning") {
           progress.failed += queue.length;
+          fail(queue, progress.lastError);
           queue.length = 0;
         }
       }
@@ -166,9 +202,13 @@ async function drain(): Promise<void> {
   }
 }
 
-/** One game session for these cars. Returns how many came back without any
+function fail(cars: InGameCar[], reason: string): void {
+  progress.failures = [...progress.failures, ...cars.map((car) => ({ id: car.id, name: car.name, reason }))];
+}
+
+/** One game session for these cars. Returns those that came back without any
  * image (the others are shown at once). */
-async function shoot(cars: InGameCar[]): Promise<number> {
+async function shoot(cars: InGameCar[]): Promise<InGameCar[]> {
   const templates = sessionTemplates();
   // The entry names come from the backend, as for every thumbnail: they are
   // what makes the game's image expire with the mod, like the others.
@@ -183,11 +223,11 @@ async function shoot(cars: InGameCar[]): Promise<number> {
     }),
   );
   const toRender = wanted.filter((w) => w.outputs.length > 0);
-  if (!toRender.length) return 0;
+  if (!toRender.length) return [];
   const results = await renderInGame(
     toRender.map(({ car, outputs }) => ({ carId: car.id, skin: car.skin, outputs })),
   );
-  let failed = 0;
+  const failed: InGameCar[] = [];
   for (const { car, outputs } of toRender) {
     let any = false;
     for (const output of outputs) {
@@ -197,7 +237,7 @@ async function shoot(cars: InGameCar[]): Promise<number> {
         any = true;
       }
     }
-    if (!any) failed += 1;
+    if (!any) failed.push(car);
   }
   return failed;
 }

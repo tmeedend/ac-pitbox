@@ -56,12 +56,6 @@ pub struct GridTemplate {
     pub fov: i32,
     /// Framing margin around the bounding box, in percent.
     pub margin: i32,
-    /// Key light intensity, in percent.
-    pub key: i32,
-    /// Fill light, in percent of the key.
-    pub fill: i32,
-    /// Rim light, in percent of the key.
-    pub rim: i32,
     /// Contact shadow opacity, in percent.
     pub shadow: i32,
     /// Where the camera looks, as a percentage of the model radius above its
@@ -160,9 +154,6 @@ impl GridTemplate {
             self.elevation,
             self.fov,
             self.margin,
-            self.key,
-            self.fill,
-            self.rim,
             self.shadow,
             self.height,
             self.floor,
@@ -260,6 +251,9 @@ pub struct GridThumb {
     /// Why this car will not render, when a previous attempt said so. An i18n
     /// key (`errors.preview*`), never a sentence.
     pub failed: Option<String>,
+    /// The image was rendered by the game: the car is protected
+    /// ([`write_from_game`]).
+    pub from_game: bool,
 }
 
 /// Where thumbnails live: next to the preview cache, and **outside its
@@ -316,10 +310,12 @@ pub fn look_up(app: &tauri::AppHandle, stem: &str) -> GridThumb {
         .and_then(|d| std::fs::read_to_string(d.join(format!("{stem}.fail"))).ok())
         .map(|reason| reason.trim().to_string())
         .filter(|reason| !reason.is_empty());
+    let from_game = dir.as_ref().is_some_and(|d| d.join(format!("{stem}.game")).is_file());
     GridThumb {
         stem: stem.to_string(),
         path: png.filter(|p| p.is_file()).map(|p| p.to_string_lossy().into_owned()),
         failed,
+        from_game,
     }
 }
 
@@ -344,6 +340,21 @@ pub fn write_in(dir: &std::path::Path, stem: &str, png: &[u8]) -> Result<PathBuf
     std::fs::rename(&tmp, &file).map_err(|e| format!("{} : {e}", file.display()))?;
     // A car that used to fail and now renders must stop being skipped.
     let _ = std::fs::remove_file(dir.join(format!("{stem}.fail")));
+    Ok(file)
+}
+
+/// Stores an image the game rendered (GRILLE§7.1), and says so next to it.
+///
+/// The `.game` mark is what keeps a protected car known as one once its image
+/// exists: the failure mark goes with the render, and without this one nothing
+/// would tell it from any other thumbnail — the settings screen could not say
+/// how many protected cars are done. Best-effort: a missing mark costs a count,
+/// not an image.
+pub fn write_from_game(dir: &std::path::Path, stem: &str, png: &[u8]) -> Result<PathBuf, String> {
+    let file = write_in(dir, stem, png)?;
+    if let Err(e) = std::fs::write(dir.join(format!("{stem}.game")), b"") {
+        log::warn!("gridthumbs: {stem} not marked as rendered by the game — {e}");
+    }
     Ok(file)
 }
 
@@ -382,6 +393,8 @@ pub fn forget(app: &tauri::AppHandle, stem: &str) -> Result<bool, String> {
     let dir = dir(app)?;
     let png = std::fs::remove_file(dir.join(format!("{stem}.png"))).is_ok();
     let failed = std::fs::remove_file(dir.join(format!("{stem}.fail"))).is_ok();
+    // The game mark goes with its image: it says how that image was made.
+    let _ = std::fs::remove_file(dir.join(format!("{stem}.game")));
     Ok(png || failed)
 }
 
@@ -510,7 +523,7 @@ pub fn rendered(
 
 /// The grid thumbnails each of these cars shows right now, to be frozen with
 /// its skeleton (ESPACE§3.3): cars that still have their files, in the livery
-/// their card shows (`preferred.ts`). Empty when `presets` is — the thumbnails
+/// of their thumbnails (`preferred.ts`). Empty when `presets` is — the thumbnails
 /// are off, or the user unchecked them.
 ///
 /// The base first, its lock given back, then the disk: a few `stat` per car.
@@ -526,7 +539,7 @@ pub fn card_thumbs(
     let prefs = crate::ui_prefs::load(app);
     cars.into_iter()
         .filter_map(|(id, dir)| {
-            let skin = preferred_skin(&prefs, &id);
+            let skin = thumbnail_skin(&prefs, &id);
             let thumbs = rendered(app, &dir, &id, skin.as_deref(), presets);
             (!thumbs.is_empty()).then_some((id, thumbs))
         })
@@ -537,6 +550,26 @@ pub fn card_thumbs(
 /// not untouched base content — with their model folder. The base is read and
 /// its lock given back before any file is touched by the caller.
 fn cars_with_files(app: &tauri::AppHandle, ids: &[String]) -> Vec<(String, PathBuf)> {
+    library_cars(app, ids)
+        .into_iter()
+        .filter(|car| !car.is_stock || car.unmanaged)
+        .map(|car| (car.id, car.dir))
+        .collect()
+}
+
+/// A car of the library that is not in the showcase, with its model folder.
+struct LibraryCar {
+    id: String,
+    dir: PathBuf,
+    is_stock: bool,
+    /// Base content touched by the user: its files are its own.
+    unmanaged: bool,
+}
+
+/// The cars among `ids` that are not in the showcase, with their folder —
+/// base content included. The base is read and its lock given back before any
+/// file is touched by the caller.
+fn library_cars(app: &tauri::AppHandle, ids: &[String]) -> Vec<LibraryCar> {
     use tauri::Manager;
     let cfg = crate::config::load(app);
     let db = app.state::<crate::overlay::Db>();
@@ -547,10 +580,14 @@ fn cars_with_files(app: &tauri::AppHandle, ids: &[String]) -> Vec<(String, PathB
     ids.iter()
         .filter_map(|id| {
             let m = crate::overlay::get_mod(&conn, id).ok().flatten()?;
-            let has_files = !m.showcase && (!m.is_stock || m.is_unmanaged);
             let car = crate::modscan::ModKind::from_column(&m.kind) == crate::modscan::ModKind::Car;
-            (car && has_files).then_some(())?;
-            Some((id.clone(), crate::preview::car_dir(&conn, &cfg, id)?))
+            (car && !m.showcase).then_some(())?;
+            Some(LibraryCar {
+                id: id.clone(),
+                dir: crate::preview::car_dir(&conn, &cfg, id)?,
+                is_stock: m.is_stock,
+                unmanaged: m.is_unmanaged,
+            })
         })
         .collect()
 }
@@ -582,7 +619,7 @@ pub fn library_card_thumbs(
 }
 
 /// A car whose grid thumbnail only the game can render (GRILLE§7.1), in the
-/// livery its card shows.
+/// livery of its thumbnails.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProtectedCar {
@@ -590,46 +627,186 @@ pub struct ProtectedCar {
     pub skin: Option<String>,
 }
 
-/// The cars of the library the Pit Box renderer could not render under
-/// `template` because their model is protected — `errors.previewProtected`
-/// recorded next to their entry (GRILLE§7). What the in-game render can still
-/// do for them in one go (GRILLE§7.1). A car not tried yet is not listed: the
-/// background pass tries every car first.
-pub fn protected_cars(app: &tauri::AppHandle, template: &GridTemplate) -> Vec<ProtectedCar> {
+/// The protected cars the in-game render still has work for (GRILLE§7.1): a
+/// car known as protected under **any** of `templates` — recorded so by the
+/// Pit Box renderer, or already rendered by the game — that lacks its image
+/// under any of them. A preset added after a run in the game is covered too:
+/// its images are missing for the very cars the game rendered before it.
+pub fn protected_cars(app: &tauri::AppHandle, templates: &[GridTemplate]) -> Vec<ProtectedCar> {
+    let Ok(store) = dir(app) else { return Vec::new() };
+    car_entries(app)
+        .into_iter()
+        .filter(|car| {
+            let entries = car.entries(templates);
+            known_protected(&store, &entries) && !entries.iter().all(|e| has_image(&store, e))
+        })
+        .map(|car| ProtectedCar {
+            car_id: car.car_id,
+            skin: car.skin,
+        })
+        .collect()
+}
+
+/// Where the protected cars stand under the presets in use (GRILLE§7.1),
+/// **counted by car**: a car missing from three presets is one car to do, not
+/// three.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProtectedSummary {
+    /// Still without an image under at least one of the presets.
+    pub pending: u32,
+    /// With an image under every preset.
+    pub rendered: u32,
+}
+
+pub fn protected_summary(app: &tauri::AppHandle, templates: &[GridTemplate]) -> ProtectedSummary {
+    let Ok(store) = dir(app) else {
+        return ProtectedSummary::default();
+    };
+    let entries: Vec<Vec<String>> = car_entries(app).iter().map(|car| car.entries(templates)).collect();
+    summarize(&store, &entries)
+}
+
+/// [`protected_summary`] over the entry names of each car, one per template.
+fn summarize(store: &std::path::Path, cars: &[Vec<String>]) -> ProtectedSummary {
+    let mut summary = ProtectedSummary::default();
+    for entries in cars.iter().filter(|entries| known_protected(store, entries)) {
+        if entries.iter().all(|e| has_image(store, e)) {
+            summary.rendered += 1;
+        } else {
+            summary.pending += 1;
+        }
+    }
+    summary
+}
+
+/// A view's preset, as the coverage asks about it: its template, and whether
+/// it leaves base content as it is (`skipStock`), whose cars then need no
+/// image of it.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CoverageQuery {
+    pub template: GridTemplate,
+    pub skip_stock: bool,
+}
+
+/// What a view still lacks (GRILLE§5.4): thumbnails Pit Box can render, and
+/// protected cars only the game can.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Coverage {
+    pub missing: u32,
+    pub protected_missing: u32,
+}
+
+/// [`Coverage`] of each of `views`, in order. A car is protected for all of
+/// them as soon as one says so. A car that failed for another reason is
+/// counted nowhere: neither renderer would do better.
+pub fn coverage(app: &tauri::AppHandle, views: &[CoverageQuery]) -> Vec<Coverage> {
+    let Ok(store) = dir(app) else {
+        return vec![Coverage::default(); views.len()];
+    };
+    let templates: Vec<GridTemplate> = views.iter().map(|v| v.template.clone()).collect();
+    let cars: Vec<(bool, Vec<String>)> = car_entries(app)
+        .iter()
+        .map(|car| (car.is_stock, car.entries(&templates)))
+        .collect();
+    let skip: Vec<bool> = views.iter().map(|v| v.skip_stock).collect();
+    count_coverage(&store, &cars, &skip)
+}
+
+/// [`coverage`] over each car's base-content flag and entry names.
+fn count_coverage(store: &std::path::Path, cars: &[(bool, Vec<String>)], skip_stock: &[bool]) -> Vec<Coverage> {
+    let mut out = vec![Coverage::default(); skip_stock.len()];
+    for (is_stock, entries) in cars {
+        let protected = known_protected(store, entries);
+        for (i, entry) in entries.iter().enumerate() {
+            if (*is_stock && skip_stock[i]) || has_image(store, entry) {
+                continue;
+            }
+            if protected {
+                out[i].protected_missing += 1;
+            } else if !store.join(format!("{entry}.fail")).is_file() {
+                out[i].missing += 1;
+            }
+        }
+    }
+    out
+}
+
+/// Whether the Pit Box renderer recorded this entry as a protected model.
+fn is_protected(store: &std::path::Path, entry: &str) -> bool {
+    std::fs::read_to_string(store.join(format!("{entry}.fail")))
+        .is_ok_and(|reason| reason.trim() == crate::errors::PREVIEW_PROTECTED)
+}
+
+/// A car is protected once any of its entries says so: recorded by the Pit
+/// Box renderer, or rendered by the game ([`write_from_game`]).
+fn known_protected(store: &std::path::Path, entries: &[String]) -> bool {
+    entries
+        .iter()
+        .any(|e| is_protected(store, e) || store.join(format!("{e}.game")).is_file())
+}
+
+fn has_image(store: &std::path::Path, entry: &str) -> bool {
+    store.join(format!("{entry}.png")).is_file()
+}
+
+/// A car of the library as its thumbnails are named: its id, the livery of
+/// its thumbnails, its entry name, which each template suffixes, and whether
+/// it is base content.
+struct CarEntry {
+    car_id: String,
+    skin: Option<String>,
+    stem: String,
+    is_stock: bool,
+}
+
+impl CarEntry {
+    fn entries(&self, templates: &[GridTemplate]) -> Vec<String> {
+        templates.iter().map(|t| entry_stem(&self.stem, t)).collect()
+    }
+}
+
+/// Every car of the library with a model to render, base content included.
+fn car_entries(app: &tauri::AppHandle) -> Vec<CarEntry> {
     use tauri::Manager;
     let ids: Vec<String> = {
         let db = app.state::<crate::overlay::Db>();
         let Ok(conn) = db.0.lock() else {
-            log::warn!("gridthumbs: base lock poisoned, no protected car listed");
+            log::warn!("gridthumbs: base lock poisoned, no car listed");
             return Vec::new();
         };
         match crate::overlay::list_mods(&conn) {
             Ok(mods) => mods.into_iter().map(|m| m.id_interne).collect(),
             Err(e) => {
-                log::warn!("gridthumbs: mods not listed, no protected car listed: {e}");
+                log::warn!("gridthumbs: mods not listed, no car listed: {e}");
                 return Vec::new();
             }
         }
     };
-    let Ok(store) = dir(app) else { return Vec::new() };
     let prefs = crate::ui_prefs::load(app);
-    cars_with_files(app, &ids)
+    library_cars(app, &ids)
         .into_iter()
-        .filter_map(|(car_id, car_dir)| {
-            let skin = preferred_skin(&prefs, &car_id);
-            let stem = crate::preview::car_entry_stem(app, &car_dir, &car_id, skin.as_deref()).ok()?;
-            let entry = entry_stem(&stem, template);
-            let reason = std::fs::read_to_string(store.join(format!("{entry}.fail"))).ok()?;
-            (reason.trim() == crate::errors::PREVIEW_PROTECTED).then_some(ProtectedCar { car_id, skin })
+        .filter_map(|car| {
+            let skin = thumbnail_skin(&prefs, &car.id);
+            let stem = crate::preview::car_entry_stem(app, &car.dir, &car.id, skin.as_deref()).ok()?;
+            Some(CarEntry {
+                car_id: car.id,
+                skin,
+                stem,
+                is_stock: car.is_stock,
+            })
         })
         .collect()
 }
 
-/// The livery a car's card shows, as `preferred.ts` keeps it in
-/// `ui_prefs.json`: a JSON object serialized into the value of
-/// `pitbox.skin.<id>`.
-fn preferred_skin(prefs: &serde_json::Value, car_id: &str) -> Option<String> {
-    let raw = prefs.get(format!("pitbox.skin.{car_id}"))?.as_str()?;
+/// The livery a car's thumbnails are rendered in, as `preferred.ts` keeps it
+/// in `ui_prefs.json`: a JSON object serialized into the value of
+/// `pitbox.thumbSkin.<id>`. `None` is the car's default livery — not the
+/// session's, which used to drive the thumbnails (GRILLE§5.4).
+fn thumbnail_skin(prefs: &serde_json::Value, car_id: &str) -> Option<String> {
+    let raw = prefs.get(format!("pitbox.thumbSkin.{car_id}"))?.as_str()?;
     let skin: serde_json::Value = serde_json::from_str(raw).ok()?;
     skin.get("id")?.as_str().map(str::to_string)
 }
@@ -638,17 +815,24 @@ fn preferred_skin(prefs: &serde_json::Value, car_id: &str) -> Option<String> {
 mod tests {
     use super::*;
 
-    /// Rule (ESPACE§3.3): the livery frozen is the one the card shows, read
-    /// as `preferred.ts` writes it — a JSON object inside a string.
+    /// Rule (ESPACE§3.3, GRILLE§5.4): the livery of the thumbnails is the one
+    /// chosen for them, read as `preferred.ts` writes it — a JSON object
+    /// inside a string — and never the session's.
     #[test]
-    fn the_preferred_skin_is_read_as_the_screen_writes_it() {
+    fn the_thumbnail_skin_is_read_as_the_screen_writes_it() {
         let prefs = serde_json::json!({
-            "pitbox.skin.lanzo": "{\"id\":\"red\",\"name\":\"Red\",\"preview\":null}",
-            "pitbox.skin.broken": "not json",
+            "pitbox.thumbSkin.lanzo": "{\"id\":\"red\",\"name\":\"Red\",\"preview\":null}",
+            "pitbox.thumbSkin.broken": "not json",
+            "pitbox.skin.session": "{\"id\":\"blue\",\"name\":\"Blue\",\"preview\":null}",
         });
-        assert_eq!(preferred_skin(&prefs, "lanzo").as_deref(), Some("red"));
-        assert_eq!(preferred_skin(&prefs, "broken"), None, "a damaged value is no livery");
-        assert_eq!(preferred_skin(&prefs, "other"), None, "nor a missing one");
+        assert_eq!(thumbnail_skin(&prefs, "lanzo").as_deref(), Some("red"));
+        assert_eq!(thumbnail_skin(&prefs, "broken"), None, "a damaged value is no livery");
+        assert_eq!(thumbnail_skin(&prefs, "other"), None, "nor a missing one");
+        assert_eq!(
+            thumbnail_skin(&prefs, "session"),
+            None,
+            "the session's livery does not count"
+        );
     }
 
     fn template() -> GridTemplate {
@@ -657,9 +841,6 @@ mod tests {
             elevation: 8,
             fov: 22,
             margin: 6,
-            key: 100,
-            fill: 25,
-            rim: 60,
             shadow: 35,
             height: 0,
             floor: 0,
@@ -693,9 +874,9 @@ mod tests {
         variants[1].elevation += 1;
         variants[2].fov += 1;
         variants[3].margin += 1;
-        variants[4].key += 1;
-        variants[5].fill += 1;
-        variants[6].rim += 1;
+        variants[4].ambient += 10;
+        variants[5].saturation += 5;
+        variants[6].cool_tint = 50;
         variants[7].shadow += 1;
         variants[8].height += 1;
         variants[9].floor += 1;
@@ -776,9 +957,9 @@ mod tests {
         std::fs::create_dir_all(&store).unwrap();
 
         let mut vitrine = template();
-        vitrine.rim = 140;
+        vitrine.floor = 85;
         let mut gone = template();
-        gone.rim = 200;
+        gone.floor = 140;
 
         let names = [
             entry_stem("v46-aaa", &template()),
@@ -866,15 +1047,100 @@ mod tests {
             "absent, la lumière ambiante est celle d'avant le réglage"
         );
         assert_eq!(old, template(), "relu à l'identique du gabarit de référence");
-        // The literal is the name this template had before the field existed
-        // (SHA-256 of the fourteen values, recomputed outside the code). Comparing
-        // two templates through the same hasher would not see a hash that moved
-        // for everyone.
+        // The literal is the name this template's images carry (SHA-256 of
+        // its eleven values, recomputed outside the code). Comparing two
+        // templates through the same hasher would not see a hash that moved
+        // for everyone. It moved once on purpose, when the three lamps were
+        // removed (2026-11-12) and every thumbnail had to be rendered again;
+        // their values, still in old presets, are read and ignored.
         assert_eq!(
             entry_stem("v46-abc", &old),
-            "v46-abc-te22d8f92",
-            "le nom de ses vignettes ne change pas"
+            "v46-abc-t685ef6a5",
+            "le nom de ses vignettes, calculé hors du code"
         );
+    }
+
+    /// GRILLE§7.1 — protected cars are counted **by car**, under the presets
+    /// in use: a car still missing from one preset is to do, a car the game
+    /// rendered everywhere it was missing is done, and a car the Pit Box
+    /// renderer handled is no protected car at all.
+    #[test]
+    fn protected_cars_are_counted_by_car() {
+        let dir = crate::testutil::temp_dir("gridthumbs-protected");
+        let protected = crate::errors::PREVIEW_PROTECTED;
+        let cars = vec![
+            vec!["v1-0a-t01".to_string(), "v1-0a-t02".to_string()],
+            vec!["v1-0b-t01".to_string(), "v1-0b-t02".to_string()],
+            vec!["v1-0c-t01".to_string(), "v1-0c-t02".to_string()],
+            vec!["v1-0d-t01".to_string(), "v1-0d-t02".to_string()],
+            vec!["v1-0e-t01".to_string(), "v1-0e-t02".to_string()],
+            vec!["v1-0f-t01".to_string(), "v1-0f-t02".to_string()],
+        ];
+        // a: protected under both presets.
+        std::fs::write(dir.join("v1-0a-t01.fail"), protected).unwrap();
+        std::fs::write(dir.join("v1-0a-t02.fail"), protected).unwrap();
+        // b: rendered by the game under both.
+        for e in ["v1-0b-t01", "v1-0b-t02"] {
+            write_from_game(&dir, e, b"png").unwrap();
+        }
+        // c: rendered by the game under one, still protected under the other.
+        write_from_game(&dir, "v1-0c-t01", b"png").unwrap();
+        std::fs::write(dir.join("v1-0c-t02.fail"), protected).unwrap();
+        // d: rendered by Pit Box.
+        write_in(&dir, "v1-0d-t01", b"png").unwrap();
+        // e: failed for another reason than protection.
+        std::fs::write(dir.join("v1-0e-t01.fail"), "decode failed").unwrap();
+        // f: rendered by the game under one, never tried under the other — a
+        // preset added after the run in the game.
+        write_from_game(&dir, "v1-0f-t01", b"png").unwrap();
+
+        assert_eq!(
+            summarize(&dir, &cars),
+            ProtectedSummary {
+                pending: 3,
+                rendered: 1
+            },
+            "a, c et f restent à faire, b est fait, d et e ne sont pas protégées"
+        );
+
+        // What each view lacks: the Pit Box renderer's work and the game's
+        // apart. d misses t02 (never tried), e failed for good under t01.
+        assert_eq!(
+            count_coverage(
+                &dir,
+                &cars.iter().map(|e| (false, e.clone())).collect::<Vec<_>>(),
+                &[false, false]
+            ),
+            vec![
+                Coverage {
+                    missing: 0,
+                    protected_missing: 1
+                },
+                Coverage {
+                    missing: 2,
+                    protected_missing: 3
+                },
+            ],
+            "t01 : a ; t02 : a, c, f pour le jeu, d et e pour Pit Box"
+        );
+        // A view that leaves base content as it is needs nothing of it.
+        assert_eq!(
+            count_coverage(&dir, &[(true, cars[3].clone())], &[true, true]),
+            vec![Coverage::default(); 2],
+            "une voiture de base sous un preset qui la laisse telle quelle ne manque à rien"
+        );
+    }
+
+    /// GRILLE§7.1 — an image from the game replaces the failure mark and leaves
+    /// its own: the car stays known as protected once rendered.
+    #[test]
+    fn a_game_render_replaces_the_failure_and_says_where_it_comes_from() {
+        let dir = crate::testutil::temp_dir("gridthumbs-game-mark");
+        std::fs::write(dir.join("v1-0a-t01.fail"), crate::errors::PREVIEW_PROTECTED).unwrap();
+        write_from_game(&dir, "v1-0a-t01", b"png").unwrap();
+        assert!(dir.join("v1-0a-t01.png").is_file(), "l'image est rangée");
+        assert!(!dir.join("v1-0a-t01.fail").exists(), "le marqueur d'échec disparaît");
+        assert!(dir.join("v1-0a-t01.game").is_file(), "la marque du jeu le remplace");
     }
 
     /// GRILLE§5.7 — the car own fingerprint stays in the name, so an updated mod

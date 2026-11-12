@@ -16,7 +16,8 @@ import { applyFloorMirror } from "./floorMirror";
 import { addFloor, attachMirror, sizeMirror } from "./floor";
 import { prepareMaterials } from "./materials";
 import { attachDetailMaps } from "./detailMap";
-import { reflectChrome } from "./reflections";
+import { reflectChrome, reflectGlass } from "./reflections";
+import { setPreviewGrade } from "./grade";
 import { preview3dPrefs } from "./preview3dPrefs.svelte";
 import { applyDriverOpacity, applySteer, findRig, stepDriverFade, type Rig } from "./rig";
 import {
@@ -158,8 +159,11 @@ export function applyScene(current: ThreeScene) {
   // mesuré au banc, ce dernier n'a aucun effet quand l'environnement vient
   // de la scène (voir `docs/SPEC-preview-3d-kn5.md` PREVIEW§15).
   current.scene.environmentIntensity = prefs.light / 100;
-  // After the line above: the chrome's own level is a multiple of it.
-  reflectChrome(current.turntable, current.scene, TUNING.chromeReflection);
+  // After the line above: the glass's and the chrome's own levels are
+  // multiples of it.
+  reflectGlass(current.turntable, current.scene, prefs.glass);
+  reflectChrome(current.turntable, current.scene, prefs.chrome);
+  setPreviewGrade(prefs.saturation, prefs.coolTint);
   const ground = current.ground.material as ThreeModule.MeshBasicMaterial;
   ground.opacity = prefs.pool / 100;
   const shadow = current.shadowCatcher.material as ThreeModule.ShadowMaterial;

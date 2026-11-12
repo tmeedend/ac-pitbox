@@ -576,7 +576,16 @@ titre de la question.
 
 Les réglages vivent dans **Réglages › Aperçu**, qui porte son propre aperçu
 (la voiture de la session, à défaut la première de la bibliothèque) : on règle
-en voyant le résultat. Ils sont dans `ui_prefs.json` ; les leviers de rendu
+en voyant le résultat. **L'écran a la forme de celui des vignettes**
+(GRILLE§6.2) : à gauche, qui ne bouge pas, « Partir d'un preset de
+vignettes », l'aperçu, puis le rendu et le cache ; à droite, seuls à défiler,
+les réglages de l'image dans les mêmes groupes et le même ordre — cadrage,
+lumière (exposition, studio, reflets des vitres et des chromes, saturation,
+teinte froide), sol. **Partir d'un preset** recopie ce que les deux écrans
+veulent dire de la même façon (angles, champ, hauteur, ombre, flaque, reflet,
+lumière du studio, reflets, étalonnage) ; c'est une copie, pas un lien : le
+preset ne change pas, et la copie attend Enregistrer comme un curseur bougé à
+la main. Ils sont dans `ui_prefs.json` ; les leviers de rendu
 que l'utilisateur ne règle pas sont regroupés dans
 `src/lib/preview3d/tuning.ts`. **Rien de ce qui suit n'entre dans la
 conversion** — en changer s'applique à l'image suivante, sans reconvertir —

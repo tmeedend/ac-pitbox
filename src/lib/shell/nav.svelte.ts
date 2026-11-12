@@ -93,6 +93,9 @@ export const nav = $state<{
    * session — décider à la place de l'utilisateur sur un geste qui ne
    * demandait qu'à regarder. */
   openSkin: string | null;
+  /** Tab to show when the sheet opens — from a link that leads to one part of
+   * it (the in-game failures list leads to Media and documents). Consumed. */
+  openTab: "media" | null;
   /** Terme de recherche à appliquer à la bibliothèque (ex. filtrer par pack, §4.4). */
   search: string | null;
   /** Duo de session courant (SESSION§1) — la bibliothèque le met à jour à l'ouverture. */
@@ -149,6 +152,7 @@ export const nav = $state<{
   openSheet: null,
   openMod: null,
   openSkin: null,
+  openTab: null,
   search: null,
   // Hydraté juste en dessous, de façon asynchrone (lecture fichier côté
   // Rust) : reste `null` le temps d'un aller-retour IPC au tout premier

@@ -4,6 +4,7 @@
 // the chrome reflect is in `preview3d/reflections.ts`, shared with the 3D
 // preview.
 import type { GridTemplate } from "./gridThumbs";
+import { GRADE_TINT } from "$lib/preview3d/grade";
 
 /** Auto exposure (`autoExposure`). **The game's preview tool does not use
  * one** — its `ppeffects.ini` turns `AUTO_EXPOSURE` off — but our studio does
@@ -68,7 +69,6 @@ export function meteredExposure(canvas: HTMLCanvasElement): number {
  * Applied on a 2D copy: the WebGL canvas cannot be written back, and the
  * queue reads its PNG from the copy anyway.
  */
-const GRADE_TINT = [-0.03, 0.02, 0.055] as const;
 
 /** Whether this template changes any colour at all — the copy and the walk
  * over every pixel are skipped otherwise. */

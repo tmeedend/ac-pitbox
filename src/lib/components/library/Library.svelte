@@ -42,7 +42,7 @@
   import { moveFocus } from "$lib/shell/gamepadNav";
   import { registerModNav } from "$lib/shell/screenActions";
   import { libraryVersion } from "$lib/library/libraryVersion.svelte";
-  import { cardImage, getPreferredSkin, getPreferredLayout } from "$lib/preferred";
+  import { cardImage, getPreferredSkin, getPreferredLayout, thumbnailSkinId } from "$lib/preferred";
   import { isPlayable } from "$lib/library/showcase.svelte";
   import { sessionFallback } from "$lib/library/sessionFallback";
   import {
@@ -342,7 +342,7 @@
           .filter((c) => !c.showcase && (!skipStock || !c.is_stock))
           .map((c) => ({
             id: c.id_interne,
-            skin: getPreferredSkin(c.id_interne)?.id ?? null,
+            skin: thumbnailSkinId(c.id_interne),
             name: cardName(c),
           })),
       ),
@@ -527,7 +527,7 @@
     isCar
       ? contextTargets
           .filter((c) => !c.showcase)
-          .map((c) => ({ id: c.id_interne, skin: getPreferredSkin(c.id_interne)?.id ?? null, name: cardName(c) }))
+          .map((c) => ({ id: c.id_interne, skin: thumbnailSkinId(c.id_interne), name: cardName(c) }))
           .filter((car) => canRenderInGame(template, car))
       : [],
   );
@@ -1025,7 +1025,8 @@
         style:--mat-lo={isCar && gridThumbsOn() ? preset.mat.lo : undefined}
       >
         {#each filtered as c (c.id_interne)}
-          {@const prefSkin = isCar ? getPreferredSkin(c.id_interne) : null}
+          <!-- The thumbnail's own livery, not the session's (GRILLE§5.4). -->
+          {@const thumbSkin = isCar ? thumbnailSkinId(c.id_interne) : null}
           {@const prefLayout = !isCar ? getPreferredLayout(c.id_interne) : null}
           {@const src = previewSrc(cardImage(c))}
           <!-- La vignette régénérée prend le pas sur la `preview.png` du mod
@@ -1036,13 +1037,13 @@
           <!-- Until the disk has said whether the thumbnail exists, the card
                shows nothing: showing the photo and switching a moment later
                was a visible flicker (GRILLE§5.4). -->
-          {@const picture = isCar ? carPicture(preset, template, c, prefSkin?.id ?? null, src) : { src, waiting: false }}
+          {@const picture = isCar ? carPicture(preset, template, c, thumbSkin, src) : { src, waiting: false }}
           {@const waiting = picture.waiting}
           {@const cardSrc = picture.src}
           {@const ol = previewSrc(prefLayout?.outline ?? c.outline)}
           {@const blocked = unusableReason(c)}
           <button data-id={c.id_interne} class="card" class:unusable={blocked !== null} class:sel={effectiveId === c.id_interne && selectedIds.size === 0} class:multisel={selectedIds.has(c.id_interne)} class:session={sessionId === c.id_interne} onclick={(e) => onCardClick(c, e)} ondblclick={() => (nav.openFull = c.id_interne)} oncontextmenu={(e) => openCardContextMenu(e, c)} title={blocked ? `${t(blocked)}\n${t("library.cardTooltip")}` : t("library.cardTooltip")}>
-            <div class="thumb" use:whenVisible={{ car: c.id_interne, skin: prefSkin?.id ?? null, name: cardName(c), want: isCar && wantsGridThumb(preset, c), frozen: isCar && c.showcase }}>
+            <div class="thumb" use:whenVisible={{ car: c.id_interne, skin: thumbSkin, name: cardName(c), want: isCar && wantsGridThumb(preset, c), frozen: isCar && c.showcase }}>
               {#if cardSrc}<img src={cardSrc} alt={c.display_name ?? c.id_interne} loading="lazy" />
               {:else if waiting}<!-- the disk has not answered yet -->
               {:else}<div class="noprev">{isCar ? t("library.typeCar") : t("library.typeTrack")}</div>{/if}

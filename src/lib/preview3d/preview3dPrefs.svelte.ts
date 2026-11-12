@@ -34,6 +34,10 @@ const KEYS = {
   reflectionReach: "pitbox.preview3d.reflectionReach",
   pool: "pitbox.preview3d.pool",
   shadow: "pitbox.preview3d.shadow",
+  glass: "pitbox.preview3d.glass",
+  chrome: "pitbox.preview3d.chrome",
+  saturation: "pitbox.preview3d.saturation",
+  coolTint: "pitbox.preview3d.coolTint",
   cacheMb: "pitbox.preview3d.cacheMb",
   steer: "pitbox.preview3d.wheelSteer",
   intro: "pitbox.preview3d.intro",
@@ -108,6 +112,21 @@ export const PREVIEW3D_RANGES = {
   pool: { min: 0, max: 200, step: 5, default: 85 },
   /** Opacité de l'ombre portée. */
   shadow: { min: 0, max: 100, step: 5, default: 50 },
+  /** What the windows reflect, in percent of what the paint does
+   * (`reflections.ts`) — the same setting as a thumbnail preset's. */
+  glass: { min: 0, max: 600, step: 10, default: 100 },
+  /** What chrome and bare metal reflect, in percent of what the paint does.
+   * The studio is dark so the paint stays deep, and a mirror only shows what
+   * is around it: headlight reflectors came out black at 100 (`ks_alfa_romeo_
+   * 155_v6`, reported on screen). 250 is the built-in thumbnail presets'
+   * value, set by eye. */
+  chrome: { min: 0, max: 600, step: 10, default: 250 },
+  /** Colour saturation, in percent — the thumbnails' colour grade
+   * (`grade.ts`). 100 leaves the colours as rendered. */
+  saturation: { min: 50, max: 150, step: 5, default: 100 },
+  /** Cool tint, in percent of the cast the game's previews carry. 0 is
+   * neutral. */
+  coolTint: { min: 0, max: 200, step: 5, default: 0 },
   /** Plafond du cache d'aperçus, **en mégaoctets**. En Mo et non en Go parce
    * que toute la mécanique de ce module travaille sur des entiers (`clamp`
    * arrondit) : un pas d'un demi-gigaoctet s'exprime en 512 Mo sans flottant.
@@ -155,8 +174,8 @@ export const PREVIEW3D_GROUPS = {
   /** Réglé sur la fiche, où le résultat est sous les yeux — c'est le seul
    * groupe que porte aussi le panneau compact posé sur l'aperçu. */
   framing: ["zoom", "azimuth", "elevation", "height", "fov", "spin"],
-  light: ["exposure", "light"],
-  floor: ["reflection", "reflectionBlur", "reflectionReach", "pool", "shadow"],
+  light: ["exposure", "light", "glass", "chrome", "saturation", "coolTint"],
+  floor: ["pool", "reflection", "reflectionBlur", "reflectionReach", "shadow"],
 } as const satisfies Record<string, readonly NumericKey[]>;
 
 export type Preview3dGroup = keyof typeof PREVIEW3D_GROUPS;
@@ -232,6 +251,10 @@ const values: Preview3dPrefs = $state({
   reflectionReach: PREVIEW3D_RANGES.reflectionReach.default,
   pool: PREVIEW3D_RANGES.pool.default,
   shadow: PREVIEW3D_RANGES.shadow.default,
+  glass: PREVIEW3D_RANGES.glass.default,
+  chrome: PREVIEW3D_RANGES.chrome.default,
+  saturation: PREVIEW3D_RANGES.saturation.default,
+  coolTint: PREVIEW3D_RANGES.coolTint.default,
   cacheMb: PREVIEW3D_RANGES.cacheMb.default,
 });
 

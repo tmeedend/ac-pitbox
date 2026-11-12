@@ -40,15 +40,39 @@ pub async fn grid_thumbnail(
     ))
 }
 
-/// The protected cars of the library under this template, in the livery
-/// their card shows (GRILLE§7.1): what the in-game render can do in one go.
-/// A few `stat` per car of the library, off the window thread.
+/// The protected cars of the library still missing an image under one of
+/// these templates, in the livery of their thumbnails (GRILLE§7.1): what the
+/// in-game render can do in one go. A few `stat` per car of the library, off
+/// the window thread.
 #[tauri::command]
 pub async fn protected_grid_cars(
     app: AppHandle,
-    template: GridTemplate,
+    templates: Vec<GridTemplate>,
 ) -> Result<Vec<crate::gridthumbs::ProtectedCar>, String> {
-    off_window(app, move |app| Ok(crate::gridthumbs::protected_cars(app, &template))).await
+    off_window(app, move |app| Ok(crate::gridthumbs::protected_cars(app, &templates))).await
+}
+
+/// What each view still lacks, Pit Box's work and the game's apart
+/// (GRILLE§5.4). Same walk, off the window thread.
+#[tauri::command]
+pub async fn grid_thumbnail_coverage(
+    app: AppHandle,
+    views: Vec<crate::gridthumbs::CoverageQuery>,
+) -> Result<Vec<crate::gridthumbs::Coverage>, String> {
+    off_window(app, move |app| Ok(crate::gridthumbs::coverage(app, &views))).await
+}
+
+/// Where the protected cars stand under the presets in use, counted by car
+/// (GRILLE§7.1). Same walk as [`protected_grid_cars`], off the window thread.
+#[tauri::command]
+pub async fn protected_grid_summary(
+    app: AppHandle,
+    templates: Vec<GridTemplate>,
+) -> Result<crate::gridthumbs::ProtectedSummary, String> {
+    off_window(app, move |app| {
+        Ok(crate::gridthumbs::protected_summary(app, &templates))
+    })
+    .await
 }
 
 /// One car of a [`grid_thumbnails`] lookup.

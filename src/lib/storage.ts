@@ -91,6 +91,8 @@ export const StorageKey = {
    * Born in `ui_prefs.json`. */
   storyAmbientMuted: `${PREFIX}.story.ambientMuted`,
   preferredSkin: (carId: string) => `${PREFIX}.skin.${carId}`,
+  /** The livery a car's grid thumbnails are rendered in (GRILLE§5.4). */
+  thumbnailSkin: (carId: string) => `${PREFIX}.thumbSkin.${carId}`,
   preferredLayout: (trackId: string) => `${PREFIX}.layout.${trackId}`,
   /** Tenue de pilote choisie pour cette voiture (PILOTE§1.4).
    * Une clé par voiture, comme le skin préféré : le filtre « pilote modifié »

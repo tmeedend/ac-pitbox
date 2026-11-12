@@ -90,15 +90,6 @@ export const GRID_THUMB_RANGES = {
    * La borne haute reste large : elle n'interdit plus rien, et un preset peut
    * vouloir laisser respirer. */
   margin: { min: 0, max: 70, step: 1, default: 6 },
-  /** Intensité de la lumière principale, en pourcentage. */
-  key: { min: 0, max: 300, step: 5, default: 100 },
-  /** Complément, en pourcentage de la principale. */
-  fill: { min: 0, max: 100, step: 5, default: 25 },
-  /** Contre-jour, en pourcentage de la principale. **Le paramètre le plus
-   * directement utile au problème de départ** : c'est lui qui détache la
-   * silhouette d'une carrosserie noire, plus que n'importe quel réglage de
-   * fond. */
-  rim: { min: 0, max: 200, step: 5, default: 60 },
   /** Opacité de l'ombre de contact. Sans elle la voiture flotte. */
   shadow: { min: 0, max: 100, step: 5, default: 35 },
   /** Où la caméra vise, en pourcentage du rayon au-dessus du centre du modèle.
@@ -291,9 +282,6 @@ function template(read: (key: TemplateKey) => number): GridTemplateValues {
     elevation: read("elevation"),
     fov: read("fov"),
     margin: read("margin"),
-    key: read("key"),
-    fill: read("fill"),
-    rim: read("rim"),
     shadow: read("shadow"),
     height: read("height"),
     floor: read("floor"),
@@ -384,15 +372,6 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
       elevation: 5,
       fov: 26,
       margin: 1,
-      // **Une principale très basse, et c'est le réglage qui fait le preset.**
-      // Le complément et le contre-jour s'expriment en pourcentage d'elle : la
-      // descendre à 30 % éteint donc tout l'éclairage direct, et ce qui reste
-      // vient presque entièrement du showroom. La voiture n'est plus posée sous
-      // des projecteurs, elle baigne dans une pièce sombre — d'où le contraste
-      // profond et les reflets étirés qu'on cherchait.
-      key: 30,
-      fill: 15,
-      rim: 140,
       shadow: 45,
       background: 0,
       // The car sits **high** to leave room for its reflection: at -12 the
@@ -484,8 +463,8 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
     //    26°, is what reproduces it, and the lens then frames the car on its
     //    own: margin 5, height 0;
     //  - **the light**: the game's paint never goes black — its shadows are
-    //    filled by the environment. Full fill, and a key low enough that
-    //    white cars stop clipping;
+    //    filled by the environment. (Measured then with three lamps, full fill
+    //    and a low key; the lamps were removed since, 2026-11-12.)
     //  - **the floor**: the pool is a faint patch under the car, not a lit
     //    floor across the frame — 35, not 100.
     //
@@ -518,9 +497,6 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
       elevation: 10,
       fov: 40,
       margin: 5,
-      key: 45,
-      fill: 100,
-      rim: 70,
       shadow: 30,
       height: 0,
       // A pool and **no reflection**: the game's images light the floor under
@@ -533,7 +509,7 @@ export const BUILTIN_PRESETS: readonly GridPreset[] = [
       reflectionBlur: 5,
       background: 100,
       trueScale: 100,
-      // Ambient 160 with the key down to 45: the lowest gap to the game over
+      // Ambient 160 (with the key lamp, since removed, at 45): the lowest gap to the game over
       // twelve cars (body luminance percentiles, 12.7 → 11.2 levels on
       // average). Higher only burns white paint — the AE86 goes from 143 to
       // 190 median at 300, against 144 in the game.

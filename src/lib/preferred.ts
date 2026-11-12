@@ -33,6 +33,27 @@ export function setPreferredSkin(carId: string, skin: PreferredSkin): void {
   setUiPref(StorageKey.preferredSkin(carId), JSON.stringify(skin));
 }
 
+/**
+ * The livery a car's grid thumbnails are rendered in (GRILLE§5.4), chosen on
+ * its sheet — **apart from the session's**. They used to follow the livery
+ * last picked for a session, so picking another one for a race changed the
+ * card: a protected car then fell back on its photo, and the grid lost its
+ * evenness (reported on screen). `null`: the car's default livery, the first
+ * of its `skins/` folder, as the backend resolves it.
+ */
+export function getThumbnailSkin(carId: string): PreferredSkin | null {
+  return readJSON<PreferredSkin>(StorageKey.thumbnailSkin(carId));
+}
+
+/** The id the thumbnail lookups take: `null` for the default livery. */
+export function thumbnailSkinId(carId: string): string | null {
+  return getThumbnailSkin(carId)?.id ?? null;
+}
+
+export function setThumbnailSkin(carId: string, skin: PreferredSkin): void {
+  setUiPref(StorageKey.thumbnailSkin(carId), JSON.stringify(skin));
+}
+
 export function getPreferredLayout(trackId: string): PreferredLayout | null {
   return readJSON<PreferredLayout>(StorageKey.preferredLayout(trackId));
 }

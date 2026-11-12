@@ -70,12 +70,12 @@ Remove-Item (Join-Path $jobDir 'done.json') -ErrorAction SilentlyContinue
 
 # The Catalogue and Vitrine presets (src/lib/gridthumbs/gridThumbPrefs.svelte.ts),
 # in the job format Pit Box writes (gameshot.rs `write_job`).
-$catalogue = @{ azimuth = 320; elevation = 8; fov = 26; margin = 6; height = -7; key = 100; fill = 25; rim = 60
+$catalogue = @{ azimuth = 320; elevation = 8; fov = 26; margin = 6; height = -7
   ambient = 100; saturation = 75; coolTint = 100; shadow = 35; trueScale = 0; gameFraming = 0; floor = 0 }
-$vitrine = @{ azimuth = 320; elevation = 5; fov = 26; margin = 1; height = -12; key = 30; fill = 15; rim = 140
+$vitrine = @{ azimuth = 320; elevation = 5; fov = 26; margin = 1; height = -12
   ambient = 100; saturation = 75; coolTint = 100; shadow = 45; trueScale = 0; gameFraming = 0; floor = 85
   reflection = 90; reflectionBlur = 35; poolSize = 0; background = 0 }
-$officiel = @{ azimuth = 306; elevation = 10; fov = 40; margin = 5; height = 0; key = 45; fill = 100; rim = 70
+$officiel = @{ azimuth = 306; elevation = 10; fov = 40; margin = 5; height = 0
   ambient = 160; saturation = 75; coolTint = 100; shadow = 30; trueScale = 100; gameFraming = 100; floor = 60
   reflection = 0; reflectionBlur = 5; poolSize = 140; poolEdge = 50; background = 100; autoExposure = 100
   matHi = "#05080a"; matLo = "#020305" }

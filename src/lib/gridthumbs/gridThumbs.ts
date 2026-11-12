@@ -24,9 +24,6 @@ export interface GridTemplate {
   elevation: number;
   fov: number;
   margin: number;
-  key: number;
-  fill: number;
-  rim: number;
   shadow: number;
   height: number;
   floor: number;
@@ -86,6 +83,8 @@ export interface GridThumb {
   path: string | null;
   /** Pourquoi cette voiture ne rendra pas — clé i18n, jamais une phrase. */
   failed: string | null;
+  /** The image was rendered by the game: the car is protected (GRILLE§7.1). */
+  fromGame: boolean;
 }
 
 export interface GridThumbStats {
@@ -227,6 +226,31 @@ export interface ProtectedCar {
 }
 
 /** The protected cars of the library under this template (GRILLE§7.1). */
-export function protectedGridCars(template: GridTemplate): Promise<ProtectedCar[]> {
-  return invoke<ProtectedCar[]>("protected_grid_cars", { template });
+/** The protected cars still missing an image under one of these templates
+ * (GRILLE§7.1) — a car protected under any of them counts for all. */
+export function protectedGridCars(templates: GridTemplate[]): Promise<ProtectedCar[]> {
+  return invoke<ProtectedCar[]>("protected_grid_cars", { templates });
+}
+
+/** What a view still lacks (GRILLE§5.4): Pit Box's work, and the game's. */
+export interface GridCoverage {
+  missing: number;
+  protectedMissing: number;
+}
+
+export function gridThumbnailCoverage(
+  views: { template: GridTemplate; skipStock: boolean }[],
+): Promise<GridCoverage[]> {
+  return invoke<GridCoverage[]>("grid_thumbnail_coverage", { views });
+}
+
+/** Where the protected cars stand under these templates, counted by car
+ * (GRILLE§7.1): still to do, or rendered by the game. */
+export interface ProtectedSummary {
+  pending: number;
+  rendered: number;
+}
+
+export function protectedGridSummary(templates: GridTemplate[]): Promise<ProtectedSummary> {
+  return invoke<ProtectedSummary>("protected_grid_summary", { templates });
 }
