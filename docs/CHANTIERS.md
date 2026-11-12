@@ -1666,8 +1666,18 @@ de reprendre. En cas d'écart, la spec fait foi.
          du point 2). Le jeu trouve Steam par ce numéro : il ne le trouvait
          plus. Remède manuel : redémarrer Steam. **Détecté depuis** : Pit Box
          refuse de lancer quand ce numéro ne correspond à aucun `steam.exe`
-         et dit de redémarrer Steam (SESSION§2.3). Reste à savoir pourquoi
-         Steam ne réécrit pas ce numéro en redémarrant.
+         et dit de redémarrer Steam (SESSION§2.3).
+         **Cause trouvée le 2026-11-12, et elle n'est pas chez l'utilisateur** :
+         Claude desktop (paquet MSIX) virtualise `HKCU\Software` pour tout ce
+         qu'il lance, comme il virtualise AppData. Un Pit Box démarré par
+         Claude — et CM, et le jeu qu'il lance à son tour — lit une copie
+         privée du registre, figée sur un ancien numéro de Steam : 10428 vu de
+         l'intérieur, 24432 (le vrai) vu de l'extérieur, au même instant.
+         Redémarrer Steam n'y fait rien ; démarrer Pit Box soi-même, hors de
+         Claude, si. Le contrôle de Pit Box reste juste — il prédit ce que le
+         jeu verra —, mais son conseil (« redémarre Steam ») ne vaut que hors
+         de Claude. Rien à corriger dans l'app : un utilisateur ne la lance
+         pas par Claude.
       4. **Un jeu planté reste ouvert** derrière la fenêtre de rapport de CSP,
          et CM reste sur « Waiting… » : toute session suivante attend. Le rendu
          dans le jeu (GRILLE§7.1) abandonne alors au bout de cinq minutes et
