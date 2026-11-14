@@ -547,6 +547,22 @@
   let skinsLoadResolve: (() => void) | null = null;
   let skinsLoadPromise: Promise<void> = Promise.resolve();
 
+  // A tab asked for while this very sheet is already open: the opening effect
+  // below does not run again for the same car, so nothing would consume the
+  // request — the tab stayed put, and the request came out at the next sheet
+  // opened. On a change of car the opening effect takes it instead: the
+  // loaded detail is still the previous car's, which this one checks.
+  $effect(() => {
+    const wanted = nav.openTab;
+    const current = id;
+    if (!wanted) return;
+    untrack(() => {
+      if (detail?.id_interne !== current) return;
+      activeTab = wanted;
+      nav.openTab = null;
+    });
+  });
+
   $effect(() => {
     const current = id;
     actionError = "";
