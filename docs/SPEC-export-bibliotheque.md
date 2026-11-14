@@ -41,9 +41,15 @@ Un export décrit une **bibliothèque**, pas une installation. Il ne contient :
 
 Sur la machine d'arrivée, ces informations se reconstituent d'elles-mêmes : le contenu d'origine est réindexé, et un mod est posé dans le jeu quand l'utilisateur récupère ses fichiers et l'active.
 
-## R3 — Importer sur une installation vide
+## R3 — Un import fusionne, et n'écrase jamais un fichier
 
-La v1 n'importe **que dans une installation sans bibliothèque** — base sans mod géré, dossier de bibliothèque vide — **et dont les chemins du jeu et de la bibliothèque sont réglés**. Fusionner deux bibliothèques veut dire arbitrer des conflits d'ids, de règles et de décisions, pour un cas rare ; c'est un autre chantier (§9). Cette règle rend l'import simple et sûr : il n'écrase jamais rien.
+Un export s'importe **dans n'importe quelle installation dont les chemins du jeu et de la bibliothèque sont réglés**, vide ou non : ce qu'il apporte se **fusionne** avec ce qui est déjà là (§7.4). Trois garanties :
+
+- **aucun fichier n'est remplacé** : ni un dossier de la bibliothèque, ni un fichier du jeu. Un mod déjà là garde ses fichiers et ses versions ; un dossier que l'import devrait créer et qui existe déjà le fait renoncer à ce qu'il porte, nommé dans le rapport ;
+- **aucune saisie ne se perd en silence** : une valeur présente d'un seul côté est gardée ; deux valeurs différentes se tranchent par un choix de l'utilisateur, groupe par groupe, et les notes sont gardées toutes les deux ;
+- **tout ce qui a été fait se dit** dans le rapport (§7.3, étape 5).
+
+Sur une installation vide, il n'y a rien à fusionner : l'import ne pose aucune question, et le résultat est celui d'une installation refaite à l'identique.
 
 ## R4 — Le format se lit sans Pit Box, et se migre avec lui
 
@@ -212,9 +218,9 @@ Repris de la liste de la sauvegarde de démarrage (`backup.rs`), fichier par fic
 
 ## 7.3 Importer
 
-1. **Choisir le fichier.** Lecture du manifeste seul, sans rien écrire.
-2. **Vérifier** : format connu et version de l'application pas plus récente (R4), installation vide (R3). Un refus dit **pourquoi** et **quoi faire** : « Cette installation contient déjà 146 mods. L'import d'une bibliothèque ne se fait que dans une installation vide. » ; « Cet export vient de Pit Box 0.45. Mettez Pit Box à jour pour l'importer. »
-3. **Montrer ce qui arrive** : parties présentes (cochables, pour n'en reprendre qu'une partie), décomptes, date d'export, « pesait 312 Go ».
+1. **Choisir le fichier.** Lecture de l'export, sans rien écrire chez l'utilisateur.
+2. **Vérifier** : format connu et version de l'application pas plus récente (R4), chemins réglés. Un refus dit **pourquoi** et **quoi faire** : « Cet export vient de Pit Box 0.45. Mettez Pit Box à jour pour l'importer. »
+3. **Montrer ce qui arrive** : parties présentes (cochables, pour n'en reprendre qu'une partie), décomptes, date d'export, « pesait 312 Go ». Sur une installation qui a déjà une bibliothèque, **ce que la fusion va faire** (§7.4) : ce qui s'ajoute, ce qui est déjà là, ce qui sera complété, les notes réunies, et pour chaque groupe où les deux côtés diffèrent, le nombre de désaccords et le choix à faire. La partie Préférences y est décochée par défaut : elle remplacerait les réglages de cette machine.
 4. **Importer**, en fond, dans cet ordre :
    1. la sauvegarde de démarrage, même sur une installation vide ;
    2. l'indexation du contenu d'origine de cette machine ;
@@ -224,9 +230,37 @@ Repris de la liste de la sauvegarde de démarrage (`backup.rs`), fichier par fic
    6. les fichiers de classement, sessions et préférences — **seuls les fichiers que l'import connaît** reviennent dans `app_config_dir`, et aucune entrée du zip ne peut sortir du dossier où elle atterrit : un `.pitbox` se transmet, un fichier fabriqué ne doit rien pouvoir remplacer. Les presets rejoignent le dossier `Pit Box\` de Content Manager **sans écraser** un preset de même nom (`Nom (2).cmpreset`) ;
    7. `prefs.json` fusionné dans `config.json` : les préférences sont reprises, **les chemins de cette machine ne bougent pas** ;
    8. la réharmonisation, déclenchée d'elle-même par l'absence des versions de moteur (§4.1).
-5. **Le rapport** : combien de mods sont en vitrine et combien étaient actifs, et « Ouvrir la bibliothèque », qui **recharge l'application** — préférences, colonnes et musique viennent d'être réécrites. **Rien n'est filtré ni sélectionné, rien ne se réactive** : sur une autre machine, la plupart des mods restent en vitrine, et on récupère ceux dont on a l'archive quand on veut (`ESPACE§7`).
+5. **Le rapport**, une fenêtre qui dit **tout** ce qui a été fait, rubrique par rubrique, chacune avec la liste des mods qu'elle concerne : ajoutés (en vitrine), déjà là et gardés tels quels, complétés de ce qui leur manquait, désaccords tranchés (et dans quel sens), notes réunies, ce qui n'a pas été repris et pourquoi (dossier déjà présent, contenu d'origine absent, couche d'un mod déjà là), profils, grilles et sessions renommés, fichiers de classement gardés. Puis « Ouvrir la bibliothèque », qui **recharge l'application** — préférences, colonnes et musique ont pu être réécrites. **Rien n'est filtré ni sélectionné, rien ne se réactive** : sur une autre machine, la plupart des mods restent en vitrine, et on récupère ceux dont on a l'archive quand on veut (`ESPACE§7`).
 
-**Un import qui échoue en route** se défait : la transaction est annulée, chaque fichier écrit est retiré, chaque fichier remplacé retrouve ses octets. L'installation revient vide, et le rapport dit à quelle étape ça s'est arrêté.
+**Un import qui échoue en route** se défait : la transaction est annulée, chaque fichier écrit est retiré, chaque fichier remplacé retrouve ses octets. L'installation revient à son état d'avant, et le rapport dit à quelle étape ça s'est arrêté.
+
+## 7.4 Fusionner dans une bibliothèque qui existe
+
+Un mod, une app ou un autre mod **est le même des deux côtés quand il a le même id** — le nom de son dossier, qui ne peut de toute façon être qu'à un seul exemplaire dans le jeu.
+
+**Ce qui n'est que dans l'export arrive**, en vitrine, comme dans une installation vide. **Ce qui n'est qu'ici ne bouge pas.** **Ce qui est des deux côtés garde ses fichiers, ses versions, ses couches et ses livrées d'ici** ; seules les saisies de l'utilisateur se fusionnent. Une version différente de l'autre côté est ignorée. Une couche, une livrée ou un son attachés dans l'export à un mod déjà là ne viennent pas. Seule exception, sans question : un mod en vitrine ici et sans vignette figée reprend celles de l'export (§4.3).
+
+**La règle d'une saisie** : présente d'un seul côté, elle est gardée ou reprise ; identique, rien ne change ; différente, le choix du groupe tranche. Les groupes, chacun avec un choix « garder la valeur de ce PC » ou « prendre celle de l'export », la première par défaut :
+
+| Groupe | Ce qu'il couvre |
+|---|---|
+| **Noms et textes** | nom repris, description |
+| **Classement** | marque choisie, catégorie décidée, catégories de circuit choisies sur la page Online |
+| **Fiche technique** | les valeurs corrigées à la main, champ par champ |
+| **Préférences par mod** | livrée et layout préférés, article Wikipédia choisi |
+
+Ce qui ne demande pas de choix, parce qu'aucun côté ne perd rien :
+
+- **Les notes** : deux notes différentes sont **gardées toutes les deux**, celle de ce PC d'abord, celle de l'export dessous, séparées par une ligne `---`. Une note de l'export déjà contenue dans celle d'ici n'est pas recopiée : réimporter le même fichier ne la double pas.
+- **Les tags posés à la main** se réunissent ; **un favori** d'un côté l'est à l'arrivée.
+- **L'usage** : « déjà essayé » d'un côté l'est à l'arrivée, les lancements s'additionnent, la date la plus récente reste.
+- **L'historique et le journal des décisions d'import** d'un mod ne sont repris que s'il n'en a pas ici : sinon chaque événement d'import serait en double.
+
+**Au-delà des mods :**
+
+- **Profils, grilles et sessions enregistrés** arrivent tous ; un nom déjà pris ici reçoit un suffixe `(2)`, et le rapport le dit. Un profil ou une grille déjà là à l'identique (le même fichier importé de nouveau) n'est pas doublé. Une entrée de profil qui vise une version que ce PC n'a pas vise sa version active.
+- **Les fichiers de classement** (règles, taxonomies, choix de logos) : ce PC garde les siens s'il y a pris des décisions, et reprend ceux de l'export sinon. Un logo à soi du même nom garde celui d'ici. Leur fusion entrée par entrée reste à faire (§9).
+- **Les préférences de l'application** ne se fusionnent pas : la partie Préférences cochée, celles de l'export remplacent celles d'ici. Les préférences par mod et les presets de vignettes ne sont pas des préférences de l'application : quand l'export les porte (dans `ui_prefs.json`, donc avec ses Préférences), elles arrivent avec la Bibliothèque, par mod pour les unes, par id de preset pour les autres (un preset d'ici garde ses réglages).
 
 ---
 
@@ -256,7 +290,8 @@ Livré après la vitrine (ESPACE lot 1) et l'état sans fichiers des apps et des
 
 **Hors périmètre, à rediscuter** :
 
-- **Fusion** d'un export dans une bibliothèque existante (R3).
+- **La fusion entrée par entrée des fichiers de classement** (§7.4) : règles, familles, alias et fusions de marques ont chacun leur clé naturelle, mais aussi des listes ordonnées, des règles désactivées et dérivées, dont la fusion demande sa propre conception.
+- **Une version différente d'un même mod** (§7.4) : l'ajouter en vitrine à côté de celle d'ici dirait « une version plus récente existait sur l'autre PC ».
 - **Export partiel de mods** (une sélection, un profil) pour partager une collection avec quelqu'un. Le format le permet ; l'écran et la question des doublons à l'arrivée restent à penser.
 - **Une table d'auteurs connus** (préfixe d'id ou nom d'archive vers la page du magasin : RSS, VRC, URD…) comme source de plus pour « Récupérer les fichiers ». Les adresses sont à fournir par le propriétaire du projet, pas à deviner ; ce sont surtout des mods payants, donc toujours une page à ouvrir.
 - **Les captures et replays** (`media_links`) : ils vivent dans les dossiers de Content Manager et du jeu, pas dans la bibliothèque.

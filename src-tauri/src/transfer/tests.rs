@@ -326,6 +326,7 @@ fn transferred(tag: &str) -> Transferred {
         &crate::rules::default_rules(),
         &file,
         &Part::ALL,
+        &Choices::default(),
     )
     .unwrap();
     Transferred {
@@ -577,6 +578,7 @@ fn a_mod_installed_by_hand_is_recovered_by_importing_its_archive() {
         &crate::rules::default_rules(),
         &file,
         &[Part::Library],
+        &Choices::default(),
     )
     .unwrap();
     car(&root.join("archive/rss_hybrid"), "Hybrid");
@@ -642,10 +644,12 @@ fn a_mod_installed_by_hand_on_both_sides_keeps_its_local_row() {
         &crate::rules::default_rules(),
         &file,
         &[Part::Library],
+        &Choices::default(),
     )
     .unwrap();
 
-    assert_eq!(report.local_kept, vec!["rss_hybrid"], "named in the report");
+    let kept: Vec<&str> = report.kept.iter().map(|n| n.id.as_str()).collect();
+    assert_eq!(kept, vec!["rss_hybrid"], "named in the report");
     assert_eq!(report.mods, 0, "nothing imported in its place");
     let conn = dest.conn();
     let hybrid = overlay::get_mod(&conn, "rss_hybrid").unwrap().unwrap();
@@ -672,15 +676,258 @@ fn a_mod_installed_by_hand_on_both_sides_keeps_its_local_row() {
     assert!(local.join("model.kn5").is_file(), "its real folder untouched");
 }
 
+/// An installation that already has its library: the same car as the
+/// source's, complete, renamed and annotated otherwise; a profile and a grid
+/// of the same names as the source's, with other contents; and a taxonomy of
+/// its own decisions.
+fn existing(root: &Path) -> Install {
+    let dest = Install::new(root, "dest", &["ks_mazda_mx5_cup"]);
+    car(&dest.root.join("in/lanzo"), "Lanzo");
+    assert_eq!(dest.import_folder(&dest.root.join("in"))[0].outcome, "IMPORT");
+    {
+        let conn = dest.conn();
+        set_display_name(&conn, EntityKind::Mod, "lanzo", Some("Mine")).unwrap();
+        set_note(&conn, EntityKind::Mod, "lanzo", Some("local note")).unwrap();
+        overlay::create_profile(&conn, "local-p", "Evening", "2026-11-01").unwrap();
+    }
+    let config = &dest.places.config_dir;
+    write(config, "saved_grids.json", br#"{"GT3 night":{"cars":["other"]}}"#);
+    write(
+        config,
+        "taxonomy.json",
+        br#"{"format":2,"brand_aliases":{"set":{"Bmw":"BMW"}}}"#,
+    );
+    dest
+}
+
+fn export_source(root: &Path) -> PathBuf {
+    let src = source(root);
+    let file = root.join("library.pitbox");
+    export(&src.db, &src.cfg, &src.places, &Part::ALL, &Thumbs::default(), &file).unwrap();
+    file
+}
+
+fn import_all(dest: &Install, file: &Path, choices: &Choices) -> ImportReport {
+    import(
+        &dest.db,
+        &dest.cfg,
+        &dest.places,
+        &crate::rules::default_rules(),
+        file,
+        &Part::ALL,
+        choices,
+    )
+    .unwrap()
+}
+
+/// Rule (EXPORT§7.3, step 3): the inspection says what a merge would do,
+/// counted on the same decisions the import then takes.
+#[test]
+fn the_inspection_announces_the_merge() {
+    let root = crate::testutil::temp_dir("transfer-merge-plan");
+    let file = export_source(&root);
+    let dest = existing(&root);
+    let plan = inspect(&dest.conn(), &dest.cfg, &dest.places, &file)
+        .unwrap()
+        .plan
+        .expect("a library in the export: a plan");
+    assert!(plan.merging, "there is a library here");
+    assert_eq!(plan.kept, 1, "the car both have");
+    assert_eq!(plan.conflicts.get(&Group::Names), Some(&1), "two names for it");
+    assert_eq!(plan.notes_joined, 1, "two notes on it");
+    assert!(plan.attached_skipped >= 1, "the export's layer of it stays out");
+    assert!(
+        plan.added >= 2,
+        "the mod installed by hand and the app arrive: {plan:?}"
+    );
+}
+
+/// Rule (EXPORT R3, §7.4): a merge keeps what is here — files, versions, its
+/// name by default — keeps both notes, and brings what is not; a profile or a
+/// grid of a name taken here is renamed, and classification decisions here
+/// stay.
+#[test]
+fn a_merge_keeps_what_is_here_and_brings_what_is_not() {
+    let root = crate::testutil::temp_dir("transfer-merge");
+    let file = export_source(&root);
+    let dest = existing(&root);
+    let versions_before = overlay::get_versions(&dest.conn(), "lanzo").unwrap();
+    let report = import_all(&dest, &file, &Choices::default());
+
+    let conn = dest.conn();
+    let lanzo = overlay::get_mod(&conn, "lanzo").unwrap().unwrap();
+    assert!(!lanzo.showcase, "the car here keeps its files");
+    assert_eq!(
+        overlay::get_versions(&conn, "lanzo").unwrap().len(),
+        versions_before.len(),
+        "and its versions, none added"
+    );
+    assert_eq!(lanzo.display_name_user.as_deref(), Some("Mine"), "its name, by default");
+    assert_eq!(
+        lanzo.notes_user.as_deref(),
+        Some("local note\n\n---\n\nbrakes early"),
+        "both notes, this machine's first"
+    );
+    assert!(
+        overlay::list_layers(&conn, "lanzo", crate::layers::HostKind::Car)
+            .unwrap()
+            .is_empty(),
+        "the export's layer of a car kept here does not come"
+    );
+    assert!(
+        overlay::get_mod(&conn, "rss_hybrid").unwrap().is_some(),
+        "what only the export has arrives"
+    );
+    let kept: Vec<&str> = report.kept.iter().map(|n| n.id.as_str()).collect();
+    assert!(kept.contains(&"lanzo"), "named among the kept");
+    let names = report
+        .decided
+        .iter()
+        .find(|d| d.group == Group::Names)
+        .expect("a disagreement");
+    assert_eq!(names.side, Side::Here);
+    assert_eq!(names.items[0].id, "lanzo");
+    assert_eq!(report.notes_joined.len(), 1);
+    assert_eq!(report.profiles_renamed, vec!["Evening (2)"]);
+    assert_eq!(report.grids_renamed, vec!["GT3 night (2)"]);
+    assert_eq!(report.classification_kept, vec!["taxonomy.json"]);
+
+    let config = &dest.places.config_dir;
+    let grids: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(config.join("saved_grids.json")).unwrap()).unwrap();
+    assert_eq!(grids["GT3 night"]["cars"][0], "other", "the grid here kept");
+    let taxonomy = std::fs::read_to_string(config.join("taxonomy.json")).unwrap();
+    assert!(taxonomy.contains("Bmw"), "the decisions here kept");
+}
+
+/// Rule (EXPORT§7.4): a disagreement goes the export's way when asked.
+#[test]
+fn a_disagreement_goes_the_exports_way_when_asked() {
+    let root = crate::testutil::temp_dir("transfer-merge-export");
+    let file = export_source(&root);
+    let dest = existing(&root);
+    let choices = Choices {
+        names: Side::Export,
+        ..Default::default()
+    };
+    import_all(&dest, &file, &choices);
+    let lanzo = overlay::get_mod(&dest.conn(), "lanzo").unwrap().unwrap();
+    assert_eq!(lanzo.display_name_user.as_deref(), Some("Lanzo V10"));
+}
+
+/// Rule (EXPORT R3): a folder already in the library, which the base here
+/// does not know of, is never written over — its mod is not brought in, and
+/// the report names it.
+#[test]
+fn a_folder_already_in_the_library_is_never_written_over() {
+    let root = crate::testutil::temp_dir("transfer-merge-folder");
+    let src = source(&root);
+    let rel = overlay::get_versions(&src.conn(), "lanzo")
+        .unwrap()
+        .remove(0)
+        .library_path;
+    let rel = tables::relative(src.library(), &rel).unwrap();
+    let file = root.join("library.pitbox");
+    export(
+        &src.db,
+        &src.cfg,
+        &src.places,
+        &[Part::Library],
+        &Thumbs::default(),
+        &file,
+    )
+    .unwrap();
+
+    let dest = Install::new(&root, "dest", &[]);
+    write(&dest.library().join(&rel), "ui/ui_car.json", b"left by hand");
+    let report = import(
+        &dest.db,
+        &dest.cfg,
+        &dest.places,
+        &crate::rules::default_rules(),
+        &file,
+        &[Part::Library],
+        &Choices::default(),
+    )
+    .unwrap();
+    assert_eq!(
+        std::fs::read(dest.library().join(&rel).join("ui/ui_car.json")).unwrap(),
+        b"left by hand",
+        "never written over"
+    );
+    let blocked: Vec<&str> = report.blocked.iter().map(|n| n.id.as_str()).collect();
+    assert_eq!(blocked, vec!["lanzo"], "named in the report");
+    assert!(
+        overlay::get_mod(&dest.conn(), "lanzo").unwrap().is_none(),
+        "not brought in"
+    );
+}
+
+/// Rule (EXPORT§7.4): a car in the showcase here and without a frozen
+/// thumbnail takes the export's; one that has its own keeps it.
+#[test]
+fn a_showcase_car_here_takes_the_exports_frozen_thumbnails() {
+    let root = crate::testutil::temp_dir("transfer-merge-thumbs");
+    let src = source(&root);
+    let rendered = root.join("cache/v1-abc-taaaa0001.png");
+    std::fs::create_dir_all(rendered.parent().unwrap()).unwrap();
+    image::RgbaImage::from_pixel(1024, 576, image::Rgba([10, 20, 30, 0]))
+        .save(&rendered)
+        .unwrap();
+    let thumbs = [crate::skeleton::ThumbFile {
+        preset: "vitrine".into(),
+        fingerprint: "aaaa0001".into(),
+        path: rendered,
+    }];
+    let card = crate::showcase::CardImages {
+        image: None,
+        thumbs: &thumbs,
+    };
+    crate::showcase::to_showcase(&src.conn(), &src.cfg, "lanzo", card, true).unwrap();
+    let file = root.join("library.pitbox");
+    let with = Thumbs {
+        include: true,
+        ..Default::default()
+    };
+    export(&src.db, &src.cfg, &src.places, &[Part::Library], &with, &file).unwrap();
+
+    let dest = existing(&root);
+    crate::showcase::to_showcase(
+        &dest.conn(),
+        &dest.cfg,
+        "lanzo",
+        crate::showcase::CardImages::default(),
+        true,
+    )
+    .unwrap();
+    let report = import(
+        &dest.db,
+        &dest.cfg,
+        &dest.places,
+        &crate::rules::default_rules(),
+        &file,
+        &[Part::Library],
+        &Choices::default(),
+    )
+    .unwrap();
+    assert_eq!(report.thumbs_adopted, 1);
+    let version = overlay::get_versions(&dest.conn(), "lanzo").unwrap().remove(0);
+    let dir = crate::libpath::resolve(dest.cfg.library_path.as_deref(), &version.library_path).unwrap();
+    assert!(
+        crate::skeleton::pick_thumb(&dir, "vitrine", "aaaa0001").is_some(),
+        "its skeleton now holds the export's thumbnail"
+    );
+}
+
 fn skeleton_of(install: &Install, id: &str) -> bool {
     crate::skeleton::is_showcase(&install.conn(), id).unwrap()
 }
 
-/// Rule (EXPORT R3, R4, §7.3): an import is refused, saying why, into an
-/// installation that holds something, from a newer Pit Box, or from a file
-/// that is not an export.
+/// Rule (EXPORT R3, R4, §7.3): an import is refused, saying why, from a newer
+/// Pit Box or from a file that is not an export — and no longer into an
+/// installation that holds a library, which it merges into (EXPORT§7.4).
 #[test]
-fn an_import_is_refused_where_it_could_overwrite_or_misread() {
+fn an_import_is_refused_where_it_could_misread_and_merges_elsewhere() {
     let root = crate::testutil::temp_dir("transfer-refusals");
     let src = Install::new(&root, "source", &[]);
     let file = root.join("library.pitbox");
@@ -698,24 +945,7 @@ fn an_import_is_refused_where_it_could_overwrite_or_misread() {
     car(&dest.root.join("in/lanzo"), "Lanzo");
     dest.import_folder(&dest.root.join("in"));
     let refusal = inspect(&dest.conn(), &dest.cfg, &dest.places, &file).unwrap().refusal;
-    assert_eq!(
-        refusal.map(|r| (r.key, r.count)),
-        Some(("transfer.refuseNotEmpty", Some(1)))
-    );
-    assert_eq!(
-        import(
-            &dest.db,
-            &dest.cfg,
-            &dest.places,
-            &crate::rules::default_rules(),
-            &file,
-            &Part::ALL
-        )
-        .err()
-        .as_deref(),
-        Some(crate::errors::TRANSFER_NOT_EMPTY),
-        "the import itself refuses too"
-    );
+    assert_eq!(refusal, None, "a library here is merged into, not refused");
 
     let older = Install::new(&root, "older", &[]);
     let places = Places {
@@ -772,6 +1002,7 @@ fn an_import_that_fails_on_the_way_leaves_the_installation_empty() {
         &crate::rules::default_rules(),
         &file,
         &Part::ALL,
+        &Choices::default(),
     );
     assert!(failed.is_err(), "the import fails");
     let conn = dest.conn();
@@ -840,6 +1071,7 @@ fn an_export_from_an_older_pit_box_is_brought_up_to_date() {
         &crate::rules::default_rules(),
         &old,
         &[Part::Library],
+        &Choices::default(),
     )
     .unwrap();
     assert!(
@@ -895,7 +1127,16 @@ fn an_export_that_lent_the_category_to_game_content_still_imports() {
 
     let dest = Install::new(&root, "dest", &["ks_mazda_mx5_cup"]);
     let rules = crate::rules::default_rules();
-    let imported = import(&dest.db, &dest.cfg, &dest.places, &rules, &old, &Part::ALL).unwrap();
+    let imported = import(
+        &dest.db,
+        &dest.cfg,
+        &dest.places,
+        &rules,
+        &old,
+        &Part::ALL,
+        &Choices::default(),
+    )
+    .unwrap();
     assert_eq!(imported.stock_applied, 1, "the note on the cup car is still laid on it");
 
     let cup = overlay::get_mod(&dest.conn(), "ks_mazda_mx5_cup").unwrap().unwrap();

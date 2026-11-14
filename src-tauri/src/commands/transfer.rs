@@ -76,7 +76,12 @@ pub async fn transfer_inspect(app: AppHandle, path: String) -> Result<transfer::
 }
 
 #[tauri::command]
-pub async fn transfer_import(app: AppHandle, path: String, parts: Vec<Part>) -> Result<transfer::ImportReport, String> {
+pub async fn transfer_import(
+    app: AppHandle,
+    path: String,
+    parts: Vec<Part>,
+    choices: transfer::Choices,
+) -> Result<transfer::ImportReport, String> {
     off_window(app, move |app| {
         let cfg = crate::config::load(app);
         let rules = crate::rules::load(app);
@@ -87,6 +92,7 @@ pub async fn transfer_import(app: AppHandle, path: String, parts: Vec<Part>) -> 
             &rules,
             Path::new(&path),
             &parts,
+            &choices,
         )
     })
     .await

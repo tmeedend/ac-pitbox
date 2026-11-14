@@ -1,9 +1,11 @@
 <script lang="ts">
-  // Importing a library (EXPORT§7.3): the manifest read alone, the refusal
-  // said with what to do, the parts to take, then the import — modal and not
-  // dismissable while it runs: it replaces the base and the settings, and a
-  // gesture elsewhere in the meantime could write over them. It ends on the
-  // app reloaded, so that every screen reads what came in.
+  // Importing a library (EXPORT§7.3): the export read, the refusal said with
+  // what to do, the parts to take and — into a library that exists — what the
+  // merge will do and the choices it needs (EXPORT§7.4), then the import:
+  // modal and not dismissable while it runs, since it writes the base and the
+  // settings, and a gesture elsewhere in the meantime could write over them.
+  // It ends on its report, then the app reloaded, so that every screen reads
+  // what came in.
   import { t, i18n } from "$lib/i18n/index.svelte";
   import { fmtSize } from "$lib/format";
   import { errorText } from "$lib/errors";
@@ -12,10 +14,16 @@
   import Modal from "$lib/components/ui/Modal.svelte";
   import ProgressBar from "$lib/components/ui/ProgressBar.svelte";
   import TransferParts from "./TransferParts.svelte";
+  import MergeChoices from "./MergeChoices.svelte";
+  import ImportReportView from "./ImportReportView.svelte";
   import {
+    defaultChoices,
     effectiveParts,
     importLibrary,
+    initialImportParts,
     inspectExport,
+    mergeToShow,
+    type Choices,
     type ImportReport,
     type Inspection,
     type Part,
@@ -30,6 +38,7 @@
 
   let inspection = $state<Inspection | null>(null);
   let selected = $state<Part[]>([]);
+  let choices = $state<Choices>(defaultChoices());
   let running = $state(false);
   let report = $state<ImportReport | null>(null);
   let error = $state("");
@@ -39,20 +48,21 @@
     inspectExport(file)
       .then((i) => {
         inspection = i;
-        selected = [...i.manifest.parts];
+        selected = initialImportParts(i.manifest.parts, i.plan?.merging ?? false);
       })
       .catch((e) => (error = errorText(e)));
   });
 
   const manifest = $derived(inspection?.manifest ?? null);
   const refusal = $derived(inspection?.refusal ?? null);
+  const plan = $derived(inspection?.plan ?? null);
   const parts = $derived(effectiveParts(selected));
 
   async function go(): Promise<void> {
     running = true;
     error = "";
     try {
-      report = await importLibrary(path, parts);
+      report = await importLibrary(path, parts, choices);
       // Before anything else can write a setting from the old copy.
       await reloadUiPrefs();
     } catch (e) {
@@ -70,33 +80,9 @@
   }
 </script>
 
-<Modal title={t("transfer.importTitle")} onclose={running || report ? undefined : onclose} width="540px">
+<Modal title={t("transfer.importTitle")} onclose={running || report ? undefined : onclose} width="600px">
   {#if report}
-    <p class="line">{t("transfer.importedMods", { count: report.mods })}</p>
-    {#if report.apps + report.others}
-      <p class="line">{t("transfer.importedAddons", { count: report.apps + report.others })}</p>
-    {/if}
-    {#if report.stock_applied}
-      <p class="line">{t("transfer.stockApplied", { count: report.stock_applied })}</p>
-    {/if}
-    {#if report.stock_missing.length}
-      <p class="line">
-        {t("transfer.stockMissing", { count: report.stock_missing.length })}
-        <span class="mono ids">{report.stock_missing.join(", ")}</span>
-      </p>
-    {/if}
-    {#if report.local_kept.length}
-      <p class="line">
-        {t("transfer.localKept", { count: report.local_kept.length })}
-        <span class="mono ids">{report.local_kept.join(", ")}</span>
-      </p>
-    {/if}
-    {#if report.presets_renamed}
-      <p class="line">{t("transfer.presetsRenamed", { count: report.presets_renamed })}</p>
-    {/if}
-    {#if report.active_at_export}
-      <p class="line muted">{t("transfer.activeAtExport", { count: report.active_at_export })}</p>
-    {/if}
+    <ImportReportView {report} />
   {:else if error && !inspection}
     <div class="errbox">{error}</div>
   {:else if !inspection || !manifest}
@@ -111,6 +97,9 @@
       </p>
     {/if}
     <TransferParts available={manifest.parts} counts={manifest.counts} bind:selected disabled={running} />
+    {#if plan && mergeToShow(plan) && parts.includes("library")}
+      <MergeChoices {plan} bind:choices disabled={running} />
+    {/if}
     {#if running}
       <ProgressBar ratio={null} phase={t("transfer.importing")} />
     {/if}
@@ -139,12 +128,6 @@
   .line.muted {
     color: var(--muted);
     font-size: 11.5px;
-  }
-  .ids {
-    display: block;
-    color: var(--muted);
-    font-size: 11px;
-    overflow-wrap: anywhere;
   }
   .refusal {
     color: var(--txt2);

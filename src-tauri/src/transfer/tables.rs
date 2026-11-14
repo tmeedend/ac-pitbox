@@ -10,6 +10,7 @@ use std::path::Path;
 
 use rusqlite::{params, Connection};
 
+use super::fusion::{self, Named, Outcome, SKIP_MODS};
 use super::{Counts, Part};
 use crate::config::AppConfig;
 use crate::modscan::ModKind;
@@ -25,7 +26,7 @@ pub(super) enum Out {
     Exclude,
 }
 
-/// On the way in, into a base that only holds this machine's game content.
+/// On the way in, into a base that may already hold a library (EXPORT§7.4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum In {
     /// Managed mods inserted; game content only lends its user fields.
@@ -34,10 +35,17 @@ pub(super) enum In {
     Replace,
     /// This machine's row wins: something it computed from its own files.
     Ignore,
-    /// Every row added, its autoincrement `id` left to this base.
-    Append,
     /// Nothing comes in.
     Skip,
+    /// Merged by [`super::fusion`]: decisions keyed by mod, settled by group
+    /// when both sides hold one (EXPORT§7.4).
+    Decide,
+    /// Merged by [`super::fusion::usage`]: launches add up.
+    Usage,
+    /// Merged by [`super::fusion::journals`]: a mod's own, only if it has none here.
+    Journal,
+    /// Merged by [`super::fusion::profiles`]: renamed rather than replaced.
+    Profiles,
 }
 
 /// Every table, in the order they are merged: a parent before the rows that
@@ -49,26 +57,27 @@ pub(super) const TABLES: &[(&str, Out, In)] = &[
     ("sub_mods", Out::Keep, In::Replace),
     ("apps", Out::Keep, In::Replace),
     ("other_mods", Out::Keep, In::Replace),
-    ("usage", Out::Keep, In::Replace),
-    ("history", Out::Keep, In::Append),
+    ("usage", Out::Keep, In::Usage),
+    ("history", Out::Keep, In::Journal),
     // The tech sheet: what the physics says is computed again here for the
-    // game's content; what the user decided always wins (FICHE R6).
+    // game's content; what the user decided comes, settled by its group when
+    // both sides decided (FICHE R6, EXPORT§7.4).
     ("tech_facts", Out::Keep, In::Ignore),
-    ("tech_user", Out::Keep, In::Replace),
+    ("tech_user", Out::Keep, In::Decide),
     // The user's category decisions (REGLES§3 level 4), by mod id: no file of
     // either machine could compute them again.
-    ("category_user", Out::Keep, In::Replace),
-    ("wiki_link", Out::Keep, In::Replace),
+    ("category_user", Out::Keep, In::Decide),
+    ("wiki_link", Out::Keep, In::Decide),
     ("wiki_no_match", Out::Keep, In::Ignore),
     ("wiki_cache", Out::Keep, In::Ignore),
-    ("import_decisions", Out::Keep, In::Append),
+    ("import_decisions", Out::Keep, In::Journal),
     ("forced_extras", Out::Keep, In::Ignore),
     // Track categories chosen on the Online page, by track id: a decision of
     // the user's, which no file of either machine could compute again.
-    ("online_track_categories", Out::Keep, In::Replace),
-    ("profiles", Out::Profiles, In::Replace),
-    ("profile_entries", Out::Profiles, In::Append),
-    ("profile_extra_entries", Out::Profiles, In::Append),
+    ("online_track_categories", Out::Keep, In::Decide),
+    ("profiles", Out::Profiles, In::Profiles),
+    ("profile_entries", Out::Profiles, In::Profiles),
+    ("profile_extra_entries", Out::Profiles, In::Profiles),
     // Captures and replays attached by path to files of the other machine.
     ("media_links", Out::Exclude, In::Skip),
     // The other machine's game folder (R2).
@@ -88,9 +97,9 @@ pub(super) const TABLES: &[(&str, Out, In)] = &[
 /// schema's real foreign keys by a test, like [`TABLES`].
 pub(super) const NAME_A_MOD: &[&str] = &["versions", "tech_facts"];
 
-/// The tables whose `parent_id` names the mod a row is laid on: a layer, a
-/// skin or a sound of a mod kept as it is here ([`keep_local`]) does not come.
-const NAME_A_HOST: &[&str] = &["layers", "sub_mods"];
+/// The tables whose rows have a folder of their own: one already here, or
+/// hung on a mod kept here, does not come (`fusion::prepare`).
+const OWN_FOLDER: &[&str] = &["layers", "sub_mods", "apps", "other_mods"];
 
 /// The tables that hold something of a library: an installation with any
 /// of them filled is not empty (EXPORT R3). Game content does not count — a
@@ -260,21 +269,6 @@ fn user_data(alias: &str) -> String {
     )
 }
 
-/// The fields of a game content row that are the user's, laid on the same id
-/// at arrival (EXPORT§4.2). Class and country too: the screens edit them, and
-/// harmonization runs again afterwards anyway. Not the category: it is shown
-/// with the decision laid on it, and the decision travels in `category_user`.
-const STOCK_USER_FIELDS: &[&str] = &[
-    "display_name_user",
-    "description_user",
-    "brand_user",
-    "notes_user",
-    "tags_manual",
-    "is_favorite",
-    "car_class",
-    "country",
-];
-
 /// What a base holds, part by part. Read on the live base by the estimate,
 /// and on the export's copy once reshaped: a mod installed by hand counts
 /// among the cars and tracks on both — it leaves managed (EXPORT§4.2).
@@ -311,67 +305,201 @@ pub(super) fn library_bytes(conn: &Connection) -> rusqlite::Result<u64> {
     .map(|n| n.max(0) as u64)
 }
 
-/// What [`merge`] brought in.
+/// What [`merge`] did (EXPORT§7.4).
 #[derive(Debug, Default)]
 pub(super) struct Merged {
-    pub mods: usize,
+    /// Mods of the export brought in, in the showcase.
+    pub added: Vec<Named>,
     pub layers: usize,
     pub apps: usize,
     pub others: usize,
-    pub stock_applied: usize,
+    /// Apps and "other" mods brought in.
+    pub added_addons: Vec<Named>,
+    /// Mods, apps and "other" mods already here: their files, versions and
+    /// rows stay this machine's.
+    pub kept: Vec<Named>,
+    /// Mods whose folder already sits in the library: not brought in.
+    pub blocked: Vec<Named>,
+    /// Layers, skins and sounds hung on what is kept here, or already here.
+    pub attached_skipped: usize,
+    /// What became of the user's entries on both sides.
+    pub outcome: Outcome,
     pub stock_missing: Vec<String>,
-    /// Mods of the export this machine has as its own, installed by hand:
-    /// kept as they are here (see [`keep_local`]).
-    pub local_kept: Vec<String>,
-    /// The library folders of what was not brought in for them — their
-    /// versions, layers, skins and sounds —, whose skeletons stay in the zip.
+    pub profiles_renamed: Vec<String>,
+    /// The library folders of what was not brought in, whose skeletons stay
+    /// in the zip.
     pub skipped_folders: Vec<String>,
+    /// Showcase cars here taking the export's frozen thumbnails.
+    pub thumb_pairs: Vec<(String, String)>,
 }
 
-fn columns(conn: &Connection, schema: &str, table: &str) -> rusqlite::Result<Vec<String>> {
+pub(super) fn columns(conn: &Connection, schema: &str, table: &str) -> rusqlite::Result<Vec<String>> {
     let mut stmt = conn.prepare(&format!("PRAGMA {schema}.table_info({table})"))?;
     let cols = stmt.query_map([], |r| r.get::<_, String>(1))?;
     cols.collect()
 }
 
-/// Brings the attached export base (`src`) into the live one (`main`), inside
-/// the caller's transaction (EXPORT§7.3, steps 3 and 4).
-pub(super) fn merge(conn: &Connection, profiles: bool, wiki: bool, now: &str) -> rusqlite::Result<Merged> {
-    let local_kept = keep_local(conn)?;
-    copy_tables(conn, profiles, wiki)?;
+/// The columns of `table` both bases know: the export was brought up to this
+/// schema by `overlay::open`, but a column it has and this one does not would
+/// have no meaning here.
+pub(super) fn shared_columns(conn: &Connection, table: &str) -> rusqlite::Result<Vec<String>> {
+    let theirs = columns(conn, "src", table)?;
+    Ok(columns(conn, "main", table)?
+        .into_iter()
+        .filter(|c| theirs.contains(c))
+        .collect())
+}
 
-    let n = |sql: &str| conn.query_row(sql, [], |r| r.get::<_, i64>(0)).map(|n| n as usize);
-    let (stock_applied, stock_missing) = lay_user_fields(conn)?;
+fn count(conn: &Connection, sql: &str) -> rusqlite::Result<usize> {
+    conn.query_row(sql, [], |r| r.get::<_, i64>(0)).map(|n| n as usize)
+}
+
+/// What the import would do, counted on the attached export base before
+/// anything is written: the import screen shows it (EXPORT§7.3, step 3).
+pub(super) fn plan(conn: &Connection, library: &Path) -> Result<super::Plan, String> {
+    let prepared = fusion::prepare(conn, library)?;
+    let counted = (|| -> rusqlite::Result<super::Plan> {
+        let outcome = fusion::user_fields(conn, &fusion::Choices::default(), false)?;
+        let addons = count(
+            conn,
+            &format!(
+                "SELECT (SELECT COUNT(*) FROM src.apps WHERE id NOT IN {})
+                      + (SELECT COUNT(*) FROM src.other_mods WHERE id NOT IN {})",
+                fusion::skipped_rows("apps"),
+                fusion::skipped_rows("other_mods")
+            ),
+        )?;
+        Ok(super::Plan {
+            merging: held(conn)? > 0,
+            added: count(
+                conn,
+                &format!("SELECT COUNT(*) FROM src.mods WHERE is_stock = 0 AND id_interne NOT IN {SKIP_MODS}"),
+            )? + addons,
+            kept: kept(conn)?.len(),
+            blocked: blocked(conn, &prepared)?,
+            attached_skipped: attached_skipped(conn)?,
+            filled: outcome.filled.len(),
+            notes_joined: outcome.notes_joined.len(),
+            conflicts: outcome.conflicts.iter().map(|(g, s)| (*g, s.len())).collect(),
+        })
+    })();
+    fusion::finish(conn);
+    counted.map_err(|e| e.to_string())
+}
+
+fn kept(conn: &Connection) -> rusqlite::Result<Vec<Named>> {
+    let mut out = fusion::named_list(
+        conn,
+        "SELECT s.id_interne FROM src.mods s
+         WHERE s.is_stock = 0 AND s.id_interne IN (SELECT id FROM temp.transfer_both)",
+        "main",
+        "mods",
+    )?;
+    for table in ["apps", "other_mods"] {
+        out.extend(fusion::named_list(
+            conn,
+            &format!("SELECT id FROM src.{table} WHERE id IN (SELECT id FROM main.{table})"),
+            "main",
+            table,
+        )?);
+    }
+    Ok(out)
+}
+
+fn blocked(conn: &Connection, prepared: &fusion::Prepared) -> rusqlite::Result<Vec<Named>> {
+    if prepared.blocked.is_empty() {
+        return Ok(Vec::new());
+    }
+    fusion::named_list(conn, "SELECT id FROM temp.transfer_blocked", "src", "mods")
+}
+
+fn attached_skipped(conn: &Connection) -> rusqlite::Result<usize> {
+    count(
+        conn,
+        "SELECT COUNT(*) FROM temp.transfer_skip_rows WHERE tbl IN ('layers', 'sub_mods')",
+    )
+}
+
+/// Brings the attached export base (`src`) into the live one (`main`), inside
+/// the caller's transaction (EXPORT§7.3, steps 3 and 4; EXPORT§7.4): what the
+/// export alone has comes, what is on both sides keeps this machine's rows
+/// and merges the user's entries along `choices`.
+pub(super) fn merge(
+    conn: &Connection,
+    library: &Path,
+    profiles: bool,
+    wiki: bool,
+    choices: &fusion::Choices,
+    now: &str,
+) -> Result<Merged, String> {
+    let prepared = fusion::prepare(conn, library)?;
+    let merged = merge_prepared(conn, &prepared, profiles, wiki, choices, now);
+    fusion::finish(conn);
+    merged.map_err(|e| e.to_string())
+}
+
+fn merge_prepared(
+    conn: &Connection,
+    prepared: &fusion::Prepared,
+    profiles: bool,
+    wiki: bool,
+    choices: &fusion::Choices,
+    now: &str,
+) -> rusqlite::Result<Merged> {
     let mut merged = Merged {
-        mods: n(&format!(
-            "SELECT COUNT(*) FROM src.mods WHERE is_stock = 0 AND id_interne NOT IN {KEPT}"
-        ))?,
-        layers: n(&format!(
-            "SELECT COUNT(*) FROM src.layers WHERE parent_id NOT IN {KEPT}"
-        ))?,
-        apps: n("SELECT COUNT(*) FROM src.apps")?,
-        others: n("SELECT COUNT(*) FROM src.other_mods")?,
-        stock_applied,
-        stock_missing,
-        local_kept,
-        skipped_folders: Vec::new(),
+        added: fusion::named_list(
+            conn,
+            &format!("SELECT id_interne FROM src.mods WHERE is_stock = 0 AND id_interne NOT IN {SKIP_MODS}"),
+            "src",
+            "mods",
+        )?,
+        layers: count(
+            conn,
+            &format!(
+                "SELECT COUNT(*) FROM src.layers WHERE id NOT IN {}",
+                fusion::skipped_rows("layers")
+            ),
+        )?,
+        kept: kept(conn)?,
+        blocked: blocked(conn, prepared)?,
+        attached_skipped: attached_skipped(conn)?,
+        ..Default::default()
     };
-    let mut stmt = conn.prepare(&format!(
-        "SELECT library_path FROM src.versions WHERE mod_id IN {KEPT}
-         UNION ALL SELECT library_path FROM src.layers WHERE parent_id IN {KEPT}
-         UNION ALL SELECT library_path FROM src.sub_mods WHERE parent_id IN {KEPT}"
-    ))?;
-    merged.skipped_folders = stmt
-        .query_map([], |r| r.get::<_, String>(0))?
-        .collect::<rusqlite::Result<_>>()?;
-    drop(stmt);
+    for table in ["apps", "other_mods"] {
+        let added = fusion::named_list(
+            conn,
+            &format!(
+                "SELECT id FROM src.{table} WHERE id NOT IN {}",
+                fusion::skipped_rows(table)
+            ),
+            "src",
+            table,
+        )?;
+        match table {
+            "apps" => merged.apps = added.len(),
+            _ => merged.others = added.len(),
+        }
+        merged.added_addons.extend(added);
+    }
+    // The entries on both sides first, while `main` holds only this
+    // machine's rows.
+    merged.outcome = fusion::user_fields(conn, choices, true)?;
+    copy_tables(conn, wiki)?;
+    fusion::usage(conn)?;
+    fusion::journals(conn)?;
+    if profiles {
+        merged.profiles_renamed = fusion::profiles(conn)?;
+    }
+    merged.stock_missing = stock_missing(conn)?;
+    merged.skipped_folders = skipped_folders(conn)?;
+    merged.thumb_pairs = fusion::thumb_pairs(conn)?;
 
     // One line in each mod's timeline: where it came from.
     conn.execute(
         &format!(
             "INSERT INTO main.history (mod_id, timestamp, event, details)
              SELECT id_interne, ?1, 'TRANSFER', '{{\"key\":\"transferred\"}}' FROM src.mods
-             WHERE is_stock = 0 AND id_interne NOT IN {KEPT}"
+             WHERE is_stock = 0 AND id_interne NOT IN {SKIP_MODS}"
         ),
         [now],
     )?;
@@ -381,67 +509,68 @@ pub(super) fn merge(conn: &Connection, profiles: bool, wiki: bool, now: &str) ->
         "DELETE FROM main.meta WHERE key = ?1",
         [crate::overlay::META_ENGINE_VERSION],
     )?;
-    conn.execute_batch("DROP TABLE temp.transfer_kept")?;
     Ok(merged)
 }
 
-/// The ids [`keep_local`] lists, for a query's `IN`.
-const KEPT: &str = "(SELECT id FROM temp.transfer_kept)";
+/// The library folders of what was not brought in: their skeletons stay in
+/// the zip.
+fn skipped_folders(conn: &Connection) -> rusqlite::Result<Vec<String>> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT library_path FROM src.versions WHERE mod_id IN {SKIP_MODS}
+         UNION ALL SELECT library_path FROM src.layers WHERE id IN {}
+         UNION ALL SELECT library_path FROM src.sub_mods WHERE id IN {}
+         UNION ALL SELECT library_path FROM src.apps WHERE id IN {}
+         UNION ALL SELECT library_path FROM src.other_mods WHERE id IN {}",
+        fusion::skipped_rows("layers"),
+        fusion::skipped_rows("sub_mods"),
+        fusion::skipped_rows("apps"),
+        fusion::skipped_rows("other_mods"),
+    ))?;
+    let paths = stmt.query_map([], |r| r.get::<_, String>(0))?;
+    paths.collect()
+}
 
-/// Mods of the export this machine already has as its own game content —
-/// installed by hand in its `content/`, a real folder Pit Box only reads.
-/// They stay what they are here, and get only what the user wrote on them:
-/// the export's version, layers and skeleton would make them mods in the
-/// showcase whose real folder sits in the game, and recovering one would run
-/// into that folder. Listed in `temp.transfer_kept` for the queries after.
-fn keep_local(conn: &Connection) -> rusqlite::Result<Vec<String>> {
-    conn.execute_batch(
-        "CREATE TEMP TABLE IF NOT EXISTS transfer_kept (id TEXT PRIMARY KEY);
-         DELETE FROM temp.transfer_kept;
-         INSERT INTO temp.transfer_kept
-           SELECT s.id_interne FROM src.mods AS s JOIN main.mods AS m ON m.id_interne = s.id_interne
-           WHERE s.is_stock = 0 AND m.is_stock = 1;",
-    )?;
-    let mut stmt = conn.prepare("SELECT id FROM temp.transfer_kept ORDER BY id")?;
+/// Game content the user wrote on that this machine does not have (a DLC?):
+/// named, never dropped in silence (EXPORT§4.2).
+fn stock_missing(conn: &Connection) -> rusqlite::Result<Vec<String>> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT s.id_interne FROM src.mods AS s
+         WHERE s.is_stock = 1 AND {}
+           AND NOT EXISTS (SELECT 1 FROM main.mods m WHERE m.id_interne = s.id_interne)
+         ORDER BY s.id_interne",
+        user_data("s.")
+    ))?;
     let ids = stmt.query_map([], |r| r.get::<_, String>(0))?;
     ids.collect()
 }
 
-/// Every table that comes in, table by table (EXPORT§4.1). Only the columns
-/// both bases know: the export was brought up to this schema by
-/// `overlay::open`, but a column it has and this one does not would have no
-/// meaning here.
-fn copy_tables(conn: &Connection, profiles: bool, wiki: bool) -> rusqlite::Result<()> {
+/// Every table that comes in by copy, table by table (EXPORT§4.1); those with
+/// two sides to settle are [`fusion`]'s. Only the columns both bases know.
+fn copy_tables(conn: &Connection, wiki: bool) -> rusqlite::Result<()> {
     for (table, out, into) in TABLES {
-        let skipped = *out == Out::Exclude
-            || (*out == Out::Profiles && !profiles)
-            || (*table == "wiki_cache" && !wiki)
-            || *into == In::Skip;
-        if skipped {
+        let handled = matches!(into, In::Skip | In::Decide | In::Usage | In::Journal | In::Profiles);
+        if *out == Out::Exclude || handled || (*table == "wiki_cache" && !wiki) {
             continue;
         }
-        let theirs = columns(conn, "src", table)?;
-        let cols: Vec<String> = columns(conn, "main", table)?
-            .into_iter()
-            .filter(|c| theirs.contains(c))
-            .filter(|c| !(*into == In::Append && c == "id"))
-            .collect();
+        let cols = shared_columns(conn, table)?;
         if cols.is_empty() {
             continue;
         }
         let list = cols.iter().map(|c| format!("\"{c}\"")).collect::<Vec<_>>().join(", ");
         let verb = match into {
             In::Mods | In::Replace => "INSERT OR REPLACE",
-            In::Ignore => "INSERT OR IGNORE",
-            In::Append | In::Skip => "INSERT",
+            _ => "INSERT OR IGNORE",
         };
         let filter = if *into == In::Mods {
-            format!(" WHERE is_stock = 0 AND id_interne NOT IN {KEPT}")
+            format!(" WHERE is_stock = 0 AND id_interne NOT IN {SKIP_MODS}")
         } else if NAME_A_MOD.contains(table) {
-            // Only the mods brought in: game content computes its own here.
-            " WHERE mod_id IN (SELECT id_interne FROM main.mods WHERE is_stock = 0)".to_string()
-        } else if NAME_A_HOST.contains(table) {
-            format!(" WHERE parent_id NOT IN {KEPT}")
+            // Only the mods brought in: game content computes its own here,
+            // and a mod kept here keeps its versions.
+            format!(
+                " WHERE mod_id IN (SELECT id_interne FROM src.mods WHERE is_stock = 0 AND id_interne NOT IN {SKIP_MODS})"
+            )
+        } else if OWN_FOLDER.contains(table) {
+            format!(" WHERE id NOT IN {}", fusion::skipped_rows(table))
         } else {
             String::new()
         };
@@ -451,38 +580,4 @@ fn copy_tables(conn: &Connection, profiles: bool, wiki: bool) -> rusqlite::Resul
         )?;
     }
     Ok(())
-}
-
-/// What the user wrote on content this machine has as its own — the game's,
-/// or a mod installed by hand ([`keep_local`]) —, laid on the same id
-/// (EXPORT§4.2). Returns how many rows got it, and the game content written on
-/// that this machine does not have.
-fn lay_user_fields(conn: &Connection) -> rusqlite::Result<(usize, Vec<String>)> {
-    let theirs = columns(conn, "src", "mods")?;
-    let ours = columns(conn, "main", "mods")?;
-    let set = STOCK_USER_FIELDS
-        .iter()
-        .filter(|c| theirs.iter().any(|t| t == *c) && ours.iter().any(|o| o == *c))
-        .map(|c| format!("\"{c}\" = s.\"{c}\""))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let user_data = user_data("s.");
-    let applied = conn.execute(
-        &format!(
-            "UPDATE main.mods SET {set} FROM src.mods AS s
-             WHERE main.mods.id_interne = s.id_interne AND main.mods.is_stock = 1
-               AND (s.is_stock = 1 OR s.id_interne IN {KEPT}) AND {user_data}"
-        ),
-        [],
-    )?;
-    let mut stmt = conn.prepare(&format!(
-        "SELECT s.id_interne FROM src.mods AS s
-         WHERE s.is_stock = 1 AND {user_data}
-           AND NOT EXISTS (SELECT 1 FROM main.mods m WHERE m.id_interne = s.id_interne)
-         ORDER BY s.id_interne"
-    ))?;
-    let missing = stmt
-        .query_map([], |r| r.get::<_, String>(0))?
-        .collect::<rusqlite::Result<_>>()?;
-    Ok((applied, missing))
 }

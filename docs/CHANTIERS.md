@@ -1476,6 +1476,22 @@ de reprendre. En cas d'écart, la spec fait foi.
         bibliothèque suffit), regarder les cartes, les fiches, les notes, les
         Compléments, puis récupérer quelques mods par leur archive. Ensuite
         seulement, `FEATURE_LIBRARY_TRANSFER = true`.
+      - **L'import fusionne, au lieu d'exiger une installation vide**
+        (2026-11-14, EXPORT R3, EXPORT§7.4) : ce qui est des deux côtés garde
+        ses fichiers, versions et couches d'ici ; les saisies se fusionnent
+        par groupe (noms, classement, fiche technique, préférences par mod),
+        « garder ce PC » par défaut ; les notes sont gardées toutes les deux ;
+        un dossier déjà présent fait renoncer au mod au lieu d'être écrasé.
+        L'écran annonce la fusion et ses désaccords avant d'importer
+        (`fusion.rs`, mêmes décisions sans écrire), le rapport dit tout.
+        **Reste** : la fusion entrée par entrée des fichiers de classement
+        (aujourd'hui, ce PC garde les siens s'il y a pris des décisions) ;
+        une version différente d'un même mod, ignorée ; réimporter le même
+        fichier additionne de nouveau les lancements (`usage`) ; l'écran
+        compte avant que le contenu d'origine ne soit réindexé, l'import
+        après — un contenu ajouté au jeu entre deux démarrages peut donc
+        donner un désaccord non annoncé ; et l'essai réel, sur deux vraies
+        bibliothèques.
       - **Les vignettes de grille voyagent, figées** (2026-11-10, EXPORT§4.3,
         ESPACE§3.3) : celles des presets liés aux deux densités, dans le
         squelette de chaque voiture, derrière une case de l'écran d'export.

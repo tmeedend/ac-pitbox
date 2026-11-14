@@ -30,6 +30,7 @@ use crate::config::AppConfig;
 use crate::overlay::{self, Db};
 
 mod files;
+mod fusion;
 mod settings;
 mod skeletons;
 mod tables;
@@ -175,31 +176,87 @@ pub struct Refusal {
     pub version: Option<String>,
 }
 
-/// The first step of an import: the manifest alone, nothing written.
+pub use fusion::{Choices, Group, Named, Side};
+
+/// What an import would do here, counted before anything is written
+/// (EXPORT§7.3, step 3).
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct Plan {
+    /// This installation already holds a library: what follows is a merge,
+    /// and the screen says so.
+    pub merging: bool,
+    /// Mods, apps and "other" mods that arrive.
+    pub added: usize,
+    /// Those already here, which keep their files and versions.
+    pub kept: usize,
+    /// Mods whose folder already sits in the library: not brought in.
+    pub blocked: Vec<Named>,
+    /// Layers, skins and sounds of what is kept here: not brought in.
+    pub attached_skipped: usize,
+    /// Entries here that get a value they lack.
+    pub filled: usize,
+    /// Notes written on both sides, both kept.
+    pub notes_joined: usize,
+    /// Entries holding two different values, by group: the choices to make.
+    pub conflicts: BTreeMap<Group, usize>,
+}
+
+/// The first step of an import: the export read, nothing written here.
 #[derive(Debug, Clone, Serialize)]
 pub struct Inspection {
     pub manifest: Manifest,
     pub refusal: Option<Refusal>,
     /// What the file weighs, beside what the library weighed (EXPORT§7.3).
     pub file_bytes: u64,
+    /// What the import would do — absent when it is refused, or when the
+    /// export holds no library.
+    pub plan: Option<Plan>,
 }
 
+/// One group's disagreements, and the side that won them.
+#[derive(Debug, Clone, Serialize)]
+pub struct Decided {
+    pub group: Group,
+    pub side: Side,
+    pub items: Vec<Named>,
+}
+
+/// Everything an import did, for the report window (EXPORT§7.3, step 5).
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct ImportReport {
     pub mods: usize,
     pub layers: usize,
     pub apps: usize,
     pub others: usize,
+    /// Mods brought in, in the showcase.
+    pub added: Vec<Named>,
+    /// Apps and "other" mods brought in.
+    pub added_addons: Vec<Named>,
+    /// Already here: their files, versions and rows kept as they are.
+    pub kept: Vec<Named>,
+    /// Their folder was already in the library: not brought in.
+    pub blocked: Vec<Named>,
+    /// Layers, skins and sounds of what is kept here: not brought in.
+    pub attached_skipped: usize,
+    /// Got from the export a value they had none of.
+    pub filled: Vec<Named>,
+    /// Disagreements, group by group, and which side won.
+    pub decided: Vec<Decided>,
+    /// Notes written on both sides, now one under the other.
+    pub notes_joined: Vec<Named>,
     /// Game content found here that got back what the user wrote on it.
     pub stock_applied: usize,
     /// Game content the user wrote on and this installation does not have
     /// (a DLC?): listed, never dropped in silence (EXPORT§4.2).
     pub stock_missing: Vec<String>,
-    /// Mods of the export this machine already has, installed by hand in its
-    /// `content/`: kept as they are, with the notes written on them.
-    pub local_kept: Vec<String>,
+    /// Showcase cars here that took the export's frozen thumbnails.
+    pub thumbs_adopted: usize,
+    pub profiles_renamed: Vec<String>,
+    pub grids_renamed: Vec<String>,
     /// Presets renamed because one of the same name was already there.
     pub presets_renamed: usize,
+    /// Classification files this machine kept, holding its own decisions.
+    pub classification_kept: Vec<String>,
     pub active_at_export: usize,
     pub library_bytes_at_export: u64,
 }
@@ -445,51 +502,72 @@ fn read_manifest(zip: &mut Archive) -> Result<Manifest, String> {
     serde_json::from_str(&raw).map_err(|_| crate::errors::TRANSFER_NOT_AN_EXPORT.to_string())
 }
 
-/// Reads the manifest alone, and says whether this installation can take it
-/// (EXPORT§7.3, steps 1 and 2).
+/// Reads the export, and says whether this installation can take it and what
+/// the import would do here (EXPORT§7.3, steps 1 to 3). Nothing is written
+/// but in a scratch folder: the export's base is attached to be compared with
+/// this one, then detached.
 pub fn inspect(conn: &Connection, cfg: &AppConfig, places: &Places, path: &Path) -> Result<Inspection, String> {
-    let manifest = read_manifest(&mut open_archive(path)?)?;
-    let refusal = check_importable(conn, cfg, &manifest, &places.app_version).map_err(|e| e.to_string())?;
+    let mut zip = open_archive(path)?;
+    let manifest = read_manifest(&mut zip)?;
+    let refusal = check_importable(cfg, &manifest, &places.app_version);
+    let plan = match (&refusal, cfg.library_path.as_deref()) {
+        (None, Some(library)) if manifest.parts.contains(&Part::Library) => {
+            let scratch = Scratch::new("inspect")?;
+            attach(conn, &mut zip, &scratch.0)?;
+            let counted = tables::plan(conn, library).and_then(|mut plan| {
+                let prefs = prefs_disagreements(&mut zip, places)?;
+                if prefs > 0 {
+                    *plan.conflicts.entry(Group::Prefs).or_default() += prefs;
+                }
+                Ok(plan)
+            });
+            detach(conn);
+            Some(counted?)
+        }
+        _ => None,
+    };
     Ok(Inspection {
         manifest,
         refusal,
         file_bytes: std::fs::metadata(path).map(|m| m.len()).unwrap_or(0),
+        plan,
     })
 }
 
-/// R3 and R4: a format this build knows, a version not newer than it, and an
-/// installation with nothing in it yet.
-pub fn check_importable(
-    conn: &Connection,
-    cfg: &AppConfig,
-    manifest: &Manifest,
-    app_version: &str,
-) -> rusqlite::Result<Option<Refusal>> {
+/// The mods whose preferred livery or layout differs between this machine
+/// and the export (EXPORT§7.4): they live in `ui_prefs.json`, not in the base.
+fn prefs_disagreements(zip: &mut Archive, places: &Places) -> Result<usize, String> {
+    let Some(theirs) = unpack::export_ui_prefs(zip)? else {
+        return Ok(0);
+    };
+    let ours = unpack::local_ui_prefs(&places.config_dir);
+    Ok(fusion::merge_ui_prefs(&ours, &theirs, true, false, Side::Here)
+        .conflicts
+        .len())
+}
+
+/// R4 and the paths: a format this build knows, a version not newer than it,
+/// and somewhere to put the library. An installation that already holds one
+/// takes it all the same: the import merges (R3).
+pub fn check_importable(cfg: &AppConfig, manifest: &Manifest, app_version: &str) -> Option<Refusal> {
     let refuse = |key| Refusal {
         key,
         count: None,
         version: None,
     };
     if manifest.format > FORMAT {
-        return Ok(Some(refuse("transfer.refuseFormat")));
+        return Some(refuse("transfer.refuseFormat"));
     }
     if is_newer(&manifest.app_version, app_version) {
-        return Ok(Some(Refusal {
+        return Some(Refusal {
             version: Some(manifest.app_version.clone()),
             ..refuse("transfer.refuseNewer")
-        }));
+        });
     }
     if cfg.library_path.is_none() || cfg.ac_install_path.is_none() {
-        return Ok(Some(refuse("transfer.refusePaths")));
+        return Some(refuse("transfer.refusePaths"));
     }
-    let held = tables::held(conn)?;
-    if held > 0 {
-        return Ok(Some(Refusal {
-            count: Some(held),
-            ..refuse("transfer.refuseNotEmpty")
-        }));
-    }
-    Ok(None)
+    None
 }
 
 /// `a` strictly newer than `b`, both `x.y.z`. A version that does not read
@@ -509,9 +587,10 @@ fn is_newer(a: &str, b: &str) -> bool {
 }
 
 /// Imports `path` into this installation (EXPORT§7.3, step 4), only the
-/// `parts` asked for among those it holds. All or nothing: a failure on the
-/// way rolls the base back and removes every file written, and the
-/// installation is empty again.
+/// `parts` asked for among those it holds, merging into what is here along
+/// `choices` (EXPORT§7.4). All or nothing: a failure on the way rolls the
+/// base back and takes back every file written, and the installation is as
+/// it was.
 pub fn import(
     db: &Db,
     cfg: &AppConfig,
@@ -519,6 +598,7 @@ pub fn import(
     rules: &crate::rules::Rules,
     path: &Path,
     parts: &[Part],
+    choices: &Choices,
 ) -> Result<ImportReport, String> {
     let mut zip = open_archive(path)?;
     let manifest = read_manifest(&mut zip)?;
@@ -529,15 +609,13 @@ pub fn import(
     let library = cfg.library_path.clone().ok_or(crate::errors::LIBRARY_NOT_CONFIGURED)?;
 
     let conn = db.0.lock().map_err(|e| e.to_string())?;
-    if let Some(refusal) = check_importable(&conn, cfg, &manifest, &places.app_version).map_err(|e| e.to_string())? {
+    if let Some(refusal) = check_importable(cfg, &manifest, &places.app_version) {
         return Err(refusal_error(&refusal).into());
     }
     let library_part = parts.contains(&Part::Library);
-    if library_part {
-        unpack::check_free(&mut zip, &library)?;
-    }
 
-    // 1. The current base saved, even empty, by the startup net's mechanism.
+    // 1. The current base saved by the startup net's mechanism: a merge
+    //    changes a library that exists, and this is its way back.
     crate::backup::backup_now(&places.config_dir, places.presets_dir.as_deref())?;
     // 2. This machine's own game content, indexed first: the export's notes
     //    on it are then laid on the ids that exist here (EXPORT§4.2).
@@ -552,47 +630,110 @@ pub fn import(
         library_bytes_at_export: manifest.library_bytes_at_export,
         ..Default::default()
     };
-    let attached = if library_part {
-        Some(attach(&conn, &mut zip, &scratch.0)?)
-    } else {
-        None
-    };
+    if library_part {
+        attach(&conn, &mut zip, &scratch.0)?;
+    }
     let result = (|| -> Result<(), String> {
-        if attached.is_some() {
+        if library_part {
             conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
             let wiki = manifest.wiki_content_version == crate::wiki::store::CONTENT_VERSION;
-            let merged =
-                tables::merge(&conn, parts.contains(&Part::Profiles), wiki, &now()).map_err(|e| e.to_string())?;
-            report.mods = merged.mods;
-            report.layers = merged.layers;
-            report.apps = merged.apps;
-            report.others = merged.others;
-            report.stock_applied = merged.stock_applied;
-            report.stock_missing = merged.stock_missing;
-            report.local_kept = merged.local_kept;
+            let merged = tables::merge(&conn, &library, parts.contains(&Part::Profiles), wiki, choices, &now())?;
             unpack::unpack_library(&mut zip, &library, &merged.skipped_folders, &mut undo)?;
+            report.thumbs_adopted = unpack::adopt_thumbs(&mut zip, &library, &merged.thumb_pairs, &mut undo)?;
+            fill_report(&mut report, merged, choices);
         }
-        report.presets_renamed = unpack::unpack_settings(&mut zip, places, &parts, &mut undo)?;
-        if attached.is_some() {
+        let settings = unpack::unpack_settings(&mut zip, places, &parts, choices.prefs, &mut undo)?;
+        report.presets_renamed = settings.presets_renamed;
+        report.grids_renamed = settings.grids_renamed;
+        report.classification_kept = settings.classification_kept;
+        if !settings.prefs.conflicts.is_empty() {
+            let items = settings.prefs.conflicts.iter().map(|id| named_mod(&conn, id)).collect();
+            add_decided(&mut report, Group::Prefs, choices.prefs, items);
+        }
+        // Filled means "had none here": a mod that just arrived is not one.
+        for id in &settings.prefs.filled {
+            if report.added.iter().any(|n| &n.id == id) {
+                continue;
+            }
+            let who = named_mod(&conn, id);
+            if !report.filled.contains(&who) {
+                report.filled.push(who);
+            }
+        }
+        if library_part {
             conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
         }
         Ok(())
     })();
-    if result.is_err() && attached.is_some() {
+    if result.is_err() && library_part {
         if let Err(e) = conn.execute_batch("ROLLBACK") {
             log::warn!("transfer: rollback failed: {e}");
         }
     }
-    if attached.is_some() {
-        if let Err(e) = conn.execute_batch("DETACH DATABASE src") {
-            log::warn!("transfer: export base not detached: {e}");
-        }
+    if library_part {
+        detach(&conn);
     }
     if let Err(e) = result {
         undo.undo();
         return Err(e);
     }
+    report.filled.sort_by_key(|n| n.name.to_lowercase());
     Ok(report)
+}
+
+/// What the base's merge did, laid in the report.
+fn fill_report(report: &mut ImportReport, merged: tables::Merged, choices: &Choices) {
+    report.mods = merged.added.len();
+    report.layers = merged.layers;
+    report.apps = merged.apps;
+    report.others = merged.others;
+    report.added = merged.added;
+    report.added_addons = merged.added_addons;
+    report.kept = merged.kept;
+    report.blocked = merged.blocked;
+    report.attached_skipped = merged.attached_skipped;
+    report.stock_missing = merged.stock_missing;
+    report.profiles_renamed = merged.profiles_renamed;
+    report.stock_applied = merged.outcome.stock_changed.len();
+    report.filled = merged.outcome.filled.into_iter().collect();
+    report.notes_joined = merged.outcome.notes_joined.into_iter().collect();
+    for (group, items) in merged.outcome.conflicts {
+        add_decided(report, group, choices.of(group), items.into_iter().collect());
+    }
+}
+
+fn add_decided(report: &mut ImportReport, group: Group, side: Side, items: Vec<Named>) {
+    match report.decided.iter_mut().find(|d| d.group == group) {
+        Some(d) => {
+            for item in items {
+                if !d.items.contains(&item) {
+                    d.items.push(item);
+                }
+            }
+        }
+        None => report.decided.push(Decided { group, side, items }),
+    }
+}
+
+/// A mod as the report names it, read in the live base after the merge.
+fn named_mod(conn: &Connection, id: &str) -> Named {
+    let name = conn
+        .query_row(
+            "SELECT COALESCE(display_name_user, display_name, id_interne) FROM main.mods WHERE id_interne = ?1",
+            [id],
+            |r| r.get::<_, String>(0),
+        )
+        .unwrap_or_else(|_| id.to_string());
+    Named {
+        id: id.to_string(),
+        name,
+    }
+}
+
+fn detach(conn: &Connection) {
+    if let Err(e) = conn.execute_batch("DETACH DATABASE src") {
+        log::warn!("transfer: export base not detached: {e}");
+    }
 }
 
 /// Extracts the export's base, brings it up to this build's schema — the
@@ -621,9 +762,8 @@ fn attach(conn: &Connection, zip: &mut Archive, scratch: &Path) -> Result<(), St
 /// the same refusal, without its count.
 fn refusal_error(r: &Refusal) -> &'static str {
     match r.key {
-        "transfer.refuseFormat" | "transfer.refuseNewer" => crate::errors::TRANSFER_INCOMPATIBLE,
         "transfer.refusePaths" => crate::errors::LIBRARY_NOT_CONFIGURED,
-        _ => crate::errors::TRANSFER_NOT_EMPTY,
+        _ => crate::errors::TRANSFER_INCOMPATIBLE,
     }
 }
 

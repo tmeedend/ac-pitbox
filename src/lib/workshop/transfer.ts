@@ -58,10 +58,51 @@ export interface Refusal {
   version: string | null;
 }
 
+/** The groups of entries a merge asks about (EXPORT§7.4). Must stay aligned
+ * with `transfer::Group`. */
+export type Group = "names" | "classification" | "tech" | "prefs";
+export const GROUPS: Group[] = ["names", "classification", "tech", "prefs"];
+
+/** Which side wins a disagreement: this machine's value, or the export's. */
+export type Side = "here" | "export";
+
+export type Choices = Record<Group, Side>;
+
+/** Nothing replaced unless asked (EXPORT§7.4). */
+export function defaultChoices(): Choices {
+  return { names: "here", classification: "here", tech: "here", prefs: "here" };
+}
+
+export interface Named {
+  id: string;
+  name: string;
+}
+
+/** What an import would do here, before anything is written. */
+export interface Plan {
+  /** This installation already holds a library: the import merges. */
+  merging: boolean;
+  added: number;
+  kept: number;
+  blocked: Named[];
+  attached_skipped: number;
+  filled: number;
+  notes_joined: number;
+  /** Disagreements by group; a group without any is absent. */
+  conflicts: Partial<Record<Group, number>>;
+}
+
 export interface Inspection {
   manifest: Manifest;
   refusal: Refusal | null;
   file_bytes: number;
+  plan: Plan | null;
+}
+
+export interface Decided {
+  group: Group;
+  side: Side;
+  items: Named[];
 }
 
 export interface ImportReport {
@@ -69,12 +110,24 @@ export interface ImportReport {
   layers: number;
   apps: number;
   others: number;
+  added: Named[];
+  added_addons: Named[];
+  /** Already here: files, versions and rows kept as they are. */
+  kept: Named[];
+  /** Their folder was already in the library: not brought in. */
+  blocked: Named[];
+  attached_skipped: number;
+  filled: Named[];
+  decided: Decided[];
+  notes_joined: Named[];
   stock_applied: number;
   stock_missing: string[];
-  /** Mods this installation already has, installed by hand: kept as they
-   * are here, with the notes written on them. */
-  local_kept: string[];
+  thumbs_adopted: number;
+  profiles_renamed: string[];
+  grids_renamed: string[];
   presets_renamed: number;
+  /** Classification files this machine kept, holding its own decisions. */
+  classification_kept: string[];
   active_at_export: number;
   library_bytes_at_export: number;
 }
@@ -93,8 +146,29 @@ export function inspectExport(path: string): Promise<Inspection> {
   return invoke<Inspection>("transfer_inspect", { path });
 }
 
-export function importLibrary(path: string, parts: Part[]): Promise<ImportReport> {
-  return invoke<ImportReport>("transfer_import", { path, parts });
+export function importLibrary(path: string, parts: Part[], choices: Choices): Promise<ImportReport> {
+  return invoke<ImportReport>("transfer_import", { path, parts, choices });
+}
+
+/** The i18n key of each group's name, shared by the choice and the report. */
+export const GROUP_LABEL: Record<Group, string> = {
+  names: "transfer.groupNames",
+  classification: "transfer.groupClassification",
+  tech: "transfer.groupTech",
+  prefs: "transfer.groupPrefs",
+};
+
+/** Whether the import screen says what the merge will do: a library here,
+ * or entries on game content to merge — notes on a Kunos car count too. */
+export function mergeToShow(plan: Plan): boolean {
+  return plan.merging || plan.notes_joined > 0 || Object.values(plan.conflicts).some((n) => (n ?? 0) > 0);
+}
+
+/** The parts an import starts with checked: all those the file holds — but
+ * Preferences when merging, which would replace this machine's settings
+ * (EXPORT§7.3, step 3). */
+export function initialImportParts(available: Part[], merging: boolean): Part[] {
+  return available.filter((p) => !(merging && p === "preferences"));
 }
 
 /** Profiles names mods: without the library they have nothing to name, and
