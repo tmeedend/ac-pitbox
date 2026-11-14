@@ -1858,3 +1858,51 @@ consommé par la peinture et n'est plus là pour le shader ; une décalcomanie
 posée sur une surface à motif reçoit donc le motif aussi. Rencontré sur aucun
 matériau à ce jour.
 
+---
+
+## Écart n°32 — une texture qui porte une opacité constante est cette opacité
+
+**Attendu** : un matériau en fondu (`blend_mode = 1`) hors verre dont la
+diffuse ne dit rien de son opacité se règle sur une approximation de vitre —
+opacité tirée de `ksDiffuse`, avec un plancher.
+
+**Réel** : certaines diffuses **peignent** leur opacité, uniforme sur tout le
+matériau. `EXT_Glass_Yellow` de `ks_ferrari_488_gt3` (le cache jaune des
+phares) a un alpha de 141 sur chaque texel, soit 55 %. Le jeu fond avec cet
+alpha tel quel. Nous lui appliquions en plus l'opacité de vitre (0,15, tirée
+de `ksDiffuse = 0,14`), que glTF multipliait par les 55 % de la texture :
+**8 %**, et des phares jaunes dans le jeu sortaient sombres chez nous.
+
+**Règle** : hors shader de verre, une diffuse dont l'alpha mesuré sur
+l'empreinte est **partiel partout** (ni vide, ni opaque, ni découpé) porte
+seule l'opacité du matériau ; le facteur de `baseColor` reste à 1 en alpha.
+Un alpha **non mesuré** n'autorise rien : l'approximation de vitre reste.
+
+---
+
+## Écart n°33 — `ksAmbient` et `ksDiffuse` dosent la couleur d'une surface
+
+**Attendu** : la couleur d'une surface est sa texture ; `ksAmbient` et
+`ksDiffuse` règlent l'éclairage, que notre rendu PBR recalcule à sa façon.
+
+**Réel** : AC éclaire un texel en `couleur × (ksAmbient × ambiante +
+ksDiffuse × soleil)`. Les deux propriétés dosent donc la couleur elle-même, et
+elles varient beaucoup : la peinture est à 0,45 / 0,5, mais 82 des 295
+matériaux opaques de sept voitures de base sont à 0,2 ou moins (plastiques,
+carbone, habitacle, boîtiers d'optique). Bug réel : l'optique de
+`ks_porsche_cayenne` est un texel bleu marine à 0,2 / 0,2, presque noir dans
+le jeu sous son reflet, **bleu vif** chez nous.
+
+**Règle** : la couleur est multipliée par la moyenne des deux propriétés
+**rapportée à celle de la peinture** (0,475), plafonnée à 1 — la peinture,
+vérifiée contre le jeu, ne bouge pas, et un facteur ne peut pas éclaircir.
+**Seulement sur les caches** : les matériaux en fondu rendus opaques par leur
+alpha, et ceux de l'écart n°32.
+
+**La piste essayée et écartée** : appliquer la règle à toute la voiture. Plus
+fidèle en principe, elle assombrit les habitacles au point de rendre les
+vitres noires : notre éclairage n'est pas celui du jeu (pas d'ambiante
+équivalente), et le dosage d'AC suppose le sien. Mesuré sur 17 voitures de
+base contre leur `preview.jpg` (preset Officiel) : écart de couleur 10,3 → 12,4
+en global, 12,0 restreint aux caches — les phares se corrigent, le reste
+bouge à peine. À reprendre avec un éclairage calé sur celui du jeu.

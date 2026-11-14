@@ -256,6 +256,7 @@ pub fn convert(
                     diffuse_alpha_blank: textures.footprint_alpha.get(&index).is_some_and(|f| f.is_blank()),
                     diffuse_alpha_opaque: textures.footprint_alpha.get(&index).is_some_and(|f| f.is_opaque()),
                     diffuse_alpha_cutout: textures.footprint_alpha.get(&index).is_some_and(|f| f.is_cutout()),
+                    diffuse_alpha_partial: textures.footprint_alpha.get(&index).is_some_and(|f| f.is_partial()),
                     diffuse_average: m
                         .texture_for("txDiffuse")
                         .and_then(|name| textures.get(name))
