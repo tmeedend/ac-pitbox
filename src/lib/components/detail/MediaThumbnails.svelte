@@ -159,17 +159,22 @@
 <style>
   .thumbs {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
   }
   figure {
     margin: 0;
     min-width: 0;
   }
   /* The preset's mat behind the image, as on a library card (GRILLE§2.2): a
-     cut-out thumbnail is meant to sit on it. */
+     cut-out thumbnail is meant to sit on it. Sized like a screenshot of the
+     gallery below (`MediaScreenshots`): without `overflow: hidden` a button
+     lets its 1024-pixel image set its height, and the thumbnails filled the
+     page. */
   .frame {
+    position: relative;
     aspect-ratio: 16 / 9;
+    overflow: hidden;
     display: block;
     width: 100%;
     padding: 0;
@@ -184,6 +189,8 @@
     background: var(--panel2);
   }
   .frame img {
+    position: absolute;
+    inset: 0;
     display: block;
     width: 100%;
     height: 100%;
