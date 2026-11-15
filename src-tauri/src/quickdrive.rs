@@ -299,7 +299,14 @@ const AUTO_NUMBER: i32 = -1;
 ///   preks de référence montre côte à côte (`"0"` et `"-1"` dans
 ///   `AiAggressions`).
 ///
-/// `ShuffleCandidates: false` pour que CM ne re-mélange pas notre ordre.
+/// **`ModeId: "custom"`, the fixed grid — never `"manual"`.** In CM's
+/// `RaceGridViewModel`, `"manual"` is a *candidates* mode: a pool CM draws the
+/// opponents from, and with `ShuffleCandidates: false` it draws each place at
+/// random **with replacement** (`list.RandomElement(random)`). Every session
+/// with opponents came out with cars missing and others doubled, in another
+/// order — seen on the in-game thumbnail sessions, seven of eleven places on
+/// some (GRILLE§7.1). `"custom"` takes the list as it is, in order, the
+/// player placed by `StartingPosition`; its serialised shape is the same.
 fn build_grid(s: &RaceSetup) -> Value {
     let opponents = &s.opponents;
     let car_ids: Vec<&str> = opponents.iter().map(|o| o.car_id.as_str()).collect();
@@ -340,7 +347,7 @@ fn build_grid(s: &RaceSetup) -> Value {
         .map(|o| o.nationality.as_deref().map(Value::from).unwrap_or(Value::Null))
         .collect();
     json!({
-        "ModeId": "manual",
+        "ModeId": "custom",
         "FilterValue": "",
         "CarIds": car_ids,
         "SkinIds": skin_ids,
@@ -725,7 +732,7 @@ mod tests {
         assert_eq!(mode_data["QualificationLength"], 20);
 
         let grid: Value = serde_json::from_str(mode_data["RaceGridSerialized"].as_str().unwrap()).unwrap();
-        assert_eq!(grid["ModeId"], "manual");
+        assert_eq!(grid["ModeId"], "custom", "the fixed grid, not a pool CM draws from");
         assert_eq!(grid["OpponentsNumber"], 2);
         assert_eq!(grid["CarIds"][0], "ks_ferrari_488_gt3");
         assert_eq!(grid["CarIds"][1], "ks_porsche_991_gt3_r");
@@ -803,7 +810,7 @@ mod tests {
             "le ModeData de Trackday ne porte aucune durée : {mode_data}"
         );
         let grid: Value = serde_json::from_str(mode_data["RaceGridSerialized"].as_str().unwrap()).unwrap();
-        assert_eq!(grid["ModeId"], "manual");
+        assert_eq!(grid["ModeId"], "custom", "the fixed grid, not a pool CM draws from");
         assert_eq!(grid["CarIds"][0], "ks_praga_r1");
     }
 

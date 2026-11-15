@@ -95,9 +95,11 @@ Weekend). Champs de premier niveau confirmés sur ces captures :
 - **Weekend** (`QuickDrive_Weekend.xaml`, couvre Course + Qualif/Practice optionnels) :
   `{PracticeLength, QualificationLength, Penalties, JumpStartPenalty, LapsNumber,
   RaceGridSerialized, Version}`. `RaceGridSerialized` est lui-même du JSON en chaîne :
-  `{ModeId:"manual", CarIds[], SkinIds[], AiLevels[], OpponentsNumber,
+  `{ModeId:"custom", CarIds[], SkinIds[], AiLevels[], OpponentsNumber,
   StartingPosition, …}` pour un plateau explicite par adversaire (voir
-  `RaceGridViewModel`/`RaceGridEntry` dans `AcManager.Controls`).
+  `RaceGridViewModel`/`RaceGridEntry` dans `AcManager.Controls`). **Pas
+  `"manual"`**, écrit ici d'abord : c'est un vivier de candidats, où CM tire
+  chaque place au hasard, avec remise (corrigé le 2026-11-15).
 
 Pit Box génère ce preset en implémentant uniquement le mode **Weekend** pour la
 course (pas de mode Race/Trackday/Drift séparé côté CM) : sans practice

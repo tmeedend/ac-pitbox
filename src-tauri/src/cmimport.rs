@@ -22,7 +22,10 @@
 //!
 //! ## Ce qui n'est pas importable, et pourquoi
 //!
-//! Seul `ModeId == "manual"` donne une grille. Les autres modes de CM
+//! Only `ModeId` `"custom"` (CM's fixed grid, what Pit Box writes since it
+//! learnt `"manual"` is a pool CM draws from) and `"manual"` (a list the user
+//! composed by hand, the closest thing to a line-up among the draw modes, and
+//! what Pit Box wrote before) give a grid. Les autres modes de CM
 //! (`same_car`, `similar_p_w_ratio`, `same_subclass_only`…) ne décrivent pas un
 //! plateau mais une **règle de tirage** : leurs `CarIds` sont des candidats, pas
 //! des lignes. En faire une grille inventerait un plateau que l'utilisateur n'a
@@ -139,7 +142,7 @@ fn at<'a>(grid: &'a Value, key: &str, i: usize) -> Option<&'a Value> {
 /// Convertit un objet `RaceGrid` en grille Pit Box. `None` quand ce n'est pas
 /// un plateau explicite (voir l'en-tête du module).
 pub(crate) fn convert(grid: &Value, name: &str, source: &str) -> Option<CmGrid> {
-    if grid.get("ModeId").and_then(Value::as_str) != Some("manual") {
+    if !matches!(grid.get("ModeId").and_then(Value::as_str), Some("custom" | "manual")) {
         return None;
     }
     let car_ids = grid.get("CarIds")?.as_array()?;
@@ -245,6 +248,15 @@ mod tests {
     /// noms des six tableaux, le fait que leurs valeurs sont des chaînes, et
     /// les deux écritures de `Auto`.
     const REFERENCE: &str = r#"{"ModeId":"manual","FilterValue":"","RandomSkinsFilter":"Lot","SequentialSkins":true,"CarIds":["spear_lamborghini_lp640_veilside","lotus_evora_gte_carbon","lotus_evora_s_s2","lotus_exos_125","ks_lotus_25"],"AiLevels":["74","100","74","-1","70"],"AiAggressions":["67","100","0","-1","-1"],"Ballasts":["0","0","100","0","0"],"Restrictors":["0","0","0","100","0"],"PlayerBallast":5.0,"PlayerRestrictor":10.0,"Names":["Bob","Billy","Joe","Martin",null],"Nationalities":["Argentina","Brunei Darussalam",null,"Bhutan",null],"ShuffleCandidates":false,"VarietyLimitation":0,"OpponentsNumber":2,"StartingPosition":3,"AiLevel":95.0,"AiLevelMin":85.0,"AiLevelArrangeRandom":0.0,"AiLevelArrangeReverse":false,"AiLevelArrangePowerRatio":false,"AiAggression":0.0,"AiAggressionMin":0.0,"AiAggressionArrangeRandom":0.0,"AiAggressionArrangeReverse":false}"#;
+
+    // Rule (SESSION§3.5): CM's fixed grid (`"custom"`), which Pit Box now
+    // writes itself, converts like a hand-composed list.
+    #[test]
+    fn a_fixed_grid_converts_too() {
+        let v: Value = serde_json::from_str(&REFERENCE.replace("\"manual\"", "\"custom\"")).unwrap();
+        let g = convert(&v, "fixed", "Race Grids/fixed.cmpreset").expect("a fixed grid is a grid");
+        assert_eq!(g.opponents.len(), 5, "one line per CarId");
+    }
 
     /// Règle protégée : les six tableaux par ligne se relisent dans le bon
     /// ordre, `-1` devient `Auto` sur un nombre et `null` sur un texte.

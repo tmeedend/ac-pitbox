@@ -152,6 +152,10 @@ manque à CSP**. `race/config` a été abandonné pour cette raison
 
 - La durée d'une session Practice n'est pas transmise : Quick Drive n'a pas ce
   champ.
+- **Le plateau part en grille fixe** (`ModeId: "custom"`) : CM lance exactement
+  les adversaires du plateau, dans l'ordre. Le mode `"manual"` de CM, employé
+  jusqu'au 2026-11-15, est un vivier où CM tire chaque place au hasard, avec
+  remise : des adversaires manquaient, d'autres venaient en double.
 - **L'état de piste** part en quatre nombres, jamais en nom. L'écran offre
   « Auto » puis les six états du jeu (ceux de `cfg/templates/tracks.ini`, avec
   ses noms et dans son ordre). « Auto » est le drapeau `WeatherDefined` de CM :
@@ -523,9 +527,10 @@ type.
 
 **Import des presets Content Manager, jamais synchronisation** : on lit une
 fois et on convertit. Deux dossiers sont parcourus récursivement : `Race
-Grids\` et `Quick Drive\` (dont la grille s'importe aussi). **Seul `ModeId:
-"manual"` devient une grille** : les autres modes de CM décrivent une règle de
-tirage, et ils sont nommés dans le rapport. **L'import aboutit toujours** : un
+Grids\` et `Quick Drive\` (dont la grille s'importe aussi). **Seuls `ModeId: "custom"`
+(la grille fixe de CM) et `"manual"` (une liste composée à la main) deviennent
+une grille** : les autres modes de CM décrivent une règle de tirage, et ils sont
+nommés dans le rapport. **L'import aboutit toujours** : un
 fichier corrompu est nommé, une voiture absente retirée en le disant, une
 voiture désactivée gardée (la garde d'activation la rallume). La proposition
 d'import et le bouton permanent vivent sur la page d'import de mods ; un refus

@@ -2010,7 +2010,7 @@ de reprendre. En cas d'écart, la spec fait foi.
         journée piste) : à essayer sur une vraie série d'une soixantaine de
         voitures protégées, pour vérifier la mémoire et la reprise après un
         plantage en milieu de lot ;
-      - **des voitures écartées par Content Manager** (relevé le 2026-11-15) :
+      - **des voitures écartées par Content Manager** (relevé le 2026-11-15) : **cause trouvée le jour même** : Pit Box envoyait sa grille en `ModeId: "manual"`, un vivier où CM tire chaque place au hasard avec remise (`RaceGridViewModel.cs`). Passée en `"custom"`, la grille fixe (SESSION§2). Relevé avant la cause :
         sur une journée piste de sept voitures, la Copen et la E46 nspec85
         manquaient, leurs places prises par une seconde Berlingo HDi et une
         seconde R34 ii_nur (journal de CM, `race.ini`) ; une session suivante
