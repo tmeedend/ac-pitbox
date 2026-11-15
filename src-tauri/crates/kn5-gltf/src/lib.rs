@@ -276,7 +276,7 @@ pub fn convert(
                 painted_diffuse: paint.painted_diffuse(index),
                 roughness_texture: roughness.roughness_texture(index),
                 csp: surfaces.get(&index).copied(),
-                detail: paint::tiled_detail(m, &textures),
+                detail: paint::tiled_detail(m, index, &textures),
             },
         )
     };

@@ -1855,8 +1855,18 @@ tombe sous le pixel.
 
 **Ce que ça ne fait pas** : le masque de peinture (l'alpha de la diffuse) a été
 consommé par la peinture et n'est plus là pour le shader ; une décalcomanie
-posée sur une surface à motif reçoit donc le motif aussi. Rencontré sur aucun
-matériau à ce jour.
+posée sur une surface à motif reçoit donc le motif aussi.
+
+**Rencontré ensuite, dans sa forme extrême** (2026-11-15) : une surface que le
+masque protège **partout**. La carrosserie de `vrc_erc_1999_fortix` (`MAIN_BODY`,
+`detailUVMultiplier` 55) a, sous la livrée `00_fortix_motorsport`, un alpha de
+251 à 255 sur toute son empreinte : le jeu la montre blanche, nous la montrions
+en tissage de carbone. Le motif n'est donc plus posé sur un matériau dont
+l'empreinte est entièrement opaque ; une autre livrée de la même voiture, qui
+laisse passer la peinture, le garde. Le cas partiel (une décalcomanie au milieu
+de la carrosserie) reste ouvert : il demanderait de garder le masque pour le
+shader. Mesuré sur les 395 voitures du dossier du jeu, livrée par défaut :
+67 matériaux sur 55 voitures perdent ainsi un motif que le jeu ne montrait pas.
 
 ---
 

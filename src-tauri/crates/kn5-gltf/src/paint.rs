@@ -176,7 +176,21 @@ fn same_scale_detail(material: &Kn5Material) -> Option<Detail> {
 /// colour ([`crate::material::DetailLayer`]): a `detailUVMultiplier` above 1,
 /// and a map that carries a pattern. A flat swatch says nothing its average
 /// has not already said in the diffuse.
-pub(crate) fn tiled_detail(material: &Kn5Material, textures: &TextureSet) -> Option<crate::material::DetailLayer> {
+///
+/// **Not where the diffuse alpha keeps it out.** That alpha is the paint mask
+/// (module header): at 255 the shader leaves the diffuse alone, pattern
+/// included. The viewer's shader no longer has the mask, so a material that
+/// samples only opaque texels gets no layer at all. Real bug:
+/// `vrc_erc_1999_fortix`, skin `00_fortix_motorsport`, whose white body
+/// (alpha 251 to 255) came out in carbon weave where the game shows it white.
+pub(crate) fn tiled_detail(
+    material: &Kn5Material,
+    index: usize,
+    textures: &TextureSet,
+) -> Option<crate::material::DetailLayer> {
+    if textures.footprint_alpha.get(&index).is_some_and(|f| f.is_opaque()) {
+        return None;
+    }
     let use_detail = material.property("useDetail").unwrap_or(0.0).clamp(0.0, 1.0);
     let scale = material.property("detailUVMultiplier")?;
     if use_detail <= 0.0 || !(scale > 1.0 && scale.is_finite()) {
@@ -467,5 +481,54 @@ mod tests {
         assert_eq!(name, variant_name("livery.dds", [0.5, 1.0, 1.5]), "nom déterministe");
         assert_ne!(name, variant_name("livery.dds", [1.5, 1.0, 0.5]), "couleur distincte");
         assert_ne!(name, variant_name("other.dds", [0.5, 1.0, 1.5]), "source distincte");
+    }
+
+    // Rule: a repeated detail map is laid over the colour only where the
+    // diffuse alpha lets paint through — a material sampling nothing but opaque
+    // texels gets no pattern (écart n°31). Real bug: the white body of
+    // `vrc_erc_1999_fortix` came out in carbon weave.
+    #[test]
+    fn a_repeated_pattern_stays_out_of_what_the_alpha_mask_protects() {
+        let weave = crate::texture::PreparedTexture {
+            name: "detail.dds".to_string(),
+            mime: "image/png",
+            bytes: Vec::new(),
+            width: 4,
+            height: 4,
+            role: crate::texture::TextureRole::Color,
+            origin: crate::texture::TextureOrigin::Embedded,
+            source_bytes: 0,
+            has_alpha: false,
+            alpha_varies: false,
+            average: [0.2, 0.2, 0.2],
+            flat: false,
+        };
+        let mut textures = TextureSet {
+            textures: vec![weave],
+            ..TextureSet::default()
+        };
+        let body = material(&[("useDetail", 1.0), ("detailUVMultiplier", 55.0)]);
+        let footprint = |min: u8, max: u8| crate::texture::FootprintAlpha {
+            min,
+            max,
+            midtones: 0,
+            samples: 100,
+        };
+
+        textures.footprint_alpha.insert(0, footprint(0, 0));
+        assert!(
+            tiled_detail(&body, 0, &textures).is_some(),
+            "bodywork the mask paints gets its pattern"
+        );
+        textures.footprint_alpha.insert(0, footprint(251, 255));
+        assert!(
+            tiled_detail(&body, 0, &textures).is_none(),
+            "a surface the mask protects everywhere gets none"
+        );
+        textures.footprint_alpha.clear();
+        assert!(
+            tiled_detail(&body, 0, &textures).is_some(),
+            "an alpha never measured protects nothing: the pattern stays (the Sesto)"
+        );
     }
 }

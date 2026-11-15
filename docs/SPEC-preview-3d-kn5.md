@@ -492,7 +492,9 @@ abandonnée. Un événement de progression alimente l'indicateur de chargement.
   noir. La peinture garde son studio sombre, qui la garde profonde.
 - **Une carte de détail répétée** (tissage d'un carbone, grain d'un cuir) se
   voit de près : la diffuse en porte la moyenne, le shader remet le motif
-  (`kn5-format.md`, écart n°31).
+  (`kn5-format.md`, écart n°31). **Pas sur une surface que l'alpha de la
+  diffuse protège partout** : chez AC, cet alpha tient la carte de détail à
+  l'écart, motif compris.
 - **Le cadrage est calculé** sur les dimensions du modèle, pas codé en dur ;
   focale de 20° par défaut, trois-quarts avant **gauche** comme les photos du
   jeu.
