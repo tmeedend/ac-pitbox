@@ -2017,8 +2017,9 @@ de reprendre. En cas d'écart, la spec fait foi.
         les prend. Ni une activation tardive ni un `ui_car.json` manquant.
         Contourné par une relance automatique, et chaque cas est noté au
         journal (`gameshot: Content Manager left out …`, avec la grille
-        demandée et celle lancée) : **à relire après la série de 58** pour
-        chercher la cause (place dans la grille, livrée, type de voiture) ;
+        demandée et celle lancée). **Confirmé à l'écran** : après le passage en
+        grille fixe, les quatre voitures restées en échec ont toutes été
+        rendues du premier coup ;
       - les reflets de peinture : un rouge Officiel sort un peu plus sombre
         et moins brillant que chez Pit Box (le showroom du jeu n'est pas son
         studio). Vitrine et Officiel sont faits (2026-11-11) : sol, reflet,
