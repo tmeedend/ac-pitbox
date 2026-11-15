@@ -190,8 +190,8 @@ liste est un paramètre du convertisseur, pas un littéral au milieu du parseur.
 Le modèle est celui que nomme `[LOD_0] FILE=` de `data/lods.ini` quand le
 dossier `data/` est en clair ; sinon le `.kn5` de la racine de la voiture, hors
 `collider.kn5` et hors `_lodb/_lodc/_lodd/_lode`, et s'il en reste plusieurs le
-plus volumineux. Le choix du LOD par l'utilisateur n'est pas implémenté
-(`CHANTIERS.md`).
+plus volumineux. L'utilisateur ne choisit pas le LOD : c'est toujours le
+plus détaillé.
 
 ### 4.3 Skins
 

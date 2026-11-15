@@ -1179,8 +1179,10 @@ gêne constatée :
     maillées et remplissent le cadre. **Le scintillement est dans la netteté du
     reflet, pas dans la géométrie.** Ne pas le réintroduire sans mesurer.
 
-Restent aussi, hérités du plan initial : le choix du LOD en config, et l'aperçu
-dans `ModDetail.svelte` (panneau latéral), qui n'a jamais été branché.
+Deux points hérités du plan initial sont tombés : le choix du LOD en config,
+abandonné (2026-11-15, une conversion prend 0,5 s, un LOD plus léger
+n'apporterait qu'un aperçu moins beau), et l'aperçu dans `ModDetail.svelte`,
+le panneau latéral retiré depuis.
 
 ### Taille du `.glb` — attributs quantifiés
 

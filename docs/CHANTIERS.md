@@ -2059,7 +2059,11 @@ de reprendre. En cas d'écart, la spec fait foi.
       fois de suite (texture, opacité, exposant spéculaire). Donc : devant un
       défaut visuel, **ne pas s'arrêter au premier champ coupable**, et
       regarder aussi ce qui est dessiné par-dessus.
-      Reste surtout le choix du LOD — PREVIEW§15.
+      Le choix du LOD par l'utilisateur est **abandonné** (2026-11-15) : il
+      visait la vitesse, et une conversion prend 0,5 s même en dev ; un LOD
+      plus léger n'apporterait qu'un aperçu moins beau. À rouvrir seulement si
+      un modèle trop lourd se montre lent à ouvrir — et alors par un repli
+      automatique, pas par un réglage.
       Le réglage de qualité se réduit au suréchantillonnage : une passe SMAA
       a été essayée, déplacée, puis retirée faute de gain visible pour un
       gigaoctet de mémoire. Il subsiste du crénelage sur les lignes claires
