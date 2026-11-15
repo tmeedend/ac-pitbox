@@ -280,10 +280,11 @@ const DEFAULT_GLASS_IOR: f32 = 1.5;
 /// déclarent elles-mêmes `fresnelC = 0.1` et recevaient 0,274, soit près de
 /// trois fois trop — un miroir à la place d'une vitre.
 ///
-/// La couche fine n'est pas modélisée : glTF ne sait pas augmenter la
-/// réflectance d'un diélectrique (`KHR_materials_specular` ne fait que la
-/// réduire), et la rendre par un vernis rajouterait un lobe spéculaire là où on
-/// vient d'en retirer un de trop.
+/// La couche fine n'est pas modélisée. The way to raise a dielectric's
+/// reflectance exists (`KHR_materials_specular`, whose colour factor may
+/// exceed 1 — used for additive materials, PREVIEW§6.2), but on glass it would
+/// bring back exactly the excess reflection this function removes, and a
+/// clear coat would add a second specular lobe on top.
 fn glass_ior_of(section: &Section) -> f32 {
     section.number("IOR").filter(|v| *v > 1.0).unwrap_or(DEFAULT_GLASS_IOR)
 }

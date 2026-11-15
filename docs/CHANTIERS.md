@@ -2100,6 +2100,22 @@ de reprendre. En cas d'écart, la spec fait foi.
         (`Material_CarPaint_Matte`), et le jeu la montre ainsi.
       Reste, de ce relevé, la calandre violette de `peugeot_504`, pas encore
       examinée.
+      **Phares sombres, relevé du 2026-11-15.** La bande lumineuse n'y a rien
+      changé. Deux corrections, deux causes :
+      - l'intérieur d'un phare déclaré par CSP (`INSIDE`) émet sa couleur
+        (PREVIEW§6.4) : la Celica est réglée, vu à l'écran ;
+      - un matériau `isAdditive = 1` garde sa texture et reçoit un reflet
+        ajouté au lieu d'être lu comme un métal (PREVIEW§6.2) : 402 matériaux
+        sur 173 voitures. Gain faible sur les phares de la M3 E30 DTM et de la
+        458. **Reste à vérifier que le chrome n'y a rien perdu** : la Fairlady
+        Z S30 (`EXT_ALU`), la Skyline R34 V-Spec (`EXT_HEADLIGHT_CHROME`),
+        l'ERC Fortix 1999 (`EXT_CHROME`, métaux peints) — chrome devenu
+        plastique gris = régression.
+      Ce qui manque surtout est la **lumière sur l'avant** de la voiture :
+      les phares Kunos sont des photos claires que le jeu éclaire de face, et
+      que notre studio, éclairé par le haut, laisse dans l'ombre. Même cause
+      pour la 595 et la GTA, dont la vitre de phare est une photo opaque
+      assombrie par l'écart n°33.
       (R et B de `txMaps` : question close, par la négative ; la métallicité
       vient de `fresnelC` — écarts n°7 et n°10 de `kn5-format.md`.)
       Trois règles à ne pas perdre de vue :

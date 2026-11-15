@@ -40,9 +40,13 @@ function isGlass(material: Standard): boolean {
 }
 
 /** Chrome and bare metal: what the converter makes metallic (`fresnelC`,
- * kn5-format écart n°10) — headlight reflectors, trims, polished rims. */
+ * kn5-format écart n°10) — headlight reflectors, trims, polished rims. And
+ * what it gives an added reflection instead (`isAdditive`, PREVIEW§6.2): the
+ * same trims and reflectors, which the game draws with their colour kept and
+ * would otherwise have left this family when they stopped being metal. */
 function isChrome(material: Standard): boolean {
-  return material.metalness >= 0.5 && !isGlass(material);
+  if (isGlass(material)) return false;
+  return material.metalness >= 0.5 || (material.specularColor?.r ?? 1) > 1;
 }
 
 /** Window reflections, in percent of what the paint reflects. */

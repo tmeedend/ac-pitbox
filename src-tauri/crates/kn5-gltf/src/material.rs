@@ -59,6 +59,10 @@ pub struct GltfMaterial {
     pub transmission: f32,
     /// `KHR_materials_ior`, quand il y a lieu.
     pub ior: Option<f32>,
+    /// Reflectance at normal incidence above a plain dielectric's, for a
+    /// surface whose reflection adds to its colour — see [`surface_response`].
+    /// Written as `KHR_materials_specular`.
+    pub reflectance: Option<f32>,
     /// Vernis par-dessus la surface — `KHR_materials_clearcoat`. Zéro sur tout
     /// ce qui n'en porte pas.
     pub clearcoat: f32,
@@ -298,6 +302,42 @@ const METALLIC_F0_ABSURD: f32 = 2.0;
 /// exactement ce qu'est un vernis.
 const METALLIC_MIN_REFLECTION: f32 = 0.15;
 
+/// Reflectance of a plain dielectric (IOR 1.5): what glTF gives a non-metal
+/// without being told otherwise.
+pub(crate) const DIELECTRIC_F0: f32 = 0.04;
+
+/// How a material answers light: its metallic factor, and the reflectance at
+/// normal incidence to give it on top of its colour, when it declares one
+/// (PREVIEW§6.2).
+///
+/// **AC has two ways of mixing a reflection in, and `isAdditive` picks one.**
+/// At 0 the reflection replaces the colour as the angle grows, which is what a
+/// metal does, and [`metallic_of`] reads it. At 1 it is **added** on top of a
+/// colour that stays whole: a dielectric, whose reflection is uncoloured and
+/// reaches `fresnelC` at normal incidence, capped by `fresnelMaxLevel` as the
+/// game caps it. Read as a metal, such a surface lost its colour for a mirror
+/// of our dark studio: the headlights of `bmw_m3_e30_dtm`, `ks_alfa_romeo_gta`
+/// `ferrari_458_s3` and `ks_abarth_595ss_s1`, whose texture is a bright photo
+/// of the lamp, came out dark (reported on screen). Measured on 395 cars:
+/// 402 materials over 173 cars are additive and were read as metal — metal
+/// trims, chrome, lights, plates, rims.
+fn surface_response(material: &Kn5Material, shader: &str) -> (f32, Option<f32>) {
+    if material.property("isAdditive") != Some(1.0) {
+        return (metallic_of(material, shader), None);
+    }
+    if GLASS_MARKERS.iter().any(|marker| shader.contains(marker)) || shader.contains("ksTyres") {
+        return (0.0, None);
+    }
+    let (Some(f0), Some(ceiling)) = (material.property("fresnelC"), material.property("fresnelMaxLevel")) else {
+        return (0.0, None);
+    };
+    if f0 > METALLIC_F0_ABSURD || ceiling > METALLIC_F0_ABSURD {
+        return (0.0, None);
+    }
+    let reflectance = f0.min(ceiling).clamp(0.0, 1.0);
+    (0.0, (reflectance > DIELECTRIC_F0).then_some(reflectance))
+}
+
 /// Métallicité d'un matériau, tirée de `fresnelC`.
 ///
 /// `fresnelC` **est** la réflectance à incidence normale — F0 — c'est-à-dire
@@ -517,6 +557,7 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
             base_color: [1.0, 1.0, 1.0, 1.0],
             transmission: 1.0,
             ior: Some(ior),
+            reflectance: None,
             clearcoat: 0.0,
             clearcoat_roughness: 0.0,
             // Glass carries no weave.
@@ -567,7 +608,10 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
     // place : mieux vaut une estimation qu'une valeur juste à moitié.
     let csp = textures.csp.unwrap_or_default();
     let roughness = csp.roughness.unwrap_or(roughness);
-    let metallic = csp.metallic.unwrap_or_else(|| metallic_of(material, shader));
+    let (metallic, reflectance) = match csp.metallic {
+        Some(metallic) => (metallic, None),
+        None => surface_response(material, shader),
+    };
     let csp_clearcoat = csp.clearcoat.unwrap_or((0.0, 0.0));
 
     let base_color_texture = textures.painted_diffuse.clone().or_else(|| base_color_map(material));
@@ -680,6 +724,7 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
         base_color,
         transmission: 0.0,
         ior: None,
+        reflectance,
         clearcoat: csp_clearcoat.0,
         clearcoat_roughness: csp_clearcoat.1,
         // The shader lays the pattern over the colour; through a cut-out or a
@@ -1678,6 +1723,102 @@ mod tests {
             metallic_of(&shine, "ksSkinnedMesh"),
             0.0,
             "un plafond de reflet impossible annule le bloc entier"
+        );
+    }
+
+    // Rule: an additive material keeps its whole colour and gets its
+    // reflection on top, uncoloured, at the strength it declares — never a
+    // metal, which would trade the colour for a mirror of the room
+    // (PREVIEW§6.2). Real bug: the headlights of `bmw_m3_e30_dtm`, a bright
+    // photo of the lamp with `fresnelC` 0.2 and `isAdditive` 1, came out dark.
+    #[test]
+    fn an_additive_material_keeps_its_colour_and_adds_its_reflection() {
+        let headlight = material(
+            "ksPerPixelMultiMap",
+            0,
+            false,
+            &[("fresnelC", 0.2), ("fresnelMaxLevel", 0.3), ("isAdditive", 1.0)],
+        );
+        let (metallic, reflectance) = surface_response(&headlight, "ksPerPixelMultiMap");
+        assert_eq!(metallic, 0.0, "the colour stays, whatever fresnelC says");
+        assert_eq!(
+            reflectance,
+            Some(0.2),
+            "reflection at fresnelC, its value at normal incidence"
+        );
+
+        let capped = material(
+            "ksPerPixelMultiMap",
+            0,
+            false,
+            &[("fresnelC", 0.5), ("fresnelMaxLevel", 0.3), ("isAdditive", 1.0)],
+        );
+        assert_eq!(
+            surface_response(&capped, "ksPerPixelMultiMap").1,
+            Some(0.3),
+            "never above the ceiling the material puts on it"
+        );
+
+        let rear = material(
+            "ksPerPixelMultiMap",
+            0,
+            false,
+            &[("fresnelC", 0.05), ("fresnelMaxLevel", 0.2), ("isAdditive", 1.0)],
+        );
+        assert_eq!(
+            surface_response(&rear, "ksPerPixelMultiMap").1,
+            Some(0.05),
+            "a weak one is still above a plain dielectric's 0.04"
+        );
+        let dull = material(
+            "ksPerPixelMultiMap",
+            0,
+            false,
+            &[("fresnelC", 0.01), ("fresnelMaxLevel", 0.2), ("isAdditive", 1.0)],
+        );
+        assert_eq!(
+            surface_response(&dull, "ksPerPixelMultiMap"),
+            (0.0, None),
+            "below a plain dielectric, nothing to add"
+        );
+        let absurd = material(
+            "ksPerPixelMultiMap",
+            0,
+            false,
+            &[("fresnelC", 100.0), ("fresnelMaxLevel", 0.5), ("isAdditive", 1.0)],
+        );
+        assert_eq!(
+            surface_response(&absurd, "ksPerPixelMultiMap"),
+            (0.0, None),
+            "an absurd value says nothing, as for metallic"
+        );
+    }
+
+    // Rule: without `isAdditive`, the response is the metallic one — chrome
+    // keeps the reading it had (kn5-format écart n°10).
+    #[test]
+    fn a_blended_material_keeps_the_metallic_reading() {
+        let chrome = material(
+            "ksPerPixelMultiMap",
+            0,
+            false,
+            &[("fresnelC", 0.4), ("fresnelMaxLevel", 0.7), ("isAdditive", 0.0)],
+        );
+        assert_eq!(
+            surface_response(&chrome, "ksPerPixelMultiMap"),
+            (1.0, None),
+            "a full metal, no added reflection"
+        );
+        let tyre = material(
+            "ksTyres",
+            0,
+            false,
+            &[("fresnelC", 0.4), ("fresnelMaxLevel", 0.7), ("isAdditive", 1.0)],
+        );
+        assert_eq!(
+            surface_response(&tyre, "ksTyres"),
+            (0.0, None),
+            "a tyre is never a mirror, additive or not"
         );
     }
 

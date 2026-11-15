@@ -359,6 +359,7 @@ pub fn build(
                 (m.transmission > 0.0).then_some("KHR_materials_transmission"),
                 m.ior.map(|_| "KHR_materials_ior"),
                 (m.clearcoat > 0.0).then_some("KHR_materials_clearcoat"),
+                m.reflectance.map(|_| "KHR_materials_specular"),
                 (!m.uv_scale.is_identity()).then_some("KHR_texture_transform"),
             ]
         })
@@ -442,6 +443,12 @@ fn material_json(material: &GltfMaterial, texture_index: &Map<String, Value>) ->
     }
     if let Some(ior) = material.ior {
         material_extensions["KHR_materials_ior"] = json!({ "ior": ior });
+    }
+    if let Some(reflectance) = material.reflectance {
+        // The colour factor scales the F0 a plain dielectric gets, and may
+        // exceed 1: a reader takes min(F0 × factor, 1).
+        let scale = reflectance / crate::material::DIELECTRIC_F0;
+        material_extensions["KHR_materials_specular"] = json!({ "specularColorFactor": [scale, scale, scale] });
     }
     if material.clearcoat > 0.0 {
         material_extensions["KHR_materials_clearcoat"] = json!({
@@ -1043,6 +1050,7 @@ mod tests {
             base_color: [1.0, 1.0, 1.0, 1.0],
             transmission: 0.0,
             ior: None,
+            reflectance: None,
             clearcoat: 0.0,
             clearcoat_roughness: 0.0,
             detail: None,
@@ -1323,6 +1331,29 @@ mod tests {
         let position = &document["accessors"][0];
         assert_eq!(position["min"], json!([0.0, 0.0, 0.0]), "min over the three vertices");
         assert_eq!(position["max"], json!([1.0, 2.0, 0.0]), "max over the three vertices");
+    }
+
+    // Rule: an added reflection is written as the factor that brings a plain
+    // dielectric's F0 to the declared reflectance (PREVIEW§6.2), and nothing is
+    // written for a material without one.
+    #[test]
+    fn an_added_reflection_is_written_as_a_specular_colour_factor() {
+        let additive = GltfMaterial {
+            reflectance: Some(0.2),
+            ..sample_material()
+        };
+        let written = material_json(&additive, &Map::new());
+        let factor = written["extensions"]["KHR_materials_specular"]["specularColorFactor"]
+            .as_array()
+            .expect("factor written");
+        assert!(
+            factor.iter().all(|v| (v.as_f64().unwrap() - 5.0).abs() < 1e-5),
+            "0.2 is five times 0.04: {factor:?}"
+        );
+        assert!(
+            material_json(&sample_material(), &Map::new())["extensions"].is_null(),
+            "no reflection declared, no extension"
+        );
     }
 
     // Rule: only materials a surviving mesh actually uses are emitted. The

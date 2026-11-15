@@ -412,6 +412,12 @@ approximation assumée, et elle ne doit jamais échouer.**
   restent inutilisés.
 - **La métallicité vient de `fresnelC`** (la réflectance à incidence normale),
   vetée par `fresnelMaxLevel`.
+- **Sauf sur un matériau `isAdditive = 1`**, que le jeu rend en ajoutant le
+  reflet à une couleur qui reste entière : il n'est jamais métallique, garde sa
+  texture, et reçoit un reflet non teinté de `fresnelC`, plafonné par
+  `fresnelMaxLevel` (`KHR_materials_specular`). Lu comme un métal, il perdait
+  sa couleur — les phares des voitures Kunos, dont la texture est une photo de
+  l'optique, sortaient sombres.
 - **La peinture** vient de la carte de détail du skin, masquée par l'alpha de
   la diffuse, et elle est **cuite dans une variante de la texture** plutôt que
   posée en facteur : le masque est par pixel, et glTF borne le facteur à 1.
