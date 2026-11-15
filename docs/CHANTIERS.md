@@ -2111,11 +2111,16 @@ de reprendre. En cas d'écart, la spec fait foi.
         Z S30 (`EXT_ALU`), la Skyline R34 V-Spec (`EXT_HEADLIGHT_CHROME`),
         l'ERC Fortix 1999 (`EXT_CHROME`, métaux peints) — chrome devenu
         plastique gris = régression.
-      Ce qui manque surtout est la **lumière sur l'avant** de la voiture :
+      Ce qui manquait surtout était la **lumière sur l'avant** de la voiture :
       les phares Kunos sont des photos claires que le jeu éclaire de face, et
-      que notre studio, éclairé par le haut, laisse dans l'ombre. Même cause
+      que notre studio, éclairé par le haut, laissait dans l'ombre (même cause
       pour la 595 et la GTA, dont la vitre de phare est une photo opaque
-      assombrie par l'écart n°33.
+      assombrie par l'écart n°33). Un panneau doux côté caméra
+      (`FRONT_FILL` de `showroomEnvironment.ts`, renderer 8) les éclaire :
+      jugé « beaucoup mieux » à l'écran, intensité choisie à l'œil. Le preset
+      Officiel avait été mesuré sans lui : à remesurer si l'écart au jeu bouge.
+      La bande lumineuse, qui n'avait rien changé aux phares, reste à juger
+      sur les chromes ; la retirer si elle n'y apporte rien.
       (R et B de `txMaps` : question close, par la négative ; la métallicité
       vient de `fresnelC` — écarts n°7 et n°10 de `kn5-format.md`.)
       Trois règles à ne pas perdre de vue :

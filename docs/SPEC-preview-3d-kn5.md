@@ -482,7 +482,10 @@ abandonnée. Un événement de progression alimente l'indicateur de chargement.
 - **Un studio sombre à rampes zénithales**, procédural et sans asset
   (`showroomEnvironment.ts`) ; c'est `scene.environmentIntensity` qui le dose.
   **Une bande lumineuse à hauteur de voiture en fait le tour** : un chrome ou
-  un réflecteur de phare n'a sinon rien de clair à refléter. Le même studio
+  un réflecteur de phare n'a sinon rien de clair à refléter.
+  **Un panneau doux, derrière la caméra, éclaire ce qui lui fait face** : les
+  phares des voitures Kunos sont des photos de l'optique, que le jeu éclaire
+  de face et qu'un studio éclairé par le haut laissait dans l'ombre. Le même studio
   éclaire les vignettes (GRILLE§5.6).
 - **Les chromes reflètent un studio plus clair que la peinture** (le métal nu,
   les réflecteurs de phares) : sans quoi un miroir dans un studio sombre sort

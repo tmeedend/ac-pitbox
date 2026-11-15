@@ -242,8 +242,10 @@ export const TEMPLATE_KEYS = Object.keys(GRID_THUMB_RANGES) as TemplateKey[];
  *  - **7** — the studio gains a light band at the car's height
  *    (`showroomEnvironment`): chrome and headlight reflectors stop coming
  *    out black. Every preset moves a little, paint included.
+ *  - **8** — a fill panel behind the camera (`showroomEnvironment`): the
+ *    fronts the room left in the shade, Kunos headlights first, are lit.
  */
-export const RENDERER_VERSION = 7;
+export const RENDERER_VERSION = 8;
 
 /** Le fond de carte d'un preset : les deux bouts du dégradé radial du mat
  * (GRILLE§2.2). Clair au centre pour décoller la voiture, sombre aux bords pour

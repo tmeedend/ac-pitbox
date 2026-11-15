@@ -30,6 +30,18 @@ const WALLS = 0.01;
  * `j8_toyota_celica_tuned` came out as dark holes (reported on screen). On the
  * paint it draws the thin horizon line of a studio photo. */
 const HORIZON = 1.5;
+/** A soft panel behind the camera, as a photographer's fill: it lights what
+ * faces the viewer. **The headlights need it**: on Kunos cars they are bright
+ * photos of the lamp, which the game lights head-on and a room lit from above
+ * left in the shade — the front of `bmw_m3_e30_dtm`, `ferrari_458_s3`,
+ * `ks_alfa_romeo_gta` and `ks_abarth_595ss_s1` came out dark next to the
+ * game's images (reported on screen, 2026-11-15). Low: the paint was
+ * calibrated without it. Chosen by eye, not measured. */
+const FRONT_FILL = 1;
+/** Where that panel stands: towards the front left of the car, where the
+ * game's own preview camera stands (framing.ts `GAME_CAMERA_POSITION`) and the
+ * default views look from. */
+const FRONT_FILL_POSITION: [number, number, number] = [-5, 2.5, 7.5];
 
 /**
  * Builds the scene `PMREMGenerator` turns into an environment map.
@@ -73,6 +85,12 @@ export function showroomEnvironment(THREE: typeof ThreeModule): ThreeModule.Scen
   panel(HORIZON, [6.7, 1, 0], [0.1, 0.5, 13.4]);
   panel(HORIZON, [0, 1, -9.8], [13.4, 0.5, 0.1]);
   panel(HORIZON, [0, 1, 9.8], [13.4, 0.5, 0.1]);
+  // The fill, turned to face the car.
+  const fill = new THREE.Mesh(geometry, areaLight(FRONT_FILL));
+  fill.position.set(...FRONT_FILL_POSITION);
+  fill.scale.set(6, 3, 0.1);
+  fill.lookAt(0, 0.6, 0);
+  scene.add(fill);
 
   return scene;
 }
