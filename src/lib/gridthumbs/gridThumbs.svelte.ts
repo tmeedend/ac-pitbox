@@ -247,6 +247,9 @@ interface Job {
    * GT-R R34 » et non un identifiant de dossier. */
   name: string;
   key: string;
+  /** Asked by hand ("Regenerate"): an older engine's image is redone without
+   * waiting for the answer to GRILLE§6.5. */
+  force?: boolean;
 }
 
 const queue: Job[] = [];
@@ -561,8 +564,16 @@ export async function regenerateGridThumb(
 ): Promise<void> {
   const known = await gridThumbnail(carId, skinId, template);
   await forgetGridThumbnail(known.stem);
-  delete cache[keyOf(template, carId, skinId)];
-  enqueue(template, carId, skinId, name ?? carId, true);
+  const key = keyOf(template, carId, skinId);
+  delete cache[key];
+  dequeue(key);
+  // Forced: the disk may still answer with an older engine's image (GRILLE§6.5),
+  // which a plain job would show again instead of redoing — "Regenerate" did
+  // nothing on such a car (reported on `vrc_erc_1999_fortix`).
+  beginBatch();
+  cache[key] = { pending: true };
+  queue.unshift({ template, carId, skinId, name: name ?? carId, key, force: true });
+  progress.total += 1;
   void drain();
 }
 
@@ -624,7 +635,7 @@ async function produce(job: Job): Promise<Entry> {
   // An older engine's image is redone only on the user's word, and a
   // protected car's never by Pit Box: it would fail and lose the image the
   // game made (GRILLE§6.5).
-  if (known.path && (!known.stale || known.fromGame || !staleRedoAccepted())) {
+  if (known.path && (!known.stale || known.fromGame || !(job.force || staleRedoAccepted()))) {
     if (known.stale && !known.fromGame) noteStale(job);
     progress.done += 1;
     return { url: convertFileSrc(known.path) };

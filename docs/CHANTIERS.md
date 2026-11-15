@@ -2107,10 +2107,10 @@ de reprendre. En cas d'écart, la spec fait foi.
       - un matériau `isAdditive = 1` garde sa texture et reçoit un reflet
         ajouté au lieu d'être lu comme un métal (PREVIEW§6.2) : 402 matériaux
         sur 173 voitures. Gain faible sur les phares de la M3 E30 DTM et de la
-        458. **Reste à vérifier que le chrome n'y a rien perdu** : la Fairlady
-        Z S30 (`EXT_ALU`), la Skyline R34 V-Spec (`EXT_HEADLIGHT_CHROME`),
-        l'ERC Fortix 1999 (`EXT_CHROME`, métaux peints) — chrome devenu
-        plastique gris = régression.
+        458. Chrome vérifié sans régression sur la MX-5 ND (`EXT_Chrome`) ;
+        la Fairlady Z S30 et la Skyline R34, d'abord proposées, sont protégées
+        et ne se comparent pas. À regarder encore au passage : l'Audi R8 Plus,
+        la 718 Cayman S, la Praga R1 (chrome devenu plastique gris = régression).
       Ce qui manquait surtout était la **lumière sur l'avant** de la voiture :
       les phares Kunos sont des photos claires que le jeu éclaire de face, et
       que notre studio, éclairé par le haut, laissait dans l'ombre (même cause

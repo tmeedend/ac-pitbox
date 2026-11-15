@@ -8,6 +8,7 @@
   import { untrack } from "svelte";
   import { convertFileSrc } from "@tauri-apps/api/core";
   import { t } from "$lib/i18n/index.svelte";
+  import Lightbox, { type LightboxItem } from "$lib/components/ui/Lightbox.svelte";
   import { gridThumbnail, type GridThumb } from "$lib/gridthumbs/gridThumbs";
   import { gridThumb, regenerateGridThumb, requestGridThumb } from "$lib/gridthumbs/gridThumbs.svelte";
   import {
@@ -71,7 +72,36 @@
   function regenerate() {
     for (const p of presets) void regenerateGridThumb(p.template, carId, skin, name);
   }
+
+  /** Every image of the block, the mod's first, as they show: a slot without
+   * an image yet is left out of the viewer. */
+  const shown = $derived<{ src: string | null; caption: string }[]>([
+    { src: photo, caption: photoLabel },
+    ...presets.map((p, i) => ({
+      src: images[i] ?? (known[i]?.path ? convertFileSrc(known[i].path) : null),
+      caption: presetName(p.preset),
+    })),
+  ]);
+  const lightboxItems = $derived<LightboxItem[]>(
+    shown.flatMap((s) => (s.src ? [{ src: s.src, caption: s.caption }] : [])),
+  );
+  let lightboxIndex = $state<number | null>(null);
+
+  /** Opens the viewer on the image of slot `slot` of [`shown`]. */
+  function open(slot: number) {
+    lightboxIndex = shown.slice(0, slot).filter((s) => s.src).length;
+  }
 </script>
+
+{#snippet frame(slot: number, src: string | null)}
+  {#if src}
+    <button class="frame open" type="button" title={t("lightbox.open")} onclick={() => open(slot)}>
+      <img {src} alt="" />
+    </button>
+  {:else}
+    <div class="frame"></div>
+  {/if}
+{/snippet}
 
 {#if gridThumbsOn() && presets.length > 0}
   <section class="blk">
@@ -82,16 +112,15 @@
     <div class="blk-b">
       <div class="thumbs">
         <figure class="original">
-          <div class="frame">{#if photo}<img src={photo} alt="" />{/if}</div>
+          {@render frame(0, photo)}
           <figcaption>
             <span class="preset">{photoLabel}</span>
             {#if skinName}<span class="slots">{skinName}</span>{/if}
           </figcaption>
         </figure>
         {#each presets as p, i (p.preset.id)}
-          {@const src = images[i] ?? (known[i]?.path ? convertFileSrc(known[i].path) : null)}
           <figure style:--mat-hi={p.preset.mat.hi} style:--mat-lo={p.preset.mat.lo}>
-            <div class="frame">{#if src}<img {src} alt="" />{/if}</div>
+            {@render frame(i + 1, shown[i + 1]?.src ?? null)}
             <figcaption>
               <span class="preset">{presetName(p.preset)}</span>
               {#if p.slots.length}<span class="slots">{p.slots.join(" · ")}</span>{/if}
@@ -123,6 +152,10 @@
   </section>
 {/if}
 
+{#if lightboxIndex !== null}
+  <Lightbox items={lightboxItems} startIndex={lightboxIndex} onclose={() => (lightboxIndex = null)} />
+{/if}
+
 <style>
   .thumbs {
     display: grid;
@@ -137,8 +170,14 @@
      cut-out thumbnail is meant to sit on it. */
   .frame {
     aspect-ratio: 16 / 9;
+    display: block;
+    width: 100%;
+    padding: 0;
     background: radial-gradient(ellipse at 50% 44%, var(--mat-hi) 0%, var(--mat-lo) 76%);
     border: 1px solid var(--line);
+  }
+  .open:hover {
+    border-color: var(--rosso-border);
   }
   /* The mod's own image carries its own background. */
   .original .frame {
