@@ -88,6 +88,11 @@ pub struct GeometryOptions {
     /// tournent pour un angle de volant donné (voir [`crate::steer`]). Aucun
     /// angle ici — il n'est plus cuit dans le modèle, seulement décrit.
     pub steering: crate::steer::SteerLimits,
+    /// Meshes drawn with another material than the one they carry, by node
+    /// name: the variant the conversion made for them (a headlight's
+    /// reflector, PREVIEW§6.4). Applied before meshes sharing a material are
+    /// merged, so a variant is never merged back into its source.
+    pub material_remap: BTreeMap<String, u32>,
 }
 
 impl Default for GeometryOptions {
@@ -109,6 +114,7 @@ impl Default for GeometryOptions {
             skip_low_res_cockpit: true,
             skip_driver_rig: false,
             steering: crate::steer::SteerLimits::default(),
+            material_remap: BTreeMap::new(),
         }
     }
 }
@@ -179,9 +185,23 @@ pub fn flatten(model: &Kn5Model, options: &GeometryOptions) -> (Vec<FlatMesh>, G
         &mut meshes,
         &mut stats,
     );
+    remap_materials(&mut meshes, &options.material_remap);
     let meshes = merge_by_material(meshes);
     stats.merged = meshes.len();
     (meshes, stats)
+}
+
+/// Points the named meshes at the material variant made for them — see
+/// [`GeometryOptions::material_remap`].
+fn remap_materials(meshes: &mut [FlatMesh], remap: &BTreeMap<String, u32>) {
+    if remap.is_empty() {
+        return;
+    }
+    for mesh in meshes {
+        if let Some(&id) = remap.get(&mesh.name) {
+            mesh.material_id = id;
+        }
+    }
 }
 
 /// Regroupe en un seul maillage tous ceux qui partagent un matériau.
@@ -1208,6 +1228,26 @@ mod tests {
         assert_eq!(merged.len(), 2, "même matériau, mais pas le même traitement");
         assert!(!merged[0].transparent, "l'opaque reste opaque");
         assert!(merged[1].transparent, "et le transparent reste transparent");
+    }
+
+    // Rule: a mesh given a material variant is drawn apart from the meshes
+    // still carrying the source material, never merged back into them
+    // (PREVIEW§6.4: a headlight's reflector, and the chrome trim sharing its
+    // material).
+    #[test]
+    fn a_remapped_mesh_is_not_merged_back_into_its_source_material() {
+        let mut reflector = flat(0, false);
+        reflector.name = "167".to_string();
+        let mut meshes = vec![flat(0, false), reflector];
+        remap_materials(&mut meshes, &BTreeMap::from([("167".to_string(), 5)]));
+        let merged = merge_by_material(meshes);
+
+        let materials: Vec<u32> = merged.iter().map(|m| m.material_id).collect();
+        assert_eq!(
+            materials,
+            vec![0, 5],
+            "the trim keeps its material, the reflector gets the variant"
+        );
     }
 
     // Règle : l'ordre de première apparition est conservé. Deux conversions du

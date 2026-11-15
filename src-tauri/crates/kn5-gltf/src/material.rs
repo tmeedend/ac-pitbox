@@ -41,6 +41,9 @@ pub struct GltfMaterial {
     /// Répétition des UV demandée par le shader — voir [`UvScale`].
     pub uv_scale: UvScale,
     pub emissive: [f32; 3],
+    /// The emission takes its colour from the base colour texture — a
+    /// headlight's reflector, see [`lit_from_inside`].
+    pub emissive_from_colour: bool,
     /// Facteur de rugosité. glTF le **multiplie** par la carte ci-dessus, donc
     /// il vaut 1 dès qu'une carte est là : c'est elle qui décide.
     pub roughness: f32,
@@ -499,6 +502,7 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
             // pas : rien à transformer.
             uv_scale: UvScale::default(),
             emissive: [0.0; 3],
+            emissive_from_colour: false,
             // Une vitre est lisse, et sa réflectance vient de l'IOR, pas d'une
             // métallicité : glTF dérive le F0 de `ior` exactement comme la
             // formule de Schlick que `materials_glass.ini` applique.
@@ -665,6 +669,7 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
         roughness_texture: textures.roughness_texture.clone(),
         uv_scale: UvScale::of(material),
         emissive,
+        emissive_from_colour: false,
         roughness,
         metallic,
         alpha_mode,
@@ -680,6 +685,37 @@ pub fn convert(material: &Kn5Material, textures: MaterialTextures) -> GltfMateri
         // The shader lays the pattern over the colour; through a cut-out or a
         // blend it would also have to know the alpha, which the paint consumed.
         detail: textures.detail.filter(|_| alpha_mode == AlphaMode::Opaque),
+    }
+}
+
+/// How bright the inside of a headlight shows, as a share of its own colour
+/// (PREVIEW§6.4). **Chosen by eye, not measured**: CSP's own multiplier
+/// (`REFLECTIVENESS_DIFFUSE_MULT`, 25 to 100 in the sections met) is in the
+/// units of its shader, not ours.
+const REFLECTOR_GLOW: f32 = 1.0;
+
+/// The variant of a material drawn inside a headlight, behind the glass a
+/// `[REFRACTING_HEADLIGHT_…]` declares (PREVIEW§6.4).
+///
+/// CSP does not draw that inside as a mirror of the room: its shader shows the
+/// surface's own colour, lit as if by the bulb. A mirror of our dark studio is
+/// what we drew instead, and the headlights of `j8_toyota_celica_tuned` came
+/// out grey where its `preview.jpg`, rendered with CSP, shows them white
+/// (reported on screen; the light band of the studio did not change it). The
+/// surface now emits its own texture, which keeps the drawing of the bowl.
+///
+/// Only an opaque surface: something see-through behind the glass is a lens,
+/// and lighting it would light the bodywork behind.
+pub fn lit_from_inside(material: GltfMaterial) -> GltfMaterial {
+    if material.alpha_mode != AlphaMode::Opaque || material.transmission > 0.0 {
+        return material;
+    }
+    let [r, g, b, _] = material.base_color;
+    GltfMaterial {
+        name: format!("{}__inside", material.name),
+        emissive: [r * REFLECTOR_GLOW, g * REFLECTOR_GLOW, b * REFLECTOR_GLOW],
+        emissive_from_colour: material.base_color_texture.is_some(),
+        ..material
     }
 }
 
@@ -1211,6 +1247,40 @@ mod tests {
             AlphaMode::Blend,
             "une vitre reste en fondu, quoi que dise son alpha"
         );
+    }
+
+    // Rule: the inside of a headlight emits its own colour, texture included;
+    // a see-through surface behind the glass is left as it is (PREVIEW§6.4).
+    #[test]
+    fn a_headlight_inside_emits_its_own_colour_and_a_lens_does_not() {
+        let mut chrome = convert(
+            &material(
+                "ksPerPixelMultiMap",
+                0,
+                false,
+                &[("fresnelC", 0.7), ("fresnelMaxLevel", 0.7)],
+            ),
+            MaterialTextures::default(),
+        );
+        chrome.base_color_texture = Some("EXT_CHROME_Mixed_AO.dds".to_string());
+        let inside = lit_from_inside(chrome.clone());
+        assert!(inside.emissive_from_colour, "the bowl keeps its drawing");
+        assert_eq!(inside.emissive, [REFLECTOR_GLOW; 3], "at the strength of its colour");
+        assert_ne!(
+            inside.name, chrome.name,
+            "a variant, not the material other meshes carry"
+        );
+
+        let lens = GltfMaterial {
+            alpha_mode: AlphaMode::Blend,
+            ..chrome.clone()
+        };
+        assert_eq!(lit_from_inside(lens.clone()).emissive, [0.0; 3], "a lens is not lit");
+        let glass = GltfMaterial {
+            transmission: 1.0,
+            ..chrome
+        };
+        assert!(!lit_from_inside(glass).emissive_from_colour, "nor is glass");
     }
 
     #[test]

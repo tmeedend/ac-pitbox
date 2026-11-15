@@ -430,6 +430,11 @@ fn material_json(material: &GltfMaterial, texture_index: &Map<String, Value>) ->
     if material.alpha_mode == crate::material::AlphaMode::Mask {
         value["alphaCutoff"] = json!(material.alpha_cutoff);
     }
+    if material.emissive_from_colour {
+        if let Some(index) = material.base_color_texture.as_ref().and_then(|n| texture_index.get(n)) {
+            value["emissiveTexture"] = texture_info(index, material.uv_scale.diffuse);
+        }
+    }
 
     let mut material_extensions = json!({});
     if material.transmission > 0.0 {
@@ -1029,6 +1034,7 @@ mod tests {
             roughness_texture: None,
             uv_scale: crate::material::UvScale::default(),
             emissive: [0.0; 3],
+            emissive_from_colour: false,
             roughness: 0.5,
             metallic: 0.0,
             alpha_mode: AlphaMode::Opaque,

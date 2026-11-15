@@ -190,11 +190,36 @@ impl SurfaceOverride {
 pub struct MaterialOverrides {
     materials: Vec<(String, SurfaceOverride)>,
     meshes: Vec<(String, SurfaceOverride)>,
+    /// Mesh names given as `INSIDE` of a `[REFRACTING_HEADLIGHT_…]`: the
+    /// reflector and bulbs behind a headlight's glass. See
+    /// [`Self::reflector_meshes`].
+    reflectors: Vec<String>,
 }
 
 impl MaterialOverrides {
     pub fn is_empty(&self) -> bool {
-        self.materials.is_empty() && self.meshes.is_empty()
+        self.materials.is_empty() && self.meshes.is_empty() && self.reflectors.is_empty()
+    }
+
+    /// The meshes of the model that sit inside a headlight, with the material
+    /// each carries, in tree order (PREVIEW§6.4).
+    ///
+    /// By mesh and not by material, unlike [`Self::resolve`]: a reflector
+    /// shares its material with trim that is not behind any glass — on
+    /// `j8_toyota_celica_tuned`, `EXT_CHROME` covers eleven light reflectors
+    /// and one chrome part (`195_T`) that must not change.
+    pub fn reflector_meshes(&self, model: &Kn5Model) -> Vec<(String, usize)> {
+        let mut out = Vec::new();
+        if self.reflectors.is_empty() {
+            return out;
+        }
+        model.visit_nodes(&mut |node| {
+            let Some(mesh) = node.mesh() else { return };
+            if self.reflectors.iter().any(|p| glob_match(p, &node.name)) {
+                out.push((node.name.clone(), mesh.material_id as usize));
+            }
+        });
+        out
     }
 
     /// Resolves the declarations against a model: material index → override.
@@ -647,6 +672,9 @@ fn collect_materials(
             for name in section.list("SURFACE").unwrap_or_default() {
                 out.meshes.push((name, glass));
             }
+            // What lies behind that glass is kept too, by name only: CSP draws
+            // it lit from within, and so do we (PREVIEW§6.4).
+            out.reflectors.extend(section.list("INSIDE").unwrap_or_default());
             continue;
         }
 
@@ -1959,6 +1987,29 @@ GLASS_COLOR = 0.25,0.25,0.25
         assert!(
             !over.meshes.iter().any(|(name, _)| name == "55_T"),
             "ce qu'il y a derrière la vitre n'est pas de la vitre"
+        );
+    }
+
+    // Rule: the meshes an `INSIDE` names are kept as a headlight's inside, by
+    // name, and nothing else of them: no override on their material, which
+    // other meshes may share (PREVIEW§6.4).
+    #[test]
+    fn a_refracting_headlight_names_its_inside_as_reflectors() {
+        let over = collected(
+            "[REFRACTING_HEADLIGHT_...]
+SURFACE = 209_T
+INSIDE = 167, 70_T,
+",
+        );
+        assert_eq!(
+            over.reflectors,
+            vec!["167".to_string(), "70_T".to_string()],
+            "every name of the list, the trailing comma ignored"
+        );
+        assert!(
+            over.materials.is_empty() && over.meshes.iter().all(|(name, _)| name == "209_T"),
+            "the inside overrides no material: {:?}",
+            over.meshes
         );
     }
 

@@ -215,8 +215,23 @@ pub fn convert(
         rig.wheel_limit = options.geometry.steering.lock / options.geometry.steering.ratio.max(f32::EPSILON);
         rig.is_worth_exporting().then_some(rig)
     });
+    // A headlight's inside gets a variant of its material, appended after the
+    // model's own: one per source material, shared by all its reflectors.
+    let mut inside_sources: Vec<usize> = Vec::new();
+    let mut material_remap = options.geometry.material_remap.clone();
+    for (mesh, source) in options.surfaces.reflector_meshes(model) {
+        let slot = match inside_sources.iter().position(|s| *s == source) {
+            Some(slot) => slot,
+            None => {
+                inside_sources.push(source);
+                inside_sources.len() - 1
+            }
+        };
+        material_remap.insert(mesh, (model.materials.len() + slot) as u32);
+    }
     let geometry_options = geometry::GeometryOptions {
         skip_driver_rig: rig.is_some(),
+        material_remap,
         ..options.geometry.clone()
     };
     let (meshes, geometry) = geometry::flatten(model, &geometry_options);
@@ -239,35 +254,39 @@ pub fn convert(
     // texture diffuse porte un alpha exploitable change la façon de traiter
     // un matériau en fondu (verre contre décalcomanie).
     let surfaces = options.surfaces.resolve(model);
-    let materials: Vec<GltfMaterial> = model
-        .materials
-        .iter()
-        .enumerate()
-        .map(|(index, m)| {
-            material::convert(
-                m,
-                material::MaterialTextures {
-                    diffuse_alpha_varies: m
-                        .texture_for("txDiffuse")
-                        .and_then(|name| textures.get(name))
-                        .is_some_and(|t| t.alpha_varies),
-                    // Mesure faite sur les UV du matériau, pas sur l'atlas :
-                    // voir `texture::FootprintAlpha`.
-                    diffuse_alpha_blank: textures.footprint_alpha.get(&index).is_some_and(|f| f.is_blank()),
-                    diffuse_alpha_opaque: textures.footprint_alpha.get(&index).is_some_and(|f| f.is_opaque()),
-                    diffuse_alpha_cutout: textures.footprint_alpha.get(&index).is_some_and(|f| f.is_cutout()),
-                    diffuse_alpha_partial: textures.footprint_alpha.get(&index).is_some_and(|f| f.is_partial()),
-                    diffuse_average: m
-                        .texture_for("txDiffuse")
-                        .and_then(|name| textures.get(name))
-                        .map(|t| t.average),
-                    painted_diffuse: paint.painted_diffuse(index),
-                    roughness_texture: roughness.roughness_texture(index),
-                    csp: surfaces.get(&index).copied(),
-                    detail: paint::tiled_detail(m, &textures),
-                },
-            )
-        })
+    let convert_material = |index: usize| {
+        let m = &model.materials[index];
+        material::convert(
+            m,
+            material::MaterialTextures {
+                diffuse_alpha_varies: m
+                    .texture_for("txDiffuse")
+                    .and_then(|name| textures.get(name))
+                    .is_some_and(|t| t.alpha_varies),
+                // Mesure faite sur les UV du matériau, pas sur l'atlas :
+                // voir `texture::FootprintAlpha`.
+                diffuse_alpha_blank: textures.footprint_alpha.get(&index).is_some_and(|f| f.is_blank()),
+                diffuse_alpha_opaque: textures.footprint_alpha.get(&index).is_some_and(|f| f.is_opaque()),
+                diffuse_alpha_cutout: textures.footprint_alpha.get(&index).is_some_and(|f| f.is_cutout()),
+                diffuse_alpha_partial: textures.footprint_alpha.get(&index).is_some_and(|f| f.is_partial()),
+                diffuse_average: m
+                    .texture_for("txDiffuse")
+                    .and_then(|name| textures.get(name))
+                    .map(|t| t.average),
+                painted_diffuse: paint.painted_diffuse(index),
+                roughness_texture: roughness.roughness_texture(index),
+                csp: surfaces.get(&index).copied(),
+                detail: paint::tiled_detail(m, &textures),
+            },
+        )
+    };
+    let materials: Vec<GltfMaterial> = (0..model.materials.len())
+        .map(convert_material)
+        .chain(
+            inside_sources
+                .iter()
+                .map(|&source| material::lit_from_inside(convert_material(source))),
+        )
         .collect();
 
     progress(ConvertStage::Writing);

@@ -433,6 +433,17 @@ Détail, chiffres et méthode : `kn5-format.md`, écarts n°3 à 27.
 - **Shader inconnu : matériau standard et un `warn` au journal**, jamais une
   erreur.
 
+### 6.4 L'intérieur d'un phare
+
+Une section CSP `[REFRACTING_HEADLIGHT_…]` nomme la vitre d'un phare
+(`SURFACE`, rendue en verre) et ce qu'il y a derrière (`INSIDE` : réflecteur,
+ampoules). **Cet intérieur émet sa propre couleur**, texture comprise, comme
+le shader de CSP le montre éclairé de l'intérieur — un miroir de notre studio
+sombre le laissait gris. La règle vaut **par maillage** : les maillages nommés
+reçoivent une variante de leur matériau, et une garniture qui partage ce
+matériau hors du phare n'en change pas. Une surface transparente derrière la
+vitre n'est pas éclairée.
+
 ---
 
 ## 7. Intégration Tauri
