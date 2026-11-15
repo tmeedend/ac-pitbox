@@ -180,10 +180,19 @@ export function gridThumbFailed(template: GridTemplate, carId: string, skinId: s
   return !!entry && "failed" in entry;
 }
 
+/** The URL of a thumbnail **just written**. A render done again lands on the
+ * same file, hence the same URL, and WebView2 kept serving the image it had
+ * cached: the new thumbnail only showed after a restart. The query changes the
+ * URL without changing the file the asset protocol reads (it resolves the path
+ * alone). A thumbnail read back as it is keeps its plain URL, and its cache. */
+function freshFileUrl(path: string): string {
+  return `${convertFileSrc(path)}?v=${Date.now()}`;
+}
+
 /** Shows a thumbnail produced outside this queue — rendered by the game
  * (GRILLE§7.1) and already stored under its entry name. */
 export function adoptGridThumb(template: GridTemplate, carId: string, skinId: string | null, path: string): void {
-  cache[keyOf(template, carId, skinId)] = { url: convertFileSrc(path) };
+  cache[keyOf(template, carId, skinId)] = { url: freshFileUrl(path) };
 }
 
 /**
@@ -624,7 +633,7 @@ async function convert(job: Job, stem: string, template: GridTemplate): Promise<
     // Affichée depuis le disque et non depuis le blob mémoire : c'est le même
     // fichier que toutes les visites suivantes serviront, autant qu'il soit à
     // l'écran tout de suite pour qu'un défaut se voie maintenant.
-    return { url: convertFileSrc(path) };
+    return { url: freshFileUrl(path) };
   } finally {
     // Le modèle part **quoi qu'il arrive** : vingt mégaoctets laissés derrière
     // un rendu raté, et le disque grossit d'une voiture ratée à l'autre.
