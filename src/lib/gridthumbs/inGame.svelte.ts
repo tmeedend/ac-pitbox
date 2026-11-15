@@ -134,6 +134,8 @@ const CARS_PER_SESSION = 12;
 const queue: InGameCar[] = [];
 /** The cars of the session under way, so a second click does not queue them. */
 let current = new Set<string>();
+/** The cars already given their second chance during this run (GRILLE§7.1). */
+let retried = new Set<string>();
 let listening = false;
 
 /** Queues cars; a car already waiting is not queued twice. */
@@ -144,6 +146,7 @@ export function requestInGame(cars: InGameCar[]): void {
     progress.failed = 0;
     progress.lastError = null;
     progress.failures = [];
+    retried = new Set();
   }
   for (const car of cars) {
     if (current.has(car.id) || queue.some((q) => q.id === car.id)) continue;
@@ -174,23 +177,30 @@ async function drain(): Promise<void> {
       progress.phase = null;
       try {
         const failed = await shoot(batch);
+        const gaveUp = retryOnce(failed);
         progress.done += batch.length - failed.length;
-        progress.failed += failed.length;
-        if (failed.length) progress.lastError = "errors.gameShotNoImage";
-        fail(failed, "errors.gameShotNoImage");
+        progress.failed += gaveUp.length;
+        if (gaveUp.length) progress.lastError = "errors.gameShotNoImage";
+        fail(gaveUp, "errors.gameShotNoImage");
       } catch (e) {
         // Not remembered: the cards keep their photo, the entry stays in the
         // menu, and the report says why (GRILLE§7.1).
         console.error("vignettes dans le jeu", batch.map((car) => car.id), e);
-        progress.failed += batch.length;
-        progress.lastError = typeof e === "string" ? e : String(e);
-        fail(batch, progress.lastError);
+        const reason = typeof e === "string" ? e : String(e);
+        // A session that ran but brought nothing back gets the same second
+        // chance as a car left out of a session that did.
+        const gaveUp = reason === "errors.gameShotNoImage" ? retryOnce(batch) : batch;
+        progress.failed += gaveUp.length;
+        if (gaveUp.length) {
+          progress.lastError = reason;
+          fail(gaveUp, reason);
+        }
         // A game still open (stuck, or behind CSP's crash report) refuses
         // every following session: the rest of the queue would fail batch by
         // batch for the same reason, so it stops here, counted as failed.
-        if (progress.lastError === "errors.gameShotTimedOut" || progress.lastError === "errors.gameRunning") {
+        if (reason === "errors.gameShotTimedOut" || reason === "errors.gameRunning") {
           progress.failed += queue.length;
-          fail(queue, progress.lastError);
+          fail(queue, reason);
           queue.length = 0;
         }
       }
@@ -204,6 +214,28 @@ async function drain(): Promise<void> {
     progress.phase = null;
     progress.finished = progress.done + progress.failed > 0;
   }
+}
+
+/**
+ * Puts the cars that came back without an image at the end of the queue,
+ * once, and returns those already retried — the ones that really failed.
+ *
+ * Content Manager sometimes leaves cars out of a track day and fills their
+ * places with a second copy of others; the same cars go through in a later
+ * session (reported, seen in its log; the cause is not known — `gameshot`
+ * logs each case). Retrying is what the user did by hand.
+ */
+function retryOnce(cars: InGameCar[]): InGameCar[] {
+  const gaveUp: InGameCar[] = [];
+  for (const car of cars) {
+    if (retried.has(car.id)) {
+      gaveUp.push(car);
+    } else {
+      retried.add(car.id);
+      queue.push(car);
+    }
+  }
+  return gaveUp;
 }
 
 function fail(cars: InGameCar[], reason: string): void {

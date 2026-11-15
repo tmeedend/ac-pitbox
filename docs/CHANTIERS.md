@@ -2010,6 +2010,15 @@ de reprendre. En cas d'écart, la spec fait foi.
         journée piste) : à essayer sur une vraie série d'une soixantaine de
         voitures protégées, pour vérifier la mémoire et la reprise après un
         plantage en milieu de lot ;
+      - **des voitures écartées par Content Manager** (relevé le 2026-11-15) :
+        sur une journée piste de sept voitures, la Copen et la E46 nspec85
+        manquaient, leurs places prises par une seconde Berlingo HDi et une
+        seconde R34 ii_nur (journal de CM, `race.ini`) ; une session suivante
+        les prend. Ni une activation tardive ni un `ui_car.json` manquant.
+        Contourné par une relance automatique, et chaque cas est noté au
+        journal (`gameshot: Content Manager left out …`, avec la grille
+        demandée et celle lancée) : **à relire après la série de 58** pour
+        chercher la cause (place dans la grille, livrée, type de voiture) ;
       - les reflets de peinture : un rouge Officiel sort un peu plus sombre
         et moins brillant que chez Pit Box (le showroom du jeu n'est pas son
         studio). Vitrine et Officiel sont faits (2026-11-11) : sol, reflet,

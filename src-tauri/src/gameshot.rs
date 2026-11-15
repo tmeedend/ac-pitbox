@@ -363,6 +363,67 @@ pub fn run(
     )
 }
 
+/// Logs the cars Content Manager left out of the session, next to what was
+/// asked and what it actually started (GRILLE§7.1).
+///
+/// Seen on a seven-car track day: two cars missing, their places taken by a
+/// second copy of two others, and a later session took them without trouble.
+/// The cause is not known; this is what will show a pattern — place in the
+/// grid, skin, kind of car — over a long series.
+fn report_left_out(paths: &Paths, requests: &[ShotRequest]) {
+    let Ok(done) = std::fs::read_to_string(paths.work().join("done.json")) else {
+        return;
+    };
+    let absent = cars_not_in_session(&done);
+    if absent.is_empty() {
+        return;
+    }
+    let asked: Vec<String> = requests
+        .iter()
+        .map(|r| format!("{} ({})", r.car_id, r.skin.as_deref().unwrap_or("first skin")))
+        .collect();
+    let started = std::fs::read_to_string(paths.ac_documents.join("cfg").join("race.ini"))
+        .map(|ini| race_ini_models(&ini).join(", "))
+        .unwrap_or_else(|e| format!("race.ini unreadable: {e}"));
+    log::warn!(
+        "gameshot: Content Manager left out {} — asked, in order: {}; started: {started}",
+        absent.join(", "),
+        asked.join(", ")
+    );
+}
+
+/// The cars the shot app found missing from the session (`not_in_session` in
+/// its `done.json`).
+fn cars_not_in_session(done_json: &str) -> Vec<String> {
+    let Ok(done) = serde_json::from_str::<serde_json::Value>(done_json) else {
+        return Vec::new();
+    };
+    done["cars"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|car| car["error"] == "not_in_session")
+        .filter_map(|car| car["id"].as_str().map(str::to_string))
+        .collect()
+}
+
+/// The car of each `[CAR_n]` of a `race.ini`, in order: what the game was
+/// actually started with.
+fn race_ini_models(ini: &str) -> Vec<String> {
+    let mut models = Vec::new();
+    let mut in_car = false;
+    for line in ini.lines().map(str::trim) {
+        if line.starts_with('[') {
+            in_car = line.to_ascii_uppercase().starts_with("[CAR_");
+        } else if in_car {
+            if let Some(model) = line.strip_prefix("MODEL=") {
+                models.push(model.trim().to_string());
+            }
+        }
+    }
+    models
+}
+
 fn run_with(
     paths: &Paths,
     requests: &[ShotRequest],
@@ -397,6 +458,7 @@ fn run_with(
         .join(", ");
     match outcome? {
         Ending::Closed => {
+            report_left_out(paths, requests);
             let results = collect(paths, requests);
             if results.iter().all(|r| r.path.is_none()) {
                 // What the app wrote says why, for a bug report: a step error,
@@ -742,5 +804,37 @@ mod tests {
         .unwrap_err();
         assert_eq!(err, crate::errors::GAMESHOT_NO_IMAGE, "said with its key");
         assert!(!p.thumbs.join(format!("{STEM}.png")).exists(), "nothing stored");
+    }
+
+    // Rule (GRILLE§7.1): the cars the shot app found missing from the session
+    // are read from its report, and only those.
+    #[test]
+    fn the_cars_left_out_are_read_from_the_report() {
+        let done = r#"{"finished":true,"cars":[
+            {"id":"kept","outputs":{"a.png":"ok"}},
+            {"id":"ddm_daihatsu_copen_street","error":"not_in_session","outputs":[]},
+            {"id":"bati_e46_nspec85","error":"not_in_session","outputs":[]}
+        ]}"#;
+        assert_eq!(
+            cars_not_in_session(done),
+            vec!["ddm_daihatsu_copen_street", "bati_e46_nspec85"],
+            "both missing cars, in the report's order"
+        );
+        assert!(
+            cars_not_in_session("not json").is_empty(),
+            "a broken report says nothing"
+        );
+    }
+
+    // Rule (GRILLE§7.1): what the game was started with is the MODEL of each
+    // [CAR_n] of race.ini, in order — duplicates included, they are the clue.
+    #[test]
+    fn the_started_grid_is_read_from_race_ini() {
+        let ini = "[RACE]\nMODEL=player_car\n\n[CAR_0]\nMODEL=-\nSKIN=x\n[CAR_1]\nMODEL=berlingo\n[CAR_2]\nMODEL=berlingo\n[SESSION_0]\nNAME=Track Day\n";
+        assert_eq!(
+            race_ini_models(ini),
+            vec!["-", "berlingo", "berlingo"],
+            "every car section, the duplicate kept, nothing from other sections"
+        );
     }
 }
