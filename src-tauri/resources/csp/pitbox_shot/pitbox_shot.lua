@@ -76,6 +76,10 @@ local function gameFramingFits(radius)
   return ratio > 1 / GAME_FRAMING_RANGE and ratio < GAME_FRAMING_RANGE
 end
 
+-- Largest plausible car box (metres); beyond it the game's box is not trusted.
+local MAX_CAR_LENGTH = 7.5
+local MAX_CAR_HEIGHT = 3.5
+
 -- Camera for one template, in model space: position, target, field of view,
 -- distance, and whether the lens shift applies (not under the game's camera,
 -- where the place of the car in the frame is the point).
@@ -464,6 +468,49 @@ local function carIndexOf(id)
   return nil
 end
 
+-- How far the body may reach past the outer edge of a tyre contact patch,
+-- sideways, in metres: the tyre's half width, the wheel arches and the mirrors.
+local BODY_PAST_WHEELS = 0.35
+
+-- Some mods report a game box far bigger than any car (a MR2 measured
+-- 10 x 9 x 12 m: a stray LOD D or collider mesh), which shrinks the car in the
+-- frame. The mesh box of the car root takes over, cut back to the wheels: it
+-- follows the car, but not closely enough on its own. On the same MR2 it was
+-- 4.4 m wide, one side further out than the other (hidden meshes count), and
+-- reached a metre below the ground (a hidden node under the car), which put the
+-- floor, its shadow and its reflection far under the wheels. Its bottom is
+-- raised to where the tyres touch the road, its sides brought in to the track.
+local function fallbackBox(car, state, record)
+  local ok, lo, hi = pcall(function() return state.root:getLocalAABB() end)
+  if not (ok and lo and hi) then return end
+  state.bmin, state.bmax = lo, hi
+  record.boxFallback = true
+  local okWheels, ground, halfTrack = pcall(function()
+    local toModel = state.modelToWorld:clone():inverse()
+    local lowest, widest = math.huge, 0
+    for w = 0, 3 do
+      local p = toModel:transformPoint(car.wheels[w].contactPoint)
+      lowest = math.min(lowest, p.y)
+      widest = math.max(widest, math.abs(p.x))
+    end
+    return lowest, widest
+  end)
+  if okWheels then
+    if ground > state.bmin.y and ground < state.bmax.y then
+      state.bmin.y = ground
+    end
+    local half = halfTrack + BODY_PAST_WHEELS
+    if halfTrack > 0 then
+      state.bmin.x = math.max(state.bmin.x, -half)
+      state.bmax.x = math.min(state.bmax.x, half)
+    end
+  end
+  record.fallbackBox = {
+    min = { state.bmin.x, state.bmin.y, state.bmin.z },
+    max = { state.bmax.x, state.bmax.y, state.bmax.z },
+  }
+end
+
 -- Builds the steps for one car. Each step runs on its own frame, so nothing
 -- reads a texture rendered on the same frame.
 local function planCar(entry, steps)
@@ -494,9 +541,21 @@ local function planCar(entry, steps)
     -- The game's own car box (LOD D or collider, model space): the mesh box
     -- of the car root reaches a metre below the ground.
     state.bmin, state.bmax = car.aabbCenter - car.aabbSize / 2, car.aabbCenter + car.aabbSize / 2
+    local size = state.bmax - state.bmin
+    if math.max(size.x, size.z) > MAX_CAR_LENGTH or size.y > MAX_CAR_HEIGHT then
+      fallbackBox(car, state, record)
+    end
     state.center = (state.bmin + state.bmax) / 2
     state.centerWorld = state.modelToWorld:transformPoint(state.center)
     state.radius = (state.bmax - state.bmin):length() / 2
+    -- Kept in the result so a car framed too small can be diagnosed afterwards
+    -- (a mod whose game box is far larger than the car shrinks it in the frame).
+    record.box = {
+      center = { car.aabbCenter.x, car.aabbCenter.y, car.aabbCenter.z },
+      size = { car.aabbSize.x, car.aabbSize.y, car.aabbSize.z },
+      radius = state.radius,
+    }
+    ac.log('pitbox_shot box ' .. entry.id .. ' size=' .. tostring(car.aabbSize) .. ' radius=' .. state.radius)
     -- The floor plane: under the car's box, facing the car's up.
     local origin = state.modelToWorld:transformPoint(vec3(0, 0, 0))
     state.floorUp = (state.modelToWorld:transformPoint(vec3(0, 1, 0)) - origin):normalize()
