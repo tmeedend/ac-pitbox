@@ -254,6 +254,9 @@ pub struct GridThumb {
     /// The image was rendered by the game: the car is protected
     /// ([`write_from_game`]).
     pub from_game: bool,
+    /// `path` is an older engine version's image, shown until the user asks
+    /// for the library to be redone ([`look_up_or_stale`], GRILLE§6.5).
+    pub stale: bool,
 }
 
 /// Where thumbnails live: next to the preview cache, and **outside its
@@ -272,9 +275,9 @@ pub fn dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 /// Name of the thumbnail produced for `car_stem` under `template`.
 ///
 /// `car_stem` is the car preview cache entry name, version prefix included
-/// (`crate::preview::car_entry_stem`), so incrementing the converter retires
-/// every thumbnail with it — and the sweep that already clears foreign versions
-/// picks them up.
+/// (`crate::preview::car_entry_stem`), so incrementing the converter makes
+/// every thumbnail stale with it: still shown, until redone on the user's
+/// word ([`look_up_or_stale`], GRILLE§6.5).
 pub fn entry_stem(car_stem: &str, template: &GridTemplate) -> String {
     format!("{car_stem}-t{}", template.fingerprint())
 }
@@ -316,6 +319,121 @@ pub fn look_up(app: &tauri::AppHandle, stem: &str) -> GridThumb {
         path: png.filter(|p| p.is_file()).map(|p| p.to_string_lossy().into_owned()),
         failed,
         from_game,
+        stale: false,
+    }
+}
+
+/// How many versions back — of the converter and of the renderer alike — a
+/// thumbnail is still shown once a newer one would be wanted (GRILLE§6.5).
+///
+/// A new engine version used to retire every image at once, and the next
+/// launch redid the whole library: four hundred cars at every start while the
+/// engine was being worked on (reported). The previous image is kept on screen
+/// instead, until the user asks for the library to be redone. Bounded, so that
+/// what is kept on disk stays bounded too: older files are swept.
+pub const STALE_VERSIONS: u32 = 5;
+
+/// [`look_up`] for a car under a template, falling back on the image an older
+/// engine version rendered for it (GRILLE§6.5). The entry name stays the
+/// current one — that is where a new render lands —, and `stale` says the
+/// image is not that entry's.
+pub fn look_up_or_stale(app: &tauri::AppHandle, car_stem: &str, template: &GridTemplate) -> GridThumb {
+    let exact = look_up(app, &entry_stem(car_stem, template));
+    if exact.path.is_some() {
+        return exact;
+    }
+    let Ok(dir) = dir(app) else { return exact };
+    match stale_stem_in(&dir, car_stem, template) {
+        Some(stale) => {
+            let older = look_up(app, &stale);
+            // A car Pit Box cannot render keeps the image the game made for
+            // it under an older version; any other failure has nothing to show.
+            if exact.failed.is_some() && !older.from_game {
+                return exact;
+            }
+            GridThumb {
+                path: older.path,
+                from_game: older.from_game,
+                stale: true,
+                ..exact
+            }
+        }
+        None => exact,
+    }
+}
+
+/// The entry an older engine version left for this car under this template:
+/// the most recent converter first, then the most recent renderer.
+fn stale_stem_in(dir: &std::path::Path, car_stem: &str, template: &GridTemplate) -> Option<String> {
+    let (version, key) = car_stem.strip_prefix('v')?.split_once('-')?;
+    let version: u32 = version.parse().ok()?;
+    let renderers: Vec<String> = (0..=STALE_VERSIONS as i32)
+        .map(|back| template.renderer - back)
+        .filter(|renderer| *renderer >= 0)
+        .map(|renderer| {
+            GridTemplate {
+                renderer,
+                ..template.clone()
+            }
+            .fingerprint()
+        })
+        .collect();
+    for converter in (version.saturating_sub(STALE_VERSIONS)..=version).rev() {
+        for (back, fingerprint) in renderers.iter().enumerate() {
+            if converter == version && back == 0 {
+                continue; // the entry itself, already looked up
+            }
+            let stem = format!("v{converter}-{key}-t{fingerprint}");
+            if dir.join(format!("{stem}.png")).is_file() {
+                return Some(stem);
+            }
+        }
+    }
+    None
+}
+
+/// Removes what no lookup can reach any more: entries of a converter older
+/// than [`STALE_VERSIONS`] back. Newer ones stay — another copy of the app,
+/// more recent, may be running on the same store.
+pub fn sweep_retired_versions(dir: &std::path::Path, current: u32) {
+    let Ok(read) = std::fs::read_dir(dir) else { return };
+    let oldest = current.saturating_sub(STALE_VERSIONS);
+    let mut removed = 0u32;
+    for entry in read.flatten() {
+        let name = entry.file_name();
+        let version = name
+            .to_string_lossy()
+            .strip_prefix('v')
+            .and_then(|rest| rest.split_once('-'))
+            .and_then(|(v, _)| v.parse::<u32>().ok());
+        if version.is_some_and(|v| v < oldest) && entry.file_type().is_ok_and(|t| t.is_file()) {
+            match std::fs::remove_file(entry.path()) {
+                Ok(()) => removed += 1,
+                Err(e) => log::warn!("gridthumbs: retired thumbnail not removed — {e}"),
+            }
+        }
+    }
+    if removed > 0 {
+        log::info!("gridthumbs: {removed} retired thumbnail file(s) removed");
+    }
+}
+
+/// Once an entry is written, the same image an older converter left for it is
+/// no use any more (GRILLE§6.5).
+fn remove_older_copies(dir: &std::path::Path, stem: &str) {
+    let Some((version, rest)) = stem.strip_prefix('v').and_then(|s| s.split_once('-')) else {
+        return;
+    };
+    let Ok(version) = version.parse::<u32>() else { return };
+    for older in version.saturating_sub(STALE_VERSIONS)..version {
+        for extension in ["png", "game", "fail"] {
+            let file = dir.join(format!("v{older}-{rest}.{extension}"));
+            if let Err(e) = std::fs::remove_file(&file) {
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    log::warn!("gridthumbs: older copy {} left in place — {e}", file.display());
+                }
+            }
+        }
     }
 }
 
@@ -340,6 +458,7 @@ pub fn write_in(dir: &std::path::Path, stem: &str, png: &[u8]) -> Result<PathBuf
     std::fs::rename(&tmp, &file).map_err(|e| format!("{} : {e}", file.display()))?;
     // A car that used to fail and now renders must stop being skipped.
     let _ = std::fs::remove_file(dir.join(format!("{stem}.fail")));
+    remove_older_copies(dir, stem);
     Ok(file)
 }
 
@@ -1157,5 +1276,95 @@ mod tests {
             entry_stem("v46-abc", &base).starts_with("v46-abc"),
             "le nom d'entrée de la voiture reste le préfixe : c'est lui que le balayage de version reconnaît"
         );
+    }
+
+    /// Rule (GRILLE§6.5): an image an older engine version rendered for the
+    /// same car under the same template is found — older converter, older
+    /// renderer, the most recent first — and nothing past the window.
+    #[test]
+    fn an_older_engines_image_stands_in_until_redone() {
+        let dir = crate::testutil::temp_dir("gridthumbs-stale");
+        let current = GridTemplate {
+            renderer: 8,
+            ..template()
+        };
+        let older_renderer = GridTemplate {
+            renderer: 7,
+            ..template()
+        };
+        let write = |stem: &str| std::fs::write(dir.join(format!("{stem}.png")), b"png").unwrap();
+
+        assert_eq!(
+            stale_stem_in(&dir, "v55-abc", &current),
+            None,
+            "nothing older, nothing shown"
+        );
+
+        write(&entry_stem("v53-abc", &older_renderer));
+        assert_eq!(
+            stale_stem_in(&dir, "v55-abc", &current),
+            Some(entry_stem("v53-abc", &older_renderer)),
+            "two converters and one renderer back"
+        );
+        write(&entry_stem("v54-abc", &current));
+        assert_eq!(
+            stale_stem_in(&dir, "v55-abc", &current),
+            Some(entry_stem("v54-abc", &current)),
+            "the most recent converter wins"
+        );
+        write(&entry_stem("v54-other", &current));
+        assert_eq!(
+            stale_stem_in(&dir, "v55-zzz", &current),
+            None,
+            "another car's image is never borrowed"
+        );
+        write(&entry_stem("v40-old", &current));
+        assert_eq!(
+            stale_stem_in(&dir, "v55-old", &current),
+            None,
+            "past the window, nothing"
+        );
+    }
+
+    /// Rule (GRILLE§6.5): writing an entry drops the copies older converters
+    /// left of it, and only those — the same car under another template keeps
+    /// its own.
+    #[test]
+    fn writing_an_entry_drops_its_older_copies() {
+        let dir = crate::testutil::temp_dir("gridthumbs-older-copies");
+        let other = GridTemplate {
+            azimuth: 30,
+            ..template()
+        };
+        let older = entry_stem("v54-abcdef", &template());
+        std::fs::write(dir.join(format!("{older}.png")), b"png").unwrap();
+        std::fs::write(dir.join(format!("{older}.game")), b"").unwrap();
+        let sibling = entry_stem("v54-abcdef", &other);
+        std::fs::write(dir.join(format!("{sibling}.png")), b"png").unwrap();
+
+        write_in(&dir, &entry_stem("v55-abcdef", &template()), b"new").unwrap();
+
+        assert!(!dir.join(format!("{older}.png")).exists(), "the older copy goes");
+        assert!(!dir.join(format!("{older}.game")).exists(), "with its mark");
+        assert!(
+            dir.join(format!("{sibling}.png")).exists(),
+            "another template's image stays"
+        );
+    }
+
+    /// Rule (GRILLE§6.5): the sweep removes only what no lookup reaches —
+    /// converters older than the window —, and keeps newer ones, which another
+    /// copy of the app may be writing.
+    #[test]
+    fn the_sweep_keeps_the_window_and_newer_versions() {
+        let dir = crate::testutil::temp_dir("gridthumbs-retired");
+        for name in ["v40-a-t1.png", "v50-a-t1.png", "v55-a-t1.png", "v56-a-t1.png"] {
+            std::fs::write(dir.join(name), b"png").unwrap();
+        }
+        sweep_retired_versions(&dir, 55);
+        assert!(!dir.join("v40-a-t1.png").exists(), "past the window: removed");
+        assert!(dir.join("v50-a-t1.png").exists(), "inside it: kept");
+        assert!(dir.join("v55-a-t1.png").exists(), "current: kept");
+        assert!(dir.join("v56-a-t1.png").exists(), "newer: kept");
     }
 }

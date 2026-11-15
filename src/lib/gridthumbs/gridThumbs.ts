@@ -85,6 +85,9 @@ export interface GridThumb {
   failed: string | null;
   /** The image was rendered by the game: the car is protected (GRILLE§7.1). */
   fromGame: boolean;
+  /** `path` is an older engine version's image, shown until the user asks for
+   * the library to be redone (GRILLE§6.5). */
+  stale: boolean;
 }
 
 export interface GridThumbStats {

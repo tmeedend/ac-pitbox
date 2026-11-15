@@ -175,7 +175,11 @@ Appliquer un preset change l'empreinte de ses vignettes (§5.4) : celles de l'an
 
 ## 6.5 Régénération sur mise à jour de l'application
 
-Une version qui change le rendu (`RENDERER_VERSION`) ou un preset embarqué périme les images concernées, qui se régénèrent au fil de l'eau (§5.4) ; la grille reste utilisable entre-temps.
+Un preset embarqué qui change périme ses images, qui se régénèrent au fil de l'eau (§5.4) ; la grille reste utilisable entre-temps.
+
+**Une nouvelle version du moteur ne refait rien d'elle-même** (convertisseur ou `RENDERER_VERSION`). La carte garde l'image de la version précédente, et la pile bas-droite le dit une fois : « Le moteur des vignettes a changé », avec le nombre d'images concernées, « Les régénérer » ou « Plus tard ». « Plus tard » vaut jusqu'au prochain lancement. Après « Les régénérer », toutes les images anciennes se refont, celles déjà vues comme celles rencontrées ensuite. L'image d'une voiture protégée, faite par le jeu, n'est jamais refaite par Pit Box : elle reste à l'écran et compte parmi les rendus à faire dans le jeu (§7.1).
+
+Une image ancienne n'est retrouvée que jusqu'à cinq versions en arrière, du convertisseur comme du moteur de rendu ; au-delà, la carte montre la photo du mod jusqu'à la nouvelle image. Un preset dont on change les valeurs n'a pas d'image ancienne : ses images se refont au fil de l'eau.
 
 ---
 

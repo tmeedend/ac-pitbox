@@ -34,10 +34,7 @@ pub async fn grid_thumbnail(
     })
     .await
     .map_err(|e| format!("tâche de vignette interrompue : {e}"))??;
-    Ok(crate::gridthumbs::look_up(
-        &app,
-        &crate::gridthumbs::entry_stem(&stem, &template),
-    ))
+    Ok(crate::gridthumbs::look_up_or_stale(&app, &stem, &template))
 }
 
 /// The protected cars of the library still missing an image under one of
@@ -111,10 +108,7 @@ pub async fn grid_thumbnails(
                 // No entry is an ordinary case (a folder without a usable
                 // model): the card keeps its photo, as with `grid_thumbnail`.
                 let stem = crate::preview::car_entry_stem(app, &dir?, &car.car_id, car.skin_id.as_deref()).ok()?;
-                Some(crate::gridthumbs::look_up(
-                    app,
-                    &crate::gridthumbs::entry_stem(&stem, &template),
-                ))
+                Some(crate::gridthumbs::look_up_or_stale(app, &stem, &template))
             })
             .collect())
     })

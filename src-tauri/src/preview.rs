@@ -400,8 +400,10 @@ fn sweep_side_stores(app: &tauri::AppHandle, state: &PreviewState) {
     if let Ok(thumbs) = thumb_dir(app) {
         sweep_foreign_versions(&thumbs);
     }
+    // Not every foreign version: an older one is still shown until the user
+    // asks for the library to be redone (GRILLE§6.5).
     if let Ok(grid) = crate::gridthumbs::dir(app) {
-        sweep_foreign_versions(&grid);
+        crate::gridthumbs::sweep_retired_versions(&grid, CONVERTER_VERSION);
     }
 }
 

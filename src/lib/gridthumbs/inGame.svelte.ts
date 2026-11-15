@@ -224,7 +224,7 @@ async function shoot(cars: InGameCar[]): Promise<InGameCar[]> {
         templates.map(async (template) => ({ template, thumb: await gridThumbnail(car.id, car.skin, template) })),
       );
       const outputs = known
-        .filter((k) => car.redo || !k.thumb.path)
+        .filter((k) => car.redo || !k.thumb.path || k.thumb.stale)
         .map((k) => ({ template: k.template, stem: k.thumb.stem }));
       return { car, outputs };
     }),

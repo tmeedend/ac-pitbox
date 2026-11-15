@@ -44,6 +44,7 @@ import { placeCamera } from "./framing";
 import { groundTexture, placePool, type StudioFloor } from "./floor";
 import { gradeColours, gradesColours, meteredExposure } from "./look";
 import { reflectChrome, reflectGlass } from "$lib/preview3d/reflections";
+import { acceptStaleRedo, noteStale, staleRedoAccepted } from "./staleThumbs.svelte";
 
 /** Taille de sortie (GRILLE§5.6). 16:9 parce que c'est le rapport des `preview.png`
  * d'Assetto Corsa : la grille restant mixte pour toujours (GRILLE§7), les deux
@@ -481,8 +482,10 @@ async function flushLookups(): Promise<void> {
       // Out of the background queue if it was there: answered now, or put
       // back at the front just below.
       dequeue(job.key);
-      if (known?.path) cache[job.key] = { url: convertFileSrc(known.path) };
-      else if (known?.failed) cache[job.key] = { failed: known.failed };
+      if (known?.path) {
+        cache[job.key] = { url: convertFileSrc(known.path) };
+        if (known.stale) onStale(job, known);
+      } else if (known?.failed) cache[job.key] = { failed: known.failed };
       else {
         // Not on disk (or not answered): the render queue takes it, ahead of
         // what is not visible.
@@ -491,6 +494,31 @@ async function flushLookups(): Promise<void> {
       }
     });
   }
+  void drain();
+}
+
+/** A card shows an older engine's image (GRILLE§6.5): redone if the user
+ * already said so, remembered for the question otherwise. A protected car's
+ * stays — only the game can redo it. */
+function onStale(job: Job, known: GridThumb): void {
+  if (known.fromGame) return;
+  if (staleRedoAccepted()) requeue(job);
+  else noteStale(job);
+}
+
+/** Puts back in the queue a car whose card keeps showing its current image
+ * meanwhile — unlike `enqueue`, which leaves alone what is already shown. */
+function requeue(job: Job): void {
+  if (queue.some((queued) => queued.key === job.key)) return;
+  beginBatch();
+  queue.push(job);
+  progress.total += 1;
+}
+
+/** The user's yes to the question of GRILLE§6.5: every older engine's image met
+ * so far is redone, and those met from now on too. */
+export function regenerateStaleThumbs(): void {
+  for (const job of acceptStaleRedo<Job>()) requeue(job);
   void drain();
 }
 
@@ -593,7 +621,11 @@ async function produce(job: Job): Promise<Entry> {
   // aussi ce qui répond « déjà essayé, impossible » sans reparser un KN5 de
   // quatorze mégaoctets à chaque lancement (GRILLE§7).
   const known = await gridThumbnail(job.carId, job.skinId, template);
-  if (known.path) {
+  // An older engine's image is redone only on the user's word, and a
+  // protected car's never by Pit Box: it would fail and lose the image the
+  // game made (GRILLE§6.5).
+  if (known.path && (!known.stale || known.fromGame || !staleRedoAccepted())) {
+    if (known.stale && !known.fromGame) noteStale(job);
     progress.done += 1;
     return { url: convertFileSrc(known.path) };
   }
