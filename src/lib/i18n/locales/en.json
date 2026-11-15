@@ -829,6 +829,8 @@
     "thumbnailOriginalGame": "The game's image",
     "mediaThumbnailsTitle": "Thumbnails",
     "mediaThumbnailsRegenerate": "Regenerate",
+    "mediaThumbnailsRegenerateInGame": "Regenerate in the game",
+    "mediaThumbnailsProtectedHint": "This car's model is protected: Pit Box cannot read it, so its thumbnails are rendered by the game, which opens for a few seconds.",
     "mediaScreenshotsTitle": "Screenshots",
     "noScreenshots": "No screenshot found for this entry.",
     "mediaReplaysTitle": "Replays",

@@ -829,6 +829,8 @@
     "thumbnailOriginalGame": "Image du jeu",
     "mediaThumbnailsTitle": "Vignettes",
     "mediaThumbnailsRegenerate": "Régénérer",
+    "mediaThumbnailsRegenerateInGame": "Régénérer dans le jeu",
+    "mediaThumbnailsProtectedHint": "Le modèle de cette voiture est protégé : Pit Box ne peut pas le lire, ses vignettes sont donc rendues par le jeu, qui s'ouvre quelques secondes.",
     "mediaScreenshotsTitle": "Screenshots",
     "noScreenshots": "Aucune capture trouvée pour cette entité.",
     "mediaReplaysTitle": "Replays",

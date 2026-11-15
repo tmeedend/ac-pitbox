@@ -99,19 +99,26 @@
           </figure>
         {/each}
       </div>
-      <div class="actions">
-        <button class="btn" type="button" onclick={regenerate}>{t("detail.mediaThumbnailsRegenerate")}</button>
-        {#if isProtected}
-          <button
-            class="btn"
-            type="button"
-            disabled={running}
-            onclick={() => requestInGame([{ id: carId, skin, name }])}
-          >
-            {t("gridThumbs.inGameAction")}
-          </button>
-        {/if}
-      </div>
+      <!-- One way to redo them, the one that works for this car: Pit Box cannot
+           read a protected model, so for it "Regenerate" only failed, and the
+           game was the only way. Hidden until the disk has said which. -->
+      {#if known.length > 0}
+        <div class="actions">
+          {#if isProtected}
+            <button
+              class="btn"
+              type="button"
+              title={t("detail.mediaThumbnailsProtectedHint")}
+              disabled={running}
+              onclick={() => requestInGame([{ id: carId, skin, name, redo: true }])}
+            >
+              {t("detail.mediaThumbnailsRegenerateInGame")}
+            </button>
+          {:else}
+            <button class="btn" type="button" onclick={regenerate}>{t("detail.mediaThumbnailsRegenerate")}</button>
+          {/if}
+        </div>
+      {/if}
     </div>
   </section>
 {/if}

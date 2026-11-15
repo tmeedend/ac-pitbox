@@ -29,6 +29,10 @@ export interface InGameCar {
   id: string;
   skin: string | null;
   name: string;
+  /** Render every preset again, those that have an image included: asked on
+   * the car's sheet. Without it, a car already rendered by the game had
+   * nothing left to render and the button did nothing. */
+  redo?: boolean;
 }
 
 /**
@@ -212,13 +216,16 @@ async function shoot(cars: InGameCar[]): Promise<InGameCar[]> {
   const templates = sessionTemplates();
   // The entry names come from the backend, as for every thumbnail: they are
   // what makes the game's image expire with the mod, like the others.
-  // A preset whose thumbnail exists already is not rendered again.
+  // A preset whose thumbnail exists already is not rendered again, unless the
+  // car was asked to be redone.
   const wanted = await Promise.all(
     cars.map(async (car) => {
       const known = await Promise.all(
         templates.map(async (template) => ({ template, thumb: await gridThumbnail(car.id, car.skin, template) })),
       );
-      const outputs = known.filter((k) => !k.thumb.path).map((k) => ({ template: k.template, stem: k.thumb.stem }));
+      const outputs = known
+        .filter((k) => car.redo || !k.thumb.path)
+        .map((k) => ({ template: k.template, stem: k.thumb.stem }));
       return { car, outputs };
     }),
   );
