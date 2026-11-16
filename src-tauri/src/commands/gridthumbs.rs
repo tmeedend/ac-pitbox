@@ -271,7 +271,7 @@ pub async fn render_in_game(
             .collect();
         let paths = crate::gameshot::Paths {
             ac,
-            ac_documents: crate::gameshot::ac_documents().ok_or("dossier Documents introuvable")?,
+            ac_documents: crate::media::documents_ac_dir().ok_or("dossier Documents introuvable")?,
             app_source: app
                 .path()
                 .app_config_dir()

@@ -152,11 +152,6 @@ pub fn session_skin(ac: &Path, request: &ShotRequest) -> String {
         .unwrap_or_default()
 }
 
-/// `Documents\Assetto Corsa`, where the game keeps its user files.
-pub fn ac_documents() -> Option<PathBuf> {
-    Some(dirs::document_dir()?.join("Assetto Corsa"))
-}
-
 /// Whether `link` is a junction to the app as Pit Box writes it — a folder
 /// `gameshot/pitbox_shot`, wherever Pit Box's data lives. A junction elsewhere
 /// is a user app that happens to share the id, deployed by the Apps screen.
@@ -213,7 +208,7 @@ pub fn uninstall_app(ac: &Path, ac_documents: &Path) {
 /// app linked. Removed here, so the next game started by hand does not carry
 /// it. Only our junction goes — see `is_ours`.
 pub fn sweep(ac: &Path) {
-    if let Some(docs) = ac_documents() {
+    if let Some(docs) = crate::media::documents_ac_dir() {
         uninstall_app(ac, &docs);
     }
 }

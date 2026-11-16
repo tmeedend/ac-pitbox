@@ -35,11 +35,16 @@ use chrono::{DateTime, Local, TimeZone};
 use serde::Serialize;
 use walkdir::WalkDir;
 
-/// `%USERPROFILE%/Documents/Assetto Corsa` — même repli que `launch.rs`
-/// (`assists.ini`).
+/// `Documents\Assetto Corsa`, where the game keeps its user files (replays,
+/// screenshots, `out\race_out.json`, `cfg\`).
+///
+/// Windows' own Documents folder (the known folder), never
+/// `%USERPROFILE%\Documents`: when OneDrive backs Documents up, the folder is
+/// `%USERPROFILE%\OneDrive\Documents` and the game writes there. Measured on
+/// the dev machine: the `%USERPROFILE%` path did not exist, so the media tab
+/// and the session result found nothing at all.
 pub fn documents_ac_dir() -> Option<PathBuf> {
-    let profile = std::env::var("USERPROFILE").ok()?;
-    Some(Path::new(&profile).join("Documents").join("Assetto Corsa"))
+    Some(dirs::document_dir()?.join("Assetto Corsa"))
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -788,7 +793,7 @@ mod tests {
         // Étape 3 seule dispo : aucun screenshot, le background officiel doit
         // être choisi.
         write(&bg_dir.join("ks_imola_901.jpg"));
-        // documents_ac_dir n'est pas mockable simplement (lit %USERPROFILE%) —
+        // documents_ac_dir n'est pas mockable simplement (dossier de Windows) —
         // on teste donc les fonctions `_in` séparément, déjà couvertes
         // ci-dessus, plus l'ordre de préférence ici via `list_backgrounds`
         // directement (le chaînon déjà vérifié dans les autres tests).
