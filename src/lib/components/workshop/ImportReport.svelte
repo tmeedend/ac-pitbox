@@ -24,7 +24,7 @@
 
   // Libellé + classe CSS de la pastille d'issue d'un mod importé.
   function outcomeChip(o: string): { cls: string; label: string } {
-    if (o === "UPDATE_REPLACE") return { cls: "upd", label: t("importOverlay.outcomeUpdate") };
+    if (o === "UPDATE_REPLACE" || o === "LAYER_REPLACE") return { cls: "upd", label: t("importOverlay.outcomeUpdate") };
     if (o === "DUPLICATE") return { cls: "dup", label: t("importOverlay.outcomeDuplicate") };
     if (o === "REHYDRATED" || o === "LAYER_REHYDRATED")
       return { cls: "upd", label: t("importOverlay.outcomeRehydrated") };
@@ -225,6 +225,10 @@
         <span class="r-conflict">{t("importOverlay.extensionFromNote", { source: m.source_name, added: m.added_count ?? 0, overwritten: m.overwritten_count ?? 0 })}</span>
       {:else if m.outcome === "EXTENSION"}
         <span class="r-conflict">{t("importOverlay.extensionNote", { added: m.added_count ?? 0, overwritten: m.overwritten_count ?? 0 })}</span>
+      {:else if m.outcome === "LAYER_REPLACE" && m.source_name}
+        <span class="r-conflict">{t("importOverlay.layerReplacedFromNote", { source: m.source_name, added: m.added_count ?? 0, overwritten: m.overwritten_count ?? 0 })}</span>
+      {:else if m.outcome === "LAYER_REPLACE"}
+        <span class="r-conflict">{t("importOverlay.layerReplacedNote", { added: m.added_count ?? 0, overwritten: m.overwritten_count ?? 0 })}</span>
       {:else if m.outcome === "UNMANAGED"}
         <span class="r-conflict">{t("importOverlay.unmanagedNote")}</span>
       {:else if m.outcome === "PARKED"}
@@ -243,9 +247,11 @@
           <button class="r-open" type="button" onclick={() => activateBack(m.id_interne)}>{t("common.activate")}</button>
           {#if activation[m.id_interne]}<span class="r-conflict">{activation[m.id_interne]}</span>{/if}
         {/if}
-      {:else if m.fragment}
-        <!-- Importé comme mod alors qu'il n'a pas de géométrie : le seul cas où
-             l'entrée créée risque de ne rien donner en jeu. -->
+      {:else if m.fragment && (m.outcome === "IMPORT" || m.outcome === "UPDATE_REPLACE")}
+        <!-- Filed as a mod of its own although it has no geometry: the only
+             case where the entry may give nothing in game. A fragment laid as
+             a layer (EXTENSION, LAYER_*) sits on a complete host and must not
+             get this warning. -->
         <span class="r-conflict">{t("importOverlay.fragmentImportedNote")}</span>
       {/if}
     </div>

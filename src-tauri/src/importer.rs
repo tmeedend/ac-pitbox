@@ -41,7 +41,8 @@ pub struct ImportedMod {
     /// "IMPORT" | "UPDATE_REPLACE" | "DUPLICATE" | "EXTENSION" | "AMBIGUOUS" (§4.4)
     /// | "PARKED" | "HOST_MISSING" | "HOST_UNKNOWN" (§4.3bis)
     /// | "REHYDRATED" (ESPACE§7.3): the files of a version in the showcase are back
-    /// | "LAYER_REHYDRATED" (ESPACE§7.5): those of a layer.
+    /// | "LAYER_REHYDRATED" (ESPACE§7.5): those of a layer
+    /// | "LAYER_REPLACE" (§4.4): the archive replaced the layer it had laid.
     /// - EXTENSION : rangé comme couche à part, la base n'est jamais touchée.
     /// - AMBIGUOUS : rien écrit, on attend le choix de l'utilisateur.
     /// - PARKED : fragment rangé en couche d'un hôte absent, en attente de lui.
@@ -3070,8 +3071,8 @@ mod tests {
 
         let second = import_folder_for_test(&conn, &cfg, &rules, &src, true, &[]);
         assert_eq!(
-            second.mods[0].outcome, "UPDATE_REPLACE",
-            "réimport : la couche est remplacée, et la fiche doit le dire"
+            second.mods[0].outcome, "LAYER_REPLACE",
+            "reimport: the layer is replaced, and the report says it is the layer, not the track"
         );
         let layers = crate::overlay::list_layers(&conn, "spa", crate::layers::HostKind::Track).unwrap();
         assert_eq!(layers.len(), 1, "une seule couche, pas deux : {layers:?}");

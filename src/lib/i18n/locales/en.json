@@ -1482,6 +1482,8 @@
     "outcomeUnmanaged": "UNMANAGED",
     "unmanagedNote": "a mod installed outside Pit Box occupies this folder — nothing was changed. Delete it from the game, then import again",
     "extensionFromNote": "{source} stored as a layer ({added} added, {overwritten} overwritten) — base untouched",
+    "layerReplacedNote": "layer updated ({added} added, {overwritten} overwritten) — base untouched",
+    "layerReplacedFromNote": "{source}: layer updated ({added} added, {overwritten} overwritten) — base untouched",
     "outcomeParked": "ON HOLD",
     "parkedNote": "kept aside for “{host}”, which is not in the library — nothing was placed in the game",
     "outcomeHostMissing": "SKIPPED",

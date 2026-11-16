@@ -1482,6 +1482,8 @@
     "outcomeUnmanaged": "NON GÉRÉ",
     "unmanagedNote": "un mod installé hors Pit Box occupe ce dossier — rien n'a été modifié. Supprimez-le du jeu, puis réimportez",
     "extensionFromNote": "{source} rangé comme couche ({added} ajoutés, {overwritten} écrasés) — base intacte",
+    "layerReplacedNote": "couche mise à jour ({added} ajoutés, {overwritten} écrasés) — base intacte",
+    "layerReplacedFromNote": "{source} : couche mise à jour ({added} ajoutés, {overwritten} écrasés) — base intacte",
     "outcomeParked": "EN ATTENTE",
     "parkedNote": "gardé de côté pour « {host} », qui n'est pas dans la bibliothèque — rien n'a été posé dans le jeu",
     "outcomeHostMissing": "ÉCARTÉ",

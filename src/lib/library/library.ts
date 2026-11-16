@@ -239,7 +239,8 @@ export interface ImportedMod {
     | "HOST_MISSING"
     | "HOST_UNKNOWN"
     | "REHYDRATED"
-    | "LAYER_REHYDRATED";
+    | "LAYER_REHYDRATED"
+    | "LAYER_REPLACE";
   version_label: string | null;
   conflict: FuzzyConflict | null;
   /** Décompte de comparaison (§4.4), présent pour EXTENSION/AMBIGUOUS. */

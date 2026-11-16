@@ -108,7 +108,7 @@ Pensé pour un lot de plusieurs dizaines de mods.
 
 **Reprise après arbitrage** : trancher un cas ambigu rejoue l'import de **ce mod-là seulement**, depuis sa seule source, re-décompressée — aucun dossier temporaire ne survit à l'import en attendant une réponse. Ce qui suit les mods (skins/sons, apps, restes) n'est pas rejoué.
 
-**Une couche a une identité** : son parent et l'archive dont elle vient. **Réimporter la même archive remplace la couche qu'elle avait posée** (priorité reprise), au lieu d'en empiler une seconde ; l'issue rapportée est une mise à jour. Une archive différente sur le même parent fait une seconde couche.
+**Une couche a une identité** : son parent et l'archive dont elle vient. **Réimporter la même archive remplace la couche qu'elle avait posée** (priorité reprise), au lieu d'en empiler une seconde ; l'issue rapportée est une mise à jour **de la couche**, que le rapport distingue de celle du mod (« couche mise à jour », base intacte) et qui, comme une extension, ne réactive pas l'hôte. Une archive différente sur le même parent fait une seconde couche.
 
 **Règle absolue** : le **contenu de base** (Kunos, `is_stock`) ne reçoit **jamais** de mise à jour, **toujours** une couche — même une « version améliorée complète » d'un circuit Kunos.
 

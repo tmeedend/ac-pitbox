@@ -572,10 +572,14 @@ impl Filing<'_> {
         // Couche active par défaut : composer tout de suite pour qu'elle
         // apparaisse en jeu (§4.4). Best-effort, comme auto_activate.
         let _ = crate::compose::recompose(conn, cfg, id_interne);
-        // Une couche qui en remplace une autre est une mise à jour,
-        // pas une nouvelle extension : la fiche doit le dire.
+        // A layer that replaces its predecessor is an update, not a new
+        // extension, and the report must say so. But an update *of the
+        // layer*: sharing UPDATE_REPLACE with a mod's own update made the
+        // report read "the track was replaced", showed a fragment's
+        // "no 3D model" warning on a layer sitting on a complete host, and
+        // re-activated the host as if it had been reimported.
         let outcome = if replaced_priority.is_some() {
-            "UPDATE_REPLACE"
+            "LAYER_REPLACE"
         } else {
             "EXTENSION"
         };
