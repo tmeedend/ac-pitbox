@@ -126,10 +126,16 @@
     const link = parseJoinLink(e.clipboardData?.getData("text") ?? "");
     if (!link) return;
     e.preventDefault();
+    linkPassword = link.password;
+    await openAddress(link.ip, link.httpPort);
+  }
+
+  /** Opens the server at this address: the lobby's entry when it lists it,
+   * else asked directly. One that does not answer is said on the page. */
+  async function openAddress(ip: string, httpPort: number) {
     error = "";
     autoPick = null;
-    const key = `${link.ip}:${link.httpPort}`;
-    linkPassword = link.password;
+    const key = `${ip}:${httpPort}`;
     const listed = servers.find((s) => serverKey(s) === key);
     if (listed) {
       openServer(listed);
@@ -138,7 +144,7 @@
     // Not in the lobby — a private server, or one the lobby lost: asked
     // directly, as its panel would.
     try {
-      openServer((await serverDetail(link.ip, link.httpPort)).summary);
+      openServer((await serverDetail(ip, httpPort)).summary);
     } catch (err) {
       error = errorText(err);
     }
