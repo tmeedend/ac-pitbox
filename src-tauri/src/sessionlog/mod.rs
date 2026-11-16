@@ -21,12 +21,13 @@ pub mod cmcopy;
 pub mod thumbs;
 mod view;
 
-pub use view::{return_view, ReturnView};
+pub use view::{
+    edit_snapshot, history, replay_result, return_view, session_view, HistoryLine, ReplayResult, ReturnView,
+};
 
 use std::path::Path;
 
 use rusqlite::Connection;
-use serde::Serialize;
 
 use crate::overlay::{self, Launch, SessionRecord};
 use crate::raceresult::SessionResult;

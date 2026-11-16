@@ -103,7 +103,7 @@ L'export produit une copie de `overlay.sqlite` (`VACUUM INTO`, lecture seule, co
 | `pending_folders`, `pending_answers` | **non** | imports en cours |
 | `meta` | **non** | les versions de moteur (harmonisation, règles) se recalculent à l'arrivée : en leur absence, la réharmonisation se déclenche d'elle-même au premier démarrage |
 | `launch_log`, `cm_session_files` | **non** | le journal des lancements et les copies de Content Manager déjà lues : l'état de la machine (RESULTAT§2) |
-| `session_results` | **non, pour l'instant** | les sessions roulées : de l'histoire, à emporter avec l'écran qui les montre (RESULTAT§7) |
+| `session_results` | oui | les sessions roulées, sans leur lancement ni leur copie de CM ; à l'import, une session déjà là (même voiture, même tracé, même fin à une seconde près) n'est pas doublée (RESULTAT§12) |
 
 **Une ligne dont le dossier est hors de la bibliothèque ne part pas** (les livrées que le jeu livre avec son contenu, que l'autre machine retrouve), ni les versions synthétiques du contenu d'origine.
 

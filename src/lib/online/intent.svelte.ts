@@ -9,7 +9,10 @@ export type OnlineIntent =
   /** Track token values (`trackValue`), posed on the All tab. */
   | { kind: "track"; layouts: string[] }
   /** A server to open in the panel. */
-  | { kind: "server"; server: ServerSummary };
+  | { kind: "server"; server: ServerSummary }
+  /** A server known by its address only (a session of the history,
+   * RESULTAT§8): opened if it answers, else the page says so. */
+  | { kind: "address"; ip: string; httpPort: number };
 
 let pending = $state.raw<OnlineIntent | null>(null);
 

@@ -208,6 +208,13 @@ fn the_scan_reads_each_copy_once() {
 #[test]
 fn a_personal_best_is_beaten_only_when_one_existed() {
     let (dir, conn) = base();
+    // Both in the library: Again is offered only then (RESULTAT§7.6).
+    conn.execute_batch(
+        "INSERT INTO mods (id_interne, kind, display_name, created_at) VALUES
+           ('ks_lamborghini_huracan_performante', 'Car', 'Huracán Performante', ''),
+           ('monza', 'Track', 'Monza', '');",
+    )
+    .unwrap();
     let file = write_result(&dir, LAPS);
     let first = launch(
         &conn,
@@ -217,12 +224,13 @@ fn a_personal_best_is_beaten_only_when_one_existed() {
         now_ms() - 60_000,
     );
     game_closed(&conn, Some(&file), now_ms(), None).unwrap();
-    let v = return_view(&conn, first, Some(&file), false).unwrap().unwrap();
+    let v = return_view(&conn, first, Some(&file), None).unwrap().unwrap();
     assert_eq!(
-        (v.best_lap_ms, v.previous_best_ms, v.new_best),
+        (v.head.best_lap_ms, v.previous_best_ms, v.new_best),
         (Some(161_626), None, false)
     );
-    assert!(v.can_again, "a session of Pit Box starts again");
+    assert!(v.head.can_again, "a session of Pit Box starts again");
+    assert_eq!(v.head.car_name.as_deref(), Some("Huracán Performante"), "the name kept");
 
     conn.execute("UPDATE session_results SET best_lap_ms = 170000", [])
         .unwrap();
@@ -235,7 +243,7 @@ fn a_personal_best_is_beaten_only_when_one_existed() {
     );
     filetime_now(&file);
     game_closed(&conn, Some(&file), now_ms(), None).unwrap();
-    let v = return_view(&conn, second, Some(&file), false).unwrap().unwrap();
+    let v = return_view(&conn, second, Some(&file), None).unwrap().unwrap();
     assert_eq!((v.previous_best_ms, v.new_best), (Some(170_000), true));
 }
 
@@ -291,4 +299,166 @@ fn a_story_copy_with_another_car_is_still_the_story() {
     );
     assert_eq!(take_copy(&conn, &laps).unwrap(), "story");
     assert_eq!(count(&conn), 0);
+}
+
+// RESULTAT§7: the history lists the sessions the latest first, with what can
+// be done with each — a session of CM is edited from its preset, an online
+// one has no preset.
+#[test]
+fn the_history_says_what_each_session_allows() {
+    let (_dir, conn) = base();
+    take_copy(&conn, &sample("laps")).unwrap();
+    take_copy(&conn, &sample("online")).unwrap();
+    let lines = history(&conn, None, None).unwrap();
+    assert_eq!(lines.len(), 2);
+    let laps = lines.iter().find(|l| l.head.mode == "practice").unwrap();
+    assert_eq!((laps.head.kind.as_str(), laps.valid_laps), ("cm", 4));
+    assert!(laps.head.can_edit && !laps.head.can_again, "CM's preset: Edit only");
+    assert!(
+        laps.head.started_at < laps.head.ended_at.unwrap(),
+        "a start estimated from the laps driven"
+    );
+    let online = lines.iter().find(|l| l.head.mode == "online").unwrap();
+    assert!(!online.head.can_edit, "no preset online");
+    let filtered = history(&conn, Some(("ks_lamborghini_huracan_performante", "monza", None)), None).unwrap();
+    assert_eq!(filtered.len(), 1, "one car on one layout");
+}
+
+// RESULTAT§8: Edit on a session of CM reads its preset at best, and says
+// what it could not carry; on a session of Pit Box, the screen's own snapshot.
+#[test]
+fn edit_loads_the_preset_of_either_origin() {
+    let (_dir, conn) = base();
+    take_copy(&conn, &sample("laps")).unwrap();
+    let id: i64 = conn
+        .query_row("SELECT id FROM session_results", [], |r| r.get(0))
+        .unwrap();
+    let (session, notes) = edit_snapshot(&conn, id).unwrap().expect("a preset");
+    assert_eq!(session["setup"]["track_id"], "monza");
+    assert!(!notes.is_empty(), "the player's skin is not in CM's preset");
+
+    let (dir2, conn2) = base();
+    let setup = serde_json::json!({
+        "car_id": "ks_lamborghini_huracan_performante", "car_skin": null, "track_id": "monza",
+        "track_layout": null, "session_type": "practice",
+    });
+    let parsed: crate::launch::RaceSetup = serde_json::from_value(setup.clone()).unwrap();
+    let snapshot = serde_json::json!({ "name": "", "setup": setup });
+    let l = session_launch(LaunchKind::Session, now_ms() - 60_000, &setup, &parsed, Some(&snapshot));
+    note_launch(&conn2, l).unwrap();
+    let file = write_result(&dir2, LAPS);
+    let closed = game_closed(&conn2, Some(&file), now_ms(), None).unwrap().unwrap();
+    let (session, notes) = edit_snapshot(&conn2, closed.session_id.unwrap()).unwrap().unwrap();
+    assert_eq!(session, snapshot, "the snapshot the screen sent");
+    assert!(notes.is_empty());
+}
+
+// RESULTAT§11: a replay belongs to the first session ending after it, on the
+// same car and track.
+#[test]
+fn a_replay_finds_its_session() {
+    let (_dir, conn) = base();
+    let copy = sample("laps");
+    take_copy(&conn, &copy).unwrap();
+    let car = "ks_lamborghini_huracan_performante";
+    let found = replay_result(&conn, car, "monza", copy.at_ms - 20_000)
+        .unwrap()
+        .expect("its session");
+    assert_eq!((found.race_position, found.best_lap_ms), (None, Some(161_626)));
+    assert!(
+        replay_result(&conn, car, "monza", copy.at_ms + 600_000)
+            .unwrap()
+            .is_none(),
+        "after it"
+    );
+    assert!(
+        replay_result(&conn, car, "spa", copy.at_ms - 20_000).unwrap().is_none(),
+        "another track"
+    );
+}
+
+// RESULTAT§9, RESULTAT§10: the record and "My times" count valid laps only;
+// a combo driven without one has a line, no best.
+#[test]
+fn records_and_my_times_count_valid_laps_only() {
+    let (_dir, conn) = base();
+    take_copy(&conn, &sample("laps")).unwrap();
+    take_copy(&conn, &sample("hotlap_cut")).unwrap();
+    let car = "ks_lamborghini_huracan_performante";
+    assert_eq!(
+        overlay::best_on(&conn, car, "monza", None).unwrap().map(|b| b.0),
+        Some(161_626)
+    );
+    assert!(
+        overlay::best_on(&conn, "rss_formula_rss_3_v6_2026", "monza", None)
+            .unwrap()
+            .is_none(),
+        "cut lap only"
+    );
+    let monza = overlay::combo_times(&conn, "monza", false).unwrap();
+    assert_eq!(monza.len(), 2, "two cars at Monza");
+    let cut = monza.iter().find(|c| c.car_id == "rss_formula_rss_3_v6_2026").unwrap();
+    assert_eq!((cut.best_lap_ms, cut.sessions), (None, 1));
+}
+
+// A base written before the names were kept reads, and gains them.
+#[test]
+fn a_base_without_the_names_is_brought_up_to_date() {
+    let dir = crate::testutil::temp_dir("sessionlog-old");
+    let path = dir.join("overlay.sqlite");
+    {
+        let old = rusqlite::Connection::open(&path).unwrap();
+        old.execute_batch(
+            "CREATE TABLE session_results (id INTEGER PRIMARY KEY AUTOINCREMENT, launch_id INTEGER UNIQUE,
+               cm_file TEXT UNIQUE, origin TEXT NOT NULL, started_at INTEGER, ended_at INTEGER NOT NULL,
+               mode TEXT NOT NULL, car_id TEXT NOT NULL, skin TEXT NOT NULL DEFAULT '', track_id TEXT NOT NULL,
+               track_layout TEXT, best_lap_ms INTEGER, laps INTEGER NOT NULL DEFAULT 0, result TEXT NOT NULL,
+               quick_drive TEXT);
+             INSERT INTO session_results (origin, ended_at, mode, car_id, track_id, result)
+               VALUES ('cm', 1, 'practice', 'a_car', 'a_track', '{}');",
+        )
+        .unwrap();
+    }
+    let conn = overlay::open(&path).expect("opens");
+    let lines = overlay::list_sessions(&conn, None).expect("reads");
+    assert_eq!(lines.len(), 1);
+    assert_eq!(lines[0].car_name, None, "no name kept before: the id stands in");
+}
+
+// RESULTAT§7.6: a session whose car left the library keeps its name, and
+// Again is not offered — Edit and its partial loading are.
+#[test]
+fn a_session_of_a_mod_gone_keeps_its_name_without_again() {
+    let (dir, conn) = base();
+    conn.execute_batch(
+        "INSERT INTO mods (id_interne, kind, display_name, created_at) VALUES
+           ('ks_lamborghini_huracan_performante', 'Car', 'Huracán Performante', ''), ('monza', 'Track', 'Monza', '');",
+    )
+    .unwrap();
+    let file = write_result(&dir, LAPS);
+    let id = launch(
+        &conn,
+        LaunchKind::Session,
+        "ks_lamborghini_huracan_performante",
+        "monza",
+        now_ms() - 60_000,
+    );
+    let session = game_closed(&conn, Some(&file), now_ms(), None)
+        .unwrap()
+        .unwrap()
+        .session_id
+        .unwrap();
+    conn.execute(
+        "DELETE FROM mods WHERE id_interne = 'ks_lamborghini_huracan_performante'",
+        [],
+    )
+    .unwrap();
+    let v = session_view(&conn, session, None).unwrap().unwrap();
+    assert_eq!(
+        v.head.car_name.as_deref(),
+        Some("Huracán Performante"),
+        "the name kept with the session"
+    );
+    assert!(!v.head.car_known && !v.head.can_again, "no Again on a car gone");
+    assert_eq!(v.head.launch_id, Some(id));
 }

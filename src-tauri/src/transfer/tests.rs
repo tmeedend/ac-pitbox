@@ -1332,3 +1332,43 @@ fn a_version_reads_as_newer_only_when_it_is() {
     assert!(!is_newer("0.7.12", "0.8.0"));
     assert!(is_newer("garbage", "0.8.0"), "what cannot be read is refused");
 }
+
+// RESULTAT§12: the sessions leave without their launch and CM copy, and a
+// session already here (same car, layout, end within a second) is not
+// brought twice.
+#[test]
+fn sessions_travel_once_and_without_the_machine() {
+    let root = crate::testutil::temp_dir("transfer-sessions");
+    let insert = |conn: &Connection, ended: i64, car: &str| {
+        conn.execute(
+            "INSERT INTO session_results (launch_id, cm_file, origin, ended_at, mode, car_id, track_id, result)
+             VALUES (?1, ?2, 'pitbox', ?3, 'practice', ?4, 'monza', '{}')",
+            rusqlite::params![ended, format!("{ended}.json"), ended, car],
+        )
+        .unwrap();
+    };
+    let export = crate::overlay::open(&root.join("export.sqlite")).unwrap();
+    insert(&export, 10_000, "car_a");
+    insert(&export, 50_000, "car_b");
+    tables::finish(&export, &[], "now").unwrap();
+    let left: (Option<i64>, Option<String>) = export
+        .query_row("SELECT launch_id, cm_file FROM session_results LIMIT 1", [], |r| {
+            Ok((r.get(0)?, r.get(1)?))
+        })
+        .unwrap();
+    assert_eq!(left, (None, None), "nothing of the machine leaves");
+    drop(export);
+
+    let here = crate::overlay::open(&root.join("here.sqlite")).unwrap();
+    insert(&here, 10_400, "car_a");
+    here.execute(
+        "ATTACH DATABASE ?1 AS src",
+        [root.join("export.sqlite").to_string_lossy()],
+    )
+    .unwrap();
+    fusion::sessions(&here).unwrap();
+    let n: i64 = here
+        .query_row("SELECT COUNT(*) FROM main.session_results", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(n, 2, "car_a was here already; car_b comes");
+}

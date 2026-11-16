@@ -900,7 +900,7 @@ export function startGamepadNav(): () => void {
           else if (nav.openFull && backPressed && !leftField) void goBackOr(() => (nav.openFull = null));
           // The screen of the session just driven (RESULTAT§4): B goes back
           // to where one was, the session zone when nothing is behind.
-          else if (nav.section === "result" && backPressed && !leftField) void goBackOr(() => void openSessionZone());
+          else if ((nav.section === "result" || nav.section === "history") && backPressed && !leftField) void goBackOr(() => void openSessionZone());
         }
 
         if (needsEntry(active)) {

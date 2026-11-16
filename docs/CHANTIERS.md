@@ -43,19 +43,17 @@ de reprendre. En cas d'écart, la spec fait foi.
         SPEC.md), « Keep » compris.
       - `media::documents_ac_dir` lisait `%USERPROFILE%\Documents` : faux dès
         que OneDrive sauvegarde Documents. Corrigé (commit à part).
-      **Reste — lot 2** :
-      - [ ] le record perso à côté du bouton Start (« PB 1:52.3 · 3 weeks ago ») ;
-      - [ ] le bloc « My times » des fiches voiture et circuit ;
-      - [ ] l'onglet History de la zone Session : sorties regroupées par
-        circuit, tableau des voitures, sessions sans tour valide masquées,
-        Again et Edit (le preset du journal pour une session de Pit Box, le
-        `__quickDrive` « au mieux » pour une de CM), image tirée d'un
-        screenshot, accès au replay s'il existe encore ;
-      - [ ] le résultat sur la ligne de replay de la fiche (« P3 · 1:52.3 ») ;
-      - [ ] emporter `session_results` dans l'export de bibliothèque (EXPORT§4.1).
-      **Reste — vérifications** : un vrai retour du jeu à l'écran (Again, Keep,
-      premier plan ou clignotement), une session online de bout en bout, une
-      série de vignettes dont la copie part à la corbeille.
+      **Lot 2 fait** (RESULTAT§7 à §12) : l'historique en sorties dans la zone
+      Session, Again / Edit / Open server, le record perso sous Start, « My
+      times » dans les fiches, le résultat sur les lignes de replay, l'export.
+      - Un tour coupé en essais ou hotlap s'écrit `time: -1` avec ses secteurs :
+        son temps est leur somme (constaté sur 4 fichiers réels).
+      - Les sessions enregistrées avant cette correction (lot 1) gardent leur
+        résultat lu par l'ancienne règle, sans leurs tours coupés.
+      **Reste — vérifications à l'écran** : un vrai retour du jeu (Again,
+      Keep, premier plan ou clignotement), une session online de bout en bout
+      et Open server, une série de vignettes dont la copie part à la
+      corbeille, Edit sur une session de CM, un export puis import réel.
 
 - [ ] **Story Mode et Create Your Own — phase 0 (2026-10-17).** Spec générique
       dans `docs/story/` ; le document complet et les maquettes restent en

@@ -565,6 +565,16 @@
     }
   });
 
+  // "Edit" on a session of the history (RESULTAT§8): loaded like a saved
+  // session, partial loading and its banner included. Same pattern.
+  $effect(() => {
+    const pending = nav.loadSession;
+    if (pending && ready) {
+      nav.loadSession = null;
+      untrack(() => void doLoadSession(pending.session, pending.notes));
+    }
+  });
+
   // Action « adversaires » posée depuis la bibliothèque voitures (§6.3ter) :
   // même schéma que autoLaunch ci-dessus, consommée une fois l'écran prêt
   // (couvre l'arrivée fraîche sur cet écran comme le cas déjà ouvert).

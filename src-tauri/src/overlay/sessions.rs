@@ -118,10 +118,28 @@ pub struct SessionRecord {
     pub laps: i64,
     pub result: String,
     pub quick_drive: Option<String>,
+    /// The car's name: the mod's today, else the one kept when the session
+    /// was recorded (RESULTAT§7.6). `None` when neither is known.
+    pub car_name: Option<String>,
+    pub track_name: Option<String>,
+    /// Whether the mod is still in the library.
+    pub car_known: bool,
+    pub track_known: bool,
 }
 
-const RECORD_COLUMNS: &str = "id, launch_id, cm_file, origin, started_at, ended_at, mode, car_id, skin, \
-     track_id, track_layout, best_lap_ms, laps, result, quick_drive";
+/// A mod's name as the library shows it.
+const NAME_OF: &str = "SELECT COALESCE(display_name_user, display_name) FROM mods WHERE id_interne";
+
+fn record_columns() -> String {
+    format!(
+        "id, launch_id, cm_file, origin, started_at, ended_at, mode, car_id, skin, \
+         track_id, track_layout, best_lap_ms, laps, result, quick_drive, \
+         COALESCE(({NAME_OF} = session_results.car_id), car_name), \
+         COALESCE(({NAME_OF} = session_results.track_id), track_name), \
+         EXISTS(SELECT 1 FROM mods WHERE id_interne = session_results.car_id), \
+         EXISTS(SELECT 1 FROM mods WHERE id_interne = session_results.track_id)"
+    )
+}
 
 fn record_row(r: &rusqlite::Row) -> rusqlite::Result<SessionRecord> {
     Ok(SessionRecord {
@@ -140,14 +158,20 @@ fn record_row(r: &rusqlite::Row) -> rusqlite::Result<SessionRecord> {
         laps: r.get(12)?,
         result: r.get(13)?,
         quick_drive: r.get(14)?,
+        car_name: r.get(15)?,
+        track_name: r.get(16)?,
+        car_known: r.get(17)?,
+        track_known: r.get(18)?,
     })
 }
 
 pub fn insert_session(conn: &Connection, s: &SessionRecord) -> rusqlite::Result<i64> {
     conn.execute(
-        "INSERT INTO session_results (launch_id, cm_file, origin, started_at, ended_at, mode, car_id, skin,
-             track_id, track_layout, best_lap_ms, laps, result, quick_drive)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+        &format!(
+            "INSERT INTO session_results (launch_id, cm_file, origin, started_at, ended_at, mode, car_id, skin,
+                 track_id, track_layout, best_lap_ms, laps, result, quick_drive, car_name, track_name)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ({NAME_OF} = ?7), ({NAME_OF} = ?9))"
+        ),
         params![
             s.launch_id,
             s.cm_file,
@@ -170,7 +194,7 @@ pub fn insert_session(conn: &Connection, s: &SessionRecord) -> rusqlite::Result<
 
 pub fn session_of_launch(conn: &Connection, launch_id: i64) -> rusqlite::Result<Option<SessionRecord>> {
     conn.query_row(
-        &format!("SELECT {RECORD_COLUMNS} FROM session_results WHERE launch_id = ?1"),
+        &format!("SELECT {} FROM session_results WHERE launch_id = ?1", record_columns()),
         [launch_id],
         record_row,
     )
@@ -219,4 +243,128 @@ pub fn mark_cm_file(conn: &Connection, file: &str, outcome: &str, at: i64) -> ru
         params![file, at, outcome],
     )?;
     Ok(())
+}
+
+/// A mod's name as the library shows it; `None` when it is not there.
+pub fn mod_name(conn: &Connection, id: &str) -> rusqlite::Result<Option<String>> {
+    conn.query_row(
+        "SELECT COALESCE(display_name_user, display_name, id_interne) FROM mods WHERE id_interne = ?1",
+        [id],
+        |r| r.get(0),
+    )
+    .optional()
+}
+
+pub fn get_session(conn: &Connection, id: i64) -> rusqlite::Result<Option<SessionRecord>> {
+    conn.query_row(
+        &format!("SELECT {} FROM session_results WHERE id = ?1", record_columns()),
+        [id],
+        record_row,
+    )
+    .optional()
+}
+
+/// Every session, the latest first, or those of one car on one layout
+/// (RESULTAT§7.6).
+pub fn list_sessions(
+    conn: &Connection,
+    combo: Option<(&str, &str, Option<&str>)>,
+) -> rusqlite::Result<Vec<SessionRecord>> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {} FROM session_results
+         WHERE ?1 IS NULL OR (car_id = ?1 AND track_id = ?2 AND COALESCE(track_layout, '') = COALESCE(?3, ''))
+         ORDER BY ended_at DESC, id DESC",
+        record_columns()
+    ))?;
+    let (car, track, layout) = match combo {
+        Some((c, t, l)) => (Some(c), Some(t), l),
+        None => (None, None, None),
+    };
+    let rows = stmt.query_map(params![car, track, layout], record_row)?;
+    rows.collect()
+}
+
+/// The record on a car and a layout, and when it was set (RESULTAT§9).
+pub fn best_on(
+    conn: &Connection,
+    car_id: &str,
+    track_id: &str,
+    layout: Option<&str>,
+) -> rusqlite::Result<Option<(i64, i64)>> {
+    conn.query_row(
+        "SELECT best_lap_ms, ended_at FROM session_results
+         WHERE car_id = ?1 AND track_id = ?2 AND COALESCE(track_layout, '') = COALESCE(?3, '')
+           AND best_lap_ms IS NOT NULL
+         ORDER BY best_lap_ms, ended_at LIMIT 1",
+        params![car_id, track_id, layout],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )
+    .optional()
+}
+
+/// One line of "My times" (RESULTAT§10): a car on a layout.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct ComboTimes {
+    pub car_id: String,
+    pub car_name: Option<String>,
+    pub track_id: String,
+    pub track_name: Option<String>,
+    pub track_layout: Option<String>,
+    pub best_lap_ms: Option<i64>,
+    /// When the best was set; the latest session when there is none.
+    pub best_at: i64,
+    pub last_at: i64,
+    pub sessions: i64,
+}
+
+/// "My times" of a car (`kind` = `car`) or a track: one line per car and
+/// layout it was driven with.
+pub fn combo_times(conn: &Connection, mod_id: &str, of_car: bool) -> rusqlite::Result<Vec<ComboTimes>> {
+    let column = if of_car { "car_id" } else { "track_id" };
+    let mut stmt = conn.prepare(&format!(
+        "SELECT s.car_id, COALESCE(({NAME_OF} = s.car_id), MAX(s.car_name)),
+                s.track_id, COALESCE(({NAME_OF} = s.track_id), MAX(s.track_name)), s.track_layout,
+                MIN(s.best_lap_ms),
+                COALESCE((SELECT b.ended_at FROM session_results b
+                          WHERE b.car_id = s.car_id AND b.track_id = s.track_id
+                            AND COALESCE(b.track_layout, '') = COALESCE(s.track_layout, '')
+                            AND b.best_lap_ms IS NOT NULL
+                          ORDER BY b.best_lap_ms, b.ended_at LIMIT 1), MAX(s.ended_at)),
+                MAX(s.ended_at), COUNT(*)
+         FROM session_results s WHERE s.{column} = ?1
+         GROUP BY s.car_id, s.track_id, COALESCE(s.track_layout, '')"
+    ))?;
+    let rows = stmt.query_map([mod_id], |r| {
+        Ok(ComboTimes {
+            car_id: r.get(0)?,
+            car_name: r.get(1)?,
+            track_id: r.get(2)?,
+            track_name: r.get(3)?,
+            track_layout: r.get(4)?,
+            best_lap_ms: r.get(5)?,
+            best_at: r.get(6)?,
+            last_at: r.get(7)?,
+            sessions: r.get(8)?,
+        })
+    })?;
+    rows.collect()
+}
+
+/// The session a replay was recorded in (RESULTAT§11): same car and track,
+/// the first one to end once the replay was written — an autosave is dated
+/// at the end of its session — and begun before it. A session of CM has no
+/// start: six hours before its end stand in.
+pub fn session_at(conn: &Connection, car_id: &str, track_id: &str, at: i64) -> rusqlite::Result<Option<SessionRecord>> {
+    conn.query_row(
+        &format!(
+            "SELECT {} FROM session_results
+             WHERE car_id = ?1 AND track_id = ?2 AND ended_at >= ?3 - 120000
+               AND COALESCE(started_at, ended_at - 21600000) <= ?3
+             ORDER BY ended_at LIMIT 1",
+            record_columns()
+        ),
+        params![car_id, track_id, at],
+        record_row,
+    )
+    .optional()
 }

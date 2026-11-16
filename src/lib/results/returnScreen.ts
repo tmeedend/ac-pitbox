@@ -8,6 +8,7 @@ export function showResultOnReturn(): () => void {
   let stop: (() => void) | null = null;
   void onSessionEnded((launchId) => {
     nav.resultLaunch = launchId;
+    nav.resultSession = null;
     void requestSection("result");
   }).then((off) => (stop = off));
   return () => stop?.();

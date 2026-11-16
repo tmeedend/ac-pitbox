@@ -84,3 +84,22 @@ function raceLines(session: SessionOutcome): RaceLine[] {
     return { standing, isPlayer: standing.car === 0, gap };
   });
 }
+
+/** `3 weeks ago`, in the app's language: the coarsest unit that fits. */
+export function fmtAgo(atMs: number, nowMs: number, locale: string): string {
+  const s = Math.round((atMs - nowMs) / 1000);
+  const abs = Math.abs(s);
+  const fmt = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  const units: [Intl.RelativeTimeFormatUnit, number][] = [
+    ["year", 365 * 86_400],
+    ["month", 30 * 86_400],
+    ["week", 7 * 86_400],
+    ["day", 86_400],
+    ["hour", 3_600],
+    ["minute", 60],
+  ];
+  for (const [unit, size] of units) {
+    if (abs >= size) return fmt.format(Math.round(s / size), unit);
+  }
+  return fmt.format(0, "minute");
+}

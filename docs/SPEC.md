@@ -478,7 +478,7 @@ Sur l'écran de réglages (SESSION§3), une image assombrie et floutée derrièr
 
 | Onglet | Contenu |
 |---|---|
-| **La voiture** / **Le circuit** | aperçu, sélecteur, fiche technique, courbe, son, bloc textuel |
+| **La voiture** / **Le circuit** | aperçu, sélecteur, fiche technique, courbe, son, « My times » (RESULTAT§10), bloc textuel |
 | **Médias et documents** | Screenshots, Replays, Ressources, Backgrounds (§6.1) |
 | **Installation** | ajouts au jeu, décisions d'import, origine, historique, couches, étiquettes, extensions CSP |
 
@@ -487,6 +487,8 @@ Sur l'écran de réglages (SESSION§3), une image assombrie et floutée derrièr
 **Le sélecteur de livrée ou de tracé est une carte de la colonne de droite** (`PickerBar`), avec en-tête et compteur (« SKINS 28 »), **au-dessus de la ligne de flottaison** — un contrôle n'exige jamais de défiler. Trois gestes : les **flèches** (défiler en gardant l'œil sur l'aperçu), le **nom** (liste déroulante) et **« Voir les N »** (grille de vignettes dépliée en place, repliée à chaque ouverture de fiche).
 
 **Le premier onglet tient en deux zones.** Une rangée à deux colonnes **qui se referme sur la hauteur de l'aperçu** — l'aperçu à gauche, toutes les cartes à droite ; une colonne de droite plus haute que l'aperçu allonge la rangée, l'aperçu reste en haut ; sous ~1 100 px de largeur **disponible**, une colonne. Puis le **bloc de lecture**, pleine largeur, contenu centré sur des **paliers de largeur** (100 %, puis 540 / 720 / 960 / 1140 / 1320 px), sans hauteur minimale. **Tous les seuils de cette mise en page sont des requêtes de conteneur**, jamais de média.
+
+**« My times »** (RESULTAT§10) est une carte de la colonne de droite, sous le sélecteur de livrée ou de tracé, masquée tant que le mod n'a jamais été roulé.
 
 **Un circuit n'a que deux cartes de données** — « Circuit » (longueur, nombre de tracés et combien une couche en apporte, pays, odomètre) puis « Habillages » —, et la grille n'est pas dictée par le type le plus riche. **La longueur porte son unité** : un entier est en mètres, une valeur sous 100 est lue en **kilomètres**, une valeur qui porte déjà une unité est rendue telle quelle (`trackLength.ts`). Le nom du tracé n'entre pas dans la carte : le sélecteur le dit. Le sous-titre de l'en-tête : marque et année pour une voiture, longueur et nombre de tracés pour un circuit.
 

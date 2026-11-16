@@ -39,11 +39,15 @@ SESSION
   Course                           ← sélectionné
     Adversaires  6 IA · 87 % ± 3   ← sous-entrée, filet d'attache
   Track day
+  Historique                       ← RESULTAT§7, sous un filet
   [ ▶ DÉMARRER LA SESSION      ]
+  Record 1:52.3 · il y a 3 semaines  ← RESULTAT§9, absent sans record
 ```
 
 **L'ordre suit celui de la décision** : le circuit, la voiture, le genre de
-séance, puis le bouton de lancement, juste sous les types.
+séance, puis le bouton de lancement, juste sous les types. **History**, sous un
+filet après les types, ouvre l'historique des sessions (RESULTAT§7) ; le record
+perso sur le couple choisi suit le bouton (RESULTAT§9).
 
 **La colonne ne défile jamais**, y compris dans le cas le plus chargé (Course
 sélectionnée, sous-entrée affichée, 1920 × 1080). Deux dispositifs y

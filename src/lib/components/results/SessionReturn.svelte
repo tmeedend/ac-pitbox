@@ -4,22 +4,25 @@
   // going anywhere else closes it. What it says depends on the session
   // (`returnView.ts`); the replay and the screenshots are computed from its
   // times, never stored (RESULTAT§6).
-  import { onMount, untrack } from "svelte";
+  import { untrack } from "svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
   import { nav, requestSection } from "$lib/shell/nav.svelte";
-  import { getModDetail, previewSrc } from "$lib/library/library";
+  import { previewSrc } from "$lib/library/library";
   import { loadThumbnails } from "$lib/detail/thumbnails";
   import { CM_SETTLE_MS, keepReplay, launchReplay } from "$lib/detail/media";
   import { canStartSession, markStarting } from "$lib/launch/gameSession.svelte";
   import { LaunchSequence } from "$lib/launch/launchSequence.svelte";
   import { PAUSE_SESSION, pauseGridThumbs } from "$lib/gridthumbs/gridThumbs.svelte";
+  import { openOnline } from "$lib/online/intent.svelte";
   import SteamPrompt from "$lib/components/launch/SteamPrompt.svelte";
   import Lightbox, { type LightboxItem } from "$lib/components/ui/Lightbox.svelte";
   import {
     launchAgain,
+    sessionEdit,
     sessionMedia,
     sessionReturn,
+    sessionView,
     type ReturnView,
     type SessionMedia,
   } from "$lib/results/results";
@@ -27,7 +30,6 @@
 
   let view = $state<ReturnView | null>(null);
   let media = $state<SessionMedia>({ replay: null, screenshots: [] });
-  let names = $state<{ car: string; track: string }>({ car: "", track: "" });
   let thumbs = $state<Record<string, string>>({});
   let lightboxIndex = $state<number | null>(null);
   let error = $state("");
@@ -37,56 +39,71 @@
 
   const content = $derived(returnContent(view?.result ?? null));
   const modeLabel = $derived(view ? t(`results.mode.${view.mode}`) : "");
+  /** Which session is shown: the launch the game just closed, else a session
+   * opened from the history (RESULTAT§7.4). */
+  const key = $derived(
+    nav.resultLaunch != null
+      ? `l${nav.resultLaunch}`
+      : nav.resultSession != null
+        ? `s${nav.resultSession}`
+        : null,
+  );
+  const combo = $derived(
+    view
+      ? [view.car_name ?? view.car_id, [view.track_name ?? view.track_id, view.track_layout].filter(Boolean).join(" · ")]
+          .filter(Boolean)
+          .join(" · ")
+      : "",
+  );
 
-  async function load(launchId: number) {
+  async function load(k: string) {
     error = "";
     try {
-      const v = await sessionReturn(launchId);
-      if (nav.resultLaunch !== launchId) return;
+      const id = Number(k.slice(1));
+      const v = k.startsWith("l") ? await sessionReturn(id) : await sessionView(id);
+      if (key !== k) return;
       view = v;
-      if (!v) return;
-      const [car, track] = await Promise.all([
-        v.car_id ? getModDetail(v.car_id).catch(() => null) : null,
-        v.track_id ? getModDetail(v.track_id).catch(() => null) : null,
-      ]);
-      names = { car: car?.display_name ?? v.car_id ?? "", track: track?.display_name ?? v.track_id ?? "" };
+      if (v) void loadMedia(k, v);
     } catch (e) {
       error = errorText(e);
     }
   }
 
-  async function loadMedia(launchId: number) {
+  async function loadMedia(k: string, v: ReturnView) {
+    if (!v.car_id || !v.track_id) return;
     try {
-      const m = await sessionMedia(launchId);
-      if (nav.resultLaunch === launchId) media = m;
+      const m = await sessionMedia(v.car_id, v.track_id, v.started_at, v.ended_at ?? Date.now());
+      if (key === k) media = m;
     } catch (e) {
       console.warn("session_media", e);
     }
   }
 
   $effect(() => {
-    const id = nav.resultLaunch;
-    if (id == null) return;
+    const k = key;
+    if (k == null) return;
     untrack(() => {
       view = null;
       media = { replay: null, screenshots: [] };
       kept = false;
-      void load(id);
-      void loadMedia(id);
+      void load(k);
     });
     // The replay lands as the game closes, and CM may rename it a few seconds
     // later: looked for again then, as the media tab does (§6.1). Not there
     // by then, no button and nothing said.
-    const again = setTimeout(() => void loadMedia(id), CM_SETTLE_MS);
+    const again = setTimeout(() => {
+      const v = untrack(() => view);
+      if (v) void loadMedia(k, v);
+    }, CM_SETTLE_MS);
     return () => clearTimeout(again);
   });
 
   $effect(() => {
-    const id = nav.resultLaunch;
+    const k = key;
     const paths = media.screenshots.map((s) => s.path);
     loadThumbnails(
       paths,
-      () => nav.resultLaunch !== id,
+      () => key !== k,
       (path, src) => (thumbs = { ...thumbs, [path]: src }),
     );
   });
@@ -116,6 +133,30 @@
   /** Keeps the track and opens the car library. */
   function changeCar() {
     void requestSection("cars");
+  }
+
+  /** The session in the settings screen, by the saved sessions' path
+   * (RESULTAT§8): what is missing is said in its yellow banner. */
+  async function edit() {
+    const id = view?.session_id;
+    if (id == null) return;
+    error = "";
+    try {
+      const loaded = await sessionEdit(id);
+      if (!loaded) return;
+      // Posed only once the screen is reached: a navigation refused (unsaved
+      // settings) must not leave it waiting for the next visit.
+      if (await requestSection("race")) nav.loadSession = loaded;
+    } catch (e) {
+      error = errorText(e);
+    }
+  }
+
+  /** The server on the Online page, which asks for its password and says
+   * when it no longer answers (RESULTAT§8). */
+  function openServer() {
+    const s = view?.server;
+    if (s) void openOnline({ kind: "address", ip: s.ip, httpPort: s.http_port });
   }
 
   async function watchReplay() {
@@ -149,10 +190,25 @@
     media.screenshots.map((s) => ({ src: previewSrc(s.path) ?? "", caption: s.file_name })),
   );
 
-  onMount(() => () => {
-    // Leaving the screen closes it: the next visit is the next session's.
-    if (nav.section !== "result") nav.resultLaunch = null;
+  /** The conditions in one line, when known (RESULTAT§7.4). */
+  const conditions = $derived.by(() => {
+    const c = view?.conditions;
+    if (!c) return "";
+    const hour =
+      c.time_hours != null
+        ? `${String(Math.floor(c.time_hours)).padStart(2, "0")}:${String(Math.round((c.time_hours % 1) * 60)).padStart(2, "0")}`
+        : null;
+    return [
+      c.weather,
+      hour,
+      c.ambient_c != null ? `${Math.round(c.ambient_c)} °C` : null,
+      c.road_c != null ? t("results.road", { temp: Math.round(c.road_c) }) : null,
+      c.track_state,
+    ]
+      .filter(Boolean)
+      .join(" · ");
   });
+  const when = $derived(view?.ended_at ? new Date(view.ended_at).toLocaleString() : "");
 </script>
 
 <div class="return">
@@ -160,7 +216,8 @@
     <div>
       <h1 class="lbl-screen">{modeLabel}</h1>
       {#if view}
-        <p class="combo">{[names.car, names.track].filter(Boolean).join(" · ")}</p>
+        <p class="combo">{combo}</p>
+        <p class="when">{[when, conditions].filter(Boolean).join(" · ")}</p>
       {/if}
     </div>
   </header>
@@ -232,8 +289,17 @@
           disabled={!canStartSession() || sequence.launching}
           onclick={() => void sequence.launch()}>{t("results.again")}</button
         >
+      {:else if view.kind === "online" && view.server}
+        <!-- The password is not kept (RESULTAT§8): the Online page asks. -->
+        <button class="btn btn-primary" type="button" onclick={openServer}>{t("results.openServer")}</button>
       {/if}
-      {#if view.kind === "session"}
+      {#if view.can_edit}
+        <button class="btn" type="button" onclick={() => void edit()}>{t("results.edit")}</button>
+      {/if}
+      <!-- Only on the return from the game: the column holds that session's
+           track then. From the history it may hold another, and Edit is the
+           way to change the car of an older session (RESULTAT§8). -->
+      {#if view.kind === "session" && nav.resultLaunch != null}
         <button class="btn" type="button" onclick={changeCar}>{t("results.changeCar")}</button>
       {/if}
       {#if media.replay}
@@ -285,6 +351,11 @@
   .combo {
     color: var(--muted);
     margin: 4px 0 0;
+  }
+  .when {
+    color: var(--faint);
+    font-size: 12px;
+    margin: 2px 0 0;
   }
   .board {
     border-collapse: collapse;

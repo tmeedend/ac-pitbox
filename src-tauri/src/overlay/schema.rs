@@ -133,6 +133,11 @@ pub(super) fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         "ALTER TABLE wiki_cache ADD COLUMN images TEXT NOT NULL DEFAULT '[]'",
         [],
     );
+    // The names of the car and the track as they were when the session was
+    // recorded (RESULTAT§7.6): what the history shows once the mod is gone.
+    // NULL on a row recorded before — its id stands in.
+    let _ = conn.execute("ALTER TABLE session_results ADD COLUMN car_name TEXT", []);
+    let _ = conn.execute("ALTER TABLE session_results ADD COLUMN track_name TEXT", []);
     Ok(())
 }
 

@@ -149,16 +149,113 @@ fn bring_back(app: &AppHandle) {
     }
 }
 
+/// The online launch whose join is still in memory, for "Again".
+fn last_join() -> Option<i64> {
+    LAST_JOIN
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_ref()
+        .map(|(id, _)| *id)
+}
+
 /// What the screen shown on return needs (RESULTAT§4).
 #[tauri::command]
 pub fn session_return(db: State<Db>, launch_id: i64) -> Result<Option<sessionlog::ReturnView>, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     let file = crate::raceresult::result_path();
-    // An online "Again" needs the join request kept in memory: gone with a
-    // restart of Pit Box.
-    let online_again =
-        matches!(LAST_JOIN.lock().unwrap_or_else(|e| e.into_inner()).as_ref(), Some((id, _)) if *id == launch_id);
-    sessionlog::return_view(&conn, launch_id, file.as_deref(), online_again).map_err(|e| e.to_string())
+    sessionlog::return_view(&conn, launch_id, file.as_deref(), last_join()).map_err(|e| e.to_string())
+}
+
+/// A session of the history, on the screen of a session (RESULTAT§7.4).
+#[tauri::command]
+pub fn session_view(db: State<Db>, session_id: i64) -> Result<Option<sessionlog::ReturnView>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    sessionlog::session_view(&conn, session_id, last_join()).map_err(|e| e.to_string())
+}
+
+/// The history, or the sessions of one car on one layout (RESULTAT§7).
+#[tauri::command]
+pub fn session_history(
+    db: State<Db>,
+    car_id: Option<String>,
+    track_id: Option<String>,
+    track_layout: Option<String>,
+) -> Result<Vec<sessionlog::HistoryLine>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let combo = match (car_id.as_deref(), track_id.as_deref()) {
+        (Some(car), Some(track)) => Some((car, track, track_layout.as_deref())),
+        _ => None,
+    };
+    sessionlog::history(&conn, combo, last_join()).map_err(|e| e.to_string())
+}
+
+#[derive(serde::Serialize)]
+pub struct EditSnapshot {
+    session: serde_json::Value,
+    notes: Vec<String>,
+}
+
+/// What "Edit" loads in the session screen (RESULTAT§8).
+#[tauri::command]
+pub fn session_edit(db: State<Db>, session_id: i64) -> Result<Option<EditSnapshot>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    Ok(sessionlog::edit_snapshot(&conn, session_id)?.map(|(session, notes)| EditSnapshot { session, notes }))
+}
+
+#[derive(serde::Serialize)]
+pub struct PersonalBest {
+    best_lap_ms: i64,
+    at_ms: i64,
+}
+
+/// The record on a car and a layout, beside Start (RESULTAT§9).
+#[tauri::command]
+pub fn personal_best(
+    db: State<Db>,
+    car_id: String,
+    track_id: String,
+    track_layout: Option<String>,
+) -> Result<Option<PersonalBest>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    Ok(
+        crate::overlay::best_on(&conn, &car_id, &track_id, track_layout.as_deref())
+            .map_err(|e| e.to_string())?
+            .map(|(best_lap_ms, at_ms)| PersonalBest { best_lap_ms, at_ms }),
+    )
+}
+
+/// "My times" of a car or a track (RESULTAT§10).
+#[tauri::command]
+pub fn my_times(db: State<Db>, mod_id: String, is_car: bool) -> Result<Vec<crate::overlay::ComboTimes>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    crate::overlay::combo_times(&conn, &mod_id, is_car).map_err(|e| e.to_string())
+}
+
+#[derive(serde::Deserialize)]
+pub struct ReplayRef {
+    path: String,
+    car_id: String,
+    track_id: String,
+    at_ms: i64,
+}
+
+/// The result of the session of each replay that has one, by path
+/// (RESULTAT§11).
+#[tauri::command]
+pub fn replay_results(
+    db: State<Db>,
+    replays: Vec<ReplayRef>,
+) -> Result<std::collections::HashMap<String, sessionlog::ReplayResult>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let mut out = std::collections::HashMap::new();
+    for r in replays {
+        if let Some(found) =
+            sessionlog::replay_result(&conn, &r.car_id, &r.track_id, r.at_ms).map_err(|e| e.to_string())?
+        {
+            out.insert(r.path, found);
+        }
+    }
+    Ok(out)
 }
 
 #[derive(serde::Serialize)]
@@ -170,30 +267,42 @@ pub struct SessionMedia {
 /// The replay and the screenshots of a session, computed from its times and
 /// its combo (RESULTAT§6). Reads the disk: off the window.
 #[tauri::command]
-pub async fn session_media(app: AppHandle, launch_id: i64) -> Result<SessionMedia, String> {
-    off_window(app, move |app| {
-        let launch = {
-            let db = app.state::<Db>();
-            let conn = db.0.lock().map_err(|e| e.to_string())?;
-            crate::overlay::get_launch(&conn, launch_id).map_err(|e| e.to_string())?
-        };
-        let empty = SessionMedia {
-            replay: None,
-            screenshots: Vec::new(),
-        };
-        let Some(l) = launch else { return Ok(empty) };
-        let (Some(car), Some(track)) = (l.car_id.as_deref(), l.track_id.as_deref()) else {
-            return Ok(empty);
-        };
-        let end = l.ended_at.unwrap_or_else(sessionlog::now_ms);
+pub async fn session_media(
+    app: AppHandle,
+    car_id: String,
+    track_id: String,
+    from_ms: i64,
+    to_ms: i64,
+) -> Result<SessionMedia, String> {
+    off_window(app, move |_| {
         Ok(SessionMedia {
-            replay: crate::media::session_replay(car, track, l.started_at, end),
-            screenshots: crate::media::session_screenshots(car, track, l.started_at, end),
+            replay: crate::media::session_replay(&car_id, &track_id, from_ms, to_ms),
+            screenshots: crate::media::session_screenshots(&car_id, &track_id, from_ms, to_ms),
         })
     })
     .await
 }
 
+/// The picture of an outing of the history: a screenshot of one of its
+/// sessions, if any (RESULTAT§7.2).
+#[tauri::command]
+pub async fn outing_picture(
+    app: AppHandle,
+    car_ids: Vec<String>,
+    track_id: String,
+    from_ms: i64,
+    to_ms: i64,
+) -> Result<Option<String>, String> {
+    off_window(app, move |_| {
+        Ok(car_ids.iter().find_map(|car| {
+            crate::media::session_screenshots(car, &track_id, from_ms, to_ms)
+                .into_iter()
+                .next()
+                .map(|s| s.path)
+        }))
+    })
+    .await
+}
 /// "Again": the same session, started again (RESULTAT§4.3). A session of
 /// the session screen goes with its own setup and preset; an online one joins
 /// the same server again.

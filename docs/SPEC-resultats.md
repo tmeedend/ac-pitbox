@@ -98,8 +98,7 @@ une session de Story Mode d'avant entre comme une session de CM.
 
 `session_results` dans `overlay.sqlite`. Comme `usage`, elle tient aux mods par
 leur id seulement et **survit à la suppression d'un mod** (§10 de SPEC.md).
-Elle ne part pas encore dans un export de bibliothèque (EXPORT§4.1) : la
-décision est au §7.
+Elle part dans l'export de bibliothèque (§12, EXPORT§4.1).
 
 ## 4. Le retour du jeu
 
@@ -215,10 +214,117 @@ Ceux du combo (voiture et circuit dans le nom) datés entre le début et deux
 minutes après la fin de la session, dans l'ordre de prise. Un clic ouvre la
 visionneuse (`Lightbox`).
 
-## 7. À venir (lot 2)
+## 7. L'historique
 
-Le record perso à côté du bouton Start, le bloc « My times » des fiches,
-l'onglet History de la zone Session (avec Edit, qui charge le preset enregistré
-par le chemin du SESSION§3.5), le résultat d'une session sur sa ligne de replay.
-L'export de bibliothèque devra alors emporter `session_results` (EXPORT§4.1),
-sans le journal ni les noms de copies de CM, qui sont l'état de la machine.
+### 7.1 L'entrée
+
+**History**, dans la colonne de session, sous la liste des types de session ;
+aucune entrée de rail. L'historique s'ouvre dans la zone de contenu, comme
+l'écran de retour, la colonne restant affichée. Il ne se rouvre jamais au
+démarrage.
+
+### 7.2 Les sorties
+
+Les sessions qui se suivent **sur le même circuit et le même tracé** forment
+une sortie, tant qu'il ne s'écoule pas plus de **deux heures** entre la fin de
+l'une et le début de la suivante. Une session de CM n'a pas de début noté : il
+vaut sa fin moins la somme des tours roulés par le joueur.
+
+Une ligne de sortie : circuit et tracé, date, nombre de sessions, voitures,
+meilleur tour. Son image est un screenshot d'une de ses sessions (§6.2) s'il y
+en a un, sinon l'image du circuit. Du plus récent au plus ancien.
+
+### 7.3 Ouvrir une sortie
+
+- **Au moins deux voitures** : un **tableau comparatif**, une ligne par voiture
+  — meilleur tour, écart au meilleur, tours valides, sessions —, et ses
+  sessions dessous.
+- **Une voiture** : la liste de ses sessions ; **une seule session** : la
+  session elle-même.
+
+### 7.4 Ouvrir une session
+
+**Une session de l'historique s'ouvre dans l'écran de retour** (§4) : même
+contenu, mêmes actions — l'écran de retour n'est que la dernière entrée de
+l'historique, ouverte d'elle-même. Venue de l'historique, elle ne ramène jamais
+Pit Box au premier plan, et le retour arrière ramène à la liste. Watch replay et
+Keep n'apparaissent que si le replay existe encore (§6.1). **Change car n'y est
+pas** : la colonne de session peut porter un autre circuit que celui de cette
+session ; c'est Edit qui reprend une session ancienne avec une autre voiture.
+
+Le détail d'une session montre ses conditions quand elles sont connues (le
+réglage d'une session de Pit Box : météo, état de piste, heure) ; elles
+n'entrent ni dans le record ni dans un filtre.
+
+### 7.5 Masquer, filtrer
+
+- **Les sessions sans tour valide sont masquées** par défaut ; un interrupteur
+  les montre. Une sortie qui n'en contient que de ce genre est masquée avec
+  elles.
+- **Le seul filtre est le couple voiture et tracé**, posé en arrivant du record
+  perso (§9) ou de « My times » (§10). Il s'affiche en pastille qu'on retire.
+
+### 7.6 Un mod supprimé
+
+`session_results` survit à la suppression (§3.5). **Le nom de la voiture et du
+circuit est gardé avec la session** à son enregistrement ; une ligne montre le
+nom du mod s'il est encore là, sinon ce nom gardé, sinon l'id. Une session
+enregistrée avant ce champ n'a que l'id. Pas de lien vers la fiche d'un mod
+disparu ; Again et Edit passent par le chargement partiel.
+
+## 8. Again, Edit, Open server
+
+- **Session lancée par Pit Box** : **Again** relance avec le réglage du journal
+  (§2). **Edit** charge la session dans l'écran de réglages par le chemin des
+  sessions enregistrées (SESSION§3.5) : le bloc `PitBox` de son preset, avec le
+  bandeau jaune s'il manque quelque chose.
+- **Session lancée par CM** : **Edit** seulement. Son `__quickDrive` se charge
+  « au mieux », comme un preset CM de la modale (SESSION§3.6), avec le même
+  bandeau.
+- **Session online** : le mot de passe n'est pas gardé (§4.3). Hors de l'écran
+  de retour qui suit la session, **Open server** remplace Again : il ouvre ce
+  serveur sur la page Online, qui demandera le mot de passe si besoin et dira
+  si le serveur ne répond plus.
+
+## 9. Le record perso à côté de Start
+
+Dans la colonne de session, voiture et tracé choisis : `PB 1:52.3 · 3 weeks
+ago`, la date complète au survol. Le record se calcule comme au §4.2 : toutes
+sources confondues, tours valides seulement. **Aucun record : rien**, pas même
+une ligne vide. Un clic ouvre l'historique filtré sur ce couple. La ligne se met
+à jour au retour du jeu.
+
+## 10. « My times » dans les fiches
+
+Dans l'onglet Contenu, **dans le panneau des données du mod, sous le sélecteur
+de skins ou de tracés** : ce sont des données du mod tel que l'utilisateur l'a
+roulé, et elles se consultent avec ses caractéristiques, pas avec les fichiers
+de l'onglet Médias. Le contenu Kunos de base a le bloc aussi. **Masqué quand il
+est vide.**
+
+- **Voiture** : une ligne par circuit et tracé roulés — meilleur tour, sa date,
+  nombre de sessions —, les plus récemment roulés en premier.
+- **Circuit** : une ligne par voiture, groupées par tracé quand il y en a
+  plusieurs, les plus rapides en premier.
+
+Un clic sur une ligne ouvre l'historique filtré sur ce couple.
+
+## 11. Le résultat sur une ligne de replay
+
+Dans l'onglet Médias, une ligne de replay rattachée à une session porte une
+pastille : `P3 · 1:52.3` pour une course, `Best 1:52.3` sinon. Le rattachement
+est celui du §6.1 dans l'autre sens : même voiture et même circuit, **la
+première session qui finit après l'heure du replay** (un autosave est daté de
+la fin de sa session, deux minutes de marge), et commencée avant elle — six
+heures avant sa fin pour une session de CM, qui n'a pas de début noté. Un clic
+ouvre la session dans l'historique.
+
+## 12. L'export de la bibliothèque
+
+`session_results` part dans l'export (EXPORT§4.1), derrière le même
+interrupteur que le reste. **Sans le journal des lancements ni les noms des
+copies de CM**, qui décrivent la machine : à la sortie, une session perd son
+lancement et sa copie (Again ne s'y propose donc plus, Edit reste pour une
+session de CM). **À l'import, une session déjà présente n'est pas doublée** :
+c'est la même quand elle a la même voiture, le même circuit et tracé, et la
+même fin à une seconde près.

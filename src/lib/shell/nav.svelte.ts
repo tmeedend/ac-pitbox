@@ -6,6 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { StorageKey } from "$lib/storage";
 import { durableWriter, type WriteFailure } from "$lib/durableWrite.svelte";
 import { getUiPrefs, setUiPrefs } from "$lib/uiPrefs.svelte";
+import type { SavedSession } from "$lib/launch/savedSessions";
 
 export interface LaunchPrefill {
   kind: "Car" | "Track";
@@ -148,8 +149,16 @@ export const nav = $state<{
   /** The launch whose result the `result` screen shows (RESULTAT§4), set
    * when the game closes after a session of the user's. */
   resultLaunch: number | null;
+  /** The recorded session the `result` screen shows when opened from the
+   * history (RESULTAT§7.4); `resultLaunch` wins when both are set. */
+  resultSession: number | null;
+  /** A session to load in the settings screen ("Edit", RESULTAT§8), consumed
+   * by `Launch.svelte` once ready, like `autoLaunch`. */
+  loadSession: { session: SavedSession; notes: string[] } | null;
 }>({
   resultLaunch: null,
+  resultSession: null,
+  loadSession: null,
   section: "cars",
   prefill: null,
   settingsTab: null,
@@ -251,10 +260,13 @@ export async function requestSection(id: string): Promise<boolean> {
 // types are its navigation.
 
 /** Screens on which the session column is shown. `result` is the screen of
- * the session just driven, shown when the game closes (RESULTAT§4): in the
- * zone, so the column stays, but never reopened at startup — a moment, not a
- * place. */
-export const SESSION_ZONE: readonly string[] = ["cars", "tracks", "driver", "race", "result"];
+ * the session just driven, shown when the game closes (RESULTAT§4), and
+ * history the sessions driven (RESULTAT§7): in the zone, so the column stays. */
+export const SESSION_ZONE: readonly string[] = ["cars", "tracks", "driver", "race", "result", "history"];
+
+/** The session zone's screens that are moments, not places: never reopened
+ * at startup (RESULTAT§7.1). */
+const MOMENTS: readonly string[] = ["result", "history"];
 
 export function inSessionZone(section: string): boolean {
   return SESSION_ZONE.includes(section);
@@ -302,7 +314,7 @@ export function tabGroupOf(section: string): readonly string[] | null {
 /** Every section `AppShell` shows. A stored screen outside it - renamed or
  * removed by an update - falls back to the car library. */
 const KNOWN_SECTIONS: readonly string[] = [
-  ...SESSION_ZONE.filter((s) => s !== "result"),
+  ...SESSION_ZONE.filter((s) => !MOMENTS.includes(s)),
   "apps",
   "others",
   "online",

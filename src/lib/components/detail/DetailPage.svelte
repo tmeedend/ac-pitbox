@@ -63,6 +63,7 @@
   import { t } from "$lib/i18n/index.svelte";
   import { trackLength } from "$lib/detail/trackLength";
   import LayersBlock from "./LayersBlock.svelte";
+  import MyTimes from "$lib/components/results/MyTimes.svelte";
   import ResourcesBlock from "./ResourcesBlock.svelte";
   import DecisionsBlock from "./DecisionsBlock.svelte";
   import ExtrasBlock from "./ExtrasBlock.svelte";
@@ -968,6 +969,8 @@
             emptyText={t("detail.noSkins")}
             cellTitle={t("detail.chooseSkinTooltip")}
           />
+          <!-- The car as driven (RESULTAT§10): with its data, under the skins. -->
+          <MyTimes modId={d.id_interne} isCar={true} />
         {:else}
           <TrackInfoBlock
             detail={d}
@@ -1009,6 +1012,11 @@
             emptyText={t("detail.singleLayout")}
             cellTitle={t("detail.chooseLayoutTooltip")}
             note={trackLength(d.track?.layouts[previewLayout]?.length) ?? undefined}
+          />
+          <MyTimes
+            modId={d.id_interne}
+            isCar={false}
+            layoutNames={Object.fromEntries((d.track?.layouts ?? []).map((l) => [l.id, l.name]))}
           />
           <TrackOnline trackId={d.id_interne} layouts={d.track?.layouts.map((l) => l.id) ?? []} />
         {/if}

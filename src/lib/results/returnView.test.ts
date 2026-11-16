@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SessionOutcome, SessionResult, Standing } from "$lib/launch/launch";
-import { fmtGap, fmtLap, returnContent } from "./returnView";
+import { fmtAgo, fmtGap, fmtLap, returnContent } from "./returnView";
 
 function standing(car: number, over: Partial<Standing> = {}): Standing {
   return {
@@ -106,5 +106,14 @@ describe("what the return screen shows (RESULTAT§4.2)", () => {
       laps: [{ number: 1, time_ms: 101_624, cut: true, best: false }],
     });
     expect(returnContent(null)).toEqual({ kind: "line", count: 0, laps: [] });
+  });
+});
+
+describe("relative dates (RESULTAT§9)", () => {
+  it("take the coarsest unit that fits", () => {
+    const now = Date.UTC(2026, 10, 16);
+    expect(fmtAgo(now - 21 * 86_400_000, now, "en")).toBe("3 weeks ago");
+    expect(fmtAgo(now - 86_400_000, now, "en")).toBe("yesterday");
+    expect(fmtAgo(now - 30_000, now, "en")).toBe("this minute");
   });
 });

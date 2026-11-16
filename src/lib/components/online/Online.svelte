@@ -233,6 +233,9 @@
       const key = serverKey(intent.server);
       openServer(servers.find((s) => serverKey(s) === key) ?? intent.server);
       linkPassword = null;
+    } else if (intent?.kind === "address") {
+      linkPassword = null;
+      void openAddress(intent.ip, intent.httpPort);
     }
   }
 
