@@ -259,6 +259,9 @@ pub async fn render_in_game(
             use crate::modscan::ModKind;
             for request in &requests {
                 crate::launch::ensure_available(&conn, &cfg, ModKind::Car, &request.car_id)?;
+                // A car whose models belong to another one loads with no body
+                // without it, and the game crashes (SESSION§2.5).
+                crate::launch::ensure_lenders(&conn, &cfg, &request.car_id)?;
             }
             crate::launch::ensure_available(&conn, &cfg, ModKind::Track, crate::gameshot::STUDIO_TRACK)?;
         }

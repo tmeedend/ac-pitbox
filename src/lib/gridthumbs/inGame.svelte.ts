@@ -19,7 +19,7 @@ import {
   type ProtectedSummary,
 } from "./gridThumbs";
 import { nav, openInSection, requestSection } from "$lib/shell/nav.svelte";
-import { adoptGridThumb, gridThumbFailed } from "./gridThumbs.svelte";
+import { NO_MODEL, adoptGridThumb, gridThumbFailure } from "./gridThumbs.svelte";
 import { THUMB_SLOTS, gridThumbsOn, presetFor, renderTemplate } from "./gridThumbPrefs.svelte";
 import { listLibrary } from "$lib/library/library";
 
@@ -42,7 +42,10 @@ export interface InGameCar {
  * of light and auto exposure included (GRILLE§7.1).
  */
 export function canRenderInGame(template: GridTemplate, car: InGameCar): boolean {
-  return gridThumbsOn() && gridThumbFailed(template, car.id, car.skin);
+  const failure = gridThumbFailure(template, car.id, car.skin);
+  // A car with no model of its own and no lender installed cannot be shot by
+  // the game either: it would load a car with no body (SESSION§2.5).
+  return gridThumbsOn() && failure !== null && failure !== NO_MODEL;
 }
 
 /** The templates one session renders: the grid's two densities and the

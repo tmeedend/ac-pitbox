@@ -103,7 +103,7 @@ Le moteur qui rend la voiture en 3D sur la fiche produit aussi les vignettes de 
 
 ## 5.4 Génération au fil de l'eau
 
-**Une carte demande sa vignette quand elle entre dans le champ de vision**, jamais au chargement de la liste : la bibliothèque se normalise pendant qu'on l'utilise. Ce qui devient visible passe devant la file, et changer de filtre la réordonne. **Une vignette déjà sur disque s'affiche aussitôt**, sans attendre son tour derrière les rendus ; tant que le disque n'a pas répondu, la carte reste sur son fond, et la photo du mod ne s'affiche que s'il n'y a pas de vignette — jamais la photo d'abord, remplacée un instant plus tard. **La génération rend la machine pendant une session** : elle se suspend **dès le clic** sur « Démarrer » et reprend à la fermeture du jeu ; hors session, elle tourne sur un pool borné à la moitié des cœurs, pour que l'interface ne saccade pas.
+**Une carte demande sa vignette quand elle entre dans le champ de vision**, jamais au chargement de la liste : la bibliothèque se normalise pendant qu'on l'utilise. Ce qui devient visible passe devant la file, et changer de filtre la réordonne. **Une vignette déjà sur disque s'affiche aussitôt**, sans attendre son tour derrière les rendus ; tant que le disque n'a pas répondu, la carte reste sur son fond, et la photo du mod ne s'affiche que s'il n'y a pas de vignette — jamais la photo d'abord, remplacée un instant plus tard. **La génération rend la machine pendant une session** : elle se suspend **dès le clic** sur « Démarrer » et reprend à la fermeture du jeu ; hors session, elle tourne sur un pool borné à la moitié des cœurs, pour que l'interface ne saccade pas. **Au lancement, le disque est interrogé d'abord** : seules les vignettes manquantes entrent dans la file, et une bibliothèque déjà complète ne fait apparaître aucune génération.
 
 **Une vignette est rendue dans la livrée choisie pour les vignettes**, pas dans celle de la session : sinon choisir une autre livrée pour une course changeait la carte, et une voiture protégée retombait sur sa photo. Par défaut, c'est la livrée par défaut de la voiture (la première de son dossier `skins/`) ; la fiche permet d'en choisir une autre, au clic droit sur une livrée de la grille dépliée, et marque celle des vignettes d'une petite icône. Le clic gauche reste le choix de la session.
 
@@ -192,6 +192,8 @@ Une voiture qui ne peut pas être rendue **garde sa `preview.png`**.
 - **L'échec est mémorisé avec l'empreinte du mod** : la tentative ne se refait que si le mod change.
 
 C'est ce cas qui rend le §2 obligatoire pour toujours.
+
+**Une voiture sans modèle** — une variante qui emprunte les siens à une voiture absente (SESSION§2.5) — garde sa photo, une fois pour toutes dans la session : elle n'est pas redemandée en boucle, et le rendu dans le jeu ne lui est pas proposé, le jeu ne la chargerait pas non plus.
 
 **Une voiture en vitrine** (sans ses fichiers, ESPACE§3.3) n'est pas un échec : elle ne se rend pas, mais elle montre la vignette figée au moment où elle a perdu ses fichiers, ou celle venue avec un export de bibliothèque (EXPORT§4.3). Elle n'entre ni dans la file ni dans le décompte du rapport.
 

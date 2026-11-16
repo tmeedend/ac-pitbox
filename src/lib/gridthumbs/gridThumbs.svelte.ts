@@ -80,15 +80,11 @@ const ENVIRONMENT = 0.55;
  * its card shows its frozen image. `looking`: the disk has been asked whether
  * the thumbnail exists, and has not answered yet — the card shows nothing
  * rather than the mod's photo it would replace a moment later. `pending`: it
- * waits in the render queue — and does not exist on disk, unless `unchecked`:
- * queued with the whole library behind the visible cards, before anyone asked
- * the disk. Such a card is not settled either: shown the mod's photo, it would
- * swap to the thumbnail when the queue reached it and found the file already
- * there — the flicker reported while scrolling. */
+ * waits in the render queue, the disk having said it is not there. */
 type Entry =
   | { url: string }
   | { looking: true }
-  | { pending: true; unchecked?: true }
+  | { pending: true }
   | { failed: string }
   | { none: true };
 
@@ -129,7 +125,7 @@ export function gridThumb(template: GridTemplate, carId: string, skinId: string 
  */
 export function gridThumbSettled(template: GridTemplate, carId: string, skinId: string | null): boolean {
   const entry = cache[keyOf(template, carId, skinId)];
-  return !!entry && !("looking" in entry) && !("unchecked" in entry);
+  return !!entry && !("looking" in entry);
 }
 
 /** A car as its picture needs it: a library card, or a mod's detail. */
@@ -171,15 +167,18 @@ export function carPicture(
 }
 
 /**
- * Whether this car is known not to render under this template — a protected
- * model (GRILLE§7). Reactive and side-effect free, like `gridThumb`: it is what
- * offers the in-game render at the right click (GRILLE§7.1), and a car whose
- * card was never shown is simply not known yet.
+ * Why this car is known not to render under this template — a protected model
+ * (GRILLE§7), no model at all —, or `null`. Reactive and side-effect free, like
+ * `gridThumb`: it is what offers the in-game render at the right click
+ * (GRILLE§7.1), and a car whose card was never shown is simply not known yet.
  */
-export function gridThumbFailed(template: GridTemplate, carId: string, skinId: string | null): boolean {
+export function gridThumbFailure(template: GridTemplate, carId: string, skinId: string | null): string | null {
   const entry = cache[keyOf(template, carId, skinId)];
-  return !!entry && "failed" in entry;
+  return entry && "failed" in entry ? entry.failed : null;
 }
+
+/** Why a car has no thumbnail when no model can be found for it. */
+export const NO_MODEL = "errors.previewModelNotFound";
 
 /** The URL of a thumbnail **just written**. A render done again lands on the
  * same file, hence the same URL, and WebView2 kept serving the image it had
@@ -396,8 +395,6 @@ function enqueue(
   skinId: string | null,
   name: string,
   front: boolean,
-  /** Whether the disk has already said the thumbnail is not there. */
-  checked = true,
 ): void {
   const key = keyOf(template, carId, skinId);
   if (cache[key]) {
@@ -409,7 +406,7 @@ function enqueue(
     return;
   }
   beginBatch();
-  cache[key] = checked ? { pending: true } : { pending: true, unchecked: true };
+  cache[key] = { pending: true };
   const job = { template, carId, skinId, name, key };
   if (front) queue.unshift(job);
   else queue.push(job);
@@ -440,7 +437,7 @@ export function requestGridThumb(
   if (!gridThumbsOn()) return;
   const key = keyOf(template, carId, skinId);
   const entry = cache[key];
-  if (entry && !("unchecked" in entry)) {
+  if (entry) {
     // Already known, being looked up, or queued — a queued one comes forward.
     enqueue(template, carId, skinId, name, true);
     void drain();
@@ -489,7 +486,10 @@ async function flushLookups(): Promise<void> {
         cache[job.key] = { url: convertFileSrc(known.path) };
         if (known.stale) onStale(job, known);
       } else if (known?.failed) cache[job.key] = { failed: known.failed };
-      else {
+      else if (known === null) {
+        // Answered, with nothing to name: no model to render (see `produce`).
+        cache[job.key] = { failed: NO_MODEL };
+      } else {
         // Not on disk (or not answered): the render queue takes it, ahead of
         // what is not visible.
         delete cache[job.key];
@@ -538,10 +538,57 @@ export function enqueueGridThumbs(
   cars: { id: string; skin: string | null; name: string }[],
 ): void {
   if (!gridThumbsOn()) return;
-  // Unchecked: a card that comes into view asks the disk before showing
-  // anything (`requestGridThumb`).
-  for (const car of cars) enqueue(template, car.id, car.skin, car.name, false, false);
-  void drain();
+  void enqueueMissing(template, cars);
+}
+
+/** How many cars one background lookup asks the disk about. */
+const BACKGROUND_LOOKUP_BATCH = 100;
+
+/**
+ * The disk first, in batches, and only what it lacks goes to the queue.
+ *
+ * Queued unchecked, every car of the library went through the render queue at
+ * each launch only to find its image there: the task said "generating
+ * thumbnails" for several seconds and reported four hundred of them, with
+ * nothing rendered (reported). Known images and known failures now fill the
+ * cache straight away and never start the task.
+ */
+async function enqueueMissing(
+  template: GridTemplate,
+  cars: { id: string; skin: string | null; name: string }[],
+): Promise<void> {
+  const unknown = cars.filter((car) => !cache[keyOf(template, car.id, car.skin)]);
+  for (let start = 0; start < unknown.length; start += BACKGROUND_LOOKUP_BATCH) {
+    const chunk = unknown.slice(start, start + BACKGROUND_LOOKUP_BATCH);
+    let found: (GridThumb | null)[] = [];
+    try {
+      found = await gridThumbnails(
+        chunk.map((car) => ({ carId: car.id, skinId: car.skin })),
+        template,
+      );
+    } catch (e) {
+      console.error("vignettes de grille : recherche de fond", e);
+    }
+    chunk.forEach((car, i) => {
+      const key = keyOf(template, car.id, car.skin);
+      // A card that came into view meanwhile has asked the disk itself.
+      if (cache[key]) return;
+      const known = found[i];
+      const job = { template, carId: car.id, skinId: car.skin, name: car.name, key };
+      if (known?.path) {
+        cache[key] = { url: convertFileSrc(known.path) };
+        if (known.stale) onStale(job, known);
+      } else if (known?.failed) {
+        cache[key] = { failed: known.failed };
+      } else if (known) {
+        enqueue(template, car.id, car.skin, car.name, false);
+      } else if (known === null) {
+        // Answered, with nothing to name: no model to render (see `produce`).
+        cache[key] = { failed: NO_MODEL };
+      }
+    });
+    void drain();
+  }
 }
 
 /**
@@ -631,7 +678,20 @@ async function produce(job: Job): Promise<Entry> {
   // Le disque d'abord, toujours : quelques `stat` contre une conversion. C'est
   // aussi ce qui répond « déjà essayé, impossible » sans reparser un KN5 de
   // quatorze mégaoctets à chaque lancement (GRILLE§7).
-  const known = await gridThumbnail(job.carId, job.skinId, template);
+  let known: GridThumb;
+  try {
+    known = await gridThumbnail(job.carId, job.skinId, template);
+  } catch (e) {
+    // No model to name the entry after (`errors.previewModelNotFound`): a
+    // verdict, not an accident. Left to the generic catch, the cache was
+    // emptied, the card asked again, and failed again — a thumbnail flickering
+    // for ever on `vrc_arc_auriel90_bop`, whose models belong to a car that is
+    // not installed (SESSION§2.5).
+    const reason = typeof e === "string" ? e : String(e);
+    if (!reason.startsWith("errors.preview")) throw e;
+    progress.failed += 1;
+    return { failed: reason };
+  }
   // An older engine's image is redone only on the user's word, and a
   // protected car's never by Pit Box: it would fail and lose the image the
   // game made (GRILLE§6.5).

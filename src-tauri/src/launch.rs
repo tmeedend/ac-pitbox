@@ -540,7 +540,7 @@ fn ready_opponents(conn: &Connection, cfg: &AppConfig, setup: &mut RaceSetup) {
 /// seating its driver. A lender found nowhere is named, since the remedy is to
 /// reinstall it; one in the library that cannot be laid (in the showcase, say)
 /// keeps its own error, which says why.
-fn ensure_lenders(conn: &Connection, cfg: &AppConfig, car_id: &str) -> Result<(), String> {
+pub(crate) fn ensure_lenders(conn: &Connection, cfg: &AppConfig, car_id: &str) -> Result<(), String> {
     let ac = cfg.ac_install_path.as_ref().ok_or(crate::errors::AC_NOT_CONFIGURED)?;
     let car_dir = ac.join("content").join("cars").join(car_id);
     for lender in crate::lods::lenders(&car_dir, car_id) {
