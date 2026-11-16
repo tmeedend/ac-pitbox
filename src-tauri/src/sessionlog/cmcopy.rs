@@ -179,6 +179,10 @@ pub(crate) mod tests {
                 "260912-184107.json",
                 include_bytes!("../raceresult/samples/cm_practice_laps.json"),
             ),
+            "hotlap_cut" => (
+                "261116-224923.json",
+                include_bytes!("../raceresult/samples/cm_hotlap_cut.json"),
+            ),
             "online" => (
                 "260821-224425.json",
                 include_bytes!("../raceresult/samples/cm_online.json"),
@@ -238,6 +242,23 @@ pub(crate) mod tests {
         assert_eq!(sample("trackday").mode, "trackday");
         assert_eq!(sample("shot").mode, "practice");
         assert_eq!(sample("laps").mode, "practice");
+    }
+
+    // RESULTAT§4.2: in a hotlap the game wipes the time of a cut lap (`-1`)
+    // but keeps its sectors — a lap driven, cut, whose time is their sum. Real
+    // file: one lap at Monza, the screen showed none.
+    #[test]
+    fn a_cut_hotlap_lap_keeps_its_time_from_the_sectors() {
+        let c = sample("hotlap_cut");
+        let laps = &c.result.sessions[0].player_laps;
+        assert_eq!(laps.len(), 1, "the lap was driven");
+        assert_eq!(
+            (laps[0].time_ms, laps[0].cuts),
+            (Some(101_624), 1),
+            "37.221 + 32.470 + 31.933"
+        );
+        assert_eq!(c.result.player_best_ms(), None, "a cut lap is no best lap");
+        assert!(c.result.any_lap_begun());
     }
 
     // The player's laps of a real practice: four driven, the best is the

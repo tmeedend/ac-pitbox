@@ -24,7 +24,7 @@
     type ReturnView,
     type SessionMedia,
   } from "$lib/results/results";
-  import { fmtGap, fmtLap, returnContent } from "$lib/results/returnView";
+  import { fmtGap, fmtLap, returnContent, type LapLine } from "$lib/results/returnView";
 
   let view = $state<ReturnView | null>(null);
   let media = $state<SessionMedia>({ replay: null, screenshots: [] });
@@ -204,21 +204,14 @@
           </span>
         {/if}
       </div>
-      <ol class="laps">
-        {#each content.laps as lap (lap.number)}
-          <li class:cut={lap.cut} class:top={lap.best}>
-            <span class="n mono">{lap.number}</span>
-            <span class="mono">{fmtLap(lap.time_ms)}</span>
-            {#if lap.cut}<span class="cutmark">{t("results.cut")}</span>{/if}
-          </li>
-        {/each}
-      </ol>
+      {@render lapList(content.laps)}
     {:else}
       <p class="quiet">
-        {content.minutes > 0
-          ? t("results.lineMinutes", { mode: modeLabel, count: content.minutes })
-          : t("results.lineLaps", { mode: modeLabel, count: content.laps })}
+        {content.count > 0
+          ? t("results.lineNoValidLap", { mode: modeLabel, count: content.count })
+          : t("results.lineNoLap", { mode: modeLabel })}
       </p>
+      {@render lapList(content.laps)}
     {/if}
 
     {#if media.screenshots.length > 0}
@@ -257,6 +250,20 @@
     </div>
   {/if}
 </div>
+
+{#snippet lapList(laps: LapLine[])}
+  {#if laps.length > 0}
+    <ol class="laps">
+      {#each laps as lap (lap.number)}
+        <li class:cut={lap.cut} class:top={lap.best}>
+          <span class="n mono">{lap.number}</span>
+          <span class="mono">{fmtLap(lap.time_ms)}</span>
+          {#if lap.cut}<span class="cutmark">{t("results.cut")}</span>{/if}
+        </li>
+      {/each}
+    </ol>
+  {/if}
+{/snippet}
 
 {#if lightboxIndex !== null}
   <Lightbox items={lightboxItems} startIndex={lightboxIndex} onclose={() => (lightboxIndex = null)} />

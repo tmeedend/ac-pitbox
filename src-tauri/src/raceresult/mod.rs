@@ -21,8 +21,12 @@
 //! - **`bestLaps` leaves out cut laps** (`cuts > 0`), and the extrapolated
 //!   ones: it is the game's own verdict on what counts, so it is used as is
 //!   rather than recomputed from `laps`.
-//! - **A lap with `time: -1` is a lap begun, not driven** — an AI sitting in
-//!   the pits during practice.
+//! - **A lap with `time: -1` and no sectors is a lap begun, not driven** — an
+//!   AI sitting in the pits during practice.
+//! - **A lap with `time: -1`, a cut and its sectors is a lap driven and cut**,
+//!   in practice and hotlap: the game wipes the time of an invalid lap there
+//!   (in a race it keeps it). Its time is the sum of its sectors. Seen on four
+//!   real files, among them a hotlap of one cut lap (`cm_hotlap_cut.json`).
 
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -78,7 +82,8 @@ pub struct Standing {
 /// One lap the player drove, in the order driven.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlayerLap {
-    pub time_ms: u32,
+    /// `None` for a cut lap whose time the game wiped without its sectors.
+    pub time_ms: Option<u32>,
     /// Times the car left the track on that lap; a lap with a cut never
     /// counts (`bestLaps` leaves it out).
     pub cuts: u32,
@@ -165,6 +170,30 @@ struct RawLap {
     time: i64,
     #[serde(default)]
     cuts: u32,
+    #[serde(default)]
+    sectors: Vec<i64>,
+}
+
+impl RawLap {
+    /// A lap the player really drove: timed, or cut (RESULTAT§4.2).
+    fn driven(&self) -> Option<PlayerLap> {
+        if self.time > 0 {
+            return Some(PlayerLap {
+                time_ms: Some(self.time as u32),
+                cuts: self.cuts,
+            });
+        }
+        if self.cuts == 0 {
+            // Begun, not driven.
+            return None;
+        }
+        let sectors = (!self.sectors.is_empty() && self.sectors.iter().all(|&s| s > 0))
+            .then(|| self.sectors.iter().sum::<i64>() as u32);
+        Some(PlayerLap {
+            time_ms: sectors,
+            cuts: self.cuts,
+        })
+    }
 }
 
 #[derive(Deserialize)]
@@ -247,11 +276,8 @@ fn classify(players: &[RawPlayer], s: &RawSession) -> SessionOutcome {
         player_laps: s
             .laps
             .iter()
-            .filter(|l| l.car == 0 && l.time > 0)
-            .map(|l| PlayerLap {
-                time_ms: l.time as u32,
-                cuts: l.cuts,
-            })
+            .filter(|l| l.car == 0)
+            .filter_map(RawLap::driven)
             .collect(),
         any_lap_begun: !s.laps.is_empty() || s.lapstotal.iter().any(|&n| n > 0),
     }

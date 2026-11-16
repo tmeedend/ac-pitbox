@@ -121,8 +121,14 @@ Windows refuse le premier plan, le bouton de la barre des tâches clignote.
   tours, les coupés grisés et marqués. **La pastille « record perso » ne vient
   que si un record existait et qu'il est battu** : la première session sur un
   couple n'en a pas.
-- **Aucun tour valide** : une ligne, le type et la durée (ou le nombre de
-  tours).
+- **Aucun tour valide** : une ligne, le type et le nombre de tours roulés —
+  jamais la durée réglée de la session, qu'un hotlap vaut quoi qu'on ait
+  roulé — et sous elle les tours roulés, tous coupés.
+
+**Un tour coupé garde son temps.** En essais et en hotlap, le jeu efface le
+temps d'un tour coupé (`time: -1`) mais garde ses secteurs : son temps est leur
+somme. Sans secteurs, `-1` est un tour commencé et pas roulé, qui n'est pas
+montré ; un tour coupé sans secteurs s'affiche sans temps.
 
 **Le record perso** est le meilleur tour valide du joueur sur la voiture et le
 tracé, **toutes sessions enregistrées confondues** : Pit Box, Content Manager,

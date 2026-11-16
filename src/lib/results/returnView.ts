@@ -31,7 +31,8 @@ export interface RaceLine {
 
 export interface LapLine {
   number: number;
-  time_ms: number;
+  /** `null` for a cut lap whose time the game did not keep. */
+  time_ms: number | null;
   cut: boolean;
   best: boolean;
 }
@@ -39,11 +40,26 @@ export interface LapLine {
 export type ReturnContent =
   | { kind: "race"; session: SessionOutcome; lines: RaceLine[] }
   | { kind: "laps"; bestMs: number; laps: LapLine[] }
-  | { kind: "line"; laps: number; minutes: number };
+  /** No valid lap: one discreet line, the laps driven (all cut) under it. */
+  | { kind: "line"; count: number; laps: LapLine[] };
+
+/** The player's laps, every session together, the best one marked. */
+function lapLines(result: SessionResult, bestMs: number | null): LapLine[] {
+  let marked = false;
+  return result.sessions
+    .flatMap((s) => s.player_laps)
+    .map((l, i) => {
+      const cut = l.cuts > 0;
+      // The game's best is a valid lap of that time: the first such one.
+      const best = bestMs != null && !cut && !marked && l.time_ms === bestMs;
+      if (best) marked = true;
+      return { number: i + 1, time_ms: l.time_ms, cut, best };
+    });
+}
 
 /** Race, then a session with a valid lap, then a discreet line. */
 export function returnContent(result: SessionResult | null): ReturnContent {
-  if (!result || result.sessions.length === 0) return { kind: "line", laps: 0, minutes: 0 };
+  if (!result || result.sessions.length === 0) return { kind: "line", count: 0, laps: [] };
   const last = result.sessions[result.sessions.length - 1];
   if (last.kind === "race") return { kind: "race", session: last, lines: raceLines(last) };
 
@@ -51,24 +67,13 @@ export function returnContent(result: SessionResult | null): ReturnContent {
   const bests = player.map((l) => l.best_lap_ms).filter((b): b is number => b != null);
   if (bests.length > 0) {
     const bestMs = Math.min(...bests);
-    const driven = result.sessions.flatMap((s) => s.player_laps);
-    let marked = false;
-    const laps = driven.map((l, i) => {
-      const cut = l.cuts > 0;
-      // The game's best is a valid lap of that time: the first such one.
-      const best = !cut && !marked && l.time_ms === bestMs;
-      if (best) marked = true;
-      return { number: i + 1, time_ms: l.time_ms, cut, best };
-    });
-    return { kind: "laps", bestMs, laps };
+    return { kind: "laps", bestMs, laps: lapLines(result, bestMs) };
   }
-  return {
-    kind: "line",
-    laps: player.reduce((n, l) => n + l.laps, 0),
-    minutes: result.sessions.reduce((n, s) => n + s.duration_minutes, 0),
-  };
+  // The laps driven, never the session's set duration: a hotlap is "30 min"
+  // whatever was driven.
+  const laps = lapLines(result, null);
+  return { kind: "line", count: Math.max(laps.length, player.reduce((n, l) => n + l.laps, 0)), laps };
 }
-
 function raceLines(session: SessionOutcome): RaceLine[] {
   const winner = session.standings[0];
   return session.standings.map((standing, i) => {

@@ -381,7 +381,8 @@ export interface Standing {
 
 /** A lap the player drove; one with a cut never counts. */
 export interface PlayerLap {
-  time_ms: number;
+  /** `null` for a cut lap whose time the game did not keep. */
+  time_ms: number | null;
   cuts: number;
 }
 

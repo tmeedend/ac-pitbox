@@ -87,11 +87,24 @@ describe("what the return screen shows (RESULTAT§4.2)", () => {
     });
   });
 
-  it("no valid lap: one discreet line", () => {
+  // Real case: a hotlap of one cut lap, set to 30 min. The line counts the
+  // laps driven, never the set duration, and the cut lap is listed.
+  it("no valid lap: one discreet line, the cut laps under it", () => {
     const c = returnContent(
-      result(session({ duration_minutes: 10, standings: [standing(0, { laps: 1 })], player_laps: [{ time_ms: 1, cuts: 1 }] })),
+      result(
+        session({
+          kind: "hotlap",
+          duration_minutes: 30,
+          standings: [standing(0, { laps: 1 })],
+          player_laps: [{ time_ms: 101_624, cuts: 1 }],
+        }),
+      ),
     );
-    expect(c).toEqual({ kind: "line", laps: 1, minutes: 10 });
-    expect(returnContent(null).kind).toBe("line");
+    expect(c).toEqual({
+      kind: "line",
+      count: 1,
+      laps: [{ number: 1, time_ms: 101_624, cut: true, best: false }],
+    });
+    expect(returnContent(null)).toEqual({ kind: "line", count: 0, laps: [] });
   });
 });
