@@ -223,11 +223,42 @@ pub fn planned_files(base: &Path, layers: &[PathBuf]) -> std::collections::HashM
 /// bibliothèque source ne sont jamais affectés — un hardlink est une entrée de
 /// répertoire parmi d'autres vers les mêmes données ; en retirer une (ce
 /// dossier) ne touche pas les autres (les fichiers de la bibliothèque).
+///
+/// **The marker goes last.** `remove_dir_all` takes the entries in directory
+/// order, so the marker could go before a file another program held open — and
+/// the removal stopped there, leaving a folder the guard no longer recognised
+/// and refused for good. Real case: `bg_mercedes_amg_gt_black_series` was left
+/// with only `extension/ext_config.ini`, which the startup scan then took for a
+/// car. Everything else first, as far as it goes; the marker and the folder
+/// only once nothing else is left, so an interrupted removal can be resumed.
 pub fn remove_deployment(path: &Path) -> Result<(), String> {
     if !is_deployed(path) {
         return Err(crate::errors::NOT_DEPLOYED_BY_PITBOX.into());
     }
-    std::fs::remove_dir_all(path).map_err(|e| format!("suppression du déploiement : {e}"))
+    let entries = std::fs::read_dir(path).map_err(|e| format!("lecture du déploiement : {e}"))?;
+    let mut first_error = None;
+    for entry in entries.flatten() {
+        if entry.file_name() == MARKER_FILE {
+            continue;
+        }
+        let entry_path = entry.path();
+        // `symlink_metadata`: a directory is emptied, never followed.
+        let is_dir = std::fs::symlink_metadata(&entry_path).is_ok_and(|m| m.is_dir());
+        let removed = if is_dir {
+            std::fs::remove_dir_all(&entry_path)
+        } else {
+            std::fs::remove_file(&entry_path)
+        };
+        if let Err(e) = removed {
+            log::warn!("deploy: {} not removed — {e}", entry_path.display());
+            first_error.get_or_insert(e);
+        }
+    }
+    if let Some(e) = first_error {
+        return Err(format!("suppression du déploiement : {e}"));
+    }
+    std::fs::remove_file(path.join(MARKER_FILE)).map_err(|e| format!("suppression du marqueur : {e}"))?;
+    std::fs::remove_dir(path).map_err(|e| format!("suppression du déploiement : {e}"))
 }
 
 #[cfg(test)]
@@ -325,6 +356,68 @@ mod tests {
         assert!(!dest.exists(), "déploiement retiré");
         assert!(source.join("f.txt").is_file(), "original bibliothèque intact");
         assert_eq!(std::fs::read_to_string(source.join("f.txt")).unwrap(), "data");
+    }
+
+    /// Rule (golden rule 2): removing a deployment takes the whole tree,
+    /// subfolders included, and nothing of the library.
+    #[test]
+    fn remove_deployment_takes_nested_folders_and_spares_the_library() {
+        let base = temp();
+        let source = base.join("source");
+        std::fs::create_dir_all(source.join("extension")).unwrap();
+        std::fs::create_dir_all(source.join("skins").join("red")).unwrap();
+        std::fs::write(source.join("extension").join("ext_config.ini"), "cfg").unwrap();
+        std::fs::write(source.join("skins").join("red").join("preview.jpg"), "img").unwrap();
+        std::fs::write(source.join("car.kn5"), "kn5").unwrap();
+        let dest = base.join("dest");
+        deploy_tree(&source, &dest, "car1", HostKind::Car).unwrap();
+
+        remove_deployment(&dest).unwrap();
+
+        assert!(!dest.exists(), "the deployed tree is gone, subfolders included");
+        assert!(
+            source.join("extension").join("ext_config.ini").is_file()
+                && source.join("skins").join("red").join("preview.jpg").is_file(),
+            "the library keeps every file"
+        );
+    }
+
+    /// Rule (golden rule 2): a removal that cannot finish keeps its marker, so
+    /// the folder stays recognised as ours and a later removal can complete
+    /// it. Real case: `bg_mercedes_amg_gt_black_series` was left with only
+    /// `extension/ext_config.ini` and no marker — the guard refused it for
+    /// good, and the startup scan took it for a car.
+    #[test]
+    fn an_interrupted_removal_keeps_the_marker_and_can_be_resumed() {
+        use std::os::windows::fs::OpenOptionsExt;
+
+        let base = temp();
+        let source = base.join("source");
+        std::fs::create_dir_all(source.join("extension")).unwrap();
+        std::fs::write(source.join("extension").join("ext_config.ini"), "cfg").unwrap();
+        std::fs::write(source.join("car.kn5"), "kn5").unwrap();
+        let dest = base.join("dest");
+        deploy_tree(&source, &dest, "car1", HostKind::Car).unwrap();
+
+        // Held open without sharing deletion, as a running program can.
+        let locked = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(dest.join("extension").join("ext_config.ini"))
+            .unwrap();
+        assert!(
+            remove_deployment(&dest).is_err(),
+            "a file that cannot go fails the removal"
+        );
+        assert!(is_deployed(&dest), "the marker stays while anything of ours is left");
+
+        drop(locked);
+        remove_deployment(&dest).expect("the removal can be resumed");
+        assert!(!dest.exists(), "and then it completes");
+        assert!(
+            source.join("extension").join("ext_config.ini").is_file(),
+            "the library file was never at stake"
+        );
     }
 
     #[test]
