@@ -518,6 +518,164 @@ pub fn resolve_session_background(
         .map(|b| b.path)
 }
 
+// --- The media of one session (RESULTAT§6) ---------------------------------
+//
+// Computed, never stored: a session has a start and an end, a replay and a
+// screenshot have a time and a combo. Nothing to keep up to date, nothing
+// that can turn false.
+//
+// Measured on the dev machine: the game's autosaves live in `replay\temp\`
+// (`AC_<ddmmyy>-<hhmmss>_<type>_…`, the time being the end of that session
+// of the weekend), not in `replay\`. The session's replay is looked for in
+// both.
+
+/// How long after the game closed a session's replay or screenshot may be
+/// dated: the autosave is written as the session ends, a little before the
+/// game is gone.
+pub const SESSION_MEDIA_SLACK_MS: i64 = 120_000;
+
+fn millis(rfc3339: &str) -> Option<i64> {
+    DateTime::parse_from_rfc3339(rfc3339).ok().map(|t| t.timestamp_millis())
+}
+
+fn replay_matches(f: &ReplayFile, car_id: &str, track_id: &str) -> bool {
+    match (&f.car_id, &f.track_id) {
+        (Some(car), Some(track)) => car == car_id && track.eq_ignore_ascii_case(track_id),
+        // A header that cannot be read: the name, which carries both ids.
+        _ => f.file_name.contains(car_id) && f.file_name.contains(track_id),
+    }
+}
+
+/// The replay of a session: the most recent one of the combo dated between
+/// its start and its end (plus `SESSION_MEDIA_SLACK_MS`). In a weekend, that
+/// is the race's.
+pub fn session_replay_in(
+    dirs: &[PathBuf],
+    car_id: &str,
+    track_id: &str,
+    from_ms: i64,
+    to_ms: i64,
+) -> Option<ReplayFile> {
+    let policy = crate::acreplay::autosave_policy();
+    let mut found: Vec<ReplayFile> = dirs
+        .iter()
+        .filter(|d| d.is_dir())
+        .flat_map(|dir| {
+            let ranks = autosave_ranks(dir);
+            WalkDir::new(dir)
+                .max_depth(1)
+                .into_iter()
+                .flatten()
+                .filter(|e| e.file_type().is_file() && is_replay_path(e.path()))
+                // The date of the name first: only the candidates have their
+                // header read. A renamed one, without a date, is read.
+                .filter(|e| {
+                    let stem = e.path().file_stem().and_then(|s| s.to_str()).unwrap_or_default();
+                    parse_replay_name(stem)
+                        .recorded_at
+                        .as_deref()
+                        .and_then(millis)
+                        .is_none_or(|t| t >= from_ms && t <= to_ms + SESSION_MEDIA_SLACK_MS)
+                })
+                .filter_map(|e| describe_replay(e.path(), &HashSet::new(), &ranks, &policy))
+                .collect::<Vec<_>>()
+        })
+        .filter(|f| {
+            f.recorded_at
+                .as_deref()
+                .and_then(millis)
+                .is_some_and(|t| t >= from_ms && t <= to_ms + SESSION_MEDIA_SLACK_MS)
+        })
+        .filter(|f| replay_matches(f, car_id, track_id))
+        .collect();
+    sort_replays(&mut found);
+    found.into_iter().next()
+}
+
+pub fn session_replay(car_id: &str, track_id: &str, from_ms: i64, to_ms: i64) -> Option<ReplayFile> {
+    let dir = documents_ac_dir()?.join("replay");
+    session_replay_in(&[dir.clone(), dir.join("temp")], car_id, track_id, from_ms, to_ms)
+}
+
+/// The screenshots taken during a session: the combo in the name, the file
+/// dated between its start and its end.
+pub fn session_screenshots_in(
+    dir: &Path,
+    car_id: &str,
+    track_id: &str,
+    from_ms: i64,
+    to_ms: i64,
+) -> Vec<ScreenshotFile> {
+    let mut shots: Vec<ScreenshotFile> = list_screenshots_in(dir, car_id, &HashSet::new())
+        .into_iter()
+        .filter(|s| s.file_name.contains(track_id))
+        .filter(|s| {
+            s.modified_at
+                .as_deref()
+                .and_then(millis)
+                .is_some_and(|t| t >= from_ms && t <= to_ms + SESSION_MEDIA_SLACK_MS)
+        })
+        .collect();
+    // In the order taken.
+    shots.reverse();
+    shots
+}
+
+pub fn session_screenshots(car_id: &str, track_id: &str, from_ms: i64, to_ms: i64) -> Vec<ScreenshotFile> {
+    match documents_ac_dir() {
+        Some(dir) => session_screenshots_in(&dir.join("screens"), car_id, track_id, from_ms, to_ms),
+        None => Vec::new(),
+    }
+}
+
+/// Takes an autosave out of the game's rotation (RESULTAT§6.1): moved to
+/// `replay\` under the name Content Manager gives a replay it keeps,
+/// `<car>_<track[_layout]>_<ddmmyy>-<hhmmss>` (§6.1). Returns the new path.
+///
+/// Only an autosave of the game, in `replay\` or `replay\temp\`; a name
+/// already taken is refused rather than overwritten.
+pub fn keep_replay_in(replay_dir: &Path, path: &Path) -> Result<PathBuf, String> {
+    let inside = path
+        .parent()
+        .is_some_and(|p| p == replay_dir || p == replay_dir.join("temp"));
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or_default();
+    let naming = parse_replay_name(stem);
+    if !inside || !is_replay_path(path) || !naming.autosave || !path.is_file() {
+        return Err(crate::errors::REPLAY_NOT_AN_AUTOSAVE.into());
+    }
+    // `AC_<date>_<type>_<rest>`: the date and the combo the game wrote.
+    let mut parts = stem.splitn(4, '_').skip(1);
+    let (Some(date), Some(_kind), Some(combo)) = (parts.next(), parts.next(), parts.next()) else {
+        return Err(crate::errors::REPLAY_NOT_AN_AUTOSAVE.into());
+    };
+    let header = crate::acreplay::read_header(path);
+    let combo = match &header {
+        Some(h) if !h.car_id.is_empty() && !h.track_id.is_empty() => {
+            let track = if h.track_layout.is_empty() {
+                h.track_id.clone()
+            } else {
+                format!("{}_{}", h.track_id, h.track_layout)
+            };
+            format!("{}_{track}", h.car_id)
+        }
+        _ => combo.trim_end_matches('_').to_string(),
+    };
+    let target = replay_dir.join(format!("{combo}_{date}.acreplay"));
+    if target.exists() {
+        return Err(crate::errors::REPLAY_NAME_TAKEN.into());
+    }
+    std::fs::rename(path, &target).map_err(|e| format!("{}: {e}", path.display()))?;
+    log::info!("results: replay {} kept as {}", path.display(), target.display());
+    Ok(target)
+}
+
+pub fn keep_replay(path: &Path) -> Result<PathBuf, String> {
+    let dir = documents_ac_dir()
+        .ok_or(crate::errors::DOCUMENTS_NOT_FOUND)?
+        .join("replay");
+    keep_replay_in(&dir, path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -813,6 +971,64 @@ mod tests {
         assert!(
             combo.is_some(),
             "le combo exact doit être identifiable parmi les captures du circuit"
+        );
+    }
+
+    fn local_ms(y: i32, mo: u32, d: u32, h: u32, mi: u32) -> i64 {
+        Local.with_ymd_and_hms(y, mo, d, h, mi, 0).unwrap().timestamp_millis()
+    }
+
+    // RESULTAT§6.1: the session's replay is the autosave of its combo dated
+    // within the session, found in `replay\temp\` where the game puts it; one
+    // of another session, or another car, is not.
+    #[test]
+    fn the_replay_of_a_session_is_its_autosave_in_temp() {
+        let base = crate::testutil::temp_dir("session-replay");
+        let replay = base.join("replay");
+        let temp = replay.join("temp");
+        write(&temp.join("AC_110926-232521_Q_car_a_rt_oulton_park_international.acreplay"));
+        write(&temp.join("AC_110926-233503_R_car_a_rt_oulton_park_international.acreplay"));
+        write(&temp.join("AC_110926-233503_R_car_b_rt_oulton_park_international.acreplay"));
+        write(&temp.join("AC_100926-120000_R_car_a_rt_oulton_park_international.acreplay"));
+        let dirs = [replay.to_path_buf(), temp.clone()];
+        let from = local_ms(2026, 9, 11, 22, 50);
+        let to = local_ms(2026, 9, 11, 23, 35);
+        let found = session_replay_in(&dirs, "car_a", "rt_oulton_park", from, to).expect("a replay");
+        assert_eq!(
+            found.file_name, "AC_110926-233503_R_car_a_rt_oulton_park_international.acreplay",
+            "the race's, the latest of the session"
+        );
+        assert!(
+            session_replay_in(&dirs, "car_a", "rt_oulton_park", to + 3_600_000, to + 7_200_000).is_none(),
+            "nothing dated in another session"
+        );
+    }
+
+    // RESULTAT§6.1: Keep moves the autosave out of the rotation, under the
+    // name CM gives a kept replay; anything but an autosave is refused.
+    #[test]
+    fn keep_renames_an_autosave_as_content_manager_does() {
+        let base = crate::testutil::temp_dir("keep-replay");
+        let replay = base.join("replay");
+        let auto = replay.join("temp").join("AC_110926-233503_R_car_a_spa.acreplay");
+        write(&auto);
+        let kept = keep_replay_in(&replay, &auto).expect("kept");
+        assert_eq!(kept, replay.join("car_a_spa_110926-233503.acreplay"));
+        assert!(kept.is_file() && !auto.exists(), "moved, not copied");
+        assert!(
+            !parse_replay_name("car_a_spa_110926-233503").autosave,
+            "out of the rotation"
+        );
+        assert_eq!(
+            keep_replay_in(&replay, &kept).unwrap_err(),
+            crate::errors::REPLAY_NOT_AN_AUTOSAVE,
+            "a kept replay is not kept twice"
+        );
+        let elsewhere = base.join("AC_110926-233503_R_car_a_spa.acreplay");
+        write(&elsewhere);
+        assert!(
+            keep_replay_in(&replay, &elsewhere).is_err(),
+            "only the game's replay folder"
         );
     }
 }

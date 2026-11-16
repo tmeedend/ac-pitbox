@@ -98,7 +98,7 @@ export function getSessionBackground(
 /** Content Manager écrit sa copie du replay une poignée de secondes après la
  * fermeture du jeu, pas pendant. Un seul rechargement à la fermeture arrive
  * donc parfois trop tôt. */
-const CM_SETTLE_MS = 6000;
+export const CM_SETTLE_MS = 6000;
 
 /**
  * Rappelle `handler` quand une session vient de se terminer (§6.1) — c'est à

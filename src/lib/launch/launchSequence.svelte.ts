@@ -8,6 +8,7 @@ import { carClassOf, driverFor, isEmpty } from "$lib/driver/driverOverride.svelt
 import { getModDetail } from "$lib/library/library";
 import { canStartSession } from "./gameSession.svelte";
 import { isSteamRunning, launchSession, type RaceSetup } from "./launch";
+import type { SavedSession } from "./savedSessions";
 
 // A failure of the check itself must not keep anyone from playing: in doubt
 // it lets through, a failure on CM's side remaining the worst case.
@@ -82,12 +83,24 @@ export class LaunchSequence {
  * kept up to date in `setup`: its source is the per-car cascade (`driverFor`),
  * which depends on the chosen car and on the default outfit, two things that
  * move elsewhere in the app. The car's class decides which of the two default
- * outfits applies: asked here, once, when it serves. */
-export async function startSession(setup: RaceSetup): Promise<void> {
+ * outfits applies: asked here, once, when it serves.
+ *
+ * `purpose` goes to the launch journal (RESULTAT§2): Story Mode's sessions
+ * are never recorded. `snapshot` is the session as the screen would save it,
+ * kept with the launch so it can be loaded again. */
+export async function startSession(
+  setup: RaceSetup,
+  purpose: "session" | "story",
+  snapshot: SavedSession | null = null,
+): Promise<void> {
   const carDetail = setup.car_id ? await getModDetail(setup.car_id).catch(() => null) : null;
   const outfit = driverFor(setup.car_id || null, carClassOf(carDetail?.car_class));
-  await launchSession({
-    ...$state.snapshot(setup),
-    driver: isEmpty(outfit) ? null : { model: outfit.body, suit: outfit.suit, gloves: outfit.gloves, helmet: outfit.helmet },
-  });
+  await launchSession(
+    {
+      ...$state.snapshot(setup),
+      driver: isEmpty(outfit) ? null : { model: outfit.body, suit: outfit.suit, gloves: outfit.gloves, helmet: outfit.helmet },
+    },
+    purpose,
+    snapshot,
+  );
 }

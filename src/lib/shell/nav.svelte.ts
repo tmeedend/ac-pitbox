@@ -145,7 +145,11 @@ export const nav = $state<{
    * "open the sheet" (DOSSIER§8.2). Read and cleared by the arriving screen,
    * like `openSkin`. */
   openSheet: { kind: "app" | "other" | "sound" | "skin"; id: string } | null;
+  /** The launch whose result the `result` screen shows (RESULTAT§4), set
+   * when the game closes after a session of the user's. */
+  resultLaunch: number | null;
 }>({
+  resultLaunch: null,
   section: "cars",
   prefill: null,
   settingsTab: null,
@@ -246,8 +250,11 @@ export async function requestSection(id: string): Promise<boolean> {
 // session settings screen, reached from the column's session types, and those
 // types are its navigation.
 
-/** Screens on which the session column is shown. */
-export const SESSION_ZONE: readonly string[] = ["cars", "tracks", "driver", "race"];
+/** Screens on which the session column is shown. `result` is the screen of
+ * the session just driven, shown when the game closes (RESULTAT§4): in the
+ * zone, so the column stays, but never reopened at startup — a moment, not a
+ * place. */
+export const SESSION_ZONE: readonly string[] = ["cars", "tracks", "driver", "race", "result"];
 
 export function inSessionZone(section: string): boolean {
   return SESSION_ZONE.includes(section);
@@ -295,7 +302,7 @@ export function tabGroupOf(section: string): readonly string[] | null {
 /** Every section `AppShell` shows. A stored screen outside it - renamed or
  * removed by an update - falls back to the car library. */
 const KNOWN_SECTIONS: readonly string[] = [
-  ...SESSION_ZONE,
+  ...SESSION_ZONE.filter((s) => s !== "result"),
   "apps",
   "others",
   "online",

@@ -157,7 +157,7 @@ pub fn save(app: &AppHandle, name: &str, setup: &RaceSetup, snapshot: &Value) ->
 /// and because it states the invariant in one place: the preset comes from the
 /// launcher's own builder, and we only add a key to it. Nothing of CM's is
 /// rewritten or reordered.
-fn preset_with_block(setup: &RaceSetup, snapshot: &Value) -> Result<Value, String> {
+pub(crate) fn preset_with_block(setup: &RaceSetup, snapshot: &Value) -> Result<Value, String> {
     let mut preset = quickdrive::preset_value(setup);
     let block = json!({ "version": PITBOX_VERSION, "session": snapshot });
     match preset.as_object_mut() {

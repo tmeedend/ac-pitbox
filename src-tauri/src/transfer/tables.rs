@@ -88,6 +88,14 @@ pub(super) const TABLES: &[(&str, Out, In)] = &[
     ("pending_answers", Out::Exclude, In::Skip),
     // Engine versions: their absence is what re-harmonizes at arrival.
     ("meta", Out::Exclude, In::Skip),
+    // The launches of this machine's game, and the copies of its Content
+    // Manager already read: machine state (RESULTAT§2).
+    ("launch_log", Out::Exclude, In::Skip),
+    ("cm_session_files", Out::Exclude, In::Skip),
+    // The sessions driven. Not yet carried: to be decided with the history
+    // screen that shows them (RESULTAT§7), they would need their launch rows
+    // dropped and their CM file names cleared on the way out.
+    ("session_results", Out::Exclude, In::Skip),
 ];
 
 /// The tables whose foreign key names a mod. A row about game content this

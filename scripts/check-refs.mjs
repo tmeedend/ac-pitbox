@@ -60,6 +60,8 @@ const DOCS = {
   EXPORT: "SPEC-export-bibliotheque.md",
   // La fiche technique d'une voiture : sources, physique, électronique, édition.
   FICHE: "SPEC-fiche-technique.md",
+  // Les sessions roulées : journal des lancements, historique, écran de retour.
+  RESULTAT: "SPEC-resultats.md",
   // Les instructions par lot de la refonte de l'écran de session. Livrées,
   // gardées pour leurs arguments — et parce que le code y renvoie.
   L5: "LOT5-refonte-ecran-session.md",

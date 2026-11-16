@@ -75,6 +75,7 @@ mod rules_share;
 mod saved_grids;
 mod saved_sessions;
 mod session_state;
+mod sessionlog;
 mod sessionpreset;
 mod shadowdir;
 mod showcase;
@@ -261,6 +262,12 @@ pub fn run() {
             commands::session::launch_replay,
             commands::session::open_native_showroom,
             commands::session::list_showrooms,
+            commands::sessionlog::session_return,
+            commands::sessionlog::session_media,
+            commands::sessionlog::keep_session_replay,
+            commands::sessionlog::launch_again,
+            commands::sessionlog::list_thumbnail_copies,
+            commands::sessionlog::trash_thumbnail_copies,
             commands::preview::prepare_car_preview,
             commands::preview::list_driver_choices,
             commands::preview::list_driver_bodies,

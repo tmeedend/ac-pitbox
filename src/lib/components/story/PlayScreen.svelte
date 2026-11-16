@@ -107,7 +107,8 @@
       // The story's own layers over the event's car and track, on until the
       // game closes; one that does not come on keeps the session from going.
       if (play.source) await beginStorySession(play.source, w.event);
-      await startSession(await buildSetup(w, g));
+      // "story": its sessions stay out of the user's history (RESULTAT§3.4).
+      await startSession(await buildSetup(w, g), "story");
       markStarting();
     } catch (e) {
       launchProblem = errorText(e);

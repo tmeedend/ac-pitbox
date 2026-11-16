@@ -545,7 +545,9 @@
     // une fois la session lancée telle qu'elle est, il n'a plus d'objet.
     error = ""; info = ""; warning = "";
     try {
-      await startSession(setup);
+      // The session as `Save session…` would write it, kept with the launch
+      // (RESULTAT§2): what "Edit" will load again.
+      await startSession(setup, "session", await currentSession(""));
       markStarting();
     } catch (e) {
       error = errorText(e);
@@ -602,28 +604,31 @@
     }
   }
 
-  async function doSaveSession(name: string) {
+  /** The whole screen as a saved session: what `Save session…` writes, and
+   * what a launch keeps with it. */
+  async function currentSession(name: string): Promise<SavedSession> {
     // Skins de circuit actifs : état de déploiement, pas un champ de `setup` —
     // capturé ici pour pouvoir remettre le circuit dans l'apparence qu'il
     // avait quand la session a été enregistrée. Un échec de lecture ne doit
     // pas empêcher la sauvegarde du reste : liste vide plutôt que rien.
     const trackSkins = setup.track_id ? await listActiveTrackSkins(setup.track_id).catch(() => []) : [];
+    return {
+      name,
+      savedAt: new Date().toISOString(),
+      setup: $state.snapshot(setup),
+      opponentCount: grid.count,
+      gridFilters: grid.serializedPool(),
+      gridPinned: [...grid.pinned],
+      season,
+      intent: selectedIntent,
+      trackSkins,
+    };
+  }
+
+  async function doSaveSession(name: string) {
     error = "";
     try {
-      await sessions.save(
-        {
-          name,
-          savedAt: new Date().toISOString(),
-          setup: $state.snapshot(setup),
-          opponentCount: grid.count,
-          gridFilters: grid.serializedPool(),
-          gridPinned: [...grid.pinned],
-          season,
-          intent: selectedIntent,
-          trackSkins,
-        },
-        setup.session_type,
-      );
+      await sessions.save(await currentSession(name), setup.session_type);
     } catch (e) {
       error = errorText(e);
     }

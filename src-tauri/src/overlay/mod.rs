@@ -28,6 +28,7 @@ mod others;
 mod pending;
 mod profiles;
 mod schema;
+mod sessions;
 mod stock;
 mod submods;
 #[cfg(test)]
@@ -46,6 +47,7 @@ pub use others::*;
 pub use pending::*;
 pub use profiles::*;
 use schema::{init, migrate};
+pub use sessions::*;
 pub use stock::*;
 pub use submods::*;
 pub use usage::*;

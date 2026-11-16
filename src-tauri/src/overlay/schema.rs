@@ -516,6 +516,51 @@ pub(super) fn init(conn: &Connection) -> rusqlite::Result<()> {
             attempted_at TEXT NOT NULL
         );
 
+        -- Every game Pit Box started, noted at the start (RESULTAT§2): what
+        -- tells Content Manager's copies apart. Times in ms since the epoch.
+        CREATE TABLE IF NOT EXISTS launch_log (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind         TEXT NOT NULL,             -- session | gameshot | story | online | replay
+            started_at   INTEGER NOT NULL,
+            ended_at     INTEGER,                   -- when the game closed
+            car_id       TEXT,
+            track_id     TEXT,
+            track_layout TEXT,
+            cars         TEXT NOT NULL DEFAULT '[]', -- every car asked for (a thumbnail job)
+            setup        TEXT,                      -- the launch's own setup, to start it again
+            preset       TEXT,                      -- quickdrive::preset_value with its PitBox block
+            detail       TEXT                       -- online: the server
+        );
+
+        -- The sessions the user drove (RESULTAT§3). Like `usage`, tied to mods by
+        -- id only: they survive the mod's removal.
+        CREATE TABLE IF NOT EXISTS session_results (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            launch_id    INTEGER UNIQUE,            -- NULL for a session started elsewhere
+            cm_file      TEXT UNIQUE,               -- its copy in CM's Progress\Sessions, once seen
+            origin       TEXT NOT NULL,             -- pitbox | cm
+            started_at   INTEGER,
+            ended_at     INTEGER NOT NULL,
+            mode         TEXT NOT NULL,             -- practice | hotlap | race | weekend | trackday | online | other
+            car_id       TEXT NOT NULL,
+            skin         TEXT NOT NULL DEFAULT '',
+            track_id     TEXT NOT NULL,
+            track_layout TEXT,
+            best_lap_ms  INTEGER,                   -- the player's best valid lap
+            laps         INTEGER NOT NULL DEFAULT 0,
+            result       TEXT NOT NULL,             -- raceresult::SessionResult
+            quick_drive  TEXT                       -- CM's __quickDrive, for a session CM started
+        );
+        CREATE INDEX IF NOT EXISTS idx_results_combo ON session_results(car_id, track_id, track_layout);
+
+        -- Content Manager's session copies already read: the scan never reads
+        -- one twice (RESULTAT§3.2).
+        CREATE TABLE IF NOT EXISTS cm_session_files (
+            file    TEXT PRIMARY KEY,
+            seen_at INTEGER NOT NULL,
+            outcome TEXT NOT NULL
+        );
+
         CREATE INDEX IF NOT EXISTS idx_versions_mod ON versions(mod_id);
         CREATE INDEX IF NOT EXISTS idx_history_mod  ON history(mod_id);
         CREATE INDEX IF NOT EXISTS idx_mods_idhash  ON mods(identity_hash);

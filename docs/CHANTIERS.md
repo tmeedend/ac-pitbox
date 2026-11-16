@@ -25,6 +25,39 @@ de reprendre. En cas d'écart, la spec fait foi.
 
 ---
 
+- [ ] **Résultats de session (2026-11-16).** Spec : `docs/SPEC-resultats.md`
+      (`RESULTAT§`). Branche `resultats-de-session`.
+      **Lot 1 fait** : le journal des lancements, l'enregistrement depuis
+      `race_out.json` et depuis `Progress\Sessions` de CM sans doublon ni
+      prise de vue ni Story Mode, le retrait des copies de vignettes (à
+      l'avenir, et l'action de Maintenance pour le passé), l'écran de retour
+      (Again, Change car, Watch replay, Keep, screenshots).
+      **Constaté, à ne pas re-chercher** :
+      - `__quickDrive` ne garde **pas** le bloc `PitBox` (CM réécrit le
+        preset) : marquer les presets de prise de vue ne servirait à rien,
+        le journal est la seule reconnaissance.
+      - `race/quick` n'a aucun paramètre pour passer la fenêtre de résultats
+        de CM, et le preset aucune clé : rien à faire sans écrire ses réglages.
+      - Les autosaves du jeu sont dans `replay\temp\`. L'onglet Médias de la
+        fiche (§6.1 de SPEC.md) **ne lit pas ce dossier** et écrit que les
+        autosaves sont dans `replay\` : sur la machine de dev, la fiche ne
+        montre donc aucun autosave. À reprendre (comportement de la fiche).
+      - `media::documents_ac_dir` lisait `%USERPROFILE%\Documents` : faux dès
+        que OneDrive sauvegarde Documents. Corrigé (commit à part).
+      **Reste — lot 2** :
+      - [ ] le record perso à côté du bouton Start (« PB 1:52.3 · 3 weeks ago ») ;
+      - [ ] le bloc « My times » des fiches voiture et circuit ;
+      - [ ] l'onglet History de la zone Session : sorties regroupées par
+        circuit, tableau des voitures, sessions sans tour valide masquées,
+        Again et Edit (le preset du journal pour une session de Pit Box, le
+        `__quickDrive` « au mieux » pour une de CM), image tirée d'un
+        screenshot, accès au replay s'il existe encore ;
+      - [ ] le résultat sur la ligne de replay de la fiche (« P3 · 1:52.3 ») ;
+      - [ ] emporter `session_results` dans l'export de bibliothèque (EXPORT§4.1).
+      **Reste — vérifications** : un vrai retour du jeu à l'écran (Again, Keep,
+      premier plan ou clignotement), une session online de bout en bout, une
+      série de vignettes dont la copie part à la corbeille.
+
 - [ ] **Story Mode et Create Your Own — phase 0 (2026-10-17).** Spec générique
       dans `docs/story/` ; le document complet et les maquettes restent en
       local (`docs/story/private/`, hors dépôt). Premier chantier long derrière un

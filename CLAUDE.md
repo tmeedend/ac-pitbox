@@ -780,7 +780,7 @@ ne relit en entier ne protège plus rien : c'est la lisibilité qui la garde vra
 `gridthumbs.rs` et `SPEC.md` dans `importer.rs`. Donc : **`§4.5` nu = `SPEC.md`**
 (le défaut, inchangé), et une **étiquette** pour les autres — `SESSION§3.2`,
 `GRILLE§5.3`, `WIKI§4.2`, `PILOTE§6.3`, `PREVIEW§8.1`, `FMOD§2bis`,
-`MUSIQUE§3.4`, `IMPORT§`, `REFONTE§`, `TEXTURE§`, `INDEX§`, `TAXO§`, `REGLES§`, `DOSSIER§`. La liste fait foi dans
+`MUSIQUE§3.4`, `IMPORT§`, `REFONTE§`, `TEXTURE§`, `INDEX§`, `TAXO§`, `REGLES§`, `DOSSIER§`, `RESULTAT§`. La liste fait foi dans
 `scripts/check-refs.mjs`.
 
 **`npm run check` affiche aussi le poids de la documentation** — nombre de
@@ -975,6 +975,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | Chantier | Où il en est | Où lire |
 | --- | --- | --- |
 | **Lancements qui échouent** | relevé le 2026-11-11 : `ModeData` solo refusé par CM (corrigé), Steam au numéro périmé (détecté), CM bloqué après une journée piste (contourné : Pit Box ferme le CM qu'il a lancé) ; restent AC parfois sur son menu vanilla et le jeu planté qui bloque CM | `docs/CHANTIERS.md` |
+| **Résultats de session** | lot 1 fait sur la branche `resultats-de-session` (journal, historique sans doublon, écran de retour, copies de vignettes retirées de CM) ; reste le lot 2 (PB près de Start, « My times », onglet History, résultat sur les replays) et les essais en jeu | `docs/SPEC-resultats.md`, `docs/CHANTIERS.md` |
 | **Sessions au format `.cmpreset`** | livré ; reste à vérifier dans CM qu'il ignore bien notre clé `PitBox` | `docs/SPEC-session.md` SESSION§3.6 |
 | **Texture updates** | rien d'implémenté ; la règle de détection est mesurée et nette | `docs/SPEC-texture-update.md` |
 | **Harmonisation des libellés** | libellés et barème du rouge faits ; restent le bleu, le vert et le jaune, sans barème | `docs/CHANTIERS.md` |

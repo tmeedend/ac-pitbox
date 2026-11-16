@@ -24,6 +24,7 @@
   import { t } from "$lib/i18n/index.svelte";
   import ExportDialog from "./ExportDialog.svelte";
   import ImportDialog from "./ImportDialog.svelte";
+  import ThumbnailCopies from "$lib/components/results/ThumbnailCopies.svelte";
 
   import { errorText } from "$lib/errors";
   let report = $state<MaintenanceReport | null>(null);
@@ -359,6 +360,8 @@
       >
     </div>
   </section>
+
+  <ThumbnailCopies />
 
   {#if FEATURE_LIBRARY_TRANSFER}
     <section class="stock-sec">

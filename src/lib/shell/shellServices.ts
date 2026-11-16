@@ -15,6 +15,7 @@ import { loadPlayerHandicap } from "$lib/launch/playerHandicap.svelte";
 import { PAUSE_SESSION, pauseGridThumbs, resumeGridThumbs } from "$lib/gridthumbs/gridThumbs.svelte";
 import { onAcRunning } from "$lib/launch/launch";
 import { startGameSessionWatch } from "$lib/launch/gameSession.svelte";
+import { showResultOnReturn } from "$lib/results/returnScreen";
 import { startGamepadNav } from "$lib/shell/gamepadNav";
 import { startControllerWatch } from "$lib/shell/gamepadDevices.svelte";
 import { goBack, goForward } from "$lib/shell/navHistory";
@@ -57,6 +58,9 @@ export function startShellServices(): () => void {
   // Whether a session runs (SESSION§2.4): the launch button of the session
   // column reads it on every screen, so it is followed from the start.
   stops.push(startGameSessionWatch());
+  // The game closed after a session of the user's: its result, wherever the
+  // window was (RESULTAT§4).
+  stops.push(showResultOnReturn());
   // Friends connecting, a slot freed (SPEC-play-online.md, v2): watched
   // whatever screen is open, so started with the shell.
   stops.push(startOnlineWatch());
