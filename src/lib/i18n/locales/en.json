@@ -850,6 +850,7 @@
     "mediaTrash": "Move to Recycle Bin (Del)",
     "replayKept": "Kept",
     "replayKeptHint": "Renamed, so out of Assetto Corsa's autosave rotation: this one stays until you delete it.",
+    "keepReplayHint": "Take it out of the autosave rotation, so the next sessions do not overwrite it.",
     "replayAutosave": "Autosave",
     "replayAutosaveRank": "Autosave {rank}/{limit}",
     "replayAutosaveHint": "Assetto Corsa keeps its last {limit} {type} autosaves. Renaming the file takes it out of the rotation.",

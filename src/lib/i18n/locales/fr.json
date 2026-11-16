@@ -850,6 +850,7 @@
     "mediaTrash": "Mettre à la corbeille (Suppr)",
     "replayKept": "Gardé",
     "replayKeptHint": "Renommé, donc sorti de la rotation d'autosave d'Assetto Corsa : celui-ci reste jusqu'à ce que tu le supprimes.",
+    "keepReplayHint": "Le sortir de la rotation des autosaves, pour que les sessions suivantes ne l'écrasent pas.",
     "replayAutosave": "Autosave",
     "replayAutosaveRank": "Autosave {rank}/{limit}",
     "replayAutosaveHint": "Assetto Corsa garde ses {limit} derniers autosaves de {type}. Renommer le fichier le sort de la rotation.",

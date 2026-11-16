@@ -318,34 +318,51 @@ fn describe_replay(
     })
 }
 
+/// The folders replays are read from (§6.1): `replay\`, and `replay\temp\`
+/// where the game keeps its autosaves — measured on the dev machine, every
+/// `AC_*` autosave was there and none in `replay\`. Not `temp\` while a game
+/// runs: the session's replay is being written there.
+pub fn replay_dirs(replay: &Path, game_running: bool) -> Vec<PathBuf> {
+    let mut dirs = vec![replay.to_path_buf()];
+    if !game_running {
+        dirs.push(replay.join("temp"));
+    }
+    dirs
+}
+
+/// The replays of `dirs` whose name holds `entity_id`. In `temp\`, only the
+/// game's autosaves (`AC_*`): anything else there is a working file. The
+/// autosave rank is counted folder by folder — the rotation is the folder's.
 fn list_replays_in(
-    dir: &Path,
+    dirs: &[PathBuf],
     entity_id: &str,
     counterpart_ids: &HashSet<String>,
     policy: &crate::acreplay::AutosavePolicy,
 ) -> Vec<ReplayFile> {
-    if !dir.is_dir() {
-        return Vec::new();
+    let mut out = Vec::new();
+    for (i, dir) in dirs.iter().enumerate().filter(|(_, d)| d.is_dir()) {
+        let working_folder = i > 0;
+        let ranks = autosave_ranks(dir);
+        // `max_depth(1)`: each folder is read on its own.
+        out.extend(
+            WalkDir::new(dir)
+                .max_depth(1)
+                .into_iter()
+                .flatten()
+                .filter(|e| e.file_type().is_file())
+                .filter_map(|e| {
+                    let path = e.path();
+                    if !is_replay_path(path) {
+                        return None;
+                    }
+                    let stem = path.file_stem()?.to_str()?;
+                    if !stem.contains(entity_id) || (working_folder && !parse_replay_name(stem).autosave) {
+                        return None;
+                    }
+                    describe_replay(path, counterpart_ids, &ranks, policy)
+                }),
+        );
     }
-    let ranks = autosave_ranks(dir);
-    // `max_depth(1)` : ne descend pas dans `replay/temp/` (fichiers de travail,
-    // jamais des replays terminés).
-    let mut out: Vec<ReplayFile> = WalkDir::new(dir)
-        .max_depth(1)
-        .into_iter()
-        .flatten()
-        .filter(|e| e.file_type().is_file())
-        .filter_map(|e| {
-            let path = e.path();
-            if !is_replay_path(path) {
-                return None;
-            }
-            if !path.file_stem()?.to_str()?.contains(entity_id) {
-                return None;
-            }
-            describe_replay(path, counterpart_ids, &ranks, policy)
-        })
-        .collect();
     sort_replays(&mut out);
     out
 }
@@ -364,7 +381,7 @@ pub fn list_replays(entity_id: &str, counterpart_ids: &HashSet<String>) -> Vec<R
         return Vec::new();
     };
     list_replays_in(
-        &dir.join("replay"),
+        &replay_dirs(&dir.join("replay"), crate::launch::game_running()),
         entity_id,
         counterpart_ids,
         &crate::acreplay::autosave_policy(),
@@ -594,7 +611,13 @@ pub fn session_replay_in(
 
 pub fn session_replay(car_id: &str, track_id: &str, from_ms: i64, to_ms: i64) -> Option<ReplayFile> {
     let dir = documents_ac_dir()?.join("replay");
-    session_replay_in(&[dir.clone(), dir.join("temp")], car_id, track_id, from_ms, to_ms)
+    session_replay_in(
+        &replay_dirs(&dir, crate::launch::game_running()),
+        car_id,
+        track_id,
+        from_ms,
+        to_ms,
+    )
 }
 
 /// The screenshots taken during a session: the combo in the name, the file
@@ -689,7 +712,7 @@ mod tests {
     /// 1 Q, 1 O) : les tests ne lisent pas le `replay.ini` du poste.
     fn list_replays_in_t(dir: &Path, entity_id: &str, counterparts: &HashSet<String>) -> Vec<ReplayFile> {
         list_replays_in(
-            dir,
+            &replay_dirs(dir, false),
             entity_id,
             counterparts,
             &crate::acreplay::AutosavePolicy::default(),
@@ -742,21 +765,31 @@ mod tests {
         );
     }
 
+    // §6.1 — behaviour changed on purpose: the game's autosaves live in
+    // `replay\temp\` (measured), so that folder is read, for `AC_*` autosaves
+    // only; anything else there is a working file. Not while a game runs.
     #[test]
-    fn replay_parses_fixed_prefix_and_matches_ids_ignoring_temp_folder() {
+    fn replay_parses_fixed_prefix_and_reads_autosaves_in_temp() {
         let base = crate::testutil::temp_dir("media-replays");
         let dir = base.join("replay");
         write(&dir.join("AC_060524-232248_R_rss_formula_rss_3_v6_ks_barcelona_layout_gp_osrw62.acreplay"));
-        write(&dir.join("AC_300124-231824_R_vrc_erc_1998_pageau_shannonville_long.acreplay"));
-        // Fichier de travail : jamais un replay terminé, doit être ignoré même
-        // s'il matcherait par ailleurs.
         write(
             &dir.join("temp")
-                .join("AC_010101-000000_R_vrc_erc_1998_pageau_shannonville_long.acreplay"),
+                .join("AC_300124-231824_R_vrc_erc_1998_pageau_shannonville_long.acreplay"),
         );
+        // Not an autosave: a working file of the game.
+        write(&dir.join("temp").join("vrc_erc_1998_pageau_shannonville_long.acreplay"));
 
         let found = list_replays_in_t(&dir, "vrc_erc_1998_pageau", &HashSet::new());
-        assert_eq!(found.len(), 1, "temp/ ne doit jamais être scanné");
+        assert_eq!(found.len(), 1, "the autosave of temp/, not its working file");
+        assert_eq!(found[0].autosave_rank, Some(1), "ranked in its folder's rotation");
+        let running = list_replays_in(
+            &replay_dirs(&dir, true),
+            "vrc_erc_1998_pageau",
+            &HashSet::new(),
+            &crate::acreplay::AutosavePolicy::default(),
+        );
+        assert!(running.is_empty(), "temp/ is not read while a game runs");
         assert_eq!(found[0].session_type.as_deref(), Some("R"));
         assert!(
             found[0]

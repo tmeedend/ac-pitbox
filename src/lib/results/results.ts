@@ -38,10 +38,6 @@ export function sessionMedia(launchId: number): Promise<SessionMedia> {
   return invoke<SessionMedia>("session_media", { launchId });
 }
 
-/** Takes the session's autosave out of the game's rotation; returns its new path. */
-export function keepSessionReplay(path: string): Promise<string> {
-  return invoke<string>("keep_session_replay", { path });
-}
 
 /** The same session, started again. */
 export function launchAgain(launchId: number): Promise<void> {

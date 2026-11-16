@@ -39,9 +39,8 @@ de reprendre. En cas d'écart, la spec fait foi.
       - `race/quick` n'a aucun paramètre pour passer la fenêtre de résultats
         de CM, et le preset aucune clé : rien à faire sans écrire ses réglages.
       - Les autosaves du jeu sont dans `replay\temp\`. L'onglet Médias de la
-        fiche (§6.1 de SPEC.md) **ne lit pas ce dossier** et écrit que les
-        autosaves sont dans `replay\` : sur la machine de dev, la fiche ne
-        montre donc aucun autosave. À reprendre (comportement de la fiche).
+        fiche ne lisait pas ce dossier : corrigé avant le lot 2 (§6.1 de
+        SPEC.md), « Keep » compris.
       - `media::documents_ac_dir` lisait `%USERPROFILE%\Documents` : faux dès
         que OneDrive sauvegarde Documents. Corrigé (commit à part).
       **Reste — lot 2** :

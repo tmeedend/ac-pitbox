@@ -10,14 +10,13 @@
   import { nav, requestSection } from "$lib/shell/nav.svelte";
   import { getModDetail, previewSrc } from "$lib/library/library";
   import { loadThumbnails } from "$lib/detail/thumbnails";
-  import { CM_SETTLE_MS, launchReplay } from "$lib/detail/media";
+  import { CM_SETTLE_MS, keepReplay, launchReplay } from "$lib/detail/media";
   import { canStartSession, markStarting } from "$lib/launch/gameSession.svelte";
   import { LaunchSequence } from "$lib/launch/launchSequence.svelte";
   import { PAUSE_SESSION, pauseGridThumbs } from "$lib/gridthumbs/gridThumbs.svelte";
   import SteamPrompt from "$lib/components/launch/SteamPrompt.svelte";
   import Lightbox, { type LightboxItem } from "$lib/components/ui/Lightbox.svelte";
   import {
-    keepSessionReplay,
     launchAgain,
     sessionMedia,
     sessionReturn,
@@ -136,7 +135,7 @@
     keeping = true;
     error = "";
     try {
-      const path = await keepSessionReplay(replay.path);
+      const path = await keepReplay(replay.path);
       media = { ...media, replay: { ...replay, path, autosave: false, file_name: path.split(/[\\/]/).pop() ?? path } };
       kept = true;
     } catch (e) {

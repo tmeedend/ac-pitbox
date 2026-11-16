@@ -14,6 +14,7 @@
     listMediaReplays,
     linkMediaManually,
     openMediaFolder,
+    keepReplay,
     launchReplay,
     trashMediaFile,
     onSessionEnd,
@@ -140,6 +141,22 @@
     }
   }
 
+  // Out of the game's rotation (§6.1): the same renaming as on the screen of
+  // a session. The list is read again — the file moved and changed its name.
+  let keeping = $state<string | null>(null);
+  async function keep(f: ReplayFile) {
+    if (keeping) return;
+    keeping = f.path;
+    try {
+      await keepReplay(f.path);
+      await reload();
+    } catch (e) {
+      onerror(errorText(e));
+    } finally {
+      keeping = null;
+    }
+  }
+
   async function linkManually() {
     if (linking) return;
     const picked = await open({
@@ -215,6 +232,15 @@
             >
               {launching === f.path ? t("common.working") : t("detail.playReplay")}
             </button>
+            {#if f.autosave}
+              <button
+                class="btn-ghost play"
+                type="button"
+                title={t("detail.keepReplayHint")}
+                disabled={keeping !== null}
+                onclick={() => keep(f)}>{t("results.keep")}</button
+              >
+            {/if}
             <button
               class="replay-del"
               type="button"

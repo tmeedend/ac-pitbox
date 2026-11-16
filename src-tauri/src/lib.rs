@@ -264,7 +264,7 @@ pub fn run() {
             commands::session::list_showrooms,
             commands::sessionlog::session_return,
             commands::sessionlog::session_media,
-            commands::sessionlog::keep_session_replay,
+            commands::media::keep_replay,
             commands::sessionlog::launch_again,
             commands::sessionlog::list_thumbnail_copies,
             commands::sessionlog::trash_thumbnail_copies,

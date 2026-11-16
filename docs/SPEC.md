@@ -443,12 +443,13 @@ Quatre blocs, en deux groupes : ce que **l'utilisateur a produit** — **Screens
 
 **Les noms de fichiers lus** :
 - `Documents\Assetto Corsa\screens\` : `Screenshot_<car>_<track>_<date>.jpg` en session, `Showroom_<car>_<date>.jpg` (sans circuit). La date du nom n'est jamais lue (format irrégulier) : seule la date du fichier compte.
-- `Documents\Assetto Corsa\replay\` : l'autosave du jeu `AC_<ddmmyy>-<hhmmss>_<type>_<car>_<track[_layout]>_…`, ou le nom que CM donne à un replay gardé, `<car>_<track>_<ddmmyy>-<hhmmss>`. La date se lit dans le nom, à défaut dans le fichier : **un replay a toujours un horodatage**. `replay\temp\` n'est jamais lu.
+- `Documents\Assetto Corsa\replay\temp\` : **là où le jeu pose ses autosaves** (constaté : tous y étaient, aucun dans `replay\`), `AC_<ddmmyy>-<hhmmss>_<type>_<car>_<track[_layout]>_…`. Seuls ces noms y sont lus, le reste du dossier est un fichier de travail ; et **pas pendant qu'un jeu tourne**, le replay de la session s'y écrit.
+- `Documents\Assetto Corsa\replay\` : un replay gardé, sous le nom que CM lui donne, `<car>_<track>_<ddmmyy>-<hhmmss>`, ou tout autre nom. La date se lit dans le nom, à défaut dans le fichier : **un replay a toujours un horodatage**.
 - `<AC>\extension\backgrounds\<track>[__<layout>]_<variante>.jpg` (CSP), par préfixe.
 
 **Une ligne de replay** affiche le combo réellement piloté, l'horodatage, la durée, le nombre de voitures, le pilote, la taille et le nom du fichier. Les cinq premiers viennent de **l'en-tête du `.acreplay`** (`acreplay.rs`), atteint par un saut de taille fixe : lire un replay de 635 Mo coûte autant qu'un de 867 Ko. En-tête illisible : la ligne garde ce que le nom et le disque donnent, jamais d'erreur.
 
-**Autosave ou gardé** : AC fait tourner ses autosaves par **nombre** (`cfg/replay.ini`, `[AUTOSAVE]`), personne ne les supprime par ancienneté. Une ligne porte **« Autosave rang/limite »** (son rang parmi les autosaves du même type de session, le plus récent en 1) ou **« Gardé »** (renommé, sorti de la rotation) ; le détail est en infobulle.
+**Autosave ou gardé** : AC fait tourner ses autosaves par **nombre** (`cfg/replay.ini`, `[AUTOSAVE]`), personne ne les supprime par ancienneté. Une ligne porte **« Autosave rang/limite »** (son rang parmi les autosaves du même type de session, le plus récent en 1) ou **« Gardé »** (renommé, sorti de la rotation) ; le détail est en infobulle. Le rang se compte dans le dossier du fichier. **« Keep »** sur un autosave le garde : il passe dans `replay\` sous le nom de CM, par la même fonction que l'écran d'une session (RESULTAT§6.1).
 
 **La liste se recharge à la fin d'une session**, sans rouvrir la fiche, sur le signal de fin du jeu (`ac://running`) : à la fermeture, puis six secondes après — AC pose l'autosave, CM le renomme ensuite. Screenshots et décomptes suivent.
 

@@ -194,12 +194,6 @@ pub async fn session_media(app: AppHandle, launch_id: i64) -> Result<SessionMedi
     .await
 }
 
-/// Takes the session's autosave out of the game's rotation (RESULTAT§6.1).
-#[tauri::command]
-pub fn keep_session_replay(path: std::path::PathBuf) -> Result<String, String> {
-    crate::media::keep_replay(&path).map(|p| p.display().to_string())
-}
-
 /// "Again": the same session, started again (RESULTAT§4.3). A session of
 /// the session screen goes with its own setup and preset; an online one joins
 /// the same server again.
