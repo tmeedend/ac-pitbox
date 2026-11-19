@@ -350,9 +350,8 @@ fn rank(variants: &mut [(Variant, String)]) {
     });
 }
 
-/// Each brand's variants, with the first car shipping each - one per file,
-/// its votes counted, and whether it is borrowed.
-fn tally(cars: &[CarBadge]) -> BTreeMap<&str, BTreeMap<String, (Variant, String)>> {
+/// Every readable badge, by car id, and whether it is borrowed (TAXO§4).
+fn analyzed(cars: &[CarBadge]) -> Vec<(&CarBadge, Analysis, bool)> {
     let mut sorted: Vec<(&CarBadge, Analysis)> = cars
         .iter()
         .filter_map(|b| Some((b, analyze(Path::new(&b.path))?)))
@@ -363,22 +362,31 @@ fn tally(cars: &[CarBadge]) -> BTreeMap<&str, BTreeMap<String, (Variant, String)
     // modder's logo: VRC's on eight brands, RSS's on Lamborghini and Lexus.
     // Not declaring alone is not enough - a "traffic" pack declares no brand
     // and ships the real Isuzu and Toyota logos, one brand each.
-    let mut brands_of: HashMap<&str, BTreeSet<&str>> = HashMap::new();
+    let mut brands_of: HashMap<String, BTreeSet<&str>> = HashMap::new();
     for (b, a) in &sorted {
-        brands_of.entry(a.hash.as_str()).or_default().insert(b.brand.as_str());
+        brands_of.entry(a.hash.clone()).or_default().insert(b.brand.as_str());
     }
+    sorted
+        .into_iter()
+        .map(|(b, a)| {
+            let borrowed = !b.declared && brands_of.get(&a.hash).is_some_and(|s| s.len() > 1);
+            (b, a, borrowed)
+        })
+        .collect()
+}
+
+/// Each brand's variants, with the first car shipping each - one per file,
+/// its votes counted, and whether it is borrowed.
+fn tally(cars: &[CarBadge]) -> BTreeMap<&str, BTreeMap<String, (Variant, String)>> {
     let mut by_brand: BTreeMap<&str, BTreeMap<String, (Variant, String)>> = BTreeMap::new();
     for (
         CarBadge {
-            car: id,
-            brand,
-            path,
-            declared,
+            car: id, brand, path, ..
         },
         a,
-    ) in &sorted
+        borrowed,
+    ) in analyzed(cars)
     {
-        let borrowed = !declared && brands_of.get(a.hash.as_str()).is_some_and(|b| b.len() > 1);
         let e = by_brand
             .entry(brand.as_str())
             .or_default()
