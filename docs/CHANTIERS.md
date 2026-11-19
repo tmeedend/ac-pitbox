@@ -26,7 +26,7 @@ de reprendre. En cas d'écart, la spec fait foi.
 ---
 
 - [ ] **Résultats de session (2026-11-16).** Spec : `docs/SPEC-resultats.md`
-      (`RESULTAT§`). Branche `resultats-de-session`.
+      (`RESULTAT§`). Fusionné dans `main` le 2026-11-19.
       **Lot 1 fait** : le journal des lancements, l'enregistrement depuis
       `race_out.json` et depuis `Progress\Sessions` de CM sans doublon ni
       prise de vue ni Story Mode, le retrait des copies de vignettes (à

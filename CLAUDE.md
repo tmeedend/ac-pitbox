@@ -975,7 +975,7 @@ où aller lire. Une entrée se retire **des deux endroits** dès qu'elle est fai
 | Chantier | Où il en est | Où lire |
 | --- | --- | --- |
 | **Lancements qui échouent** | relevé le 2026-11-11 : `ModeData` solo refusé par CM (corrigé), Steam au numéro périmé (détecté), CM bloqué après une journée piste (contourné : Pit Box ferme le CM qu'il a lancé) ; restent AC parfois sur son menu vanilla et le jeu planté qui bloque CM | `docs/CHANTIERS.md` |
-| **Résultats de session** | lots 1 et 2 faits sur la branche `resultats-de-session` (journal, historique en sorties, écran de retour, record sous Start, « My times », résultat des replays, export) ; restent les essais en jeu | `docs/SPEC-resultats.md`, `docs/CHANTIERS.md` |
+| **Résultats de session** | lots 1 et 2 faits et fusionnés (2026-11-19) (journal, historique en sorties, écran de retour, record sous Start, « My times », résultat des replays, export) ; restent les essais en jeu | `docs/SPEC-resultats.md`, `docs/CHANTIERS.md` |
 | **Sessions au format `.cmpreset`** | livré ; reste à vérifier dans CM qu'il ignore bien notre clé `PitBox` | `docs/SPEC-session.md` SESSION§3.6 |
 | **Texture updates** | rien d'implémenté ; la règle de détection est mesurée et nette | `docs/SPEC-texture-update.md` |
 | **Harmonisation des libellés** | libellés et barème du rouge faits ; restent le bleu, le vert et le jaune, sans barème | `docs/CHANTIERS.md` |
