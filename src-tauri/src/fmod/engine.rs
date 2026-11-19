@@ -924,29 +924,7 @@ fn start(
     let parameters = l.system.parameters(desc).map_err(|e| e.to_string())?;
     let roles = params::classify(&parameters);
 
-    // Samples are not implicit in the bank load; without this the first few
-    // hundred milliseconds are silent.
-    l.system.load_sample_data(desc).map_err(|e| e.to_string())?;
-    let deadline = std::time::Instant::now() + SAMPLE_WAIT;
-    loop {
-        if l.system.samples_loaded(desc).map_err(|e| e.to_string())? {
-            break;
-        }
-        if std::time::Instant::now() >= deadline {
-            // Giving up has to say what it gave up on: a state that never
-            // becomes the one being waited for is indistinguishable, from the
-            // outside, from a bank that is genuinely slow to load.
-            log::warn!(
-                "fmod: samples for {} still not loaded after {:?}, state {:?} — playing anyway",
-                request.event_path,
-                SAMPLE_WAIT,
-                l.system.sample_loading_state(desc),
-            );
-            break;
-        }
-        let _ = l.system.update();
-        std::thread::sleep(TICK);
-    }
+    load_samples(l, desc, &request.event_path)?;
 
     let samples_ready = began.elapsed();
 
@@ -1096,6 +1074,35 @@ fn start(
         showcase: None,
     });
     Ok(report)
+}
+
+/// Loads an event's samples and waits for them, up to `SAMPLE_WAIT`.
+///
+/// Samples are not implicit in the bank load; without this the first few
+/// hundred milliseconds are silent. Past the deadline the event plays anyway,
+/// and the log says so.
+fn load_samples(l: &Loaded, desc: super::sys::EventDesc, event_path: &str) -> Result<(), String> {
+    l.system.load_sample_data(desc).map_err(|e| e.to_string())?;
+    let deadline = std::time::Instant::now() + SAMPLE_WAIT;
+    loop {
+        if l.system.samples_loaded(desc).map_err(|e| e.to_string())? {
+            return Ok(());
+        }
+        if std::time::Instant::now() >= deadline {
+            // Giving up has to say what it gave up on: a state that never
+            // becomes the one being waited for is indistinguishable, from the
+            // outside, from a bank that is genuinely slow to load.
+            log::warn!(
+                "fmod: samples for {} still not loaded after {:?}, state {:?} — playing anyway",
+                event_path,
+                SAMPLE_WAIT,
+                l.system.sample_loading_state(desc),
+            );
+            return Ok(());
+        }
+        let _ = l.system.update();
+        std::thread::sleep(TICK);
+    }
 }
 
 /// Applies a value to whichever role the selector picks, clamped to the range
