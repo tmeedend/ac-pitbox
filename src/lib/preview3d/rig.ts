@@ -59,6 +59,12 @@ export interface Rig {
    * conversion n'a pas greffé de mannequin. */
   driver: ThreeModule.Mesh[];
   driverMaterials: ThreeModule.Material[];
+  /** The driver's head — helmet, visor, face — which the interior view hides
+   * the way the game does in its cockpit camera (PREVIEW§15.1): the camera
+   * sits inside it. */
+  driverHead: Set<ThreeModule.Mesh>;
+  /** The head is hidden right now. */
+  headHidden: boolean;
   /** Opacité actuelle du pilote, et celle vers laquelle il va. Le fondu est
    * mené par la boucle de rendu, comme la rotation du plateau : c'est le
    * seul endroit qui connaisse le temps écoulé. */
@@ -130,9 +136,45 @@ export function findRig(THREE: typeof ThreeModule, gltf: GLTF, driverShown: bool
     steered,
     driver: driverMeshes,
     driverMaterials: [...driverMaterials],
+    driverHead: findHead(gltf.scene, driverMeshes),
+    headHidden: false,
     driverOpacity: opacity,
     driverTarget: opacity,
   };
+}
+
+/** Names of the head bone in every Kunos mannequin, and so in every mod one:
+ * the car's `steer.ksanim` animates the rig by bone name, so a mannequin that
+ * renamed its bones would not hold the wheel. three.js strips the `:` of
+ * `DRIVER:RIG_Head` on load (see `DRIVER_MESH_PREFIX`), hence the suffix. */
+const HEAD_BONE = /RIG_Head$/i;
+/** Fallback for a mannequin whose head pieces are not under that bone. */
+const HEAD_PIECE = /helmet|visor|glass|face|head/i;
+
+/** The driver meshes that make up the head: those under the head bone — the
+ * helmet, its glass and the face hang from it in the Kunos rig (measured on
+ * the cached models) — or, failing that bone, the ones named like a head. */
+function findHead(root: ThreeModule.Object3D, driver: ThreeModule.Mesh[]): Set<ThreeModule.Mesh> {
+  const bones: ThreeModule.Object3D[] = [];
+  root.traverse((object) => {
+    if (HEAD_BONE.test(object.name)) bones.push(object);
+  });
+  const bone = bones[0] ?? null;
+  const under = (mesh: ThreeModule.Object3D): boolean => {
+    for (let node: ThreeModule.Object3D | null = mesh; node; node = node.parent) {
+      if (node === bone) return true;
+    }
+    return false;
+  };
+  const head = bone ? driver.filter(under) : [];
+  return new Set(head.length > 0 ? head : driver.filter((mesh) => HEAD_PIECE.test(mesh.name)));
+}
+
+/** Hides or shows the driver's head, for the interior view. */
+export function setDriverHeadHidden(current: Rig, hidden: boolean) {
+  if (current.headHidden === hidden) return;
+  current.headHidden = hidden;
+  applyDriverOpacity(current, current.driverOpacity);
 }
 
 /**
@@ -217,7 +259,9 @@ export function applyDriverOpacity(current: Rig, opacity: number) {
   }
   // Retiré de la scène quand il n'est plus là du tout : un mannequin à
   // opacité nulle coûterait encore ses appels de dessin et son ombre.
-  for (const mesh of current.driver) mesh.visible = opacity > 0.002;
+  for (const mesh of current.driver) {
+    mesh.visible = opacity > 0.002 && !(current.headHidden && current.driverHead.has(mesh));
+  }
 }
 
 /** Avance le fondu d'une image. Rend `true` tant qu'il reste à faire, ce qui

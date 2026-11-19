@@ -34,6 +34,13 @@ export interface CarPreview {
   fromCache: boolean;
 }
 
+/** Where the car seats its driver's eyes (`[GRAPHICS] DRIVEREYES`), in the
+ * model's space: the camera of the interior view (PREVIEW§15.1). `null` when
+ * the car does not say — the preview then offers no interior view. */
+export function carDriverEyes(carId: string): Promise<[number, number, number] | null> {
+  return invoke<[number, number, number] | null>("car_driver_eyes", { carId });
+}
+
 /** Étapes émises pendant une conversion, dans cet ordre. */
 export type PreviewStage = "geometry" | "textures" | "writing";
 

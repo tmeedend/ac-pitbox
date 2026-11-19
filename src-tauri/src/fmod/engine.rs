@@ -16,7 +16,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use super::guids::Guid;
-pub use super::listener::Listener;
+pub use super::listener::{Ear, HeadListener, Listener};
 use super::params::{self, Roles};
 use super::sys::{Attributes3d, Bank, Fmod, PlaybackState, Reverb, System};
 
@@ -47,6 +47,15 @@ const SAMPLE_WAIT: Duration = Duration::from_secs(10);
 /// wherever they were recorded, so a room laid generously on top of that gives
 /// a bathroom rather than a showroom.
 pub const DEFAULT_REVERB_WET_DB: f32 = -14.0;
+
+/// Where the engine event sits: the car's centre, facing -Z — see the comment
+/// above its use in `start` for why the tail and not the nose.
+const CAR_ATTRIBUTES: Attributes3d = Attributes3d {
+    position: [0.0; 3],
+    velocity: [0.0; 3],
+    forward: [0.0, 0.0, -1.0],
+    up: [0.0, 1.0, 0.0],
+};
 
 /// What the caller wants played. Everything here is resolved **before** the
 /// message is sent, by pure code that needs no DLL — the thread does no lookup.
@@ -84,6 +93,13 @@ pub struct PlayRequest {
     pub idle_rev: f32,
 }
 
+/// The other view of the engine already playing: same bank, another event.
+#[derive(Debug, Clone)]
+pub struct SwitchRequest {
+    pub guid: Guid,
+    pub event_path: String,
+}
+
 /// What actually happened, so the interface can show it and the caller can fall
 /// back to the in-house decoder when it did not work.
 #[derive(Debug, Clone, serde::Serialize)]
@@ -98,12 +114,27 @@ pub struct PlayReport {
     pub throttle_param: Option<String>,
 }
 
+impl PlayReport {
+    fn new(event_path: String, roles: &Roles) -> Self {
+        PlayReport {
+            event_path,
+            rev_param: roles.rev.as_ref().map(|p| p.name.clone()),
+            rev_min: roles.rev.as_ref().map(|p| p.min),
+            rev_max: roles.rev.as_ref().map(|p| p.max),
+            throttle_param: roles.throttle.as_ref().map(|p| p.name.clone()),
+        }
+    }
+}
+
 pub enum Command {
     Play(PlayRequest, Sender<Result<PlayReport, String>>),
     SetRev(f32),
     /// The pointer took hold of the rev slider, or let go of it (FMOD§6septies).
     Pedal(bool),
-    SetListener(Listener),
+    SetListener(Ear),
+    /// Swap the engine event under the running audition, exterior for
+    /// interior or back (FMOD§6octies).
+    SwitchEvent(SwitchRequest, Sender<Result<PlayReport, String>>),
     /// Start or stop the "showing off the engine" routine (FMOD§6bis).
     Showcase(bool),
     Stop,
@@ -145,8 +176,17 @@ impl FmodEngineHandle {
 
     /// Moves the ear. Sent without waiting: this follows a camera being
     /// dragged, so it must never make the drag stutter.
-    pub fn set_listener(&self, listener: Listener) {
-        self.send(Command::SetListener(listener));
+    pub fn set_listener(&self, ear: impl Into<Ear>) {
+        self.send(Command::SetListener(ear.into()));
+    }
+
+    /// Plays the other view of the engine under way, and waits for the
+    /// verdict. An error leaves the audition as it was: still playing, on the
+    /// event it had.
+    pub fn switch_event(&self, request: SwitchRequest) -> Result<PlayReport, String> {
+        let (tx, rx) = mpsc::channel();
+        self.send(Command::SwitchEvent(request, tx));
+        rx.recv().map_err(|_| "the FMOD thread is gone".to_string())?
     }
 
     pub fn set_showcase(&self, on: bool) {
@@ -183,6 +223,9 @@ struct Loaded {
 
 struct Playing {
     instance: super::sys::EventInstance,
+    /// The engine event `instance` plays, so that switching to the view
+    /// already playing is a no-op rather than a restart.
+    guid: Guid,
     roles: Roles,
     /// The limiter, ready to be struck. Its description is kept rather than an
     /// instance: it only exists while the engine is actually against the stop.
@@ -693,7 +736,7 @@ fn run(rx: Receiver<Command>) {
     let mut playing: Option<Playing> = None;
     // Kept across plays: moving the camera, switching sound mod and listening
     // again should not silently put the ear back in front of the car.
-    let mut listener = Listener::default();
+    let mut listener = Ear::default();
 
     loop {
         match rx.recv_timeout(TICK) {
@@ -776,6 +819,16 @@ fn run(rx: Receiver<Command>) {
                     }
                 }
             }
+            Ok(Command::SwitchEvent(request, reply)) => {
+                let outcome = match (&loaded, &mut playing) {
+                    (Some(l), Some(p)) => switch_event(l, p, &request, &listener),
+                    _ => Err("nothing is playing".to_string()),
+                };
+                if let Err(e) = &outcome {
+                    log::warn!("fmod: could not switch to {}: {e}", request.event_path);
+                }
+                let _ = reply.send(outcome);
+            }
             Ok(Command::Stop) => stop_current(&loaded, &mut playing),
             Err(mpsc::RecvTimeoutError::Timeout) => {}
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
@@ -854,7 +907,7 @@ fn start(
     loaded: &mut Option<Loaded>,
     playing: &mut Option<Playing>,
     request: PlayRequest,
-    listener: Listener,
+    listener: Ear,
 ) -> Result<PlayReport, String> {
     let began = std::time::Instant::now();
 
@@ -1010,13 +1063,7 @@ fn start(
     // not something this side can tell, and it does not change what to do.
     // Only the ear could catch it: the cone readings are symmetric about the
     // axis, so 0-at-the-nose and 0-at-the-tail measure identically.
-    let car = Attributes3d {
-        position: [0.0; 3],
-        velocity: [0.0; 3],
-        forward: [0.0, 0.0, -1.0],
-        up: [0.0, 1.0, 0.0],
-    };
-    if let Err(e) = l.system.set_instance_3d(instance, &car) {
+    if let Err(e) = l.system.set_instance_3d(instance, &CAR_ATTRIBUTES) {
         log::warn!("fmod: could not place the event in space: {e}");
     }
     if let Err(e) = l.system.set_listener(&listener.attributes()) {
@@ -1055,15 +1102,10 @@ fn start(
         );
     }
 
-    let report = PlayReport {
-        event_path: request.event_path,
-        rev_param: roles.rev.as_ref().map(|p| p.name.clone()),
-        rev_min: roles.rev.as_ref().map(|p| p.min),
-        rev_max: roles.rev.as_ref().map(|p| p.max),
-        throttle_param: roles.throttle.as_ref().map(|p| p.name.clone()),
-    };
+    let report = PlayReport::new(request.event_path, &roles);
     *playing = Some(Playing {
         instance,
+        guid: request.guid,
         roles,
         limiter,
         rev_ceiling: request.rev_ceiling,
@@ -1074,6 +1116,59 @@ fn start(
         showcase: None,
     });
     Ok(report)
+}
+
+/// Swaps the engine event under a running audition (FMOD§6octies).
+///
+/// **No restart**, and that is the point: the two views live in the same bank,
+/// so the new instance starts at the engine speed and throttle the old one was
+/// at, and the starter does not turn again. The old instance goes only once the
+/// new one has started, so the switch never drops to silence.
+fn switch_event(l: &Loaded, p: &mut Playing, request: &SwitchRequest, ear: &Ear) -> Result<PlayReport, String> {
+    // A bank with a single engine event answers both views with it: nothing
+    // to switch, and a new instance would only restart the same sound.
+    if request.guid == p.guid {
+        return Ok(PlayReport::new(request.event_path.clone(), &p.roles));
+    }
+    let desc = l.system.event(&request.guid).map_err(|e| e.to_string())?;
+    let parameters = l.system.parameters(desc).map_err(|e| e.to_string())?;
+    let roles = params::classify(&parameters);
+    load_samples(l, desc, &request.event_path)?;
+    let instance = l.system.create_instance(desc).map_err(|e| e.to_string())?;
+
+    // Where the engine is now. While the start runs, the next tick sets both
+    // anyway; afterwards the slider's speed and the smoothed throttle are
+    // exactly what the old instance was last given.
+    let rev = if p.startup.is_some() { 0.0 } else { p.manual_rev };
+    if let Some(param) = &roles.rev {
+        let _ = l
+            .system
+            .set_parameter(instance, &param.name, rev.clamp(param.min, param.max));
+    }
+    if let Some(param) = &roles.throttle {
+        let _ = l
+            .system
+            .set_parameter(instance, &param.name, p.throttle.current.clamp(param.min, param.max));
+    }
+    if let Err(e) = l.system.set_instance_3d(instance, &CAR_ATTRIBUTES) {
+        log::warn!("fmod: could not place the event in space: {e}");
+    }
+    if let Err(e) = l.system.set_listener(&ear.attributes()) {
+        log::warn!("fmod: could not place the listener: {e}");
+    }
+    if let Err(e) = l.system.start(instance) {
+        let _ = l.system.release_instance(instance);
+        return Err(e.to_string());
+    }
+
+    let previous = std::mem::replace(&mut p.instance, instance);
+    p.guid = request.guid;
+    p.roles = roles;
+    let _ = l.system.stop(previous);
+    if let Err(e) = l.system.release_instance(previous) {
+        log::warn!("fmod: releasing the previous view failed: {e}");
+    }
+    Ok(PlayReport::new(request.event_path.clone(), &p.roles))
 }
 
 /// Loads an event's samples and waits for them, up to `SAMPLE_WAIT`.

@@ -53,6 +53,69 @@ impl Listener {
     }
 }
 
+/// The ear in the driver's seat, for the interior view: a point in the car's
+/// space and the direction the head is turned.
+///
+/// Same frame as [`Listener`] — the car's centre at the origin, +Z the nose,
+/// +Y up — so that the two can follow each other without the sound jumping.
+/// Unlike the orbit, the ear does **not** face the car: it faces wherever the
+/// driver looks, which is what turns the engine from one ear to the other as
+/// the head turns.
+#[derive(Debug, Clone, Copy)]
+pub struct HeadListener {
+    pub position: [f32; 3],
+    /// Degrees from the nose (+Z) towards +X.
+    pub yaw: f32,
+    /// Degrees above the horizon, clamped like [`Listener::elevation`].
+    pub pitch: f32,
+}
+
+impl HeadListener {
+    pub(super) fn attributes(&self) -> Attributes3d {
+        let yaw = self.yaw.to_radians();
+        let pitch = self.pitch.clamp(-80.0, 80.0).to_radians();
+        let forward = normalize([yaw.sin() * pitch.cos(), pitch.sin(), yaw.cos() * pitch.cos()]);
+        let right = normalize(cross([0.0, 1.0, 0.0], forward));
+        let up = normalize(cross(forward, right));
+        Attributes3d {
+            position: self.position,
+            velocity: [0.0; 3],
+            forward,
+            up,
+        }
+    }
+}
+
+/// Where the ear is, whichever way the interface put it there.
+#[derive(Debug, Clone, Copy)]
+pub enum Ear {
+    /// Orbiting the car, facing it: the exterior view.
+    Orbit(Listener),
+    /// In the driver's seat: the interior view.
+    Head(HeadListener),
+}
+
+impl Default for Ear {
+    fn default() -> Self {
+        Ear::Orbit(Listener::default())
+    }
+}
+
+impl From<Listener> for Ear {
+    fn from(listener: Listener) -> Self {
+        Ear::Orbit(listener)
+    }
+}
+
+impl Ear {
+    pub(super) fn attributes(&self) -> Attributes3d {
+        match self {
+            Ear::Orbit(listener) => listener.attributes(),
+            Ear::Head(head) => head.attributes(),
+        }
+    }
+}
+
 fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
     [
         a[1] * b[2] - a[2] * b[1],
@@ -112,5 +175,32 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// In the seat the ear sits where it is put and faces where the head
+    /// looks — never back at the car's centre, or turning the head would change
+    /// nothing (FMOD§6octies).
+    #[test]
+    fn head_listener_sits_where_asked_and_faces_where_the_head_looks() {
+        let dot = |u: [f32; 3], v: [f32; 3]| u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+        let ahead = HeadListener {
+            position: [0.33, 0.4, -0.2],
+            yaw: 0.0,
+            pitch: 0.0,
+        }
+        .attributes();
+        assert_eq!(ahead.position, [0.33, 0.4, -0.2], "the ear is at the eyes");
+        assert!(dot(ahead.forward, [0.0, 0.0, 1.0]) > 0.999, "yaw 0 looks at the nose");
+        assert!(dot(ahead.up, [0.0, 1.0, 0.0]) > 0.999, "a level head keeps up up");
+
+        let left = HeadListener {
+            position: [0.0; 3],
+            yaw: 90.0,
+            pitch: 20.0,
+        }
+        .attributes();
+        assert!(left.forward[0] > 0.9, "yaw 90 turns towards +X, got {:?}", left.forward);
+        assert!(left.forward[1] > 0.3, "a raised pitch looks up, got {:?}", left.forward);
+        assert!(dot(left.forward, left.up).abs() < 1e-4, "the basis stays orthonormal");
     }
 }

@@ -20,6 +20,7 @@ import { reflectChrome, reflectGlass } from "./reflections";
 import { setPreviewGrade } from "./grade";
 import { preview3dPrefs } from "./preview3dPrefs.svelte";
 import { applyDriverOpacity, applySteer, findRig, stepDriverFade, type Rig } from "./rig";
+import { disposeCockpit, reportCockpitEar, stepCockpit, type Cockpit } from "./cockpit";
 import {
   FRAMING_DISTANCE,
   FRAMING_FOV,
@@ -53,6 +54,8 @@ export interface ThreeScene extends Rig {
   controls: {
     update(): boolean;
     dispose(): void;
+    /** Off while the interior view has the mouse (`cockpit.ts`). */
+    enabled: boolean;
     addEventListener(type: string, listener: () => void): void;
     /** Point visé, déplacé verticalement par le réglage de hauteur. */
     target: ThreeModule.Vector3;
@@ -63,6 +66,12 @@ export interface ThreeScene extends Rig {
     getPolarAngle(): number;
   };
   pmrem: ThreeModule.PMREMGenerator;
+  /** The converted model itself, in its own space — the space the car's
+   * `DRIVEREYES` is written in, which the interior view converts from. */
+  model: ThreeModule.Object3D;
+  /** The interior view while the camera is in the seat or flying to or from
+   * it (`cockpit.ts`, PREVIEW§15.1), `null` while it orbits. */
+  cockpit: Cockpit | null;
   /** Le plateau : la voiture y est posée, l'ombre de contact non — un socle
    * de salon tourne sous la voiture, il n'emporte pas son ombre. */
   turntable: ThreeModule.Group;
@@ -235,6 +244,7 @@ export function webglAvailable(): boolean {
 export function disposeScene(current: ThreeScene | null) {
   if (!current || current.disposed) return;
   current.disposed = true;
+  disposeCockpit(current);
   if (current.frame) cancelAnimationFrame(current.frame);
   current.frame = 0;
   current.lastFrameAt = 0;
@@ -292,6 +302,12 @@ export function turning(current: ThreeScene): boolean {
  * ou non, parce que lui seul sait si quelque chose est spatialisable.
  */
 function reportEar(current: ThreeScene) {
+  // In the seat the ear is the driver's (`cockpit.ts`); on the way out it
+  // says nothing until the orbit has the camera back.
+  if (current.cockpit) {
+    reportCockpitEar(current);
+    return;
+  }
   const camera = (current.controls.getAzimuthalAngle() * 180) / Math.PI;
   const car = (current.turntable.rotation.y * 180) / Math.PI;
   const azimuth = (((camera - car) % 360) + 360) % 360;
@@ -326,7 +342,10 @@ export function requestRender(current: ThreeScene) {
       current.turntable.rotation.y += SPIN_SPEED * (preview3dPrefs().spin / 100) * intro * elapsed;
     }
     const fading = stepDriverFade(current, elapsed);
-    const moving = current.controls.update();
+    // In the seat the orbit is switched off and the interior view places the
+    // camera; `controls.update()` would pull it back towards its target.
+    const flying = stepCockpit(current, now);
+    const moving = current.cockpit ? flying : current.controls.update();
     reportEar(current);
     current.renderer.render(current.scene, current.camera);
     // Rien à ajouter pour l'effet d'entrée : il ne fait qu'accélérer un
@@ -349,6 +368,9 @@ export function requestRender(current: ThreeScene) {
  * scène, et surtout pas de reconvertir le modèle.
  */
 export function placeCamera(current: ThreeScene) {
+  // In the seat the settings' framing has nothing to frame; it applies again
+  // when the camera comes out, which returns to the orbit it left.
+  if (current.cockpit) return;
   const prefs = preview3dPrefs();
   // La focale change la perspective **sans** changer la taille de la voiture
   // dans le cadre : la distance est recalculée pour compenser. Sans ça, les
@@ -469,6 +491,8 @@ export async function build(
     camera,
     controls,
     pmrem,
+    model: gltf.scene,
+    cockpit: null,
     turntable,
     center,
     radius,

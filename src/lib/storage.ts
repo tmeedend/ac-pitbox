@@ -90,6 +90,10 @@ export const StorageKey = {
   /** `"1"` when the player muted the scenes' ambient sound in Story Mode.
    * Born in `ui_prefs.json`. */
   storyAmbientMuted: `${PREFIX}.story.ambientMuted`,
+  /** `"1"` when a car's sheet is in the interior view, picture and engine
+   * sound together (PREVIEW§15.1); anything else is the exterior. One for
+   * every car. Born in `ui_prefs.json`. */
+  interiorView: `${PREFIX}.detail.interiorView`,
   preferredSkin: (carId: string) => `${PREFIX}.skin.${carId}`,
   /** The livery a car's grid thumbnails are rendered in (GRILLE§5.4). */
   thumbnailSkin: (carId: string) => `${PREFIX}.thumbSkin.${carId}`,

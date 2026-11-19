@@ -94,6 +94,28 @@ export function setAuditionListener(
   return invoke<void>("set_audition_listener", { azimuth, elevation, distance });
 }
 
+/** What a view switch reports: the event now playing, and its parameters. */
+export type ViewSwitch = Pick<NativeAudition, "eventPath" | "revParam" | "revMin" | "revMax" | "throttleParam">;
+
+/**
+ * Plays the other view of the engine under way — `engine_int` for
+ * `engine_ext` or back — without restarting it: same engine speed, no
+ * starter (FMOD§6octies). Rejects when nothing plays natively or the car has no
+ * such event; the audition then carries on as it was.
+ */
+export function switchAuditionView(parentId: string, subId: string | null, interior: boolean): Promise<ViewSwitch> {
+  return invoke<ViewSwitch>("switch_audition_view", { parentId, subId, interior });
+}
+
+/**
+ * Puts the ear in the driver's seat: `position` in metres in the car's space
+ * (its centre at the origin, +Z the nose), `yaw` in degrees from the nose
+ * towards +X, `pitch` above the horizon.
+ */
+export function setAuditionHead(position: [number, number, number], yaw: number, pitch: number): Promise<void> {
+  return invoke<void>("set_audition_head", { position, yaw, pitch });
+}
+
 /** Lance ou coupe les coups d'accélérateur. */
 export function setAuditionShowcase(on: boolean): Promise<void> {
   return invoke<void>("set_audition_showcase", { on });

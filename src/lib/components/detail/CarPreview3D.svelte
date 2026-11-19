@@ -11,7 +11,13 @@
   // decides which model to load and when, swaps a skin without a cut, and
   // carries the scene's settings over from the preferences.
   import { onDestroy, untrack } from "svelte";
-  import { prepareCarPreview, onPreviewProgress, type DriverView, type PreviewStage } from "$lib/preview3d/preview";
+  import {
+    carDriverEyes,
+    prepareCarPreview,
+    onPreviewProgress,
+    type DriverView,
+    type PreviewStage,
+  } from "$lib/preview3d/preview";
   import { carClassOf, driverOverridePayload } from "$lib/driver/driverOverride.svelte";
   import {
     preview3dGraftsDriver,
@@ -21,7 +27,16 @@
   } from "$lib/preview3d/preview3dPrefs.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { errorText } from "$lib/errors";
-  import { engineRunning } from "$lib/detail/enginePlayer.svelte";
+  import { engineRunning, forgetPreviewEar } from "$lib/detail/enginePlayer.svelte";
+  import { interiorView, setCockpitSeatAvailable } from "$lib/detail/interiorView.svelte";
+  import {
+    cockpitLook,
+    enterCockpit,
+    inCockpit,
+    leaveCockpit,
+    recentreCockpit,
+    type CockpitLook,
+  } from "$lib/preview3d/cockpit";
   import {
     applyQuality,
     applyScene,
@@ -57,6 +72,9 @@
      * a pas à tourner, et y régler un pilote qu'on ne voit jamais n'aurait pas
      * de sens — c'est le seul appelant qui le pose. */
     driverAlways = false,
+    /** Follows the sheet's interior view (PREVIEW§15.1). Only the detail page
+     * has the switch: the Settings preview stays outside, where it frames. */
+    cockpit = false,
   }: {
     carId: string;
     skinId?: string | null;
@@ -64,6 +82,7 @@
     carClass?: string | null;
     revision?: number;
     driverAlways?: boolean;
+    cockpit?: boolean;
   } = $props();
 
   type Phase = "loading" | "ready" | "unavailable";
@@ -90,6 +109,28 @@
   function sceneKey(car: string, skin: string | null | undefined, driver: DriverView | null): string {
     return `${car}|${skin}|${revision}|${driver ? JSON.stringify(driver) : ""}`;
   }
+  /** Where the car seats its driver's eyes, for the interior view; `null`
+   * while unknown or when the car does not say. Not reactive: it is read when
+   * the view is entered, never drawn. */
+  let eyes: [number, number, number] | null = null;
+  /** The car `eyes` belongs to: a late answer for the previous car is dropped. */
+  let eyesFor = "";
+
+  /** Puts the camera where the sheet's interior view wants it. `animate`
+   * only for the user's own switch: a sheet opening inside, or a skin swapped
+   * while inside, lands in the seat at once. */
+  function syncCockpit(animate: boolean, look: CockpitLook | null = null) {
+    if (!cockpit || !scene || scene.disposed || phase !== "ready") return;
+    const live = scene;
+    const wanted = untrack(interiorView);
+    if (wanted && eyes && !inCockpit(live)) {
+      enterCockpit(live, eyes, { animate, look, redraw: () => requestRender(live) });
+    } else if (!wanted && inCockpit(live)) {
+      leaveCockpit(live, { animate });
+    }
+    requestRender(live);
+  }
+
   /** Voiture du modèle en place — la moitié de `loaded` qui décide si un
    * changement de skin peut se faire à chaud (même géométrie) ou non. */
   let loadedCar = "";
@@ -202,9 +243,13 @@
           disposeScene(built);
           return;
         }
+        // The seat's look goes with the skin, like the stand and the camera:
+        // read before the old scene is freed.
+        const previous = untrack(() => scene);
+        const look = hot && previous && !previous.disposed ? cockpitLook(previous) : null;
         // L'ancien modèle ne part qu'une fois le nouveau posé et rendu : c'est
         // ce qui évite le trou noir d'une image entre les deux.
-        disposeScene(untrack(() => scene));
+        disposeScene(previous);
         scene = built;
         loaded = sceneKey(car, skin, driver);
         loadedCar = car;
@@ -217,6 +262,7 @@
         // serait un défaut, pas un effet.
         if (!hot) armIntro(built);
         requestRender(built);
+        untrack(() => syncCockpit(false, look));
       } catch (e) {
         if (cancelled) return;
         swapping = false;
@@ -235,6 +281,40 @@
     return () => {
       cancelled = true;
     };
+  });
+
+  // The driver's eyes of the car, for the interior view. Asked once per car,
+  // apart from the model: they come from `car.ini`, not from the conversion,
+  // and a skin change does not move them.
+  $effect(() => {
+    const car = carId;
+    if (!cockpit) return;
+    untrack(() => {
+      if (eyesFor === car) return;
+      eyesFor = car;
+      eyes = null;
+      setCockpitSeatAvailable(false);
+      carDriverEyes(car)
+        .then((seat) => {
+          if (eyesFor !== car) return;
+          eyes = seat;
+          setCockpitSeatAvailable(seat !== null);
+          // A sheet opened already inside sits down as soon as it knows where.
+          syncCockpit(false);
+        })
+        .catch((e) => {
+          if (eyesFor === car) console.warn("car_driver_eyes", e);
+        });
+    });
+  });
+
+  // The interior view switched, by either of its two buttons: fly in or out.
+  // `interiorView` reads a preference, so this effect also runs on every
+  // preference written elsewhere — `syncCockpit` does nothing when the
+  // camera is already where it should be.
+  $effect(() => {
+    void interiorView();
+    untrack(() => syncCockpit(true));
   });
 
   // Niveau de qualité changé pendant qu'une fiche est ouverte : même principe
@@ -319,6 +399,13 @@
     preview3dResets();
     untrack(() => {
       if (!scene) return;
+      // In the seat, "reset" means looking ahead again, from the seat: the
+      // stand and the framing are outside matters.
+      if (inCockpit(scene)) {
+        recentreCockpit(scene);
+        requestRender(scene);
+        return;
+      }
       scene.turntable.rotation.y = 0;
       stageHost.spinning = !REDUCED_MOTION;
       armIntro(scene);
@@ -354,6 +441,8 @@
   onDestroy(() => {
     disposeScene(scene);
     scene = null;
+    if (cockpit) setCockpitSeatAvailable(false);
+    forgetPreviewEar();
     unlisten?.();
   });
 </script>

@@ -516,6 +516,23 @@ fn engine_event_in(
     })
 }
 
+/// The engine event of one view for a list entry — what switching views under
+/// a running audition needs, and nothing of the rest of [`native_target`].
+pub fn engine_event(
+    conn: &Connection,
+    cfg: &AppConfig,
+    parent_id: &str,
+    sub_id: Option<&str>,
+    view: crate::fmod::guids::EngineView,
+) -> Result<(String, crate::fmod::guids::Guid), String> {
+    let ac_root = cfg
+        .ac_install_path
+        .as_deref()
+        .ok_or_else(|| "no Assetto Corsa install configured".to_string())?;
+    let dir = sound_dir(conn, cfg, parent_id, sub_id)?;
+    engine_event_in(&dir, ac_root, parent_id, view)
+}
+
 /// Resolves a list entry to a playable FMOD event.
 ///
 /// Every failure here is a **fallback trigger**, not something to show: no game

@@ -261,3 +261,29 @@ export const INTRO_LAUNCH_TAU_MS = 900;
  * l'attende pas, assez long pour qu'on le voie : c'est une arrivée, pas une
  * apparition. */
 export const DRIVER_FADE_SECONDS = 0.45;
+
+/** The interior view (PREVIEW§15.1): how long the camera takes to fly into
+ * the seat or out of it. Long enough to see where it goes, short enough not
+ * to be waited for. */
+export const COCKPIT_FLIGHT_MS = 900;
+/** How far above the straight line the flight arcs, in model radii: a camera
+ * going straight from outside to the eyes would cross the roof. */
+export const COCKPIT_FLIGHT_ARC = 0.18;
+/** Vertical field of view in the seat, in degrees, and the range the wheel
+ * moves it in. 56 is the game's own default for the cockpit camera. */
+export const COCKPIT_FOV = 56;
+export const COCKPIT_FOV_MIN = 30;
+export const COCKPIT_FOV_MAX = 85;
+/** Degrees the head turns per pixel dragged. */
+export const COCKPIT_LOOK_SPEED = 0.18;
+/** How far the head turns: further back than the shoulder is not a view a
+ * driver has; up and down stay within what a neck does. */
+export const COCKPIT_YAW_LIMIT = 140;
+export const COCKPIT_PITCH_UP = 40;
+export const COCKPIT_PITCH_DOWN = 55;
+/** Metres the head moves per pixel dragged, and how far it may lean from the
+ * seat: sideways, up and down. Enough to look past a pillar or at a gauge,
+ * not enough to leave the car. */
+export const COCKPIT_MOVE_SPEED = 0.0012;
+export const COCKPIT_LEAN_SIDE = 0.2;
+export const COCKPIT_LEAN_UP = 0.12;

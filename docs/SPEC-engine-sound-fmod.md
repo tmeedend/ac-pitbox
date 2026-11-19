@@ -267,13 +267,27 @@ Le relâchement s'écoute sur la fenêtre et non sur le curseur : un glissement
 finit souvent hors de la piste, et un relâchement perdu laisserait la pédale
 au plancher.
 
+## 6octies. Extérieur ou intérieur
+
+La fiche voiture fait choisir d'où l'on écoute : **Extérieur** joue
+`engine_ext`, **Intérieur** `engine_int` — la bascule à côté des sons, et le
+bouton de vue intérieure de l'aperçu 3D (PREVIEW§15.1), qui sont **un seul
+réglage** : changer l'un change l'autre, et le choix tient au redémarrage.
+
+- **Basculer pendant l'écoute ne relance pas le moteur** : même bank, même
+  régime, même gaz, pas de démarreur. La nouvelle vue part avant que
+  l'ancienne ne se taise, sans trou. Une voiture qui n'a qu'un des deux
+  événements garde celui qu'elle a, sans rien afficher.
+- **En intérieur, l'oreille est la tête du pilote** quand l'aperçu est assis :
+  aux yeux de la voiture, tournée là où il regarde. Sans aperçu, elle est au
+  milieu de la voiture, face à l'avant.
+- Le décodeur maison n'a qu'un échantillon : la bascule n'y change rien.
+- La fiche d'un mod de son, dans Compléments, écoute toujours de l'extérieur.
+
 ---
 
 ## 7. Questions ouvertes
 
-- **Extérieur ou intérieur** : le backend accepte les deux, l'interface n'expose
-  que l'extérieur, le plus comparable d'un mod à l'autre. Question de goût, non
-  tranchée.
 - **Les autres événements** (turbo, échappement, rapports, klaxon) sont
   jouables par la même plomberie, hors périmètre.
 - **Couper la musique Big Picture pendant l'écoute ?** À juger à l'oreille.

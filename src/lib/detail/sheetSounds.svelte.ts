@@ -8,6 +8,7 @@
 import { errorText } from "$lib/errors";
 import { activateSound, listSubMods, restoreSound, type SubModRow } from "$lib/inventory/submods";
 import { stopEngine, toggleEngine } from "$lib/detail/enginePlayer.svelte";
+import { interiorView } from "$lib/detail/interiorView.svelte";
 
 /** What the sounds read from the sheet. Getters: both change under it. */
 export interface SheetSubsHost {
@@ -78,7 +79,9 @@ export class SheetSounds {
     if (!parent) return;
     this.#host.setError("");
     try {
-      const clip = await toggleEngine(parent, subId);
+      // The sheet's view decides which of the two engine sounds starts
+      // (FMOD§6octies), the 3D preview shown or not.
+      const clip = await toggleEngine(parent, subId, interiorView());
       // Which sample was picked, and how: invisible on screen, but it is what
       // the log needs when someone reports having heard the horn.
       if (clip) {

@@ -4,6 +4,17 @@ use tauri::Manager;
 
 use super::prelude::*;
 
+/// Where the car seats the driver's eyes, `[GRAPHICS] DRIVEREYES` — the
+/// camera of the preview's interior view (PREVIEW§15). `None` when the car
+/// does not say, in which case the preview offers no interior view.
+#[tauri::command]
+pub async fn car_driver_eyes(app: AppHandle, car_id: String) -> Result<Option<[f32; 3]>, String> {
+    read_off_window(app, move |conn, cfg| {
+        Ok(crate::preview::car_dir(conn, cfg, &car_id).and_then(|dir| crate::driver::eyes_of(&dir, &car_id)))
+    })
+    .await
+}
+
 /// Prépare l'aperçu 3D d'une voiture et renvoie l'URL de son `.glb`.
 ///
 /// **Aucun angle de braquage ici** : roues, volant et bras du pilote tournent

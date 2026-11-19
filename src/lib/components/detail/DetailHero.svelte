@@ -17,6 +17,7 @@
     setPreview3dEnabled,
   } from "$lib/preview3d/preview3dPrefs.svelte";
   import { nav } from "$lib/shell/nav.svelte";
+  import { cockpitSeatAvailable, interiorView, setInteriorView } from "$lib/detail/interiorView.svelte";
   import { t } from "$lib/i18n/index.svelte";
 
   interface Props {
@@ -57,6 +58,7 @@
   }: Props = $props();
 
   const preview3d = $derived(preview3dPrefs().enabled);
+  const inside = $derived(interiorView());
 
   /** Raccourci vers Réglages → Aperçu, qui porte l'aperçu 3D et les treize
    * réglages. Passe par `nav.settingsTab` : l'onglet actif est un état interne
@@ -107,7 +109,7 @@
       {/if}
     {/if}
     {#if car && preview3d && !freed}
-      <CarPreview3D carId={modId} {skinId} fallbackSrc={image} {carClass} {revision} />
+      <CarPreview3D carId={modId} {skinId} fallbackSrc={image} {carClass} {revision} cockpit />
     {/if}
   </div>
   {#if car && freed}
@@ -170,6 +172,26 @@
             <path d="M2 10.5 H14" fill="none" />
             <circle cx="6" cy="5.5" r="1.8" />
             <circle cx="10.5" cy="10.5" r="1.8" />
+          </svg>
+        </button>
+        <!-- Interior view (PREVIEW§15.1), in the corner: the same switch as the
+             one beside the engine sounds, so the sound follows. Off when the
+             car does not say where its driver sits. -->
+        <button
+          class="hero-btn"
+          class:on={inside}
+          type="button"
+          onclick={() => setInteriorView(!inside)}
+          disabled={!inside && !cockpitSeatAvailable()}
+          title={inside ? t("detail.viewLeaveCockpit") : t("detail.viewEnterCockpit")}
+          aria-label={inside ? t("detail.viewLeaveCockpit") : t("detail.viewEnterCockpit")}
+          aria-pressed={inside}
+        >
+          <!-- Un volant. -->
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="8" cy="8" r="6" />
+            <circle cx="8" cy="8" r="1.6" />
+            <path d="M2.2 7 L6.4 7.6 M13.8 7 L9.6 7.6 M8 9.6 V14" fill="none" />
           </svg>
         </button>
       {/if}
@@ -328,6 +350,13 @@
   .hero-btn:hover {
     border-color: var(--rosso);
     color: var(--txt);
+  }
+  .hero-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  .hero-btn:disabled:hover {
+    border-color: var(--muted2);
   }
   .hero-btn.on {
     border-color: var(--rosso);
