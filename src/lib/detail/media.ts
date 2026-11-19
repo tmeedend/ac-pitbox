@@ -80,6 +80,12 @@ export function openMediaFolder(kind: MediaKind): Promise<void> {
   return invoke<void>("open_media_folder", { kind });
 }
 
+/** Takes an autosave out of the game's rotation, renamed as CM keeps a replay
+ * (§6.1); returns its new path. */
+export function keepReplay(path: string): Promise<string> {
+  return invoke<string>("keep_replay", { path });
+}
+
 /** Lance un replay dans Content Manager (§6.1). */
 export function launchReplay(replayPath: string): Promise<void> {
   return invoke<void>("launch_replay", { replayPath });
@@ -98,7 +104,7 @@ export function getSessionBackground(
 /** Content Manager écrit sa copie du replay une poignée de secondes après la
  * fermeture du jeu, pas pendant. Un seul rechargement à la fermeture arrive
  * donc parfois trop tôt. */
-const CM_SETTLE_MS = 6000;
+export const CM_SETTLE_MS = 6000;
 
 /**
  * Rappelle `handler` quand une session vient de se terminer (§6.1) — c'est à

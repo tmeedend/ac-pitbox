@@ -4,6 +4,8 @@
   import About from "$lib/components/settings/About.svelte";
   import Library from "$lib/components/library/Library.svelte";
   import Launch from "$lib/components/launch/Launch.svelte";
+  import SessionReturn from "$lib/components/results/SessionReturn.svelte";
+  import History from "$lib/components/results/History.svelte";
   import DriverScreen from "$lib/components/driver/DriverScreen.svelte";
   import Inventory from "$lib/components/inventory/Inventory.svelte";
   import Apps from "$lib/components/inventory/Apps.svelte";
@@ -184,6 +186,10 @@
           <DriverScreen />
         {:else if nav.section === "race"}
           <Launch />
+        {:else if nav.section === "result"}
+          <SessionReturn />
+        {:else if nav.section === "history"}
+          <History />
         {:else if nav.section === "online"}
           <Online />
         {:else if nav.section === "apps"}

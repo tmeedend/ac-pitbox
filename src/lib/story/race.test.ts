@@ -99,9 +99,18 @@ describe("eventResultOf", () => {
   function result(standings: Standing[], kind: "race" | "hotlap" = "race"): SessionResult {
     return {
       track: "t-gp",
+      entries: [],
       sessions: [
-        { name: "Qualify", kind: "qualifying", race_laps: 0, duration_minutes: 10, standings: [] },
-        { name: "Race", kind, race_laps: 8, duration_minutes: 0, standings },
+        {
+          name: "Qualify",
+          kind: "qualifying",
+          race_laps: 0,
+          duration_minutes: 10,
+          standings: [],
+          player_laps: [],
+          any_lap_begun: true,
+        },
+        { name: "Race", kind, race_laps: 8, duration_minutes: 0, standings, player_laps: [], any_lap_begun: true },
       ],
     };
   }

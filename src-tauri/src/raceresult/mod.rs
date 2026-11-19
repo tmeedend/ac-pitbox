@@ -21,8 +21,12 @@
 //! - **`bestLaps` leaves out cut laps** (`cuts > 0`), and the extrapolated
 //!   ones: it is the game's own verdict on what counts, so it is used as is
 //!   rather than recomputed from `laps`.
-//! - **A lap with `time: -1` is a lap begun, not driven** — an AI sitting in
-//!   the pits during practice.
+//! - **A lap with `time: -1` and no sectors is a lap begun, not driven** — an
+//!   AI sitting in the pits during practice.
+//! - **A lap with `time: -1`, a cut and its sectors is a lap driven and cut**,
+//!   in practice and hotlap: the game wipes the time of an invalid lap there
+//!   (in a race it keeps it). Its time is the sum of its sectors. Seen on four
+//!   real files, among them a hotlap of one cut lap (`cm_hotlap_cut.json`).
 
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -33,7 +37,7 @@ use serde::{Deserialize, Serialize};
 /// show them: 1 to 4 are attested in the samples. The others (time attack,
 /// drift, drag) exist in the game but no file here carries one, so they stay
 /// `Other` rather than a guessed name.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionKind {
     Practice,
@@ -56,7 +60,7 @@ impl SessionKind {
 }
 
 /// One car's line in a session's classification.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Standing {
     /// 1 for the winner (race) or the fastest (any other session).
     pub position: u32,
@@ -75,7 +79,17 @@ pub struct Standing {
     pub dnf: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+/// One lap the player drove, in the order driven.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlayerLap {
+    /// `None` for a cut lap whose time the game wiped without its sectors.
+    pub time_ms: Option<u32>,
+    /// Times the car left the track on that lap; a lap with a cut never
+    /// counts (`bestLaps` leaves it out).
+    pub cuts: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionOutcome {
     pub name: String,
     pub kind: SessionKind,
@@ -83,11 +97,27 @@ pub struct SessionOutcome {
     pub race_laps: u32,
     pub duration_minutes: u32,
     pub standings: Vec<Standing>,
+    /// The player's laps (car 0), cut ones included; a lap begun and not
+    /// driven (`time: -1`) is not one.
+    pub player_laps: Vec<PlayerLap>,
+    /// Whether any car began a lap: a lap recorded, or a lap counted. A
+    /// session where none did is one nobody drove (SESSION§2.6).
+    pub any_lap_begun: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+/// One car of the entry list, as the game started it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Entry {
+    pub driver_name: String,
+    pub car_id: String,
+    pub skin: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionResult {
     pub track: String,
+    /// The entry list, in the game's order: car 0 is the player.
+    pub entries: Vec<Entry>,
     /// In the order they were run: practice, qualifying, race.
     pub sessions: Vec<SessionOutcome>,
 }
@@ -138,6 +168,32 @@ struct RawSession {
 struct RawLap {
     car: usize,
     time: i64,
+    #[serde(default)]
+    cuts: u32,
+    #[serde(default)]
+    sectors: Vec<i64>,
+}
+
+impl RawLap {
+    /// A lap the player really drove: timed, or cut (RESULTAT§4.2).
+    fn driven(&self) -> Option<PlayerLap> {
+        if self.time > 0 {
+            return Some(PlayerLap {
+                time_ms: Some(self.time as u32),
+                cuts: self.cuts,
+            });
+        }
+        if self.cuts == 0 {
+            // Begun, not driven.
+            return None;
+        }
+        let sectors = (!self.sectors.is_empty() && self.sectors.iter().all(|&s| s > 0))
+            .then(|| self.sectors.iter().sum::<i64>() as u32);
+        Some(PlayerLap {
+            time_ms: sectors,
+            cuts: self.cuts,
+        })
+    }
 }
 
 #[derive(Deserialize)]
@@ -161,8 +217,18 @@ fn decode(bytes: &[u8]) -> String {
 pub fn parse(bytes: &[u8]) -> Result<SessionResult, String> {
     let raw: RawFile = serde_json::from_str(&decode(bytes)).map_err(|e| format!("race_out.json: {e}"))?;
     let sessions = raw.sessions.iter().map(|s| classify(&raw.players, s)).collect();
+    let entries = raw
+        .players
+        .iter()
+        .map(|p| Entry {
+            driver_name: p.name.clone(),
+            car_id: p.car.clone(),
+            skin: p.skin.clone(),
+        })
+        .collect();
     Ok(SessionResult {
         track: raw.track,
+        entries,
         sessions,
     })
 }
@@ -207,6 +273,43 @@ fn classify(players: &[RawPlayer], s: &RawSession) -> SessionOutcome {
         race_laps: s.laps_count,
         duration_minutes: s.duration,
         standings: ordered,
+        player_laps: s
+            .laps
+            .iter()
+            .filter(|l| l.car == 0)
+            .filter_map(RawLap::driven)
+            .collect(),
+        any_lap_begun: !s.laps.is_empty() || s.lapstotal.iter().any(|&n| n > 0),
+    }
+}
+
+impl SessionResult {
+    /// Whether any car of any session began a lap (SESSION§2.6).
+    pub fn any_lap_begun(&self) -> bool {
+        self.sessions.iter().any(|s| s.any_lap_begun)
+    }
+
+    /// The player's best valid lap over every session, in milliseconds.
+    pub fn player_best_ms(&self) -> Option<u32> {
+        self.sessions
+            .iter()
+            .flat_map(|s| s.standings.iter().filter(|l| l.car == 0))
+            .filter_map(|l| l.best_lap_ms)
+            .min()
+    }
+
+    /// Laps the player completed, every session together.
+    pub fn player_laps(&self) -> u32 {
+        self.sessions
+            .iter()
+            .flat_map(|s| s.standings.iter().filter(|l| l.car == 0))
+            .map(|l| l.laps)
+            .sum()
+    }
+
+    /// The player's entry: car 0.
+    pub fn player(&self) -> Option<&Entry> {
+        self.entries.first()
     }
 }
 

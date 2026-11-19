@@ -14,6 +14,7 @@
     listMediaReplays,
     linkMediaManually,
     openMediaFolder,
+    keepReplay,
     launchReplay,
     trashMediaFile,
     onSessionEnd,
@@ -25,6 +26,9 @@
   import { errorText } from "$lib/errors";
   import { fmtDuration, fmtSize } from "$lib/format";
   import { t } from "$lib/i18n/index.svelte";
+  import { replayResults, type ReplayResult } from "$lib/results/results";
+  import { fmtLap } from "$lib/results/returnView";
+  import { openSession } from "$lib/results/historyState.svelte";
 
   let {
     modId,
@@ -43,6 +47,33 @@
   let linking = $state(false);
   let launching = $state<string | null>(null);
   let trashing = $state(false);
+
+  // The result of the session each replay was recorded in (RESULTAT§11),
+  // asked for the rows whose header gave a combo.
+  let results = $state<Record<string, ReplayResult>>({});
+  $effect(() => {
+    const list = files
+      .filter((f) => f.car_id && f.track_id && f.recorded_at)
+      .map((f) => ({
+        path: f.path,
+        car_id: f.car_id as string,
+        track_id: f.track_id as string,
+        at_ms: new Date(f.recorded_at as string).getTime(),
+      }));
+    const current = modId;
+    results = {};
+    if (!list.length) return;
+    replayResults(list)
+      .then((r) => {
+        if (current === modId) results = r;
+      })
+      .catch((e) => console.warn("replay_results", e));
+  });
+
+  function resultLabel(r: ReplayResult): string | null {
+    if (r.race_position != null) return `${t("results.position", { n: r.race_position })} · ${fmtLap(r.best_lap_ms)}`;
+    return r.best_lap_ms != null ? t("results.replayBest", { time: fmtLap(r.best_lap_ms) }) : null;
+  }
 
   async function reload() {
     const current = modId;
@@ -140,6 +171,22 @@
     }
   }
 
+  // Out of the game's rotation (§6.1): the same renaming as on the screen of
+  // a session. The list is read again — the file moved and changed its name.
+  let keeping = $state<string | null>(null);
+  async function keep(f: ReplayFile) {
+    if (keeping) return;
+    keeping = f.path;
+    try {
+      await keepReplay(f.path);
+      await reload();
+    } catch (e) {
+      onerror(errorText(e));
+    } finally {
+      keeping = null;
+    }
+  }
+
   async function linkManually() {
     if (linking) return;
     const picked = await open({
@@ -193,6 +240,12 @@
                 {#if rotation(f)}
                   <span class="pill" class:kept={!f.autosave} title={rotationHint(f)}>{rotation(f)}</span>
                 {/if}
+                {#if results[f.path] && resultLabel(results[f.path])}
+                  {@const r = results[f.path]}
+                  <button class="pill result" type="button" title={t("results.openSession")} onclick={() => void openSession(r.session_id)}
+                    >{resultLabel(r)}</button
+                  >
+                {/if}
               </div>
               <div class="replay-meta mono">
                 <span>{fmtDate(f.recorded_at)}</span>
@@ -215,6 +268,15 @@
             >
               {launching === f.path ? t("common.working") : t("detail.playReplay")}
             </button>
+            {#if f.autosave}
+              <button
+                class="btn-ghost play"
+                type="button"
+                title={t("detail.keepReplayHint")}
+                disabled={keeping !== null}
+                onclick={() => keep(f)}>{t("results.keep")}</button
+              >
+            {/if}
             <button
               class="replay-del"
               type="button"
@@ -280,6 +342,16 @@
   }
   /* Le gardé se distingue de l'autosave sans couleur d'alerte : ce n'est pas
      un défaut, juste un état. */
+  /* The result of the replay's session: a way into it (RESULTAT§11). */
+  .pill.result {
+    background: none;
+    color: var(--txt2);
+    cursor: pointer;
+  }
+  .pill.result:hover {
+    color: var(--txt);
+    border-color: var(--rosso-border);
+  }
   .pill.kept {
     border-color: var(--rosso-border);
     color: var(--rosso-bright);

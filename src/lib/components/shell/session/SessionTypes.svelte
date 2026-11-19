@@ -20,6 +20,7 @@
   import { nav, requestSection } from "$lib/shell/nav.svelte";
   import type { SessionType } from "$lib/launch/launch";
   import { t } from "$lib/i18n/index.svelte";
+  import { openHistory } from "$lib/results/historyState.svelte";
 
   async function goToType(type: SessionType) {
     pickSessionType(type);
@@ -109,6 +110,11 @@
       </button>
     {/if}
   {/each}
+  <!-- The sessions driven (RESULTAT§7.1): under the types, not on the rail —
+       part of the session, like them. -->
+  <button class="type history" class:on={nav.section === "history"} type="button" onclick={() => void openHistory()}
+    >{t("results.history")}</button
+  >
 </nav>
 
 <style>
@@ -143,6 +149,11 @@
   .type:hover {
     color: var(--txt2);
     background: var(--panel2);
+  }
+  /* Not a type: set apart by a rule above it. */
+  .type.history {
+    margin-top: 4px;
+    border-top: 1px solid var(--line);
   }
   /* Le type qui partira : lisible en pleine lumière, sans rouge — c'est une
      valeur, pas un écran. */

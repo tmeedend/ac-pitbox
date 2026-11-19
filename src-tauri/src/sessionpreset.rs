@@ -157,7 +157,7 @@ pub fn save(app: &AppHandle, name: &str, setup: &RaceSetup, snapshot: &Value) ->
 /// and because it states the invariant in one place: the preset comes from the
 /// launcher's own builder, and we only add a key to it. Nothing of CM's is
 /// rewritten or reordered.
-fn preset_with_block(setup: &RaceSetup, snapshot: &Value) -> Result<Value, String> {
+pub(crate) fn preset_with_block(setup: &RaceSetup, snapshot: &Value) -> Result<Value, String> {
     let mut preset = quickdrive::preset_value(setup);
     let block = json!({ "version": PITBOX_VERSION, "session": snapshot });
     match preset.as_object_mut() {
@@ -205,7 +205,7 @@ fn read_preset(path: &Path) -> Option<Value> {
 }
 
 /// Our snapshot out of a preset, if it has one we can read.
-fn pitbox_block(preset: &Value) -> Option<&Value> {
+pub(crate) fn pitbox_block(preset: &Value) -> Option<&Value> {
     let block = preset.get(PITBOX_KEY)?;
     let version = block.get("version").and_then(Value::as_u64).unwrap_or(0);
     if version == 0 || version > PITBOX_VERSION {
@@ -437,7 +437,7 @@ fn center_spread(min: f64, max: f64) -> (u32, u32) {
 /// all) comes back as a note rather than as a silently wrong value. The
 /// session is still loadable — a preset with no player skin simply keeps the
 /// skin currently selected, which is what CM itself does.
-fn from_cm(preset: &Value, name: &str, saved_at: &str) -> Result<(Value, Vec<String>), String> {
+pub(crate) fn from_cm(preset: &Value, name: &str, saved_at: &str) -> Result<(Value, Vec<String>), String> {
     let (session_type, qualify_enabled) = mode_of(preset)?;
     let mut notes = vec![crate::errors::CM_NOTE_NO_PLAYER_SKIN.to_string()];
     let data = mode_data(preset);

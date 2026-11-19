@@ -46,6 +46,9 @@ pub(super) enum In {
     Journal,
     /// Merged by [`super::fusion::profiles`]: renamed rather than replaced.
     Profiles,
+    /// Merged by [`super::fusion::sessions`]: a session already here is not
+    /// brought twice.
+    Sessions,
 }
 
 /// Every table, in the order they are merged: a parent before the rows that
@@ -88,6 +91,13 @@ pub(super) const TABLES: &[(&str, Out, In)] = &[
     ("pending_answers", Out::Exclude, In::Skip),
     // Engine versions: their absence is what re-harmonizes at arrival.
     ("meta", Out::Exclude, In::Skip),
+    // The launches of this machine's game, and the copies of its Content
+    // Manager already read: machine state (RESULTAT§2).
+    ("launch_log", Out::Exclude, In::Skip),
+    ("cm_session_files", Out::Exclude, In::Skip),
+    // The sessions driven (RESULTAT§12): history of the user's, without what
+    // ties them to this machine (`finish`).
+    ("session_results", Out::Keep, In::Sessions),
 ];
 
 /// The tables whose foreign key names a mod. A row about game content this
@@ -246,6 +256,9 @@ pub(super) fn finish(conn: &Connection, parts: &[Part], stamp: &str) -> rusqlite
         )?;
     }
     conn.execute("UPDATE other_mods SET is_active = 0, junctions = '[]'", [])?;
+    // A session leaves without its launch and its copy in CM: both describe
+    // this machine (RESULTAT§12).
+    conn.execute("UPDATE session_results SET launch_id = NULL, cm_file = NULL", [])?;
     for (table, out, _) in TABLES {
         let cleared = match out {
             Out::Exclude => true,
@@ -487,6 +500,7 @@ fn merge_prepared(
     copy_tables(conn, wiki)?;
     fusion::usage(conn)?;
     fusion::journals(conn)?;
+    fusion::sessions(conn)?;
     if profiles {
         merged.profiles_renamed = fusion::profiles(conn)?;
     }
@@ -548,7 +562,10 @@ fn stock_missing(conn: &Connection) -> rusqlite::Result<Vec<String>> {
 /// two sides to settle are [`fusion`]'s. Only the columns both bases know.
 fn copy_tables(conn: &Connection, wiki: bool) -> rusqlite::Result<()> {
     for (table, out, into) in TABLES {
-        let handled = matches!(into, In::Skip | In::Decide | In::Usage | In::Journal | In::Profiles);
+        let handled = matches!(
+            into,
+            In::Skip | In::Decide | In::Usage | In::Journal | In::Profiles | In::Sessions
+        );
         if *out == Out::Exclude || handled || (*table == "wiki_cache" && !wiki) {
             continue;
         }

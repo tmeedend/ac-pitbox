@@ -64,13 +64,44 @@ pub fn car_factory_assists(db: State<Db>, car_id: String) -> Option<crate::elect
     crate::electronics::read(&conn, &car_id)
 }
 
+/// Who asks for a session: the session screen, or Story Mode — whose sessions
+/// are never recorded (RESULTAT§3.4).
+#[derive(Debug, Clone, Copy, Default, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LaunchPurpose {
+    #[default]
+    Session,
+    Story,
+}
+
 /// Construit le preset Quick Drive et lance la session via Content Manager (SESSION§2).
+///
+/// The launch is noted in the journal (RESULTAT§2) with the setup as sent and
+/// the preset with its `PitBox` block, built from `snapshot` — the session as
+/// the screen would save it — so the session can be started again.
 #[tauri::command]
-pub fn launch_session(app: AppHandle, db: State<Db>, setup: crate::launch::RaceSetup) -> Result<(), String> {
-    let _game_write = crate::gamestate::GameWrite::begin();
-    let cfg = crate::config::load(&app);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    crate::launch::launch(&conn, &cfg, &setup)
+pub fn launch_session(
+    app: AppHandle,
+    db: State<Db>,
+    setup: serde_json::Value,
+    purpose: Option<LaunchPurpose>,
+    snapshot: Option<serde_json::Value>,
+) -> Result<(), String> {
+    let parsed: crate::launch::RaceSetup = serde_json::from_value(setup.clone()).map_err(|e| e.to_string())?;
+    let started_at = crate::sessionlog::now_ms();
+    {
+        let _game_write = crate::gamestate::GameWrite::begin();
+        let cfg = crate::config::load(&app);
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        crate::launch::launch(&conn, &cfg, &parsed)?;
+        let kind = match purpose.unwrap_or_default() {
+            LaunchPurpose::Session => crate::sessionlog::LaunchKind::Session,
+            LaunchPurpose::Story => crate::sessionlog::LaunchKind::Story,
+        };
+        let launch = crate::sessionlog::session_launch(kind, started_at, &setup, &parsed, snapshot.as_ref());
+        crate::sessionlog::note_launch(&conn, launch);
+    }
+    Ok(())
 }
 
 /// Steam tourne-t-il ? Vérifié avant chaque lancement de session (SESSION§2.3) :
@@ -109,7 +140,22 @@ pub fn open_content_manager(app: AppHandle) -> Result<(), String> {
 /// Lance un replay dans Content Manager (§6.1, onglet Médias).
 #[tauri::command]
 pub fn launch_replay(app: AppHandle, replay_path: std::path::PathBuf) -> Result<(), String> {
-    crate::launch::launch_replay(&crate::config::load(&app), &replay_path)
+    let started_at = crate::sessionlog::now_ms();
+    crate::launch::launch_replay(&crate::config::load(&app), &replay_path)?;
+    // In the journal too: a copy CM may write of it is no session of the
+    // user's (RESULTAT§2).
+    let header = crate::acreplay::read_header(&replay_path);
+    super::sessionlog::note(
+        &app,
+        crate::overlay::Launch {
+            kind: crate::sessionlog::LaunchKind::Replay.as_str().into(),
+            started_at,
+            car_id: header.as_ref().map(|h| h.car_id.clone()),
+            track_id: header.as_ref().map(|h| h.track_id.clone()),
+            ..Default::default()
+        },
+    );
+    Ok(())
 }
 
 /// Lance l'aperçu 3D natif (`acShowroom.exe`, distinct de Content Manager)

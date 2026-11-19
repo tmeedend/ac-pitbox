@@ -148,6 +148,12 @@ pub const NOT_A_DIRECTORY: &str = "errors.notADirectory";
 pub const REAL_FOLDER_GUARD: &str = "errors.realFolderGuard";
 pub const MUSIC_FOLDER_EMPTY: &str = "errors.musicFolderEmpty";
 pub const MEDIA_NOT_A_FILE: &str = "errors.mediaNotAFile";
+/// "Keep" on a replay that is not one of the game's autosaves (RESULTAT§6.1).
+pub const REPLAY_NOT_AN_AUTOSAVE: &str = "errors.replayNotAnAutosave";
+/// "Keep" where a kept replay of that name already exists.
+pub const REPLAY_NAME_TAKEN: &str = "errors.replayNameTaken";
+/// "Again" on a session whose launch can no longer be read.
+pub const SESSION_NOT_RELAUNCHABLE: &str = "errors.sessionNotRelaunchable";
 pub const IMPORT_CANCELLED: &str = "errors.importCancelled";
 pub const NOT_ENOUGH_DISK_SPACE: &str = "errors.notEnoughDiskSpace";
 pub const NOTHING_TO_IMPORT_IN_ARCHIVE: &str = "errors.nothingToImportInArchive";

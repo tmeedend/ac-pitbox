@@ -139,3 +139,11 @@ pub fn get_session_background(
         layout_id.as_deref(),
     ))
 }
+
+/// Takes an autosave out of the game's rotation, under the name CM gives a
+/// kept replay (§6.1, RESULTAT§6.1): from the media tab and from the screen of
+/// a session alike.
+#[tauri::command]
+pub fn keep_replay(path: std::path::PathBuf) -> Result<String, String> {
+    crate::media::keep_replay(&path).map(|p| p.display().to_string())
+}

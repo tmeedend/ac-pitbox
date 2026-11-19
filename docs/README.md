@@ -31,6 +31,7 @@ désigne `SPEC.md`** et les autres documents portent une étiquette :
 | `ESPACE§` | `SPEC-sans-fichiers.md` |
 | `EXPORT§` | `SPEC-export-bibliotheque.md` |
 | `FICHE§` | `SPEC-fiche-technique.md` |
+| `RESULTAT§` | `SPEC-resultats.md` |
 | `SETUP§` | `LOT-session-setup.md` |
 | `CIBLE§` | `CIBLE-reglages-session.md` |
 | `L1§` | `LOT1-forme-ecran-session.md` |
@@ -57,6 +58,12 @@ chose qui rendait jusqu'ici une renumérotation invisible au code.
   plateau et les conditions, la coexistence des deux aperçus 3D. Extrait du §9
   de `SPEC.md`. Le code y renvoie par `SESSION§`. Ce qu'on a lu dans le code de
   CM pour en fixer les règles est dans `L4-cm-launch-research.md`.
+- **`SPEC-resultats.md`** (`RESULTAT§`) — **les sessions roulées** : le journal
+  des lancements, l'historique tiré du fichier du jeu et des copies de Content
+  Manager sans doublon ni prise de vue, l'écran du retour du jeu (Again,
+  replay, screenshots), et le retrait des copies de vignettes dans CM. Un
+  document à part parce qu'il traverse la session, les vignettes, les médias et
+  la Maintenance.
 
 ## Import (le domaine le plus dense)
 

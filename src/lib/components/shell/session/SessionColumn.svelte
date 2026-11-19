@@ -4,6 +4,7 @@
   // session types and the launch button, and holds what they share: the fresh
   // details of the session car and track, which both the blocks and the
   // activation guard read.
+  import PersonalBest from "$lib/components/results/PersonalBest.svelte";
   import SessionSlot, { type SlotState } from "./SessionSlot.svelte";
   import TrackFields from "./TrackFields.svelte";
   import CarFields from "./CarFields.svelte";
@@ -442,6 +443,7 @@
           ? t("session.starting")
           : t("session.start")}</button
     >
+    <PersonalBest />
     <!-- La sortie vers Content Manager a rejoint le pied du rail
          (`NavRail`), entre Réglages et À propos : cette colonne n'a plus
          de hauteur à donner à ce qui n'est pas la session. -->

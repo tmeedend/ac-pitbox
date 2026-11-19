@@ -443,12 +443,13 @@ Quatre blocs, en deux groupes : ce que **l'utilisateur a produit** — **Screens
 
 **Les noms de fichiers lus** :
 - `Documents\Assetto Corsa\screens\` : `Screenshot_<car>_<track>_<date>.jpg` en session, `Showroom_<car>_<date>.jpg` (sans circuit). La date du nom n'est jamais lue (format irrégulier) : seule la date du fichier compte.
-- `Documents\Assetto Corsa\replay\` : l'autosave du jeu `AC_<ddmmyy>-<hhmmss>_<type>_<car>_<track[_layout]>_…`, ou le nom que CM donne à un replay gardé, `<car>_<track>_<ddmmyy>-<hhmmss>`. La date se lit dans le nom, à défaut dans le fichier : **un replay a toujours un horodatage**. `replay\temp\` n'est jamais lu.
+- `Documents\Assetto Corsa\replay\temp\` : **là où le jeu pose ses autosaves** (constaté : tous y étaient, aucun dans `replay\`), `AC_<ddmmyy>-<hhmmss>_<type>_<car>_<track[_layout]>_…`. Seuls ces noms y sont lus, le reste du dossier est un fichier de travail ; et **pas pendant qu'un jeu tourne**, le replay de la session s'y écrit.
+- `Documents\Assetto Corsa\replay\` : un replay gardé, sous le nom que CM lui donne, `<car>_<track>_<ddmmyy>-<hhmmss>`, ou tout autre nom. La date se lit dans le nom, à défaut dans le fichier : **un replay a toujours un horodatage**.
 - `<AC>\extension\backgrounds\<track>[__<layout>]_<variante>.jpg` (CSP), par préfixe.
 
 **Une ligne de replay** affiche le combo réellement piloté, l'horodatage, la durée, le nombre de voitures, le pilote, la taille et le nom du fichier. Les cinq premiers viennent de **l'en-tête du `.acreplay`** (`acreplay.rs`), atteint par un saut de taille fixe : lire un replay de 635 Mo coûte autant qu'un de 867 Ko. En-tête illisible : la ligne garde ce que le nom et le disque donnent, jamais d'erreur.
 
-**Autosave ou gardé** : AC fait tourner ses autosaves par **nombre** (`cfg/replay.ini`, `[AUTOSAVE]`), personne ne les supprime par ancienneté. Une ligne porte **« Autosave rang/limite »** (son rang parmi les autosaves du même type de session, le plus récent en 1) ou **« Gardé »** (renommé, sorti de la rotation) ; le détail est en infobulle.
+**Autosave ou gardé** : AC fait tourner ses autosaves par **nombre** (`cfg/replay.ini`, `[AUTOSAVE]`), personne ne les supprime par ancienneté. Une ligne porte **« Autosave rang/limite »** (son rang parmi les autosaves du même type de session, le plus récent en 1) ou **« Gardé »** (renommé, sorti de la rotation) ; le détail est en infobulle. Le rang se compte dans le dossier du fichier. **« Keep »** sur un autosave le garde : il passe dans `replay\` sous le nom de CM, par la même fonction que l'écran d'une session (RESULTAT§6.1).
 
 **La liste se recharge à la fin d'une session**, sans rouvrir la fiche, sur le signal de fin du jeu (`ac://running`) : à la fermeture, puis six secondes après — AC pose l'autosave, CM le renomme ensuite. Screenshots et décomptes suivent.
 
@@ -477,7 +478,7 @@ Sur l'écran de réglages (SESSION§3), une image assombrie et floutée derrièr
 
 | Onglet | Contenu |
 |---|---|
-| **La voiture** / **Le circuit** | aperçu, sélecteur, fiche technique, courbe, son, bloc textuel |
+| **La voiture** / **Le circuit** | aperçu, sélecteur, fiche technique, courbe, son, « My times » (RESULTAT§10), bloc textuel |
 | **Médias et documents** | Screenshots, Replays, Ressources, Backgrounds (§6.1) |
 | **Installation** | ajouts au jeu, décisions d'import, origine, historique, couches, étiquettes, extensions CSP |
 
@@ -486,6 +487,8 @@ Sur l'écran de réglages (SESSION§3), une image assombrie et floutée derrièr
 **Le sélecteur de livrée ou de tracé est une carte de la colonne de droite** (`PickerBar`), avec en-tête et compteur (« SKINS 28 »), **au-dessus de la ligne de flottaison** — un contrôle n'exige jamais de défiler. Trois gestes : les **flèches** (défiler en gardant l'œil sur l'aperçu), le **nom** (liste déroulante) et **« Voir les N »** (grille de vignettes dépliée en place, repliée à chaque ouverture de fiche).
 
 **Le premier onglet tient en deux zones.** Une rangée à deux colonnes **qui se referme sur la hauteur de l'aperçu** — l'aperçu à gauche, toutes les cartes à droite ; une colonne de droite plus haute que l'aperçu allonge la rangée, l'aperçu reste en haut ; sous ~1 100 px de largeur **disponible**, une colonne. Puis le **bloc de lecture**, pleine largeur, contenu centré sur des **paliers de largeur** (100 %, puis 540 / 720 / 960 / 1140 / 1320 px), sans hauteur minimale. **Tous les seuils de cette mise en page sont des requêtes de conteneur**, jamais de média.
+
+**« My times »** (RESULTAT§10) est une carte de la colonne de droite, sous le sélecteur de livrée ou de tracé, masquée tant que le mod n'a jamais été roulé.
 
 **Un circuit n'a que deux cartes de données** — « Circuit » (longueur, nombre de tracés et combien une couche en apporte, pays, odomètre) puis « Habillages » —, et la grille n'est pas dictée par le type le plus riche. **La longueur porte son unité** : un entier est en mètres, une valeur sous 100 est lue en **kilomètres**, une valeur qui porte déjà une unité est rendue telle quelle (`trackLength.ts`). Le nom du tracé n'entre pas dans la carte : le sélecteur le dit. Le sous-titre de l'en-tête : marque et année pour une voiture, longueur et nombre de tracés pour un circuit.
 

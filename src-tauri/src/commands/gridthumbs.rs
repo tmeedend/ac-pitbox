@@ -271,7 +271,7 @@ pub async fn render_in_game(
             .collect();
         let paths = crate::gameshot::Paths {
             ac,
-            ac_documents: crate::gameshot::ac_documents().ok_or("dossier Documents introuvable")?,
+            ac_documents: crate::media::documents_ac_dir().ok_or("dossier Documents introuvable")?,
             app_source: app
                 .path()
                 .app_config_dir()
@@ -280,7 +280,17 @@ pub async fn render_in_game(
                 .join(crate::gameshot::APP_ID),
             thumbs: crate::gridthumbs::dir(app)?,
         };
-        let launch = || crate::launch::launch_studio(&cfg, &cars, crate::gameshot::STUDIO_TRACK);
+        // Noted in the journal at the start (RESULTAT§2): what recognises CM's
+        // copy of this session afterwards.
+        let car_ids: Vec<String> = cars.iter().map(|(car, _)| car.clone()).collect();
+        let started_at = crate::sessionlog::now_ms();
+        let launched = std::cell::Cell::new(false);
+        let launch = || {
+            crate::launch::launch_studio(&cfg, &cars, crate::gameshot::STUDIO_TRACK)?;
+            launched.set(true);
+            super::sessionlog::note_gameshot(app, &car_ids, started_at);
+            Ok(())
+        };
         let progress = |phase: crate::gameshot::Phase| {
             if let Err(e) = app.emit("gameshot://phase", phase) {
                 log::warn!("gameshot: phase not sent ({e})");
@@ -288,14 +298,20 @@ pub async fn render_in_game(
         };
         // The next session of the queue starts only once Content Manager has
         // let go of this one (SESSION§2.7): asked once the game has gone.
-        crate::gameshot::run(
+        let outcome = crate::gameshot::run(
             &paths,
             &requests,
             &launch,
             &crate::launch::game_running,
             &progress,
             &crate::cmwatch::release_owned,
-        )
+        );
+        // Content Manager has let go: its copy of the session is written, and
+        // goes out of its result list (RESULTAT§5.1).
+        if launched.get() {
+            super::sessionlog::retire_thumbnail_copy(app, &car_ids, started_at, crate::sessionlog::now_ms());
+        }
+        outcome
     })
     .await
 }

@@ -35,6 +35,7 @@ pub mod rules;
 pub mod saved_grids;
 pub mod session;
 pub mod session_state;
+pub mod sessionlog;
 pub mod sessionpreset;
 pub mod showcase;
 pub mod story;

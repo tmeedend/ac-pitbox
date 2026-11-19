@@ -25,6 +25,36 @@ de reprendre. En cas d'écart, la spec fait foi.
 
 ---
 
+- [ ] **Résultats de session (2026-11-16).** Spec : `docs/SPEC-resultats.md`
+      (`RESULTAT§`). Branche `resultats-de-session`.
+      **Lot 1 fait** : le journal des lancements, l'enregistrement depuis
+      `race_out.json` et depuis `Progress\Sessions` de CM sans doublon ni
+      prise de vue ni Story Mode, le retrait des copies de vignettes (à
+      l'avenir, et l'action de Maintenance pour le passé), l'écran de retour
+      (Again, Change car, Watch replay, Keep, screenshots).
+      **Constaté, à ne pas re-chercher** :
+      - `__quickDrive` ne garde **pas** le bloc `PitBox` (CM réécrit le
+        preset) : marquer les presets de prise de vue ne servirait à rien,
+        le journal est la seule reconnaissance.
+      - `race/quick` n'a aucun paramètre pour passer la fenêtre de résultats
+        de CM, et le preset aucune clé : rien à faire sans écrire ses réglages.
+      - Les autosaves du jeu sont dans `replay\temp\`. L'onglet Médias de la
+        fiche ne lisait pas ce dossier : corrigé avant le lot 2 (§6.1 de
+        SPEC.md), « Keep » compris.
+      - `media::documents_ac_dir` lisait `%USERPROFILE%\Documents` : faux dès
+        que OneDrive sauvegarde Documents. Corrigé (commit à part).
+      **Lot 2 fait** (RESULTAT§7 à §12) : l'historique en sorties dans la zone
+      Session, Again / Edit / Open server, le record perso sous Start, « My
+      times » dans les fiches, le résultat sur les lignes de replay, l'export.
+      - Un tour coupé en essais ou hotlap s'écrit `time: -1` avec ses secteurs :
+        son temps est leur somme (constaté sur 4 fichiers réels).
+      - Les sessions enregistrées avant cette correction (lot 1) gardent leur
+        résultat lu par l'ancienne règle, sans leurs tours coupés.
+      **Reste — vérifications à l'écran** : un vrai retour du jeu (Again,
+      Keep, premier plan ou clignotement), une session online de bout en bout
+      et Open server, une série de vignettes dont la copie part à la
+      corbeille, Edit sur une session de CM, un export puis import réel.
+
 - [ ] **Story Mode et Create Your Own — phase 0 (2026-10-17).** Spec générique
       dans `docs/story/` ; le document complet et les maquettes restent en
       local (`docs/story/private/`, hors dépôt). Premier chantier long derrière un

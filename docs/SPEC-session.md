@@ -39,11 +39,15 @@ SESSION
   Course                           ← sélectionné
     Adversaires  6 IA · 87 % ± 3   ← sous-entrée, filet d'attache
   Track day
+  Historique                       ← RESULTAT§7, sous un filet
   [ ▶ DÉMARRER LA SESSION      ]
+  Record 1:52.3 · il y a 3 semaines  ← RESULTAT§9, absent sans record
 ```
 
 **L'ordre suit celui de la décision** : le circuit, la voiture, le genre de
-séance, puis le bouton de lancement, juste sous les types.
+séance, puis le bouton de lancement, juste sous les types. **History**, sous un
+filet après les types, ouvre l'historique des sessions (RESULTAT§7) ; le record
+perso sur le couple choisi suit le bouton (RESULTAT§9).
 
 **La colonne ne défile jamais**, y compris dans le cas le plus chargé (Course
 sélectionnée, sous-entrée affichée, 1920 × 1080). Deux dispositifs y
@@ -249,9 +253,11 @@ Une erreur destinée à l'utilisateur peut donc porter des valeurs :
 `Documents\Assetto Corsa\out\race_out.json`. `raceresult.rs` le lit en un
 classement par session jouée, et `read_session_result(since_ms)` le rend
 **seulement s'il est plus récent que le lancement** : un fichier plus ancien est
-celui d'une autre session. Aucun écran ne s'en sert encore ; Story Mode en sera
-le premier. Pour chaque voiture : position, tours, meilleur tour valide, temps
-cumulé, et abandon.
+celui d'une autre session. Story Mode s'en sert pour ses épreuves ; ce que Pit
+Box en enregistre et l'écran montré au retour du jeu sont dans
+`SPEC-resultats.md` (RESULTAT§3, RESULTAT§4). Pour chaque voiture : position,
+tours, meilleur tour valide, temps cumulé, et abandon ; pour le joueur, la liste
+de ses tours, les coupés compris.
 
 - **La voiture 0 est le joueur.**
 - **L'ordre d'une course est celui du jeu** ; hors course, c'est le meilleur
@@ -272,7 +278,7 @@ alors toute nouvelle demande** : la session suivante ne démarre pas.
 - **Seulement après une session de prise de vue** (GRILLE§7.1), où il n'y a
   aucun résultat à lire. Après une session de l'utilisateur, Content Manager
   garde son comportement : sa fenêtre de résultats suit son réglage « Skip
-  results ».
+  results », qu'aucun lancement ne peut demander de passer (RESULTAT§4.6).
 - **Seulement le Content Manager que Pit Box a lui-même démarré**, c'est-à-dire
   quand aucun ne tournait. Celui que l'utilisateur avait ouvert, ou qu'il a
   ouvert par le bouton « Ouvrir Content Manager » de Pit Box, n'est jamais

@@ -277,6 +277,7 @@ pub fn save_online_store(app: AppHandle, store: serde_json::Value) -> Result<(),
 pub async fn online_join(app: AppHandle, request: online::join::JoinRequest) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let features = online::join::prepare(&request)?;
+        let started_at = crate::sessionlog::now_ms();
         let guard = {
             let _game_write = crate::gamestate::GameWrite::begin();
             let cfg = crate::config::load(&app);
@@ -287,6 +288,25 @@ pub async fn online_join(app: AppHandle, request: online::join::JoinRequest) -> 
         if let Some(generation) = guard {
             arm_layers_guard(&app, generation);
         }
+        // The journal (RESULTAT§2): the server without its password.
+        let launch = crate::overlay::Launch {
+            kind: crate::sessionlog::LaunchKind::Online.as_str().into(),
+            started_at,
+            car_id: (!request.car_id.is_empty()).then(|| request.car_id.clone()),
+            track_id: Some(request.track_id.clone()),
+            // `folder-layout`, as CM names it.
+            track_layout: request
+                .track_kunos_id
+                .strip_prefix(&format!("{}-", request.track_id))
+                .filter(|l| !l.is_empty())
+                .map(str::to_string),
+            detail: Some(
+                serde_json::json!({ "ip": request.ip, "port": request.port, "http_port": request.http_port })
+                    .to_string(),
+            ),
+            ..Default::default()
+        };
+        super::sessionlog::remember_join(super::sessionlog::note(&app, launch), &request);
         Ok(())
     })
     .await

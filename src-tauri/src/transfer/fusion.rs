@@ -621,6 +621,32 @@ pub(super) fn usage(conn: &Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
+/// The sessions driven (RESULTAT§12): those of the export not already here.
+/// The same session is the same car on the same layout, ended within a second
+/// — the end of a session is the one time both machines agree on. The export
+/// left without launches or CM file names (`tables::finish`).
+pub(super) fn sessions(conn: &Connection) -> rusqlite::Result<()> {
+    let cols: Vec<String> = super::tables::shared_columns(conn, "session_results")?
+        .into_iter()
+        .filter(|c| c != "id")
+        .collect();
+    let list = cols.iter().map(|c| format!("\"{c}\"")).collect::<Vec<_>>().join(", ");
+    let picked = cols.iter().map(|c| format!("s.\"{c}\"")).collect::<Vec<_>>().join(", ");
+    conn.execute(
+        &format!(
+            "INSERT INTO main.session_results ({list})
+             SELECT {picked} FROM src.session_results s
+             WHERE NOT EXISTS (
+               SELECT 1 FROM main.session_results m
+               WHERE m.car_id = s.car_id AND m.track_id = s.track_id
+                 AND COALESCE(m.track_layout, '') = COALESCE(s.track_layout, '')
+                 AND abs(m.ended_at - s.ended_at) <= 1000)"
+        ),
+        [],
+    )?;
+    Ok(())
+}
+
 /// A mod's history and its journal of import decisions come only if it has
 /// none here: otherwise every import event would be there twice (EXPORT§7.4).
 pub(super) fn journals(conn: &Connection) -> rusqlite::Result<()> {

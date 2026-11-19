@@ -343,9 +343,13 @@ export function trackSun(
  *
  * La reprise, elle, est bien celle de la musique : voir `onAcRunning`.
  */
-export function launchSession(setup: RaceSetup): Promise<void> {
+export function launchSession(
+  setup: RaceSetup,
+  purpose: "session" | "story",
+  snapshot: unknown = null,
+): Promise<void> {
   pauseGridThumbs(PAUSE_SESSION);
-  return invoke<void>("launch_session", { setup });
+  return invoke<void>("launch_session", { setup, purpose, snapshot });
 }
 
 /**
@@ -375,6 +379,13 @@ export interface Standing {
   dnf: boolean;
 }
 
+/** A lap the player drove; one with a cut never counts. */
+export interface PlayerLap {
+  /** `null` for a cut lap whose time the game did not keep. */
+  time_ms: number | null;
+  cuts: number;
+}
+
 export interface SessionOutcome {
   name: string;
   kind: "practice" | "qualifying" | "race" | "hotlap" | "other";
@@ -382,10 +393,16 @@ export interface SessionOutcome {
   race_laps: number;
   duration_minutes: number;
   standings: Standing[];
+  /** The player's laps, cut ones included, in the order driven. */
+  player_laps: PlayerLap[];
+  /** Whether any car began a lap. */
+  any_lap_begun: boolean;
 }
 
 export interface SessionResult {
   track: string;
+  /** The entry list; the first is the player. */
+  entries: { driver_name: string; car_id: string; skin: string }[];
   /** In the order they ran: practice, qualifying, race. */
   sessions: SessionOutcome[];
 }
