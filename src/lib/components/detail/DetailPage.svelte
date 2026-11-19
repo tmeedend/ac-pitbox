@@ -11,7 +11,7 @@
   // `EngineSoundBlock`, `TrackSkinsBlock`, `DescriptionCard`…) only draw what
   // they are given: most of them are unmounted on every tab switch, and state
   // kept there would be reloaded, or lost, each time.
-  import { isPlaque } from "$lib/library/brandLogos.svelte";
+  import { carEmblem } from "$lib/library/brandLogos.svelte";
   import {
     getModDetail,
     listLibrary,
@@ -854,14 +854,15 @@
     <div class="empty">{t("common.loading")}</div>
   {:else}
     {@const d = detail}
+    {@const emblem = isCar ? carEmblem(d.badge, d.brand) : null}
     <FicheHeader
       flush
       onback={onclose}
       backLabel={t("detail.backTooltip")}
       glyph={isCar ? "▤" : "◠"}
-      image={isCar && d.badge ? previewSrc(d.badge) : null}
+      image={emblem ? previewSrc(emblem.path) : null}
       imageAlt={d.brand ?? ""}
-      imagePlaque={isCar && isPlaque(d.badge)}
+      imagePlaque={emblem?.plaque ?? false}
       name={d.display_name ?? d.id_interne}
       {subtitle}
       usage={isCar ? usageLine(d) : undefined}

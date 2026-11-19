@@ -9,7 +9,7 @@
   import { updateFor } from "$lib/library/modUpdates.svelte";
   import BulkEditPanel from "./BulkEditPanel.svelte";
   import BrowseIndex from "./BrowseIndex.svelte";
-  import { isPlaque, logoOf } from "$lib/library/brandLogos.svelte";
+  import { carEmblem, logoOf } from "$lib/library/brandLogos.svelte";
   import Emblem from "$lib/components/ui/Emblem.svelte";
   import { categoryFamilies, loadFamilies } from "$lib/library/familyTable.svelte";
   import { loadTrackCategoryLooks, withTrackCategoryLabels } from "$lib/library/trackCategoryTable.svelte";
@@ -1107,8 +1107,10 @@
           {#if col.key === "active"}
             <StateBadge active={c.active} stock={c.is_stock} unmanaged={c.is_unmanaged} showcase={c.showcase} />
           {:else if col.key === "brand"}
-            {#if c.badge}<span class="brand-badge"
-                ><Emblem src={previewSrc(c.badge) ?? ""} plaque={isPlaque(c.badge)} size={13} /></span
+            {@const emblem = carEmblem(c.badge, c.brand)}
+            {@const emblemSrc = emblem ? previewSrc(emblem.path) : null}
+            {#if emblem && emblemSrc}<span class="brand-badge"
+                ><Emblem src={emblemSrc} plaque={emblem.plaque} size={13} /></span
               >{/if}
             {col.value(c)}
           {:else if col.key === "country" && c.country}

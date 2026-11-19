@@ -46,11 +46,17 @@ export interface BrandLogo {
 interface LogosView {
   brands: Record<string, BrandLogo>;
   plaque: string[];
+  borrowed: string[];
 }
 
-export const brandLogos = $state<{ brands: Record<string, BrandLogo>; plaque: Record<string, true> }>({
+export const brandLogos = $state<{
+  brands: Record<string, BrandLogo>;
+  plaque: Record<string, true>;
+  borrowed: Record<string, true>;
+}>({
   brands: {},
   plaque: {},
+  borrowed: {},
 });
 
 /** A READ: `invokeSafe` - a missing logo is better than a frozen shell. */
@@ -59,6 +65,7 @@ export async function loadBrandLogos(): Promise<void> {
   if (!v) return;
   brandLogos.brands = v.brands;
   brandLogos.plaque = Object.fromEntries(v.plaque.map((p) => [p, true as const]));
+  brandLogos.borrowed = Object.fromEntries(v.borrowed.map((p) => [p, true as const]));
   mark("logos");
 }
 
@@ -71,6 +78,21 @@ export function logoOf(brand: string): { path: string; plaque: boolean } | null 
 /** Whether a car's badge goes on the plate: a property of the file (TAXO§5). */
 export function isPlaque(path: string | null | undefined): boolean {
   return !!path && path in brandLogos.plaque;
+}
+
+/**
+ * The emblem drawn on a CAR (TAXO§3): its own badge, unless that badge is a
+ * team's or a modder's borrowed for a brand its file does not name - then its
+ * brand's logo, or nothing when the brand has none. VRC's "Alfio Romani",
+ * filed under Alfa Romeo, showed VRC's badge on its card and its page.
+ */
+export function carEmblem(
+  badge: string | null | undefined,
+  brand: string | null | undefined,
+): { path: string; plaque: boolean } | null {
+  if (!badge) return null;
+  if (badge in brandLogos.borrowed) return brand ? logoOf(brand) : null;
+  return { path: badge, plaque: isPlaque(badge) };
 }
 
 /** WRITES: plain `invoke`, the error goes to the caller, who shows it. */

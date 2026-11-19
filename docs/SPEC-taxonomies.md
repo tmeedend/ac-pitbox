@@ -53,6 +53,8 @@ La bonne question n'est donc pas *quel logo*, c'est **à quel niveau**.
 
 Au niveau voiture, la variation d'époque est signifiante et l'application n'a rien à corriger — c'est déjà le comportement actuel, il est conservé.
 
+**Une seule exception : le badge d'emprunt** (§4). Le badge d'une équipe ou d'un moddeur n'est pas un logo d'époque de la marque : une voiture VRC rangée sous Alfa Romeo ne montre donc pas le badge VRC mais le **logo de sa marque** (le canonique, §4), et rien si la marque n'en a pas. Le même critère sert aux deux niveaux : un badge qui ne vote pas pour la marque ne la représente pas non plus sur la voiture.
+
 Au niveau marque, il n'y a pas d'année à représenter : la marque est une catégorie, pas un millésime.
 
 **Pays et catégories n'ont qu'un niveau** : leur emblème est fixe, identique partout, sans curation d'image possible.
