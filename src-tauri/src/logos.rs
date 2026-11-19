@@ -473,18 +473,33 @@ pub fn elect(cars: &[CarBadge], prefs: &Prefs, dir: &Path) -> BTreeMap<String, B
 pub struct LogosView {
     pub brands: BTreeMap<String, BrandLogo>,
     pub plaque: Vec<String>,
+    /// Car badges that are a team's or a modder's, not the brand's the car is
+    /// filed under (TAXO§3): the car shows its brand's logo instead - VRC's
+    /// "Alfio Romani" shows Alfa Romeo's, never VRC's.
+    pub borrowed: Vec<String>,
 }
 
 pub fn view(cars: &[CarBadge], dir: &Path) -> LogosView {
     let brands = elect(cars, &load_prefs(dir), dir);
-    let mut plaque: Vec<String> = cars
-        .iter()
-        .filter(|b| analyze(Path::new(&b.path)).is_some_and(|a| a.background == Background::Baked))
-        .map(|b| b.path.clone())
-        .collect();
-    plaque.sort();
-    plaque.dedup();
-    LogosView { brands, plaque }
+    let mut plaque = Vec::new();
+    let mut borrowed = Vec::new();
+    for (b, a, is_borrowed) in analyzed(cars) {
+        if a.background == Background::Baked {
+            plaque.push(b.path.clone());
+        }
+        if is_borrowed {
+            borrowed.push(b.path.clone());
+        }
+    }
+    for list in [&mut plaque, &mut borrowed] {
+        list.sort();
+        list.dedup();
+    }
+    LogosView {
+        brands,
+        plaque,
+        borrowed,
+    }
 }
 
 #[cfg(test)]
@@ -599,6 +614,43 @@ mod tests {
         });
         let i = &elect(&traffic, &Prefs::new(), &base)["Isuzu"];
         assert_eq!(i.path.as_deref(), Some(isuzu.as_str()), "a file of one brand votes");
+    }
+
+    /// TAXO§3: a borrowed badge is not shown on its car either - VRC's
+    /// "Alfio Romani", filed under Alfa Romeo by a rule, showed the team's
+    /// badge on its card and its page. The view lists such badges, and only
+    /// them: a declared brand's badge, or a pack's one-brand file, stay the
+    /// car's own.
+    #[test]
+    fn the_view_lists_the_badges_a_car_borrows() {
+        let base = crate::testutil::temp_dir("logos-view-borrowed");
+        let team = |car: &str, brand: &str| {
+            let dir = base.join(car);
+            std::fs::create_dir_all(&dir).unwrap();
+            CarBadge {
+                declared: false,
+                ..badge(car, brand, &write(&dir, "badge.png", &square([0, 0, 0, 0])))
+            }
+        };
+        let alfio = team("vrc_erc_1998_alfio_csp", "Alfa Romeo");
+        let pageau = team("vrc_erc_1998_pageau", "Peugeot");
+        let mut img = square([0, 0, 0, 0]);
+        img.put_pixel(1, 1, Rgba([9, 9, 9, 255]));
+        let isuzu = CarBadge {
+            declared: false,
+            ..badge("traffic_isuzu_npr", "Isuzu", &write(&base, "isuzu.png", &img))
+        };
+        let alfa = badge(
+            "ks_alfa_romeo_155",
+            "Alfa Romeo",
+            &write(&base, "alfa.png", &square([255, 255, 255, 255])),
+        );
+        let v = view(&[alfio.clone(), pageau.clone(), isuzu, alfa], &base);
+        assert_eq!(
+            v.borrowed,
+            vec![alfio.path, pageau.path],
+            "the team's badges only, by path"
+        );
     }
 
     /// TAXO§4: transparent first - even outvoted - then resolution, then

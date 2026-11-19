@@ -27,7 +27,7 @@
   // grande.
   import type { Snippet } from "svelte";
   import { previewSrc } from "$lib/library/library";
-  import { isPlaque } from "$lib/library/brandLogos.svelte";
+  import { carEmblem } from "$lib/library/brandLogos.svelte";
   import Emblem from "$lib/components/ui/Emblem.svelte";
 
   interface Props {
@@ -54,6 +54,8 @@
   let { name, badge = null, brand = null, year = null, dim = false, reserve = false, after }: Props = $props();
 
   const empty = $derived(!name && !badge && !brand && !year);
+  const emblem = $derived(carEmblem(badge, brand));
+  const emblemSrc = $derived(emblem ? previewSrc(emblem.path) : null);
 
   /** Ce que la ligne écrit, d'un seul tenant — et ce que l'info-bulle répète
    * quand il est coupé. Bâti ici plutôt que relu dans le DOM : l'info-bulle
@@ -105,9 +107,10 @@
 
 {#if !empty || reserve}
   <div class="line" class:dim>
-    <!-- The car's own badge (TAXO§3: the car level, never curated), on the
-         light plate when its background is baked in (TAXO§5). -->
-    {#if badge}<span class="badge"><Emblem src={previewSrc(badge) ?? ""} plaque={isPlaque(badge)} size={13} /></span>{/if}
+    <!-- The car's own badge (TAXO§3: the car level, never curated - a
+         borrowed team badge aside), on the light plate when its background
+         is baked in (TAXO§5). -->
+    {#if emblem && emblemSrc}<span class="badge"><Emblem src={emblemSrc} plaque={emblem.plaque} size={13} /></span>{/if}
     <span class="text" use:titleIfClipped={label}>{label}</span>
     <!-- Hors de la boîte qui tronque : un ⚠ « mod non activé » avalé par une
          ellipse serait exactement l'avertissement qu'on ne voit pas. -->
