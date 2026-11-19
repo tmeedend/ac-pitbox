@@ -194,6 +194,16 @@ impl OutfitOverride {
     }
 }
 
+/// Where the car puts a pair of eyes, `[GRAPHICS] DRIVEREYES` of its
+/// `car.ini`, in the car's own space — the same space the converted model is
+/// in, since the converter applies no change of frame.
+pub fn eyes_of(car_dir: &Path, car_id: &str) -> Option<[f32; 3]> {
+    car_ini(car_dir, car_id)
+        .as_deref()
+        .and_then(|text| ini_value(text, GRAPHICS_SECTION, "DRIVEREYES"))
+        .and_then(parse_position)
+}
+
 /// Reads what the car and its skin declare, without touching the AC install.
 pub fn outfit_of(car_dir: &Path, car_id: &str, skin_dir: Option<&Path>) -> Option<DriverOutfit> {
     let ini = driver3d_ini(car_dir, car_id)?;
@@ -229,10 +239,7 @@ pub fn outfit_of(car_dir: &Path, car_id: &str, skin_dir: Option<&Path>) -> Optio
         suit: wardrobe_path(&wardrobe, &section, "SUIT"),
         gloves: wardrobe_path(&wardrobe, &section, "GLOVES"),
         helmet: wardrobe_path(&wardrobe, &section, "HELMET"),
-        eyes: car_ini(car_dir, car_id)
-            .as_deref()
-            .and_then(|text| ini_value(text, GRAPHICS_SECTION, "DRIVEREYES"))
-            .and_then(parse_position),
+        eyes: eyes_of(car_dir, car_id),
         model,
         position,
         lock,

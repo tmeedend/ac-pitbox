@@ -16,10 +16,13 @@
 //! portable, so the recognition rules that decide what actually gets played are
 //! unit-tested without a DLL anywhere in sight. `sys` is the Windows-only FFI,
 //! and holds every fact about the ABI that FMOD's own headers get wrong.
+//! `listener` is where the ear sits, as geometry the engine thread hands over.
 
 #[cfg(windows)]
 pub mod engine;
 pub mod guids;
+#[cfg(windows)]
+mod listener;
 pub mod params;
 #[cfg(windows)]
 pub mod sys;
