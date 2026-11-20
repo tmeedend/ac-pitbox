@@ -32,7 +32,7 @@ const setup = (over: Partial<RaceSetup> = {}): RaceSetup => ({
   grip: 98,
   practice_enabled: true,
   practice_minutes: 30,
-  qualify_enabled: false,
+  qualify_enabled: true,
   qualify_minutes: 15,
   ghost_car: true,
   ghost_advantage: 2,
@@ -120,7 +120,7 @@ describe("readPreset — older presets", () => {
       jump_start_penalty: 0,
       track_state: null,
       practice_enabled: false,
-      practice_minutes: 20,
+      practice_minutes: 0,
       qualify_enabled: true,
       qualify_minutes: 10,
       ghost_car: false,
@@ -132,5 +132,20 @@ describe("readPreset — older presets", () => {
       ideal_line: false,
     });
     expect(v.season).toBe("");
+  });
+
+  // The minutes on screen decide which phases run (L5§3.1). A preset written
+  // with free practice off and 20 minutes showed 20 and ran none: the stored
+  // flag is not read back (reported).
+  it("runs the free practice the minutes show, whatever flag was stored", () => {
+    const v = readPreset(oldest({ practice_enabled: false, practice_minutes: 20, qualify_minutes: 10 }));
+    expect(v.setup.practice_enabled, "20 minutes on screen are 20 minutes sent").toBe(true);
+    expect(v.setup.qualify_enabled).toBe(true);
+  });
+
+  it("drops free practice when qualifying is at 0, as Content Manager has nowhere to run it", () => {
+    const v = readPreset(oldest({ practice_enabled: true, practice_minutes: 20, qualify_minutes: 0 }));
+    expect(v.setup.practice_enabled).toBe(false);
+    expect(v.setup.qualify_enabled).toBe(false);
   });
 });
