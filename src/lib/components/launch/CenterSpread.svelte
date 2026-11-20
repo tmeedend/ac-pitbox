@@ -36,10 +36,10 @@
   let { label, center, spread, min, max, unit = "%", onchange, info }: Props = $props();
 
   const bounds = $derived(band(center, spread, min, max));
-  /** Where the band starts and ends on the track, in percent of its length.
+  /** Where the band starts and ends, as a fraction of the thumb's travel.
    * The band is the spread made visible: widening the spread widens it, and
    * at ± 0 it is gone (SESSION§3.1). */
-  const pct = (v: number) => (max > min ? ((v - min) / (max - min)) * 100 : 0);
+  const pct = (v: number) => (max > min ? (v - min) / (max - min) : 0);
   const bandFrom = $derived(pct(bounds[0]));
   const bandTo = $derived(pct(bounds[1]));
 </script>
@@ -60,8 +60,8 @@
       {min}
       {max}
       value={center}
-      style:--lo="{bandFrom}%"
-      style:--hi="{bandTo}%"
+      style:--lo={bandFrom}
+      style:--hi={bandTo}
       aria-label={t("launch.centerLabel", { label })}
       oninput={(e) => onchange(Number(e.currentTarget.value), spread)}
     />
@@ -113,15 +113,23 @@
     cursor: pointer;
   }
   /* The band from the lowest to the highest value the grid will get, lighter
-     than the rest of the track. */
+     than the rest of the track. **Placed on the thumb's travel, not on the
+     track**: the browser keeps the whole thumb inside the track, so its centre
+     only runs from half a thumb in to half a thumb short of the end. Measured
+     against the full length, the band sat off the thumb (reported). */
+  .slider {
+    --thumb: 10px;
+    --lo-x: calc(var(--thumb) / 2 + var(--lo) * (100% - var(--thumb)));
+    --hi-x: calc(var(--thumb) / 2 + var(--hi) * (100% - var(--thumb)));
+  }
   .slider::-webkit-slider-runnable-track {
     height: 3px;
     background: linear-gradient(
       to right,
-      var(--line) var(--lo),
-      var(--muted2) var(--lo),
-      var(--muted2) var(--hi),
-      var(--line) var(--hi)
+      var(--line) var(--lo-x),
+      var(--muted2) var(--lo-x),
+      var(--muted2) var(--hi-x),
+      var(--line) var(--hi-x)
     );
   }
   .pm {
@@ -132,7 +140,7 @@
   }
   .slider::-webkit-slider-thumb {
     appearance: none;
-    width: 10px;
+    width: var(--thumb);
     height: 18px;
     border-radius: 2px;
     background: var(--rosso);
