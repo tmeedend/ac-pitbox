@@ -119,6 +119,8 @@ Le moteur qui rend la voiture en 3D sur la fiche produit aussi les vignettes de 
 
 Nommés **par leur résultat**, chiffrés sur la bibliothèque scannée, avec la phrase « Modifiable à tout moment dans les réglages ».
 
+**Qui vient d'une version sans vignettes** ne voit jamais cette page : une notification les lui propose au démarrage — les activer, garder celles d'origine, ou ouvrir les réglages. Chacune des deux réponses est écrite et la question ne revient plus ; « Plus tard » la repose au lancement suivant. Le signe qui la déclenche : le réglage des vignettes n'a jamais été écrit, ce que l'assistant fait toujours, quel que soit le profil. Activer depuis la notification ne touche ni à l'aperçu 3D ni au plafond du cache, que le profil « Soigné » règle aussi.
+
 ## 5.6 Paramètres de rendu — le gabarit
 
 **Il n'y a pas un gabarit mais trois presets embarqués**, parce que la preview d'AC est plus *jolie* que notre rendu et le nôtre plus *lisible* — deux objectifs, pas deux qualités d'exécution :

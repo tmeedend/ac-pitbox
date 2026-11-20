@@ -601,8 +601,18 @@ const stored: Values = $state({ enabled: false, user: [], bound: { ...FALLBACK }
 
 let loaded: Promise<void> | null = null;
 
+/**
+ * Whether the user was ever asked about regenerated thumbnails (GRILLE§5.5).
+ * `null` until the file is read. The setup wizard answers it for a new
+ * install, whatever the profile; it stays unanswered for someone who came from
+ * a version without thumbnails, which is what the offer of
+ * `ThumbsOfferToast` keys on.
+ */
+const asked = $state<{ answered: boolean | null }>({ answered: null });
+
 function ensureLoaded(): Promise<void> {
   loaded ??= getUiPrefs(Object.values(KEYS)).then((read) => {
+    asked.answered = read[KEYS.enabled] !== null;
     if (read[KEYS.enabled] !== null) values.enabled = read[KEYS.enabled] === "1";
     values.user = parsePresets(read[KEYS.presets]);
     // Un preset supprimé laisse un emplacement orphelin : il retombe sur son
@@ -740,6 +750,23 @@ export function setGridThumbsEnabled(enabled: boolean): void {
   values.enabled = enabled;
 }
 
+/** Is the offer of regenerated thumbnails still to be made (GRILLE§5.5)?
+ * False while the settings are not read yet. */
+export function gridThumbsUnanswered(): boolean {
+  return asked.answered === false;
+}
+
+/**
+ * The answer to that offer, written at once and **alone**: the switch only,
+ * not whatever else may be half-edited in Réglages › Vignettes at the time.
+ */
+export async function answerGridThumbs(enabled: boolean): Promise<void> {
+  await setUiPrefs({ [KEYS.enabled]: enabled ? "1" : "0" });
+  values.enabled = enabled;
+  stored.enabled = enabled;
+  asked.answered = true;
+}
+
 export function bindPreset(slot: ThumbSlot, id: string): void {
   values.bound = { ...values.bound, [slot]: id };
 }
@@ -830,6 +857,7 @@ export async function saveGridThumbPrefs(): Promise<void> {
     [KEYS.session]: values.bound.session,
   });
   Object.assign(stored, structuredClone($state.snapshot(values)));
+  asked.answered = true;
   // `renderTemplate` et non `p.template` : c'est l'empreinte du gabarit **tel
   // qu'il a rendu** que le magasin porte dans ses noms de fichier, mat compris
   // quand le preset le cuit. La comparer sans le mat garderait les mauvaises
