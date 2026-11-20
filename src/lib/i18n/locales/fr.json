@@ -529,6 +529,9 @@
     "viewList": "Liste",
     "displayMenu": "Options d'affichage",
     "density": "Densité",
+    "sortBy": "Trier par",
+    "sortAsc": "Croissant",
+    "sortDesc": "Décroissant",
     "hideBrand": "Masquer la marque dans le nom"
   },
   "bulk": {

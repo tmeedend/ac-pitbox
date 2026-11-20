@@ -392,17 +392,23 @@
     prefsReady = true;
   });
 
-  function toggleSort(key: string) {
-    if (sortKey === key) sortDir = sortDir === 1 ? -1 : 1;
-    else {
-      sortKey = key;
-      sortDir = 1;
-    }
+  /** One sort for both views: the table's headers and the grid's « Sort by »
+   * write the same key and direction, so switching views never reorders. */
+  function setSort(key: string, dir: 1 | -1) {
+    sortKey = key;
+    sortDir = dir;
     if (prefsReady) {
       setUiPref(KEYS.sortKey, sortKey);
       setUiPref(KEYS.sortDir, String(sortDir));
     }
   }
+
+  function toggleSort(key: string) {
+    setSort(key, sortKey === key ? (sortDir === 1 ? -1 : 1) : 1);
+  }
+
+  /** What « Sort by » offers: the sortable columns, shown or not in the table. */
+  const sortChoices = $derived(columns.filter((c) => c.sortable));
 
   /** A tile of the index poses its chip (INDEX§2) - through the same
    * filter state as the chip editor, so everything after it works unchanged. */
@@ -977,6 +983,31 @@
                   <span>{t(key)}</span>
                 </label>
               {/each}
+              <!-- The grid has no headers to click: without this, its order was
+                   whatever had last been picked in the table (SPEC §7.4). -->
+              <span class="dm-sep"></span>
+              <span class="dm-title">{t("library.sortBy")}</span>
+              <div class="dm-sort">
+                <select
+                  class="input"
+                  aria-label={t("library.sortBy")}
+                  value={sortKey}
+                  onchange={(e) => setSort(e.currentTarget.value, sortDir)}
+                >
+                  {#each sortChoices as c (c.key)}<option value={c.key}>{t(c.labelKey)}</option>{/each}
+                </select>
+                <Seg
+                  items={[
+                    { value: "1", label: "↑", title: t("library.sortAsc") },
+                    { value: "-1", label: "↓", title: t("library.sortDesc") },
+                  ]}
+                  value={String(sortDir)}
+                  onselect={(v) => setSort(sortKey, v === "-1" ? -1 : 1)}
+                  tone="neutral"
+                  size="mini"
+                  icon
+                />
+              </div>
               {#if isCar}
                 <span class="dm-sep"></span>
                 <label>
@@ -1158,6 +1189,18 @@
 </div>
 
 <style>
+  /* « Sort by » of the display menu: the criterion and its direction on one
+     row. */
+  .dm-sort {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 4px 2px;
+  }
+  .dm-sort select {
+    flex: 1;
+    min-width: 0;
+  }
   /* Same size as the flag of a chip: one flag size in the app. */
   .country-flag {
     width: 16px;
