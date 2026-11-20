@@ -1055,7 +1055,10 @@
         style:--mat-hi={isCar && gridThumbsOn() ? preset.mat.hi : undefined}
         style:--mat-lo={isCar && gridThumbsOn() ? preset.mat.lo : undefined}
       >
-        {#each filtered as c (c.id_interne)}
+        <!-- `sorted`, like the table: drawn from `filtered`, the grid ignored
+             the sort and showed the base's own order, while the keyboard and
+             range selection already walked the sorted one (reported). -->
+        {#each sorted as c (c.id_interne)}
           <!-- The thumbnail's own livery, not the session's (GRILLE§5.4). -->
           {@const thumbSkin = isCar ? thumbnailSkinId(c.id_interne) : null}
           {@const prefLayout = !isCar ? getPreferredLayout(c.id_interne) : null}
