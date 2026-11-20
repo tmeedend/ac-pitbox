@@ -36,6 +36,12 @@
   let { label, center, spread, min, max, unit = "%", onchange, info }: Props = $props();
 
   const bounds = $derived(band(center, spread, min, max));
+  /** Where the band starts and ends on the track, in percent of its length.
+   * The band is the spread made visible: widening the spread widens it, and
+   * at ± 0 it is gone (SESSION§3.1). */
+  const pct = (v: number) => (max > min ? ((v - min) / (max - min)) * 100 : 0);
+  const bandFrom = $derived(pct(bounds[0]));
+  const bandTo = $derived(pct(bounds[1]));
 </script>
 
 <div class="cs">
@@ -54,11 +60,17 @@
       {min}
       {max}
       value={center}
+      style:--lo="{bandFrom}%"
+      style:--hi="{bandTo}%"
       aria-label={t("launch.centerLabel", { label })}
       oninput={(e) => onchange(Number(e.currentTarget.value), spread)}
     />
+    <!-- The same "±" as the line above: the field reads as the second number
+         of "95% ± 3", which is what it sets. -->
+    <span class="pm mono" aria-hidden="true">±</span>
     <NumberStepper
       width={56}
+      title={t("launch.spreadLabel", { label })}
       min={0}
       max={max - min}
       value={spread}
@@ -100,9 +112,23 @@
     background: transparent;
     cursor: pointer;
   }
+  /* The band from the lowest to the highest value the grid will get, lighter
+     than the rest of the track. */
   .slider::-webkit-slider-runnable-track {
     height: 3px;
-    background: var(--line);
+    background: linear-gradient(
+      to right,
+      var(--line) var(--lo),
+      var(--muted2) var(--lo),
+      var(--muted2) var(--hi),
+      var(--line) var(--hi)
+    );
+  }
+  .pm {
+    font-size: 12px;
+    color: var(--muted);
+    /* Tucked against its field: it belongs to the number, not to the track. */
+    margin-right: -4px;
   }
   .slider::-webkit-slider-thumb {
     appearance: none;

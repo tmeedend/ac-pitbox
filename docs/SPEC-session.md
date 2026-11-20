@@ -452,7 +452,8 @@ idéale restent sur la page de réglages.
 
 **Difficulté et agressivité : un centre et un écart**, un même composant deux
 fois. Déplacer le centre conserve l'écart ; l'écart est un champ (`± 0` se pose
-exactement). Le libellé affiche la plage **bornée** (`3% ± 5 (0–8)`), et le
+exactement), précédé du même `±` que le libellé. La plage se voit aussi sur le
+curseur, en bande plus claire, qui disparaît à `± 0`. Le libellé affiche la plage **bornée** (`3% ± 5 (0–8)`), et le
 bornage vaut aussi pour ce qui part en jeu. Les réglages d'avant ce modèle
 (minimum et maximum) sont **convertis**, jamais repliés sur le défaut.
 

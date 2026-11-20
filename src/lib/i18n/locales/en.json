@@ -1012,6 +1012,7 @@
     "gridLoaded": "Grid “{name}” loaded — {count} opponents.",
     "gridMissingCars": "{count} cars of this grid are no longer in the library and were left out.",
     "centerLabel": "{label} centre",
+    "spreadLabel": "{label} spread",
     "aiCount": "Opponents",
     "gridHeader": "Grid · {count} AI",
     "opponentEditTooltip": "Click to change the car or skin",

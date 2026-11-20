@@ -1012,6 +1012,7 @@
     "gridLoaded": "Grille « {name} » chargée — {count} adversaires.",
     "gridMissingCars": "{count} voitures de cette grille ne sont plus en bibliothèque et ont été laissées de côté.",
     "centerLabel": "Centre de {label}",
+    "spreadLabel": "Écart de {label}",
     "aiCount": "Adversaires",
     "gridHeader": "Plateau · {count} IA",
     "opponentEditTooltip": "Cliquer pour changer la voiture ou le skin",
