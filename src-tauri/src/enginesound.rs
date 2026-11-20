@@ -499,6 +499,40 @@ pub(crate) fn rev_ceiling(car_dir: &Path) -> f32 {
     }
 }
 
+/// The engine event of one view, looked up in the `GUIDs.txt` beside a sound
+/// folder (or the game's own). A raw diagnostic on failure, like the rest of
+/// the native path: it only ever reaches the log.
+fn engine_event_in(
+    dir: &Path,
+    ac_root: &Path,
+    parent_id: &str,
+    view: crate::fmod::guids::EngineView,
+) -> Result<(String, crate::fmod::guids::Guid), String> {
+    crate::fmod::guids::resolve_engine_event(dir, Some(ac_root), parent_id, view).ok_or_else(|| {
+        format!(
+            "no engine event for {parent_id} in any GUIDs.txt near {}",
+            dir.display()
+        )
+    })
+}
+
+/// The engine event of one view for a list entry — what switching views under
+/// a running audition needs, and nothing of the rest of [`native_target`].
+pub fn engine_event(
+    conn: &Connection,
+    cfg: &AppConfig,
+    parent_id: &str,
+    sub_id: Option<&str>,
+    view: crate::fmod::guids::EngineView,
+) -> Result<(String, crate::fmod::guids::Guid), String> {
+    let ac_root = cfg
+        .ac_install_path
+        .as_deref()
+        .ok_or_else(|| "no Assetto Corsa install configured".to_string())?;
+    let dir = sound_dir(conn, cfg, parent_id, sub_id)?;
+    engine_event_in(&dir, ac_root, parent_id, view)
+}
+
 /// Resolves a list entry to a playable FMOD event.
 ///
 /// Every failure here is a **fallback trigger**, not something to show: no game
@@ -518,13 +552,7 @@ pub fn native_target(
         .ok_or_else(|| "no Assetto Corsa install configured".to_string())?;
     let dir = sound_dir(conn, cfg, parent_id, sub_id)?;
     let bank = find_bank(&dir).ok_or_else(|| format!("no .bank in {}", dir.display()))?;
-    let (event_path, guid) = crate::fmod::guids::resolve_engine_event(&dir, Some(&ac_root), parent_id, view)
-        .ok_or_else(|| {
-            format!(
-                "no engine event for {parent_id} in any GUIDs.txt near {}",
-                dir.display()
-            )
-        })?;
+    let (event_path, guid) = engine_event_in(&dir, &ac_root, parent_id, view)?;
     // The curve belongs to the **car**, never to the sound mod being
     // auditioned: swapping the sound does not change what the engine revs to.
     let car_dir =

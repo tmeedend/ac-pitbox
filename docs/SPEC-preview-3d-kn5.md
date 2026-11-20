@@ -677,3 +677,27 @@ sauf le pilote (§4.6). Les numéros sont ceux du journal du lot 6
 Le rangement en document + blobs adressés par leur contenu est décrit au
 §5.3 ; ses mesures (−65 % sur quatre skins d'une même voiture) et les deux
 pièges rencontrés en l'écrivant sont dans `preview3d-research.md`.
+
+### 15.1 La vue intérieure
+
+Un bouton au coin bas-droit de l'aperçu, avec les autres commandes, fait entrer
+la caméra **à la place du pilote**, en vol (moins d'une seconde, en arc
+au-dessus de la carrosserie), et l'en fait ressortir vers le cadrage qu'elle
+avait quitté.
+
+- **Le siège est `[GRAPHICS] DRIVEREYES`** du `car.ini`, là où le jeu pose sa
+  caméra cockpit. Une voiture qui ne le déclare pas n'a pas de vue intérieure :
+  le bouton est éteint.
+- **Dedans, la souris est au pilote, plus à l'orbite** : clic gauche glissé,
+  la tête tourne (jusqu'à 140° de chaque côté, 40° vers le haut, 55° vers le
+  bas) ; clic droit glissé, elle se déplace (20 cm de côté, 12 cm en hauteur) ;
+  la molette règle le champ (30° à 85°, 56° au départ, le défaut du jeu) ; un
+  double-clic, ou « replacer », regarde à nouveau droit devant.
+- **La tête du pilote est masquée**, comme dans le jeu : casque, visière et
+  visage, c'est-à-dire ce qui pend de l'os de la tête du mannequin. Le corps et
+  les mains restent sur le volant.
+- Le plateau s'arrête à l'entrée et ne repart pas à la sortie.
+- **La vue et le son ne font qu'un réglage** (FMOD§6octies), retenu au
+  redémarrage et commun à toutes les voitures : une fiche rouverte en vue
+  intérieure s'ouvre déjà assise, sans vol. Un changement de skin garde la
+  tête où elle était. L'aperçu de Réglages › Aperçu reste dehors.

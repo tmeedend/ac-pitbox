@@ -15,8 +15,10 @@ import {
   setAuditionListener,
   setAuditionPedal,
   setAuditionRev,
+  setAuditionHead,
   setAuditionShowcase,
   stopAuditionNative,
+  switchAuditionView,
   type EngineClip,
   type NativeAudition,
 } from "./enginesound";
@@ -32,6 +34,8 @@ function keyOf(parentId: string, subId: string | null): string {
 /** L'écoute native tourne côté Rust, pas dans la webview : ceci n'en est que
  * le reflet, pour savoir quoi couper et s'il faut afficher le curseur. */
 let native = $state<NativeAudition | null>(null);
+/** The list entry the native audition plays, for switching its view. */
+let nativeEntry: { parentId: string; subId: string | null } | null = null;
 /** Régime demandé, en tr/min. Vit ici et non dans le composant, pour la même
  * raison que le reste : la fiche se démonte, le son non. */
 let rev = $state(0);
@@ -47,6 +51,48 @@ const ANGLE_EPSILON = 1.5;
 /** Et jamais plus souvent que ça, en millisecondes. Le timbre suit largement
  * à cette cadence, et l'aperçu tourne lui à 60 images par seconde. */
 const ANGLE_INTERVAL = 60;
+
+/** Same for the ear in the driver's seat. */
+let lastHead = { x: 999, y: 999, z: 999, yaw: 999, pitch: 999 };
+/** A send of the head's latest pose, waiting out the interval. */
+let headTrailing: ReturnType<typeof setTimeout> | null = null;
+
+/** Where the ear goes in the interior view when no 3D preview says where the
+ * driver's head is: the middle of the car, a little up, facing the nose. */
+const SEAT_FALLBACK: [number, number, number] = [0, 0.4, 0];
+
+/** The last ear the 3D preview asked for, of each kind, **whether or not
+ * anything was playing**: a preview at rest renders no frame, so it would not
+ * say again where the camera is when an engine starts or changes view. */
+let previewEar: {
+  orbit: [number, number, number] | null;
+  head: { position: [number, number, number]; yaw: number; pitch: number } | null;
+} = { orbit: null, head: null };
+
+/** The preview is gone: what it last said no longer describes any camera. */
+export function forgetPreviewEar(): void {
+  previewEar = { orbit: null, head: null };
+}
+
+/** Forgets what was last sent, so that the next report goes out even if the
+ * camera has not moved — a new event, or a new kind of ear. */
+function forgetEar() {
+  lastAngle = { azimuth: 999, elevation: 999, distance: 0 };
+  lastHead = { x: 999, y: 999, z: 999, yaw: 999, pitch: 999 };
+}
+
+/** Puts the ear where the view wants it: where the 3D preview's camera last
+ * was for that view, or, with no preview, the seat for the interior and the
+ * three-quarter front for the exterior. */
+function placeEar(interior: boolean) {
+  if (interior) {
+    const head = previewEar.head;
+    void setAuditionHead(head?.position ?? SEAT_FALLBACK, head?.yaw ?? 0, head?.pitch ?? 0).catch(() => {});
+  } else {
+    const [azimuth, elevation, distance] = previewEar.orbit ?? [35, 8, 4];
+    void setAuditionListener(azimuth, elevation, distance).catch(() => {});
+  }
+}
 
 let context: AudioContext | null = null;
 let source: AudioBufferSourceNode | null = null;
@@ -143,6 +189,7 @@ export function setEngineShowcase(on: boolean): void {
  * Sans écoute native en cours, l'appel ne coûte rien.
  */
 export function reportListenerAngle(azimuth: number, elevation: number, distance: number): void {
+  previewEar.orbit = [azimuth, elevation, distance];
   if (!native) return;
   const now = performance.now();
   const moved =
@@ -155,12 +202,69 @@ export function reportListenerAngle(azimuth: number, elevation: number, distance
   void setAuditionListener(azimuth, elevation, distance).catch(() => {});
 }
 
+/**
+ * The ear in the driver's seat, called by the 3D preview **every frame** of
+ * its interior view: `position` in metres in the car's space (its centre at
+ * the origin), `yaw` and `pitch` in degrees. Filtered here for the same
+ * reason as `reportListenerAngle`.
+ */
+export function reportListenerHead(position: [number, number, number], yaw: number, pitch: number): void {
+  previewEar.head = { position, yaw, pitch };
+  if (!native) return;
+  const now = performance.now();
+  const [x, y, z] = position;
+  const moved =
+    Math.abs(yaw - lastHead.yaw) > ANGLE_EPSILON ||
+    Math.abs(pitch - lastHead.pitch) > ANGLE_EPSILON ||
+    Math.hypot(x - lastHead.x, y - lastHead.y, z - lastHead.z) > 0.02;
+  if (!moved) return;
+  if (now - lastAngleAt < ANGLE_INTERVAL) {
+    // **The last pose of a drag must arrive**: the interior view renders no
+    // frame once the mouse stops, so a pose dropped here would leave the ear
+    // a few degrees off for good. One trailing send covers it.
+    headTrailing ??= setTimeout(() => {
+      headTrailing = null;
+      const latest = previewEar.head;
+      if (latest) reportListenerHead(latest.position, latest.yaw, latest.pitch);
+    }, ANGLE_INTERVAL);
+    return;
+  }
+  lastHead = { x, y, z, yaw, pitch };
+  lastAngleAt = now;
+  void setAuditionHead(position, yaw, pitch).catch(() => {});
+}
+
+/**
+ * Switches the engine under way between its exterior and interior sound
+ * (FMOD§6octies), without restarting it.
+ *
+ * Only the game's own engine has two views: the in-house decoder plays one
+ * sample, the same whichever way, so there is nothing to switch there. A
+ * refusal (a car whose bank has a single engine event) is not shown either:
+ * the engine carries on as it was, and the next audition asks again.
+ */
+export async function switchEngineView(interior: boolean): Promise<void> {
+  const entry = nativeEntry;
+  if (!native || !entry) return;
+  try {
+    const switched = await switchAuditionView(entry.parentId, entry.subId, interior);
+    // The engine may have been stopped, or another one started, meanwhile.
+    if (!native || nativeEntry !== entry) return;
+    native = { ...native, ...switched };
+    forgetEar();
+    placeEar(interior);
+  } catch (e) {
+    console.info(`[son moteur] vue ${interior ? "intérieure" : "extérieure"} indisponible : ${e}`);
+  }
+}
+
 /** Coupe ce qui tourne, en fondu. */
 export function stopEngine(): void {
   playing = null;
   showcase = false;
   if (native) {
     native = null;
+    nativeEntry = null;
     void stopAuditionNative().catch(() => {});
   }
   if (!context || !gain || !source) return;
@@ -186,6 +290,7 @@ export function stopEngine(): void {
 export async function toggleEngine(
   parentId: string,
   subId: string | null,
+  interior = false,
 ): Promise<EngineClip | null> {
   const key = keyOf(parentId, subId);
   // **Un clic pendant le chargement est ignoré.** Lire un bank de trente
@@ -200,8 +305,8 @@ export async function toggleEngine(
   }
   stopEngine();
 
-  // **Le vrai moteur du jeu d'abord.** Il joue l'événement `engine_ext` que le
-  // jeu jouerait, réglable en régime, au lieu d'un échantillon deviné — mesuré
+  // **Le vrai moteur du jeu d'abord.** Il joue l'événement `engine_ext` (ou
+  // `engine_int` en vue intérieure) que le jeu jouerait, réglable en régime, au lieu d'un échantillon deviné — mesuré
   // sur les 299 voitures de l'installation de référence, il aboutit à chaque
   // fois (docs/SPEC-engine-sound-fmod.md FMOD§5, lot 4).
   //
@@ -211,13 +316,15 @@ export async function toggleEngine(
   // reste qu'une ligne de journal.
   loading = key;
   try {
-    const audition = await auditionEngineNative(parentId, subId);
+    const audition = await auditionEngineNative(parentId, subId, interior);
     native = audition;
+    nativeEntry = { parentId, subId };
     rev = audition.revStart;
     showcase = false;
     // Un nouvel événement, une nouvelle instance : le prochain angle doit
     // repartir, même si la caméra n'a pas bougé entre-temps.
-    lastAngle = { azimuth: 999, elevation: 999, distance: 0 };
+    forgetEar();
+    placeEar(interior);
     playing = key;
     return null;
   } catch (e) {

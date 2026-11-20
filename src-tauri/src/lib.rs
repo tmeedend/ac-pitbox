@@ -276,6 +276,7 @@ pub fn run() {
             commands::sessionlog::list_thumbnail_copies,
             commands::sessionlog::trash_thumbnail_copies,
             commands::preview::prepare_car_preview,
+            commands::preview::car_driver_eyes,
             commands::preview::list_driver_choices,
             commands::preview::list_driver_bodies,
             commands::preview::prepare_driver_preview,
@@ -372,6 +373,10 @@ pub fn run() {
             commands::addons::set_audition_pedal,
             #[cfg(windows)]
             commands::addons::set_audition_listener,
+            #[cfg(windows)]
+            commands::addons::set_audition_head,
+            #[cfg(windows)]
+            commands::addons::switch_audition_view,
             #[cfg(windows)]
             commands::addons::set_audition_showcase,
             #[cfg(windows)]

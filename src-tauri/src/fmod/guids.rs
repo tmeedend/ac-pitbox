@@ -77,9 +77,8 @@ fn hex_pairs(s: &str) -> impl Iterator<Item = Option<u8>> + '_ {
 
 /// Which of the two engine events to reach for first.
 ///
-/// Left open on purpose: `docs/SPEC-engine-sound-fmod.md` FMOD§7 has not settled
-/// whether the exterior or the interior view should be the default, and this
-/// module has no business deciding it.
+/// The user picks it on the car's sheet (FMOD§6octies); this module only finds
+/// the event, falling back on the other view when a bank has only one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum EngineView {
     /// `engine_ext` — what a bystander hears, and the most comparable between mods.

@@ -261,6 +261,51 @@ pub fn stop_audition_native(engine: State<crate::fmod::engine::FmodEngineHandle>
     engine.stop();
 }
 
+/// Switches the audition under way between the exterior and the interior
+/// engine event, without restarting it (FMOD§6octies): same speed, no starter.
+/// Rejects when nothing is playing or the other view cannot be played — the
+/// audition then carries on as it was.
+#[cfg(windows)]
+#[tauri::command]
+pub async fn switch_audition_view(
+    app: AppHandle,
+    db: State<'_, Db>,
+    engine: State<'_, crate::fmod::engine::FmodEngineHandle>,
+    parent_id: String,
+    sub_id: Option<String>,
+    interior: bool,
+) -> Result<crate::fmod::engine::PlayReport, String> {
+    let cfg = crate::config::load(&app);
+    let view = if interior {
+        crate::fmod::guids::EngineView::Interior
+    } else {
+        crate::fmod::guids::EngineView::Exterior
+    };
+    let (event_path, guid) = {
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        crate::enginesound::engine_event(&conn, &cfg, &parent_id, sub_id.as_deref(), view)?
+    };
+    engine.switch_event(crate::fmod::engine::SwitchRequest { guid, event_path })
+}
+
+/// Puts the ear in the driver's seat (interior view): a point in the car's
+/// space, the car's centre at the origin, and where the head is turned, in
+/// degrees. Sent without an answer, like `set_audition_listener`.
+#[cfg(windows)]
+#[tauri::command]
+pub fn set_audition_head(
+    engine: State<crate::fmod::engine::FmodEngineHandle>,
+    position: [f32; 3],
+    yaw: f32,
+    pitch: f32,
+) {
+    engine.set_listener(crate::fmod::engine::Ear::Head(crate::fmod::engine::HeadListener {
+        position,
+        yaw,
+        pitch,
+    }));
+}
+
 /// Fiche d'un mod de son : ce qu'il vise, ce qu'il pèse, et ce que son bank
 /// contient réellement (§8). Tout est lu à la demande — rien de ce qui décrit
 /// un fichier n'est mémorisé en base, il peut changer sous nos pieds.

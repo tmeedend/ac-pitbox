@@ -8,6 +8,8 @@
   import IgnitionKey from "./IgnitionKey.svelte";
   import EngineRevControls from "./EngineRevControls.svelte";
   import { engineState } from "$lib/detail/enginePlayer.svelte";
+  import { interiorView, setInteriorView } from "$lib/detail/interiorView.svelte";
+  import Seg from "$lib/components/ui/Seg.svelte";
   import { t } from "$lib/i18n/index.svelte";
 
   interface Props {
@@ -28,7 +30,24 @@
 </script>
 
 <section class="blk">
-  <header class="blk-h"><span class="blk-t">{t("detail.engineSound")}</span></header>
+  <header class="blk-h">
+    <span class="blk-t">{t("detail.engineSound")}</span>
+    {#if !freed}
+      <!-- Heard from outside or from the seat (FMOD§6octies). The same switch
+           as the button over the 3D preview, which follows it — and it is here
+           too because the preview may well be off. -->
+      <Seg
+        items={[
+          { value: "ext", label: t("detail.viewExterior") },
+          { value: "int", label: t("detail.viewInterior") },
+        ]}
+        value={interiorView() ? "int" : "ext"}
+        onselect={(v) => setInteriorView(v === "int")}
+        tone="neutral"
+        size="mini"
+      />
+    {/if}
+  </header>
   <div class="blk-b">
     {#if freed}
       <p class="freed">{t("showcase.noSound")}</p>
