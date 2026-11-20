@@ -8,6 +8,24 @@
 // change.
 import type { AssistLevel, RaceSetup, StartMode } from "$lib/launch/launch";
 
+/**
+ * Which phases of a Race weekend run, **read from the minutes on screen**
+ * (L5§3.1): 0 turns a phase off, and free practice needs qualifying, the two
+ * only existing together in Content Manager's Weekend mode.
+ *
+ * The booleans still exist because they pick that mode, but they are never
+ * typed by hand any more. Kept beside the minutes, they drifted apart: a
+ * preset written with practice off and 20 minutes showed 20 and ran none
+ * (reported).
+ */
+export function durationFlags(
+  practiceMinutes: number,
+  qualifyMinutes: number,
+): { practice_enabled: boolean; qualify_enabled: boolean } {
+  const qualify = qualifyMinutes > 0;
+  return { practice_enabled: qualify && practiceMinutes > 0, qualify_enabled: qualify };
+}
+
 /** The session before any choice, preset or saved selection is applied: the
  * session screen's, and a story event's before its own settings. */
 export function defaultSetup(): RaceSetup {
@@ -39,8 +57,10 @@ export function defaultSetup(): RaceSetup {
     jump_start_penalty: 0,
     track_state: null,
     grip: 96,
+    // No free practice until one is asked for: 0 on screen is what is sent
+    // (`durationFlags`).
     practice_enabled: false,
-    practice_minutes: 20,
+    practice_minutes: 0,
     qualify_enabled: true,
     qualify_minutes: 10,
     ghost_car: false,

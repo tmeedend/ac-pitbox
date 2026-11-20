@@ -323,7 +323,9 @@ page parce que c'est le couple type + circuit qui est en cause.
 TOURS  [  5 ]      QUALIFICATION  [ 10 ] min      ESSAIS LIBRES  [ 20 ] min
 ```
 
-Un `0` s'affiche éteint. Les booléens de mode se **déduisent** des durées. Le
+Un `0` s'affiche éteint. Les booléens de mode se **déduisent** des durées,
+à la saisie comme à la relecture d'un preset : ce qui est affiché est ce qui
+part. Sans réglage, pas d'essais libres (0 min). Le
 champ des essais libres est éteint tant que la qualification vaut 0, et dit
 pourquoi.
 

@@ -4,6 +4,7 @@
   // everything is a direct read/write of `setup` (state shared with the
   // parent, SESSION§3.3) — no logic to lift up.
   import { type RaceSetup, type StartMode } from "$lib/launch/launch";
+  import { durationFlags } from "$lib/launch/setupRules";
   import { t } from "$lib/i18n/index.svelte";
   import NumberStepper from "$lib/components/ui/NumberStepper.svelte";
   import Seg from "$lib/components/ui/Seg.svelte";
@@ -20,18 +21,15 @@
   //
   // The booleans stay in `RaceSetup`: they are what picks Content Manager's
   // mode (`QuickDrive_Weekend` carries qualifying, `QuickDrive_Race` does not),
-  // so they are derived from the minutes rather than typed by hand.
+  // so they are derived from the minutes rather than typed by hand — here and
+  // wherever a preset is read back (`durationFlags`).
   function setQualifyMinutes(v: number) {
     setup.qualify_minutes = v;
-    setup.qualify_enabled = v > 0;
-    // Free practice only exists in the Weekend mode — the very one qualifying
-    // carries. Without qualifying it has nowhere to happen, so it follows.
-    if (v === 0) setup.practice_enabled = false;
-    else setup.practice_enabled = setup.practice_minutes > 0;
+    Object.assign(setup, durationFlags(setup.practice_minutes, v));
   }
   function setPracticeMinutes(v: number) {
     setup.practice_minutes = v;
-    setup.practice_enabled = v > 0 && setup.qualify_minutes > 0;
+    Object.assign(setup, durationFlags(v, setup.qualify_minutes));
   }
   /** Free practice has no effect at all without qualifying: the field says so
    * rather than accepting a value that goes nowhere. */

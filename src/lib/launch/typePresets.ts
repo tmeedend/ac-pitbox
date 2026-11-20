@@ -17,7 +17,7 @@ import type {
 } from "$lib/launch/launch";
 import { clampAiLevel } from "$lib/launch/opponent";
 import type { SavedPool } from "$lib/launch/gridRules";
-import { START_MODES, assistLevelFrom, nearestGrip } from "$lib/launch/setupRules";
+import { START_MODES, assistLevelFrom, durationFlags, nearestGrip } from "$lib/launch/setupRules";
 
 /** How many opponents a grid has before the player chose: the session
  * screen's, a preset that does not say, and a story race that does not
@@ -137,9 +137,11 @@ export function readPreset(p: TypePreset): PresetValues {
       // retrouve alors l'état natif le plus proche, ce que faisait l'ancien select.
       track_state: p.track_state ?? null,
       grip: nearestGrip(p.grip ?? 100),
-      practice_enabled: p.practice_enabled ?? false,
-      practice_minutes: p.practice_minutes ?? 20,
-      qualify_enabled: p.qualify_enabled ?? true,
+      // The minutes are what the screen shows, so they decide; the stored
+      // booleans are not read back (`durationFlags`). A preset from before
+      // the minutes were stored had no free practice: 0.
+      ...durationFlags(p.practice_minutes ?? 0, p.qualify_minutes ?? 10),
+      practice_minutes: p.practice_minutes ?? 0,
       qualify_minutes: p.qualify_minutes ?? 10,
       ghost_car: p.ghost_car ?? false,
       practice_start: p.practice_start ?? "pit",
