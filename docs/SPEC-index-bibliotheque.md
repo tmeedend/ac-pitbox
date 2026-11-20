@@ -156,9 +156,9 @@ Deux conséquences d'interface :
 
 ## 6.2 Parcourir par marque
 
-**Seules les marques significatives sont affichées**, plus un lien `Toutes les marques (N)` qui déplie la liste entière, **toute par ordre alphabétique** (les significatives ne restent pas en tête), et `Réduire` qui revient aux significatives, par nombre.
+**Toutes les marques sont affichées**, **par ordre alphabétique**, avec un lien `Réduire` qui ne garde que les marques significatives, par nombre, et `Toutes les marques (N)` qui revient à la liste entière. Choix de l'utilisateur (2026-11-20) : la vue repliée était le défaut, on y cherchait sa marque sans la trouver.
 
-Soixante-dix marques dont la moitié ne mène qu'à une seule voiture : une grille complète serait surtout du bruit, et beaucoup de clics pour rien.
+La vue réduite reste pour qui veut l'essentiel : soixante-dix marques dont la moitié ne mène qu'à une seule voiture, c'est beaucoup de tuiles pour peu de voitures.
 
 **Seuil dynamique — pas de constante en dur :**
 
@@ -170,7 +170,7 @@ Borné à [8, 24] tuiles.
 
 Sur l'installation de référence, ça donne quatorze marques. Sur une bibliothèque de quarante voitures, ça en donne huit ; sur une de deux mille, vingt-quatre. **Un « top 18 » figé casserait dans les deux cas.**
 
-L'état déplié n'est pas mémorisé.
+L'état replié n'est pas mémorisé : chaque arrivée sur l'index repart sur la liste entière.
 
 ## 6.3 Pas d'index par pays pour les voitures
 

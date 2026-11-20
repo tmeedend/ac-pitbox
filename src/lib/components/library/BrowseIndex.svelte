@@ -55,8 +55,9 @@
   const countries = $derived(isCar ? [] : tilesByName(indexTiles(optionsFor("country"))));
   const familyTiles = $derived(isCar && families.length ? indexTiles(optionsFor("family")) : []);
   const categoryTiles = $derived(isCar ? [] : indexTiles(optionsFor("category")));
-  /** Not remembered, on purpose (INDEX§6.2): folded again next time. */
-  let allBrands = $state(false);
+  /** Every brand by default (INDEX§6.2); folding to the significant ones is
+   * not remembered, so the next visit shows them all again. */
+  let allBrands = $state(true);
   const brandAll = $derived(isCar ? indexTiles(optionsFor("brand")) : []);
   const brands = $derived(brandTiles(brandAll, total, allBrands));
 
