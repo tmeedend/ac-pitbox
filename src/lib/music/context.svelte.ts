@@ -13,10 +13,12 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { familiesOfTags, familyLookup, familyTagsOf, type CategoryFamily } from "$lib/library/families";
 import { categoryFamilies, loadFamilies } from "$lib/library/familyTable.svelte";
 import { listLibrary, type ModCard } from "$lib/library/library";
+import { FEATURE_MUSIC_ASSIGNMENTS } from "$lib/features";
 import { getMusicConfig, musicSetContext, musicSetMinimized, saveMusicConfig, type MusicConfig } from "./music";
 import {
   anchorAfter,
   anchorOnTile,
+  emptyAssignments,
   resolve,
   sameResolution,
   waitsBeforePlaying,
@@ -67,7 +69,9 @@ export function loadMusicConfig(): Promise<void> {
 function send(): void {
   const cfg = shared.config;
   if (!cfg) return;
-  const next = resolve(lastView, anchor, cfg.assignments);
+  // Feature off (`features.ts`): nothing is attached to anything, so every
+  // screen falls back on MENU and the session settings on GRID.
+  const next = resolve(lastView, anchor, FEATURE_MUSIC_ASSIGNMENTS ? cfg.assignments : emptyAssignments());
   if (sameResolution(lastSent, next)) return;
   lastSent = next;
   musicSetContext({ ...next, delayed: waitsBeforePlaying(lastView) }).catch((e) => {

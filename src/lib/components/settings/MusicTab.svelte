@@ -17,6 +17,7 @@
   import Slider from "$lib/components/ui/Slider.svelte";
   import MusicSourcePicker from "$lib/components/music/MusicSourcePicker.svelte";
   import MusicAssignments from "$lib/components/music/MusicAssignments.svelte";
+  import { FEATURE_MUSIC_ASSIGNMENTS } from "$lib/features";
 
   // Fichier séparé de AppConfig (music.json, §16.1) : état et sauvegarde
   // propres à cet onglet, indépendants de la garde de navigation de
@@ -177,7 +178,7 @@
   />
 </section>
 
-{#if config.use_custom_folders}
+{#if FEATURE_MUSIC_ASSIGNMENTS && config.use_custom_folders}
   <section class="blk">
     <div class="blk-h"><span class="blk-t">{t("music.byScreen")}</span></div>
     <div class="blk-b screens">

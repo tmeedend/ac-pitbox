@@ -964,6 +964,12 @@ Le résultat est mis en cache dans **`app_config_dir/Music/index/`**, un fichier
 
 ### 16.4 Attributions
 
+**Cachées dans un build livré** (`FEATURE_MUSIC_ASSIGNMENTS`, visibles sous
+`tauri dev` seulement) jusqu'à leur sortie : ni ligne MUSIC dans le Classement,
+ni *By screen* ni *Assignments* dans Réglages › Musique, et les attributions
+déjà écrites ne jouent pas — MENU partout, GRID sur les réglages de session.
+Elles restent dans `music.json`.
+
 Une source peut être attachée à :
 
 - une **marque**, une **famille** de voitures, une **catégorie de circuit** (son tag, `#drift`) ou un **pays**, toujours par **id canonique** (TAXO§2) ;

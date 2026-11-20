@@ -1506,6 +1506,13 @@ de reprendre. En cas d'écart, la spec fait foi.
       du même cas (une communauté et son propre lanceur) : à vérifier, le
       journal du jeu (`Documents/Assetto Corsa/logs/log.txt`) donne la raison.
 
+- [ ] **Musique par terme et par écran (§16.4) — finie, cachée dans les builds
+      livrés (`FEATURE_MUSIC_ASSIGNMENTS`, 2026-11-20).** Retenue de la 0.11.0
+      pour sortir dans une version suivante ; le mode de lecture, les sources et
+      les bandes-son Steam, livrés avec elle, sortent en 0.11.0.
+      **Reste :** passer `FEATURE_MUSIC_ASSIGNMENTS` à `true` le jour de la
+      sortie, et retirer cette entrée.
+
 - [ ] **Export / import de la bibliothèque (`EXPORT§`) — construit, derrière
       un interrupteur ; reste à l'essayer sur de vraies bibliothèques.**
       Élargi le 2026-10-09 : l'export emporte aussi apps, mannequins, tenues

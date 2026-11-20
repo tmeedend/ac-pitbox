@@ -8,6 +8,7 @@
   import { errorText } from "$lib/errors";
   import { assignMusic, loadMusicConfig, musicConfig, ownMusicOn } from "$lib/music/context.svelte";
   import { stopPreview } from "$lib/music/preview.svelte";
+  import { FEATURE_MUSIC_ASSIGNMENTS } from "$lib/features";
   import type { Taxonomy } from "$lib/music/resolve";
   import MusicSourcePicker from "./MusicSourcePicker.svelte";
 
@@ -25,7 +26,7 @@
   }
 </script>
 
-{#if ownMusicOn()}
+{#if FEATURE_MUSIC_ASSIGNMENTS && ownMusicOn()}
   <div class="field">
     <span class="lbl-key">{t("music.label")}</span>
     <MusicSourcePicker {value} defaultLabel={t("music.followsScreen")} label={t("music.label")} onchange={pick} />

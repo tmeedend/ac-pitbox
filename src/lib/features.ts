@@ -72,3 +72,25 @@ export const FEATURE_GRID_THUMBS = true;
  * The backend commands stay registered: nothing calls them without a screen.
  */
 export const FEATURE_LIBRARY_TRANSFER: boolean = import.meta.env.DEV;
+
+/**
+ * **Music by term and by screen** (§16.4, §16.5): a music attached to a brand,
+ * a car family, a track category, a country or a rail entry.
+ *
+ * On in development, off in a built installer, like the library transfer:
+ * finished, held back to come out in a later release. What `false` leaves is
+ * the music as it was before it — MENU everywhere, GRID on the session
+ * settings — with what came alongside it and stays (play mode, sources,
+ * Steam soundtracks, volume).
+ *
+ * **What `false` turns off**:
+ *
+ *  - the MUSIC line of a brand, a family, a track category and a country in
+ *    Classement (`MusicField.svelte`, one component for the four tabs);
+ *  - the « By screen » and « Assignments » blocks of Réglages › Musique
+ *    (`MusicTab.svelte`);
+ *  - **what plays**: the assignments are not read (`context.svelte.ts`), so
+ *    those written under `tauri dev` — the same `music.json` — never play in a
+ *    build. They stay in the file, untouched, for the day this turns on.
+ */
+export const FEATURE_MUSIC_ASSIGNMENTS: boolean = import.meta.env.DEV;
