@@ -56,6 +56,10 @@ export const sessionNav = $state<{
   alert: false,
 });
 
+/** The type a grid sent from the library moved the session away from, while
+ * its notification is up (`SessionTypeToast`). */
+const switched = $state<{ from: SessionType | null }>({ from: null });
+
 /** Whether the user has already picked a type by hand. The seeding below must
  * not overwrite a deliberate pick with what was on disk: the two races each
  * other only during the few milliseconds after startup, but losing that race
@@ -98,8 +102,40 @@ async function loadSessionNav(): Promise<void> {
  */
 export function pickSessionType(type: SessionType): void {
   picked = true;
+  // A type picked by hand settles the question the notification was asking.
+  switched.from = null;
   sessionNav.type = type;
   sessionNav.page = "setup";
+}
+
+/**
+ * Where opponents sent from the library land (§7.4): the opponents page,
+ * under a type that fields a grid. Practice and Hotlap have none, so the
+ * session turns into a Race — said, and undoable, since the user was building
+ * something else.
+ */
+export function openGridForOpponents(): void {
+  const from = sessionNav.type;
+  if (!hasOpponents(from)) {
+    pickSessionType("race");
+    switched.from = from;
+  }
+  sessionNav.page = "opponents";
+}
+
+export function typeSwitchedFrom(): SessionType | null {
+  return switched.from;
+}
+
+export function dismissTypeSwitch(): void {
+  switched.from = null;
+}
+
+/** Back to the type the grid moved the session away from. The grid itself
+ * stays: the type never decides what is remembered (L5§1.4). */
+export function revertTypeSwitch(): void {
+  const from = switched.from;
+  if (from) pickSessionType(from);
 }
 
 /** The sub-entry. Only ever reachable under a type that fields a grid. */

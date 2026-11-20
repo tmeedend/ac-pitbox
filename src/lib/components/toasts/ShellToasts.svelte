@@ -18,6 +18,7 @@
   import OnlineLayersToast from "./OnlineLayersToast.svelte";
   import OnlineWatchToast from "./OnlineWatchToast.svelte";
   import PrepareToast from "./PrepareToast.svelte";
+  import SessionTypeToast from "./SessionTypeToast.svelte";
   import GridThumbToast from "./GridThumbToast.svelte";
   import InGameShotToast from "./InGameShotToast.svelte";
   import StaleThumbsToast from "./StaleThumbsToast.svelte";
@@ -42,6 +43,7 @@
   <OnlineLayersToast />
   <OnlineWatchToast />
   <PrepareToast />
+  <SessionTypeToast />
   <!-- La génération des vignettes en dernier, donc au plus près du coin : elle
        dure des minutes là où les autres passent, et c'est celle qu'on revient
        consulter. -->

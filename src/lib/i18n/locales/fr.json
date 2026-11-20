@@ -943,6 +943,8 @@
       "trackday": "Track day"
     },
     "saveSessionTitle": "Sauvegarder la session",
+    "switchedToRace": "Session passée en Course",
+    "switchBack": "Revenir en {type}",
     "sessionNamePlaceholder": "Nom de la sauvegarde…",
     "noSavedSessions": "Aucune session sauvegardée.",
     "loadWarnCarMissing": "Voiture « {id} » introuvable : la voiture actuelle est conservée.",

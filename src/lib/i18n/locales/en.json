@@ -943,6 +943,8 @@
       "trackday": "Track day"
     },
     "saveSessionTitle": "Save session",
+    "switchedToRace": "Session switched to Race",
+    "switchBack": "Back to {type}",
     "sessionNamePlaceholder": "Save name…",
     "noSavedSessions": "No saved sessions.",
     "loadWarnCarMissing": "Car “{id}” not found: keeping the current car.",

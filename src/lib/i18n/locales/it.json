@@ -564,6 +564,8 @@
   "launch": {
     "saveSession": "⤒ Salva",
     "saveSessionTitle": "Salva la sessione",
+    "switchedToRace": "Sessione passata a Gara",
+    "switchBack": "Torna a {type}",
     "sessionNamePlaceholder": "Nome del salvataggio…",
     "noSavedSessions": "Nessuna sessione salvata.",
     "loadWarnCarMissing": "Auto « {id} » non trovata: viene mantenuta l'auto attuale.",

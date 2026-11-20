@@ -564,6 +564,8 @@
   "launch": {
     "saveSession": "⤒ Speichern",
     "saveSessionTitle": "Session speichern",
+    "switchedToRace": "Sitzung auf Rennen umgestellt",
+    "switchBack": "Zurück zu {type}",
     "sessionNamePlaceholder": "Name des Speicherstands…",
     "noSavedSessions": "Keine gespeicherten Sessions.",
     "loadWarnCarMissing": "Fahrzeug „{id}“ nicht gefunden: das aktuelle Fahrzeug bleibt.",
