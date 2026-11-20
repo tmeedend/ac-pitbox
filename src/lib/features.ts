@@ -58,12 +58,11 @@ export const FEATURE_GRID_THUMBS = true;
 /**
  * **Export and import of the library** (EXPORT§).
  *
- * On in development (`npm run tauri dev`), off in a built installer — the
- * one switch here that is not a constant: the feature is complete, and
- * must be tried on real libraries before anyone else sees it. Once it is,
- * this becomes `true`.
+ * On everywhere since 0.11.0 (2026-11-21), shipped before the trial on two
+ * real libraries that `docs/CHANTIERS.md` still lists. The switch stays, as
+ * the way to take it back out of a build without touching its code.
  *
- * **What `false` turns off**, the only two places that exposed it:
+ * **What `false` turns off**, the only two places that expose it:
  *
  *  - the « Transférer la bibliothèque » section of Fichiers › Maintenance
  *    (`Maintenance.svelte`);
@@ -71,7 +70,7 @@ export const FEATURE_GRID_THUMBS = true;
  *
  * The backend commands stay registered: nothing calls them without a screen.
  */
-export const FEATURE_LIBRARY_TRANSFER: boolean = import.meta.env.DEV;
+export const FEATURE_LIBRARY_TRANSFER: boolean = true;
 
 /**
  * **Music by term and by screen** (§16.4, §16.5): a music attached to a brand,

@@ -6,7 +6,7 @@
 
 > **Étiquette de renvoi : `EXPORT§`.** Repose entièrement sur la vitrine (`ESPACE§`) : **un export est une bibliothèque dont tous les mods sont en vitrine**, apps et autres mods compris (ESPACE§5.6).
 >
-> **Construit, derrière un interrupteur** (`FEATURE_LIBRARY_TRANSFER`, `src/lib/features.ts`) : visible sous `tauri dev`, absent d'un installateur tant qu'il n'a pas été essayé sur de vraies bibliothèques (`CHANTIERS.md`). Code : `src-tauri/src/transfer/`, `ExportDialog`, `ImportDialog`, l'étape de l'assistant.
+> **Livré en 0.11.0** (`FEATURE_LIBRARY_TRANSFER`, `src/lib/features.ts`, allumé), avant l'essai sur deux vraies bibliothèques que `CHANTIERS.md` garde à faire. Code : `src-tauri/src/transfer/`, `ExportDialog`, `ImportDialog`, l'étape de l'assistant.
 
 ---
 

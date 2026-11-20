@@ -1513,8 +1513,9 @@ de reprendre. En cas d'écart, la spec fait foi.
       **Reste :** passer `FEATURE_MUSIC_ASSIGNMENTS` à `true` le jour de la
       sortie, et retirer cette entrée.
 
-- [ ] **Export / import de la bibliothèque (`EXPORT§`) — construit, derrière
-      un interrupteur ; reste à l'essayer sur de vraies bibliothèques.**
+- [ ] **Export / import de la bibliothèque (`EXPORT§`) — allumé en 0.11.0
+      (2026-11-21), avant l'essai sur de vraies bibliothèques, par choix de
+      l'utilisateur.**
       Élargi le 2026-10-09 : l'export emporte aussi apps, mannequins, tenues
       et autres mods. Lot A : l'**état** sans fichiers des apps et des autres
       mods (ESPACE§5.6) et le **squelette des couches** (ESPACE§5.4). Lot B :
@@ -1525,8 +1526,9 @@ de reprendre. En cas d'écart, la spec fait foi.
       - **L'essai réel**, par l'utilisateur : exporter sa bibliothèque,
         l'importer dans une installation vide (un second dossier de jeu et de
         bibliothèque suffit), regarder les cartes, les fiches, les notes, les
-        Compléments, puis récupérer quelques mods par leur archive. Ensuite
-        seulement, `FEATURE_LIBRARY_TRANSFER = true`.
+        Compléments, puis récupérer quelques mods par leur archive. Il vaut
+        maintenant pour la version livrée : un défaut trouvé là se corrige
+        en 0.11.x, ou se cache en repassant l'interrupteur à `false`.
       - **L'import fusionne, au lieu d'exiger une installation vide**
         (2026-11-14, EXPORT R3, EXPORT§7.4) : ce qui est des deux côtés garde
         ses fichiers, versions et couches d'ici ; les saisies se fusionnent
