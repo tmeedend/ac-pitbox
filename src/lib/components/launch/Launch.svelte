@@ -21,7 +21,13 @@
   import { isPlayable } from "$lib/library/showcase.svelte";
   import { getSessionBackground } from "$lib/detail/media";
   import { nav, pickSession, type OpponentsAction } from "$lib/shell/nav.svelte";
-  import { hasOpponents, openSetupPage, sessionNav, sessionNavReady } from "$lib/shell/sessionNav.svelte";
+  import {
+    hasOpponents,
+    openGridForOpponents,
+    openSetupPage,
+    sessionNav,
+    sessionNavReady,
+  } from "$lib/shell/sessionNav.svelte";
   import { carAssists, setCarAssists } from "$lib/launch/carAssists.svelte";
   import { getPreferredSkin } from "$lib/preferred";
   import { listActiveTrackSkins } from "$lib/inventory/submods";
@@ -208,13 +214,24 @@
     savedGrids = await listSavedGrids();
   }
 
-  /** Adversaires envoyés depuis la sélection groupée de la bibliothèque
-   * voitures (§6.3ter). Bascule sur le type Course directement : les
-   * adversaires imposés ne doivent pas être écrasés par un plateau tiré pour
-   * l'occasion — `impose` invalide toute génération déjà en vol. */
-  function applyOpponentsAction(action: OpponentsAction) {
-    setup.session_type = "race";
-    grid.impose(action);
+  /** Opponents sent from the car library (§7.4): the grid, on the
+   * opponents page, under a type that fields one. `impose` invalidates any
+   * draw already in flight, so the chosen cars are never written over by a
+   * grid drawn for the occasion. */
+  // **Through `sessionNav`, never `setup` alone**: the column's store is the
+  // live type, and writing only this screen's copy left the column — and the
+  // page shown — on Practice while the grid was being filled (reported). The
+  // type is applied before the grid is imposed, so that a preset applied on
+  // the way cannot fill it over.
+  //
+  // A grid empty beforehand is **set**, even on "add": arriving on a Race
+  // fills an empty grid on its own (L5§1.5), and adding the chosen cars to
+  // opponents nobody asked for would be the opposite of the gesture.
+  async function applyOpponentsAction(action: OpponentsAction) {
+    const wasEmpty = setup.opponents.length === 0;
+    openGridForOpponents();
+    if (setup.session_type !== sessionNav.type) await setSessionType(sessionNav.type);
+    grid.impose(wasEmpty ? { ...action, mode: "set" } : action);
   }
 
   // --- Modale de sélection d'adversaire (SESSION§3) ---
@@ -582,7 +599,7 @@
     if (nav.opponentsAction && ready) {
       const action = nav.opponentsAction;
       nav.opponentsAction = null;
-      applyOpponentsAction(action);
+      void applyOpponentsAction(action);
     }
   });
 

@@ -564,6 +564,8 @@
   "launch": {
     "saveSession": "⤒ Guardar",
     "saveSessionTitle": "Guardar la sesión",
+    "switchedToRace": "Sesión cambiada a Carrera",
+    "switchBack": "Volver a {type}",
     "sessionNamePlaceholder": "Nombre para guardar…",
     "noSavedSessions": "Ninguna sesión guardada.",
     "loadWarnCarMissing": "Coche « {id} » no encontrado: se mantiene el coche actual.",

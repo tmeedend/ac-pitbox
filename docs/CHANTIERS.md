@@ -25,6 +25,20 @@ de reprendre. En cas d'écart, la spec fait foi.
 
 ---
 
+- [ ] **Mises à jour des mods Overtake (2026-11-20).** Recherche :
+      `docs/overtake-updates-research.md`. Prévenir qu'un mod d'overtake.gg a
+      une nouvelle version, puis ouvrir sa page : **jamais rien téléchargé
+      d'Overtake**. **Lot 0 fait** : pages et flux RSS sont derrière un défi
+      anti-robot pour WinHTTP ; seul le sitemap (autorisé, non défié) passe,
+      et son `lastmod` est la date de la dernière version (recoupé sur la
+      ressource 88197). **En attente** : l'accord d'Overtake sur la lecture
+      quotidienne du sitemap et sur le lien vers la page d'un mod (leurs
+      conditions interdisent le *deep-linking* vers « our resources »), ou une
+      clé d'API XenForo. Restent ensuite les lots 1 (page Overtake d'un mod,
+      saisie), 2 (vérification) et 3 (annonce, « Open page »).
+      À savoir : 21 mods sur 347 seulement portent une adresse de ressource
+      dans leur `ui_*.json` — la saisie à la main est le cas courant.
+
 - [ ] **Résultats de session (2026-11-16).** Spec : `docs/SPEC-resultats.md`
       (`RESULTAT§`). Fusionné dans `main` le 2026-11-19.
       **Lot 1 fait** : le journal des lancements, l'enregistrement depuis

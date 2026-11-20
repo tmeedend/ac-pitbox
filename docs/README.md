@@ -257,6 +257,10 @@ dans un commentaire de code.
   voiture choisie : `race/online` plutôt que `race/online/join`, la
   réinjection de `__FEATURES` indispensable sur AssettoServer, le skin imposé
   par le serveur. Six essais réels, un refus encore inexpliqué.
+- **`overtake-updates-research.md`** — savoir qu'un mod d'overtake.gg a une
+  mise à jour sans rien télécharger : pages et flux RSS derrière un défi
+  anti-robot, le sitemap seul ouvert et porteur de la date de dernière
+  version, et les deux questions à poser à Overtake avant de coder.
 - **`controller-onboarding-design.md`** — choix du périphérique de contrôle.
   Part d'un bug réel (des éléments d'interface se déplaçaient seuls, volant
   branché) : `mapping === "standard"` est *déclaré* par le périphérique, pas
